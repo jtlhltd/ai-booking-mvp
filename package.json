@@ -1,4 +1,3 @@
-Set-Content -Path .\package.json -Value @'
 {
   "name": "ai-booking-mvp-skeleton",
   "version": "0.1.0",
@@ -17,4 +16,3 @@ Set-Content -Path .\package.json -Value @'
     "nanoid": "^5.0.7"
   }
 }
-'@
