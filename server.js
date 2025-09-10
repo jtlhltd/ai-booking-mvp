@@ -1,4 +1,4 @@
-// server.js - AI Lead Follow-Up & Booking Agent (MVP skeleton) — Windows-safe paths
+// server.js - AI Lead Follow-Up & Booking Agent (Render/Windows-safe, with Vapi outbound call + Google Calendar)
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
@@ -8,6 +8,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { nanoid } from 'nanoid';
 
+import { makeJwtAuth, insertEvent, listUpcoming } from './gcal.js';
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -16,7 +18,7 @@ app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 app.use(morgan('dev'));
 
-// --- Cross-platform path handling (fix for Windows double drive issue)
+// --- Cross-platform path handling
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
 const DATA_DIR   = path.join(__dirname, 'data');
@@ -30,20 +32,90 @@ async function ensureDataFiles() {
 }
 
 async function readJson(p) {
-  const raw = await fs.readFile(p, 'utf8');
-  return JSON.parse(raw || '[]');
+  const raw = await fs.readFile(p, 'utf8').catch(() => '[]');
+  try { return JSON.parse(raw || '[]'); } catch { return []; }
 }
 
 async function writeJson(p, data) {
   await fs.writeFile(p, JSON.stringify(data, null, 2), 'utf8');
 }
 
+// === Google Calendar env ===
+// These names match your .env.example
+const GOOGLE_CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL || '';
+const GOOGLE_PRIVATE_KEY  = process.env.GOOGLE_PRIVATE_KEY  || '';
+const GOOGLE_CALENDAR_ID  = process.env.GOOGLE_CALENDAR_ID  || 'primary';
+const TIMEZONE            = process.env.TZ || process.env.TIMEZONE || 'Europe/London';
+
 // --- Health
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, service: 'ai-booking-mvp', time: new Date().toISOString() });
+  res.json({
+    ok: true,
+    service: 'ai-booking-mvp',
+    time: new Date().toISOString(),
+    gcalConfigured: !!(GOOGLE_CLIENT_EMAIL && GOOGLE_PRIVATE_KEY && GOOGLE_CALENDAR_ID)
+  });
 });
 
-// 1) Webhook: new lead → trigger outbound agent call (stub)
+// --- Optional diagnostics for Google Calendar
+app.get('/gcal/ping', async (_req, res) => {
+  try {
+    if (!(GOOGLE_CLIENT_EMAIL && GOOGLE_PRIVATE_KEY && GOOGLE_CALENDAR_ID)) {
+      return res.status(400).json({ ok: false, error: 'Missing GOOGLE_* env vars' });
+    }
+    const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY });
+    await auth.authorize();
+    const items = await listUpcoming({ auth, calendarId: GOOGLE_CALENDAR_ID, maxResults: 5 });
+    res.json({ ok: true, upcomingCount: items.length, sample: items.map(e => ({ id: e.id, summary: e.summary })) });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// --- Vapi outbound helper (REAL call)
+async function startOutboundCall(lead) {
+  const apiKey = process.env.VAPI_PRIVATE_KEY;
+  const assistantId = process.env.VAPI_ASSISTANT_ID;
+
+  if (!apiKey || !assistantId) {
+    console.warn('[VAPI] Missing VAPI_PRIVATE_KEY or VAPI_ASSISTANT_ID — skipping outbound call');
+    return { skipped: true, reason: 'missing_env' };
+  }
+
+  const body = {
+    assistantId,
+    phoneNumber: lead.phone, // the number to dial
+    customer: {
+      name: lead.name,
+      phone: lead.phone,
+      email: lead.email,
+      service: lead.service
+    },
+    assistantOverrides: {
+      variableValues: {
+        BusinessName: process.env.BUSINESS_NAME || 'Default Clinic',
+        ConsentLine: process.env.CONSENT_LINE || 'This call may be recorded for quality.'
+      }
+    }
+  };
+
+  const resp = await fetch('https://api.vapi.ai/call', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    throw new Error(`[VAPI] Outbound call failed: ${resp.status} ${resp.statusText} ${text}`);
+  }
+  return resp.json();
+}
+
+// 1) Webhook: new lead → persist + trigger outbound Vapi call
 app.post('/webhooks/new-lead', async (req, res) => {
   const { name, phone, email, service } = req.body || {};
   if (!name || !phone || !service) {
@@ -60,58 +132,103 @@ app.post('/webhooks/new-lead', async (req, res) => {
   leads.push(lead);
   await writeJson(LEADS_PATH, leads);
 
-  console.log('[VAPI:OUTBOUND_STUB] Would initiate call to', phone, 'for service:', service);
-
-  return res.status(202).json({ received: true, lead });
-});
-
-// 2) Tool: calendar.checkAndBook (stub booking into Google Calendar)
-app.post('/api/calendar/check-book', async (req, res) => {
-  const { service, startPref, durationMin, lead } = req.body || {};
-  if (!service || !durationMin || !lead?.name || !lead?.phone) {
-    return res.status(400).json({ error: 'Missing required fields: service, durationMin, lead{name,phone}' });
+  // Kick off outbound call via Vapi
+  let callResp = null;
+  try {
+    callResp = await startOutboundCall(lead);
+    console.log('[VAPI] Outbound call started:', callResp);
+  } catch (err) {
+    console.error(err.message);
+    callResp = { error: err.message };
   }
 
-  const now = new Date();
-  const tomorrow = new Date(now.getTime() + 24*60*60*1000);
-  tomorrow.setHours(14, 0, 0, 0);
-
-  const startISO = tomorrow.toISOString();
-  const endISO = new Date(tomorrow.getTime() + (durationMin || 30) * 60 * 1000).toISOString();
-
-  const eventId = 'evt_' + nanoid(10);
-
-  const calls = await readJson(CALLS_PATH);
-  calls.push({
-    id: 'call_' + nanoid(10),
-    lead_id: lead.id || null,
-    status: 'booked',
-    disposition: 'booked',
-    booking: { start: startISO, end: endISO, service, eventId },
-    created_at: new Date().toISOString()
-  });
-  await writeJson(CALLS_PATH, calls);
-
-  return res.json({ slot: { start: startISO, end: endISO }, eventId });
+  return res.status(202).json({ received: true, lead, call: callResp });
 });
 
-// 3) Tool: notify.send (Twilio SMS / SendGrid email stub)
+// 2) Tool: calendar.checkAndBook (NOW: writes to Google Calendar)
+app.post('/api/calendar/check-book', async (req, res) => {
+  try {
+    const { service, startPref, durationMin, lead, attendeeEmails } = req.body || {};
+    if (!service || !durationMin || !lead?.name || !lead?.phone) {
+      return res.status(400).json({ error: 'Missing required fields: service, durationMin, lead{name,phone}' });
+    }
+
+    // Choose a slot (you can replace this with your own availability logic)
+    const now = new Date();
+    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    tomorrow.setHours(14, 0, 0, 0);
+
+    const startISO = tomorrow.toISOString();
+    const endISO = new Date(tomorrow.getTime() + (durationMin || 30) * 60 * 1000).toISOString();
+
+    // Insert into Google Calendar (if configured)
+    let google = { skipped: true };
+    if (GOOGLE_CLIENT_EMAIL && GOOGLE_PRIVATE_KEY && GOOGLE_CALENDAR_ID) {
+      try {
+        const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY });
+        await auth.authorize();
+
+        const summary = `${service} — ${lead.name || lead.phone}`;
+        const description = [
+          `Auto-booked by AI agent`,
+          `Name: ${lead.name}`,
+          `Phone: ${lead.phone}`,
+          lead.email ? `Email: ${lead.email}` : null,
+          startPref ? `Start preference: ${startPref}` : null
+        ].filter(Boolean).join('\n');
+
+        const event = await insertEvent({
+          auth,
+          calendarId: GOOGLE_CALENDAR_ID,
+          summary,
+          description,
+          startIso: startISO,
+          endIso: endISO,
+          timezone: TIMEZONE,
+          attendees: Array.isArray(attendeeEmails) ? attendeeEmails : []
+        });
+
+        google = { id: event.id, htmlLink: event.htmlLink, status: event.status };
+      } catch (err) {
+        console.error('[GCAL] insert failed:', err);
+        google = { error: String(err) };
+      }
+    }
+
+    // Persist a “call/book” log (your original behavior)
+    const calls = await readJson(CALLS_PATH);
+    calls.push({
+      id: 'call_' + nanoid(10),
+      lead_id: lead.id || null,
+      status: 'booked',
+      disposition: 'booked',
+      booking: { start: startISO, end: endISO, service, startPref: startPref || null, google },
+      created_at: new Date().toISOString()
+    });
+    await writeJson(CALLS_PATH, calls);
+
+    return res.json({ slot: { start: startISO, end: endISO }, google });
+  } catch (e) {
+    return res.status(500).json({ error: String(e) });
+  }
+});
+
+// 3) Tool: notify.send (stub)
 app.post('/api/notify/send', async (req, res) => {
   const { channel, to, message } = req.body || {};
   if (!channel || !to || !message) {
     return res.status(400).json({ error: 'Missing required fields: channel, to, message' });
   }
-  if (!['sms','email'].includes(channel)) {
-    return res.status(400).json({ error: 'channel must be \"sms\" or \"email\"' });
+  if (!['sms', 'email'].includes(channel)) {
+    return res.status(400).json({ error: 'channel must be "sms" or "email"' });
   }
 
   const id = 'msg_' + nanoid(10);
   console.log(`[NOTIFY:STUB] ${channel} → ${to}:`, message);
-
   return res.json({ sent: true, id });
 });
 
-// 4) Tool: crm.upsert (local JSON log for MVP)
+// 4) Tool: crm.upsertLead (stub logger)
 app.post('/api/crm/upsert', async (req, res) => {
   const { name, phone, email, disposition } = req.body || {};
   if (!name || !phone || !disposition) {
@@ -155,5 +272,5 @@ app.get('/gdpr/delete', async (req, res) => {
 // --- Boot
 await ensureDataFiles();
 app.listen(PORT, () => {
-  console.log(`AI Booking MVP skeleton listening on http://localhost:${PORT}`);
+  console.log(`AI Booking MVP listening on http://localhost:${PORT}`);
 });
