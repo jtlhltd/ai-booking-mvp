@@ -1,4 +1,4 @@
-// server.js - AI Lead Follow-Up & Booking Agent (Render/Windows-safe, with Vapi outbound call + Google Calendar)
+// server.js - AI Booking MVP (with Google Calendar + Twilio SMS)
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
@@ -7,6 +7,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { nanoid } from 'nanoid';
+import twilio from 'twilio';
 
 import { makeJwtAuth, insertEvent, listUpcoming } from './gcal.js';
 
@@ -41,11 +42,18 @@ async function writeJson(p, data) {
 }
 
 // === Google Calendar env ===
-// These names match your .env.example
 const GOOGLE_CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL || '';
 const GOOGLE_PRIVATE_KEY  = process.env.GOOGLE_PRIVATE_KEY  || '';
 const GOOGLE_CALENDAR_ID  = process.env.GOOGLE_CALENDAR_ID  || 'primary';
 const TIMEZONE            = process.env.TZ || process.env.TIMEZONE || 'Europe/London';
+
+// === Twilio env ===
+const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || '';
+const TWILIO_AUTH_TOKEN  = process.env.TWILIO_AUTH_TOKEN  || '';
+const TWILIO_FROM_NUMBER = process.env.TWILIO_FROM_NUMBER || '';
+const TWILIO_MESSAGING_SERVICE_SID = process.env.TWILIO_MESSAGING_SERVICE_SID || '';
+const twilioEnabled = !!(TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && (TWILIO_FROM_NUMBER || TWILIO_MESSAGING_SERVICE_SID));
+const smsClient = (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN) ? twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) : null;
 
 // --- Health
 app.get('/health', (_req, res) => {
@@ -53,7 +61,8 @@ app.get('/health', (_req, res) => {
     ok: true,
     service: 'ai-booking-mvp',
     time: new Date().toISOString(),
-    gcalConfigured: !!(GOOGLE_CLIENT_EMAIL && GOOGLE_PRIVATE_KEY && GOOGLE_CALENDAR_ID)
+    gcalConfigured: !!(GOOGLE_CLIENT_EMAIL && GOOGLE_PRIVATE_KEY && GOOGLE_CALENDAR_ID),
+    smsConfigured: twilioEnabled
   });
 });
 
@@ -84,7 +93,7 @@ async function startOutboundCall(lead) {
 
   const body = {
     assistantId,
-    phoneNumber: lead.phone, // the number to dial
+    phoneNumber: lead.phone,
     customer: {
       name: lead.name,
       phone: lead.phone,
@@ -132,7 +141,6 @@ app.post('/webhooks/new-lead', async (req, res) => {
   leads.push(lead);
   await writeJson(LEADS_PATH, leads);
 
-  // Kick off outbound call via Vapi
   let callResp = null;
   try {
     callResp = await startOutboundCall(lead);
@@ -145,7 +153,7 @@ app.post('/webhooks/new-lead', async (req, res) => {
   return res.status(202).json({ received: true, lead, call: callResp });
 });
 
-// 2) Tool: calendar.checkAndBook (NOW: writes to Google Calendar)
+// 2) Tool: calendar.checkAndBook (writes to Google Calendar)
 app.post('/api/calendar/check-book', async (req, res) => {
   try {
     const { service, startPref, durationMin, lead, attendeeEmails } = req.body || {};
@@ -153,7 +161,6 @@ app.post('/api/calendar/check-book', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields: service, durationMin, lead{name,phone}' });
     }
 
-    // Choose a slot (you can replace this with your own availability logic)
     const now = new Date();
     const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
     tomorrow.setHours(14, 0, 0, 0);
@@ -161,7 +168,6 @@ app.post('/api/calendar/check-book', async (req, res) => {
     const startISO = tomorrow.toISOString();
     const endISO = new Date(tomorrow.getTime() + (durationMin || 30) * 60 * 1000).toISOString();
 
-    // Insert into Google Calendar (if configured)
     let google = { skipped: true };
     if (GOOGLE_CLIENT_EMAIL && GOOGLE_PRIVATE_KEY && GOOGLE_CALENDAR_ID) {
       try {
@@ -175,7 +181,7 @@ app.post('/api/calendar/check-book', async (req, res) => {
           `Phone: ${lead.phone}`,
           lead.email ? `Email: ${lead.email}` : null,
           startPref ? `Start preference: ${startPref}` : null
-        ].filter(Boolean).join('\n');
+        ].filter(Boolean).join('\\n');
 
         const event = await insertEvent({
           auth,
@@ -195,7 +201,6 @@ app.post('/api/calendar/check-book', async (req, res) => {
       }
     }
 
-    // Persist a “call/book” log (your original behavior)
     const calls = await readJson(CALLS_PATH);
     calls.push({
       id: 'call_' + nanoid(10),
@@ -213,19 +218,38 @@ app.post('/api/calendar/check-book', async (req, res) => {
   }
 });
 
-// 3) Tool: notify.send (stub)
+// 3) Tool: notify.send (Twilio SMS real send)
 app.post('/api/notify/send', async (req, res) => {
   const { channel, to, message } = req.body || {};
   if (!channel || !to || !message) {
     return res.status(400).json({ error: 'Missing required fields: channel, to, message' });
   }
-  if (!['sms', 'email'].includes(channel)) {
-    return res.status(400).json({ error: 'channel must be "sms" or "email"' });
+
+  if (channel !== 'sms') {
+    const id = 'msg_' + nanoid(10);
+    console.log(`[NOTIFY:STUB:${channel}] → ${to}:`, message);
+    return res.json({ sent: true, id, channel });
   }
 
-  const id = 'msg_' + nanoid(10);
-  console.log(`[NOTIFY:STUB] ${channel} → ${to}:`, message);
-  return res.json({ sent: true, id });
+  if (!twilioEnabled) {
+    return res.status(400).json({ error: 'SMS not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_FROM_NUMBER or TWILIO_MESSAGING_SERVICE_SID' });
+  }
+
+  try {
+    const payload = { to, body: message };
+    if (TWILIO_MESSAGING_SERVICE_SID) {
+      payload.messagingServiceSid = TWILIO_MESSAGING_SERVICE_SID;
+    } else {
+      payload.from = TWILIO_FROM_NUMBER;
+    }
+
+    const resp = await smsClient.messages.create(payload);
+    console.log('[SMS] sent', resp.sid, 'to', to);
+    return res.json({ sent: true, id: resp.sid, to, channel: 'sms' });
+  } catch (err) {
+    console.error('[SMS] error:', err);
+    return res.status(502).json({ sent: false, error: String(err) });
+  }
 });
 
 // 4) Tool: crm.upsertLead (stub logger)

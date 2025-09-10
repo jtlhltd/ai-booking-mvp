@@ -1,6 +1,6 @@
 {
   "name": "ai-booking-mvp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "engines": { "node": ">=18" },
@@ -14,6 +14,7 @@
     "express": "^4.19.2",
     "googleapis": "^131.0.0",
     "morgan": "^1.10.0",
-    "nanoid": "^5.0.7"
+    "nanoid": "^5.0.7",
+    "twilio": "^4.22.0"
   }
 }
