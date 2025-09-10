@@ -1,6 +1,6 @@
 {
-  "name": "ai-booking-mvp-skeleton",
-  "version": "0.1.0",
+  "name": "ai-booking-mvp",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "engines": { "node": ">=18" },
@@ -12,6 +12,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "googleapis": "^131.0.0",
     "morgan": "^1.10.0",
     "nanoid": "^5.0.7"
   }
