@@ -1,7 +1,8 @@
-// server.js — AI Booking MVP
-// Hardened with: API key auth, CORS allowlist, rate limit, input validation,
-// idempotency cache, Twilio delivery receipts, structured logs.
-// Includes: Google Calendar booking + auto-SMS confirmation via Twilio.
+// server.js — AI Booking MVP (hardened + auto-idempotency superset)
+// - API key auth, CORS allowlist, rate limit, input validation
+// - Idempotency via header OR automatic body-hash fallback (10 min)
+// - Retries for Google/Twilio; auto-SMS confirmation
+// - Twilio delivery receipts; /webhooks/new-lead kept
 
 import 'dotenv/config';
 import express from 'express';
@@ -13,6 +14,7 @@ import { fileURLToPath } from 'url';
 import { nanoid } from 'nanoid';
 import rateLimit from 'express-rate-limit';
 import twilio from 'twilio';
+import { createHash } from 'crypto';
 
 import { makeJwtAuth, insertEvent, listUpcoming } from './gcal.js';
 
@@ -42,7 +44,7 @@ const TWILIO_MESSAGING_SERVICE_SID = process.env.TWILIO_MESSAGING_SERVICE_SID ||
 const smsClient = (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN) ? twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) : null;
 const smsConfigured = !!(smsClient && (TWILIO_FROM_NUMBER || TWILIO_MESSAGING_SERVICE_SID));
 
-// === Middleware: basics
+// === Middleware
 app.use(express.json({ limit: '1mb' }));
 app.use(morgan('dev'));
 app.use(cors({
@@ -50,25 +52,10 @@ app.use(cors({
   methods: ['GET','POST','OPTIONS'],
   allowedHeaders: ['Content-Type','X-API-Key','Idempotency-Key'],
 }));
-
-// For Twilio callbacks (application/x-www-form-urlencoded)
 app.use('/webhooks/twilio-status', express.urlencoded({ extended: false }));
+app.use((req, _res, next) => { req.id = 'req_' + nanoid(10); next(); });
+app.use(rateLimit({ windowMs: 60_000, max: 60, standardHeaders: true, legacyHeaders: false }));
 
-// Request id
-app.use((req, _res, next) => {
-  req.id = 'req_' + nanoid(10);
-  next();
-});
-
-// Rate limit
-app.use(rateLimit({
-  windowMs: 60_000,
-  max: 60, // 60 req/min per IP
-  standardHeaders: true,
-  legacyHeaders: false,
-}));
-
-// Files bootstrapping
 async function ensureDataFiles() {
   await fs.mkdir(DATA_DIR, { recursive: true });
   for (const p of [LEADS_PATH, CALLS_PATH, SMS_STATUS_PATH]) {
@@ -92,7 +79,7 @@ function requireApiKey(req, res, next) {
 }
 app.use(requireApiKey);
 
-// Idempotency (10 minute cache)
+// Idempotency cache
 const idemCache = new Map(); // key -> { at, status, body }
 const IDEM_TTL_MS = 10 * 60_000;
 function getCachedIdem(key) {
@@ -101,8 +88,13 @@ function getCachedIdem(key) {
   if (Date.now() - v.at > IDEM_TTL_MS) { idemCache.delete(key); return null; }
   return v;
 }
-function setCachedIdem(key, status, body) {
-  idemCache.set(key, { at: Date.now(), status, body });
+function setCachedIdem(key, status, body) { idemCache.set(key, { at: Date.now(), status, body }); }
+function deriveIdemKey(req) {
+  // Prefer caller-provided header, else hash the body
+  const headerKey = req.get('Idempotency-Key');
+  if (headerKey) return headerKey;
+  const h = createHash('sha256').update(JSON.stringify(req.body || {})).digest('hex');
+  return 'auto:' + h;
 }
 
 // Retry helper (for transient HTTP errors)
@@ -150,7 +142,6 @@ app.get('/gcal/ping', async (_req, res) => {
 
 // Twilio status callback (delivery receipts)
 app.post('/webhooks/twilio-status', async (req, res) => {
-  // Expected fields: MessageSid, MessageStatus, To, From, ErrorCode, ErrorMessage (varies)
   const log = {
     evt: 'sms.status',
     rid: req.id,
@@ -168,7 +159,7 @@ app.post('/webhooks/twilio-status', async (req, res) => {
   res.type('text/plain').send('OK');
 });
 
-// Outbound lead webhook (optional Vapi trigger)
+// Outbound lead webhook (kept)
 app.post('/webhooks/new-lead', async (req, res) => {
   const { name, phone, email, service } = req.body || {};
   if (!name || !phone || !service || !isE164(phone)) {
@@ -180,13 +171,12 @@ app.post('/webhooks/new-lead', async (req, res) => {
   return res.status(202).json({ received: true, lead });
 });
 
-// Booking route with: validation + idempotency + retries + auto-SMS
+// Booking route with: validation + idempotency (header or auto) + retries + auto-SMS
 app.post('/api/calendar/check-book', async (req, res) => {
-  const idemKey = req.get('Idempotency-Key');
-  if (idemKey) {
-    const cached = getCachedIdem(idemKey);
-    if (cached) return res.status(cached.status).json(cached.body);
-  }
+  const idemKey = deriveIdemKey(req);
+  const cached = getCachedIdem(idemKey);
+  if (cached) return res.status(cached.status).json(cached.body);
+
   try {
     const { service, startPref, durationMin, lead, attendeeEmails } = req.body || {};
     if (!service || typeof service !== 'string') return res.status(400).json({ error: 'Missing service' });
@@ -265,42 +255,41 @@ app.post('/api/calendar/check-book', async (req, res) => {
     console.log(JSON.stringify({ evt: 'booking.created', rid: req.id, booking: record.booking }));
 
     const responseBody = { slot: { start: startISO, end: endISO, timezone: TIMEZONE }, google, sms };
-    if (idemKey) setCachedIdem(idemKey, 200, responseBody);
+    setCachedIdem(idemKey, 200, responseBody);
     return res.json(responseBody);
   } catch (e) {
     const status = 500;
     const body = { error: String(e) };
-    if (idemKey) setCachedIdem(idemKey, status, body);
+    setCachedIdem(idemKey, status, body);
     return res.status(status).json(body);
   }
 });
 
 // Manual SMS endpoint (agent / other notifications)
 app.post('/api/notify/send', async (req, res) => {
-  const idemKey = req.get('Idempotency-Key');
-  if (idemKey) {
-    const cached = getCachedIdem(idemKey);
-    if (cached) return res.status(cached.status).json(cached.body);
-  }
+  const idemKey = deriveIdemKey(req);
+  const cached = getCachedIdem(idemKey);
+  if (cached) return res.status(cached.status).json(cached.body);
+
   const { channel, to, message } = req.body || {};
   if (!channel || !to || !message) {
     const status = 400, body = { error: 'Missing channel, to, message' };
-    if (req.get('Idempotency-Key')) setCachedIdem(req.get('Idempotency-Key'), status, body);
+    setCachedIdem(idemKey, status, body);
     return res.status(status).json(body);
   }
   if (channel !== 'sms') {
     const status = 200, body = { sent: true, id: 'stub', channel };
-    if (idemKey) setCachedIdem(idemKey, status, body);
+    setCachedIdem(idemKey, status, body);
     return res.status(status).json(body);
   }
   if (!isE164(to)) {
     const status = 400, body = { error: 'to must be E.164 (+447... )' };
-    if (idemKey) setCachedIdem(idemKey, status, body);
+    setCachedIdem(idemKey, status, body);
     return res.status(status).json(body);
   }
   if (!smsConfigured) {
     const status = 400, body = { error: 'SMS not configured' };
-    if (idemKey) setCachedIdem(idemKey, status, body);
+    setCachedIdem(idemKey, status, body);
     return res.status(status).json(body);
   }
   try {
@@ -310,12 +299,12 @@ app.post('/api/notify/send', async (req, res) => {
     const resp = await withRetry(() => smsClient.messages.create(payload), { retries: 2, delayMs: 300 });
     const out = { sent: true, id: resp.sid, to, channel: 'sms' };
     console.log(JSON.stringify({ evt: 'sms.sent', rid: req.id, sid: resp.sid, to }));
-    if (idemKey) setCachedIdem(idemKey, 200, out);
+    setCachedIdem(idemKey, 200, out);
     return res.json(out);
   } catch (err) {
     console.error(JSON.stringify({ evt: 'sms.error', rid: req.id, error: String(err) }));
     const status = 502, body = { sent: false, error: String(err) };
-    if (idemKey) setCachedIdem(idemKey, status, body);
+    setCachedIdem(idemKey, status, body);
     return res.status(status).json(body);
   }
 });
