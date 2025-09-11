@@ -5,13 +5,14 @@
     "calendarId": "smile_dental_calendar@group.calendar.google.com",
     "serviceAccount": "inherit",
     "booking": { "defaultDurationMin": 30, "timezone": "Europe/London", "openHours": "09:00-17:00" },
-    "sms": { "messagingServiceSid": "MGxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" }   // or: { "fromNumber": "+44XXXXXXXXXX" }
+    "sms": { "messagingServiceSid": "MG852f3cf7b50ef1be50c566be9e7efa04" }
   },
   {
     "clientKey": "bright_skin",
     "displayName": "Bright Skin Clinic",
     "calendarId": "bright_skin_calendar@group.calendar.google.com",
     "serviceAccount": "inherit",
-    "booking": { "defaultDurationMin": 45, "timezone": "Europe/London" }
+    "booking": { "defaultDurationMin": 45, "timezone": "Europe/London", "openHours": "09:00-17:00" },
+    "sms": { "messagingServiceSid": "MG852f3cf7b50ef1be50c566be9e7efa04" }
   }
 ]
