@@ -1,0 +1,16 @@
+[
+  {
+    "clientKey": "smile_dental",
+    "displayName": "Smile Dental",
+    "calendarId": "smile_dental_calendar@group.calendar.google.com",
+    "serviceAccount": "inherit",
+    "booking": { "defaultDurationMin": 30, "timezone": "Europe/London", "openHours": "09:00-17:00" }
+  },
+  {
+    "clientKey": "bright_skin",
+    "displayName": "Bright Skin Clinic",
+    "calendarId": "bright_skin_calendar@group.calendar.google.com",
+    "serviceAccount": "inherit",
+    "booking": { "defaultDurationMin": 45, "timezone": "Europe/London" }
+  }
+]
