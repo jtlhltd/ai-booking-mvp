@@ -4,7 +4,8 @@
     "displayName": "Smile Dental",
     "calendarId": "smile_dental_calendar@group.calendar.google.com",
     "serviceAccount": "inherit",
-    "booking": { "defaultDurationMin": 30, "timezone": "Europe/London", "openHours": "09:00-17:00" }
+    "booking": { "defaultDurationMin": 30, "timezone": "Europe/London", "openHours": "09:00-17:00" },
+    "sms": { "messagingServiceSid": "MGxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" }   // or: { "fromNumber": "+44XXXXXXXXXX" }
   },
   {
     "clientKey": "bright_skin",

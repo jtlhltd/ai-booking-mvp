@@ -1,24 +1,4 @@
-// server.js — AI Booking MVP (multi-tenant superset)
-// Adds per-client (tenant) config for Calendar + SMS while keeping all hardened features:
-// - API key auth, CORS, rate limit, validation
-// - Idempotency via header or body-hash fallback
-// - Retries for Google/Twilio; auto-SMS confirmation
-// - Twilio delivery receipts; /webhooks/new-lead
-// - NEW: Load clients.json and select calendar/timezone/SMS per X-Client-Key
-//
-// How to use multi-tenant mode:
-// 1) In clients.json add entries like:
-//    {
-//      "clientKey": "smile_dental",
-//      "displayName": "Smile Dental",
-//      "calendarId": "smile_dental_calendar@group.calendar.google.com",
-//      "serviceAccount": "inherit",
-//      "booking": { "defaultDurationMin": 30, "timezone": "Europe/London", "openHours": "09:00-17:00" },
-//      "sms": { "messagingServiceSid": "MGxxxxxxxx..." }   // or: { "fromNumber": "+44..." }
-//    }
-// 2) In Vapi tools, add header: X-Client-Key: <clientKey>
-// 3) Server will pick that client's calendar/timezone and SMS sender. If absent, falls back to env defaults.
-
+// server.js — AI Booking MVP (multi-tenant + stats + clients API, branded SMS)
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
@@ -66,7 +46,7 @@ app.use(express.json({ limit: '1mb' }));
 app.use(morgan('dev'));
 app.use(cors({
   origin: ORIGIN === '*' ? true : ORIGIN,
-  methods: ['GET','POST','OPTIONS'],
+  methods: ['GET','POST','OPTIONS','DELETE'],
   allowedHeaders: ['Content-Type','X-API-Key','Idempotency-Key','X-Client-Key'],
 }));
 app.use('/webhooks/twilio-status', express.urlencoded({ extended: false }));
@@ -103,6 +83,14 @@ async function loadClientsMap() {
   clientsCache = { at: now, map };
   return map;
 }
+async function readClientsArray() {
+  const arr = await readJson(CLIENTS_PATH, []);
+  return Array.isArray(arr) ? arr : [];
+}
+async function writeClientsArray(arr) {
+  await writeJson(CLIENTS_PATH, arr);
+  clientsCache = { at: 0, map: new Map() }; // bust cache
+}
 
 async function getClient(req) {
   const key = req.get('X-Client-Key') || null;
@@ -118,12 +106,10 @@ function pickCalendarId(client) {
   return client?.calendarId || GOOGLE_CALENDAR_ID;
 }
 function smsConfig(client) {
-  // Returns { client, messagingServiceSid, fromNumber, smsClient, configured }
-  const cfg = { clientKey: client?.clientKey || null };
-  // For most setups, we use the global account SID/AUTH_TOKEN, but choose per-tenant sender
+  // Returns { messagingServiceSid, fromNumber, smsClient, configured }
   const messagingServiceSid = client?.sms?.messagingServiceSid || TWILIO_MESSAGING_SERVICE_SID || null;
   const fromNumber = client?.sms?.fromNumber || TWILIO_FROM_NUMBER || null;
-  const smsClient = defaultSmsClient; // single account
+  const smsClient = defaultSmsClient; // single account auth
   const configured = !!(smsClient && (messagingServiceSid || fromNumber));
   return { messagingServiceSid, fromNumber, smsClient, configured };
 }
@@ -201,7 +187,7 @@ app.get('/gcal/ping', async (_req, res) => {
   }
 });
 
-// Twilio delivery receipts (attempt to tag tenant by From or MessagingServiceSid)
+// Twilio delivery receipts
 app.post('/webhooks/twilio-status', async (req, res) => {
   const rows = await readJson(SMS_STATUS_PATH, []);
   const log = {
@@ -212,7 +198,6 @@ app.post('/webhooks/twilio-status', async (req, res) => {
     status: req.body.MessageStatus || null,
     to: req.body.To || null,
     from: req.body.From || null,
-    // Note: MessagingServiceSid may be present depending on Twilio
     messagingServiceSid: req.body.MessagingServiceSid || null,
     errorCode: req.body.ErrorCode || null
   };
@@ -221,7 +206,7 @@ app.post('/webhooks/twilio-status', async (req, res) => {
   res.type('text/plain').send('OK');
 });
 
-// Outbound lead webhook (kept)
+// Outbound lead webhook
 app.post('/webhooks/new-lead', async (req, res) => {
   const { name, phone, email, service } = req.body || {};
   if (!name || !phone || !service || !isE164(normalizePhone(phone))) {
@@ -232,7 +217,7 @@ app.post('/webhooks/new-lead', async (req, res) => {
   return res.status(202).json({ received: true, lead });
 });
 
-// Booking route (tenant-aware) with auto-SMS
+// Booking route (tenant-aware) with auto-SMS (BRANDED)
 app.post('/api/calendar/check-book', async (req, res) => {
   const idemKey = deriveIdemKey(req);
   const cached = getCachedIdem(idemKey);
@@ -252,7 +237,7 @@ app.post('/api/calendar/check-book', async (req, res) => {
     lead.phone = normalizePhone(lead.phone);
     if (!isE164(lead.phone)) return res.status(400).json({ error: 'lead.phone must be E.164' });
 
-    // Choose a slot: tomorrow at 14:00
+    // Choose a slot: tomorrow at 14:00 in server time (reported in tenant tz)
     const base = new Date(Date.now() + 24 * 60 * 60 * 1000);
     base.setHours(14, 0, 0, 0);
     const startISO = base.toISOString();
@@ -272,7 +257,7 @@ app.post('/api/calendar/check-book', async (req, res) => {
           `Phone: ${lead.phone}`,
           lead.email ? `Email: ${lead.email}` : null,
           startPref ? `Start preference: ${startPref}` : null
-        ].filter(Boolean).join('\n');
+        ].filter(Boolean).join('\\n');
 
         const event = await withRetry(() => insertEvent({
           auth, calendarId, summary, description,
@@ -287,7 +272,7 @@ app.post('/api/calendar/check-book', async (req, res) => {
       google = { error: String(err) };
     }
 
-    // Auto-SMS confirmation (tenant-aware sender)
+    // Auto-SMS confirmation (tenant-aware sender, BRANDED)
     let sms = null;
     const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
     if (configured) {
@@ -297,7 +282,8 @@ app.post('/api/calendar/check-book', async (req, res) => {
         hour: 'numeric', minute: '2-digit', hour12: true
       });
       const link = google?.htmlLink ? ` Calendar: ${google.htmlLink}` : '';
-      const body = `Hi ${lead.name}, your ${service} is booked for ${when} ${tz}.${link} Reply STOP to opt out.`;
+      const tenantName = client?.displayName || 'Our Clinic';
+      const body = `Hi ${lead.name}, your ${service} is booked with ${tenantName} for ${when} ${tz}.${link} Reply STOP to opt out.`;
 
       try {
         const payload = { to: lead.phone, body };
@@ -379,6 +365,77 @@ app.post('/api/notify/send', async (req, res) => {
     setCachedIdem(idemKey, status, body);
     return res.status(status).json(body);
   }
+});
+
+// --- /api/stats: bookings + sms counts per tenant (last 7 & 30 days)
+app.get('/api/stats', async (_req, res) => {
+  const now = Date.now();
+  const day = 24 * 60 * 60 * 1000;
+  const within = (ts, days) => (now - ts) <= (days * day);
+
+  const calls = await readJson(CALLS_PATH, []);
+  const smsEvents = await readJson(SMS_STATUS_PATH, []);
+  const agg = {};
+
+  for (const c of calls) {
+    const t = c.tenant || 'default';
+    const ts = new Date(c.created_at || c.at || Date.now()).getTime();
+    agg[t] ||= { bookings7: 0, bookings30: 0, smsSent7: 0, smsSent30: 0 };
+    if (within(ts, 7))  agg[t].bookings7++;
+    if (within(ts, 30)) agg[t].bookings30++;
+  }
+
+  for (const e of smsEvents) {
+    const t = e.tenant || 'default'; // (we can improve tagging later)
+    const ts = new Date(e.at || Date.now()).getTime();
+    const ok = ['accepted','queued','sent','delivered'].includes(e.status);
+    if (!ok) continue;
+    agg[t] ||= { bookings7: 0, bookings30: 0, smsSent7: 0, smsSent30: 0 };
+    if (within(ts, 7))  agg[t].smsSent7++;
+    if (within(ts, 30)) agg[t].smsSent30++;
+  }
+
+  const map = await loadClientsMap();
+  for (const k of map.keys()) agg[k] ||= { bookings7: 0, bookings30: 0, smsSent7: 0, smsSent30: 0 };
+
+  res.json({ ok: true, tenants: agg });
+});
+
+// --- Basic Clients CRUD (file-based)
+app.get('/api/clients', async (_req, res) => {
+  const arr = await readClientsArray();
+  res.json({ ok: true, count: arr.length, clients: arr });
+});
+
+app.post('/api/clients', async (req, res) => {
+  const c = req.body || {};
+  const key = (c.clientKey || '').toString().trim();
+  if (!key) return res.status(400).json({ error: 'clientKey is required' });
+
+  // minimal validation
+  const tz = c.booking?.timezone || TIMEZONE;
+  if (typeof tz !== 'string' || !tz.length) return res.status(400).json({ error: 'booking.timezone is required' });
+
+  // sms block optional, but if provided must have one sender
+  if (c.sms && !(c.sms.messagingServiceSid || c.sms.fromNumber)) {
+    return res.status(400).json({ error: 'sms.messagingServiceSid or sms.fromNumber required when sms block present' });
+  }
+
+  const arr = await readClientsArray();
+  const idx = arr.findIndex(x => x.clientKey === key);
+  if (idx >= 0) arr[idx] = { ...arr[idx], ...c };
+  else arr.push(c);
+
+  await writeClientsArray(arr);
+  res.json({ ok: true, client: c });
+});
+
+app.delete('/api/clients/:key', async (req, res) => {
+  const key = req.params.key;
+  const arr = await readClientsArray();
+  const next = arr.filter(c => c.clientKey !== key);
+  await writeClientsArray(next);
+  res.json({ ok: true, deleted: arr.length - next.length });
 });
 
 // GDPR delete by phone
