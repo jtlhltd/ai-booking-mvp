@@ -18,6 +18,23 @@ import { createHash } from 'crypto';
 import { makeJwtAuth, insertEvent, listUpcoming, freeBusy } from './gcal.js';
 
 const app = express();
+
+// --- Tenant header normalizer ---
+// Accept X-Client-Key in any casing or as ?clientKey=... and normalize to 'x-client-key'.
+app.use((req, _res, next) => {
+  const hdrs = req.headers || {};
+  const fromHeader =
+    req.get?.('X-Client-Key') ||
+    req.get?.('x-client-key') ||
+    hdrs['x-client-key'] ||
+    hdrs['X-Client-Key'];
+  const fromQuery = req.query?.clientKey;
+  const tenantKey = fromHeader || fromQuery;
+  if (tenantKey && !hdrs['x-client-key']) {
+    req.headers['x-client-key'] = String(tenantKey);
+  }
+  next();
+});
 const PORT = process.env.PORT || 3000;
 const ORIGIN = process.env.VAPI_ORIGIN || '*';
 const API_KEY = process.env.API_KEY || '';
