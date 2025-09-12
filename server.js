@@ -249,6 +249,93 @@ app.post('/api/calendar/find-slots', async (req, res) => {
   }
 });
 
+// === Book a slot ===
+app.post('/api/calendar/book-slot', async (req, res) => {
+  try {
+    const client = await getClient(req);
+    if (!client) return res.status(400).json({ ok:false, error: 'Unknown tenant (missing X-Client-Key)' });
+
+    if (!(GOOGLE_CLIENT_EMAIL && (GOOGLE_PRIVATE_KEY || GOOGLE_PRIVATE_KEY_B64)))
+      return res.status(400).json({ ok:false, error:'Google env missing' });
+
+    const tz = pickTimezone(client);
+    const calendarId = pickCalendarId(client);
+
+    const { service, lead, start, durationMin } = req.body || {};
+
+    if (!service || typeof service !== 'string') {
+      return res.status(400).json({ ok:false, error: 'Missing/invalid "service" (string)' });
+    }
+    if (!lead || typeof lead !== 'object' || !lead.name || !lead.phone) {
+      return res.status(400).json({ ok:false, error: 'Missing/invalid "lead" (need name, phone)' });
+    }
+    const startISO = (() => { try { return new Date(start).toISOString(); } catch { return null; } })();
+    if (!start || !startISO) {
+      return res.status(400).json({ ok:false, error: 'Missing/invalid "start" (ISO datetime)' });
+    }
+    const dur = Number.isFinite(+durationMin) ? +durationMin : (client?.booking?.defaultDurationMin || 30);
+    const endISO = new Date(new Date(startISO).getTime() + dur * 60000).toISOString();
+
+    // Auth
+    const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY, privateKeyB64: GOOGLE_PRIVATE_KEY_B64 });
+    await auth.authorize();
+
+    // Guard against conflicts via freeBusy
+    const busy = await freeBusy({ auth, calendarId, timeMinISO: startISO, timeMaxISO: endISO });
+    const conflict = busy.some(b => !(endISO <= b.start || startISO >= b.end));
+    if (conflict) {
+      return res.status(409).json({ ok:false, error:'Requested time is busy', busy });
+    }
+
+    // Create event
+    const summary = `${service} — ${lead.name}`;
+    const description = [
+      `Service: ${service}`,
+      `Lead: ${lead.name}`,
+      lead.phone ? `Phone: ${lead.phone}` : null,
+      lead.id ? `Lead ID: ${lead.id}` : null,
+      `Booked via AI Booking MVP`
+    ].filter(Boolean).join('\\n');
+
+    const attendees = [];
+    if (lead.email && typeof lead.email === 'string' && lead.email.includes('@')) {
+      attendees.push(lead.email);
+    }
+
+    const event = await insertEvent({
+      auth,
+      calendarId,
+      summary,
+      description,
+      startIso: startISO,
+      endIso: endISO,
+      timezone: tz,
+      attendees
+    });
+
+    return res.status(201).json({
+      ok: true,
+      event: {
+        id: event.id,
+        htmlLink: event.htmlLink,
+        status: event.status,
+        start: event.start,
+        end: event.end,
+        summary: event.summary,
+        creator: event.creator,
+        organizer: event.organizer
+      },
+      tenant: {
+        clientKey: client?.clientKey || null,
+        calendarId,
+        timezone: tz
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ ok:false, error: String(err) });
+  }
+});
+
 // Twilio delivery receipts
 app.post('/webhooks/twilio-status', async (req, res) => {
   const rows = await readJson(SMS_STATUS_PATH, []);
