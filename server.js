@@ -1,4 +1,4 @@
-// server.js — AI Booking MVP (multi-tenant + stats + clients API, branded SMS)
+// server.js — AI Booking MVP (multi-tenant + stats + clients API, branded SMS) — MERGED & FIXED
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
@@ -258,7 +258,7 @@ app.post('/api/calendar/check-book', async (req, res) => {
           `Phone: ${lead.phone}`,
           lead.email ? `Email: ${lead.email}` : null,
           startPref ? `Start preference: ${startPref}` : null
-        ].filter(Boolean).join('\\n');
+        ].filter(Boolean).join('\n');
 
         const event = await withRetry(() => insertEvent({
           auth, calendarId, summary, description,
@@ -283,7 +283,7 @@ app.post('/api/calendar/check-book', async (req, res) => {
         hour: 'numeric', minute: '2-digit', hour12: true
       });
       const link = google?.htmlLink ? ` Calendar: ${google.htmlLink}` : '';
-      const tenantName = client?.displayName || 'Our Clinic';
+      const tenantName = client?.displayName || client?.clientKey || 'Our Clinic';
       const body = `Hi ${lead.name}, your ${service} is booked with ${tenantName} for ${when} ${tz}.${link} Reply STOP to opt out.`;
 
       try {
@@ -322,7 +322,7 @@ app.post('/api/calendar/check-book', async (req, res) => {
   }
 });
 
-// Manual SMS (tenant-aware)
+// Manual SMS (tenant-aware) — FIXED to define & return `out`
 app.post('/api/notify/send', async (req, res) => {
   const idemKey = deriveIdemKey(req);
   const cached = getCachedIdem(idemKey);
@@ -356,7 +356,11 @@ app.post('/api/notify/send', async (req, res) => {
   }
 
   try {
-    const brand = (client?.displayName && String(client.displayName).trim()) || req.get('X-Client-Key') || (client?.clientKey && String(client.clientKey)) || 'Our Clinic';
+    const brand =
+      (client?.displayName && String(client.displayName).trim()) ||
+      req.get('X-Client-Key') ||
+      (client?.clientKey && String(client.clientKey)) ||
+      'Our Clinic';
     const branded = `${brand}: ${message}`;
 
     const payload = { to: cleanTo, body: branded };
@@ -364,13 +368,17 @@ app.post('/api/notify/send', async (req, res) => {
     else payload.from = fromNumber;
 
     const resp = await withRetry(() => smsClient.messages.create(payload), { retries: 2, delayMs: 300 });
+
+    const out = { sent: true, id: resp.sid, to: cleanTo, channel: 'sms', tenant: client?.clientKey || 'default', status: resp.status };
     setCachedIdem(idemKey, 200, out);
+    return res.json(out);
   } catch (err) {
     const status = 503, body = { sent: false, error: String(err) };
     setCachedIdem(idemKey, status, body);
     return res.status(status).json(body);
   }
 });
+
 // --- /api/stats: bookings + sms counts per tenant (last 7 & 30 days)
 app.get('/api/stats', async (_req, res) => {
   const now = Date.now();
@@ -510,4 +518,3 @@ app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
     return res.status(500).json({ error: String(err) });
   }
 });
-
