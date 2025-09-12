@@ -1,4 +1,4 @@
-// server.js — AI Booking MVP (multi-tenant + stats + clients API, branded SMS) — MERGED & FIXED
+// server.js — AI Booking MVP (enhanced: availability, consent gating, sequences)
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
@@ -12,7 +12,7 @@ import twilio from 'twilio';
 import fetch from 'node-fetch';
 import { createHash } from 'crypto';
 
-import { makeJwtAuth, insertEvent, listUpcoming } from './gcal.js';
+import { makeJwtAuth, insertEvent, listUpcoming, freeBusy } from './gcal.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -25,15 +25,16 @@ const DATA_DIR   = path.join(__dirname, 'data');
 const LEADS_PATH = path.join(DATA_DIR, 'leads.json');
 const CALLS_PATH = path.join(DATA_DIR, 'calls.json');
 const SMS_STATUS_PATH = path.join(DATA_DIR, 'sms-status.json');
+const JOBS_PATH  = path.join(DATA_DIR, 'jobs.json');
 const CLIENTS_PATH = path.join(__dirname, 'clients.json');
 
-// === Env: Google (defaults if client not specified)
+// === Env: Google
 const GOOGLE_CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL || '';
 const GOOGLE_PRIVATE_KEY  = process.env.GOOGLE_PRIVATE_KEY  || '';
 const GOOGLE_CALENDAR_ID  = process.env.GOOGLE_CALENDAR_ID  || 'primary';
 const TIMEZONE            = process.env.TZ || process.env.TIMEZONE || 'Europe/London';
 
-// === Env: Twilio (account creds are global; sender is per-tenant when provided)
+// === Env: Twilio
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || '';
 const TWILIO_AUTH_TOKEN  = process.env.TWILIO_AUTH_TOKEN  || '';
 const TWILIO_FROM_NUMBER = process.env.TWILIO_FROM_NUMBER || '';
@@ -56,10 +57,9 @@ app.use(rateLimit({ windowMs: 60_000, max: 60, standardHeaders: true, legacyHead
 
 async function ensureDataFiles() {
   await fs.mkdir(DATA_DIR, { recursive: true });
-  for (const p of [LEADS_PATH, CALLS_PATH, SMS_STATUS_PATH]) {
+  for (const p of [LEADS_PATH, CALLS_PATH, SMS_STATUS_PATH, JOBS_PATH]) {
     try { await fs.access(p); } catch { await fs.writeFile(p, '[]', 'utf8'); }
   }
-  // clients.json optional; if missing, we operate in single-tenant env mode
 }
 
 async function readJson(p, fallback = null) {
@@ -71,28 +71,19 @@ async function writeJson(p, data) { await fs.writeFile(p, JSON.stringify(data, n
 const isE164 = (s) => typeof s === 'string' && /^\+\d{7,15}$/.test(s);
 const normalizePhone = s => (s || '').trim().replace(/[^\d+]/g, '');
 
-// === Clients loader (cached with simple 5s ttl)
+// === Clients (file-backed)
 let clientsCache = { at: 0, map: new Map() };
 async function loadClientsMap() {
   const now = Date.now();
   if (now - clientsCache.at < 5000 && clientsCache.map.size) return clientsCache.map;
   const arr = await readJson(CLIENTS_PATH, []);
   const map = new Map();
-  for (const c of Array.isArray(arr) ? arr : []) {
-    if (c?.clientKey) map.set(String(c.clientKey), c);
-  }
+  for (const c of Array.isArray(arr) ? arr : []) if (c?.clientKey) map.set(String(c.clientKey), c);
   clientsCache = { at: now, map };
   return map;
 }
-async function readClientsArray() {
-  const arr = await readJson(CLIENTS_PATH, []);
-  return Array.isArray(arr) ? arr : [];
-}
-async function writeClientsArray(arr) {
-  await writeJson(CLIENTS_PATH, arr);
-  clientsCache = { at: 0, map: new Map() }; // bust cache
-}
-
+async function readClientsArray() { const arr = await readJson(CLIENTS_PATH, []); return Array.isArray(arr) ? arr : []; }
+async function writeClientsArray(arr) { await writeJson(CLIENTS_PATH, arr); clientsCache = { at: 0, map: new Map() }; }
 async function getClient(req) {
   const key = req.get('X-Client-Key') || null;
   if (!key) return null;
@@ -100,17 +91,12 @@ async function getClient(req) {
   return map.get(key) || null;
 }
 
-function pickTimezone(client) {
-  return client?.booking?.timezone || TIMEZONE;
-}
-function pickCalendarId(client) {
-  return client?.calendarId || GOOGLE_CALENDAR_ID;
-}
+function pickTimezone(client) { return client?.booking?.timezone || TIMEZONE; }
+function pickCalendarId(client) { return client?.calendarId || GOOGLE_CALENDAR_ID; }
 function smsConfig(client) {
-  // Returns { messagingServiceSid, fromNumber, smsClient, configured }
   const messagingServiceSid = client?.sms?.messagingServiceSid || TWILIO_MESSAGING_SERVICE_SID || null;
   const fromNumber = client?.sms?.fromNumber || TWILIO_FROM_NUMBER || null;
-  const smsClient = defaultSmsClient; // single account auth
+  const smsClient = defaultSmsClient;
   const configured = !!(smsClient && (messagingServiceSid || fromNumber));
   return { messagingServiceSid, fromNumber, smsClient, configured };
 }
@@ -124,7 +110,7 @@ function getCachedIdem(key) {
   if (Date.now() - v.at > IDEM_TTL_MS) { idemCache.delete(key); return null; }
   return v;
 }
-function setCachedIdem(key, status, body) { idemCache.set(key, { at: Date.now(), status, body }); }
+function setCachedIdem(key, status, body) { if (!key) return; idemCache.set(key, { at: Date.now(), status, body }); }
 function deriveIdemKey(req) {
   const headerKey = req.get('Idempotency-Key');
   if (headerKey) return headerKey;
@@ -132,7 +118,7 @@ function deriveIdemKey(req) {
   return 'auto:' + h;
 }
 
-// API key guard (skip for health, gcal ping, Twilio webhook)
+// API key guard
 function requireApiKey(req, res, next) {
   if (req.method === 'GET' && (req.path === '/health' || req.path === '/gcal/ping')) return next();
   if (req.path.startsWith('/webhooks/twilio-status')) return next();
@@ -173,18 +159,74 @@ app.get('/health', async (_req, res) => {
   });
 });
 
-// GCal diagnostics
-app.get('/gcal/ping', async (_req, res) => {
+// === Availability ===
+app.post('/api/calendar/find-slots', async (req, res) => {
   try {
-    if (!(GOOGLE_CLIENT_EMAIL && GOOGLE_PRIVATE_KEY && GOOGLE_CALENDAR_ID)) {
-      return res.status(400).json({ ok: false, error: 'Missing GOOGLE_* env vars' });
-    }
+    const client = await getClient(req);
+    if (!client) return res.status(400).json({ ok:false, error: 'Unknown tenant (missing X-Client-Key)' });
+    if (!(GOOGLE_CLIENT_EMAIL && GOOGLE_PRIVATE_KEY)) return res.status(400).json({ ok:false, error:'Google env missing' });
+
+    const tz = pickTimezone(client);
+    const calendarId = pickCalendarId(client);
+    const { durationMin = client?.booking?.defaultDurationMin || 30, daysAhead = 14, stepMinutes = 15 } = req.body || {};
+
+    const business = client?.booking?.hours || {
+      mon: ['09:00-17:00'], tue: ['09:00-17:00'], wed: ['09:00-17:00'],
+      thu: ['09:00-17:00'], fri: ['09:00-17:00']
+    };
+
+    const windowStart = new Date();
+    const windowEnd   = new Date(Date.now() + daysAhead * 86400000);
+
     const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY });
     await auth.authorize();
-    const items = await listUpcoming({ auth, calendarId: GOOGLE_CALENDAR_ID, maxResults: 5 });
-    res.json({ ok: true, upcomingCount: items.length, sample: items.map(e => ({ id: e.id, summary: e.summary })) });
+    const busy = await freeBusy({ auth, calendarId, timeMinISO: windowStart.toISOString(), timeMaxISO: windowEnd.toISOString() });
+
+    const slotMs = durationMin * 60000;
+    const results = [];
+    const cursor = new Date(windowStart);
+    cursor.setSeconds(0,0);
+
+    const dowName = ['sun','mon','tue','wed','thu','fri','sat'];
+
+    function localHM(dt) {
+      const f = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
+      const parts = f.formatToParts(dt);
+      const hh = parts.find(p => p.type==='hour').value;
+      const mm = parts.find(p => p.type==='minute').value;
+      return `${hh}:${mm}`;
+    }
+
+    function isOpen(dt) {
+      const spans = business[dowName[dt.getUTCDay()]];
+      if (!Array.isArray(spans) || spans.length === 0) return false;
+      const hm = localHM(dt);
+      return spans.some(s => {
+        const [a,b] = s.split('-'); return hm >= a && hm < b;
+      });
+    }
+
+    function overlapsBusy(sISO, eISO) {
+      return busy.some(b => !(eISO <= b.start || sISO >= b.end));
+    }
+
+    while (cursor < windowEnd && results.length < 20) {
+      const start = new Date(cursor);
+      const end   = new Date(cursor.getTime() + slotMs);
+      const sISO = start.toISOString();
+      const eISO = end.toISOString();
+
+      if (isOpen(start) && !overlapsBusy(sISO, eISO)) {
+        results.push({ start: sISO, end: eISO, timezone: tz });
+      }
+
+      cursor.setMinutes(cursor.getMinutes() + stepMinutes);
+      cursor.setSeconds(0,0);
+    }
+
+    res.json({ ok:true, slots: results });
   } catch (err) {
-    res.status(500).json({ ok: false, error: String(err) });
+    res.status(500).json({ ok:false, error: String(err) });
   }
 });
 
@@ -208,17 +250,54 @@ app.post('/webhooks/twilio-status', async (req, res) => {
 });
 
 // Outbound lead webhook
-app.post('/webhooks/new-lead', async (req, res) => {
-  const { name, phone, email, service } = req.body || {};
-  if (!name || !phone || !service || !isE164(normalizePhone(phone))) {
-    return res.status(400).json({ error: 'Missing/invalid: name, phone (E.164), service' });
+const VAPI_URL = 'https://api.vapi.ai';
+const VAPI_PRIVATE_KEY   = process.env.VAPI_PRIVATE_KEY || '';
+const VAPI_ASSISTANT_ID  = process.env.VAPI_ASSISTANT_ID || '';
+const VAPI_PHONE_NUMBER_ID = process.env.VAPI_PHONE_NUMBER_ID || '';
+
+app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const map = await loadClientsMap();
+    const client = map.get(clientKey);
+    if (!client) return res.status(404).json({ error: `Unknown clientKey ${clientKey}` });
+
+    const { name, phone, email, service, durationMin } = req.body || {};
+    if (!phone) return res.status(400).json({ error: 'Missing phone' });
+    const e164 = normalizePhone(phone);
+    if (!isE164(e164)) return res.status(400).json({ error: 'phone must be E.164 (+447...)' });
+    if (!(VAPI_PRIVATE_KEY && VAPI_ASSISTANT_ID && VAPI_PHONE_NUMBER_ID)) {
+      return res.status(500).json({ error: 'Missing Vapi env: VAPI_PRIVATE_KEY, VAPI_ASSISTANT_ID, VAPI_PHONE_NUMBER_ID' });
+    }
+
+    const resp = await fetch(`${VAPI_URL}/call`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        assistantId: VAPI_ASSISTANT_ID,
+        phoneNumberId: VAPI_PHONE_NUMBER_ID,
+        customer: { number: e164, numberE164CheckEnabled: true },
+        assistantOverrides: {
+          variableValues: {
+            ClientKey: clientKey,
+            BusinessName: client.displayName || client.businessName || clientKey,
+            ConsentLine: 'This call may be recorded for quality.',
+            DefaultService: service || '',
+            DefaultDurationMin: durationMin || client?.booking?.defaultDurationMin || 30
+          }
+        }
+      })
+    });
+
+    const data = await resp.json();
+    return res.status(resp.ok ? 200 : 502).json(data);
+  } catch (err) {
+    console.error('new-lead vapi error', err);
+    return res.status(500).json({ error: String(err) });
   }
-  const lead = { id: 'lead_' + nanoid(8), name, phone: normalizePhone(phone), email: email || null, service, created_at: new Date().toISOString() };
-  const leads = await readJson(LEADS_PATH, []); leads.push(lead); await writeJson(LEADS_PATH, leads);
-  return res.status(202).json({ received: true, lead });
 });
 
-// Booking route (tenant-aware) with auto-SMS (BRANDED)
+// Booking (as before, branded auto-SMS)
 app.post('/api/calendar/check-book', async (req, res) => {
   const idemKey = deriveIdemKey(req);
   const cached = getCachedIdem(idemKey);
@@ -238,13 +317,11 @@ app.post('/api/calendar/check-book', async (req, res) => {
     lead.phone = normalizePhone(lead.phone);
     if (!isE164(lead.phone)) return res.status(400).json({ error: 'lead.phone must be E.164' });
 
-    // Choose a slot: tomorrow at 14:00 in server time (reported in tenant tz)
     const base = new Date(Date.now() + 24 * 60 * 60 * 1000);
     base.setHours(14, 0, 0, 0);
     const startISO = base.toISOString();
     const endISO = new Date(base.getTime() + dur * 60 * 1000).toISOString();
 
-    // Insert event with retries
     let google = { skipped: true };
     try {
       if (GOOGLE_CLIENT_EMAIL && GOOGLE_PRIVATE_KEY && calendarId) {
@@ -273,13 +350,11 @@ app.post('/api/calendar/check-book', async (req, res) => {
       google = { error: String(err) };
     }
 
-    // Auto-SMS confirmation (tenant-aware sender, BRANDED)
     let sms = null;
     const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
     if (configured) {
       const when = new Date(startISO).toLocaleString('en-GB', {
-        timeZone: tz,
-        weekday: 'short', day: 'numeric', month: 'short',
+        timeZone: tz, weekday: 'short', day: 'numeric', month: 'short',
         hour: 'numeric', minute: '2-digit', hour12: true
       });
       const link = google?.htmlLink ? ` Calendar: ${google.htmlLink}` : '';
@@ -322,7 +397,20 @@ app.post('/api/calendar/check-book', async (req, res) => {
   }
 });
 
-// Manual SMS (tenant-aware) — FIXED to define & return `out`
+// === Consent ===
+app.post('/api/leads/consent', async (req, res) => {
+  const { leadId, phone } = req.body || {};
+  if (!leadId && !phone) return res.status(400).json({ ok:false, error: 'leadId or phone required' });
+  const leads = await readJson(LEADS_PATH, []);
+  const e164 = phone ? normalizePhone(phone) : null;
+  const idx = leads.findIndex(l => (leadId && l.id === leadId) || (e164 && l.phone === e164));
+  if (idx < 0) return res.status(404).json({ ok:false, error: 'lead not found' });
+  leads[idx].consentSms = true;
+  await writeJson(LEADS_PATH, leads);
+  res.json({ ok:true, leadId: leads[idx].id, consentSms: true });
+});
+
+// === Notify (manual SMS) with consent gating ===
 app.post('/api/notify/send', async (req, res) => {
   const idemKey = deriveIdemKey(req);
   const cached = getCachedIdem(idemKey);
@@ -330,7 +418,7 @@ app.post('/api/notify/send', async (req, res) => {
 
   const client = await getClient(req);
   const { smsClient, messagingServiceSid, fromNumber, configured } = smsConfig(client);
-  const { channel, to, message } = req.body || {};
+  const { channel, to, message, type = 'transactional' } = req.body || {};
 
   if (!channel || !to || !message) {
     const status = 400, body = { error: 'Missing channel, to, message' };
@@ -353,6 +441,16 @@ app.post('/api/notify/send', async (req, res) => {
     const status = 400, body = { error: 'SMS not configured for tenant' };
     setCachedIdem(idemKey, status, body);
     return res.status(status).json(body);
+  }
+
+  if (String(type) !== 'transactional') {
+    const leads = await readJson(LEADS_PATH, []);
+    const lead = leads.find(l => l.phone === cleanTo);
+    if (!lead?.consentSms) {
+      const status = 403, body = { sent: false, error: 'consent_required' };
+      setCachedIdem(idemKey, status, body);
+      return res.status(status).json(body);
+    }
   }
 
   try {
@@ -379,7 +477,67 @@ app.post('/api/notify/send', async (req, res) => {
   }
 });
 
-// --- /api/stats: bookings + sms counts per tenant (last 7 & 30 days)
+// === Sequences ===
+app.post('/api/notify/sequence', async (req, res) => {
+  const tenant = (req.get('X-Client-Key') || '').trim();
+  const { to, name, steps, type = 'marketing' } = req.body || {};
+  if (!tenant || !to || !Array.isArray(steps) || steps.length === 0) {
+    return res.status(400).json({ ok:false, error: 'tenant header, to, steps required' });
+  }
+  const e164 = normalizePhone(to);
+  if (!isE164(e164)) return res.status(400).json({ ok:false, error:'to must be E.164' });
+
+  const rendered = steps.map(s => ({
+    at: new Date(s.at || Date.now()).toISOString(),
+    message: String(s.message || '').replaceAll('{{name}}', name || 'there')
+  }));
+
+  const jobs = await readJson(JOBS_PATH, []);
+  const job = { id: 'job_'+nanoid(10), tenant, to: e164, type, steps: rendered, status: 'queued' };
+  jobs.push(job); await writeJson(JOBS_PATH, jobs);
+  res.json({ ok:true, job });
+});
+
+setInterval(async () => {
+  try {
+    const now = Date.now();
+    const jobs = await readJson(JOBS_PATH, []);
+    let changed = false;
+
+    for (const job of jobs) {
+      if (job.status === 'completed' || job.status === 'cancelled') continue;
+      for (const step of job.steps) {
+        if (step.sent) continue;
+        if (new Date(step.at).getTime() > now) continue;
+
+        const body = { channel: 'sms', to: job.to, message: step.message, type: job.type };
+        try {
+          await fetch(`http://localhost:${PORT}/api/notify/send`, {
+            method: 'POST',
+            headers: {
+              'Content-Type':'application/json',
+              'X-API-Key': API_KEY,
+              'X-Client-Key': job.tenant,
+              'Idempotency-Key': `job:${job.id}:${step.at}`
+            },
+            body: JSON.stringify(body)
+          });
+          step.sent = true;
+          step.sentAt = new Date().toISOString();
+          changed = true;
+        } catch (e) {
+          step.error = String(e);
+          changed = true;
+        }
+      }
+      if (job.steps.every(s => s.sent)) job.status = 'completed';
+    }
+
+    if (changed) await writeJson(JOBS_PATH, jobs);
+  } catch {}
+}, 60_000);
+
+// Stats
 app.get('/api/stats', async (_req, res) => {
   const now = Date.now();
   const day = 24 * 60 * 60 * 1000;
@@ -398,7 +556,7 @@ app.get('/api/stats', async (_req, res) => {
   }
 
   for (const e of smsEvents) {
-    const t = e.tenant || 'default'; // (we can improve tagging later)
+    const t = e.tenant || 'default';
     const ts = new Date(e.at || Date.now()).getTime();
     const ok = ['accepted','queued','sent','delivered'].includes(e.status);
     if (!ok) continue;
@@ -413,35 +571,27 @@ app.get('/api/stats', async (_req, res) => {
   res.json({ ok: true, tenants: agg });
 });
 
-// --- Basic Clients CRUD (file-based)
+// Clients
 app.get('/api/clients', async (_req, res) => {
   const arr = await readClientsArray();
   res.json({ ok: true, count: arr.length, clients: arr });
 });
-
 app.post('/api/clients', async (req, res) => {
   const c = req.body || {};
   const key = (c.clientKey || '').toString().trim();
   if (!key) return res.status(400).json({ error: 'clientKey is required' });
-
-  // minimal validation
   const tz = c.booking?.timezone || TIMEZONE;
   if (typeof tz !== 'string' || !tz.length) return res.status(400).json({ error: 'booking.timezone is required' });
-
-  // sms block optional, but if provided must have one sender
   if (c.sms && !(c.sms.messagingServiceSid || c.sms.fromNumber)) {
     return res.status(400).json({ error: 'sms.messagingServiceSid or sms.fromNumber required when sms block present' });
   }
-
   const arr = await readClientsArray();
   const idx = arr.findIndex(x => x.clientKey === key);
   if (idx >= 0) arr[idx] = { ...arr[idx], ...c };
   else arr.push(c);
-
   await writeClientsArray(arr);
   res.json({ ok: true, client: c });
 });
-
 app.delete('/api/clients/:key', async (req, res) => {
   const key = req.params.key;
   const arr = await readClientsArray();
@@ -450,71 +600,7 @@ app.delete('/api/clients/:key', async (req, res) => {
   res.json({ ok: true, deleted: arr.length - next.length });
 });
 
-// GDPR delete by phone
-app.get('/gdpr/delete', async (req, res) => {
-  const phone = normalizePhone(req.query.phone);
-  if (!phone || !isE164(phone)) return res.status(400).json({ error: 'phone (E.164) is required' });
-  const leads = await readJson(LEADS_PATH, []);
-  const calls = await readJson(CALLS_PATH, []);
-  const leadsAfter = leads.filter(l => l.phone !== phone);
-  const callsAfter = calls.filter(c => (c.contact?.phone || '') !== phone);
-  await writeJson(LEADS_PATH, leadsAfter);
-  await writeJson(CALLS_PATH, callsAfter);
-  return res.json({ deleted: { leads: leads.length - leadsAfter.length, calls: calls.length - callsAfter.length } });
-});
-
 await ensureDataFiles();
 app.listen(PORT, () => {
   console.log(`AI Booking MVP listening on http://localhost:${PORT}`);
-});
-
-// === Vapi outbound call (tenant-aware) ===
-const VAPI_URL = 'https://api.vapi.ai';
-const VAPI_PRIVATE_KEY   = process.env.VAPI_PRIVATE_KEY || '';
-const VAPI_ASSISTANT_ID  = process.env.VAPI_ASSISTANT_ID || '';
-const VAPI_PHONE_NUMBER_ID = process.env.VAPI_PHONE_NUMBER_ID || '';
-
-app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
-  try {
-    const { clientKey } = req.params;
-    const map = await loadClientsMap();
-    const client = map.get(clientKey);
-    if (!client) return res.status(404).json({ error: `Unknown clientKey ${clientKey}` });
-
-    const { name, phone, email, service, durationMin } = req.body || {};
-    if (!phone) return res.status(400).json({ error: 'Missing phone' });
-    const e164 = normalizePhone(phone);
-    if (!isE164(e164)) return res.status(400).json({ error: 'phone must be E.164 (+447...)' });
-    if (!(VAPI_PRIVATE_KEY && VAPI_ASSISTANT_ID && VAPI_PHONE_NUMBER_ID)) {
-      return res.status(500).json({ error: 'Missing Vapi env: VAPI_PRIVATE_KEY, VAPI_ASSISTANT_ID, VAPI_PHONE_NUMBER_ID' });
-    }
-
-    const resp = await fetch(`${VAPI_URL}/call`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        assistantId: VAPI_ASSISTANT_ID,
-        phoneNumberId: VAPI_PHONE_NUMBER_ID,
-        customer: { number: e164, numberE164CheckEnabled: true },
-        assistantOverrides: {
-          variableValues: {
-            ClientKey: clientKey,
-            BusinessName: client.displayName || client.businessName || clientKey,
-            ConsentLine: 'This call may be recorded for quality.',
-            DefaultService: service || '',
-            DefaultDurationMin: durationMin || client?.booking?.defaultDurationMin || 30
-          }
-        }
-      })
-    });
-
-    const data = await resp.json();
-    return res.status(resp.ok ? 200 : 502).json(data);
-  } catch (err) {
-    console.error('new-lead vapi error', err);
-    return res.status(500).json({ error: String(err) });
-  }
 });
