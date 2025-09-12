@@ -364,26 +364,13 @@ app.post('/api/notify/send', async (req, res) => {
     else payload.from = fromNumber;
 
     const resp = await withRetry(() => smsClient.messages.create(payload), { retries: 2, delayMs: 300 });
-    const out = { sent: true, id: resp.sid, to: cleanTo, channel: 'sms', tenant: client?.clientKey || 'default' };
     setCachedIdem(idemKey, 200, out);
-    return res.json(out);
   } catch (err) {
     const status = 503, body = { sent: false, error: String(err) };
     setCachedIdem(idemKey, status, body);
     return res.status(status).json(body);
   }
 });
-// Cleaned duplicate block
-// const out = { sent: true, id: resp.sid, to: cleanTo, channel: 'sms', tenant: client?.clientKey || 'default' };
-    setCachedIdem(idemKey, 200, out);
-    return res.json(out);
-  } catch (err) {
-    const status = 503, body = { sent: false, error: String(err) };
-    setCachedIdem(idemKey, status, body);
-    return res.status(status).json(body);
-  }
-});
-
 // --- /api/stats: bookings + sms counts per tenant (last 7 & 30 days)
 app.get('/api/stats', async (_req, res) => {
   const now = Date.now();
@@ -523,3 +510,4 @@ app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
     return res.status(500).json({ error: String(err) });
   }
 });
+
