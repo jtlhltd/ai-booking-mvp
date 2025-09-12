@@ -372,7 +372,9 @@ app.post('/api/notify/send', async (req, res) => {
     setCachedIdem(idemKey, status, body);
     return res.status(status).json(body);
   }
-});const out = { sent: true, id: resp.sid, to: cleanTo, channel: 'sms', tenant: client?.clientKey || 'default' };
+});
+// Removed duplicate stray block
+// const out = { sent: true, id: resp.sid, to: cleanTo, channel: 'sms', tenant: client?.clientKey || 'default' };
     setCachedIdem(idemKey, 200, out);
     return res.json(out);
   } catch (err) {
