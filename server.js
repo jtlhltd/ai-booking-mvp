@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 import { nanoid } from 'nanoid';
 import rateLimit from 'express-rate-limit';
 import twilio from 'twilio';
+import fetch from 'node-fetch';
 import { createHash } from 'crypto';
 
 import { makeJwtAuth, insertEvent, listUpcoming } from './gcal.js';
@@ -330,6 +331,7 @@ app.post('/api/notify/send', async (req, res) => {
   const client = await getClient(req);
   const { smsClient, messagingServiceSid, fromNumber, configured } = smsConfig(client);
   const { channel, to, message } = req.body || {};
+
   if (!channel || !to || !message) {
     const status = 400, body = { error: 'Missing channel, to, message' };
     setCachedIdem(idemKey, status, body);
@@ -352,12 +354,25 @@ app.post('/api/notify/send', async (req, res) => {
     setCachedIdem(idemKey, status, body);
     return res.status(status).json(body);
   }
+
   try {
-    const payload = { to: cleanTo, body: message };
+    const brand = client?.displayName || client?.clientKey || 'Our Clinic';
+    const branded = `${brand}: ${message}`;
+
+    const payload = { to: cleanTo, body: branded };
     if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid;
     else payload.from = fromNumber;
+
     const resp = await withRetry(() => smsClient.messages.create(payload), { retries: 2, delayMs: 300 });
     const out = { sent: true, id: resp.sid, to: cleanTo, channel: 'sms', tenant: client?.clientKey || 'default' };
+    setCachedIdem(idemKey, 200, out);
+    return res.json(out);
+  } catch (err) {
+    const status = 503, body = { sent: false, error: String(err) };
+    setCachedIdem(idemKey, status, body);
+    return res.status(status).json(body);
+  }
+});const out = { sent: true, id: resp.sid, to: cleanTo, channel: 'sms', tenant: client?.clientKey || 'default' };
     setCachedIdem(idemKey, 200, out);
     return res.json(out);
   } catch (err) {
@@ -455,3 +470,55 @@ await ensureDataFiles();
 app.listen(PORT, () => {
   console.log(`AI Booking MVP listening on http://localhost:${PORT}`);
 });
+
+// === Vapi outbound call (tenant-aware) ===
+const VAPI_URL = 'https://api.vapi.ai';
+const VAPI_PRIVATE_KEY   = process.env.VAPI_PRIVATE_KEY || '';
+const VAPI_ASSISTANT_ID  = process.env.VAPI_ASSISTANT_ID || '';
+const VAPI_PHONE_NUMBER_ID = process.env.VAPI_PHONE_NUMBER_ID || '';
+
+app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const map = await loadClientsMap();
+    const client = map.get(clientKey);
+    if (!client) return res.status(404).json({ error: `Unknown clientKey ${clientKey}` });
+
+    const { name, phone, email, service, durationMin } = req.body || {};
+    if (!phone) return res.status(400).json({ error: 'Missing phone' });
+    const e164 = normalizePhone(phone);
+    if (!isE164(e164)) return res.status(400).json({ error: 'phone must be E.164 (+447...)' });
+    if (!(VAPI_PRIVATE_KEY && VAPI_ASSISTANT_ID && VAPI_PHONE_NUMBER_ID)) {
+      return res.status(500).json({ error: 'Missing Vapi env: VAPI_PRIVATE_KEY, VAPI_ASSISTANT_ID, VAPI_PHONE_NUMBER_ID' });
+    }
+
+    const resp = await fetch(`${VAPI_URL}/call`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        assistantId: VAPI_ASSISTANT_ID,
+        phoneNumberId: VAPI_PHONE_NUMBER_ID,
+        customer: { number: e164, numberE164CheckEnabled: true },
+        assistantOverrides: {
+          variableValues: {
+            ClientKey: clientKey,
+            BusinessName: client.displayName || client.businessName || clientKey,
+            ConsentLine: 'This call may be recorded for quality.',
+            DefaultService: service || '',
+            DefaultDurationMin: durationMin || client?.booking?.defaultDurationMin || 30
+          }
+        }
+      })
+    });
+
+    const data = await resp.json();
+    return res.status(resp.ok ? 200 : 502).json(data);
+  } catch (err) {
+    console.error('new-lead vapi error', err);
+    return res.status(500).json({ error: String(err) });
+  }
+});
+
