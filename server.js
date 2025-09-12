@@ -1,4 +1,7 @@
+
 // server.js — AI Booking MVP (enhanced: availability, consent gating, sequences)
+// ES module (package.json "type": "module")
+
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
@@ -29,10 +32,11 @@ const JOBS_PATH  = path.join(DATA_DIR, 'jobs.json');
 const CLIENTS_PATH = path.join(__dirname, 'clients.json');
 
 // === Env: Google
-const GOOGLE_CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL || '';
-const GOOGLE_PRIVATE_KEY  = process.env.GOOGLE_PRIVATE_KEY  || '';
-const GOOGLE_CALENDAR_ID  = process.env.GOOGLE_CALENDAR_ID  || 'primary';
-const TIMEZONE            = process.env.TZ || process.env.TIMEZONE || 'Europe/London';
+const GOOGLE_CLIENT_EMAIL    = process.env.GOOGLE_CLIENT_EMAIL    || '';
+const GOOGLE_PRIVATE_KEY     = process.env.GOOGLE_PRIVATE_KEY     || '';
+const GOOGLE_PRIVATE_KEY_B64 = process.env.GOOGLE_PRIVATE_KEY_B64 || '';
+const GOOGLE_CALENDAR_ID     = process.env.GOOGLE_CALENDAR_ID     || 'primary';
+const TIMEZONE               = process.env.TZ || process.env.TIMEZONE || 'Europe/London';
 
 // === Env: Twilio
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || '';
@@ -61,6 +65,7 @@ async function ensureDataFiles() {
     try { await fs.access(p); } catch { await fs.writeFile(p, '[]', 'utf8'); }
   }
 }
+await ensureDataFiles();
 
 async function readJson(p, fallback = null) {
   try { return JSON.parse(await fs.readFile(p, 'utf8')); } catch { return fallback; }
@@ -152,11 +157,24 @@ app.get('/health', async (_req, res) => {
     ok: true,
     service: 'ai-booking-mvp',
     time: new Date().toISOString(),
-    gcalConfigured: !!(GOOGLE_CLIENT_EMAIL && GOOGLE_PRIVATE_KEY && GOOGLE_CALENDAR_ID),
+    gcalConfigured: !!(GOOGLE_CLIENT_EMAIL && (GOOGLE_PRIVATE_KEY || GOOGLE_PRIVATE_KEY_B64) && GOOGLE_CALENDAR_ID),
     smsConfigured: defaultSmsConfigured,
     corsOrigin: ORIGIN === '*' ? 'any' : ORIGIN,
     tenants: Array.from(map.keys())
   });
+});
+
+// Optional: gcal ping (auth only)
+app.get('/gcal/ping', async (_req, res) => {
+  try {
+    if (!(GOOGLE_CLIENT_EMAIL && (GOOGLE_PRIVATE_KEY || GOOGLE_PRIVATE_KEY_B64)))
+      return res.status(400).json({ ok:false, error:'Google env missing' });
+    const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY, privateKeyB64: GOOGLE_PRIVATE_KEY_B64 });
+    await auth.authorize();
+    res.json({ ok:true });
+  } catch (e) {
+    res.status(500).json({ ok:false, error: String(e) });
+  }
 });
 
 // === Availability ===
@@ -164,7 +182,8 @@ app.post('/api/calendar/find-slots', async (req, res) => {
   try {
     const client = await getClient(req);
     if (!client) return res.status(400).json({ ok:false, error: 'Unknown tenant (missing X-Client-Key)' });
-    if (!(GOOGLE_CLIENT_EMAIL && GOOGLE_PRIVATE_KEY)) return res.status(400).json({ ok:false, error:'Google env missing' });
+    if (!(GOOGLE_CLIENT_EMAIL && (GOOGLE_PRIVATE_KEY || GOOGLE_PRIVATE_KEY_B64)))
+      return res.status(400).json({ ok:false, error:'Google env missing' });
 
     const tz = pickTimezone(client);
     const calendarId = pickCalendarId(client);
@@ -178,7 +197,7 @@ app.post('/api/calendar/find-slots', async (req, res) => {
     const windowStart = new Date();
     const windowEnd   = new Date(Date.now() + daysAhead * 86400000);
 
-    const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY });
+    const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY, privateKeyB64: GOOGLE_PRIVATE_KEY_B64 });
     await auth.authorize();
     const busy = await freeBusy({ auth, calendarId, timeMinISO: windowStart.toISOString(), timeMaxISO: windowEnd.toISOString() });
 
@@ -324,8 +343,8 @@ app.post('/api/calendar/check-book', async (req, res) => {
 
     let google = { skipped: true };
     try {
-      if (GOOGLE_CLIENT_EMAIL && GOOGLE_PRIVATE_KEY && calendarId) {
-        const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY });
+      if (GOOGLE_CLIENT_EMAIL && (GOOGLE_PRIVATE_KEY || GOOGLE_PRIVATE_KEY_B64) && calendarId) {
+        const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY, privateKeyB64: GOOGLE_PRIVATE_KEY_B64 });
         await auth.authorize();
         const summary = `${service} — ${lead.name || lead.phone}`;
         const description = [
@@ -335,7 +354,7 @@ app.post('/api/calendar/check-book', async (req, res) => {
           `Phone: ${lead.phone}`,
           lead.email ? `Email: ${lead.email}` : null,
           startPref ? `Start preference: ${startPref}` : null
-        ].filter(Boolean).join('\n');
+        ].filter(Boolean).join('\\n');
 
         const event = await withRetry(() => insertEvent({
           auth, calendarId, summary, description,
@@ -456,7 +475,7 @@ app.post('/api/notify/send', async (req, res) => {
   try {
     const brand =
       (client?.displayName && String(client.displayName).trim()) ||
-      req.get('X-Client-Key') ||
+      (req.get('X-Client-Key') || '') ||
       (client?.clientKey && String(client.clientKey)) ||
       'Our Clinic';
     const branded = `${brand}: ${message}`;
@@ -600,7 +619,6 @@ app.delete('/api/clients/:key', async (req, res) => {
   res.json({ ok: true, deleted: arr.length - next.length });
 });
 
-await ensureDataFiles();
 app.listen(PORT, () => {
   console.log(`AI Booking MVP listening on http://localhost:${PORT}`);
 });

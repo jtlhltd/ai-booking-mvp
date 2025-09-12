@@ -1,11 +1,25 @@
-// gcal.js — Google Calendar helpers (patched with freeBusy)
+// gcal.js — Google Calendar helpers (fully patched)
 import { google } from 'googleapis';
 
-export function makeJwtAuth({ clientEmail, privateKey }) {
+/**
+ * Create a JWT auth client.
+ * Accepts:
+ *  - GOOGLE_PRIVATE_KEY with real newlines
+ *  - GOOGLE_PRIVATE_KEY containing literal "\\n"
+ *  - GOOGLE_PRIVATE_KEY_B64 (base64 of the PEM)
+ */
+export function makeJwtAuth({ clientEmail, privateKey, privateKeyB64 }) {
+  let key = privateKey || '';
+  if (!key && privateKeyB64) {
+    try { key = Buffer.from(privateKeyB64, 'base64').toString('utf8'); } catch {}
+  }
+  if (key && key.includes('\\n')) {
+    key = key.replace(/\\n/g, '\n');
+  }
   return new google.auth.JWT(
     clientEmail,
     null,
-    (privateKey || '').replace(/\n/g, '\n'),
+    key,
     ['https://www.googleapis.com/auth/calendar']
   );
 }
@@ -18,7 +32,7 @@ export async function insertEvent({ auth, calendarId, summary, description, star
       summary,
       description,
       start: { dateTime: startIso, timeZone: timezone },
-      end: { dateTime: endIso, timeZone: timezone },
+      end:   { dateTime: endIso,   timeZone: timezone },
       attendees: attendees.map(e => ({ email: e }))
     }
   });
@@ -37,7 +51,7 @@ export async function listUpcoming({ auth, calendarId, maxResults = 10 }) {
   return resp.data.items || [];
 }
 
-// NEW: Free/Busy query — returns array of { start, end } busy blocks in the range
+// Free/Busy query
 export async function freeBusy({ auth, calendarId, timeMinISO, timeMaxISO }) {
   const calendar = google.calendar({ version: 'v3', auth });
   const resp = await calendar.freebusy.query({
