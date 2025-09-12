@@ -364,8 +364,7 @@ app.post('/api/notify/send', async (req, res) => {
     else payload.from = fromNumber;
 
     const resp = await withRetry(() => smsClient.messages.create(payload), { retries: 2, delayMs: 300 });
-    setCachedIdem(idemKey, 200, out);
-  } catch (err) {
+} catch (err) {
     const status = 503, body = { sent: false, error: String(err) };
     setCachedIdem(idemKey, status, body);
     return res.status(status).json(body);
