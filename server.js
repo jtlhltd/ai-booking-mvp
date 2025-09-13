@@ -22,7 +22,7 @@ const app = express();
 
 // --- healthz: report which integrations are configured (without leaking secrets)
 app.get('/healthz', (req, res) => {
-  const flags = {
+const flags = {
     apiKey: !!process.env.API_KEY,
     sms: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && (process.env.TWILIO_MESSAGING_SERVICE_SID || process.env.TWILIO_FROM_NUMBER)),
     gcal: !!(process.env.GOOGLE_CLIENT_EMAIL && (process.env.GOOGLE_PRIVATE_KEY || process.env.GOOGLE_PRIVATE_KEY_B64)),
@@ -30,7 +30,7 @@ app.get('/healthz', (req, res) => {
     tz: process.env.TZ || 'unset'
   };
   res.json({ ok: true, integrations: flags });
-
+});
 
 // --- version: show deployed commit/time for debugging
 app.get('/version', (req, res) => {
@@ -441,7 +441,6 @@ const newLeadHandler = async (req, res) => {
 }
 app.post('/webhooks/new-lead/:clientKey', newLeadHandler);
 app.post('/api/webhooks/new-lead/:clientKey', newLeadHandler);
-);
 
 // Booking (as before, branded auto-SMS)
 app.post('/api/calendar/check-book', async (req, res) => {
