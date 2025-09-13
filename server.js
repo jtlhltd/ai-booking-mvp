@@ -19,6 +19,18 @@ import { makeJwtAuth, insertEvent, listUpcoming, freeBusy } from './gcal.js';
 
 const app = express();
 
+
+// --- healthz: report which integrations are configured (without leaking secrets)
+app.get('/healthz', (req, res) => {
+  const flags = {
+    apiKey: !!process.env.API_KEY,
+    sms: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && (process.env.TWILIO_MESSAGING_SERVICE_SID || process.env.TWILIO_FROM_NUMBER)),
+    gcal: !!(process.env.GOOGLE_CLIENT_EMAIL && (process.env.GOOGLE_PRIVATE_KEY || process.env.GOOGLE_PRIVATE_KEY_B64)),
+    vapi: !!(process.env.VAPI_PRIVATE_KEY && process.env.VAPI_ASSISTANT_ID && process.env.VAPI_PHONE_NUMBER_ID),
+    tz: process.env.TZ || 'unset'
+  };
+  res.json({ ok: true, integrations: flags });
+});
 // --- Tenant header normalizer ---
 // Accept X-Client-Key in any casing or as ?clientKey=... and normalize to 'x-client-key'.
 app.use((req, _res, next) => {
