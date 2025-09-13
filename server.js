@@ -36,7 +36,6 @@ const flags = {
 app.get('/version', (req, res) => {
   res.json({ ok: true, commit: process.env.RENDER_GIT_COMMIT || null, time: new Date().toISOString() });
 });
-});
 // --- Tenant header normalizer ---
 // Accept X-Client-Key in any casing or as ?clientKey=... and normalize to 'x-client-key'.
 app.use((req, _res, next) => {
