@@ -413,9 +413,9 @@ const newLeadHandler = async (req, res) => {
       return res.status(500).json({ error: 'Missing Vapi env: VAPI_PUBLIC_KEY, VAPI_ASSISTANT_ID, VAPI_PHONE_NUMBER_ID' });
     }
 
-    const resp = await fetch(`${VAPI_URL}/v1/calls`, {
+    const resp = await fetch(`${VAPI_URL}/call`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${VAPI_PUBLIC_KEY}`, 'Content-Type': 'application/json' },
+      headers: { 'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         assistantId: VAPI_ASSISTANT_ID,
         phoneNumberId: VAPI_PHONE_NUMBER_ID,
