@@ -154,14 +154,24 @@ function deriveIdemKey(req) {
 
 // API key guard
 function requireApiKey(req, res, next) {
-  if (req.method === 'GET' && (req.path === '/health' || req.path === '/gcal/ping')) return next();
+  // public GET endpoints:
+  if (req.method === 'GET' && (
+      req.path === '/health' ||
+      req.path === '/healthz' ||
+      req.path === '/version' ||
+      req.path === '/gcal/ping'
+  )) {
+    return next();
+  }
+
+  // webhook status endpoint public:
   if (req.path.startsWith('/webhooks/twilio-status')) return next();
+
   if (!API_KEY) return res.status(500).json({ error: 'Server missing API_KEY' });
   const key = req.get('X-API-Key');
   if (key && key === API_KEY) return next();
   return res.status(401).json({ error: 'Unauthorized' });
 }
-app.use(requireApiKey);
 
 // Retry
 async function withRetry(fn, { retries = 2, delayMs = 250 } = {}) {
@@ -744,3 +754,10 @@ app.listen(PORT, () => {
 // touch: 2025-09-13T20:10:27
 
 // touch: 2025-09-13T20:16:56
+app.get('/version', (req, res) => {
+  res.json({
+    ok: true,
+    commit: process.env.RENDER_GIT_COMMIT || process.env.RENDER_GIT_COMMIT_SHA || null,
+    time: new Date().toISOString()
+  });
+});
