@@ -154,24 +154,14 @@ function deriveIdemKey(req) {
 
 // API key guard
 function requireApiKey(req, res, next) {
-  // public GET endpoints:
-  if (req.method === 'GET' && (
-      req.path === '/health' ||
-      req.path === '/healthz' ||
-      req.path === '/version' ||
-      req.path === '/gcal/ping'
-  )) {
-    return next();
-  }
-
-  // webhook status endpoint public:
+  if (req.method === 'GET' && (req.path === '/health' || req.path === '/gcal/ping')) return next();
   if (req.path.startsWith('/webhooks/twilio-status')) return next();
-
   if (!API_KEY) return res.status(500).json({ error: 'Server missing API_KEY' });
   const key = req.get('X-API-Key');
   if (key && key === API_KEY) return next();
   return res.status(401).json({ error: 'Unauthorized' });
 }
+app.use(requireApiKey);
 
 // Retry
 async function withRetry(fn, { retries = 2, delayMs = 250 } = {}) {
@@ -400,17 +390,21 @@ const VAPI_PRIVATE_KEY   = process.env.VAPI_PRIVATE_KEY || '';
 const VAPI_ASSISTANT_ID  = process.env.VAPI_ASSISTANT_ID || '';
 const VAPI_PHONE_NUMBER_ID = process.env.VAPI_PHONE_NUMBER_ID || '';
 
-app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
+// unified new-lead handler + dual routes (/webhooks and /api/webhooks)
+async function newLeadHandler(req, res) {
   try {
     const { clientKey } = req.params;
     const map = await loadClientsMap();
     const client = map.get(clientKey);
-    if (!client) return res.status(404).json({ error: `Unknown clientKey ${clientKey}` });
+    if (!client) {
+      return res.status(404).json({ error: `Unknown clientKey ${clientKey}` });
+    }
 
     const { name, phone, email, service, durationMin } = req.body || {};
     if (!phone) return res.status(400).json({ error: 'Missing phone' });
     const e164 = normalizePhone(phone);
     if (!isE164(e164)) return res.status(400).json({ error: 'phone must be E.164 (+447...)' });
+
     if (!(VAPI_PRIVATE_KEY && VAPI_ASSISTANT_ID && VAPI_PHONE_NUMBER_ID)) {
       return res.status(500).json({ error: 'Missing Vapi env: VAPI_PRIVATE_KEY, VAPI_ASSISTANT_ID, VAPI_PHONE_NUMBER_ID' });
     }
@@ -440,7 +434,10 @@ app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
     console.error('new-lead vapi error', err);
     return res.status(500).json({ error: String(err) });
   }
-});
+}
+
+app.post('/webhooks/new-lead/:clientKey', newLeadHandler);
+app.post('/api/webhooks/new-lead/:clientKey', newLeadHandler);
 
 // Booking (as before, branded auto-SMS)
 app.post('/api/calendar/check-book', async (req, res) => {
