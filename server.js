@@ -22,19 +22,14 @@ const app = express();
 
 // --- healthz: report which integrations are configured (without leaking secrets)
 app.get('/healthz', (req, res) => {
-const flags = {
+  const flags = {
     apiKey: !!process.env.API_KEY,
     sms: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && (process.env.TWILIO_MESSAGING_SERVICE_SID || process.env.TWILIO_FROM_NUMBER)),
     gcal: !!(process.env.GOOGLE_CLIENT_EMAIL && (process.env.GOOGLE_PRIVATE_KEY || process.env.GOOGLE_PRIVATE_KEY_B64)),
-    vapi: !!(process.env.VAPI_PUBLIC_KEY && process.env.VAPI_ASSISTANT_ID && process.env.VAPI_PHONE_NUMBER_ID),
+    vapi: !!(process.env.VAPI_PRIVATE_KEY && process.env.VAPI_ASSISTANT_ID && process.env.VAPI_PHONE_NUMBER_ID),
     tz: process.env.TZ || 'unset'
   };
   res.json({ ok: true, integrations: flags });
-});
-
-// --- version: show deployed commit/time for debugging
-app.get('/version', (req, res) => {
-  res.json({ ok: true, commit: process.env.RENDER_GIT_COMMIT || null, time: new Date().toISOString() });
 });
 // --- Tenant header normalizer ---
 // Accept X-Client-Key in any casing or as ?clientKey=... and normalize to 'x-client-key'.
@@ -70,7 +65,7 @@ const GOOGLE_CLIENT_EMAIL    = process.env.GOOGLE_CLIENT_EMAIL    || '';
 const GOOGLE_PRIVATE_KEY     = process.env.GOOGLE_PRIVATE_KEY     || '';
 const GOOGLE_PRIVATE_KEY_B64 = process.env.GOOGLE_PRIVATE_KEY_B64 || '';
 const GOOGLE_CALENDAR_ID     = process.env.GOOGLE_CALENDAR_ID     || 'primary';
-const TIMEZONE = process.env.TZ || process.env.TIMEZONE || 'Europe/London';
+const TIMEZONE               = process.env.TZ || process.env.TIMEZONE || 'Europe/London';
 
 // === Env: Twilio
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || '';
@@ -159,7 +154,7 @@ function deriveIdemKey(req) {
 
 // API key guard
 function requireApiKey(req, res, next) {
-  if (req.method === 'GET' && (['/health','/healthz','/version','/gcal/ping'].includes(req.path))) return next();
+  if (req.method === 'GET' && (req.path === '/health' || req.path === '/gcal/ping')) return next();
   if (req.path.startsWith('/webhooks/twilio-status')) return next();
   if (!API_KEY) return res.status(500).json({ error: 'Server missing API_KEY' });
   const key = req.get('X-API-Key');
@@ -392,13 +387,10 @@ app.post('/webhooks/twilio-status', async (req, res) => {
 // Outbound lead webhook
 const VAPI_URL = 'https://api.vapi.ai';
 const VAPI_PRIVATE_KEY   = process.env.VAPI_PRIVATE_KEY || '';
-const VAPI_PUBLIC_KEY    = process.env.VAPI_PUBLIC_KEY || '';
 const VAPI_ASSISTANT_ID  = process.env.VAPI_ASSISTANT_ID || '';
 const VAPI_PHONE_NUMBER_ID = process.env.VAPI_PHONE_NUMBER_ID || '';
 
-
-// unified new-lead handler
-const newLeadHandler = async (req, res) => {
+app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
   try {
     const { clientKey } = req.params;
     const map = await loadClientsMap();
@@ -409,8 +401,8 @@ const newLeadHandler = async (req, res) => {
     if (!phone) return res.status(400).json({ error: 'Missing phone' });
     const e164 = normalizePhone(phone);
     if (!isE164(e164)) return res.status(400).json({ error: 'phone must be E.164 (+447...)' });
-    if (!(VAPI_PUBLIC_KEY && VAPI_ASSISTANT_ID && VAPI_PHONE_NUMBER_ID)) {
-      return res.status(500).json({ error: 'Missing Vapi env: VAPI_PUBLIC_KEY, VAPI_ASSISTANT_ID, VAPI_PHONE_NUMBER_ID' });
+    if (!(VAPI_PRIVATE_KEY && VAPI_ASSISTANT_ID && VAPI_PHONE_NUMBER_ID)) {
+      return res.status(500).json({ error: 'Missing Vapi env: VAPI_PRIVATE_KEY, VAPI_ASSISTANT_ID, VAPI_PHONE_NUMBER_ID' });
     }
 
     const resp = await fetch(`${VAPI_URL}/call`, {
@@ -438,9 +430,7 @@ const newLeadHandler = async (req, res) => {
     console.error('new-lead vapi error', err);
     return res.status(500).json({ error: String(err) });
   }
-}
-app.post('/webhooks/new-lead/:clientKey', newLeadHandler);
-app.post('/api/webhooks/new-lead/:clientKey', newLeadHandler);
+});
 
 // Booking (as before, branded auto-SMS)
 app.post('/api/calendar/check-book', async (req, res) => {
