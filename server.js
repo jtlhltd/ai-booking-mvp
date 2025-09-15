@@ -390,21 +390,17 @@ const VAPI_PRIVATE_KEY   = process.env.VAPI_PRIVATE_KEY || '';
 const VAPI_ASSISTANT_ID  = process.env.VAPI_ASSISTANT_ID || '';
 const VAPI_PHONE_NUMBER_ID = process.env.VAPI_PHONE_NUMBER_ID || '';
 
-// unified new-lead handler + dual routes (/webhooks and /api/webhooks)
-async function newLeadHandler(req, res) {
+app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
   try {
     const { clientKey } = req.params;
     const map = await loadClientsMap();
     const client = map.get(clientKey);
-    if (!client) {
-      return res.status(404).json({ error: `Unknown clientKey ${clientKey}` });
-    }
+    if (!client) return res.status(404).json({ error: `Unknown clientKey ${clientKey}` });
 
     const { name, phone, email, service, durationMin } = req.body || {};
     if (!phone) return res.status(400).json({ error: 'Missing phone' });
     const e164 = normalizePhone(phone);
     if (!isE164(e164)) return res.status(400).json({ error: 'phone must be E.164 (+447...)' });
-
     if (!(VAPI_PRIVATE_KEY && VAPI_ASSISTANT_ID && VAPI_PHONE_NUMBER_ID)) {
       return res.status(500).json({ error: 'Missing Vapi env: VAPI_PRIVATE_KEY, VAPI_ASSISTANT_ID, VAPI_PHONE_NUMBER_ID' });
     }
@@ -434,10 +430,7 @@ async function newLeadHandler(req, res) {
     console.error('new-lead vapi error', err);
     return res.status(500).json({ error: String(err) });
   }
-}
-
-app.post('/webhooks/new-lead/:clientKey', newLeadHandler);
-app.post('/api/webhooks/new-lead/:clientKey', newLeadHandler);
+});
 
 // Booking (as before, branded auto-SMS)
 app.post('/api/calendar/check-book', async (req, res) => {
@@ -751,10 +744,3 @@ app.listen(PORT, () => {
 // touch: 2025-09-13T20:10:27
 
 // touch: 2025-09-13T20:16:56
-app.get('/version', (req, res) => {
-  res.json({
-    ok: true,
-    commit: process.env.RENDER_GIT_COMMIT || process.env.RENDER_GIT_COMMIT_SHA || null,
-    time: new Date().toISOString()
-  });
-});
