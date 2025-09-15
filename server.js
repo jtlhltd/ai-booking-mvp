@@ -1,7 +1,4 @@
-
-// server.js — AI Booking MVP (enhanced: availability, consent gating, sequences)
-// ES module (package.json "type": "module")
-
+// server.js — AI Booking MVP (SQLite tenants + env bootstrap for free Render)
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
@@ -12,13 +9,12 @@ import { fileURLToPath } from 'url';
 import { nanoid } from 'nanoid';
 import rateLimit from 'express-rate-limit';
 import twilio from 'twilio';
-import fetch from 'node-fetch';
 import { createHash } from 'crypto';
 
-import { makeJwtAuth, insertEvent, listUpcoming, freeBusy } from './gcal.js';
+import { makeJwtAuth, insertEvent, freeBusy } from './gcal.js';
+import { upsertClient, getClientByKey, listClients, deleteClient, DB_PATH } from './db.js'; // SQLite-backed tenants
 
 const app = express();
-
 
 // --- healthz: report which integrations are configured (without leaking secrets)
 app.get('/healthz', (req, res) => {
@@ -31,8 +27,8 @@ app.get('/healthz', (req, res) => {
   };
   res.json({ ok: true, integrations: flags });
 });
+
 // --- Tenant header normalizer ---
-// Accept X-Client-Key in any casing or as ?clientKey=... and normalize to 'x-client-key'.
 app.use((req, _res, next) => {
   const hdrs = req.headers || {};
   const fromHeader =
@@ -47,6 +43,7 @@ app.use((req, _res, next) => {
   }
   next();
 });
+
 const PORT = process.env.PORT || 3000;
 const ORIGIN = process.env.VAPI_ORIGIN || '*';
 const API_KEY = process.env.API_KEY || '';
@@ -58,7 +55,6 @@ const LEADS_PATH = path.join(DATA_DIR, 'leads.json');
 const CALLS_PATH = path.join(DATA_DIR, 'calls.json');
 const SMS_STATUS_PATH = path.join(DATA_DIR, 'sms-status.json');
 const JOBS_PATH  = path.join(DATA_DIR, 'jobs.json');
-const CLIENTS_PATH = path.join(__dirname, 'clients.json');
 
 // === Env: Google
 const GOOGLE_CLIENT_EMAIL    = process.env.GOOGLE_CLIENT_EMAIL    || '';
@@ -103,33 +99,19 @@ async function writeJson(p, data) { await fs.writeFile(p, JSON.stringify(data, n
 
 // Helpers
 const isE164 = (s) => typeof s === 'string' && /^\+\d{7,15}$/.test(s);
-const normalizePhone = s => (s || '').trim().replace(/[^\d+]/g, '');
+const normalizePhone = (s) => (s || '').trim().replace(/[^\d+]/g, '');
 
-// === Clients (file-backed)
-let clientsCache = { at: 0, map: new Map() };
-async function loadClientsMap() {
-  const now = Date.now();
-  if (now - clientsCache.at < 5000 && clientsCache.map.size) return clientsCache.map;
-  const arr = await readJson(CLIENTS_PATH, []);
-  const map = new Map();
-  for (const c of Array.isArray(arr) ? arr : []) if (c?.clientKey) map.set(String(c.clientKey), c);
-  clientsCache = { at: now, map };
-  return map;
-}
-async function readClientsArray() { const arr = await readJson(CLIENTS_PATH, []); return Array.isArray(arr) ? arr : []; }
-async function writeClientsArray(arr) { await writeJson(CLIENTS_PATH, arr); clientsCache = { at: 0, map: new Map() }; }
-async function getClient(req) {
+// === Clients (DB-backed)
+async function getClientFromHeader(req) {
   const key = req.get('X-Client-Key') || null;
   if (!key) return null;
-  const map = await loadClientsMap();
-  return map.get(key) || null;
+  return await getClientByKey(key);
 }
-
-function pickTimezone(client) { return client?.booking?.timezone || TIMEZONE; }
+function pickTimezone(client) { return client?.bookingTimezone || TIMEZONE; }
 function pickCalendarId(client) { return client?.calendarId || GOOGLE_CALENDAR_ID; }
 function smsConfig(client) {
-  const messagingServiceSid = client?.sms?.messagingServiceSid || TWILIO_MESSAGING_SERVICE_SID || null;
-  const fromNumber = client?.sms?.fromNumber || TWILIO_FROM_NUMBER || null;
+  const messagingServiceSid = client?.smsMessagingServiceSid || TWILIO_MESSAGING_SERVICE_SID || null;
+  const fromNumber = client?.smsFrom || TWILIO_FROM_NUMBER || null;
   const smsClient = defaultSmsClient;
   const configured = !!(smsClient && (messagingServiceSid || fromNumber));
   return { messagingServiceSid, fromNumber, smsClient, configured };
@@ -163,7 +145,7 @@ function requireApiKey(req, res, next) {
 }
 app.use(requireApiKey);
 
-// Retry
+// Retry helper
 async function withRetry(fn, { retries = 2, delayMs = 250 } = {}) {
   let lastErr;
   for (let i = 0; i <= retries; i++) {
@@ -179,21 +161,45 @@ async function withRetry(fn, { retries = 2, delayMs = 250 } = {}) {
   throw lastErr;
 }
 
-// Health
+// --- Bootstrap tenants from env (for free Render without disk) ---
+async function bootstrapClients() {
+  try {
+    const existing = await listClients();
+    if (existing.length > 0) return;
+    const raw = process.env.BOOTSTRAP_CLIENTS_JSON;
+    if (!raw) return;
+    let seed = JSON.parse(raw);
+    if (!Array.isArray(seed)) seed = [seed];
+    for (const c of seed) {
+      if (!c.clientKey || !c.booking?.timezone) continue;
+      await upsertClient(c);
+    }
+    console.log(`Bootstrapped ${seed.length} client(s) into SQLite from BOOTSTRAP_CLIENTS_JSON`);
+  } catch (e) {
+    console.error('bootstrapClients error', e?.message || e);
+  }
+}
+
+// Health (DB)
 app.get('/health', async (_req, res) => {
-  const map = await loadClientsMap();
-  res.json({
-    ok: true,
-    service: 'ai-booking-mvp',
-    time: new Date().toISOString(),
-    gcalConfigured: !!(GOOGLE_CLIENT_EMAIL && (GOOGLE_PRIVATE_KEY || GOOGLE_PRIVATE_KEY_B64) && GOOGLE_CALENDAR_ID),
-    smsConfigured: defaultSmsConfigured,
-    corsOrigin: ORIGIN === '*' ? 'any' : ORIGIN,
-    tenants: Array.from(map.keys())
-  });
+  try {
+    const rows = await listClients();
+    res.json({
+      ok: true,
+      service: 'ai-booking-mvp',
+      time: new Date().toISOString(),
+      gcalConfigured: !!(GOOGLE_CLIENT_EMAIL && (GOOGLE_PRIVATE_KEY || GOOGLE_PRIVATE_KEY_B64) && GOOGLE_CALENDAR_ID),
+      smsConfigured: defaultSmsConfigured,
+      corsOrigin: ORIGIN === '*' ? 'any' : ORIGIN,
+      tenants: rows.map(r => r.clientKey),
+      db: { path: DB_PATH }
+    });
+  } catch (e) {
+    res.status(500).json({ ok:false, error: String(e) });
+  }
 });
 
-// Optional: gcal ping (auth only)
+// Optional: gcal ping
 app.get('/gcal/ping', async (_req, res) => {
   try {
     if (!(GOOGLE_CLIENT_EMAIL && (GOOGLE_PRIVATE_KEY || GOOGLE_PRIVATE_KEY_B64)))
@@ -209,14 +215,14 @@ app.get('/gcal/ping', async (_req, res) => {
 // === Availability ===
 app.post('/api/calendar/find-slots', async (req, res) => {
   try {
-    const client = await getClient(req);
+    const client = await getClientFromHeader(req);
     if (!client) return res.status(400).json({ ok:false, error: 'Unknown tenant (missing X-Client-Key)' });
     if (!(GOOGLE_CLIENT_EMAIL && (GOOGLE_PRIVATE_KEY || GOOGLE_PRIVATE_KEY_B64)))
       return res.status(400).json({ ok:false, error:'Google env missing' });
 
     const tz = pickTimezone(client);
     const calendarId = pickCalendarId(client);
-    const { durationMin = client?.booking?.defaultDurationMin || 30, daysAhead = 14, stepMinutes = 15 } = req.body || {};
+    const { durationMin = client?.bookingDefaultDurationMin || 30, daysAhead = 14, stepMinutes = 15 } = req.body || {};
 
     const business = client?.booking?.hours || {
       mon: ['09:00-17:00'], tue: ['09:00-17:00'], wed: ['09:00-17:00'],
@@ -281,7 +287,7 @@ app.post('/api/calendar/find-slots', async (req, res) => {
 // === Book a slot ===
 app.post('/api/calendar/book-slot', async (req, res) => {
   try {
-    const client = await getClient(req);
+    const client = await getClientFromHeader(req);
     if (!client) return res.status(400).json({ ok:false, error: 'Unknown tenant (missing X-Client-Key)' });
 
     if (!(GOOGLE_CLIENT_EMAIL && (GOOGLE_PRIVATE_KEY || GOOGLE_PRIVATE_KEY_B64)))
@@ -302,7 +308,7 @@ app.post('/api/calendar/book-slot', async (req, res) => {
     if (!start || !startISO) {
       return res.status(400).json({ ok:false, error: 'Missing/invalid "start" (ISO datetime)' });
     }
-    const dur = Number.isFinite(+durationMin) ? +durationMin : (client?.booking?.defaultDurationMin || 30);
+    const dur = Number.isFinite(+durationMin) ? +durationMin : (client?.bookingDefaultDurationMin || 30);
     const endISO = new Date(new Date(startISO).getTime() + dur * 60000).toISOString();
 
     // Auth
@@ -324,7 +330,7 @@ app.post('/api/calendar/book-slot', async (req, res) => {
       lead.phone ? `Phone: ${lead.phone}` : null,
       lead.id ? `Lead ID: ${lead.id}` : null,
       `Booked via AI Booking MVP`
-    ].filter(Boolean).join('\\n');
+    ].filter(Boolean).join('\n');
 
     const attendees = [];
     if (lead.email && typeof lead.email === 'string' && lead.email.includes('@')) {
@@ -384,20 +390,19 @@ app.post('/webhooks/twilio-status', async (req, res) => {
   res.type('text/plain').send('OK');
 });
 
-// Outbound lead webhook
+// Outbound lead webhook → Vapi
 const VAPI_URL = 'https://api.vapi.ai';
-const VAPI_PRIVATE_KEY   = process.env.VAPI_PRIVATE_KEY || '';
-const VAPI_ASSISTANT_ID  = process.env.VAPI_ASSISTANT_ID || '';
+const VAPI_PRIVATE_KEY     = process.env.VAPI_PRIVATE_KEY || '';
+const VAPI_ASSISTANT_ID    = process.env.VAPI_ASSISTANT_ID || '';
 const VAPI_PHONE_NUMBER_ID = process.env.VAPI_PHONE_NUMBER_ID || '';
 
 app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
   try {
     const { clientKey } = req.params;
-    const map = await loadClientsMap();
-    const client = map.get(clientKey);
+    const client = await getClientByKey(clientKey);
     if (!client) return res.status(404).json({ error: `Unknown clientKey ${clientKey}` });
 
-    const { name, phone, email, service, durationMin } = req.body || {};
+    const { phone, service, durationMin } = req.body || {};
     if (!phone) return res.status(400).json({ error: 'Missing phone' });
     const e164 = normalizePhone(phone);
     if (!isE164(e164)) return res.status(400).json({ error: 'phone must be E.164 (+447...)' });
@@ -415,16 +420,19 @@ app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
         assistantOverrides: {
           variableValues: {
             ClientKey: clientKey,
-            BusinessName: client.displayName || client.businessName || clientKey,
+            BusinessName: client.displayName || client.clientKey,
             ConsentLine: 'This call may be recorded for quality.',
             DefaultService: service || '',
-            DefaultDurationMin: durationMin || client?.booking?.defaultDurationMin || 30
+            DefaultDurationMin: durationMin || client?.bookingDefaultDurationMin || 30
           }
         }
       })
     });
 
-    const data = await resp.json();
+    let data;
+    try { data = await resp.json(); }
+    catch { data = { raw: await resp.text().catch(() => '') }; }
+
     return res.status(resp.ok ? 200 : 502).json(data);
   } catch (err) {
     console.error('new-lead vapi error', err);
@@ -432,14 +440,14 @@ app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
   }
 });
 
-// Booking (as before, branded auto-SMS)
+// Booking (auto-book + branded SMS)
 app.post('/api/calendar/check-book', async (req, res) => {
   const idemKey = deriveIdemKey(req);
   const cached = getCachedIdem(idemKey);
   if (cached) return res.status(cached.status).json(cached.body);
 
   try {
-    const client = await getClient(req);
+    const client = await getClientFromHeader(req); // DB-backed
     const tz = pickTimezone(client);
     const calendarId = pickCalendarId(client);
 
@@ -447,7 +455,7 @@ app.post('/api/calendar/check-book', async (req, res) => {
     if (!service || typeof service !== 'string') return res.status(400).json({ error: 'Missing service' });
     const dur = (typeof durationMin === 'number' && durationMin > 0)
       ? durationMin
-      : (client?.booking?.defaultDurationMin || 30);
+      : (client?.bookingDefaultDurationMin || 30);
     if (!lead?.name || !lead?.phone) return res.status(400).json({ error: 'Missing lead{name, phone}' });
     lead.phone = normalizePhone(lead.phone);
     if (!isE164(lead.phone)) return res.status(400).json({ error: 'lead.phone must be E.164' });
@@ -470,7 +478,7 @@ app.post('/api/calendar/check-book', async (req, res) => {
           `Phone: ${lead.phone}`,
           lead.email ? `Email: ${lead.email}` : null,
           startPref ? `Start preference: ${startPref}` : null
-        ].filter(Boolean).join('\\n');
+        ].filter(Boolean).join('\n');
 
         const event = await withRetry(() => insertEvent({
           auth, calendarId, summary, description,
@@ -551,7 +559,7 @@ app.post('/api/notify/send', async (req, res) => {
   const cached = getCachedIdem(idemKey);
   if (cached) return res.status(cached.status).json(cached.body);
 
-  const client = await getClient(req);
+  const client = await getClientFromHeader(req);
   const { smsClient, messagingServiceSid, fromNumber, configured } = smsConfig(client);
   const { channel, to, message, type = 'transactional' } = req.body || {};
 
@@ -578,6 +586,7 @@ app.post('/api/notify/send', async (req, res) => {
     return res.status(status).json(body);
   }
 
+  // Marketing SMS requires prior consent
   if (String(type) !== 'transactional') {
     const leads = await readJson(LEADS_PATH, []);
     const lead = leads.find(l => l.phone === cleanTo);
@@ -612,7 +621,7 @@ app.post('/api/notify/send', async (req, res) => {
   }
 });
 
-// === Sequences ===
+// === Sequences (kept as-is; writes to JSON log)
 app.post('/api/notify/sequence', async (req, res) => {
   const tenant = (req.get('X-Client-Key') || '').trim();
   const { to, name, steps, type = 'marketing' } = req.body || {};
@@ -640,6 +649,7 @@ setInterval(async () => {
     let changed = false;
 
     for (const job of jobs) {
+      if (job.status === 'completed' || 'cancelled') {/* continue when either */}
       if (job.status === 'completed' || job.status === 'cancelled') continue;
       for (const step of job.steps) {
         if (step.sent) continue;
@@ -700,47 +710,60 @@ app.get('/api/stats', async (_req, res) => {
     if (within(ts, 30)) agg[t].smsSent30++;
   }
 
-  const map = await loadClientsMap();
-  for (const k of map.keys()) agg[k] ||= { bookings7: 0, bookings30: 0, smsSent7: 0, smsSent30: 0 };
+  const rows = await listClients();
+  for (const r of rows) agg[r.clientKey] ||= { bookings7: 0, bookings30: 0, smsSent7: 0, smsSent30: 0 };
 
   res.json({ ok: true, tenants: agg });
 });
 
-// Clients
+// Clients API (DB-backed)
 app.get('/api/clients', async (_req, res) => {
-  const arr = await readClientsArray();
-  res.json({ ok: true, count: arr.length, clients: arr });
-});
-app.post('/api/clients', async (req, res) => {
-  const c = req.body || {};
-  const key = (c.clientKey || '').toString().trim();
-  if (!key) return res.status(400).json({ error: 'clientKey is required' });
-  const tz = c.booking?.timezone || TIMEZONE;
-  if (typeof tz !== 'string' || !tz.length) return res.status(400).json({ error: 'booking.timezone is required' });
-  if (c.sms && !(c.sms.messagingServiceSid || c.sms.fromNumber)) {
-    return res.status(400).json({ error: 'sms.messagingServiceSid or sms.fromNumber required when sms block present' });
+  try {
+    const rows = await listClients();
+    res.json({ ok: true, count: rows.length, clients: rows });
+  } catch (e) {
+    res.status(500).json({ ok:false, error: String(e) });
   }
-  const arr = await readClientsArray();
-  const idx = arr.findIndex(x => x.clientKey === key);
-  if (idx >= 0) arr[idx] = { ...arr[idx], ...c };
-  else arr.push(c);
-  await writeClientsArray(arr);
-  res.json({ ok: true, client: c });
 });
+
+app.get('/api/clients/:key', async (req, res) => {
+  try {
+    const c = await getClientByKey(req.params.key);
+    if (!c) return res.status(404).json({ ok:false, error: 'not found' });
+    res.json({ ok:true, client: c });
+  } catch (e) {
+    res.status(500).json({ ok:false, error: String(e) });
+  }
+});
+
+app.post('/api/clients', async (req, res) => {
+  try {
+    const c = req.body || {};
+    const key = (c.clientKey || '').toString().trim();
+    if (!key) return res.status(400).json({ ok:false, error: 'clientKey is required' });
+    const tz = c.booking?.timezone || TIMEZONE;
+    if (typeof tz !== 'string' || !tz.length) return res.status(400).json({ ok:false, error: 'booking.timezone is required' });
+    if (c.sms && !(c.sms.messagingServiceSid || c.sms.fromNumber)) {
+      return res.status(400).json({ ok:false, error: 'sms.messagingServiceSid or sms.fromNumber required when sms block present' });
+    }
+    await upsertClient(c);
+    return res.json({ ok: true, client: { clientKey: key, displayName: c.displayName || key, booking: { timezone: tz, defaultDurationMin: c.booking?.defaultDurationMin ?? 30 } } });
+  } catch (e) {
+    return res.status(500).json({ ok:false, error: String(e) });
+  }
+});
+
 app.delete('/api/clients/:key', async (req, res) => {
-  const key = req.params.key;
-  const arr = await readClientsArray();
-  const next = arr.filter(c => c.clientKey !== key);
-  await writeClientsArray(next);
-  res.json({ ok: true, deleted: arr.length - next.length });
+  try {
+    const out = await deleteClient(req.params.key);
+    res.json({ ok: true, deleted: out.changes });
+  } catch (e) {
+    res.status(500).json({ ok:false, error: String(e) });
+  }
 });
+
+await bootstrapClients(); // <--- run after routes loaded & DB ready
 
 app.listen(PORT, () => {
-  console.log(`AI Booking MVP listening on http://localhost:${PORT}`);
+  console.log(`AI Booking MVP listening on http://localhost:${PORT} (DB: ${DB_PATH})`);
 });
-// touch: 2025-09-12T23:35:01
-// touch: 2025-09-12T23:41:50
-
-// touch: 2025-09-13T20:10:27
-
-// touch: 2025-09-13T20:16:56

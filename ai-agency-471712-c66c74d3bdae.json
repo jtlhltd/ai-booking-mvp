@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "ai-agency-471712",
+  "private_key_id": "c66c74d3bdae83547685f7bebcc739daf6fd857d",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDBxVcjGt9I75yP\nh9QI4mfXlGMQcWu6rnoV+YXTWxN5HyBCElUTJYXpzzld895EWx6TVDInWUxEVxP4\nttTSL94F7XIrSEQ5r7SDeqMu8KODLhppxDpMZW9C1vvVL4xp63HTt4p4OyOZfWAB\neH/POhCyzPFGYoLlVfGaPfx8BGaOr39xz5OCP0A/Iwfkfx7JY6S3GY2U50azbZw4\nPSVzsWpxRykqlhESVeI4AYpilR0+C1+jTgWc6DkjBRNgt1IXFx7H5FXPe5X37uak\nR4vx4JBotgsZwVIJ3YvyyI98GX5WF1nZm+nr0wRFIAxUi1j96FRgdbCYlXyHqZQG\nhpIrVdj/AgMBAAECggEAO0eVmFpEvAn98hUiQ5OMJDIzuliQlhyBog5jqBzhULk6\ng6wbFc/xb22jhcAxG+VqbbUg4NPbVr7zD7BTXHgjatnRBzfFE4bS6TRQDvC0fVHR\n59CN60hO6PpfMcGpqc/LU3N/q7ef9PmbsOd95lZDvIehOqCxndqUntTe1Mv92iGC\nczoP5syb2j074hmmH7sE8A7weJifuMNw9jHBe4T65JzSKqssjXuh9leRcFkZlMN1\nng0mTCAFnMZSq0fyicowohkphGcrplhrDz2o/y1IcfNEaETUBOQPxcP8N2Rm8qaI\ndXbPOXSoW+NgHj9yvzcdbe7C4NcTcIGgaFEuI7uBbQKBgQD49H6KriWxA4yJN8YX\nrwy0hdoeQkbgKw00AVZhvQmzhSDuBIxSZ3pzZ6VwGsaw3UPVac2wLN1JXittiNgo\nNO62uvMEeL5mDHiBmKR+f11Sx+BEgUZtKBxItVeeLiOkD1eDed3ZLdGhfRZRpebp\nT4/SdicWbcBLPrHzLIXNudFRxQKBgQDHQRM4lYc2avA5Ijx+pGVldNN76xfBZOJ+\nutP/xCH11mov8cdviIOhtYUszVgZeX3+2DptvsTCKa7clH3M7SyOogq2bOcN2Nup\nfqvG1XHs29kPHqJ1rDWp5m8cTb3lrYkDz3TEGLUNZ6i9im4oaYG1kberXXQkioaa\ng0XEsYr/8wKBgQCnFPAYgugo9QjMzvHT01fjkDHjPPf0WvBxhrRCxGxOX3rKQ6Mp\naulzqowNwOq4qMdt46R4KKQbKWhcCwuHcH8FhFK1HZQrSRNXZup/O1uWwy5wy5JI\nkDLrWUmEj9K7uNAzHQcXSvj2OM1R3tYqn4sW5NU26FG2Lk2ftrHWcG9bQQKBgA5t\n7gBpA7OzJtZcXlkleppQTYhpy/ybW7Olv/iDsZnl/yadsb2n+zBYvt4xuLGPlMpB\nymlsKT+OWTVsI3gVrOZfYbs4Q7tC+xVZMQNjLa7jdOKda1JuOCynnWBFWP0rBgMa\noPAagfIIkbW4MqYGjfgiJ1TnnaOPzJOf8gt+d/x1AoGBAMcNPcL1krAkXGwQfJ1z\n4Zjj4/12wrT5u4UKhSyAjkGtsRZPx07Y8wXvdYzErlEjoEmXvWa6GWiO3S2UIg2n\nqPcxcfYtBuizgKONL0F1MiQ1+fzDPBjvQqByUf2LYUi64NnRTsCI6mhixG2aCSDM\nL/1lSKe9tuTicOPOiywcF1sY\n-----END PRIVATE KEY-----\n",
+  "client_email": "booking-agent@ai-agency-471712.iam.gserviceaccount.com",
+  "client_id": "104638433513119768412",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/booking-agent%40ai-agency-471712.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

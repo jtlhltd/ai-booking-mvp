@@ -1,9 +1,11 @@
 {
   "name": "ai-booking-mvp",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js"
@@ -16,6 +18,7 @@
     "googleapis": "^131.0.0",
     "morgan": "^1.10.0",
     "nanoid": "^5.0.7",
+    "sqlite3": "^5.1.7",
     "twilio": "^4.22.0"
   }
 }

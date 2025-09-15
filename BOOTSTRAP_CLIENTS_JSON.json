@@ -1,0 +1,17 @@
+[
+  {
+    "clientKey": "victory_dental",
+    "displayName": "Victory Dental Clinic",
+    "booking": { "timezone": "Europe/London", "defaultDurationMin": 30 }
+  },
+  {
+    "clientKey": "smile_dental",
+    "displayName": "Smile Dental",
+    "booking": { "timezone": "Europe/London", "defaultDurationMin": 30 }
+  },
+  {
+    "clientKey": "bright_skin",
+    "displayName": "Bright Skin",
+    "booking": { "timezone": "Europe/London", "defaultDurationMin": 45 }
+  }
+]
