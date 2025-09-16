@@ -345,9 +345,7 @@ app.post('/api/calendar/book-slot', async (req, res) => {
       return res.status(409).json({ ok:false, error:'Requested time is busy', busy });
     }
 
-    let attendees = attendeeEmailsFor(client);
-    if (lead.email && typeof lead.email === 'string' && lead.email.includes('@')) attendees.push(lead.email);
-    attendees = Array.from(new Set(attendees.filter(e => typeof e === 'string' && e.includes('@'))));
+    const attendees = []; // removed invites
 const summary = `${service} — ${lead.name}`;
     const description = [
       `Service: ${service}`,
@@ -366,8 +364,7 @@ const summary = `${service} — ${lead.name}`;
         description,
         startIso: startISO,
         endIso: endISO,
-        timezone: tz,
-        attendees
+        timezone: tz
       });
     } catch (e) {
       const code = e?.response?.status || 500;
@@ -557,13 +554,13 @@ app.post('/api/calendar/check-book', async (req, res) => {
           `Phone: ${lead.phone}`
         ].join('\n');
 
-        const attendees = attendeeEmailsFor(client);
+        const attendees = []; // removed invites
 
         let event;
         try {
           event = await withRetry(() => insertEvent({
             auth, calendarId, summary, description,
-            startIso: startISO, endIso: endISO, timezone: tz, attendees
+            startIso: startISO, endIso: endISO, timezone: tz
           }), { retries: 2, delayMs: 300 });
         } catch (e) {
           const code = e?.response?.status || 500;
