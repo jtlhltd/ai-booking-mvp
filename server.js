@@ -1,4 +1,4 @@
-// server.js — AI Booking MVP (SQLite tenants + env bootstrap for free Render)
+// server.js — AI Booking MVP (SQLite tenants + env bootstrap + richer tenant awareness)
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
@@ -22,7 +22,7 @@ app.get('/healthz', (req, res) => {
     apiKey: !!process.env.API_KEY,
     sms: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && (process.env.TWILIO_MESSAGING_SERVICE_SID || process.env.TWILIO_FROM_NUMBER)),
     gcal: !!(process.env.GOOGLE_CLIENT_EMAIL && (process.env.GOOGLE_PRIVATE_KEY || process.env.GOOGLE_PRIVATE_KEY_B64)),
-    vapi: !!(process.env.VAPI_PRIVATE_KEY && process.env.VAPI_ASSISTANT_ID && process.env.VAPI_PHONE_NUMBER_ID),
+    vapi: !!(process.env.VAPI_PRIVATE_KEY && (process.env.VAPI_ASSISTANT_ID || true) && (process.env.VAPI_PHONE_NUMBER_ID || true)),
     tz: process.env.TZ || 'unset'
   };
   res.json({ ok: true, integrations: flags });
@@ -81,6 +81,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type','X-API-Key','Idempotency-Key','X-Client-Key'],
 }));
 app.use('/webhooks/twilio-status', express.urlencoded({ extended: false }));
+app.use('/webhooks/twilio-inbound', express.urlencoded({ extended: false }));
 app.use((req, _res, next) => { req.id = 'req_' + nanoid(10); next(); });
 app.use(rateLimit({ windowMs: 60_000, max: 60, standardHeaders: true, legacyHeaders: false }));
 
@@ -136,8 +137,8 @@ function deriveIdemKey(req) {
 
 // API key guard
 function requireApiKey(req, res, next) {
-  if (req.method === 'GET' && (req.path === '/health' || req.path === '/gcal/ping')) return next();
-  if (req.path.startsWith('/webhooks/twilio-status')) return next();
+  if (req.method === 'GET' && (req.path === '/health' || req.path === '/gcal/ping' || req.path === '/healthz')) return next();
+  if (req.path.startsWith('/webhooks/twilio-status') || req.path.startsWith('/webhooks/twilio-inbound')) return next();
   if (!API_KEY) return res.status(500).json({ error: 'Server missing API_KEY' });
   const key = req.get('X-API-Key');
   if (key && key === API_KEY) return next();
@@ -212,7 +213,16 @@ app.get('/gcal/ping', async (_req, res) => {
   }
 });
 
-// === Availability ===
+// Helpers for hours/closures
+function parseJson(s, fallback) { try { return JSON.parse(s); } catch { return fallback; } }
+function hoursFor(client) {
+  const hours = parseJson(client?.hoursJson || 'null', null);
+  if (hours && typeof hours === 'object') return hours;
+  return { mon:['09:00-17:00'], tue:['09:00-17:00'], wed:['09:00-17:00'], thu:['09:00-17:00'], fri:['09:00-17:00'] };
+}
+function closedDatesFor(client) { return parseJson(client?.closedDatesJson || '[]', []); }
+
+// === Availability === (respects hours/closures/min notice/max advance + per-service duration)
 app.post('/api/calendar/find-slots', async (req, res) => {
   try {
     const client = await getClientFromHeader(req);
@@ -222,55 +232,62 @@ app.post('/api/calendar/find-slots', async (req, res) => {
 
     const tz = pickTimezone(client);
     const calendarId = pickCalendarId(client);
-    const { durationMin = client?.bookingDefaultDurationMin || 30, daysAhead = 14, stepMinutes = 15 } = req.body || {};
 
-    const business = client?.booking?.hours || {
-      mon: ['09:00-17:00'], tue: ['09:00-17:00'], wed: ['09:00-17:00'],
-      thu: ['09:00-17:00'], fri: ['09:00-17:00']
-    };
+    const services = parseJson(client?.servicesJson || '[]', []);
+    const requestedService = req.body?.service;
+    const svc = services.find(s => s.id === requestedService);
+    const durationMin = (svc?.durationMin) || req.body?.durationMin || client?.bookingDefaultDurationMin || 30;
+    const bufferMin = (svc?.bufferMin) || 0;
 
-    const windowStart = new Date();
-    const windowEnd   = new Date(Date.now() + daysAhead * 86400000);
+    const minNoticeMin = client?.minNoticeMin || 0;
+    const maxAdvanceDays = client?.maxAdvanceDays || 14;
+    const business = hoursFor(client);
+    const closedDates = new Set(closedDatesFor(client));
+    const stepMinutes = Math.max(5, Number(req.body?.stepMinutes || 15));
+
+    const windowStart = new Date(Date.now() + minNoticeMin * 60000);
+    const windowEnd   = new Date(Date.now() + maxAdvanceDays * 86400000);
 
     const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY, privateKeyB64: GOOGLE_PRIVATE_KEY_B64 });
     await auth.authorize();
     const busy = await freeBusy({ auth, calendarId, timeMinISO: windowStart.toISOString(), timeMaxISO: windowEnd.toISOString() });
 
-    const slotMs = durationMin * 60000;
+    const slotMs = (durationMin + bufferMin) * 60000;
     const results = [];
     const cursor = new Date(windowStart);
     cursor.setSeconds(0,0);
 
     const dowName = ['sun','mon','tue','wed','thu','fri','sat'];
 
-    function localHM(dt) {
+    function formatHMLocal(dt) {
       const f = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false });
       const parts = f.formatToParts(dt);
       const hh = parts.find(p => p.type==='hour').value;
       const mm = parts.find(p => p.type==='minute').value;
       return `${hh}:${mm}`;
     }
-
     function isOpen(dt) {
       const spans = business[dowName[dt.getUTCDay()]];
       if (!Array.isArray(spans) || spans.length === 0) return false;
-      const hm = localHM(dt);
-      return spans.some(s => {
-        const [a,b] = s.split('-'); return hm >= a && hm < b;
-      });
+      const hm = formatHMLocal(dt);
+      return spans.some(s => { const [a,b] = String(s).split('-'); return hm >= a && hm < b; });
     }
-
+    function isClosedDate(dt) {
+      const f = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year:'numeric', month:'2-digit', day:'2-digit' });
+      const [y,m,d] = f.format(dt).split('-');
+      return closedDates.has(`${y}-${m}-${d}`);
+    }
     function overlapsBusy(sISO, eISO) {
       return busy.some(b => !(eISO <= b.start || sISO >= b.end));
     }
 
-    while (cursor < windowEnd && results.length < 20) {
+    while (cursor < windowEnd && results.length < 30) {
       const start = new Date(cursor);
       const end   = new Date(cursor.getTime() + slotMs);
       const sISO = start.toISOString();
       const eISO = end.toISOString();
 
-      if (isOpen(start) && !overlapsBusy(sISO, eISO)) {
+      if (!isClosedDate(start) && isOpen(start) && !overlapsBusy(sISO, eISO)) {
         results.push({ start: sISO, end: eISO, timezone: tz });
       }
 
@@ -278,7 +295,7 @@ app.post('/api/calendar/find-slots', async (req, res) => {
       cursor.setSeconds(0,0);
     }
 
-    res.json({ ok:true, slots: results });
+    res.json({ ok:true, slots: results, params: { durationMin, bufferMin, stepMinutes } });
   } catch (err) {
     res.status(500).json({ ok:false, error: String(err) });
   }
@@ -322,20 +339,17 @@ app.post('/api/calendar/book-slot', async (req, res) => {
       return res.status(409).json({ ok:false, error:'Requested time is busy', busy });
     }
 
-    // Create event
+    const attendees = parseJson(client?.attendeeEmailsJson || '[]', []);
+    if (lead.email && typeof lead.email === 'string' && lead.email.includes('@')) attendees.push(lead.email);
+
     const summary = `${service} — ${lead.name}`;
     const description = [
       `Service: ${service}`,
       `Lead: ${lead.name}`,
       lead.phone ? `Phone: ${lead.phone}` : null,
       lead.id ? `Lead ID: ${lead.id}` : null,
-      `Booked via AI Booking MVP`
+      `Tenant: ${client?.clientKey || 'default'}`
     ].filter(Boolean).join('\n');
-
-    const attendees = [];
-    if (lead.email && typeof lead.email === 'string' && lead.email.includes('@')) {
-      attendees.push(lead.email);
-    }
 
     const event = await insertEvent({
       auth,
@@ -353,18 +367,9 @@ app.post('/api/calendar/book-slot', async (req, res) => {
       event: {
         id: event.id,
         htmlLink: event.htmlLink,
-        status: event.status,
-        start: event.start,
-        end: event.end,
-        summary: event.summary,
-        creator: event.creator,
-        organizer: event.organizer
+        status: event.status
       },
-      tenant: {
-        clientKey: client?.clientKey || null,
-        calendarId,
-        timezone: tz
-      }
+      tenant: { clientKey: client?.clientKey || null, calendarId, timezone: tz }
     });
   } catch (err) {
     return res.status(500).json({ ok:false, error: String(err) });
@@ -390,7 +395,25 @@ app.post('/webhooks/twilio-status', async (req, res) => {
   res.type('text/plain').send('OK');
 });
 
-// Outbound lead webhook → Vapi
+// Twilio inbound STOP/START to toggle consent
+app.post('/webhooks/twilio-inbound', async (req, res) => {
+  try {
+    const from = normalizePhone(req.body.From || '');
+    const text = String(req.body.Body || '').trim().toUpperCase();
+    if (!isE164(from)) return res.type('text/plain').send('IGNORED');
+    const leads = await readJson(LEADS_PATH, []);
+    let lead = leads.find(l => l.phone === from);
+    if (!lead) { lead = { id: 'lead_' + nanoid(8), phone: from }; leads.push(lead); }
+    if (['STOP','STOP ALL','UNSUBSCRIBE','CANCEL','END','QUIT'].includes(text)) lead.consentSms = false;
+    if (['START','UNSTOP','YES'].includes(text)) lead.consentSms = true;
+    await writeJson(LEADS_PATH, leads);
+    res.type('text/plain').send('OK');
+  } catch {
+    res.type('text/plain').send('OK');
+  }
+});
+
+// Outbound lead webhook → Vapi (tenant-aware variables + optional per-tenant caller ID)
 const VAPI_URL = 'https://api.vapi.ai';
 const VAPI_PRIVATE_KEY     = process.env.VAPI_PRIVATE_KEY || '';
 const VAPI_ASSISTANT_ID    = process.env.VAPI_ASSISTANT_ID || '';
@@ -406,27 +429,41 @@ app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
     if (!phone) return res.status(400).json({ error: 'Missing phone' });
     const e164 = normalizePhone(phone);
     if (!isE164(e164)) return res.status(400).json({ error: 'phone must be E.164 (+447...)' });
-    if (!(VAPI_PRIVATE_KEY && VAPI_ASSISTANT_ID && VAPI_PHONE_NUMBER_ID)) {
-      return res.status(500).json({ error: 'Missing Vapi env: VAPI_PRIVATE_KEY, VAPI_ASSISTANT_ID, VAPI_PHONE_NUMBER_ID' });
+    if (!VAPI_PRIVATE_KEY) {
+      return res.status(500).json({ error: 'Missing VAPI_PRIVATE_KEY' });
     }
+
+    const assistantId = client?.vapiAssistantId || VAPI_ASSISTANT_ID;
+    const phoneNumberId = client?.vapiPhoneNumberId || VAPI_PHONE_NUMBER_ID;
+
+    const payload = {
+      assistantId,
+      phoneNumberId,
+      customer: { number: e164, numberE164CheckEnabled: true },
+      assistantOverrides: {
+        variableValues: {
+          ClientKey: clientKey,
+          BusinessName: client.displayName || client.clientKey,
+          ConsentLine: 'This call may be recorded for quality.',
+          DefaultService: service || '',
+          DefaultDurationMin: durationMin || client?.bookingDefaultDurationMin || 30,
+          Timezone: client?.bookingTimezone || TIMEZONE,
+          ServicesJSON: client?.servicesJson || '[]',
+          PricesJSON: client?.pricesJson || '{}',
+          HoursJSON: client?.hoursJson || '{}',
+          ClosedDatesJSON: client?.closedDatesJson || '[]',
+          Locale: client?.locale || 'en-GB',
+          ScriptHints: client?.scriptHints || '',
+          FAQJSON: client?.faqJson || '[]',
+          Currency: client?.currency || 'GBP'
+        }
+      }
+    };
 
     const resp = await fetch(`${VAPI_URL}/call`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        assistantId: VAPI_ASSISTANT_ID,
-        phoneNumberId: VAPI_PHONE_NUMBER_ID,
-        customer: { number: e164, numberE164CheckEnabled: true },
-        assistantOverrides: {
-          variableValues: {
-            ClientKey: clientKey,
-            BusinessName: client.displayName || client.clientKey,
-            ConsentLine: 'This call may be recorded for quality.',
-            DefaultService: service || '',
-            DefaultDurationMin: durationMin || client?.bookingDefaultDurationMin || 30
-          }
-        }
-      })
+      body: JSON.stringify(payload)
     });
 
     let data;
@@ -448,18 +485,23 @@ app.post('/api/calendar/check-book', async (req, res) => {
 
   try {
     const client = await getClientFromHeader(req); // DB-backed
+    if (!client) return res.status(400).json({ error: 'Unknown tenant' });
     const tz = pickTimezone(client);
     const calendarId = pickCalendarId(client);
 
-    const { service, startPref, durationMin, lead, attendeeEmails } = req.body || {};
-    if (!service || typeof service !== 'string') return res.status(400).json({ error: 'Missing service' });
-    const dur = (typeof durationMin === 'number' && durationMin > 0)
-      ? durationMin
-      : (client?.bookingDefaultDurationMin || 30);
+    const services = parseJson(client?.servicesJson || '[]', []);
+    const requestedService = req.body?.service;
+    const svc = services.find(s => s.id === requestedService);
+    const dur = (typeof req.body?.durationMin === 'number' && req.body.durationMin > 0)
+      ? req.body.durationMin
+      : (svc?.durationMin || client?.bookingDefaultDurationMin || 30);
+
+    const { lead } = req.body || {};
     if (!lead?.name || !lead?.phone) return res.status(400).json({ error: 'Missing lead{name, phone}' });
     lead.phone = normalizePhone(lead.phone);
     if (!isE164(lead.phone)) return res.status(400).json({ error: 'lead.phone must be E.164' });
 
+    // Default: book tomorrow ~14:00 in tenant TZ
     const base = new Date(Date.now() + 24 * 60 * 60 * 1000);
     base.setHours(14, 0, 0, 0);
     const startISO = base.toISOString();
@@ -470,20 +512,19 @@ app.post('/api/calendar/check-book', async (req, res) => {
       if (GOOGLE_CLIENT_EMAIL && (GOOGLE_PRIVATE_KEY || GOOGLE_PRIVATE_KEY_B64) && calendarId) {
         const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY, privateKeyB64: GOOGLE_PRIVATE_KEY_B64 });
         await auth.authorize();
-        const summary = `${service} — ${lead.name || lead.phone}`;
+        const summary = `${requestedService || 'Appointment'} — ${lead.name || lead.phone}`;
         const description = [
           `Auto-booked by AI agent`,
           `Tenant: ${client?.clientKey || 'default'}`,
           `Name: ${lead.name}`,
-          `Phone: ${lead.phone}`,
-          lead.email ? `Email: ${lead.email}` : null,
-          startPref ? `Start preference: ${startPref}` : null
-        ].filter(Boolean).join('\n');
+          `Phone: ${lead.phone}`
+        ].join('\n');
+
+        const attendees = parseJson(client?.attendeeEmailsJson || '[]', []);
 
         const event = await withRetry(() => insertEvent({
           auth, calendarId, summary, description,
-          startIso: startISO, endIso: endISO, timezone: tz,
-          attendees: Array.isArray(attendeeEmails) ? attendeeEmails : []
+          startIso: startISO, endIso: endISO, timezone: tz, attendees
         }), { retries: 2, delayMs: 300 });
 
         google = { id: event.id, htmlLink: event.htmlLink, status: event.status };
@@ -496,13 +537,14 @@ app.post('/api/calendar/check-book', async (req, res) => {
     let sms = null;
     const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
     if (configured) {
-      const when = new Date(startISO).toLocaleString('en-GB', {
+      const when = new Date(startISO).toLocaleString(client?.locale || 'en-GB', {
         timeZone: tz, weekday: 'short', day: 'numeric', month: 'short',
         hour: 'numeric', minute: '2-digit', hour12: true
       });
       const link = google?.htmlLink ? ` Calendar: ${google.htmlLink}` : '';
-      const tenantName = client?.displayName || client?.clientKey || 'Our Clinic';
-      const body = `Hi ${lead.name}, your ${service} is booked with ${tenantName} for ${when} ${tz}.${link} Reply STOP to opt out.`;
+      const brand = client?.displayName || client?.clientKey || 'Our Clinic';
+      const sig = client?.brandSignature ? ` ${client.brandSignature}` : '';
+      const body = `Hi ${lead.name}, your ${requestedService || 'appointment'} is booked with ${brand} for ${when} ${tz}.${link}${sig} Reply STOP to opt out.`;
 
       try {
         const payload = { to: lead.phone, body };
@@ -519,11 +561,9 @@ app.post('/api/calendar/check-book', async (req, res) => {
     const calls = await readJson(CALLS_PATH, []);
     const record = {
       id: 'call_' + nanoid(10),
-      lead_id: lead.id || null,
       tenant: client?.clientKey || null,
       status: 'booked',
-      disposition: 'booked',
-      booking: { start: startISO, end: endISO, service, startPref: startPref || null, google, sms },
+      booking: { start: startISO, end: endISO, service: requestedService || null, google, sms },
       created_at: new Date().toISOString()
     };
     calls.push(record);
@@ -539,148 +579,6 @@ app.post('/api/calendar/check-book', async (req, res) => {
     return res.status(status).json(body);
   }
 });
-
-// === Consent ===
-app.post('/api/leads/consent', async (req, res) => {
-  const { leadId, phone } = req.body || {};
-  if (!leadId && !phone) return res.status(400).json({ ok:false, error: 'leadId or phone required' });
-  const leads = await readJson(LEADS_PATH, []);
-  const e164 = phone ? normalizePhone(phone) : null;
-  const idx = leads.findIndex(l => (leadId && l.id === leadId) || (e164 && l.phone === e164));
-  if (idx < 0) return res.status(404).json({ ok:false, error: 'lead not found' });
-  leads[idx].consentSms = true;
-  await writeJson(LEADS_PATH, leads);
-  res.json({ ok:true, leadId: leads[idx].id, consentSms: true });
-});
-
-// === Notify (manual SMS) with consent gating ===
-app.post('/api/notify/send', async (req, res) => {
-  const idemKey = deriveIdemKey(req);
-  const cached = getCachedIdem(idemKey);
-  if (cached) return res.status(cached.status).json(cached.body);
-
-  const client = await getClientFromHeader(req);
-  const { smsClient, messagingServiceSid, fromNumber, configured } = smsConfig(client);
-  const { channel, to, message, type = 'transactional' } = req.body || {};
-
-  if (!channel || !to || !message) {
-    const status = 400, body = { error: 'Missing channel, to, message' };
-    setCachedIdem(idemKey, status, body);
-    return res.status(status).json(body);
-  }
-  if (channel !== 'sms') {
-    const status = 200, body = { sent: true, id: 'stub', channel };
-    setCachedIdem(idemKey, status, body);
-    return res.status(status).json(body);
-  }
-
-  const cleanTo = normalizePhone(to);
-  if (!isE164(cleanTo)) {
-    const status = 400, body = { error: 'to must be E.164 (+447...)' };
-    setCachedIdem(idemKey, status, body);
-    return res.status(status).json(body);
-  }
-  if (!configured) {
-    const status = 400, body = { error: 'SMS not configured for tenant' };
-    setCachedIdem(idemKey, status, body);
-    return res.status(status).json(body);
-  }
-
-  // Marketing SMS requires prior consent
-  if (String(type) !== 'transactional') {
-    const leads = await readJson(LEADS_PATH, []);
-    const lead = leads.find(l => l.phone === cleanTo);
-    if (!lead?.consentSms) {
-      const status = 403, body = { sent: false, error: 'consent_required' };
-      setCachedIdem(idemKey, status, body);
-      return res.status(status).json(body);
-    }
-  }
-
-  try {
-    const brand =
-      (client?.displayName && String(client.displayName).trim()) ||
-      (req.get('X-Client-Key') || '') ||
-      (client?.clientKey && String(client.clientKey)) ||
-      'Our Clinic';
-    const branded = `${brand}: ${message}`;
-
-    const payload = { to: cleanTo, body: branded };
-    if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid;
-    else payload.from = fromNumber;
-
-    const resp = await withRetry(() => smsClient.messages.create(payload), { retries: 2, delayMs: 300 });
-
-    const out = { sent: true, id: resp.sid, to: cleanTo, channel: 'sms', tenant: client?.clientKey || 'default', status: resp.status };
-    setCachedIdem(idemKey, 200, out);
-    return res.json(out);
-  } catch (err) {
-    const status = 503, body = { sent: false, error: String(err) };
-    setCachedIdem(idemKey, status, body);
-    return res.status(status).json(body);
-  }
-});
-
-// === Sequences (kept as-is; writes to JSON log)
-app.post('/api/notify/sequence', async (req, res) => {
-  const tenant = (req.get('X-Client-Key') || '').trim();
-  const { to, name, steps, type = 'marketing' } = req.body || {};
-  if (!tenant || !to || !Array.isArray(steps) || steps.length === 0) {
-    return res.status(400).json({ ok:false, error: 'tenant header, to, steps required' });
-  }
-  const e164 = normalizePhone(to);
-  if (!isE164(e164)) return res.status(400).json({ ok:false, error:'to must be E.164' });
-
-  const rendered = steps.map(s => ({
-    at: new Date(s.at || Date.now()).toISOString(),
-    message: String(s.message || '').replaceAll('{{name}}', name || 'there')
-  }));
-
-  const jobs = await readJson(JOBS_PATH, []);
-  const job = { id: 'job_'+nanoid(10), tenant, to: e164, type, steps: rendered, status: 'queued' };
-  jobs.push(job); await writeJson(JOBS_PATH, jobs);
-  res.json({ ok:true, job });
-});
-
-setInterval(async () => {
-  try {
-    const now = Date.now();
-    const jobs = await readJson(JOBS_PATH, []);
-    let changed = false;
-
-    for (const job of jobs) {
-      if (job.status === 'completed' || 'cancelled') {/* continue when either */}
-      if (job.status === 'completed' || job.status === 'cancelled') continue;
-      for (const step of job.steps) {
-        if (step.sent) continue;
-        if (new Date(step.at).getTime() > now) continue;
-
-        const body = { channel: 'sms', to: job.to, message: step.message, type: job.type };
-        try {
-          await fetch(`http://localhost:${PORT}/api/notify/send`, {
-            method: 'POST',
-            headers: {
-              'Content-Type':'application/json',
-              'X-API-Key': API_KEY,
-              'X-Client-Key': job.tenant,
-              'Idempotency-Key': `job:${job.id}:${step.at}`
-            },
-            body: JSON.stringify(body)
-          });
-          step.sent = true;
-          step.sentAt = new Date().toISOString();
-          changed = true;
-        } catch (e) {
-          step.error = String(e);
-          changed = true;
-        }
-      }
-      if (job.steps.every(s => s.sent)) job.status = 'completed';
-    }
-
-    if (changed) await writeJson(JOBS_PATH, jobs);
-  } catch {}
-}, 60_000);
 
 // Stats
 app.get('/api/stats', async (_req, res) => {
