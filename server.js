@@ -12,7 +12,7 @@ import twilio from 'twilio';
 import { createHash } from 'crypto';
 
 import { makeJwtAuth, insertEvent, freeBusy } from './gcal.js';
-import { upsertClient, getClientByKey, listClients, deleteClient, DB_PATH } from './db.js'; // SQLite-backed tenants
+import { upsertFullClient, getFullClient, listFullClients, deleteClient, DB_PATH } from './db.js'; // SQLite-backed tenants
 
 const app = express();
 
@@ -106,13 +106,13 @@ const normalizePhone = (s) => (s || '').trim().replace(/[^\d+]/g, '');
 async function getClientFromHeader(req) {
   const key = req.get('X-Client-Key') || null;
   if (!key) return null;
-  return await getClientByKey(key);
+  return await getFullClient(key);
 }
-function pickTimezone(client) { return client?.bookingTimezone || TIMEZONE; }
+function pickTimezone(client) { return client?.booking?.timezone || TIMEZONE; }
 function pickCalendarId(client) { return client?.calendarId || GOOGLE_CALENDAR_ID; }
 function smsConfig(client) {
-  const messagingServiceSid = client?.smsMessagingServiceSid || TWILIO_MESSAGING_SERVICE_SID || null;
-  const fromNumber = client?.smsFrom || TWILIO_FROM_NUMBER || null;
+  const messagingServiceSid = client?.sms?.messagingServiceSid || TWILIO_MESSAGING_SERVICE_SID || null;
+  const fromNumber = client?.sms?.fromNumber || TWILIO_FROM_NUMBER || null;
   const smsClient = defaultSmsClient;
   const configured = !!(smsClient && (messagingServiceSid || fromNumber));
   return { messagingServiceSid, fromNumber, smsClient, configured };
@@ -165,7 +165,7 @@ async function withRetry(fn, { retries = 2, delayMs = 250 } = {}) {
 // --- Bootstrap tenants from env (for free Render without disk) ---
 async function bootstrapClients() {
   try {
-    const existing = await listClients();
+    const existing = await listFullClients();
     if (existing.length > 0) return;
     const raw = process.env.BOOTSTRAP_CLIENTS_JSON;
     if (!raw) return;
@@ -173,7 +173,7 @@ async function bootstrapClients() {
     if (!Array.isArray(seed)) seed = [seed];
     for (const c of seed) {
       if (!c.clientKey || !c.booking?.timezone) continue;
-      await upsertClient(c);
+      await upsertFullClient(c);
     }
     console.log(`Bootstrapped ${seed.length} client(s) into SQLite from BOOTSTRAP_CLIENTS_JSON`);
   } catch (e) {
@@ -184,7 +184,7 @@ async function bootstrapClients() {
 // Health (DB)
 app.get('/health', async (_req, res) => {
   try {
-    const rows = await listClients();
+    const rows = await listFullClients();
     res.json({
       ok: true,
       service: 'ai-booking-mvp',
@@ -214,13 +214,19 @@ app.get('/gcal/ping', async (_req, res) => {
 });
 
 // Helpers for hours/closures
-function parseJson(s, fallback) { try { return JSON.parse(s); } catch { return fallback; } }
-function hoursFor(client) {
-  const hours = parseJson(client?.hoursJson || 'null', null);
-  if (hours && typeof hours === 'object') return hours;
-  return { mon:['09:00-17:00'], tue:['09:00-17:00'], wed:['09:00-17:00'], thu:['09:00-17:00'], fri:['09:00-17:00'] };
+function asJson(val, fallback) {
+  if (val == null) return fallback;
+  if (typeof val === 'object') return val;
+  try { return JSON.parse(String(val)); } catch { return fallback; }
 }
-function closedDatesFor(client) { return parseJson(client?.closedDatesJson || '[]', []); }
+function hoursFor(client) {
+  return asJson(client?.booking?.hours, null)
+      || asJson(client?.hoursJson, null)
+      || { mon:['09:00-17:00'], tue:['09:00-17:00'], wed:['09:00-17:00'], thu:['09:00-17:00'], fri:['09:00-17:00'] };
+}
+const closedDatesFor    = (c) => asJson(c?.closedDates, [])     || asJson(c?.closedDatesJson, []);
+const servicesFor       = (c) => asJson(c?.services, [])        || asJson(c?.servicesJson, []);
+const attendeeEmailsFor = (c) => asJson(c?.attendeeEmails, [])  || asJson(c?.attendeeEmailsJson, []);
 
 // === Availability === (respects hours/closures/min notice/max advance + per-service duration)
 app.post('/api/calendar/find-slots', async (req, res) => {
@@ -233,14 +239,14 @@ app.post('/api/calendar/find-slots', async (req, res) => {
     const tz = pickTimezone(client);
     const calendarId = pickCalendarId(client);
 
-    const services = parseJson(client?.servicesJson || '[]', []);
+    const services = servicesFor(client);
     const requestedService = req.body?.service;
     const svc = services.find(s => s.id === requestedService);
-    const durationMin = (svc?.durationMin) || req.body?.durationMin || client?.bookingDefaultDurationMin || 30;
+    const durationMin = (svc?.durationMin) || req.body?.durationMin || client?.booking?.defaultDurationMin || 30;
     const bufferMin = (svc?.bufferMin) || 0;
 
-    const minNoticeMin = client?.minNoticeMin || 0;
-    const maxAdvanceDays = client?.maxAdvanceDays || 14;
+    const minNoticeMin   = client?.booking?.minNoticeMin   ?? client?.minNoticeMin   ?? 0;
+    const maxAdvanceDays = client?.booking?.maxAdvanceDays ?? client?.maxAdvanceDays ?? 14;
     const business = hoursFor(client);
     const closedDates = new Set(closedDatesFor(client));
     const stepMinutes = Math.max(5, Number(req.body?.stepMinutes || 15));
@@ -325,7 +331,7 @@ app.post('/api/calendar/book-slot', async (req, res) => {
     if (!start || !startISO) {
       return res.status(400).json({ ok:false, error: 'Missing/invalid "start" (ISO datetime)' });
     }
-    const dur = Number.isFinite(+durationMin) ? +durationMin : (client?.bookingDefaultDurationMin || 30);
+    const dur = Number.isFinite(+durationMin) ? +durationMin : (client?.booking?.defaultDurationMin || 30);
     const endISO = new Date(new Date(startISO).getTime() + dur * 60000).toISOString();
 
     // Auth
@@ -339,10 +345,10 @@ app.post('/api/calendar/book-slot', async (req, res) => {
       return res.status(409).json({ ok:false, error:'Requested time is busy', busy });
     }
 
-    const attendees = parseJson(client?.attendeeEmailsJson || '[]', []);
+    let attendees = attendeeEmailsFor(client);
     if (lead.email && typeof lead.email === 'string' && lead.email.includes('@')) attendees.push(lead.email);
-
-    const summary = `${service} — ${lead.name}`;
+    attendees = Array.from(new Set(attendees.filter(e => typeof e === 'string' && e.includes('@'))));
+const summary = `${service} — ${lead.name}`;
     const description = [
       `Service: ${service}`,
       `Lead: ${lead.name}`,
@@ -351,16 +357,23 @@ app.post('/api/calendar/book-slot', async (req, res) => {
       `Tenant: ${client?.clientKey || 'default'}`
     ].filter(Boolean).join('\n');
 
-    const event = await insertEvent({
-      auth,
-      calendarId,
-      summary,
-      description,
-      startIso: startISO,
-      endIso: endISO,
-      timezone: tz,
-      attendees
-    });
+    let event;
+    try {
+      event = await insertEvent({
+        auth,
+        calendarId,
+        summary,
+        description,
+        startIso: startISO,
+        endIso: endISO,
+        timezone: tz,
+        attendees
+      });
+    } catch (e) {
+      const code = e?.response?.status || 500;
+      const data = e?.response?.data || e?.message || String(e);
+      return res.status(code).json({ ok:false, error:'gcal_insert_failed', details: data });
+    }
 
     return res.status(201).json({
       ok: true,
@@ -377,6 +390,30 @@ app.post('/api/calendar/book-slot', async (req, res) => {
 });
 
 // Twilio delivery receipts
+
+// Simple SMS send route (per-tenant or global fallback)
+app.post('/api/notify/send', async (req, res) => {
+  try {
+    const client = await getClientFromHeader(req);
+    const { channel, to, message } = req.body || {};
+    if (channel !== 'sms') return res.status(400).json({ ok:false, error:'Only channel="sms" is supported' });
+    if (!to || !message) return res.status(400).json({ ok:false, error:'Missing "to" or "message"' });
+
+    const { smsClient, messagingServiceSid, fromNumber, configured } = smsConfig(client);
+    if (!configured) return res.status(400).json({ ok:false, error:'SMS not configured (no fromNumber or messagingServiceSid)' });
+
+    const payload = { to, body: message };
+    if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid;
+    else if (fromNumber) payload.from = fromNumber;
+
+    const resp = await smsClient.messages.create(payload);
+    return res.json({ ok:true, sid: resp.sid });
+  } catch (e) {
+    const msg = e?.message || 'sms_error';
+    const code = e?.status || e?.code || 500;
+    return res.status(500).json({ ok:false, error: msg });
+  }
+});
 app.post('/webhooks/twilio-status', async (req, res) => {
   const rows = await readJson(SMS_STATUS_PATH, []);
   const log = {
@@ -422,7 +459,7 @@ const VAPI_PHONE_NUMBER_ID = process.env.VAPI_PHONE_NUMBER_ID || '';
 app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
   try {
     const { clientKey } = req.params;
-    const client = await getClientByKey(clientKey);
+    const client = await getFullClient(clientKey);
     if (!client) return res.status(404).json({ error: `Unknown clientKey ${clientKey}` });
 
     const { phone, service, durationMin } = req.body || {};
@@ -446,8 +483,8 @@ app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
           BusinessName: client.displayName || client.clientKey,
           ConsentLine: 'This call may be recorded for quality.',
           DefaultService: service || '',
-          DefaultDurationMin: durationMin || client?.bookingDefaultDurationMin || 30,
-          Timezone: client?.bookingTimezone || TIMEZONE,
+          DefaultDurationMin: durationMin || client?.booking?.defaultDurationMin || 30,
+          Timezone: client?.booking?.timezone || TIMEZONE,
           ServicesJSON: client?.servicesJson || '[]',
           PricesJSON: client?.pricesJson || '{}',
           HoursJSON: client?.hoursJson || '{}',
@@ -489,7 +526,7 @@ app.post('/api/calendar/check-book', async (req, res) => {
     const tz = pickTimezone(client);
     const calendarId = pickCalendarId(client);
 
-    const services = parseJson(client?.servicesJson || '[]', []);
+    const services = servicesFor(client);
     const requestedService = req.body?.service;
     const svc = services.find(s => s.id === requestedService);
     const dur = (typeof req.body?.durationMin === 'number' && req.body.durationMin > 0)
@@ -520,12 +557,19 @@ app.post('/api/calendar/check-book', async (req, res) => {
           `Phone: ${lead.phone}`
         ].join('\n');
 
-        const attendees = parseJson(client?.attendeeEmailsJson || '[]', []);
+        const attendees = attendeeEmailsFor(client);
 
-        const event = await withRetry(() => insertEvent({
-          auth, calendarId, summary, description,
-          startIso: startISO, endIso: endISO, timezone: tz, attendees
-        }), { retries: 2, delayMs: 300 });
+        let event;
+        try {
+          event = await withRetry(() => insertEvent({
+            auth, calendarId, summary, description,
+            startIso: startISO, endIso: endISO, timezone: tz, attendees
+          }), { retries: 2, delayMs: 300 });
+        } catch (e) {
+          const code = e?.response?.status || 500;
+          const data = e?.response?.data || e?.message || String(e);
+          return res.status(code).json({ ok:false, error:'gcal_insert_failed', details: data });
+        }
 
         google = { id: event.id, htmlLink: event.htmlLink, status: event.status };
       }
@@ -608,7 +652,7 @@ app.get('/api/stats', async (_req, res) => {
     if (within(ts, 30)) agg[t].smsSent30++;
   }
 
-  const rows = await listClients();
+  const rows = await listFullClients();
   for (const r of rows) agg[r.clientKey] ||= { bookings7: 0, bookings30: 0, smsSent7: 0, smsSent30: 0 };
 
   res.json({ ok: true, tenants: agg });
@@ -617,7 +661,7 @@ app.get('/api/stats', async (_req, res) => {
 // Clients API (DB-backed)
 app.get('/api/clients', async (_req, res) => {
   try {
-    const rows = await listClients();
+    const rows = await listFullClients();
     res.json({ ok: true, count: rows.length, clients: rows });
   } catch (e) {
     res.status(500).json({ ok:false, error: String(e) });
@@ -626,7 +670,7 @@ app.get('/api/clients', async (_req, res) => {
 
 app.get('/api/clients/:key', async (req, res) => {
   try {
-    const c = await getClientByKey(req.params.key);
+    const c = await getFullClient(req.params.key);
     if (!c) return res.status(404).json({ ok:false, error: 'not found' });
     res.json({ ok:true, client: c });
   } catch (e) {
@@ -644,8 +688,9 @@ app.post('/api/clients', async (req, res) => {
     if (c.sms && !(c.sms.messagingServiceSid || c.sms.fromNumber)) {
       return res.status(400).json({ ok:false, error: 'sms.messagingServiceSid or sms.fromNumber required when sms block present' });
     }
-    await upsertClient(c);
-    return res.json({ ok: true, client: { clientKey: key, displayName: c.displayName || key, booking: { timezone: tz, defaultDurationMin: c.booking?.defaultDurationMin ?? 30 } } });
+    await upsertFullClient(c);
+    const saved = await getFullClient(key);
+    return res.json({ ok: true, client: saved });
   } catch (e) {
     return res.status(500).json({ ok:false, error: String(e) });
   }
