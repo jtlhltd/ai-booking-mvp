@@ -1,6 +1,10 @@
-// store.js
-const fs = require('fs');
-const path = require('path');
+// store.js (ESM)
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const DATA_DIR = path.join(__dirname, 'data');
 const LEADS_PATH = path.join(DATA_DIR, 'leads.json');
@@ -23,7 +27,7 @@ function getTenants() {
   return Object.entries(raw || {}).map(([key, v]) => ({ key, ...v }));
 }
 
-const tenants = {
+export const tenants = {
   findByKey: async (clientKey) => {
     const list = getTenants();
     const t = list.find(x => x.key === clientKey || x.clientKey === clientKey || x.slug === clientKey);
@@ -42,7 +46,7 @@ const tenants = {
 function readLeads() { return loadJSON(LEADS_PATH); }
 function writeLeads(arr) { saveJSON(LEADS_PATH, arr); }
 
-const leads = {
+export const leads = {
   findByComposite: async (tenantId, phone, service) => {
     return readLeads().find(l => l.tenant_id === tenantId && l.phone === phone && l.service === service) || null;
   },
@@ -80,7 +84,7 @@ const leads = {
 function readOptouts() { return loadJSON(OPTOUTS_PATH); }
 function writeOptouts(arr) { saveJSON(OPTOUTS_PATH, arr); }
 
-const optouts = {
+export const optouts = {
   upsert: async (tenantId, phone) => {
     const arr = readOptouts();
     if (!arr.find(x => x.tenant_id === tenantId && x.phone === phone)) {
@@ -93,7 +97,7 @@ const optouts = {
   }
 };
 
-const twilio = {
+export const twilio = {
   mapToTenant: async (messagingServiceSid, toNumber) => {
     const list = getTenants();
     let t = null;
@@ -109,11 +113,9 @@ const twilio = {
   }
 };
 
-const contactAttempts = {
+export const contactAttempts = {
   log: async (entry) => {
     const p = path.join(DATA_DIR, 'contact_attempts.log');
-    fs.appendFileSync(p, JSON.stringify({ ...entry, ts: nowISO() }) + '\\n');
+    fs.appendFileSync(p, JSON.stringify({ ...entry, ts: nowISO() }) + '\n');
   }
 };
-
-module.exports = { tenants, leads, optouts, twilio, contactAttempts };

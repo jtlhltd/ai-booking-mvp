@@ -1,5 +1,5 @@
-// sheets.js
-const { google } = require('googleapis');
+// sheets.js (ESM)
+import { google } from 'googleapis';
 
 let sheetsClient;
 async function getClient() {
@@ -19,12 +19,12 @@ async function getClient() {
   return sheetsClient;
 }
 
-const HEADERS = [
+export const HEADERS = [
   'Lead ID','Name','Phone','Service','Source',
   'Status','Attempts','Last Attempt At','Booked?','Booking Start','Booking End','Notes'
 ];
 
-async function ensureHeader(spreadsheetId) {
+export async function ensureHeader(spreadsheetId) {
   const s = await getClient();
   await s.spreadsheets.values.update({
     spreadsheetId,
@@ -34,7 +34,7 @@ async function ensureHeader(spreadsheetId) {
   });
 }
 
-async function appendLead(spreadsheetId, lead) {
+export async function appendLead(spreadsheetId, lead) {
   const s = await getClient();
   await ensureHeader(spreadsheetId);
   const row = [
@@ -53,7 +53,7 @@ async function appendLead(spreadsheetId, lead) {
   return { rowNumber: m ? parseInt(m[1], 10) : null };
 }
 
-async function updateLead(spreadsheetId, { leadId, rowNumber, patch }) {
+export async function updateLead(spreadsheetId, { leadId, rowNumber, patch }) {
   const s = await getClient();
   await ensureHeader(spreadsheetId);
 
@@ -79,5 +79,3 @@ async function updateLead(spreadsheetId, { leadId, rowNumber, patch }) {
     requestBody: { values: [values] }
   });
 }
-
-module.exports = { appendLead, updateLead, ensureHeader };
