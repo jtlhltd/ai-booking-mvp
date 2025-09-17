@@ -117,7 +117,8 @@ function smsConfig(client) {
   const fromNumber = client?.sms?.fromNumber || TWILIO_FROM_NUMBER || null;
   const smsClient = defaultSmsClient;
   const configured = !!(smsClient && (messagingServiceSid || fromNumber));
-  return { messagingServiceSid, fromNumber, smsClient, configured }
+  return { messagingServiceSid, fromNumber, smsClient, configured };
+}
 
 // Expose a simple notify helper for SMS so other modules/routes can reuse Twilio
 app.locals.notifySend = async ({ to, from, message, idempotencyKey }) => {
@@ -128,8 +129,6 @@ app.locals.notifySend = async ({ to, from, message, idempotencyKey }) => {
   return smsClient.messages.create(payload);
 };
 
-;
-}
 
 // Idempotency
 const idemCache = new Map();
@@ -932,35 +931,23 @@ async function appendToSheet({ spreadsheetId, sheetName, values }) {
 
 
 
-// === Leads storage (JSON file) + routes ===
-const DATA_DIR   = path.join(__dirname, 'data');
-const LEADS_PATH = path.join(DATA_DIR, 'leads.json');
-async function ensureLeadsFile() {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  try { await fs.access(LEADS_PATH); } catch { await fs.writeFile(LEADS_PATH, '[]', 'utf8'); }
-}
-async function readLeads() { return JSON.parse(await fs.readFile(LEADS_PATH, 'utf8')); }
-async function writeLeads(rows) { await fs.writeFile(LEADS_PATH, JSON.stringify(rows, null, 2), 'utf8'); }
-function normalizePhone(s) { return (s || '').trim().replace(/[^\d+]/g, ''); }
-const isE164 = s => typeof s === 'string' && /^\+\d{7,15}$/.test(s);
-
+// === Leads routes (JSON-backed using existing DATA_DIR/LEADS_PATH) ===
 app.post('/api/leads', async (req, res) => {
   try {
     const client = await getClientFromHeader(req);
     if (!client) return res.status(401).json({ ok:false, error:'missing or unknown X-Client-Key' });
 
-    await ensureLeadsFile();
     const { id, name, phone, source } = req.body || {};
     const leadId = (id && String(id)) || ('lead_' + nanoid(8));
     const phoneNorm = normalizePhone(phone);
     if (!isE164(phoneNorm)) return res.status(400).json({ ok:false, error:'invalid phone (E.164 required)' });
 
     const now = new Date().toISOString();
-    const rows = await readLeads();
+    const rows = await readJson(LEADS_PATH, []);
     const idx = rows.findIndex(r => r.id === leadId);
     const lead = { id: leadId, tenantId: client.clientKey || client.id, name: name || '', phone: phoneNorm, source: source || 'unknown', status: 'new', createdAt: now, updatedAt: now };
     if (idx >= 0) rows[idx] = { ...rows[idx], ...lead, updatedAt: now }; else rows.push(lead);
-    await writeLeads(rows);
+    await writeJson(LEADS_PATH, rows);
     res.status(201).json({ ok:true, lead });
   } catch (e) {
     res.status(500).json({ ok:false, error: String(e?.message || e) });
@@ -971,6 +958,32 @@ app.post('/api/leads/nudge', async (req, res) => {
   try {
     const client = await getClientFromHeader(req);
     if (!client) return res.status(401).json({ ok:false, error:'missing or unknown X-Client-Key' });
+
+    const { id } = req.body || {};
+    if (!id) return res.status(400).json({ ok:false, error:'lead id required' });
+
+    const rows = await readJson(LEADS_PATH, []);
+    const lead = rows.find(r => r.id === id && (r.tenantId === (client.clientKey || client.id)));
+    if (!lead) return res.status(404).json({ ok:false, error:'lead not found' });
+
+    const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
+    if (!configured) return res.status(400).json({ ok:false, error:'tenant SMS not configured' });
+
+    const brand = client?.displayName || client?.clientKey || 'Our Clinic';
+    const body  = `Hi ${lead.name || ''} — it’s ${brand}. Ready to book your appointment? Reply YES to continue.`.trim();
+    const payload = { to: lead.phone, body };
+    if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid; else if (fromNumber) payload.from = fromNumber;
+    const result = await smsClient.messages.create(payload);
+
+    lead.status = 'contacted';
+    lead.updatedAt = new Date().toISOString();
+    await writeJson(LEADS_PATH, rows);
+
+    res.json({ ok:true, result: { sid: result?.sid } });
+  } catch (e) {
+    res.status(500).json({ ok:false, error: String(e?.message || e) });
+  }
+});
 
     await ensureLeadsFile();
     const { id } = req.body || {};
