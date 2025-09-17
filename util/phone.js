@@ -1,5 +1,4 @@
-// util/phone.js
-function normalizePhone(p) {
+export function normalizePhone(p) {
   if (!p) return p;
   let s = String(p).replace(/[^\d+]/g, '');
   if (!s.startsWith('+')) {
@@ -8,4 +7,3 @@ function normalizePhone(p) {
   }
   return s;
 }
-module.exports = { normalizePhone };

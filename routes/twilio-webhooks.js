@@ -1,10 +1,9 @@
-// routes/twilio-webhooks.js
-const express = require('express');
-const router = express.Router();
+import express from 'express';
+import store from '../store.js';
+import sheets from '../sheets.js';
+import { normalizePhone } from '../util/phone.js';
 
-const store = require('../store');
-const sheets = require('../sheets');
-const { normalizePhone } = require('../util/phone');
+const router = express.Router();
 
 router.post('/webhooks/twilio/sms-inbound', async (req, res) => {
   try {
@@ -43,4 +42,4 @@ router.post('/webhooks/twilio/sms-inbound', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

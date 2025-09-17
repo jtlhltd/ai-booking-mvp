@@ -1,10 +1,9 @@
-// routes/leads.js
-const express = require('express');
-const router = express.Router();
+import express from 'express';
+import store from '../store.js';
+import sheets from '../sheets.js';
+import { normalizePhone } from '../util/phone.js';
 
-const store = require('../store');
-const sheets = require('../sheets');
-const { normalizePhone } = require('../util/phone');
+const router = express.Router();
 
 async function authTenant(req, res, next) {
   try {
@@ -52,9 +51,6 @@ router.post('/api/leads', authTenant, async (req, res) => {
       if (rowNumber) await store.leads.updateSheetRowId(row.id, String(rowNumber));
     }
 
-    // Optionally queue call worker here
-    // if (req.jobs?.queueFollowUp) req.jobs.queueFollowUp({ tenantId: tenant.id, leadId: row.id });
-
     res.status(createdNew ? 201 : 200).json({ ok:true, leadId: row.id, status: row.status });
   } catch (e) {
     console.error(e);
@@ -62,4 +58,4 @@ router.post('/api/leads', authTenant, async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;
