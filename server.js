@@ -249,26 +249,18 @@ app.post('/api/calendar/find-slots', async (req, res) => {
     const maxAdvanceDays = client?.booking?.maxAdvanceDays ?? client?.maxAdvanceDays ?? 14;
     const business = hoursFor(client);
     const closedDates = new Set(closedDatesFor(client));
-    const stepMinutes = Math.max(5, Number((req.body?.stepMinutes ?? svc?.slotStepMin ?? durationMin ?? 15)));
-const windowStart = new Date(Date.now() + minNoticeMin * 60000);
-const windowEnd   = new Date(Date.now() + maxAdvanceDays * 86400000);
+    const stepMinutes = Math.max(5, Number(req.body?.stepMinutes || 15));
 
-    // Align first candidate start to the grid (e.g., 60-min => :00 only)
-    function alignToGrid(d) {
-      const dt = new Date(d);
-      dt.setSeconds(0,0);
-      const m = dt.getMinutes();
-      const rem = m % stepMinutes;
-      if (rem !== 0) dt.setMinutes(m + (stepMinutes - rem));
-      return dt;
-    }
-const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY, privateKeyB64: GOOGLE_PRIVATE_KEY_B64 });
+    const windowStart = new Date(Date.now() + minNoticeMin * 60000);
+    const windowEnd   = new Date(Date.now() + maxAdvanceDays * 86400000);
+
+    const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY, privateKeyB64: GOOGLE_PRIVATE_KEY_B64 });
     await auth.authorize();
     const busy = await freeBusy({ auth, calendarId, timeMinISO: windowStart.toISOString(), timeMaxISO: windowEnd.toISOString() });
 
     const slotMs = (durationMin + bufferMin) * 60000;
     const results = [];
-    let cursor = alignToGrid(windowStart);
+    const cursor = new Date(windowStart);
     cursor.setSeconds(0,0);
 
     const dowName = ['sun','mon','tue','wed','thu','fri','sat'];
@@ -327,7 +319,15 @@ app.post('/api/calendar/book-slot', async (req, res) => {
     const tz = pickTimezone(client);
     const calendarId = pickCalendarId(client);
 
-    const { service, lead, start, durationMin } = req.body || {};
+    const { service, lead, start, durationMin, stepMinutes: stepOverride } = req.body || {};
+
+    const services = servicesFor(client);
+    const svc = services.find(s => s.id === service);
+    const durSvc = (svc?.durationMin) || undefined;
+    const bufferMin = (svc?.bufferMin) || 0;
+    const stepDefault = svc?.slotStepMin || durSvc || durationMin || client?.booking?.defaultDurationMin || 30;
+    const stepMinutes = Math.max(5, Number(stepOverride ?? stepDefault));
+
 
     if (!service || typeof service !== 'string') {
       return res.status(400).json({ ok:false, error: 'Missing/invalid "service" (string)' });
@@ -336,11 +336,18 @@ app.post('/api/calendar/book-slot', async (req, res) => {
       return res.status(400).json({ ok:false, error: 'Missing/invalid "lead" (need name, phone)' });
     }
     const startISO = (() => { try { return new Date(start).toISOString(); } catch { return null; } })();
+    // Grid enforcement: require start to align to the step grid
+    // Align to UTC minute grid (matches generator behavior) to keep :00,:15,:30 etc.
+    function minutesMod(dt) { const m = new Date(dt).getUTCMinutes(); return m % stepMinutes; }
+    if (startISO && (minutesMod(startISO) !== 0)) {
+      return res.status(400).json({ ok:false, error: 'start not aligned to grid', stepMinutes });
+    }
+
     if (!start || !startISO) {
       return res.status(400).json({ ok:false, error: 'Missing/invalid "start" (ISO datetime)' });
     }
-    const dur = Number.isFinite(+durationMin) ? +durationMin : (client?.booking?.defaultDurationMin || 30);
-    const endISO = new Date(new Date(startISO).getTime() + dur * 60000).toISOString();
+    const dur = Number.isFinite(+durationMin) ? +durationMin : (durSvc || client?.booking?.defaultDurationMin || 30);
+    const endISO = new Date(new Date(startISO).getTime() + (dur + bufferMin) * 60000).toISOString();
 
     // Auth
     const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY, privateKeyB64: GOOGLE_PRIVATE_KEY_B64 });
