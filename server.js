@@ -985,30 +985,7 @@ app.post('/api/leads/nudge', async (req, res) => {
   }
 });
 
-        const rows = await readLeads();
-    const lead = rows.find(r => r.id === id && (r.tenantId === (client.clientKey || client.id)));
-    if (!lead) return res.status(404).json({ ok:false, error:'lead not found' });
-
-    const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
-    if (!configured) return res.status(400).json({ ok:false, error:'tenant SMS not configured' });
-
-    const brand = client?.displayName || client?.clientKey || 'Our Clinic';
-    const body  = `Hi ${lead.name || ''} — it’s ${brand}. Ready to book your appointment? Reply YES to continue.`.trim();
-    const payload = { to: lead.phone, body };
-    if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid; else if (fromNumber) payload.from = fromNumber;
-    const result = await smsClient.messages.create(payload);
-
-    lead.status = 'contacted';
-    lead.updatedAt = new Date().toISOString();
-    await writeLeads(rows);
-
-    res.json({ ok:true, result: { sid: result?.sid } });
-  } catch (e) {
-    res.status(500).json({ ok:false, error: String(e?.message || e) });
-  }
-});
-
-
+        
 await bootstrapClients(); // <--- run after routes loaded & DB ready
 
 app.listen(PORT, () => {
