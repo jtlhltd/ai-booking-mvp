@@ -379,26 +379,52 @@ let event;
 try {
   // Deterministic event id to prevent duplicates on retries/same payloads
   const rawKey = `${client?.clientKey || 'default'}|${service}|${startISO}|${lead.phone}`;
-  const deterministicId = 'bk_' + createHash('sha1').update(rawKey).digest('hex').slice(0, 20);
+  const deterministicId = ('bk' + createHash('sha1').update(rawKey).digest('hex').slice(0, 20)).toLowerCase();
 
   const cal = google.calendar({ version: 'v3', auth });
-  const respInsert = await cal.events.insert({
-    calendarId,
-    requestBody: {
-      id: deterministicId,
-      summary,
-      description,
-      start: { dateTime: startISO, timeZone: tz },
-      end:   { dateTime: endISO,   timeZone: tz },
-      extendedProperties: { private: { leadPhone: lead.phone, leadId: lead.id || '' } }
+  let respInsert;
+  try {
+    respInsert = await cal.events.insert({
+      calendarId,
+      requestBody: {
+        id: deterministicId,
+        summary,
+        description,
+        start: { dateTime: startISO, timeZone: tz },
+        end:   { dateTime: endISO,   timeZone: tz },
+        extendedProperties: { private: { leadPhone: lead.phone, leadId: lead.id || '' } }
+      }
+    });
+  } catch (err) {
+    const sc = err?.response?.status;
+    const msg = err?.response?.data || err?.message || '';
+    if (sc === 400 && String(msg).toLowerCase().includes('id')) {
+      // Retry once without ID if Google rejects the custom id
+      respInsert = await cal.events.insert({
+        calendarId,
+        requestBody: {
+          summary,
+          description,
+          start: { dateTime: startISO, timeZone: tz },
+          end:   { dateTime: endISO,   timeZone: tz },
+          extendedProperties: { private: { leadPhone: lead.phone, leadId: lead.id || '' } }
+        }
+      });
+    } else {
+      throw err;
     }
-  });
+  }
   event = respInsert.data;
 } catch (e) {
   const code = e?.response?.status || 500;
   const data = e?.response?.data || e?.message || String(e);
   return res.status(code === 409 ? 409 : code).json({ ok:false, error:(code===409?'duplicate_event_id':'gcal_insert_failed'), details: data });
+});
 }
+);
+    }
+
+    
 // Send confirmation SMS if tenant SMS is configured
 try {
   const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
@@ -804,6 +830,9 @@ app.post('/api/calendar/cancel', async (req, res) => {
     res.status(code).json({ ok:false, error: String(e?.response?.data || e?.message || e) });
   }
 });
+}
+});
+
 // === Reschedule ===
 app.post('/api/calendar/reschedule', async (req, res) => {
   try {
