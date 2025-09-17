@@ -372,6 +372,30 @@ const summary = `${service} — ${lead.name}`;
       return res.status(code).json({ ok:false, error:'gcal_insert_failed', details: data });
     }
 
+    
+    // Optional SMS confirmation (mirror of check-book)
+    let sms = null;
+    try {
+      const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
+      const toE164 = normalizePhone(lead.phone || '');
+      const canSend = configured && isE164(toE164);
+      if (canSend) {
+        const when = new Date(startISO).toLocaleString(client?.locale || 'en-GB', {
+          timeZone: tz, weekday: 'short', day: 'numeric', month: 'short',
+          hour: 'numeric', minute: '2-digit', hour12: true
+        });
+        const brand = client?.displayName || client?.clientKey || 'Our Clinic';
+        const sig = client?.brandSignature ? ` ${client.brandSignature}` : '';
+        const body = `Hi ${lead.name}, your ${service} is booked with ${brand} for ${when} ${tz}. Reply STOP to opt out.${sig}`;
+        const payload = { to: toE164, body };
+        if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid; else payload.from = fromNumber;
+        const resp = await withRetry(() => smsClient.messages.create(payload), { retries: 2, delayMs: 300 });
+        sms = { id: resp.sid, to: toE164 };
+      }
+    } catch (e) {
+      sms = { error: e?.message || String(e) };
+    }
+
     return res.status(201).json({
       ok: true,
       event: {
@@ -379,7 +403,7 @@ const summary = `${service} — ${lead.name}`;
         htmlLink: event.htmlLink,
         status: event.status
       },
-      tenant: { clientKey: client?.clientKey || null, calendarId, timezone: tz }
+      tenant: { clientKey: client?.clientKey || null, calendarId, timezone: tz }, sms
     });
   } catch (err) {
     return res.status(500).json({ ok:false, error: String(err) });
@@ -482,13 +506,13 @@ app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
           DefaultService: service || '',
           DefaultDurationMin: durationMin || client?.booking?.defaultDurationMin || 30,
           Timezone: client?.booking?.timezone || TIMEZONE,
-          ServicesJSON: client?.servicesJson || '[]',
-          PricesJSON: client?.pricesJson || '{}',
-          HoursJSON: client?.hoursJson || '{}',
-          ClosedDatesJSON: client?.closedDatesJson || '[]',
+          ServicesJSON: JSON.stringify(client?.services || []),
+          PricesJSON:   JSON.stringify(client?.prices   || {}),
+          HoursJSON:    JSON.stringify(client?.booking?.hours || {}),
+          ClosedDatesJSON: JSON.stringify(client?.closedDates || []),
           Locale: client?.locale || 'en-GB',
           ScriptHints: client?.scriptHints || '',
-          FAQJSON: client?.faqJson || '[]',
+          FAQJSON:      JSON.stringify(client?.faq || []),
           Currency: client?.currency || 'GBP'
         }
       }
