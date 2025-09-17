@@ -373,24 +373,33 @@ const summary = `${service} — ${lead.name}`;
     }
 
     
-    // Optional SMS confirmation (mirror of check-book)
+    // Optional SMS confirmation (self-contained; no external helpers)
     let sms = null;
     try {
-      const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
-      const toE164 = normalizePhone(lead.phone || '');
-      const canSend = configured && isE164(toE164);
-      if (canSend) {
+      const cfg = smsConfig(client);
+      const smsClient = cfg?.smsClient;
+      const messagingServiceSid = cfg?.messagingServiceSid;
+      const fromNumber = cfg?.fromNumber;
+      const configured = !!(smsClient && (messagingServiceSid || fromNumber));
+      const raw = String(lead?.phone || '').trim();
+      const to = raw.startsWith('+') ? raw : null; // require E.164
+      if (configured && to) {
         const when = new Date(startISO).toLocaleString(client?.locale || 'en-GB', {
           timeZone: tz, weekday: 'short', day: 'numeric', month: 'short',
           hour: 'numeric', minute: '2-digit', hour12: true
         });
         const brand = client?.displayName || client?.clientKey || 'Our Clinic';
         const sig = client?.brandSignature ? ` ${client.brandSignature}` : '';
-        const body = `Hi ${lead.name}, your ${service} is booked with ${brand} for ${when} ${tz}. Reply STOP to opt out.${sig}`;
-        const payload = { to: toE164, body };
+        const body = `Hi ${lead?.name || ''}, your ${service} is booked with ${brand} for ${when} ${tz}. Reply STOP to opt out.${sig}`;
+        const payload = { to, body };
         if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid; else payload.from = fromNumber;
-        const resp = await withRetry(() => smsClient.messages.create(payload), { retries: 2, delayMs: 300 });
-        sms = { id: resp.sid, to: toE164 };
+        let resp;
+        if (typeof withRetry === 'function') {
+          resp = await withRetry(() => smsClient.messages.create(payload), { retries: 2, delayMs: 300 });
+        } else {
+          resp = await smsClient.messages.create(payload);
+        }
+        sms = { id: resp?.sid || null, to };
       }
     } catch (e) {
       sms = { error: e?.message || String(e) };
