@@ -13,6 +13,8 @@ import { createHash } from 'crypto';
 
 import { makeJwtAuth, insertEvent, freeBusy } from './gcal.js';
 import { upsertFullClient, getFullClient, listFullClients, deleteClient, DB_PATH } from './db.js'; // SQLite-backed tenants
+import { google } from 'googleapis';
+import cron from 'node-cron';
 
 const app = express();
 
@@ -115,7 +117,18 @@ function smsConfig(client) {
   const fromNumber = client?.sms?.fromNumber || TWILIO_FROM_NUMBER || null;
   const smsClient = defaultSmsClient;
   const configured = !!(smsClient && (messagingServiceSid || fromNumber));
-  return { messagingServiceSid, fromNumber, smsClient, configured };
+  return { messagingServiceSid, fromNumber, smsClient, configured }
+
+// Expose a simple notify helper for SMS so other modules/routes can reuse Twilio
+app.locals.notifySend = async ({ to, from, message, idempotencyKey }) => {
+  const { smsClient, configured } = smsConfig();
+  if (!configured) throw new Error('SMS not configured');
+  const payload = { to, body: message };
+  if (from) payload.from = from;
+  return smsClient.messages.create(payload);
+};
+
+;
 }
 
 // Idempotency
@@ -371,13 +384,55 @@ const summary = `${service} — ${lead.name}`;
         description,
         startIso: startISO,
         endIso: endISO,
-        timezone: tz
+        timezone: tz,
+        extendedProperties: { private: { leadPhone: lead.phone, leadId: lead.id || '' } }
       });
     } catch (e) {
       const code = e?.response?.status || 500;
       const data = e?.response?.data || e?.message || String(e);
       return res.status(code).json({ ok:false, error:'gcal_insert_failed', details: data });
     }
+
+    
+// Send confirmation SMS if tenant SMS is configured
+try {
+  const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
+  if (configured) {
+    const when = new Date(startISO).toLocaleString(client?.locale || 'en-GB', {
+      timeZone: tz, weekday: 'short', day: 'numeric', month: 'short',
+      hour: 'numeric', minute: '2-digit', hour12: true
+    });
+    const brand = client?.displayName || client?.clientKey || 'Our Clinic';
+    const link  = event?.htmlLink ? ` Calendar: ${event.htmlLink}` : '';
+    const body  = `Hi ${lead.name}, your ${service} is booked with ${brand} for ${when} ${tz}.${link} Reply STOP to opt out.`;
+    const payload = { to: lead.phone, body };
+    if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid; else if (fromNumber) payload.from = fromNumber;
+    await smsClient.messages.create(payload);
+  }
+} catch (e) {
+  console.error('confirm sms failed', e?.message || e);
+}
+
+    
+// Append to Google Sheets ledger (optional)
+try {
+  if (process.env.BOOKINGS_SHEET_ID) {
+    await appendToSheet({
+      spreadsheetId: process.env.BOOKINGS_SHEET_ID,
+      sheetName: 'Bookings',
+      values: [
+        new Date().toISOString(),
+        client?.clientKey || client?.id || '',
+        service,
+        lead?.name || '',
+        lead?.phone || '',
+        event?.id || '',
+        event?.htmlLink || '',
+        startISO
+      ]
+    });
+  }
+} catch (e) { console.warn('sheets append error', e?.message || e); }
 
     return res.status(201).json({
       ok: true,
@@ -708,6 +763,242 @@ app.delete('/api/clients/:key', async (req, res) => {
     res.status(500).json({ ok:false, error: String(e) });
   }
 });
+
+
+
+// === Cancel ===
+app.post('/api/calendar/cancel', async (req, res) => {
+  try {
+    const client = await getClientFromHeader(req);
+    if (!client) return res.status(400).json({ ok:false, error:'Unknown tenant' });
+    const { eventId, leadPhone } = req.body || {};
+    if (!eventId) return res.status(400).json({ ok:false, error:'eventId required' });
+    const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY, privateKeyB64: GOOGLE_PRIVATE_KEY_B64 });
+    await auth.authorize();
+    const cal = google.calendar({ version:'v3', auth });
+    await cal.events.delete({ calendarId: pickCalendarId(client), eventId });
+    if (leadPhone) {
+      try {
+        const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
+        if (configured) {
+          const payload = { to: leadPhone, body: 'Your appointment has been cancelled. Reply if you would like to reschedule.' };
+          if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid; else if (fromNumber) payload.from = fromNumber;
+          await smsClient.messages.create(payload);
+        }
+      } catch {}
+    }
+    res.json({ ok:true });
+  } catch (e) {
+    const code = e?.response?.status || 500;
+    res.status(code).json({ ok:false, error: String(e?.response?.data || e?.message || e) });
+  }
+});
+
+// === Reschedule ===
+app.post('/api/calendar/reschedule', async (req, res) => {
+  try {
+    const client = await getClientFromHeader(req);
+    if (!client) return res.status(400).json({ ok:false, error:'Unknown tenant' });
+    const { oldEventId, newStartISO, service, lead } = req.body || {};
+    if (!oldEventId || !newStartISO || !service || !lead?.phone) {
+      return res.status(400).json({ ok:false, error:'missing fields' });
+    }
+    const tz = pickTimezone(client);
+    const calendarId = pickCalendarId(client);
+    const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY, privateKeyB64: GOOGLE_PRIVATE_KEY_B64 });
+    await auth.authorize();
+    const cal = google.calendar({ version:'v3', auth });
+    try { await cal.events.delete({ calendarId, eventId: oldEventId }); } catch {}
+
+    const dur = client?.booking?.defaultDurationMin || 30;
+    const endISO = new Date(new Date(newStartISO).getTime() + dur * 60000).toISOString();
+    const summary = `${service} — ${lead.name || ''}`.trim();
+
+    let event;
+    try {
+      event = await insertEvent({
+        auth, calendarId, summary, description: '', startIso: newStartISO, endIso: endISO, timezone: tz,
+        extendedProperties: { private: { leadPhone: lead.phone, leadId: lead.id || '' } }
+      });
+    } catch (e) {
+      const code = e?.response?.status || 500;
+      const data = e?.response?.data || e?.message || String(e);
+      return res.status(code).json({ ok:false, error:'gcal_insert_failed', details: data });
+    }
+
+    try {
+      const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
+      if (configured) {
+        const when = new Date(newStartISO).toLocaleString(client?.locale || 'en-GB', {
+          timeZone: tz, weekday: 'short', day: 'numeric', month: 'short',
+          hour: 'numeric', minute: '2-digit', hour12: true
+        });
+        const brand = client?.displayName || client?.clientKey || 'Our Clinic';
+        const link  = event?.htmlLink ? ` Calendar: ${event.htmlLink}` : '';
+        const body  = `✅ Rescheduled: ${service} at ${when} ${tz}.${link}`;
+        const payload = { to: lead.phone, body };
+        if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid; else if (fromNumber) payload.from = fromNumber;
+        await smsClient.messages.create(payload);
+      }
+    } catch {}
+
+    res.status(201).json({ ok:true, event: { id: event.id, htmlLink: event.htmlLink, status: event.status } });
+  } catch (e) {
+    const code = e?.response?.status || 500;
+    res.status(code).json({ ok:false, error: String(e?.response?.data || e?.message || e) });
+  }
+});
+
+
+
+
+// === Reminder job: 24h & 1h SMS ===
+function startReminders() {
+  try {
+    cron.schedule('*/10 * * * *', async () => {
+      try {
+        const tenants = await listFullClients();
+        const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY, privateKeyB64: GOOGLE_PRIVATE_KEY_B64 });
+        await auth.authorize();
+        const cal = google.calendar({ version:'v3', auth });
+
+        const now = new Date();
+        const in26h = new Date(now.getTime() + 26*60*60*1000);
+
+        for (const t of tenants) {
+          const calendarId = t.calendarId || t.gcalCalendarId || 'primary';
+          const tz = t?.booking?.timezone || TIMEZONE;
+          const resp = await cal.events.list({
+            calendarId,
+            timeMin: now.toISOString(),
+            timeMax: in26h.toISOString(),
+            singleEvents: true,
+            orderBy: 'startTime'
+          });
+          const items = resp.data.items || [];
+          for (const ev of items) {
+            const startISO = ev.start?.dateTime || ev.start?.date;
+            if (!startISO) continue;
+            const start = new Date(startISO);
+            const mins  = Math.floor((start - now)/60000);
+            const leadPhone = ev.extendedProperties?.private?.leadPhone;
+            if (!leadPhone) continue;
+
+            const { messagingServiceSid, fromNumber, smsClient } = smsConfig(t);
+            if (!smsClient || !(messagingServiceSid || fromNumber)) continue;
+
+            if (mins <= 1440 && mins > 1380) {
+              const body = `Reminder: ${ev.summary || 'appointment'} tomorrow at ${start.toLocaleTimeString('en-GB', { timeZone: tz })}.`;
+              const payload = { to: leadPhone, body };
+              if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid; else if (fromNumber) payload.from = fromNumber;
+              await smsClient.messages.create(payload);
+            } else if (mins <= 60 && mins > 50) {
+              const body = `Reminder: ${ev.summary || 'appointment'} in ~1 hour. Details: ${ev.htmlLink || ''}`.trim();
+              const payload = { to: leadPhone, body };
+              if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid; else if (fromNumber) payload.from = fromNumber;
+              await smsClient.messages.create(payload);
+            }
+          }
+        }
+      } catch (e) {
+        console.error('reminders loop error', e?.message || e);
+      }
+    });
+  } catch (e) {
+    console.error('reminders setup error', e?.message || e);
+  }
+}
+
+startReminders();
+
+
+
+// === Google Sheets ledger helper ===
+async function appendToSheet({ spreadsheetId, sheetName, values }) {
+  try {
+    const { google } = await import('googleapis');
+    const auth = new google.auth.GoogleAuth({ scopes: ['https://www.googleapis.com/auth/spreadsheets'] });
+    const sheets = google.sheets({ version: 'v4', auth });
+    await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: `${sheetName}!A1`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: [values] }
+    });
+  } catch (err) {
+    console.warn('appendToSheet failed', err?.response?.data || String(err));
+  }
+}
+
+
+
+// === Leads storage (JSON file) + routes ===
+const DATA_DIR   = path.join(__dirname, 'data');
+const LEADS_PATH = path.join(DATA_DIR, 'leads.json');
+async function ensureLeadsFile() {
+  await fs.mkdir(DATA_DIR, { recursive: true });
+  try { await fs.access(LEADS_PATH); } catch { await fs.writeFile(LEADS_PATH, '[]', 'utf8'); }
+}
+async function readLeads() { return JSON.parse(await fs.readFile(LEADS_PATH, 'utf8')); }
+async function writeLeads(rows) { await fs.writeFile(LEADS_PATH, JSON.stringify(rows, null, 2), 'utf8'); }
+function normalizePhone(s) { return (s || '').trim().replace(/[^\d+]/g, ''); }
+const isE164 = s => typeof s === 'string' && /^\+\d{7,15}$/.test(s);
+
+app.post('/api/leads', async (req, res) => {
+  try {
+    const client = await getClientFromHeader(req);
+    if (!client) return res.status(401).json({ ok:false, error:'missing or unknown X-Client-Key' });
+
+    await ensureLeadsFile();
+    const { id, name, phone, source } = req.body || {};
+    const leadId = (id && String(id)) || ('lead_' + nanoid(8));
+    const phoneNorm = normalizePhone(phone);
+    if (!isE164(phoneNorm)) return res.status(400).json({ ok:false, error:'invalid phone (E.164 required)' });
+
+    const now = new Date().toISOString();
+    const rows = await readLeads();
+    const idx = rows.findIndex(r => r.id === leadId);
+    const lead = { id: leadId, tenantId: client.clientKey || client.id, name: name || '', phone: phoneNorm, source: source || 'unknown', status: 'new', createdAt: now, updatedAt: now };
+    if (idx >= 0) rows[idx] = { ...rows[idx], ...lead, updatedAt: now }; else rows.push(lead);
+    await writeLeads(rows);
+    res.status(201).json({ ok:true, lead });
+  } catch (e) {
+    res.status(500).json({ ok:false, error: String(e?.message || e) });
+  }
+});
+
+app.post('/api/leads/nudge', async (req, res) => {
+  try {
+    const client = await getClientFromHeader(req);
+    if (!client) return res.status(401).json({ ok:false, error:'missing or unknown X-Client-Key' });
+
+    await ensureLeadsFile();
+    const { id } = req.body || {};
+    if (!id) return res.status(400).json({ ok:false, error:'lead id required' });
+
+    const rows = await readLeads();
+    const lead = rows.find(r => r.id === id && (r.tenantId === (client.clientKey || client.id)));
+    if (!lead) return res.status(404).json({ ok:false, error:'lead not found' });
+
+    const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
+    if (!configured) return res.status(400).json({ ok:false, error:'tenant SMS not configured' });
+
+    const brand = client?.displayName || client?.clientKey || 'Our Clinic';
+    const body  = `Hi ${lead.name || ''} — it’s ${brand}. Ready to book your appointment? Reply YES to continue.`.trim();
+    const payload = { to: lead.phone, body };
+    if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid; else if (fromNumber) payload.from = fromNumber;
+    const result = await smsClient.messages.create(payload);
+
+    lead.status = 'contacted';
+    lead.updatedAt = new Date().toISOString();
+    await writeLeads(rows);
+
+    res.json({ ok:true, result: { sid: result?.sid } });
+  } catch (e) {
+    res.status(500).json({ ok:false, error: String(e?.message || e) });
+  }
+});
+
 
 await bootstrapClients(); // <--- run after routes loaded & DB ready
 
