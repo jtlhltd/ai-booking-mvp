@@ -249,18 +249,25 @@ app.post('/api/calendar/find-slots', async (req, res) => {
     const maxAdvanceDays = client?.booking?.maxAdvanceDays ?? client?.maxAdvanceDays ?? 14;
     const business = hoursFor(client);
     const closedDates = new Set(closedDatesFor(client));
-    const stepMinutes = Math.max(5, Number(req.body?.stepMinutes || 15));
+    const stepMinutes = Math.max(5, Number((req.body?.stepMinutes ?? svc?.slotStepMin ?? durationMin ?? 15)));
+const windowStart = new Date(Date.now() + minNoticeMin * 60000);
+const windowEnd   = new Date(Date.now() + maxAdvanceDays * 86400000);
 
-    const windowStart = new Date(Date.now() + minNoticeMin * 60000);
-    const windowEnd   = new Date(Date.now() + maxAdvanceDays * 86400000);
-
-    const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY, privateKeyB64: GOOGLE_PRIVATE_KEY_B64 });
+    function alignToGrid(d) {
+      const dt = new Date(d);
+      dt.setSeconds(0,0);
+      const minutes = dt.getMinutes();
+      const rem = minutes % stepMinutes;
+      if (rem !== 0) dt.setMinutes(minutes + (stepMinutes - rem));
+      return dt;
+    }
+const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY, privateKeyB64: GOOGLE_PRIVATE_KEY_B64 });
     await auth.authorize();
     const busy = await freeBusy({ auth, calendarId, timeMinISO: windowStart.toISOString(), timeMaxISO: windowEnd.toISOString() });
 
     const slotMs = (durationMin + bufferMin) * 60000;
     const results = [];
-    const cursor = new Date(windowStart);
+    let cursor = alignToGrid(windowStart);
     cursor.setSeconds(0,0);
 
     const dowName = ['sun','mon','tue','wed','thu','fri','sat'];
@@ -319,15 +326,7 @@ app.post('/api/calendar/book-slot', async (req, res) => {
     const tz = pickTimezone(client);
     const calendarId = pickCalendarId(client);
 
-    const { service, lead, start, durationMin, stepMinutes: stepOverride } = req.body || {};
-
-    const services = servicesFor(client);
-    const svc = services.find(s => s.id === service);
-    const durSvc = (svc?.durationMin) || undefined;
-    const bufferMin = (svc?.bufferMin) || 0;
-    const stepDefault = svc?.slotStepMin || durSvc || durationMin || client?.booking?.defaultDurationMin || 30;
-    const stepMinutes = Math.max(5, Number(stepOverride ?? stepDefault));
-
+    const { service, lead, start, durationMin } = req.body || {};
 
     if (!service || typeof service !== 'string') {
       return res.status(400).json({ ok:false, error: 'Missing/invalid "service" (string)' });
@@ -336,18 +335,11 @@ app.post('/api/calendar/book-slot', async (req, res) => {
       return res.status(400).json({ ok:false, error: 'Missing/invalid "lead" (need name, phone)' });
     }
     const startISO = (() => { try { return new Date(start).toISOString(); } catch { return null; } })();
-    // Grid enforcement: require start to align to the step grid
-    // Align to UTC minute grid (matches generator behavior) to keep :00,:15,:30 etc.
-    function minutesMod(dt) { const m = new Date(dt).getUTCMinutes(); return m % stepMinutes; }
-    if (startISO && (minutesMod(startISO) !== 0)) {
-      return res.status(400).json({ ok:false, error: 'start not aligned to grid', stepMinutes });
-    }
-
     if (!start || !startISO) {
       return res.status(400).json({ ok:false, error: 'Missing/invalid "start" (ISO datetime)' });
     }
-    const dur = Number.isFinite(+durationMin) ? +durationMin : (durSvc || client?.booking?.defaultDurationMin || 30);
-    const endISO = new Date(new Date(startISO).getTime() + (dur + bufferMin) * 60000).toISOString();
+    const dur = Number.isFinite(+durationMin) ? +durationMin : (client?.booking?.defaultDurationMin || 30);
+    const endISO = new Date(new Date(startISO).getTime() + dur * 60000).toISOString();
 
     // Auth
     const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY, privateKeyB64: GOOGLE_PRIVATE_KEY_B64 });
@@ -387,39 +379,6 @@ const summary = `${service} — ${lead.name}`;
       return res.status(code).json({ ok:false, error:'gcal_insert_failed', details: data });
     }
 
-    
-    // Optional SMS confirmation (self-contained; no external helpers)
-    let sms = null;
-    try {
-      const cfg = smsConfig(client);
-      const smsClient = cfg?.smsClient;
-      const messagingServiceSid = cfg?.messagingServiceSid;
-      const fromNumber = cfg?.fromNumber;
-      const configured = !!(smsClient && (messagingServiceSid || fromNumber));
-      const raw = String(lead?.phone || '').trim();
-      const to = raw.startsWith('+') ? raw : null; // require E.164
-      if (configured && to) {
-        const when = new Date(startISO).toLocaleString(client?.locale || 'en-GB', {
-          timeZone: tz, weekday: 'short', day: 'numeric', month: 'short',
-          hour: 'numeric', minute: '2-digit', hour12: true
-        });
-        const brand = client?.displayName || client?.clientKey || 'Our Clinic';
-        const sig = client?.brandSignature ? ` ${client.brandSignature}` : '';
-        const body = `Hi ${lead?.name || ''}, your ${service} is booked with ${brand} for ${when} ${tz}. Reply STOP to opt out.${sig}`;
-        const payload = { to, body };
-        if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid; else payload.from = fromNumber;
-        let resp;
-        if (typeof withRetry === 'function') {
-          resp = await withRetry(() => smsClient.messages.create(payload), { retries: 2, delayMs: 300 });
-        } else {
-          resp = await smsClient.messages.create(payload);
-        }
-        sms = { id: resp?.sid || null, to };
-      }
-    } catch (e) {
-      sms = { error: e?.message || String(e) };
-    }
-
     return res.status(201).json({
       ok: true,
       event: {
@@ -427,7 +386,7 @@ const summary = `${service} — ${lead.name}`;
         htmlLink: event.htmlLink,
         status: event.status
       },
-      tenant: { clientKey: client?.clientKey || null, calendarId, timezone: tz }, sms
+      tenant: { clientKey: client?.clientKey || null, calendarId, timezone: tz }
     });
   } catch (err) {
     return res.status(500).json({ ok:false, error: String(err) });
@@ -530,13 +489,13 @@ app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
           DefaultService: service || '',
           DefaultDurationMin: durationMin || client?.booking?.defaultDurationMin || 30,
           Timezone: client?.booking?.timezone || TIMEZONE,
-          ServicesJSON: JSON.stringify(client?.services || []),
-          PricesJSON:   JSON.stringify(client?.prices   || {}),
-          HoursJSON:    JSON.stringify(client?.booking?.hours || {}),
-          ClosedDatesJSON: JSON.stringify(client?.closedDates || []),
+          ServicesJSON: client?.servicesJson || '[]',
+          PricesJSON: client?.pricesJson || '{}',
+          HoursJSON: client?.hoursJson || '{}',
+          ClosedDatesJSON: client?.closedDatesJson || '[]',
           Locale: client?.locale || 'en-GB',
           ScriptHints: client?.scriptHints || '',
-          FAQJSON:      JSON.stringify(client?.faq || []),
+          FAQJSON: client?.faqJson || '[]',
           Currency: client?.currency || 'GBP'
         }
       }
