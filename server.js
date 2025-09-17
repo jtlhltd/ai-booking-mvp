@@ -985,11 +985,7 @@ app.post('/api/leads/nudge', async (req, res) => {
   }
 });
 
-    await ensureLeadsFile();
-    const { id } = req.body || {};
-    if (!id) return res.status(400).json({ ok:false, error:'lead id required' });
-
-    const rows = await readLeads();
+        const rows = await readLeads();
     const lead = rows.find(r => r.id === id && (r.tenantId === (client.clientKey || client.id)));
     if (!lead) return res.status(404).json({ ok:false, error:'lead not found' });
 
