@@ -399,10 +399,6 @@ try {
   const data = e?.response?.data || e?.message || String(e);
   return res.status(code === 409 ? 409 : code).json({ ok:false, error:(code===409?'duplicate_event_id':'gcal_insert_failed'), details: data });
 }
-);
-    }
-
-    
 // Send confirmation SMS if tenant SMS is configured
 try {
   const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
@@ -808,9 +804,6 @@ app.post('/api/calendar/cancel', async (req, res) => {
     res.status(code).json({ ok:false, error: String(e?.response?.data || e?.message || e) });
   }
 });
-}
-});
-
 // === Reschedule ===
 app.post('/api/calendar/reschedule', async (req, res) => {
   try {
