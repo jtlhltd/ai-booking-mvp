@@ -15,6 +15,9 @@ import { makeJwtAuth, insertEvent, freeBusy } from './gcal.js';
 import { upsertFullClient, getFullClient, listFullClients, deleteClient, DB_PATH } from './db.js'; // SQLite-backed tenants
 import { google } from 'googleapis';
 import cron from 'node-cron';
+import leadsRouter from './routes/leads.js';
+import twilioWebhooks from './routes/twilio-webhooks.js';
+
 
 const app = express();
 
@@ -76,6 +79,7 @@ const defaultSmsConfigured = !!(defaultSmsClient && (TWILIO_FROM_NUMBER || TWILI
 
 // === Middleware
 app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: false }));
 app.use(morgan('dev'));
 app.use(cors({
   origin: ORIGIN === '*' ? true : ORIGIN,
@@ -158,6 +162,10 @@ function requireApiKey(req, res, next) {
 }
 app.use(requireApiKey);
 
+
+// Mounted minimal lead intake + STOP webhook
+app.use(leadsRouter);
+app.use(twilioWebhooks);
 // Retry helper
 async function withRetry(fn, { retries = 2, delayMs = 250 } = {}) {
   let lastErr;
