@@ -249,18 +249,26 @@ app.post('/api/calendar/find-slots', async (req, res) => {
     const maxAdvanceDays = client?.booking?.maxAdvanceDays ?? client?.maxAdvanceDays ?? 14;
     const business = hoursFor(client);
     const closedDates = new Set(closedDatesFor(client));
-    const stepMinutes = Math.max(5, Number(req.body?.stepMinutes || 15));
+    const stepMinutes = Math.max(5, Number((req.body?.stepMinutes ?? svc?.slotStepMin ?? durationMin ?? 15)));
+const windowStart = new Date(Date.now() + minNoticeMin * 60000);
+const windowEnd   = new Date(Date.now() + maxAdvanceDays * 86400000);
 
-    const windowStart = new Date(Date.now() + minNoticeMin * 60000);
-    const windowEnd   = new Date(Date.now() + maxAdvanceDays * 86400000);
-
-    const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY, privateKeyB64: GOOGLE_PRIVATE_KEY_B64 });
+    // Align first candidate start to the grid (e.g., 60-min => :00 only)
+    function alignToGrid(d) {
+      const dt = new Date(d);
+      dt.setSeconds(0,0);
+      const m = dt.getMinutes();
+      const rem = m % stepMinutes;
+      if (rem !== 0) dt.setMinutes(m + (stepMinutes - rem));
+      return dt;
+    }
+const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY, privateKeyB64: GOOGLE_PRIVATE_KEY_B64 });
     await auth.authorize();
     const busy = await freeBusy({ auth, calendarId, timeMinISO: windowStart.toISOString(), timeMaxISO: windowEnd.toISOString() });
 
     const slotMs = (durationMin + bufferMin) * 60000;
     const results = [];
-    const cursor = new Date(windowStart);
+    let cursor = alignToGrid(windowStart);
     cursor.setSeconds(0,0);
 
     const dowName = ['sun','mon','tue','wed','thu','fri','sat'];
