@@ -1049,6 +1049,24 @@ app.post('/api/leads/nudge', async (req, res) => {
         
 await bootstrapClients(); // <--- run after routes loaded & DB ready
 
+
+// --- DEBUG endpoints ---
+app.get('/version', (req, res) => {
+  res.json({
+    commit: process.env.RENDER_GIT_COMMIT || 'unknown',
+    time: new Date().toISOString(),
+  });
+});
+
+app.get('/__routes', (req, res) => {
+  const stack = app._router?.stack || [];
+  const routes = stack
+    .filter(l => l.route && l.route.path)
+    .map(l => `${Object.keys(l.route.methods).join(',').toUpperCase()} ${l.route.path}`);
+  res.json(routes);
+});
+
+
 app.listen(PORT, () => {
   console.log(`AI Booking MVP listening on http://localhost:${PORT} (DB: ${DB_PATH})`);
 });
