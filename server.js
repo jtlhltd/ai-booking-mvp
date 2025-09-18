@@ -17,6 +17,7 @@ import { google } from 'googleapis';
 import cron from 'node-cron';
 import leadsRouter from './routes/leads.js';
 import twilioWebhooks from './routes/twilio-webhooks.js';
+import vapiWebhooks from './routes/vapi-webhooks.js';
 
 
 const app = express();
@@ -154,7 +155,7 @@ function deriveIdemKey(req) {
 // API key guard
 function requireApiKey(req, res, next) {
   if (req.method === 'GET' && (req.path === '/health' || req.path === '/gcal/ping' || req.path === '/healthz')) return next();
-  if (req.path.startsWith('/webhooks/twilio-status') || req.path.startsWith('/webhooks/twilio-inbound')) return next();
+  if (req.path.startsWith('/webhooks/twilio-status') || req.path.startsWith('/webhooks/twilio-inbound') || req.path.startsWith('/webhooks/twilio/sms-inbound') || req.path.startsWith('/webhooks/vapi')) return next();
   if (!API_KEY) return res.status(500).json({ error: 'Server missing API_KEY' });
   const key = req.get('X-API-Key');
   if (key && key === API_KEY) return next();
@@ -166,6 +167,7 @@ app.use(requireApiKey);
 // Mounted minimal lead intake + STOP webhook
 app.use(leadsRouter);
 app.use(twilioWebhooks);
+app.use(vapiWebhooks);
 // Retry helper
 async function withRetry(fn, { retries = 2, delayMs = 250 } = {}) {
   let lastErr;
