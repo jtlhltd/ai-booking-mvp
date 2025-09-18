@@ -1052,3 +1052,5 @@ await bootstrapClients(); // <--- run after routes loaded & DB ready
 app.listen(PORT, () => {
   console.log(`AI Booking MVP listening on http://localhost:${PORT} (DB: ${DB_PATH})`);
 });
+
+// deploy touch: 2025-09-18T10:15:38Z
