@@ -571,22 +571,62 @@ app.post('/webhooks/twilio-status', async (req, res) => {
 
 // Twilio inbound STOP/START to toggle consent
 app.post('/webhooks/twilio-inbound', async (req, res) => {
-    console.log('[inbound]', req.body);
-try {
-    const from = normalizePhone(req.body.From || '');
-    const text = String(req.body.Body || '').trim().toUpperCase();
+      try {
+    const rawFrom = (req.body.From || '').toString();
+    const rawTo   = (req.body.To   || '').toString();
+    const bodyTxt = (req.body.Body || '').toString().trim();
+
+    // Normalize numbers: strip spaces so E.164 comparisons work
+    const from = rawFrom.replace(/\s+/g, '');
+    const to   = rawTo.replace(/\s+/g, '');
+
+    // Validate sender
     if (!isE164(from)) return res.type('text/plain').send('IGNORED');
-    const leads = await readJson(LEADS_PATH, []);
-    let lead = leads.find(l => l.phone === from);
-    if (!lead) { lead = { id: 'lead_' + nanoid(8), phone: from }; leads.push(lead); }
-    if (['STOP','STOP ALL','UNSUBSCRIBE','CANCEL','END','QUIT'].includes(text)) lead.consentSms = false;
-    if (['START','UNSTOP','YES'].includes(text)) lead.consentSms = true;
+
+    // YES / STOP intents (extend as needed)
+    const isYes  = /^\s*(yes|y|start|ok|sure|confirm)\s*$/i.test(bodyTxt);
+    const isStop = /^\s*(stop|unsubscribe|cancel|end|quit)\s*$/i.test(bodyTxt);
+
+    // Load & update the most recent lead matching this phone
+    let leads = await readJson(LEADS_PATH, []);
+    const revIdx = [...leads].reverse().findIndex(L => (L.phone || '').replace(/\s+/g,'') === from);
+    const idx = revIdx >= 0 ? (leads.length - 1 - revIdx) : -1;
+
+    if (idx >= 0) {
+      const prev = leads[idx];
+      const now = new Date().toISOString();
+      leads[idx] = {
+        ...prev,
+        lastInboundAt: now,
+        lastInboundText: bodyTxt,
+        lastInboundFrom: from,
+        lastInboundTo: to,
+        consentSms: isStop ? false : (isYes ? true : (prev.consentSms ?? false)),
+        status: isStop ? 'opted_out' : (isYes ? 'engaged' : (prev.status || 'new')),
+        updatedAt: now,
+      };
+    } else {
+      // Create a minimal lead if unknown number texts in
+      leads.push({
+        id: 'lead_' + nanoid(8),
+        phone: from,
+        lastInboundAt: new Date().toISOString(),
+        lastInboundText: bodyTxt,
+        lastInboundFrom: from,
+        lastInboundTo: to,
+        consentSms: isYes ? true : false,
+        status: isYes ? 'engaged' : 'new',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
     await writeJson(LEADS_PATH, leads);
-    res.type('text/plain').send('OK');
-  } catch {
-    res.type('text/plain').send('OK');
-  }
-});
+    return res.type('text/plain').send('OK');
+  } catch (e) {
+    console.error('[inbound.error]', e?.message || e);
+    return res.type('text/plain').send('OK');
+  }});
 
 // Outbound lead webhook → Vapi (tenant-aware variables + optional per-tenant caller ID)
 const VAPI_URL = 'https://api.vapi.ai';
@@ -1062,7 +1102,19 @@ app.post('/api/leads/nudge', async (req, res) => {
     const client = await getClientFromHeader(req);
     if (!client) return res.status(401).json({ ok:false, error:'missing or unknown X-Client-Key' });
 
-    const { id } = req.body || {};
+    
+// Read a single lead by id
+app.get('/api/leads/:id', async (req, res) => {
+  try {
+    const rows = await readJson(LEADS_PATH, []);
+    const lead = rows.find(r => r.id === req.params.id);
+    if (!lead) return res.status(404).json({ ok:false, error:'lead not found' });
+    res.json({ ok:true, lead });
+  } catch (e) {
+    res.status(500).json({ ok:false, error: String(e?.message || e) });
+  }
+});
+const { id } = req.body || {};
     if (!id) return res.status(400).json({ ok:false, error:'lead id required' });
 
     const rows = await readJson(LEADS_PATH, []);
