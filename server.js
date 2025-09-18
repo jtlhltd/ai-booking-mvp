@@ -106,8 +106,8 @@ async function readJson(p, fallback = null) {
 async function writeJson(p, data) { await fs.writeFile(p, JSON.stringify(data, null, 2), 'utf8'); }
 
 // Helpers
-const isE164 = (s) => typeof s === 'string' && /^\\+\\d{7,15}$/.test(s);
-const normalizePhone = (s) => (s || '').trim().replace(/[^\\d+]/g, '');
+const isE164 = (s) => typeof s === 'string' && /^\+\d{7,15}$/.test(s);
+const normalizePhone = (s) => (s || '').trim().replace(/[^\d+]/g, '');
 
 // === Clients (DB-backed)
 async function getClientFromHeader(req) {
