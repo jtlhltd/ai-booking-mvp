@@ -622,6 +622,17 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
     }
 
     await writeJson(LEADS_PATH, leads);
+    // If lead replied YES, auto-trigger Vapi outbound call using tenant inferred from inbound number or messaging service
+    if (isYes) {
+      const client = await detectTenantFromInbound({ to, messagingServiceSid: req.body.MessagingServiceSid });
+      if (client) {
+        console.log('[LEAD OPT-IN YES] Tenant detected:', client.clientKey || client.id);
+        await queueVapiCallFor({ client, phone: from });
+      } else {
+        console.warn('[LEAD OPT-IN YES] Tenant not found for inbound To/msid', { to, msid: req.body.MessagingServiceSid });
+      }
+    }
+
     return res.type('text/plain').send('OK');
   } catch (e) {
     console.error('[inbound.error]', e?.message || e);
@@ -633,6 +644,78 @@ const VAPI_URL = 'https://api.vapi.ai';
 const VAPI_PRIVATE_KEY     = process.env.VAPI_PRIVATE_KEY || '';
 const VAPI_ASSISTANT_ID    = process.env.VAPI_ASSISTANT_ID || '';
 const VAPI_PHONE_NUMBER_ID = process.env.VAPI_PHONE_NUMBER_ID || '';
+
+
+// === Inbound helpers to map number/service to tenant and trigger Vapi call on YES ===
+async function detectTenantFromInbound({ to, messagingServiceSid }) {
+  try {
+    const tenants = await listFullClients();
+    const norm = (s) => (s || '').toString().replace(/\s+/g, '');
+    if (messagingServiceSid) {
+      const bySvc = tenants.find(t => (t?.sms?.messagingServiceSid || '') === messagingServiceSid);
+      if (bySvc) return bySvc;
+    }
+    if (to) {
+      const byFrom = tenants.find(t => norm(t?.sms?.fromNumber) === norm(to));
+      if (byFrom) return byFrom;
+    }
+    return null;
+  } catch (e) {
+    console.warn('detectTenantFromInbound failed', e?.message || e);
+    return null;
+  }
+}
+
+async function queueVapiCallFor({ client, phone, service = '', durationMin = null }) {
+  try {
+    if (!client) throw new Error('client missing');
+    const e164 = normalizePhone(phone);
+    if (!isE164(e164)) throw new Error('phone must be E.164');
+
+    const assistantId   = client?.vapiAssistantId   || VAPI_ASSISTANT_ID;
+    const phoneNumberId = client?.vapiPhoneNumberId || VAPI_PHONE_NUMBER_ID;
+    if (!VAPI_PRIVATE_KEY) throw new Error('Missing VAPI_PRIVATE_KEY');
+    if (!assistantId) throw new Error('Missing assistantId for tenant');
+    if (!phoneNumberId) throw new Error('Missing phoneNumberId for tenant');
+
+    const payload = {
+      assistantId,
+      phoneNumberId,
+      customer: { number: e164, numberE164CheckEnabled: true, metadata: { tenantKey: client.clientKey || client.id || 'default' } },
+      assistantOverrides: {
+        variableValues: {
+          ClientKey: client.clientKey || client.id || 'default',
+          BusinessName: client.displayName || client.clientKey || 'Our Clinic',
+          ConsentLine: 'This call may be recorded for quality.',
+          DefaultService: service || '',
+          DefaultDurationMin: durationMin || client?.booking?.defaultDurationMin || 30,
+          Timezone: client?.booking?.timezone || TIMEZONE
+        }
+      }
+    };
+
+    const resp = await fetch(`${VAPI_URL}/call`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    let dataText = await resp.text();
+    let data;
+    try { data = JSON.parse(dataText) } catch { data = { raw: dataText } }
+
+    if (!resp.ok) {
+      console.error('[VAPI CALL ERROR]', resp.status, data);
+      return { ok:false, status: resp.status, data };
+    }
+    console.log('[VAPI CALL QUEUED]', data);
+    return { ok:true, status: resp.status, data };
+  } catch (e) {
+    console.error('[queueVapiCallFor error]', e?.message || e);
+    return { ok:false, error: e?.message || String(e) };
+  }
+}
+
 
 app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
   try {
