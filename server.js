@@ -106,8 +106,8 @@ async function readJson(p, fallback = null) {
 async function writeJson(p, data) { await fs.writeFile(p, JSON.stringify(data, null, 2), 'utf8'); }
 
 // Helpers
-const isE164 = (s) => typeof s === 'string' && /^\+\d{7,15}$/.test(s);
-const normalizePhone = (s) => (s || '').trim().replace(/[^\d+]/g, '');
+const isE164 = (s) => typeof s === 'string' && /^\\+\\d{7,15}$/.test(s);
+const normalizePhone = (s) => (s || '').trim().replace(/[^\\d+]/g, '');
 
 // === Clients (DB-backed)
 async function getClientFromHeader(req) {
@@ -423,7 +423,7 @@ const summary = `${service} — ${lead.name}`;
       lead.phone ? `Phone: ${lead.phone}` : null,
       lead.id ? `Lead ID: ${lead.id}` : null,
       `Tenant: ${client?.clientKey || 'default'}`
-    ].filter(Boolean).join('\n');
+    ].filter(Boolean).join('\\n');
 
     
 let event;
@@ -569,32 +569,45 @@ app.post('/webhooks/twilio-status', async (req, res) => {
   res.type('text/plain').send('OK');
 });
 
-// Twilio inbound STOP/START to toggle consent
+// Twilio inbound STOP/START to toggle consent + YES => trigger Vapi call
+const VAPI_URL = 'https://api.vapi.ai';
+const VAPI_PRIVATE_KEY     = process.env.VAPI_PRIVATE_KEY || '';
+const VAPI_ASSISTANT_ID    = process.env.VAPI_ASSISTANT_ID || '';
+const VAPI_PHONE_NUMBER_ID = process.env.VAPI_PHONE_NUMBER_ID || '';
+
 app.post('/webhooks/twilio-inbound', async (req, res) => {
-      try {
+  try {
     const rawFrom = (req.body.From || '').toString();
     const rawTo   = (req.body.To   || '').toString();
     const bodyTxt = (req.body.Body || '').toString().trim();
 
     // Normalize numbers: strip spaces so E.164 comparisons work
-    const from = rawFrom.replace(/\s+/g, '');
-    const to   = rawTo.replace(/\s+/g, '');
+    const from = rawFrom.replace(/\\s+/g, '');
+    const to   = rawTo.replace(/\\s+/g, '');
+
+    // Render log for grep
+    console.log('[INBOUND SMS]', { from, to, body: bodyTxt });
 
     // Validate sender
     if (!isE164(from)) return res.type('text/plain').send('IGNORED');
 
     // YES / STOP intents (extend as needed)
-    const isYes  = /^\s*(yes|y|start|ok|sure|confirm)\s*$/i.test(bodyTxt);
-    const isStop = /^\s*(stop|unsubscribe|cancel|end|quit)\s*$/i.test(bodyTxt);
+    const isYes  = /^\\s*(yes|y|start|ok|sure|confirm)\\s*$/i.test(bodyTxt);
+    const isStop = /^\\s*(stop|unsubscribe|cancel|end|quit)\\s*$/i.test(bodyTxt);
 
     // Load & update the most recent lead matching this phone
     let leads = await readJson(LEADS_PATH, []);
-    const revIdx = [...leads].reverse().findIndex(L => (L.phone || '').replace(/\s+/g,'') === from);
+    const revIdx = [...leads].reverse().findIndex(L => (L.phone || '').replace(/\\s+/g,'') === from);
     const idx = revIdx >= 0 ? (leads.length - 1 - revIdx) : -1;
+
+    let tenantKey = null;
+    let serviceForCall = '';
 
     if (idx >= 0) {
       const prev = leads[idx];
       const now = new Date().toISOString();
+      tenantKey = prev.tenantId || null;
+      serviceForCall = prev.service || '';
       leads[idx] = {
         ...prev,
         lastInboundAt: now,
@@ -607,21 +620,69 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
       };
     } else {
       // Create a minimal lead if unknown number texts in
-      leads.push({
+      const now = new Date().toISOString();
+      const newLead = {
         id: 'lead_' + nanoid(8),
         phone: from,
-        lastInboundAt: new Date().toISOString(),
+        lastInboundAt: now,
         lastInboundText: bodyTxt,
         lastInboundFrom: from,
         lastInboundTo: to,
         consentSms: isYes ? true : false,
         status: isYes ? 'engaged' : 'new',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
+        createdAt: now,
+        updatedAt: now,
+      };
+      leads.push(newLead);
     }
 
     await writeJson(LEADS_PATH, leads);
+
+    // If user texted YES and we know the tenant, trigger a Vapi call right away (fire-and-forget)
+    if (isYes && tenantKey && VAPI_PRIVATE_KEY) {
+      try {
+        const client = await getFullClient(tenantKey);
+        if (client) {
+          const assistantId = client?.vapiAssistantId || VAPI_ASSISTANT_ID;
+          const phoneNumberId = client?.vapiPhoneNumberId || VAPI_PHONE_NUMBER_ID;
+          const payload = {
+            assistantId,
+            phoneNumberId,
+            customer: { number: from, numberE164CheckEnabled: true },
+            assistantOverrides: {
+              variableValues: {
+                ClientKey: tenantKey,
+                BusinessName: client.displayName || client.clientKey,
+                ConsentLine: 'This call may be recorded for quality.',
+                DefaultService: serviceForCall || '',
+                DefaultDurationMin: client?.booking?.defaultDurationMin || 30,
+                Timezone: client?.booking?.timezone || TIMEZONE,
+                ServicesJSON: client?.servicesJson || '[]',
+                PricesJSON: client?.pricesJson || '{}',
+                HoursJSON: client?.hoursJson || '{}',
+                ClosedDatesJSON: client?.closedDatesJson || '[]',
+                Locale: client?.locale || 'en-GB',
+                ScriptHints: client?.scriptHints || '',
+                FAQJSON: client?.faqJson || '[]',
+                Currency: client?.currency || 'GBP'
+              }
+            }
+          };
+          const resp = await fetch(`${VAPI_URL}/call`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          const ok = resp.ok;
+          console.log('[LEAD OPT-IN YES]', { from, tenantKey, vapiStatus: ok ? 'ok' : resp.status });
+        } else {
+          console.log('[LEAD OPT-IN YES]', { from, tenantKey, vapiStatus: 'client_not_found' });
+        }
+      } catch (err) {
+        console.log('[LEAD OPT-IN YES]', { from, tenantKey, vapiStatus: 'error', error: (err?.message || String(err)) });
+      }
+    }
+
     return res.type('text/plain').send('OK');
   } catch (e) {
     console.error('[inbound.error]', e?.message || e);
@@ -629,11 +690,6 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
   }});
 
 // Outbound lead webhook → Vapi (tenant-aware variables + optional per-tenant caller ID)
-const VAPI_URL = 'https://api.vapi.ai';
-const VAPI_PRIVATE_KEY     = process.env.VAPI_PRIVATE_KEY || '';
-const VAPI_ASSISTANT_ID    = process.env.VAPI_ASSISTANT_ID || '';
-const VAPI_PHONE_NUMBER_ID = process.env.VAPI_PHONE_NUMBER_ID || '';
-
 app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
   try {
     const { clientKey } = req.params;
@@ -733,7 +789,7 @@ app.post('/api/calendar/check-book', async (req, res) => {
           `Tenant: ${client?.clientKey || 'default'}`,
           `Name: ${lead.name}`,
           `Phone: ${lead.phone}`
-        ].join('\n');
+        ].join('\\n');
 
         const attendees = []; // removed invites
 
