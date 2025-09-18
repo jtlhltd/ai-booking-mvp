@@ -571,7 +571,8 @@ app.post('/webhooks/twilio-status', async (req, res) => {
 
 // Twilio inbound STOP/START to toggle consent
 app.post('/webhooks/twilio-inbound', async (req, res) => {
-  try {
+    console.log('[inbound]', req.body);
+try {
     const from = normalizePhone(req.body.From || '');
     const text = String(req.body.Body || '').trim().toUpperCase();
     if (!isE164(from)) return res.type('text/plain').send('IGNORED');
