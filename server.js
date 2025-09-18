@@ -1,4 +1,4 @@
-﻿// server.js â€” AI Booking MVP (SQLite tenants + env bootstrap + richer tenant awareness)
+// server.js — AI Booking MVP (SQLite tenants + env bootstrap + richer tenant awareness)
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
@@ -162,6 +162,47 @@ function requireApiKey(req, res, next) {
   return res.status(401).json({ error: 'Unauthorized' });
 }
 app.use(requireApiKey);
+
+// === HARD-OVERRIDE (top-priority) /api/leads to kill 404s ===
+app.post('/api/leads', async (req, res) => {
+  try {
+    // Minimal logging to Render logs so we can see hits unequivocally
+    console.log('HIT /api/leads (override)', { rid: req.id, path: req.path });
+
+    const client = await getClientFromHeader(req);
+    if (!client) return res.status(401).json({ ok:false, error:'missing or unknown X-Client-Key' });
+
+    const body    = req.body || {};
+    const service = String(body.service || '');
+    const lead    = body.lead || {};
+    const name    = String(lead.name || body.name || '').trim();
+    const phoneIn = String(lead.phone || body.phone || '').trim();
+    const source  = String(body.source || 'unknown');
+
+    if (!service) return res.status(400).json({ ok:false, error:'Missing service' });
+    if (!name || !phoneIn) return res.status(400).json({ ok:false, error:'Missing lead.name or lead.phone' });
+
+    const phone = normalizePhone(phoneIn);
+    if (!isE164(phone)) return res.status(400).json({ ok:false, error:'invalid phone (E.164 required)' });
+
+    const now = new Date().toISOString();
+    const rows = await readJson(LEADS_PATH, []);
+    const id = 'lead_' + nanoid(8);
+    const saved = {
+      id, tenantId: client.clientKey || client.id, name, phone, source, service,
+      status: 'new', createdAt: now, updatedAt: now
+    };
+    rows.push(saved);
+    await writeJson(LEADS_PATH, rows);
+
+    return res.status(201).json({ ok:true, lead: saved, override: true });
+  } catch (err) {
+    console.error('[POST /api/leads override] error:', err);
+    return res.status(500).json({ ok:false, error:'Internal error' });
+  }
+});
+
+
 
 
 // Mounted minimal lead intake + STOP webhook
@@ -375,7 +416,7 @@ app.post('/api/calendar/book-slot', async (req, res) => {
     }
 
     const attendees = []; // removed invites
-const summary = `${service} â€” ${lead.name}`;
+const summary = `${service} — ${lead.name}`;
     const description = [
       `Service: ${service}`,
       `Lead: ${lead.name}`,
@@ -546,7 +587,7 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
   }
 });
 
-// Outbound lead webhook â†’ Vapi (tenant-aware variables + optional per-tenant caller ID)
+// Outbound lead webhook → Vapi (tenant-aware variables + optional per-tenant caller ID)
 const VAPI_URL = 'https://api.vapi.ai';
 const VAPI_PRIVATE_KEY     = process.env.VAPI_PRIVATE_KEY || '';
 const VAPI_ASSISTANT_ID    = process.env.VAPI_ASSISTANT_ID || '';
@@ -645,7 +686,7 @@ app.post('/api/calendar/check-book', async (req, res) => {
       if (GOOGLE_CLIENT_EMAIL && (GOOGLE_PRIVATE_KEY || GOOGLE_PRIVATE_KEY_B64) && calendarId) {
         const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY, privateKeyB64: GOOGLE_PRIVATE_KEY_B64 });
         await auth.authorize();
-        const summary = `${requestedService || 'Appointment'} â€” ${lead.name || lead.phone}`;
+        const summary = `${requestedService || 'Appointment'} — ${lead.name || lead.phone}`;
         const description = [
           `Auto-booked by AI agent`,
           `Tenant: ${client?.clientKey || 'default'}`,
@@ -855,7 +896,7 @@ app.post('/api/calendar/reschedule', async (req, res) => {
 
     const dur = client?.booking?.defaultDurationMin || 30;
     const endISO = new Date(new Date(newStartISO).getTime() + dur * 60000).toISOString();
-    const summary = `${service} â€” ${lead.name || ''}`.trim();
+    const summary = `${service} — ${lead.name || ''}`.trim();
 
     let event;
     try {
@@ -878,7 +919,7 @@ app.post('/api/calendar/reschedule', async (req, res) => {
         });
         const brand = client?.displayName || client?.clientKey || 'Our Clinic';
         const link  = event?.htmlLink ? ` Calendar: ${event.htmlLink}` : '';
-        const body  = `âœ… Rescheduled: ${service} at ${when} ${tz}.${link}`;
+        const body  = `✅ Rescheduled: ${service} at ${when} ${tz}.${link}`;
         const payload = { to: lead.phone, body };
         if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid; else if (fromNumber) payload.from = fromNumber;
         await smsClient.messages.create(payload);
@@ -1031,7 +1072,7 @@ app.post('/api/leads/nudge', async (req, res) => {
     if (!configured) return res.status(400).json({ ok:false, error:'tenant SMS not configured' });
 
     const brand = client?.displayName || client?.clientKey || 'Our Clinic';
-    const body  = `Hi ${lead.name || ''} â€” itâ€™s ${brand}. Ready to book your appointment? Reply YES to continue.`.trim();
+    const body  = `Hi ${lead.name || ''} — it’s ${brand}. Ready to book your appointment? Reply YES to continue.`.trim();
     const payload = { to: lead.phone, body };
     if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid; else if (fromNumber) payload.from = fromNumber;
     const result = await smsClient.messages.create(payload);
@@ -1049,28 +1090,6 @@ app.post('/api/leads/nudge', async (req, res) => {
         
 await bootstrapClients(); // <--- run after routes loaded & DB ready
 
-
-// --- DEBUG endpoints ---
-app.get('/version', (req, res) => {
-  res.json({
-    commit: process.env.RENDER_GIT_COMMIT || 'unknown',
-    time: new Date().toISOString(),
-  });
-});
-
-app.get('/__routes', (req, res) => {
-  const stack = app._router?.stack || [];
-  const routes = stack
-    .filter(l => l.route && l.route.path)
-    .map(l => `${Object.keys(l.route.methods).join(',').toUpperCase()} ${l.route.path}`);
-  res.json(routes);
-});
-
-
 app.listen(PORT, () => {
   console.log(`AI Booking MVP listening on http://localhost:${PORT} (DB: ${DB_PATH})`);
 });
-
-// deploy touch: 2025-09-18T10:15:38Z
-
-// deploy touch: 2025-09-18T10:21:06Z
