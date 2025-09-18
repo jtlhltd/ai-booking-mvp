@@ -582,8 +582,8 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
     const bodyTxt = (req.body.Body || '').toString().trim();
 
     // Normalize numbers: strip spaces so E.164 comparisons work
-    const from = normalizePhone(rawFrom);
-    const to   = normalizePhone(rawTo);
+    const from = rawFrom.replace(/\\s+/g, '');
+    const to   = rawTo.replace(/\\s+/g, '');
 
     // Render log for grep
     console.log('[INBOUND SMS]', { from, to, body: bodyTxt });
@@ -592,12 +592,12 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
     if (!isE164(from)) return res.type('text/plain').send('IGNORED');
 
     // YES / STOP intents (extend as needed)
-    const isYes  = /^\\s*(yes|y|start|ok|sure|confirm)\\s*$/i.test(bodyTxt);
-    const isStop = /^\\s*(stop|unsubscribe|cancel|end|quit)\\s*$/i.test(bodyTxt);
+    const isYes  = /^\s*(yes|y|start|ok|sure|confirm)\s*$/i.test(bodyTxt);
+    const isStop = /^\s*(stop|unsubscribe|cancel|end|quit)\s*$/i.test(bodyTxt);
 
     // Load & update the most recent lead matching this phone
     let leads = await readJson(LEADS_PATH, []);
-    const revIdx = [...leads].reverse().findIndex(L => normalizePhone(L.phone || '') === from);
+    const revIdx = [...leads].reverse().findIndex(L => (L.phone || '').replace(/\\s+/g,'') === from);
     const idx = revIdx >= 0 ? (leads.length - 1 - revIdx) : -1;
 
     let tenantKey = null;
