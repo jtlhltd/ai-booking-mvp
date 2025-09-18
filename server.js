@@ -106,8 +106,8 @@ async function readJson(p, fallback = null) {
 async function writeJson(p, data) { await fs.writeFile(p, JSON.stringify(data, null, 2), 'utf8'); }
 
 // Helpers
-const isE164 = (s) => typeof s === 'string' && /^\\+\\d{7,15}$/.test(s);
-const normalizePhone = (s) => (s || '').trim().replace(/[^\\d+]/g, '');
+const isE164 = (s) => typeof s === 'string' && /^\+\d{7,15}$/.test(s);
+const normalizePhone = (s) => (s || '').trim().replace(/[^\d+]/g, '');
 
 // === Clients (DB-backed)
 async function getClientFromHeader(req) {
@@ -582,8 +582,8 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
     const bodyTxt = (req.body.Body || '').toString().trim();
 
     // Normalize numbers: strip spaces so E.164 comparisons work
-    const from = rawFrom.replace(/\\s+/g, '');
-    const to   = rawTo.replace(/\\s+/g, '');
+    const from = normalizePhone(rawFrom);
+    const to   = normalizePhone(rawTo);
 
     // Render log for grep
     console.log('[INBOUND SMS]', { from, to, body: bodyTxt });
@@ -597,7 +597,7 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
 
     // Load & update the most recent lead matching this phone
     let leads = await readJson(LEADS_PATH, []);
-    const revIdx = [...leads].reverse().findIndex(L => (L.phone || '').replace(/\\s+/g,'') === from);
+    const revIdx = [...leads].reverse().findIndex(L => normalizePhone(L.phone || '') === from);
     const idx = revIdx >= 0 ? (leads.length - 1 - revIdx) : -1;
 
     let tenantKey = null;
@@ -1147,21 +1147,7 @@ app.post('/api/leads', async (req, res) => {
 
     if (idx >= 0) rows[idx] = { ...rows[idx], ...lead, updatedAt: now }; else rows.push(lead);
     await writeJson(LEADS_PATH, rows);
-    
-    // --- Auto-nudge SMS so the lead can reply YES
-    try {
-      const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
-      if (configured) {
-        const brand = client?.displayName || client?.clientKey || 'Our Clinic';
-        const msgBody = `Hi ${name || lead.name || ''} — it’s ${brand}. Ready to book your appointment? Reply YES to continue.`.trim();
-        const payload = { to: phoneNorm, body: msgBody };
-        if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid; else if (fromNumber) payload.from = fromNumber;
-        await smsClient.messages.create(payload);
-      }
-    } catch (e) {
-      console.log('[AUTO-NUDGE SMS ERROR]', e?.message || String(e));
-    }
-res.status(201).json({ ok:true, lead });
+    res.status(201).json({ ok:true, lead });
   } catch (e) {
     res.status(500).json({ ok:false, error: String(e?.message || e) });
   }
