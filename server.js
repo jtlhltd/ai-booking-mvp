@@ -981,22 +981,39 @@ app.post('/api/leads', async (req, res) => {
     const client = await getClientFromHeader(req);
     if (!client) return res.status(401).json({ ok:false, error:'missing or unknown X-Client-Key' });
 
-    const { id, name, phone, source } = req.body || {};
-    const leadId = (id && String(id)) || ('lead_' + nanoid(8));
-    const phoneNorm = normalizePhone(phone);
+    const body = req.body || {};
+    const name  = (body.name ?? body.lead?.name ?? '').toString();
+    const phoneIn = (body.phone ?? body.lead?.phone ?? '').toString();
+    const source = (body.source ?? 'unknown').toString();
+    const service = (body.service ?? '').toString();
+
+    const leadId = (body.id && String(body.id)) || ('lead_' + nanoid(8));
+    const phoneNorm = normalizePhone(phoneIn);
     if (!isE164(phoneNorm)) return res.status(400).json({ ok:false, error:'invalid phone (E.164 required)' });
 
     const now = new Date().toISOString();
     const rows = await readJson(LEADS_PATH, []);
     const idx = rows.findIndex(r => r.id === leadId);
-    const lead = { id: leadId, tenantId: client.clientKey || client.id, name: name || '', phone: phoneNorm, source: source || 'unknown', status: 'new', createdAt: now, updatedAt: now };
+
+    const lead = {
+      id: leadId,
+      tenantId: client.clientKey || client.id,
+      name,
+      phone: phoneNorm,
+      source,
+      service,
+      status: 'new',
+      createdAt: now,
+      updatedAt: now
+    };
+
     if (idx >= 0) rows[idx] = { ...rows[idx], ...lead, updatedAt: now }; else rows.push(lead);
     await writeJson(LEADS_PATH, rows);
     res.status(201).json({ ok:true, lead });
   } catch (e) {
     res.status(500).json({ ok:false, error: String(e?.message || e) });
   }
-});
+});;
 
 app.post('/api/leads/nudge', async (req, res) => {
   try {
