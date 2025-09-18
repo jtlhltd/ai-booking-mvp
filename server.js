@@ -1,4 +1,4 @@
-// server.js — AI Booking MVP (SQLite tenants + env bootstrap + richer tenant awareness)
+﻿// server.js â€” AI Booking MVP (SQLite tenants + env bootstrap + richer tenant awareness)
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
@@ -375,7 +375,7 @@ app.post('/api/calendar/book-slot', async (req, res) => {
     }
 
     const attendees = []; // removed invites
-const summary = `${service} — ${lead.name}`;
+const summary = `${service} â€” ${lead.name}`;
     const description = [
       `Service: ${service}`,
       `Lead: ${lead.name}`,
@@ -546,7 +546,7 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
   }
 });
 
-// Outbound lead webhook → Vapi (tenant-aware variables + optional per-tenant caller ID)
+// Outbound lead webhook â†’ Vapi (tenant-aware variables + optional per-tenant caller ID)
 const VAPI_URL = 'https://api.vapi.ai';
 const VAPI_PRIVATE_KEY     = process.env.VAPI_PRIVATE_KEY || '';
 const VAPI_ASSISTANT_ID    = process.env.VAPI_ASSISTANT_ID || '';
@@ -645,7 +645,7 @@ app.post('/api/calendar/check-book', async (req, res) => {
       if (GOOGLE_CLIENT_EMAIL && (GOOGLE_PRIVATE_KEY || GOOGLE_PRIVATE_KEY_B64) && calendarId) {
         const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY, privateKeyB64: GOOGLE_PRIVATE_KEY_B64 });
         await auth.authorize();
-        const summary = `${requestedService || 'Appointment'} — ${lead.name || lead.phone}`;
+        const summary = `${requestedService || 'Appointment'} â€” ${lead.name || lead.phone}`;
         const description = [
           `Auto-booked by AI agent`,
           `Tenant: ${client?.clientKey || 'default'}`,
@@ -855,7 +855,7 @@ app.post('/api/calendar/reschedule', async (req, res) => {
 
     const dur = client?.booking?.defaultDurationMin || 30;
     const endISO = new Date(new Date(newStartISO).getTime() + dur * 60000).toISOString();
-    const summary = `${service} — ${lead.name || ''}`.trim();
+    const summary = `${service} â€” ${lead.name || ''}`.trim();
 
     let event;
     try {
@@ -878,7 +878,7 @@ app.post('/api/calendar/reschedule', async (req, res) => {
         });
         const brand = client?.displayName || client?.clientKey || 'Our Clinic';
         const link  = event?.htmlLink ? ` Calendar: ${event.htmlLink}` : '';
-        const body  = `✅ Rescheduled: ${service} at ${when} ${tz}.${link}`;
+        const body  = `âœ… Rescheduled: ${service} at ${when} ${tz}.${link}`;
         const payload = { to: lead.phone, body };
         if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid; else if (fromNumber) payload.from = fromNumber;
         await smsClient.messages.create(payload);
@@ -1031,7 +1031,7 @@ app.post('/api/leads/nudge', async (req, res) => {
     if (!configured) return res.status(400).json({ ok:false, error:'tenant SMS not configured' });
 
     const brand = client?.displayName || client?.clientKey || 'Our Clinic';
-    const body  = `Hi ${lead.name || ''} — it’s ${brand}. Ready to book your appointment? Reply YES to continue.`.trim();
+    const body  = `Hi ${lead.name || ''} â€” itâ€™s ${brand}. Ready to book your appointment? Reply YES to continue.`.trim();
     const payload = { to: lead.phone, body };
     if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid; else if (fromNumber) payload.from = fromNumber;
     const result = await smsClient.messages.create(payload);
