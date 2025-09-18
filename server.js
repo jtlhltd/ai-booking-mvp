@@ -106,8 +106,8 @@ async function readJson(p, fallback = null) {
 async function writeJson(p, data) { await fs.writeFile(p, JSON.stringify(data, null, 2), 'utf8'); }
 
 // Helpers
-const isE164 = (s) => typeof s === 'string' && /^\+\d{7,15}$/.test(s);
-const normalizePhone = (s) => (s || '').trim().replace(/[^\d+]/g, '');
+const isE164 = (s) => typeof s === 'string' && /^\\+\\d{7,15}$/.test(s);
+const normalizePhone = (s) => (s || '').trim().replace(/[^\\d+]/g, '');
 
 // === Clients (DB-backed)
 async function getClientFromHeader(req) {
@@ -592,8 +592,8 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
     if (!isE164(from)) return res.type('text/plain').send('IGNORED');
 
     // YES / STOP intents (extend as needed)
-    const isYes  = /^\s*(yes|y|start|ok|sure|confirm)\s*$/i.test(bodyTxt);
-    const isStop = /^\s*(stop|unsubscribe|cancel|end|quit)\s*$/i.test(bodyTxt);
+    const isYes  = /^\\s*(yes|y|start|ok|sure|confirm)\\s*$/i.test(bodyTxt);
+    const isStop = /^\\s*(stop|unsubscribe|cancel|end|quit)\\s*$/i.test(bodyTxt);
 
     // Load & update the most recent lead matching this phone
     let leads = await readJson(LEADS_PATH, []);
@@ -1147,7 +1147,21 @@ app.post('/api/leads', async (req, res) => {
 
     if (idx >= 0) rows[idx] = { ...rows[idx], ...lead, updatedAt: now }; else rows.push(lead);
     await writeJson(LEADS_PATH, rows);
-    res.status(201).json({ ok:true, lead });
+    
+    // --- Auto-nudge SMS so the lead can reply YES
+    try {
+      const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
+      if (configured) {
+        const brand = client?.displayName || client?.clientKey || 'Our Clinic';
+        const msgBody = `Hi ${name || lead.name || ''} — it’s ${brand}. Ready to book your appointment? Reply YES to continue.`.trim();
+        const payload = { to: phoneNorm, body: msgBody };
+        if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid; else if (fromNumber) payload.from = fromNumber;
+        await smsClient.messages.create(payload);
+      }
+    } catch (e) {
+      console.log('[AUTO-NUDGE SMS ERROR]', e?.message || String(e));
+    }
+res.status(201).json({ ok:true, lead });
   } catch (e) {
     res.status(500).json({ ok:false, error: String(e?.message || e) });
   }
