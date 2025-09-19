@@ -642,8 +642,8 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
     if (!isE164(from)) return res.type('text/plain').send('IGNORED');
 
     // YES / STOP intents (extend as needed)
-    const isYes  = /^\\s*(yes|y|start|ok|sure|confirm)\\s*$/i.test(bodyTxt);
-    const isStop = /^\\s*(stop|unsubscribe|cancel|end|quit)\\s*$/i.test(bodyTxt);
+    const isYes  = /^\s*(yes|y|start|ok|sure|confirm)\s*$/i.test(bodyTxt);
+    const isStop = /^\s*(stop|unsubscribe|cancel|end|quit)\s*$/i.test(bodyTxt);
 
     // Load & update the most recent lead matching this phone
     let leads = await readJson(LEADS_PATH, []);
