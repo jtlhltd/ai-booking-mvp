@@ -621,7 +621,7 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
   if (!tenantKey) {
     const mgsid = (req.body.MessagingServiceSid || req.body.messagingServiceSid || '').trim();
     try {
-      const clients = await readJson(CLIENTS_PATH);
+      const clients = await listFullClients();
       const hit = clients.find(c =>
         (c?.sms?.fromNumber && c.sms.fromNumber === to) ||
         (mgsid && c?.sms?.messagingServiceSid === mgsid)
@@ -650,7 +650,6 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
     const revIdx = [...leads].reverse().findIndex(L => normalizePhone(L.phone || '') === from);
     const idx = revIdx >= 0 ? (leads.length - 1 - revIdx) : -1;
 
-    let tenantKey = null;
     let serviceForCall = '';
 
     if (idx >= 0) {
