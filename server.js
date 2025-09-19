@@ -195,6 +195,20 @@ app.post('/api/leads', async (req, res) => {
     rows.push(saved);
     await writeJson(LEADS_PATH, rows);
 
+    // --- Auto-nudge SMS so the lead can reply YES (minimal, tenant-aware)
+    try {
+      const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
+      if (configured) {
+        const brand = client?.displayName || client?.clientKey || 'Our Clinic';
+        const msgBody = `Hi ${name} — it’s ${brand}. Ready to book your appointment? Reply YES to continue.`;
+        const payload = { to: phone, body: msgBody };
+        if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid; else if (fromNumber) payload.from = fromNumber;
+        await smsClient.messages.create(payload);
+      }
+    } catch (e) {
+      console.log('[AUTO-NUDGE SMS ERROR]', e?.message || String(e));
+    }
+
     return res.status(201).json({ ok:true, lead: saved, override: true });
   } catch (err) {
     console.error('[POST /api/leads override] error:', err);
