@@ -616,6 +616,27 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
 
     // Render log for grep
     console.log('[INBOUND SMS]', { from, to, body: bodyTxt });
+  // --- derive tenantKey from header, inbound 'To', or MessagingServiceSid (minimal mapping) ---
+  let tenantKey = (req.headers['x-client-key'] || '').trim();
+  if (!tenantKey) {
+    const mgsid = (req.body.MessagingServiceSid || req.body.messagingServiceSid || '').trim();
+    try {
+      const clients = await readJson(CLIENTS_PATH);
+      const hit = clients.find(c =>
+        (c?.sms?.fromNumber && c.sms.fromNumber === to) ||
+        (mgsid && c?.sms?.messagingServiceSid === mgsid)
+      );
+      if (hit) tenantKey = hit.clientKey;
+      console.log('[INBOUND MAP]', { to, mgsid: mgsid || null, tenantKey: tenantKey || null });
+    } catch (e) {
+      console.log('[INBOUND MAP ERROR]', e?.message || String(e));
+    }
+  }
+  if (!tenantKey) {
+    console.log('[INBOUND MAP MISS]', { to, body: bodyTxt });
+    return res.send('OK');
+  }
+
 
     // Validate sender
     if (!isE164(from)) return res.type('text/plain').send('IGNORED');
