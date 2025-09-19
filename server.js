@@ -108,6 +108,16 @@ async function writeJson(p, data) { await fs.writeFile(p, JSON.stringify(data, n
 // Helpers
 const isE164 = (s) => typeof s === 'string' && /^\+\d{7,15}$/.test(s);
 const normalizePhone = (s) => (s || '').trim().replace(/[^\d+]/g, '');
+// Simple {{var}} template renderer for SMS bodies
+function renderTemplate(str, vars = {}) {
+  try {
+    return String(str).replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, k) => {
+      const v = vars[k];
+      return (v === undefined || v === null) ? '' : String(v);
+    });
+  } catch { return String(str || ''); }
+}
+
 
 // === Clients (DB-backed)
 async function getClientFromHeader(req) {
@@ -194,20 +204,6 @@ app.post('/api/leads', async (req, res) => {
     };
     rows.push(saved);
     await writeJson(LEADS_PATH, rows);
-
-    // --- Auto-nudge SMS so the lead can reply YES (minimal, tenant-aware)
-    try {
-      const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
-      if (configured) {
-        const brand = client?.displayName || client?.clientKey || 'Our Clinic';
-        const msgBody = `Hi ${name} — it’s ${brand}. Ready to book your appointment? Reply YES to continue.`;
-        const payload = { to: phone, body: msgBody };
-        if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid; else if (fromNumber) payload.from = fromNumber;
-        await smsClient.messages.create(payload);
-      }
-    } catch (e) {
-      console.log('[AUTO-NUDGE SMS ERROR]', e?.message || String(e));
-    }
 
     return res.status(201).json({ ok:true, lead: saved, override: true });
   } catch (err) {
@@ -496,7 +492,10 @@ try {
     });
     const brand = client?.displayName || client?.clientKey || 'Our Clinic';
     const link  = event?.htmlLink ? ` Calendar: ${event.htmlLink}` : '';
-    const body  = `Hi ${lead.name}, your ${service} is booked with ${brand} for ${when} ${tz}.${link} Reply STOP to opt out.`;
+    const sig   = client?.brandSignature ? ` ${client.brandSignature}` : '';
+    const defaultBody  = `Hi {{name}}, your {{service}} is booked with {{brand}} for {{when}} {{tz}}.{{link}}{{sig}} Reply STOP to opt out.`;
+    const templ = client?.smsTemplates?.confirm || defaultBody;
+    const body  = renderTemplate(templ, { name: lead.name, service, brand, when, tz, link, sig });
     const payload = { to: lead.phone, body };
     if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid; else if (fromNumber) payload.from = fromNumber;
     await smsClient.messages.create(payload);
@@ -689,6 +688,17 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
           });
           const ok = resp.ok;
           console.log('[LEAD OPT-IN YES]', { from, tenantKey, vapiStatus: ok ? 'ok' : resp.status });
+          console.log('[LEAD OPT-IN YES]', { from, tenantKey, step: 'calling_vapi', vapiStatus: ok ? 'ok' : resp.status });
+          try {
+            const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
+            if (configured) {
+              const brand = client?.displayName || client?.clientKey || 'Our Clinic';
+              const ack = `Thanks! ${brand} is calling you now. Reply STOP to opt out.`;
+              const payload = { to: from, body: ack };
+              if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid; else if (fromNumber) payload.from = fromNumber;
+              await smsClient.messages.create(payload);
+            }
+          } catch (e) { console.log('[YES ACK SMS ERROR]', e?.message || String(e)); }
         } else {
           console.log('[LEAD OPT-IN YES]', { from, tenantKey, vapiStatus: 'client_not_found' });
         }
@@ -1096,7 +1106,7 @@ function startReminders() {
           }
         }
       } catch (e) {
-        console.error('reminders loop error', e?.message || e);
+        const sc = e?.response?.status; if (sc === 404 || sc === 410) return; console.error('reminders loop error', e?.message || e);
       }
     });
   } catch (e) {
