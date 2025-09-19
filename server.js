@@ -1211,7 +1211,74 @@ app.post('/api/leads', async (req, res) => {
   } catch (e) {
     res.status(500).json({ ok:false, error: String(e?.message || e) });
   }
-});;
+});
+// Recall endpoint for n8n follow-ups: re-attempt an outbound call via Vapi
+app.post('/api/leads/recall', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const clientKey = String(body.clientKey || body.tenantKey || '').trim();
+    const lead = body.lead || {};
+    const phone = (lead.phone || '').toString().trim();
+    if (!clientKey) return res.status(400).json({ ok:false, error:'missing clientKey' });
+    if (!phone) return res.status(400).json({ ok:false, error:'missing lead.phone' });
+
+    const client = await getFullClient(clientKey);
+    if (!client) return res.status(404).json({ ok:false, error:'unknown clientKey' });
+
+    const assistantId   = client?.vapiAssistantId   || VAPI_ASSISTANT_ID;
+    const phoneNumberId = client?.vapiPhoneNumberId || VAPI_PHONE_NUMBER_ID;
+
+    if (!assistantId || !VAPI_PRIVATE_KEY) {
+      return res.status(500).json({ ok:false, error:'Vapi not configured' });
+    }
+
+    // compute top 3 slots quickly using freeBusy/find (reuse your existing slot logic if available)
+    // Here we keep it minimal and let the assistant propose times from its own logic.
+    const payload = {
+      assistantId,
+      phoneNumberId,
+      customer: { number: phone, name: lead.name || 'Lead' },
+      assistantOverrides: {
+        variableValues: {
+          ClientKey: clientKey,
+          BusinessName: client.displayName || client.clientKey,
+          ConsentLine: 'This call may be recorded for quality.',
+          DefaultService: lead.service || '',
+          DefaultDurationMin: client?.booking?.defaultDurationMin || 30,
+          Timezone: client?.booking?.timezone || TIMEZONE,
+          ServicesJSON: client?.servicesJson || '[]',
+          PricesJSON: client?.pricesJson || '{}',
+          HoursJSON: client?.hoursJson || '{}',
+          ClosedDatesJSON: client?.closedDatesJson || '[]',
+          Locale: client?.locale || 'en-GB',
+          ScriptHints: client?.scriptHints || '',
+          FAQJSON: client?.faqJson || '[]'
+        }
+      },
+      metadata: {
+        clientKey: clientKey,
+        service: lead.service || '',
+        recall: true
+      }
+    };
+
+    const resp = await fetch('https://api.vapi.ai/call', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const ok = resp.ok;
+    console.log('[LEAD RECALL]', { clientKey, phone, vapiStatus: ok ? 'ok' : resp.status });
+    if (!ok) return res.status(502).json({ ok:false, error:`vapi ${resp.status}` });
+
+    return res.json({ ok:true });
+  } catch (e) {
+    console.error('[POST /api/leads/recall] error', e?.message || e);
+    res.status(500).json({ ok:false, error:'Internal error' });
+  }
+});
+;
 
 app.post('/api/leads/nudge', async (req, res) => {
   try {
