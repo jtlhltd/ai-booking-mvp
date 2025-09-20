@@ -1,25 +1,14 @@
+# 1) Hit the n8n intake webhook directly
+$F = "https://jtlh.app.n8n.cloud/webhook/leads"
+$S = "super-secret-123"   # must match the Code node
+$Body = @'
 {
-  "name": "ai-booking-mvp",
-  "version": "0.4.1",
-  "private": true,
-  "type": "module",
-  "engines": {
-    "node": ">=18"
-  },
-  "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js"
-  },
-  "dependencies": {
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "express": "^4.19.2",
-    "express-rate-limit": "^7.4.0",
-    "googleapis": "^131.0.0",
-    "morgan": "^1.10.0",
-    "nanoid": "^5.1.5",
-    "node-cron": "^4.2.1",
-    "sqlite3": "^5.1.7",
-    "twilio": "^4.22.0"
-  }
+  "clientKey": "victory_dental",
+  "name": "Jane Doe",
+  "phone": "+447491683261",
+  "service": "Dental Consultation",
+  "source": "facebook_ads",
+  "notes": "prefers mornings"
 }
+'@
+Invoke-RestMethod -Uri $F -Method POST -Headers @{ 'Content-Type'='application/json'; 'X-Shared-Secret'=$S } -Body $Body
