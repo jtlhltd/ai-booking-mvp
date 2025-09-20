@@ -21,6 +21,9 @@ import vapiWebhooks from './routes/vapi-webhooks.js';
 
 
 const app = express();
+// Force Postgres mode flag (skip SQLite bootstrap when using Postgres)
+const USE_PG = (process.env.DB_TYPE || '').toLowerCase() === 'postgres' || (DB_PATH === 'postgres');
+
 
 // --- healthz: report which integrations are configured (without leaking secrets)
 app.get('/healthz', (req, res) => {
@@ -368,6 +371,7 @@ async function withRetry(fn, { retries = 2, delayMs = 250 } = {}) {
 
 // --- Bootstrap tenants from env (for free Render without disk) ---
 async function bootstrapClients() {
+  if (USE_PG) return;
   try {
     const existing = await listFullClients();
     if (existing.length > 0) return;
@@ -1439,7 +1443,11 @@ const { id } = req.body || {};
 });
 
 
-await bootstrapClients(); // <--- run after routes loaded & DB ready
+if (USE_PG) {
+  console.log('Postgres mode: skipping BOOTSTRAP_CLIENTS_JSON bootstrap.');
+} else {
+  await bootstrapClients();
+} // <--- run after routes loaded & DB ready
 
 app.listen(PORT, () => {
   console.log(`AI Booking MVP listening on http://localhost:${PORT} (DB: ${DB_PATH})`);
