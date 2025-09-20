@@ -12,7 +12,8 @@ import twilio from 'twilio';
 import { createHash } from 'crypto';
 
 import { makeJwtAuth, insertEvent, freeBusy } from './gcal.js';
-import { upsertFullClient, getFullClient, listFullClients, deleteClient, DB_PATH } from './db.js'; // SQLite-backed tenants
+import { upsertFullClient, getFullClient, listFullClients, deleteClient, DB_PATH , init as initDb} from './db.js'; // SQLite-backed tenants
+await initDb();
 import { google } from 'googleapis';
 import cron from 'node-cron';
 import leadsRouter from './routes/leads.js';
