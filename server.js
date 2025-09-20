@@ -677,8 +677,8 @@ app.post('/api/notify/send', async (req, res) => {
   try {
     const client = await getClientFromHeader(req);
     const { channel, to, message } = req.body || {};
-    if (channel !== 'sms') return res.status(400).json({ ok:false, error:'Only channel=\"sms\" is supported' });
-    if (!to || !message) return res.status(400).json({ ok:false, error:'Missing \"to\" or \"message\"' });
+    if (channel !== 'sms') return res.status(400).json({ ok:false, error:'Only channel="sms" is supported' });
+    if (!to || !message) return res.status(400).json({ ok:false, error:'Missing "to" or "message"' });
 
     const { smsClient, messagingServiceSid, fromNumber, configured } = smsConfig(client);
     if (!configured) return res.status(400).json({ ok:false, error:'SMS not configured (no fromNumber or messagingServiceSid)' });
