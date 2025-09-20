@@ -106,12 +106,12 @@ async function readJson(p, fallback = null) {
 async function writeJson(p, data) { await fs.writeFile(p, JSON.stringify(data, null, 2), 'utf8'); }
 
 // Helpers
-const isE164 = (s) => typeof s === 'string' && /^\+\d{7,15}$/.test(s);
-const normalizePhone = (s) => (s || '').trim().replace(/[^\d+]/g, '');
+const isE164 = (s) => typeof s === 'string' && /^\\+\\d{7,15}$/.test(s);
+const normalizePhone = (s) => (s || '').trim().replace(/[^\\d+]/g, '');
 // Simple {{var}} template renderer for SMS bodies
 function renderTemplate(str, vars = {}) {
   try {
-    return String(str).replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, k) => {
+    return String(str).replace(/\\{\\{\\s*([a-zA-Z0-9_]+)\\s*\\}\\}/g, (_, k) => {
       const v = vars[k];
       return (v === undefined || v === null) ? '' : String(v);
     });
@@ -566,7 +566,7 @@ const summary = `${service} — ${lead.name}`;
       `Tenant: ${client?.clientKey || 'default'}`
     ].filter(Boolean).join('\\n');
 
-    
+
 let event;
 try {
   // Deterministic event id to prevent duplicates on retries/same payloads
@@ -635,7 +635,7 @@ try {
   console.error('confirm sms failed', e?.message || e);
 }
 
-    
+
 // Append to Google Sheets ledger (optional)
 try {
   if (process.env.BOOKINGS_SHEET_ID) {
@@ -677,8 +677,8 @@ app.post('/api/notify/send', async (req, res) => {
   try {
     const client = await getClientFromHeader(req);
     const { channel, to, message } = req.body || {};
-    if (channel !== 'sms') return res.status(400).json({ ok:false, error:'Only channel="sms" is supported' });
-    if (!to || !message) return res.status(400).json({ ok:false, error:'Missing "to" or "message"' });
+    if (channel !== 'sms') return res.status(400).json({ ok:false, error:'Only channel=\"sms\" is supported' });
+    if (!to || !message) return res.status(400).json({ ok:false, error:'Missing \"to\" or \"message\"' });
 
     const { smsClient, messagingServiceSid, fromNumber, configured } = smsConfig(client);
     if (!configured) return res.status(400).json({ ok:false, error:'SMS not configured (no fromNumber or messagingServiceSid)' });
@@ -757,8 +757,8 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
     if (!isE164(from)) return res.type('text/plain').send('IGNORED');
 
     // YES / STOP intents (extend as needed)
-    const isYes  = /^\s*(yes|y|start|ok|sure|confirm)\s*$/i.test(bodyTxt);
-    const isStop = /^\s*(stop|unsubscribe|cancel|end|quit)\s*$/i.test(bodyTxt);
+    const isYes  = /^\\s*(yes|y|start|ok|sure|confirm)\\s*$/i.test(bodyTxt);
+    const isStop = /^\\s*(stop|unsubscribe|cancel|end|quit)\\s*$/i.test(bodyTxt);
 
     // Load & update the most recent lead matching this phone
     let leads = await readJson(LEADS_PATH, []);
@@ -1081,7 +1081,7 @@ app.get('/api/clients/:key', async (req, res) => {
   try {
     const c = await getFullClient(req.params.key);
     if (!c) return res.status(404).json({ ok:false, error: 'not found' });
-    res.json({ ok:true, client: c });
+  res.json({ ok:true, client: c });
   } catch (e) {
     res.status(500).json({ ok:false, error: String(e) });
   }
@@ -1400,7 +1400,7 @@ app.post('/api/leads/nudge', async (req, res) => {
     const client = await getClientFromHeader(req);
     if (!client) return res.status(401).json({ ok:false, error:'missing or unknown X-Client-Key' });
 
-    
+
 // Read a single lead by id
 app.get('/api/leads/:id', async (req, res) => {
   try {
@@ -1438,7 +1438,7 @@ const { id } = req.body || {};
   }
 });
 
-        
+
 await bootstrapClients(); // <--- run after routes loaded & DB ready
 
 app.listen(PORT, () => {
