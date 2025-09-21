@@ -12,8 +12,7 @@ import twilio from 'twilio';
 import { createHash } from 'crypto';
 
 import { makeJwtAuth, insertEvent, freeBusy } from './gcal.js';
-import { upsertFullClient, getFullClient, listFullClients, deleteClient, DB_PATH , init as initDb} from './db.js'; // SQLite-backed tenants
-await initDb();
+import { upsertFullClient, getFullClient, listFullClients, deleteClient, DB_PATH } from './db.js'; // SQLite-backed tenants
 import { google } from 'googleapis';
 import cron from 'node-cron';
 import leadsRouter from './routes/leads.js';
@@ -196,7 +195,10 @@ app.post('/api/leads', async (req, res) => {
     if (!service) return res.status(400).json({ ok:false, error:'Missing service' });
     if (!name || !phoneIn) return res.status(400).json({ ok:false, error:'Missing lead.name or lead.phone' });
 
-    const phone = normalizePhone(phoneIn);
+    const phoneRaw = normalizePhone(phoneIn);
+    // accept digits-only by auto-adding '+' before E.164 check
+    let phone = phoneRaw;
+    if (!phone.startsWith('+') && /^\d{7,15}$/.test(phone)) phone = '+' + phone;
     if (!isE164(phone)) return res.status(400).json({ ok:false, error:'invalid phone (E.164 required)' });
 
     const now = new Date().toISOString();
@@ -1306,7 +1308,9 @@ app.post('/api/leads', async (req, res) => {
     const service = (body.service ?? '').toString();
 
     const leadId = (body.id && String(body.id)) || ('lead_' + nanoid(8));
-    const phoneNorm = normalizePhone(phoneIn);
+    const phoneRaw = normalizePhone(phoneIn);
+    let phoneNorm = phoneRaw;
+    if (!phoneNorm.startsWith('+') && /^\d{7,15}$/.test(phoneNorm)) phoneNorm = '+' + phoneNorm;
     if (!isE164(phoneNorm)) return res.status(400).json({ ok:false, error:'invalid phone (E.164 required)' });
 
     const now = new Date().toISOString();
