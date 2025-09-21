@@ -157,37 +157,6 @@ async function readJson(p, fallback = null) {
 }
 async function writeJson(p, data) { await fs.writeFile(p, JSON.stringify(data, null, 2), 'utf8'); }
 
-// Helpers
-
-  const digits = cleaned.replace(/\D/g, '');
-
-  // GB heuristics
-  const reg = String(region || 'GB').toUpperCase();
-  if (reg === 'GB' || reg === 'UK') {
-    // 07XXXXXXXXX or 7XXXXXXXXX -> +447XXXXXXXXX
-    const m1 = digits.match(/^0?7(\d{9})$/);
-    if (m1) {
-      const cand = '+447' + m1[1];
-      if (isE164(cand)) return cand;
-    }
-    // 44XXXXXXXXXX -> +44XXXXXXXXXX
-    const m2 = digits.match(/^44(\d{9,10})$/);
-    if (m2) {
-      const cand = '+44' + m2[1];
-      if (isE164(cand)) return cand;
-    }
-  }
-
-  // Generic fallback: if it looks like a plausible international number, prefix '+'
-  if (/^\d{7,15}$/.test(digits)) {
-    const cand = '+' + digits;
-    if (isE164(cand)) return cand;
-  }
-
-  return null;
-}
-// Best-effort E.164 coercion (GB-focused)
-// Accepts common UK inputs like "07491 683261" or "7491683261" && returns "+447491683261".
 function ensureE164(input, country = 'GB') {
   const raw = (input || '').toString().trim();
   if (!raw) return null;
