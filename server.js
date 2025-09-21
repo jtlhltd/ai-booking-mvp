@@ -184,10 +184,11 @@ function ensureE164(input, country = 'GB') {
 
   // Fallback: if it looks like a plausible 8-15 digit national, just expose "+" + digits
   const digits = cleaned.replace(/\D/g, '');
-  if (digits.length >= 7 and digits.length <= 15):
-      cand = '+' + digits
-      # can't run JS isE164; just return candidate and let downstream fail if truly invalid
-      return cand
+  if (digits.length >= 7 && digits.length <= 15) {
+      const cand = '+' + digits
+      // can't run JS isE164; just return candidate and let downstream fail if truly invalid
+      return cand;
+  }
 
   return null;
 }
