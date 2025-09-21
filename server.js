@@ -157,6 +157,37 @@ async function readJson(p, fallback = null) {
 }
 async function writeJson(p, data) { await fs.writeFile(p, JSON.stringify(data, null, 2), 'utf8'); }
 
+// Helpers
+
+  const digits = cleaned.replace(/\D/g, '');
+
+  // GB heuristics
+  const reg = String(region || 'GB').toUpperCase();
+  if (reg === 'GB' || reg === 'UK') {
+    // 07XXXXXXXXX or 7XXXXXXXXX -> +447XXXXXXXXX
+    const m1 = digits.match(/^0?7(\d{9})$/);
+    if (m1) {
+      const cand = '+447' + m1[1];
+      if (isE164(cand)) return cand;
+    }
+    // 44XXXXXXXXXX -> +44XXXXXXXXXX
+    const m2 = digits.match(/^44(\d{9,10})$/);
+    if (m2) {
+      const cand = '+44' + m2[1];
+      if (isE164(cand)) return cand;
+    }
+  }
+
+  // Generic fallback: if it looks like a plausible international number, prefix '+'
+  if (/^\d{7,15}$/.test(digits)) {
+    const cand = '+' + digits;
+    if (isE164(cand)) return cand;
+  }
+
+  return null;
+}
+// Best-effort E.164 coercion (GB-focused)
+// Accepts common UK inputs like "07491 683261" or "7491683261" && returns "+447491683261".
 function ensureE164(input, country = 'GB') {
   const raw = (input || '').toString().trim();
   if (!raw) return null;
@@ -187,22 +218,50 @@ function ensureE164(input, country = 'GB') {
   // Fallback: if it looks like a plausible 8-15 digit national, just expose "+" + digits
   const digits = cleaned.replace(/\D/g, '');
   if (digits.length >= 7 && digits.length <= 15) {
-      const cand = '+' + digits;
-      // can't run JS isE164; just return candidate and let downstream fail if truly invalid
-      return cand;
-  }
+      cand = '+' + digits
+      # can't run JS isE164; just return candidate && let downstream fail if truly invalid
+      return cand
 
   return null;
 }
 // Simple {{var}} template renderer for SMS bodies
-function renderTemplate(str, vars = {}) {
+
+function renderTemplate(tpl, ctx = {}) {
   try {
-    return String(str).replace(/\\{\\{\\s*([a-zA-Z0-9_]+)\\s*\\}\\}/g, (_, k) => {
-      const v = vars[k];
-      return (v === undefined || v === null) ? '' : String(v);
+    if (typeof tpl !== 'string') return '';
+    return tpl.replace(/\{\{\s*([^}]+)\s*\}\}/g, (_, rawKey) => {
+      const key = String(rawKey || '').trim();
+      // Dotted path support: {{lead.name}}, {{client.displayName}}, etc.
+      const path = key.split('.');
+      let val = ctx;
+      for (const k of path) {
+        if (val == null) break;
+        val = val[k];
+      }
+      if (val == null) {
+        // Back-compat short keys
+        switch (key) {
+          case 'name':   return ctx.lead?.name ?? ctx.name ?? '';
+          case 'brand':
+          case 'business':
+          case 'clinic':
+          case 'company':
+            return ctx.brand ?? ctx.client?.displayName ?? ctx.client?.clientKey ?? ctx.tenant?.displayName ?? '';
+          case 'service': return ctx.service ?? '';
+          case 'when':    return ctx.when ?? '';
+          case 'tz':      return ctx.tz ?? '';
+          case 'link':    return ctx.link ?? '';
+          case 'sig':     return ctx.sig ?? '';
+          default:        return '';
+        }
+      }
+      return String(val);
     });
-  } catch { return String(str || ''); }
+  } catch {
+    return String(tpl || '');
+  }
 }
+
 
 
 // === Clients (DB-backed)
@@ -813,8 +872,8 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
     const bodyTxt = (req.body.Body || '').toString().trim();
 
     // Normalize numbers: strip spaces so E.164 comparisons work
-    const from = normalizePhone(rawFrom);
-    const to   = normalizePhone(rawTo);
+    const from = ensureE164(rawFrom, 'GB');
+    const to   = ensureE164(rawTo, 'GB');
 
     // Render log for grep
     console.log('[INBOUND SMS]', { from, to, body: bodyTxt });
@@ -844,7 +903,7 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
     if (!isE164(from)) return res.type('text/plain').send('IGNORED');
 
     // YES / STOP intents (extend as needed)
-    const isYes  = /^\\s*(yes|y|start|ok|sure|confirm)\\s*$/i.test(bodyTxt);
+    const isYes  = /^\s*(yes|y|start|ok|sure|confirm)\s*$/i.test(bodyTxt);
     const isStop = /^\\s*(stop|unsubscribe|cancel|end|quit)\\s*$/i.test(bodyTxt);
 
     // Load & update the most recent lead matching this phone
