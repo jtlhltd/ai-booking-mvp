@@ -1,3 +1,54 @@
+const isE164 = (s) => typeof s === 'string' && /^\+\d{7,15}$/.test(s);
+// Keep only + && digits
+const normalizePhone = (s) => (s || '').trim().replace(/[^\d+]/g, '');
+
+/**
+ * Accepts already-E.164, converts common GB local formats, or returns null.
+ */
+function coerceE164(input, region = 'GB') {
+  if (input == null) return null;
+  const raw = String(input).trim();
+  if (!raw) return null;
+
+  const cleaned = normalizePhone(raw);
+
+  // Already valid E.164?
+  if (isE164(cleaned)) return cleaned;
+
+  // Convert "00..." to "+"
+  if (/^00\d{6,}$/.test(cleaned)) {
+    const cand = '+' + cleaned.slice(2);
+    if (isE164(cand)) return cand;
+  }
+
+  const digits = cleaned.replace(/\D/g, '');
+
+  // GB-specific heuristics
+  const reg = String(region || 'GB').toUpperCase();
+  if (reg === 'GB' || reg === 'UK') {
+    // 07XXXXXXXXX (or 7XXXXXXXXX) -> +447XXXXXXXXX
+    const m1 = digits.match(/^0?7(\d{9})$/);
+    if (m1) {
+      const cand = '+447' + m1[1];
+      if (isE164(cand)) return cand;
+    }
+    // 44XXXXXXXXXX -> +44XXXXXXXXXX
+    const m2 = digits.match(/^44(\d{9,10})$/);
+    if (m2) {
+      const cand = '+44' + m2[1];
+      if (isE164(cand)) return cand;
+    }
+  }
+
+  // Fallback: if it looks like 7–15 digits, prefix +
+  if (/^\d{7,15}$/.test(digits)) {
+    const cand = '+' + digits;
+    if (isE164(cand)) return cand;
+  }
+
+  return null;
+}
+
 // server.js — AI Booking MVP (SQLite tenants + env bootstrap + richer tenant awareness)
 import 'dotenv/config';
 import express from 'express';
@@ -107,24 +158,6 @@ async function readJson(p, fallback = null) {
 async function writeJson(p, data) { await fs.writeFile(p, JSON.stringify(data, null, 2), 'utf8'); }
 
 // Helpers
-const isE164 = (s) => typeof s === 'string' && /^\+\d{7,15}$/.test(s);
-const normalizePhone = (s) => (s || '').trim().replace(/[^\d+]/g, '');
-// Robust coercion to E.164. Accepts already-E.164, GB local formats (07... or 44...),
-// and numbers with spaces or punctuation. Returns '+[digits]' or null.
-function coerceE164(input, region = 'GB') {
-  if (input == null) return null;
-  const raw = String(input).trim();
-  if (!raw) return null;
-  const cleaned = normalizePhone(raw);
-
-  // Already valid E.164
-  if (isE164(cleaned)) return cleaned;
-
-  // Convert common international '00' prefix to '+'
-  if (/^00\d{6,}$/.test(cleaned)) {
-    const cand = '+' + cleaned.slice(2);
-    if (isE164(cand)) return cand;
-  }
 
   const digits = cleaned.replace(/\D/g, '');
 
@@ -154,7 +187,7 @@ function coerceE164(input, region = 'GB') {
   return null;
 }
 // Best-effort E.164 coercion (GB-focused)
-// Accepts common UK inputs like "07491 683261" or "7491683261" and returns "+447491683261".
+// Accepts common UK inputs like "07491 683261" or "7491683261" && returns "+447491683261".
 function ensureE164(input, country = 'GB') {
   const raw = (input || '').toString().trim();
   if (!raw) return null;
@@ -184,9 +217,9 @@ function ensureE164(input, country = 'GB') {
 
   // Fallback: if it looks like a plausible 8-15 digit national, just expose "+" + digits
   const digits = cleaned.replace(/\D/g, '');
-  if (digits.length >= 7 and digits.length <= 15):
+  if (digits.length >= 7 && digits.length <= 15) {
       cand = '+' + digits
-      # can't run JS isE164; just return candidate and let downstream fail if truly invalid
+      # can't run JS isE164; just return candidate && let downstream fail if truly invalid
       return cand
 
   return null;
@@ -886,7 +919,7 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
 
     await writeJson(LEADS_PATH, leads);
 
-    // If user texted YES and we know the tenant, trigger a Vapi call right away (fire-and-forget)
+    // If user texted YES && we know the tenant, trigger a Vapi call right away (fire-and-forget)
     if (isYes && tenantKey && VAPI_PRIVATE_KEY) {
       try {
         const client = await getFullClient(tenantKey);
@@ -1433,7 +1466,7 @@ app.post('/api/leads/recall', async (req, res) => {
     }
 
     // compute top 3 slots quickly using freeBusy/find (reuse your existing slot logic if available)
-    // Here we keep it minimal and let the assistant propose times from its own logic.
+    // Here we keep it minimal && let the assistant propose times from its own logic.
     const payload = {
       assistantId,
       phoneNumberId,
