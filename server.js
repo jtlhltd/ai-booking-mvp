@@ -1409,19 +1409,7 @@ app.post('/api/leads/nudge', async (req, res) => {
     const client = await getClientFromHeader(req);
     if (!client) return res.status(401).json({ ok:false, error:'missing or unknown X-Client-Key' });
 
-
-// Read a single lead by id
-app.get('/api/leads/:id', async (req, res) => {
-  try {
-    const rows = await readJson(LEADS_PATH, []);
-    const lead = rows.find(r => r.id === req.params.id);
-    if (!lead) return res.status(404).json({ ok:false, error:'lead not found' });
-    res.json({ ok:true, lead });
-  } catch (e) {
-    res.status(500).json({ ok:false, error: String(e?.message || e) });
-  }
-});
-const { id } = req.body || {};
+    const { id } = req.body || {};
     if (!id) return res.status(400).json({ ok:false, error:'lead id required' });
 
     const rows = await readJson(LEADS_PATH, []);
@@ -1447,13 +1435,14 @@ const { id } = req.body || {};
   }
 });
 
-
-if (USE_PG) {
-  console.log('Postgres mode: skipping BOOTSTRAP_CLIENTS_JSON bootstrap.');
-} else {
-  await bootstrapClients();
-} // <--- run after routes loaded & DB ready
-
-app.listen(PORT, () => {
-  console.log(`AI Booking MVP listening on http://localhost:${PORT} (DB: ${DB_PATH})`);
+// Read a single lead by id (moved outside of /nudge handler)
+app.get('/api/leads/:id', async (req, res) => {
+  try {
+    const rows = await readJson(LEADS_PATH, []);
+    const lead = rows.find(r => r.id === req.params.id);
+    if (!lead) return res.status(404).json({ ok:false, error:'lead not found' });
+    res.json({ ok:true, lead });
+  } catch (e) {
+    res.status(500).json({ ok:false, error: String(e?.message || e) });
+  }
 });
