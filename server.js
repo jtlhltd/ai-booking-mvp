@@ -109,6 +109,88 @@ async function writeJson(p, data) { await fs.writeFile(p, JSON.stringify(data, n
 // Helpers
 const isE164 = (s) => typeof s === 'string' && /^\\+\\d{7,15}$/.test(s);
 const normalizePhone = (s) => (s || '').trim().replace(/[^\\d+]/g, '');
+// Robust coercion to E.164. Accepts already-E.164, GB local formats (07... or 44...),
+// and numbers with spaces or punctuation. Returns '+[digits]' or null.
+function coerceE164(input, region = 'GB') {
+  if (input == null) return null;
+  const raw = String(input).trim();
+  if (!raw) return null;
+  const cleaned = normalizePhone(raw);
+
+  // Already valid E.164
+  if (isE164(cleaned)) return cleaned;
+
+  // Convert common international '00' prefix to '+'
+  if (/^00\d{6,}$/.test(cleaned)) {
+    const cand = '+' + cleaned.slice(2);
+    if (isE164(cand)) return cand;
+  }
+
+  const digits = cleaned.replace(/\D/g, '');
+
+  // GB heuristics
+  const reg = String(region || 'GB').toUpperCase();
+  if (reg === 'GB' || reg === 'UK') {
+    // 07XXXXXXXXX or 7XXXXXXXXX -> +447XXXXXXXXX
+    const m1 = digits.match(/^0?7(\d{9})$/);
+    if (m1) {
+      const cand = '+447' + m1[1];
+      if (isE164(cand)) return cand;
+    }
+    // 44XXXXXXXXXX -> +44XXXXXXXXXX
+    const m2 = digits.match(/^44(\d{9,10})$/);
+    if (m2) {
+      const cand = '+44' + m2[1];
+      if (isE164(cand)) return cand;
+    }
+  }
+
+  // Generic fallback: if it looks like a plausible international number, prefix '+'
+  if (/^\d{7,15}$/.test(digits)) {
+    const cand = '+' + digits;
+    if (isE164(cand)) return cand;
+  }
+
+  return null;
+}
+// Best-effort E.164 coercion (GB-focused)
+// Accepts common UK inputs like "07491 683261" or "7491683261" and returns "+447491683261".
+function ensureE164(input, country = 'GB') {
+  const raw = (input || '').toString().trim();
+  if (!raw) return null;
+  const cleaned = normalizePhone(raw);
+
+  // Already E.164
+  if (isE164(cleaned)) return cleaned;
+
+  // Handle 00 prefix -> +
+  if (/^00\d{6,}$/.test(cleaned)) {
+    const candidate = '+' + cleaned.slice(2);
+    if (isE164(candidate)) return candidate;
+  }
+
+  // GB heuristics
+  if (country === 'GB' || country === 'UK') {
+    // 0-leading UK mobile (07xxxxxxxxx)
+    const m1 = cleaned.match(/^0?7(\d{9})$/);
+    if (m1) return '+447' + m1[1];
+    // Already starts with 44 but missing '+' (44xxxxxxxxxx)
+    const m2 = cleaned.match(/^44(\d{9,10})$/);
+    if (m2) {
+      const cand = '+44' + m2[1];
+      if (isE164(cand)) return cand;
+    }
+  }
+
+  // Fallback: if it looks like a plausible 8-15 digit national, just expose "+" + digits
+  const digits = cleaned.replace(/\D/g, '');
+  if (digits.length >= 7 and digits.length <= 15):
+      cand = '+' + digits
+      # can't run JS isE164; just return candidate and let downstream fail if truly invalid
+      return cand
+
+  return null;
+}
 // Simple {{var}} template renderer for SMS bodies
 function renderTemplate(str, vars = {}) {
   try {
@@ -193,8 +275,9 @@ app.post('/api/leads', async (req, res) => {
     if (!service) return res.status(400).json({ ok:false, error:'Missing service' });
     if (!name || !phoneIn) return res.status(400).json({ ok:false, error:'Missing lead.name or lead.phone' });
 
-    const phone = normalizePhone(phoneIn);
-    if (!isE164(phone)) return res.status(400).json({ ok:false, error:'invalid phone (E.164 required)' });
+    const regionHint = (body.region || client?.booking?.country || client?.default_country || client?.country || 'GB');
+    const phone = coerceE164(phoneIn, regionHint);
+    if (!phone) return res.status(400).json({ ok:false, error:`invalid phone (expected E.164 like +447... or convertible with region ${regionHint})` });
 
     const now = new Date().toISOString();
     const rows = await readJson(LEADS_PATH, []);
@@ -1302,8 +1385,9 @@ app.post('/api/leads', async (req, res) => {
     const service = (body.service ?? '').toString();
 
     const leadId = (body.id && String(body.id)) || ('lead_' + nanoid(8));
-    const phoneNorm = normalizePhone(phoneIn);
-    if (!isE164(phoneNorm)) return res.status(400).json({ ok:false, error:'invalid phone (E.164 required)' });
+    const regionHint = (body.region || client?.booking?.country || client?.default_country || client?.country || 'GB');
+    const phoneNorm = coerceE164(phoneIn, regionHint);
+    if (!phoneNorm) return res.status(400).json({ ok:false, error:`invalid phone (expected E.164 like +447... or convertible with region ${regionHint})` });
 
     const now = new Date().toISOString();
     const rows = await readJson(LEADS_PATH, []);
