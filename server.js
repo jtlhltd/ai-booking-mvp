@@ -12,7 +12,8 @@ import twilio from 'twilio';
 import { createHash } from 'crypto';
 
 import { makeJwtAuth, insertEvent, freeBusy } from './gcal.js';
-import { upsertFullClient, getFullClient, listFullClients, deleteClient, DB_PATH } from './db.js'; // SQLite-backed tenants
+import { init as initDb,  upsertFullClient, getFullClient, listFullClients, deleteClient, DB_PATH } from './db.js'; // SQLite-backed tenants
+await initDb();
 import { google } from 'googleapis';
 import cron from 'node-cron';
 import leadsRouter from './routes/leads.js';
@@ -21,9 +22,6 @@ import vapiWebhooks from './routes/vapi-webhooks.js';
 
 
 const app = express();
-// Force Postgres mode flag (skip SQLite bootstrap when using Postgres)
-const USE_PG = (process.env.DB_TYPE || '').toLowerCase() === 'postgres' || (DB_PATH === 'postgres');
-
 
 // --- healthz: report which integrations are configured (without leaking secrets)
 app.get('/healthz', (req, res) => {
@@ -195,10 +193,7 @@ app.post('/api/leads', async (req, res) => {
     if (!service) return res.status(400).json({ ok:false, error:'Missing service' });
     if (!name || !phoneIn) return res.status(400).json({ ok:false, error:'Missing lead.name or lead.phone' });
 
-    const phoneRaw = normalizePhone(phoneIn);
-    // accept digits-only by auto-adding '+' before E.164 check
-    let phone = phoneRaw;
-    if (!phone.startsWith('+') && /^\d{7,15}$/.test(phone)) phone = '+' + phone;
+    const phone = normalizePhone(phoneIn);
     if (!isE164(phone)) return res.status(400).json({ ok:false, error:'invalid phone (E.164 required)' });
 
     const now = new Date().toISOString();
@@ -374,7 +369,6 @@ async function withRetry(fn, { retries = 2, delayMs = 250 } = {}) {
 
 // --- Bootstrap tenants from env (for free Render without disk) ---
 async function bootstrapClients() {
-  if (USE_PG) return;
   try {
     const existing = await listFullClients();
     if (existing.length > 0) return;
@@ -1308,9 +1302,7 @@ app.post('/api/leads', async (req, res) => {
     const service = (body.service ?? '').toString();
 
     const leadId = (body.id && String(body.id)) || ('lead_' + nanoid(8));
-    const phoneRaw = normalizePhone(phoneIn);
-    let phoneNorm = phoneRaw;
-    if (!phoneNorm.startsWith('+') && /^\d{7,15}$/.test(phoneNorm)) phoneNorm = '+' + phoneNorm;
+    const phoneNorm = normalizePhone(phoneIn);
     if (!isE164(phoneNorm)) return res.status(400).json({ ok:false, error:'invalid phone (E.164 required)' });
 
     const now = new Date().toISOString();
@@ -1409,7 +1401,19 @@ app.post('/api/leads/nudge', async (req, res) => {
     const client = await getClientFromHeader(req);
     if (!client) return res.status(401).json({ ok:false, error:'missing or unknown X-Client-Key' });
 
-    const { id } = req.body || {};
+
+// Read a single lead by id
+app.get('/api/leads/:id', async (req, res) => {
+  try {
+    const rows = await readJson(LEADS_PATH, []);
+    const lead = rows.find(r => r.id === req.params.id);
+    if (!lead) return res.status(404).json({ ok:false, error:'lead not found' });
+    res.json({ ok:true, lead });
+  } catch (e) {
+    res.status(500).json({ ok:false, error: String(e?.message || e) });
+  }
+});
+const { id } = req.body || {};
     if (!id) return res.status(400).json({ ok:false, error:'lead id required' });
 
     const rows = await readJson(LEADS_PATH, []);
@@ -1435,14 +1439,9 @@ app.post('/api/leads/nudge', async (req, res) => {
   }
 });
 
-// Read a single lead by id (moved outside of /nudge handler)
-app.get('/api/leads/:id', async (req, res) => {
-  try {
-    const rows = await readJson(LEADS_PATH, []);
-    const lead = rows.find(r => r.id === req.params.id);
-    if (!lead) return res.status(404).json({ ok:false, error:'lead not found' });
-    res.json({ ok:true, lead });
-  } catch (e) {
-    res.status(500).json({ ok:false, error: String(e?.message || e) });
-  }
+
+await bootstrapClients(); // <--- run after routes loaded & DB ready
+
+app.listen(process.env.PORT ? Number(process.env.PORT) : 10000, '0.0.0.0', () => {
+  console.log(`AI Booking MVP listening on http://localhost:${PORT} (DB: ${DB_PATH})`);
 });
