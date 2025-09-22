@@ -13,7 +13,7 @@ try {
     $headers = @{ "X-API-Key" = $API_KEY }
     $health = Invoke-RestMethod -Uri "$BASE_URL/admin/system-health" -Headers $headers
     
-    Write-Host "✅ System Health Check Passed!" -ForegroundColor Green
+    Write-Host "System Health Check Passed!" -ForegroundColor Green
     Write-Host "System Status:" -ForegroundColor Cyan
     Write-Host "  - Overall Status: $($health.status)"
     Write-Host "  - Database: $($health.health.database.status)"
@@ -23,7 +23,7 @@ try {
     Write-Host "  - Uptime: $([math]::Round($health.health.system.uptime/60, 1)) minutes"
     Write-Host ""
 } catch {
-    Write-Host "❌ System Health Check Failed: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "System Health Check Failed: $($_.Exception.Message)" -ForegroundColor Red
     Write-Host ""
 }
 
@@ -33,7 +33,7 @@ try {
     $headers = @{ "X-API-Key" = $API_KEY }
     $metrics = Invoke-RestMethod -Uri "$BASE_URL/admin/metrics" -Headers $headers
     
-    Write-Host "✅ Metrics Dashboard Working!" -ForegroundColor Green
+    Write-Host "Metrics Dashboard Working!" -ForegroundColor Green
     Write-Host "Key Metrics:" -ForegroundColor Cyan
     Write-Host "  - Total Leads: $($metrics.metrics.overview.totalLeads)"
     Write-Host "  - Total Calls: $($metrics.metrics.overview.totalCalls)"
@@ -42,7 +42,7 @@ try {
     Write-Host "  - Success Rate: $([math]::Round($metrics.metrics.performance.successRate, 1))%"
     Write-Host ""
 } catch {
-    Write-Host "❌ Metrics Test Failed: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "Metrics Test Failed: $($_.Exception.Message)" -ForegroundColor Red
     Write-Host ""
 }
 
@@ -53,17 +53,17 @@ try {
     $leadScore = Invoke-RestMethod -Uri "$BASE_URL/admin/lead-score?phone=+447491683261" -Headers $headers
     
     if ($leadScore.found) {
-        Write-Host "✅ Lead Scoring Working!" -ForegroundColor Green
+        Write-Host "Lead Scoring Working!" -ForegroundColor Green
         Write-Host "Lead Analysis:" -ForegroundColor Cyan
         Write-Host "  - Score: $($leadScore.score)/100"
         Write-Host "  - Priority: $($leadScore.priority)"
         Write-Host "  - Breakdown: $($leadScore.breakdown | ConvertTo-Json -Compress)"
     } else {
-        Write-Host "ℹ️ No lead found (normal if no SMS sent yet)" -ForegroundColor Blue
+        Write-Host "No lead found (normal if no SMS sent yet)" -ForegroundColor Blue
     }
     Write-Host ""
 } catch {
-    Write-Host "❌ Lead Scoring Test Failed: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "Lead Scoring Test Failed: $($_.Exception.Message)" -ForegroundColor Red
     Write-Host ""
 }
 
@@ -73,18 +73,18 @@ try {
     $headers = @{ "X-API-Key" = $API_KEY }
     $tenants = Invoke-RestMethod -Uri "$BASE_URL/admin/check-tenants" -Headers $headers
     
-    Write-Host "✅ Tenant Configuration Check Passed!" -ForegroundColor Green
+    Write-Host "Tenant Configuration Check Passed!" -ForegroundColor Green
     Write-Host "Tenant Summary:" -ForegroundColor Cyan
     foreach ($tenant in $tenants.tenants) {
         Write-Host "  - $($tenant.tenantKey): $($tenant.fromNumber)"
     }
     
     if ($tenants.duplicates.fromNumber.Count -gt 0) {
-        Write-Host "⚠️ Duplicate From Numbers: $($tenants.duplicates.fromNumber -join ', ')" -ForegroundColor Yellow
+        Write-Host "Duplicate From Numbers: $($tenants.duplicates.fromNumber -join ', ')" -ForegroundColor Yellow
     }
     Write-Host ""
 } catch {
-    Write-Host "❌ Tenant Check Failed: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "Tenant Check Failed: $($_.Exception.Message)" -ForegroundColor Red
     Write-Host ""
 }
 
@@ -94,7 +94,7 @@ try {
     $response = Invoke-WebRequest -Uri "$BASE_URL/health" -Method GET
     $headers = $response.Headers
     
-    Write-Host "✅ Security Headers Check:" -ForegroundColor Green
+    Write-Host "Security Headers Check:" -ForegroundColor Green
     Write-Host "Security Headers:" -ForegroundColor Cyan
     Write-Host "  - X-Content-Type-Options: $($headers['X-Content-Type-Options'])"
     Write-Host "  - X-Frame-Options: $($headers['X-Frame-Options'])"
@@ -102,7 +102,7 @@ try {
     Write-Host "  - Referrer-Policy: $($headers['Referrer-Policy'])"
     Write-Host ""
 } catch {
-    Write-Host "❌ Security Headers Test Failed: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "Security Headers Test Failed: $($_.Exception.Message)" -ForegroundColor Red
     Write-Host ""
 }
 
@@ -120,7 +120,7 @@ try {
             $successCount++
         } catch {
             if ($_.Exception.Response.StatusCode -eq 429) {
-                Write-Host "  ✅ Rate limiting working (request $i blocked)" -ForegroundColor Green
+                Write-Host "  Rate limiting working (request $i blocked)" -ForegroundColor Green
                 $errorCount++
             } else {
                 $errorCount++
@@ -134,7 +134,7 @@ try {
     Write-Host "  - Blocked requests: $errorCount"
     Write-Host ""
 } catch {
-    Write-Host "❌ Rate Limiting Test Failed: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "Rate Limiting Test Failed: $($_.Exception.Message)" -ForegroundColor Red
     Write-Host ""
 }
 
@@ -144,12 +144,12 @@ try {
     # Test invalid endpoint
     try {
         $response = Invoke-RestMethod -Uri "$BASE_URL/invalid-endpoint" -Method GET
-        Write-Host "❌ Should have returned 404" -ForegroundColor Red
+        Write-Host "Should have returned 404" -ForegroundColor Red
     } catch {
         if ($_.Exception.Response.StatusCode -eq 404) {
-            Write-Host "✅ 404 Error Handling Working" -ForegroundColor Green
+            Write-Host "404 Error Handling Working" -ForegroundColor Green
         } else {
-            Write-Host "❌ Unexpected error: $($_.Exception.Response.StatusCode)" -ForegroundColor Red
+            Write-Host "Unexpected error: $($_.Exception.Response.StatusCode)" -ForegroundColor Red
         }
     }
     
@@ -157,30 +157,30 @@ try {
     try {
         $badHeaders = @{ "X-API-Key" = "invalid-key" }
         $response = Invoke-RestMethod -Uri "$BASE_URL/admin/metrics" -Headers $badHeaders
-        Write-Host "❌ Should have returned 401" -ForegroundColor Red
+        Write-Host "Should have returned 401" -ForegroundColor Red
     } catch {
         if ($_.Exception.Response.StatusCode -eq 401) {
-            Write-Host "✅ 401 Unauthorized Handling Working" -ForegroundColor Green
+            Write-Host "401 Unauthorized Handling Working" -ForegroundColor Green
         } else {
-            Write-Host "❌ Unexpected error: $($_.Exception.Response.StatusCode)" -ForegroundColor Red
+            Write-Host "Unexpected error: $($_.Exception.Response.StatusCode)" -ForegroundColor Red
         }
     }
     
     Write-Host ""
 } catch {
-    Write-Host "❌ Error Handling Test Failed: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "Error Handling Test Failed: $($_.Exception.Message)" -ForegroundColor Red
     Write-Host ""
 }
 
-Write-Host "🎉 Hardened System Testing Complete!" -ForegroundColor Green
+Write-Host "Hardened System Testing Complete!" -ForegroundColor Green
 Write-Host ""
 Write-Host "System Status Summary:" -ForegroundColor Cyan
-Write-Host "✅ Enhanced Error Handling & Retry Logic"
-Write-Host "✅ Security Headers & Input Validation"
-Write-Host "✅ Rate Limiting & Performance Monitoring"
-Write-Host "✅ Comprehensive Health Checks"
-Write-Host "✅ Real-time Metrics & Lead Scoring"
-Write-Host "✅ Business Hours Detection"
+Write-Host "Enhanced Error Handling and Retry Logic"
+Write-Host "Security Headers and Input Validation"
+Write-Host "Rate Limiting and Performance Monitoring"
+Write-Host "Comprehensive Health Checks"
+Write-Host "Real-time Metrics and Lead Scoring"
+Write-Host "Business Hours Detection"
 Write-Host ""
-Write-Host "Your AI Booking MVP is now production-ready! 🚀" -ForegroundColor Green
+Write-Host "Your AI Booking MVP is now production-ready!" -ForegroundColor Green
 Write-Host ""
