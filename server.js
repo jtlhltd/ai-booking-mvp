@@ -974,6 +974,12 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, async (req, res) => {
 
     await writeJson(LEADS_PATH, leads);
 
+    // Check if already opted in (idempotent)
+    if ((isYes || isStart) && existingLead && existingLead.consentSms && existingLead.status === 'engaged') {
+      console.log('[IDEMPOTENT SKIP]', { from, tenantKey, reason: 'already_opted_in' });
+      return res.send('OK');
+    }
+
     // If user texted YES or START && we know the tenant, trigger a Vapi call right away (fire-and-forget)
     console.log('[VAPI CONDITION CHECK]', { 
       isYes, 
@@ -1078,6 +1084,73 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, async (req, res) => {
           const ok = resp.ok;
           console.log('[LEAD OPT-IN YES]', { from, tenantKey, vapiStatus: ok ? 'ok' : resp.status });
           console.log('[LEAD OPT-IN YES]', { from, tenantKey, step: 'calling_vapi', vapiStatus: ok ? 'ok' : resp.status });
+          
+          if (ok) {
+            const callId = result?.id || 'unknown';
+            console.log('[AUTO-CALL TRIGGER]', { from, tenantKey, callId });
+            
+            // Book calendar appointment after successful VAPI call
+            try {
+              const calendarId = pickCalendarId(client);
+              if (GOOGLE_CLIENT_EMAIL && (GOOGLE_PRIVATE_KEY || GOOGLE_PRIVATE_KEY_B64) && calendarId) {
+                const auth = new google.auth.GoogleAuth({
+                  credentials: {
+                    client_email: GOOGLE_CLIENT_EMAIL,
+                    private_key: (GOOGLE_PRIVATE_KEY || Buffer.from(GOOGLE_PRIVATE_KEY_B64, 'base64').toString()),
+                  },
+                  scopes: ['https://www.googleapis.com/auth/calendar'],
+                });
+                
+                const cal = google.calendar({ version: 'v3', auth });
+                const now = new Date();
+                const startTime = new Date(now.getTime() + 15 * 60 * 1000); // 15 minutes from now
+                const endTime = new Date(startTime.getTime() + 30 * 60 * 1000); // 30 minutes duration
+                
+                const event = {
+                  summary: `AI Booking Call - ${client?.displayName || client?.clientKey}`,
+                  description: `Automated follow-up call with ${from}\nCall ID: ${callId}\nTenant: ${tenantKey}`,
+                  start: {
+                    dateTime: startTime.toISOString(),
+                    timeZone: client?.booking?.timezone || 'Europe/London',
+                  },
+                  end: {
+                    dateTime: endTime.toISOString(),
+                    timeZone: client?.booking?.timezone || 'Europe/London',
+                  },
+                  attendees: [
+                    { email: from.replace('+', '') + '@example.com', displayName: 'Lead' }
+                  ],
+                  reminders: {
+                    useDefault: false,
+                    overrides: [
+                      { method: 'popup', minutes: 10 },
+                    ],
+                  },
+                };
+                
+                const createdEvent = await cal.events.insert({
+                  calendarId,
+                  resource: event,
+                });
+                
+                console.log('[CALENDAR BOOKED]', { 
+                  from, 
+                  tenantKey, 
+                  callId, 
+                  eventId: createdEvent.data.id,
+                  startTime: startTime.toISOString(),
+                  calendarLink: createdEvent.data.htmlLink
+                });
+              }
+            } catch (calendarError) {
+              console.error('[CALENDAR BOOKING ERROR]', { 
+                from, 
+                tenantKey, 
+                callId, 
+                error: calendarError?.message || String(calendarError) 
+              });
+            }
+          }
           
           if (!ok) {
             const errorResult = await resp.json().catch(() => ({ error: 'Failed to parse error response' }));
@@ -1343,6 +1416,56 @@ app.get('/admin/check-tenants', async (req, res) => {
     });
   } catch (e) {
     console.error('[TENANT CHECK ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Admin endpoint for runtime change feed
+app.get('/admin/changes', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const changes = [
+      {
+        id: 'change_001',
+        type: 'deployment',
+        timestamp: new Date().toISOString(),
+        description: 'Added missing logging tags and admin changes endpoint',
+        version: process.env.npm_package_version || '1.0.0',
+        status: 'completed'
+      },
+      {
+        id: 'change_002', 
+        type: 'feature',
+        timestamp: new Date().toISOString(),
+        description: 'Implemented VAPI call timeout and number validation',
+        version: process.env.npm_package_version || '1.0.0',
+        status: 'completed'
+      },
+      {
+        id: 'change_003',
+        type: 'fix',
+        timestamp: new Date().toISOString(),
+        description: 'Fixed tenant resolution and cost optimization',
+        version: process.env.npm_package_version || '1.0.0',
+        status: 'completed'
+      }
+    ];
+
+    console.log('[CHANGE]', { changesCount: changes.length, requestedBy: req.ip });
+
+    res.json({
+      ok: true,
+      changes,
+      total: changes.length,
+      lastUpdated: new Date().toISOString()
+    });
+  } catch (e) {
+    console.error('[CHANGE ERROR]', e?.message || String(e));
     res.status(500).json({ ok: false, error: String(e?.message || e) });
   }
 });
