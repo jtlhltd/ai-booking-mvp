@@ -108,6 +108,54 @@ const PORT = process.env.PORT || 3000;
 const ORIGIN = process.env.VAPI_ORIGIN || '*';
 const API_KEY = process.env.API_KEY || '';
 
+// VAPI Token Protection - prevent unnecessary calls during testing
+const VAPI_TEST_MODE = process.env.VAPI_TEST_MODE === 'true' || process.env.NODE_ENV === 'test';
+const VAPI_DRY_RUN = process.env.VAPI_DRY_RUN === 'true';
+
+// Rate limiting store (in production, use Redis)
+const rateLimitStore = new Map();
+const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
+const RATE_LIMIT_MAX_REQUESTS = 10; // 10 requests per minute per IP
+
+// Input validation helpers
+function validatePhoneNumber(phone) {
+  if (!phone || typeof phone !== 'string') return false;
+  const cleaned = phone.replace(/\D/g, '');
+  return cleaned.length >= 10 && cleaned.length <= 15;
+}
+
+function validateSmsBody(body) {
+  if (!body || typeof body !== 'string') return false;
+  return body.trim().length > 0 && body.length <= 1600; // SMS character limit
+}
+
+// Rate limiting middleware
+function rateLimit(req, res, next) {
+  const ip = req.ip || req.connection.remoteAddress;
+  const now = Date.now();
+  const windowStart = now - RATE_LIMIT_WINDOW;
+  
+  // Clean old entries
+  for (const [key, timestamp] of rateLimitStore.entries()) {
+    if (timestamp < windowStart) {
+      rateLimitStore.delete(key);
+    }
+  }
+  
+  // Check current IP
+  const requests = Array.from(rateLimitStore.entries())
+    .filter(([key, timestamp]) => key.startsWith(ip) && timestamp > windowStart)
+    .length;
+  
+  if (requests >= RATE_LIMIT_MAX_REQUESTS) {
+    console.log('[RATE LIMIT]', { ip, requests, limit: RATE_LIMIT_MAX_REQUESTS });
+    return res.status(429).json({ error: 'Too many requests' });
+  }
+  
+  rateLimitStore.set(`${ip}-${now}`, now);
+  next();
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
 const DATA_DIR   = path.join(__dirname, 'data');
@@ -825,11 +873,27 @@ const VAPI_PRIVATE_KEY     = process.env.VAPI_PRIVATE_KEY || '';
 const VAPI_ASSISTANT_ID    = process.env.VAPI_ASSISTANT_ID || '';
 const VAPI_PHONE_NUMBER_ID = process.env.VAPI_PHONE_NUMBER_ID || '';
 
-app.post('/webhooks/twilio-inbound', async (req, res) => {
+app.post('/webhooks/twilio-inbound', rateLimit, async (req, res) => {
   try {
     const rawFrom = (req.body.From || '').toString();
     const rawTo   = (req.body.To   || '').toString();
     const bodyTxt = (req.body.Body || '').toString().trim();
+
+    // Input validation
+    if (!validatePhoneNumber(rawFrom)) {
+      console.log('[INVALID INPUT]', { field: 'From', value: rawFrom, reason: 'invalid_phone' });
+      return res.status(400).send('Invalid phone number');
+    }
+    
+    if (!validatePhoneNumber(rawTo)) {
+      console.log('[INVALID INPUT]', { field: 'To', value: rawTo, reason: 'invalid_phone' });
+      return res.status(400).send('Invalid phone number');
+    }
+    
+    if (!validateSmsBody(bodyTxt)) {
+      console.log('[INVALID INPUT]', { field: 'Body', value: bodyTxt, reason: 'invalid_body' });
+      return res.status(400).send('Invalid message body');
+    }
 
     // Normalize numbers: strip spaces so E.164 comparisons work
     const from = normalizePhoneE164(rawFrom);
@@ -837,6 +901,17 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
 
     // Render log for grep
     console.log('[INBOUND SMS]', { from, to, body: bodyTxt });
+    
+    // Analytics logging
+    console.log('[SMS_ANALYTICS]', {
+      timestamp: new Date().toISOString(),
+      from,
+      to,
+      bodyLength: bodyTxt.length,
+      messageType: bodyTxt.toUpperCase(),
+      ip: req.ip || req.connection.remoteAddress,
+      userAgent: req.get('User-Agent') || 'unknown'
+    });
   // --- derive tenantKey from header, inbound 'To', or MessagingServiceSid ---
   const headerKey = req.get('X-Client-Key');
   const toE164 = normalizePhoneE164(req.body.To, 'GB');
@@ -901,6 +976,17 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
 
     // If user texted YES or START && we know the tenant, trigger a Vapi call right away (fire-and-forget)
     if ((isYes || isStart) && tenantKey && VAPI_PRIVATE_KEY) {
+      // VAPI Token Protection - prevent unnecessary calls during testing
+      if (VAPI_TEST_MODE || VAPI_DRY_RUN) {
+        console.log('[AUTO-CALL SKIPPED]', { 
+          tenantKey, 
+          from, 
+          reason: VAPI_TEST_MODE ? 'test_mode' : 'dry_run',
+          wouldHaveCalled: true 
+        });
+        return res.send('OK');
+      }
+      
       try {
         const client = await getFullClient(tenantKey);
         if (client) {
