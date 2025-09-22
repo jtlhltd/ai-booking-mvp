@@ -76,6 +76,9 @@ import vapiWebhooks from './routes/vapi-webhooks.js';
 
 const app = express();
 
+// Trust proxy for rate limiting (required for Render)
+app.set('trust proxy', 1);
+
 // Serve static files from public directory
 app.use(express.static('public'));
 
