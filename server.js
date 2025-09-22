@@ -124,7 +124,14 @@ app.post('/api/create-client', async (req, res) => {
   try {
     // Check API key
     const apiKey = req.get('X-API-Key');
+    console.log('[API DEBUG]', { 
+      receivedKey: apiKey ? apiKey.substring(0, 8) + '...' : 'none',
+      expectedKey: process.env.API_KEY ? process.env.API_KEY.substring(0, 8) + '...' : 'none',
+      headers: req.headers
+    });
+    
     if (apiKey !== process.env.API_KEY) {
+      console.log('[API ERROR] Unauthorized request');
       return res.status(401).json({ ok: false, error: 'Unauthorized' });
     }
 
