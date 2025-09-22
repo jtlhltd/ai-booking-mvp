@@ -157,7 +157,35 @@ async function readJson(p, fallback = null) {
 }
 async function writeJson(p, data) { await fs.writeFile(p, JSON.stringify(data, null, 2), 'utf8'); }
 
+// Helpers
 
+  const digits = cleaned.replace(/\D/g, '');
+
+  // GB heuristics
+  const reg = String(region || 'GB').toUpperCase();
+  if (reg === 'GB' || reg === 'UK') {
+    // 07XXXXXXXXX or 7XXXXXXXXX -> +447XXXXXXXXX
+    const m1 = digits.match(/^0?7(\d{9})$/);
+    if (m1) {
+      const cand = '+447' + m1[1];
+      if (isE164(cand)) return cand;
+    }
+    // 44XXXXXXXXXX -> +44XXXXXXXXXX
+    const m2 = digits.match(/^44(\d{9,10})$/);
+    if (m2) {
+      const cand = '+44' + m2[1];
+      if (isE164(cand)) return cand;
+    }
+  }
+
+  // Generic fallback: if it looks like a plausible international number, prefix '+'
+  if (/^\d{7,15}$/.test(digits)) {
+    const cand = '+' + digits;
+    if (isE164(cand)) return cand;
+  }
+
+  return null;
+}
 // Best-effort E.164 coercion (GB-focused)
 // Accepts common UK inputs like "07491 683261" or "7491683261" && returns "+447491683261".
 function ensureE164(input, country = 'GB') {
@@ -190,17 +218,16 @@ function ensureE164(input, country = 'GB') {
   // Fallback: if it looks like a plausible 8-15 digit national, just expose "+" + digits
   const digits = cleaned.replace(/\D/g, '');
   if (digits.length >= 7 && digits.length <= 15) {
-      const cand = '+' + digits;
-      // can't run JS isE164; just return candidate and let downstream fail if truly invalid
-      return cand;
-  }
+      cand = '+' + digits
+      # can't run JS isE164; just return candidate && let downstream fail if truly invalid
+      return cand
 
   return null;
 }
 // Simple {{var}} template renderer for SMS bodies
 function renderTemplate(str, vars = {}) {
   try {
-    return String(str).replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, k) => {
+    return String(str).replace(/\\{\\{\\s*([a-zA-Z0-9_]+)\\s*\\}\\}/g, (_, k) => {
       const v = vars[k];
       return (v === undefined || v === null) ? '' : String(v);
     });
@@ -816,8 +843,8 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
     const bodyTxt = (req.body.Body || '').toString().trim();
 
     // Normalize numbers: strip spaces so E.164 comparisons work
-    const from = ensureE164(rawFrom, 'GB');
-    const to   = ensureE164(rawTo, 'GB');
+    const from = normalizePhone(rawFrom);
+    const to   = normalizePhone(rawTo);
 
     // Render log for grep
     console.log('[INBOUND SMS]', { from, to, body: bodyTxt });
@@ -847,7 +874,8 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
     if (!isE164(from)) return res.type('text/plain').send('IGNORED');
 
     // YES / STOP intents (extend as needed)
-    const isYes  = /^\s*(yes|y|start|ok|sure|confirm)\s*$/i.test(bodyTxt);
+    const isYes  = /^\s*(yes|y|ok|okay|sure|confirm)\s*$/i.test(bodyTxt);
+    const isStart = /^\s*(start|unstop)\s*$/i.test(bodyTxt);
     const isStop = /^\\s*(stop|unsubscribe|cancel|end|quit)\\s*$/i.test(bodyTxt);
 
     // Load & update the most recent lead matching this phone
@@ -868,7 +896,7 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
         lastInboundText: bodyTxt,
         lastInboundFrom: from,
         lastInboundTo: to,
-        consentSms: isStop ? false : (isYes ? true : (prev.consentSms ?? false)),
+        consentSms: isStop ? false : ((isYes || isStart) ? true : (prev.consentSms ?? false)),
         status: isStop ? 'opted_out' : (isYes ? 'engaged' : (prev.status || 'new')),
         updatedAt: now,
       };
@@ -882,7 +910,7 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
         lastInboundText: bodyTxt,
         lastInboundFrom: from,
         lastInboundTo: to,
-        consentSms: isYes ? true : false,
+        consentSms: (isYes || isStart) ? true : false,
         status: isYes ? 'engaged' : 'new',
         createdAt: now,
         updatedAt: now,
