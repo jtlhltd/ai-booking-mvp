@@ -79,9 +79,13 @@ const app = express();
 // Serve static files from public directory
 app.use(express.static('public'));
 
-// Dashboard route
+// Dashboard routes
 app.get('/', (req, res) => {
   res.sendFile(new URL('./public/index.html', import.meta.url).pathname);
+});
+
+app.get('/tenant-dashboard', (req, res) => {
+  res.sendFile(new URL('./public/tenant-dashboard.html', import.meta.url).pathname);
 });
 
 // --- healthz: report which integrations are configured (without leaking secrets)
@@ -1875,6 +1879,88 @@ app.get('/admin/lead-score', async (req, res) => {
 });
 
 // System health and performance monitoring
+// Tenant management endpoints
+app.get('/admin/tenants', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const clients = await listFullClients();
+    const tenants = clients.map(client => ({
+      clientKey: client.clientKey,
+      displayName: client.displayName || client.clientKey,
+      timezone: client.timezone || 'Europe/London',
+      locale: client.locale || 'en-GB',
+      phone: client?.sms?.fromNumber || null,
+      messagingServiceSid: client?.sms?.messagingServiceSid || null,
+      status: 'active',
+      createdAt: client.createdAt || new Date().toISOString(),
+      lastActivity: client.lastActivity || null
+    }));
+
+    console.log('[TENANT LIST]', { tenantsCount: tenants.length, requestedBy: req.ip });
+
+    res.json({
+      ok: true,
+      tenants,
+      total: tenants.length
+    });
+  } catch (e) {
+    console.error('[TENANT LIST ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+app.get('/admin/tenants/:tenantKey', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { tenantKey } = req.params;
+    const client = await getFullClient(tenantKey);
+    
+    if (!client) {
+      return res.status(404).json({ ok: false, error: 'Tenant not found' });
+    }
+
+    const tenant = {
+      clientKey: client.clientKey,
+      displayName: client.displayName || client.clientKey,
+      timezone: client.timezone || 'Europe/London',
+      locale: client.locale || 'en-GB',
+      phone: client?.sms?.fromNumber || null,
+      messagingServiceSid: client?.sms?.messagingServiceSid || null,
+      vapiAssistantId: client?.vapi?.assistantId || null,
+      vapiPhoneNumberId: client?.vapi?.phoneNumberId || null,
+      calendarId: client?.calendarId || null,
+      businessHours: client?.businessHours || {
+        start: 9,
+        end: 17,
+        days: [1, 2, 3, 4, 5]
+      },
+      status: 'active',
+      createdAt: client.createdAt || new Date().toISOString(),
+      lastActivity: client.lastActivity || null
+    };
+
+    console.log('[TENANT DETAIL]', { tenantKey, requestedBy: req.ip });
+
+    res.json({
+      ok: true,
+      tenant
+    });
+  } catch (e) {
+    console.error('[TENANT DETAIL ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
 app.get('/admin/system-health', async (req, res) => {
   try {
     // Check API key
