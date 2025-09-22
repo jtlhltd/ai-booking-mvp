@@ -17,7 +17,7 @@ async function callVapi({ tenant, lead, service }) {
     assistantId,
     phoneNumberId,
     customer: { number: lead.phone, numberE164CheckEnabled: true },
-    maxDurationSeconds: 5, // Cut off after 5 seconds for testing to save costs
+    maxDurationSeconds: 10, // VAPI minimum is 10 seconds - still much cheaper than 10 minutes
     assistantOverrides: {
       variableValues: {
         ClientKey: tenant.key,
