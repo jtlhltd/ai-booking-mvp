@@ -129,6 +129,24 @@ function validateSmsBody(body) {
   return body.trim().length > 0 && body.length <= 1600; // SMS character limit
 }
 
+// Enhanced input sanitization
+function sanitizeInput(input, maxLength = 1000) {
+  if (!input || typeof input !== 'string') return '';
+  return input
+    .trim()
+    .substring(0, maxLength)
+    .replace(/[<>]/g, '') // Remove potential HTML
+    .replace(/[\r\n\t]/g, ' '); // Normalize whitespace
+}
+
+// Validate and sanitize phone number
+function validateAndSanitizePhone(phone) {
+  if (!phone || typeof phone !== 'string') return null;
+  const cleaned = phone.replace(/[^\d+]/g, '');
+  if (cleaned.length < 10 || cleaned.length > 15) return null;
+  return cleaned;
+}
+
 // Custom rate limiting middleware for SMS webhooks
 function smsRateLimit(req, res, next) {
   const ip = req.ip || req.connection.remoteAddress;
@@ -170,6 +188,49 @@ const GOOGLE_PRIVATE_KEY     = process.env.GOOGLE_PRIVATE_KEY     || '';
 const GOOGLE_PRIVATE_KEY_B64 = process.env.GOOGLE_PRIVATE_KEY_B64 || '';
 const GOOGLE_CALENDAR_ID     = process.env.GOOGLE_CALENDAR_ID     || 'primary';
 const TIMEZONE               = process.env.TZ || process.env.TIMEZONE || 'Europe/London';
+
+// Retry logic for external API calls
+async function retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (attempt === maxRetries) {
+        throw error;
+      }
+      
+      const delay = baseDelay * Math.pow(2, attempt - 1) + Math.random() * 1000;
+      console.log(`[RETRY] Attempt ${attempt}/${maxRetries} failed, retrying in ${Math.round(delay)}ms`, { error: error.message });
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+}
+
+// Enhanced error handling wrapper
+function safeAsync(handler) {
+  return async (req, res) => {
+    try {
+      await handler(req, res);
+    } catch (error) {
+      console.error('[UNHANDLED ERROR]', {
+        error: error.message,
+        stack: error.stack,
+        url: req.url,
+        method: req.method,
+        ip: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+      
+      if (!res.headersSent) {
+        res.status(500).json({ 
+          ok: false, 
+          error: 'Internal server error',
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+  };
+}
 
 // Business hours detection
 function isBusinessHours(tenant = null) {
@@ -296,8 +357,18 @@ const defaultSmsClient = (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN) ? twilio(TWIL
 const defaultSmsConfigured = !!(defaultSmsClient && (TWILIO_FROM_NUMBER || TWILIO_MESSAGING_SERVICE_SID));
 
 // === Middleware
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: false }));
+// Security headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  next();
+});
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(morgan('dev'));
 app.use(cors({
   origin: ORIGIN === '*' ? true : ORIGIN,
@@ -988,7 +1059,7 @@ const VAPI_PRIVATE_KEY     = process.env.VAPI_PRIVATE_KEY || '';
 const VAPI_ASSISTANT_ID    = process.env.VAPI_ASSISTANT_ID || '';
 const VAPI_PHONE_NUMBER_ID = process.env.VAPI_PHONE_NUMBER_ID || '';
 
-app.post('/webhooks/twilio-inbound', smsRateLimit, async (req, res) => {
+app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) => {
   try {
     const rawFrom = (req.body.From || '').toString();
     const rawTo   = (req.body.To   || '').toString();
@@ -1257,17 +1328,32 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, async (req, res) => {
               }
             }
           };
-          const resp = await fetch(`${VAPI_URL}/call`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-          const ok = resp.ok;
-          console.log('[LEAD OPT-IN YES]', { from, tenantKey, vapiStatus: ok ? 'ok' : resp.status });
-          console.log('[LEAD OPT-IN YES]', { from, tenantKey, step: 'calling_vapi', vapiStatus: ok ? 'ok' : resp.status });
+            // Use retry logic for VAPI calls
+            const vapiResult = await retryWithBackoff(async () => {
+              const resp = await fetch(`${VAPI_URL}/call`, {
+                method: 'POST',
+                headers: { 
+                  'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`, 
+                  'Content-Type': 'application/json',
+                  'User-Agent': 'AI-Booking-MVP/1.0'
+                },
+                body: JSON.stringify(payload),
+                timeout: 30000 // 30 second timeout
+              });
+              
+              if (!resp.ok) {
+                const errorText = await resp.text().catch(() => resp.statusText);
+                throw new Error(`VAPI call failed: ${resp.status} ${errorText}`);
+              }
+              
+              return await resp.json();
+            }, 3, 2000); // 3 retries, 2 second base delay
+
+            console.log('[LEAD OPT-IN YES]', { from, tenantKey, vapiStatus: 'ok' });
+            console.log('[LEAD OPT-IN YES]', { from, tenantKey, step: 'calling_vapi', vapiStatus: 'ok' });
           
-          if (ok) {
-            const callId = result?.id || 'unknown';
+          if (vapiResult) {
+            const callId = vapiResult?.id || 'unknown';
             console.log('[AUTO-CALL TRIGGER]', { from, tenantKey, callId });
             
             // Book calendar appointment after successful VAPI call
@@ -1368,7 +1454,8 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, async (req, res) => {
   } catch (e) {
     console.error('[inbound.error]', e?.message || e);
     return res.type('text/plain').send('OK');
-  }});
+  }
+}));
 
 // Outbound lead webhook → Vapi (tenant-aware variables + optional per-tenant caller ID)
 app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
@@ -1704,6 +1791,91 @@ app.get('/admin/lead-score', async (req, res) => {
     });
   } catch (e) {
     console.error('[LEAD SCORE ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// System health and performance monitoring
+app.get('/admin/system-health', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const health = {
+      timestamp: new Date().toISOString(),
+      system: {
+        uptime: process.uptime(),
+        memory: process.memoryUsage(),
+        cpu: process.cpuUsage(),
+        nodeVersion: process.version,
+        platform: process.platform
+      },
+      database: {
+        status: 'unknown',
+        lastCheck: new Date().toISOString()
+      },
+      external: {
+        vapi: 'unknown',
+        twilio: 'unknown',
+        google: 'unknown'
+      },
+      performance: {
+        avgResponseTime: 0,
+        errorRate: 0,
+        requestCount: 0
+      }
+    };
+
+    // Test database connectivity
+    try {
+      await listFullClients();
+      health.database.status = 'connected';
+    } catch (e) {
+      health.database.status = 'disconnected';
+      health.database.error = e.message;
+    }
+
+    // Test external services
+    try {
+      if (VAPI_PRIVATE_KEY) {
+        const vapiTest = await fetch(`${VAPI_URL}/call`, {
+          method: 'HEAD',
+          headers: { 'Authorization': `Bearer ${VAPI_PRIVATE_KEY}` }
+        });
+        health.external.vapi = vapiTest.ok ? 'connected' : 'error';
+      }
+    } catch (e) {
+      health.external.vapi = 'error';
+    }
+
+    try {
+      if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN) {
+        const twilioTest = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}.json`, {
+          headers: { 'Authorization': `Basic ${Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString('base64')}` }
+        });
+        health.external.twilio = twilioTest.ok ? 'connected' : 'error';
+      }
+    } catch (e) {
+      health.external.twilio = 'error';
+    }
+
+    console.log('[SYSTEM HEALTH]', { 
+      database: health.database.status,
+      vapi: health.external.vapi,
+      twilio: health.external.twilio,
+      memory: Math.round(health.system.memory.heapUsed / 1024 / 1024) + 'MB'
+    });
+
+    res.json({
+      ok: true,
+      health,
+      status: health.database.status === 'connected' ? 'healthy' : 'degraded'
+    });
+  } catch (e) {
+    console.error('[SYSTEM HEALTH ERROR]', e?.message || String(e));
     res.status(500).json({ ok: false, error: String(e?.message || e) });
   }
 });
