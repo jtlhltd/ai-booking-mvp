@@ -1199,6 +1199,9 @@ app.post('/admin/fix-tenants', async (req, res) => {
   try {
     console.log('[TENANT FIX] Starting tenant configuration fix...');
     
+    // Use the valid MessagingServiceSid that we know works
+    const validMessagingServiceSid = 'MG852f3cf7b50ef1be50c566be9e7efa04';
+    
     // Fix victory_dental configuration
     await upsertFullClient({
       clientKey: 'victory_dental',
@@ -1211,7 +1214,7 @@ app.post('/admin/fix-tenants', async (req, res) => {
       },
       sms: {
         fromNumber: '+447403934440',
-        messagingServiceSid: 'MG_victory_dental'
+        messagingServiceSid: validMessagingServiceSid
       },
       vapi: {},
       calendarId: null,
@@ -1234,7 +1237,7 @@ app.post('/admin/fix-tenants', async (req, res) => {
       },
       sms: {
         fromNumber: '+447491683261',
-        messagingServiceSid: 'MG_northside_vet'
+        messagingServiceSid: validMessagingServiceSid
       },
       vapi: {},
       calendarId: null,
@@ -1249,15 +1252,15 @@ app.post('/admin/fix-tenants', async (req, res) => {
     
     res.json({
       ok: true,
-      message: 'Tenant configurations fixed successfully',
+      message: 'Tenant configurations fixed successfully with valid MessagingServiceSid',
       changes: {
         victory_dental: {
           fromNumber: '+447403934440',
-          messagingServiceSid: 'MG_victory_dental'
+          messagingServiceSid: validMessagingServiceSid
         },
         northside_vet: {
           fromNumber: '+447491683261',
-          messagingServiceSid: 'MG_northside_vet'
+          messagingServiceSid: validMessagingServiceSid
         }
       }
     });
