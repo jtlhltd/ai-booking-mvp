@@ -999,7 +999,7 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, async (req, res) => {
             assistantId,
             phoneNumberId,
             customer: { number: from, numberE164CheckEnabled: true },
-            maxDurationSeconds: 60, // Cut off after 1 minute max to save costs
+            maxDurationSeconds: 5, // Cut off after 5 seconds for testing to save costs
             assistantOverrides: {
               variableValues: {
                 ClientKey: tenantKey,
@@ -1073,7 +1073,7 @@ app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
       assistantId,
       phoneNumberId,
       customer: { number: e164, numberE164CheckEnabled: true },
-      maxDurationSeconds: 60, // Cut off after 1 minute max to save costs
+      maxDurationSeconds: 5, // Cut off after 5 seconds for testing to save costs
       assistantOverrides: {
         variableValues: {
           ClientKey: clientKey,
@@ -1777,7 +1777,7 @@ app.post('/api/leads/recall', async (req, res) => {
       assistantId,
       phoneNumberId,
       customer: { number: phone, name: lead.name || 'Lead' },
-      maxDurationSeconds: 60, // Cut off after 1 minute max to save costs
+      maxDurationSeconds: 5, // Cut off after 5 seconds for testing to save costs
       assistantOverrides: {
         variableValues: {
           ClientKey: clientKey,
