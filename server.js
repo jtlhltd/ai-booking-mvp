@@ -1177,7 +1177,7 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
     if (idx >= 0) {
       const prev = leads[idx];
       const now = new Date().toISOString();
-      tenantKey = prev.tenantId || null;
+      tenantKey = prev.tenantKey || tenantKey; // Preserve existing tenantKey or use resolved one
       serviceForCall = prev.service || '';
       leads[idx] = {
         ...prev,
