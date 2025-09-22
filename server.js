@@ -1234,6 +1234,14 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
       condition: (isYes || isStart) && tenantKey && VAPI_PRIVATE_KEY
     });
     
+    // Debug: Check if tenantKey is still available
+    console.log('[TENANT KEY DEBUG]', { 
+      tenantKey, 
+      isYes, 
+      isStart, 
+      willTriggerVapi: (isYes || isStart) && tenantKey && VAPI_PRIVATE_KEY
+    });
+    
     // Prevent calls to assistant's own number or invalid numbers
     const isAssistantNumber = from === '+447403934440'; // Assistant's number - don't call this
     const isValidCustomerNumber = from && from.length > 10 && !from.includes('000000');
