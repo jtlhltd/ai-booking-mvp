@@ -1146,6 +1146,54 @@ app.get('/admin/tenant-resolve', async (req, res) => {
   }
 });
 
+// Admin endpoint to validate tenant SMS configuration
+app.get('/admin/check-tenants', async (req, res) => {
+  try {
+    const clients = await listFullClients();
+    const tenants = clients.map(client => ({
+      tenantKey: client.clientKey,
+      fromNumber: client?.sms?.fromNumber || null,
+      messagingServiceSid: client?.sms?.messagingServiceSid || null
+    }));
+
+    // Detect duplicates
+    const fromNumberCounts = {};
+    const messagingServiceSidCounts = {};
+    
+    tenants.forEach(tenant => {
+      if (tenant.fromNumber) {
+        fromNumberCounts[tenant.fromNumber] = (fromNumberCounts[tenant.fromNumber] || 0) + 1;
+      }
+      if (tenant.messagingServiceSid) {
+        messagingServiceSidCounts[tenant.messagingServiceSid] = (messagingServiceSidCounts[tenant.messagingServiceSid] || 0) + 1;
+      }
+    });
+
+    const duplicates = {
+      fromNumber: Object.keys(fromNumberCounts).filter(num => fromNumberCounts[num] > 1),
+      messagingServiceSid: Object.keys(messagingServiceSidCounts).filter(sid => messagingServiceSidCounts[sid] > 1)
+    };
+
+    const dupFromCount = duplicates.fromNumber.length;
+    const dupSidCount = duplicates.messagingServiceSid.length;
+    
+    console.log('[TENANT CHECK]', { 
+      tenantsCount: tenants.length, 
+      dupFromCount, 
+      dupSidCount 
+    });
+
+    res.json({
+      ok: true,
+      tenants,
+      duplicates
+    });
+  } catch (e) {
+    console.error('[TENANT CHECK ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
 // Stats
 app.get('/api/stats', async (_req, res) => {
   const now = Date.now();
