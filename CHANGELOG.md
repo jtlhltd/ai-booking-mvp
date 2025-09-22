@@ -3,6 +3,7 @@
 All notable changes to this project will be documented here.
 
 ## [Unreleased]
+- fix(sms): resolve all identified issues - tenant resolution, lead scoring, and metrics
 - feat(hardening): implement comprehensive system hardening with error handling, retry logic, and security
 - feat(quick-wins): implement real-time metrics dashboard, business hours detection, and lead scoring system
 - feat(metrics): add comprehensive /admin/metrics endpoint with conversion rates and cost tracking
