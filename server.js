@@ -76,6 +76,14 @@ import vapiWebhooks from './routes/vapi-webhooks.js';
 
 const app = express();
 
+// Serve static files from public directory
+app.use(express.static('public'));
+
+// Dashboard route
+app.get('/', (req, res) => {
+  res.sendFile(new URL('./public/index.html', import.meta.url).pathname);
+});
+
 // --- healthz: report which integrations are configured (without leaking secrets)
 app.get('/healthz', (req, res) => {
   const flags = {
