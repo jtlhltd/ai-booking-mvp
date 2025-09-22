@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Onboarding Templates</title>
+    <style>
+        :root {
+            --primary-color: #667eea;
+            --secondary-color: #764ba2;
+            --success-color: #28a745;
+            --warning-color: #ffc107;
+            --danger-color: #dc3545;
+            --info-color: #17a2b8;
+            --light-color: #f8f9fa;
+            --dark-color: #343a40;
+            --border-radius: 8px;
+            --shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            background: white;
+            padding: 30px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .templates-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        .template-card {
+            background: white;
+            border-radius: var(--border-radius);
+            padding: 25px;
+            box-shadow: var(--shadow);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .template-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+
+        .template-card.healthcare { border-left-color: #28a745; }
+        .template-card.dental { border-left-color: #17a2b8; }
+        .template-card.veterinary { border-left-color: #ffc107; }
+        .template-card.legal { border-left-color: #6f42c1; }
+        .template-card.real-estate { border-left-color: #fd7e14; }
+        .template-card.fitness { border-left-color: #e83e8c; }
+        .template-card.beauty { border-left-color: #20c997; }
+
+        .template-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .template-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--dark-color);
+        }
+
+        .template-duration {
+            background: var(--light-color);
+            color: var(--dark-color);
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .template-description {
+            color: #666;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+
+        .template-features {
+            margin-bottom: 20px;
+        }
+
+        .template-features h4 {
+            color: var(--dark-color);
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .feature-list {
+            list-style: none;
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: center;
+            padding: 6px 0;
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .feature-item::before {
+            content: "✓";
+            color: var(--success-color);
+            font-weight: bold;
+            margin-right: 8px;
+        }
+
+        .template-steps {
+            margin-bottom: 20px;
+        }
+
+        .template-steps h4 {
+            color: var(--dark-color);
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .step-list {
+            list-style: none;
+        }
+
+        .step-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 0;
+            font-size: 0.9rem;
+            color: #666;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .step-item:last-child {
+            border-bottom: none;
+        }
+
+        .step-number {
+            background: var(--primary-color);
+            color: white;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: bold;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .step-title {
+            font-weight: 500;
+            color: var(--dark-color);
+        }
+
+        .step-time {
+            font-size: 0.8rem;
+            color: #999;
+            margin-top: 2px;
+        }
+
+        .template-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5a6fd8;
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: var(--light-color);
+            color: var(--dark-color);
+            border: 1px solid #ddd;
+        }
+
+        .btn-secondary:hover {
+            background: #e9ecef;
+        }
+
+        .btn-success {
+            background: var(--success-color);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .custom-template {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .custom-template h3 {
+            margin-bottom: 15px;
+            font-size: 1.5rem;
+        }
+
+        .custom-template p {
+            margin-bottom: 25px;
+            opacity: 0.9;
+        }
+
+        .btn-white {
+            background: white;
+            color: var(--primary-color);
+        }
+
+        .btn-white:hover {
+            background: #f8f9fa;
+            transform: translateY(-1px);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .templates-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .template-actions {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>📋 Onboarding Templates</h1>
+            <p>Choose the right template for your client's industry and needs</p>
+        </div>
+
+        <!-- Templates Grid -->
+        <div class="templates-grid">
+            <!-- Healthcare Template -->
+            <div class="template-card healthcare">
+                <div class="template-header">
+                    <div class="template-title">🏥 Healthcare</div>
+                    <div class="template-duration">3-5 days</div>
+                </div>
+                <div class="template-description">
+                    Comprehensive setup for healthcare providers including appointment booking, patient management, and compliance features.
+                </div>
+                <div class="template-features">
+                    <h4>Included Features</h4>
+                    <ul class="feature-list">
+                        <li class="feature-item">HIPAA-compliant messaging</li>
+                        <li class="feature-item">Appointment scheduling</li>
+                        <li class="feature-item">Patient intake forms</li>
+                        <li class="feature-item">Insurance verification</li>
+                        <li class="feature-item">Follow-up reminders</li>
+                    </ul>
+                </div>
+                <div class="template-steps">
+                    <h4>Setup Steps</h4>
+                    <ul class="step-list">
+                        <li class="step-item">
+                            <div class="step-number">1</div>
+                            <div class="step-content">
+                                <div class="step-title">Compliance Review</div>
+                                <div class="step-time">2 hours</div>
+                            </div>
+                        </li>
+                        <li class="step-item">
+                            <div class="step-number">2</div>
+                            <div class="step-content">
+                                <div class="step-title">System Configuration</div>
+                                <div class="step-time">4 hours</div>
+                            </div>
+                        </li>
+                        <li class="step-item">
+                            <div class="step-number">3</div>
+                            <div class="step-content">
+                                <div class="step-title">Integration Setup</div>
+                                <div class="step-time">6 hours</div>
+                            </div>
+                        </li>
+                        <li class="step-item">
+                            <div class="step-number">4</div>
+                            <div class="step-content">
+                                <div class="step-title">Testing & Training</div>
+                                <div class="step-time">4 hours</div>
+                            </div>
+                        </li>
+                        <li class="step-item">
+                            <div class="step-number">5</div>
+                            <div class="step-content">
+                                <div class="step-title">Go Live</div>
+                                <div class="step-time">2 hours</div>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+                <div class="template-actions">
+                    <button class="btn btn-primary" onclick="useTemplate('healthcare')">Use Template</button>
+                    <button class="btn btn-secondary" onclick="previewTemplate('healthcare')">Preview</button>
+                </div>
+            </div>
+
+            <!-- Dental Template -->
+            <div class="template-card dental">
+                <div class="template-header">
+                    <div class="template-title">🦷 Dental</div>
+                    <div class="template-duration">2-3 days</div>
+                </div>
+                <div class="template-description">
+                    Streamlined setup for dental practices with appointment booking, treatment planning, and patient communication.
+                </div>
+                <div class="template-features">
+                    <h4>Included Features</h4>
+                    <ul class="feature-list">
+                        <li class="feature-item">Appointment booking</li>
+                        <li class="feature-item">Treatment reminders</li>
+                        <li class="feature-item">Insurance processing</li>
+                        <li class="feature-item">Payment collection</li>
+                        <li class="feature-item">Follow-up care</li>
+                    </ul>
+                </div>
+                <div class="template-steps">
+                    <h4>Setup Steps</h4>
+                    <ul class="step-list">
+                        <li class="step-item">
+                            <div class="step-number">1</div>
+                            <div class="step-content">
+                                <div class="step-title">Practice Setup</div>
+                                <div class="step-time">2 hours</div>
+                            </div>
+                        </li>
+                        <li class="step-item">
+                            <div class="step-number">2</div>
+                            <div class="step-content">
+                                <div class="step-title">System Configuration</div>
+                                <div class="step-time">3 hours</div>
+                            </div>
+                        </li>
+                        <li class="step-item">
+                            <div class="step-number">3</div>
+                            <div class="step-content">
+                                <div class="step-title">Testing & Training</div>
+                                <div class="step-time">3 hours</div>
+                            </div>
+                        </li>
+                        <li class="step-item">
+                            <div class="step-number">4</div>
+                            <div class="step-content">
+                                <div class="step-title">Go Live</div>
+                                <div class="step-time">1 hour</div>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+                <div class="template-actions">
+                    <button class="btn btn-primary" onclick="useTemplate('dental')">Use Template</button>
+                    <button class="btn btn-secondary" onclick="previewTemplate('dental')">Preview</button>
+                </div>
+            </div>
+
+            <!-- Veterinary Template -->
+            <div class="template-card veterinary">
+                <div class="template-header">
+                    <div class="template-title">🐕 Veterinary</div>
+                    <div class="template-duration">2-3 days</div>
+                </div>
+                <div class="template-description">
+                    Specialized setup for veterinary clinics with emergency scheduling, pet records, and owner communication.
+                </div>
+                <div class="template-features">
+                    <h4>Included Features</h4>
+                    <ul class="feature-list">
+                        <li class="feature-item">Emergency scheduling</li>
+                        <li class="feature-item">Pet record management</li>
+                        <li class="feature-item">Vaccination reminders</li>
+                        <li class="feature-item">Owner communication</li>
+                        <li class="feature-item">Appointment follow-up</li>
+                    </ul>
+                </div>
+                <div class="template-steps">
+                    <h4>Setup Steps</h4>
+                    <ul class="step-list">
+                        <li class="step-item">
+                            <div class="step-number">1</div>
+                            <div class="step-content">
+                                <div class="step-title">Clinic Setup</div>
+                                <div class="step-time">2 hours</div>
+                            </div>
+                        </li>
+                        <li class="step-item">
+                            <div class="step-number">2</div>
+                            <div class="step-content">
+                                <div class="step-title">System Configuration</div>
+                                <div class="step-time">3 hours</div>
+                            </div>
+                        </li>
+                        <li class="step-item">
+                            <div class="step-number">3</div>
+                            <div class="step-content">
+                                <div class="step-title">Testing & Training</div>
+                                <div class="step-time">3 hours</div>
+                            </div>
+                        </li>
+                        <li class="step-item">
+                            <div class="step-number">4</div>
+                            <div class="step-content">
+                                <div class="step-title">Go Live</div>
+                                <div class="step-time">1 hour</div>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+                <div class="template-actions">
+                    <button class="btn btn-primary" onclick="useTemplate('veterinary')">Use Template</button>
+                    <button class="btn btn-secondary" onclick="previewTemplate('veterinary')">Preview</button>
+                </div>
+            </div>
+
+            <!-- Legal Template -->
+            <div class="template-card legal">
+                <div class="template-header">
+                    <div class="template-title">⚖️ Legal</div>
+                    <div class="template-duration">5-7 days</div>
+                </div>
+                <div class="template-description">
+                    Comprehensive setup for law firms with consultation booking, client intake, and case management features.
+                </div>
+                <div class="template-features">
+                    <h4>Included Features</h4>
+                    <ul class="feature-list">
+                        <li class="feature-item">Consultation booking</li>
+                        <li class="feature-item">Client intake forms</li>
+                        <li class="feature-item">Case management</li>
+                        <li class="feature-item">Document sharing</li>
+                        <li class="feature-item">Billing integration</li>
+                    </ul>
+                </div>
+                <div class="template-steps">
+                    <h4>Setup Steps</h4>
+                    <ul class="step-list">
+                        <li class="step-item">
+                            <div class="step-number">1</div>
+                            <div class="step-content">
+                                <div class="step-title">Compliance Review</div>
+                                <div class="step-time">4 hours</div>
+                            </div>
+                        </li>
+                        <li class="step-item">
+                            <div class="step-number">2</div>
+                            <div class="step-content">
+                                <div class="step-title">System Configuration</div>
+                                <div class="step-time">6 hours</div>
+                            </div>
+                        </li>
+                        <li class="step-item">
+                            <div class="step-number">3</div>
+                            <div class="step-content">
+                                <div class="step-title">Integration Setup</div>
+                                <div class="step-time">8 hours</div>
+                            </div>
+                        </li>
+                        <li class="step-item">
+                            <div class="step-number">4</div>
+                            <div class="step-content">
+                                <div class="step-title">Testing & Training</div>
+                                <div class="step-time">6 hours</div>
+                            </div>
+                        </li>
+                        <li class="step-item">
+                            <div class="step-number">5</div>
+                            <div class="step-content">
+                                <div class="step-title">Go Live</div>
+                                <div class="step-time">2 hours</div>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+                <div class="template-actions">
+                    <button class="btn btn-primary" onclick="useTemplate('legal')">Use Template</button>
+                    <button class="btn btn-secondary" onclick="previewTemplate('legal')">Preview</button>
+                </div>
+            </div>
+
+            <!-- Real Estate Template -->
+            <div class="template-card real-estate">
+                <div class="template-header">
+                    <div class="template-title">🏠 Real Estate</div>
+                    <div class="template-duration">2-3 days</div>
+                </div>
+                <div class="template-description">
+                    Quick setup for real estate agents with property viewing scheduling, lead management, and client communication.
+                </div>
+                <div class="template-features">
+                    <h4>Included Features</h4>
+                    <ul class="feature-list">
+                        <li class="feature-item">Property viewing booking</li>
+                        <li class="feature-item">Lead qualification</li>
+                        <li class="feature-item">Client follow-up</li>
+                        <li class="feature-item">Market updates</li>
+                        <li class="feature-item">Document sharing</li>
+                    </ul>
+                </div>
+                <div class="template-steps">
+                    <h4>Setup Steps</h4>
+                    <ul class="step-list">
+                        <li class="step-item">
+                            <div class="step-number">1</div>
+                            <div class="step-content">
+                                <div class="step-title">Agent Setup</div>
+                                <div class="step-time">1 hour</div>
+                            </div>
+                        </li>
+                        <li class="step-item">
+                            <div class="step-number">2</div>
+                            <div class="step-content">
+                                <div class="step-title">System Configuration</div>
+                                <div class="step-time">3 hours</div>
+                            </div>
+                        </li>
+                        <li class="step-item">
+                            <div class="step-number">3</div>
+                            <div class="step-content">
+                                <div class="step-title">Testing & Training</div>
+                                <div class="step-time">2 hours</div>
+                            </div>
+                        </li>
+                        <li class="step-item">
+                            <div class="step-number">4</div>
+                            <div class="step-content">
+                                <div class="step-title">Go Live</div>
+                                <div class="step-time">1 hour</div>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+                <div class="template-actions">
+                    <button class="btn btn-primary" onclick="useTemplate('real-estate')">Use Template</button>
+                    <button class="btn btn-secondary" onclick="previewTemplate('real-estate')">Preview</button>
+                </div>
+            </div>
+
+            <!-- Fitness Template -->
+            <div class="template-card fitness">
+                <div class="template-header">
+                    <div class="template-title">💪 Fitness</div>
+                    <div class="template-duration">1-2 days</div>
+                </div>
+                <div class="template-description">
+                    Fast setup for fitness trainers and gyms with class booking, membership management, and workout scheduling.
+                </div>
+                <div class="template-features">
+                    <h4>Included Features</h4>
+                    <ul class="feature-list">
+                        <li class="feature-item">Class booking</li>
+                        <li class="feature-item">Membership management</li>
+                        <li class="feature-item">Workout scheduling</li>
+                        <li class="feature-item">Progress tracking</li>
+                        <li class="feature-item">Payment processing</li>
+                    </ul>
+                </div>
+                <div class="template-steps">
+                    <h4>Setup Steps</h4>
+                    <ul class="step-list">
+                        <li class="step-item">
+                            <div class="step-number">1</div>
+                            <div class="step-content">
+                                <div class="step-title">Gym Setup</div>
+                                <div class="step-time">1 hour</div>
+                            </div>
+                        </li>
+                        <li class="step-item">
+                            <div class="step-number">2</div>
+                            <div class="step-content">
+                                <div class="step-title">System Configuration</div>
+                                <div class="step-time">2 hours</div>
+                            </div>
+                        </li>
+                        <li class="step-item">
+                            <div class="step-number">3</div>
+                            <div class="step-content">
+                                <div class="step-title">Testing & Training</div>
+                                <div class="step-time">1 hour</div>
+                            </div>
+                        </li>
+                        <li class="step-item">
+                            <div class="step-number">4</div>
+                            <div class="step-content">
+                                <div class="step-title">Go Live</div>
+                                <div class="step-time">30 min</div>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+                <div class="template-actions">
+                    <button class="btn btn-primary" onclick="useTemplate('fitness')">Use Template</button>
+                    <button class="btn btn-secondary" onclick="previewTemplate('fitness')">Preview</button>
+                </div>
+            </div>
+
+            <!-- Beauty Template -->
+            <div class="template-card beauty">
+                <div class="template-header">
+                    <div class="template-title">💄 Beauty</div>
+                    <div class="template-duration">2-3 days</div>
+                </div>
+                <div class="template-description">
+                    Elegant setup for beauty salons and spas with appointment booking, service management, and client care.
+                </div>
+                <div class="template-features">
+                    <h4>Included Features</h4>
+                    <ul class="feature-list">
+                        <li class="feature-item">Appointment booking</li>
+                        <li class="feature-item">Service management</li>
+                        <li class="feature-item">Client preferences</li>
+                        <li class="feature-item">Reminder system</li>
+                        <li class="feature-item">Loyalty programs</li>
+                    </ul>
+                </div>
+                <div class="template-steps">
+                    <h4>Setup Steps</h4>
+                    <ul class="step-list">
+                        <li class="step-item">
+                            <div class="step-number">1</div>
+                            <div class="step-content">
+                                <div class="step-title">Salon Setup</div>
+                                <div class="step-time">2 hours</div>
+                            </div>
+                        </li>
+                        <li class="step-item">
+                            <div class="step-number">2</div>
+                            <div class="step-content">
+                                <div class="step-title">System Configuration</div>
+                                <div class="step-time">3 hours</div>
+                            </div>
+                        </li>
+                        <li class="step-item">
+                            <div class="step-number">3</div>
+                            <div class="step-content">
+                                <div class="step-title">Testing & Training</div>
+                                <div class="step-time">2 hours</div>
+                            </div>
+                        </li>
+                        <li class="step-item">
+                            <div class="step-number">4</div>
+                            <div class="step-content">
+                                <div class="step-title">Go Live</div>
+                                <div class="step-time">1 hour</div>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+                <div class="template-actions">
+                    <button class="btn btn-primary" onclick="useTemplate('beauty')">Use Template</button>
+                    <button class="btn btn-secondary" onclick="previewTemplate('beauty')">Preview</button>
+                </div>
+            </div>
+
+            <!-- Custom Template -->
+            <div class="template-card custom-template">
+                <h3>🎨 Custom Template</h3>
+                <p>Need something specific? Create a custom onboarding template tailored to your client's unique requirements.</p>
+                <button class="btn btn-white" onclick="createCustomTemplate()">Create Custom</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Template data
+        const templates = {
+            healthcare: {
+                name: 'Healthcare',
+                duration: '3-5 days',
+                features: [
+                    'HIPAA-compliant messaging',
+                    'Appointment scheduling',
+                    'Patient intake forms',
+                    'Insurance verification',
+                    'Follow-up reminders'
+                ],
+                steps: [
+                    { name: 'Compliance Review', time: '2 hours' },
+                    { name: 'System Configuration', time: '4 hours' },
+                    { name: 'Integration Setup', time: '6 hours' },
+                    { name: 'Testing & Training', time: '4 hours' },
+                    { name: 'Go Live', time: '2 hours' }
+                ]
+            },
+            dental: {
+                name: 'Dental',
+                duration: '2-3 days',
+                features: [
+                    'Appointment booking',
+                    'Treatment reminders',
+                    'Insurance processing',
+                    'Payment collection',
+                    'Follow-up care'
+                ],
+                steps: [
+                    { name: 'Practice Setup', time: '2 hours' },
+                    { name: 'System Configuration', time: '3 hours' },
+                    { name: 'Testing & Training', time: '3 hours' },
+                    { name: 'Go Live', time: '1 hour' }
+                ]
+            },
+            veterinary: {
+                name: 'Veterinary',
+                duration: '2-3 days',
+                features: [
+                    'Emergency scheduling',
+                    'Pet record management',
+                    'Vaccination reminders',
+                    'Owner communication',
+                    'Appointment follow-up'
+                ],
+                steps: [
+                    { name: 'Clinic Setup', time: '2 hours' },
+                    { name: 'System Configuration', time: '3 hours' },
+                    { name: 'Testing & Training', time: '3 hours' },
+                    { name: 'Go Live', time: '1 hour' }
+                ]
+            },
+            legal: {
+                name: 'Legal',
+                duration: '5-7 days',
+                features: [
+                    'Consultation booking',
+                    'Client intake forms',
+                    'Case management',
+                    'Document sharing',
+                    'Billing integration'
+                ],
+                steps: [
+                    { name: 'Compliance Review', time: '4 hours' },
+                    { name: 'System Configuration', time: '6 hours' },
+                    { name: 'Integration Setup', time: '8 hours' },
+                    { name: 'Testing & Training', time: '6 hours' },
+                    { name: 'Go Live', time: '2 hours' }
+                ]
+            },
+            'real-estate': {
+                name: 'Real Estate',
+                duration: '2-3 days',
+                features: [
+                    'Property viewing booking',
+                    'Lead qualification',
+                    'Client follow-up',
+                    'Market updates',
+                    'Document sharing'
+                ],
+                steps: [
+                    { name: 'Agent Setup', time: '1 hour' },
+                    { name: 'System Configuration', time: '3 hours' },
+                    { name: 'Testing & Training', time: '2 hours' },
+                    { name: 'Go Live', time: '1 hour' }
+                ]
+            },
+            fitness: {
+                name: 'Fitness',
+                duration: '1-2 days',
+                features: [
+                    'Class booking',
+                    'Membership management',
+                    'Workout scheduling',
+                    'Progress tracking',
+                    'Payment processing'
+                ],
+                steps: [
+                    { name: 'Gym Setup', time: '1 hour' },
+                    { name: 'System Configuration', time: '2 hours' },
+                    { name: 'Testing & Training', time: '1 hour' },
+                    { name: 'Go Live', time: '30 min' }
+                ]
+            },
+            beauty: {
+                name: 'Beauty',
+                duration: '2-3 days',
+                features: [
+                    'Appointment booking',
+                    'Service management',
+                    'Client preferences',
+                    'Reminder system',
+                    'Loyalty programs'
+                ],
+                steps: [
+                    { name: 'Salon Setup', time: '2 hours' },
+                    { name: 'System Configuration', time: '3 hours' },
+                    { name: 'Testing & Training', time: '2 hours' },
+                    { name: 'Go Live', time: '1 hour' }
+                ]
+            }
+        };
+
+        // Use template
+        function useTemplate(templateKey) {
+            const template = templates[templateKey];
+            if (!template) {
+                alert('Template not found!');
+                return;
+            }
+
+            // Redirect to onboarding dashboard with template pre-selected
+            const params = new URLSearchParams({
+                template: templateKey,
+                name: template.name,
+                duration: template.duration
+            });
+            
+            window.location.href = `onboarding-dashboard.html?${params.toString()}`;
+        }
+
+        // Preview template
+        function previewTemplate(templateKey) {
+            const template = templates[templateKey];
+            if (!template) {
+                alert('Template not found!');
+                return;
+            }
+
+            const preview = `
+Template: ${template.name}
+Duration: ${template.duration}
+
+Features:
+${template.features.map(f => `• ${f}`).join('\n')}
+
+Setup Steps:
+${template.steps.map((step, i) => `${i + 1}. ${step.name} (${step.time})`).join('\n')}
+
+Total Setup Time: ${template.steps.reduce((total, step) => {
+                const hours = parseInt(step.time);
+                return total + (isNaN(hours) ? 0 : hours);
+            }, 0)} hours
+            `;
+
+            alert(preview);
+        }
+
+        // Create custom template
+        function createCustomTemplate() {
+            const clientName = prompt('Enter client name:');
+            if (!clientName) return;
+
+            const industry = prompt('Enter industry:');
+            if (!industry) return;
+
+            const duration = prompt('Enter estimated duration (e.g., "3-5 days"):');
+            if (!duration) return;
+
+            // Redirect to onboarding dashboard with custom template
+            const params = new URLSearchParams({
+                template: 'custom',
+                name: clientName,
+                industry: industry,
+                duration: duration
+            });
+            
+            window.location.href = `onboarding-dashboard.html?${params.toString()}`;
+        }
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Onboarding templates loaded');
+        });
+    </script>
+</body>
+</html>

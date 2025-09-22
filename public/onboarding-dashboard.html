@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Client Onboarding Dashboard</title>
+    <style>
+        :root {
+            --primary-color: #667eea;
+            --secondary-color: #764ba2;
+            --success-color: #28a745;
+            --warning-color: #ffc107;
+            --danger-color: #dc3545;
+            --info-color: #17a2b8;
+            --light-color: #f8f9fa;
+            --dark-color: #343a40;
+            --border-radius: 8px;
+            --shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            background: white;
+            padding: 30px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .onboarding-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            border-radius: var(--border-radius);
+            padding: 25px;
+            box-shadow: var(--shadow);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+
+        .card h3 {
+            margin-bottom: 20px;
+            color: var(--dark-color);
+            font-size: 1.3rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-pending { background: var(--warning-color); }
+        .status-completed { background: var(--success-color); }
+        .status-in-progress { background: var(--info-color); }
+        .status-blocked { background: var(--danger-color); }
+
+        .step-list {
+            list-style: none;
+        }
+
+        .step-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .step-item:last-child {
+            border-bottom: none;
+        }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .step-title {
+            font-weight: 500;
+            color: var(--dark-color);
+        }
+
+        .step-description {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .step-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5a6fd8;
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: var(--light-color);
+            color: var(--dark-color);
+            border: 1px solid #ddd;
+        }
+
+        .btn-secondary:hover {
+            background: #e9ecef;
+        }
+
+        .btn-success {
+            background: var(--success-color);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .client-form {
+            background: white;
+            padding: 25px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            margin-bottom: 25px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: var(--dark-color);
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: border-color 0.2s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+            transition: width 0.3s ease;
+        }
+
+        .timeline {
+            position: relative;
+            padding-left: 30px;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 15px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #e9ecef;
+        }
+
+        .timeline-item {
+            position: relative;
+            margin-bottom: 30px;
+        }
+
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -22px;
+            top: 6px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            border: 3px solid white;
+            box-shadow: 0 0 0 3px var(--primary-color);
+        }
+
+        .timeline-item.completed::before {
+            background: var(--success-color);
+            box-shadow: 0 0 0 3px var(--success-color);
+        }
+
+        .timeline-item.in-progress::before {
+            background: var(--info-color);
+            box-shadow: 0 0 0 3px var(--info-color);
+        }
+
+        .timeline-content {
+            background: white;
+            padding: 20px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+        }
+
+        .timeline-title {
+            font-weight: 600;
+            color: var(--dark-color);
+            margin-bottom: 8px;
+        }
+
+        .timeline-description {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 12px;
+        }
+
+        .timeline-meta {
+            font-size: 0.8rem;
+            color: #999;
+        }
+
+        .client-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .client-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background-color 0.2s ease;
+        }
+
+        .client-item:hover {
+            background: #f8f9fa;
+        }
+
+        .client-info h4 {
+            color: var(--dark-color);
+            margin-bottom: 4px;
+        }
+
+        .client-info p {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .client-status {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .status-active { background: #d4edda; color: #155724; }
+        .status-pending { background: #fff3cd; color: #856404; }
+        .status-onboarding { background: #d1ecf1; color: #0c5460; }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .onboarding-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🚀 Client Onboarding Dashboard</h1>
+            <p>Streamline client setup and track onboarding progress</p>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="card" style="margin-bottom: 25px;">
+            <h3>⚡ Quick Actions</h3>
+            <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                <button class="btn btn-primary" onclick="showNewClientForm()">+ New Client</button>
+                <button class="btn btn-secondary" onclick="refreshData()">🔄 Refresh</button>
+                <button class="btn btn-secondary" onclick="exportOnboardingData()">📊 Export Data</button>
+                <button class="btn btn-secondary" onclick="viewOnboardingTemplates()">📋 Templates</button>
+            </div>
+        </div>
+
+        <!-- Onboarding Grid -->
+        <div class="onboarding-grid">
+            <!-- New Client Form -->
+            <div class="card" id="newClientCard" style="display: none;">
+                <h3>👤 New Client Setup</h3>
+                <form id="newClientForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="clientName">Company Name *</label>
+                            <input type="text" id="clientName" name="clientName" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="contactName">Contact Name *</label>
+                            <input type="text" id="contactName" name="contactName" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="email">Email *</label>
+                            <input type="email" id="email" name="email" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="phone">Phone</label>
+                            <input type="tel" id="phone" name="phone">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="industry">Industry</label>
+                        <select id="industry" name="industry">
+                            <option value="">Select Industry</option>
+                            <option value="healthcare">Healthcare</option>
+                            <option value="dental">Dental</option>
+                            <option value="veterinary">Veterinary</option>
+                            <option value="legal">Legal</option>
+                            <option value="real-estate">Real Estate</option>
+                            <option value="fitness">Fitness</option>
+                            <option value="beauty">Beauty</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="primaryColor">Brand Color</label>
+                        <input type="color" id="primaryColor" name="primaryColor" value="#667eea">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="notes">Notes</label>
+                        <textarea id="notes" name="notes" rows="3" placeholder="Any special requirements or notes..."></textarea>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                        <button type="button" class="btn btn-secondary" onclick="hideNewClientForm()">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Start Onboarding</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Onboarding Progress -->
+            <div class="card">
+                <h3>📈 Onboarding Progress</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill" style="width: 65%;"></div>
+                </div>
+                <div style="text-align: center; margin-top: 10px;">
+                    <span id="progressText">3 of 5 clients completed</span>
+                </div>
+                
+                <div class="step-list">
+                    <div class="step-item">
+                        <span class="status-indicator status-completed"></span>
+                        <div class="step-content">
+                            <div class="step-title">Client Discovery</div>
+                            <div class="step-description">Initial consultation and requirements gathering</div>
+                        </div>
+                        <div class="step-actions">
+                            <button class="btn btn-success" disabled>✓ Done</button>
+                        </div>
+                    </div>
+                    
+                    <div class="step-item">
+                        <span class="status-indicator status-completed"></span>
+                        <div class="step-content">
+                            <div class="step-title">System Setup</div>
+                            <div class="step-description">Configure SMS numbers and VAPI settings</div>
+                        </div>
+                        <div class="step-actions">
+                            <button class="btn btn-success" disabled>✓ Done</button>
+                        </div>
+                    </div>
+                    
+                    <div class="step-item">
+                        <span class="status-indicator status-in-progress"></span>
+                        <div class="step-content">
+                            <div class="step-title">Branding & Customization</div>
+                            <div class="step-description">Apply client branding and customize dashboard</div>
+                        </div>
+                        <div class="step-actions">
+                            <button class="btn btn-primary">Continue</button>
+                        </div>
+                    </div>
+                    
+                    <div class="step-item">
+                        <span class="status-indicator status-pending"></span>
+                        <div class="step-content">
+                            <div class="step-title">Testing & Training</div>
+                            <div class="step-description">System testing and client training session</div>
+                        </div>
+                        <div class="step-actions">
+                            <button class="btn btn-secondary" disabled>Pending</button>
+                        </div>
+                    </div>
+                    
+                    <div class="step-item">
+                        <span class="status-indicator status-pending"></span>
+                        <div class="step-content">
+                            <div class="step-title">Go Live</div>
+                            <div class="step-description">Final deployment and handover to client</div>
+                        </div>
+                        <div class="step-actions">
+                            <button class="btn btn-secondary" disabled>Pending</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Clients -->
+            <div class="card">
+                <h3>👥 Active Clients</h3>
+                <div class="client-list" id="clientList">
+                    <div class="client-item">
+                        <div class="client-info">
+                            <h4>Victory Dental</h4>
+                            <p>Healthcare • Started 2 days ago</p>
+                        </div>
+                        <div class="client-status status-onboarding">Onboarding</div>
+                    </div>
+                    
+                    <div class="client-item">
+                        <div class="client-info">
+                            <h4>Northside Vet</h4>
+                            <p>Veterinary • Started 1 week ago</p>
+                        </div>
+                        <div class="client-status status-active">Active</div>
+                    </div>
+                    
+                    <div class="client-item">
+                        <div class="client-info">
+                            <h4>ABC Law Firm</h4>
+                            <p>Legal • Started 3 days ago</p>
+                        </div>
+                        <div class="client-status status-pending">Pending</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Onboarding Timeline -->
+            <div class="card">
+                <h3>⏰ Recent Activity</h3>
+                <div class="timeline">
+                    <div class="timeline-item completed">
+                        <div class="timeline-content">
+                            <div class="timeline-title">Victory Dental - System Setup Complete</div>
+                            <div class="timeline-description">SMS numbers configured and VAPI integration tested</div>
+                            <div class="timeline-meta">2 hours ago</div>
+                        </div>
+                    </div>
+                    
+                    <div class="timeline-item completed">
+                        <div class="timeline-content">
+                            <div class="timeline-title">Northside Vet - Go Live</div>
+                            <div class="timeline-description">Client dashboard deployed and training completed</div>
+                            <div class="timeline-meta">1 day ago</div>
+                        </div>
+                    </div>
+                    
+                    <div class="timeline-item in-progress">
+                        <div class="timeline-content">
+                            <div class="timeline-title">ABC Law Firm - Branding in Progress</div>
+                            <div class="timeline-description">Applying custom colors and logo to dashboard</div>
+                            <div class="timeline-meta">3 hours ago</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Onboarding data
+        let onboardingData = {
+            clients: [
+                {
+                    id: 1,
+                    name: "Victory Dental",
+                    industry: "healthcare",
+                    status: "onboarding",
+                    startDate: "2025-09-20",
+                    progress: 60,
+                    contact: "Dr. Smith",
+                    email: "dr.smith@victorydental.com"
+                },
+                {
+                    id: 2,
+                    name: "Northside Vet",
+                    industry: "veterinary",
+                    status: "active",
+                    startDate: "2025-09-15",
+                    progress: 100,
+                    contact: "Dr. Johnson",
+                    email: "dr.johnson@northsidevet.com"
+                },
+                {
+                    id: 3,
+                    name: "ABC Law Firm",
+                    industry: "legal",
+                    status: "pending",
+                    startDate: "2025-09-22",
+                    progress: 20,
+                    contact: "John Doe",
+                    email: "john.doe@abclaw.com"
+                }
+            ],
+            steps: [
+                { id: 1, name: "Client Discovery", completed: true },
+                { id: 2, name: "System Setup", completed: true },
+                { id: 3, name: "Branding & Customization", completed: false, inProgress: true },
+                { id: 4, name: "Testing & Training", completed: false },
+                { id: 5, name: "Go Live", completed: false }
+            ]
+        };
+
+        // Show new client form
+        function showNewClientForm() {
+            document.getElementById('newClientCard').style.display = 'block';
+        }
+
+        // Hide new client form
+        function hideNewClientForm() {
+            document.getElementById('newClientCard').style.display = 'none';
+            document.getElementById('newClientForm').reset();
+        }
+
+        // Handle new client form submission
+        document.getElementById('newClientForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const clientData = {
+                name: formData.get('clientName'),
+                contact: formData.get('contactName'),
+                email: formData.get('email'),
+                phone: formData.get('phone'),
+                industry: formData.get('industry'),
+                primaryColor: formData.get('primaryColor'),
+                notes: formData.get('notes'),
+                status: 'pending',
+                startDate: new Date().toISOString().split('T')[0],
+                progress: 0
+            };
+
+            // Add to onboarding data
+            onboardingData.clients.push({
+                id: onboardingData.clients.length + 1,
+                ...clientData
+            });
+
+            // Update UI
+            updateClientList();
+            updateProgress();
+            hideNewClientForm();
+
+            // Show success message
+            alert(`Client "${clientData.name}" added to onboarding queue!`);
+        });
+
+        // Update client list
+        function updateClientList() {
+            const clientList = document.getElementById('clientList');
+            clientList.innerHTML = onboardingData.clients.map(client => `
+                <div class="client-item">
+                    <div class="client-info">
+                        <h4>${client.name}</h4>
+                        <p>${client.industry} • Started ${getDaysAgo(client.startDate)} ago</p>
+                    </div>
+                    <div class="client-status status-${client.status}">${client.status}</div>
+                </div>
+            `).join('');
+        }
+
+        // Update progress
+        function updateProgress() {
+            const totalClients = onboardingData.clients.length;
+            const completedClients = onboardingData.clients.filter(c => c.status === 'active').length;
+            const progress = Math.round((completedClients / totalClients) * 100);
+            
+            document.getElementById('progressFill').style.width = `${progress}%`;
+            document.getElementById('progressText').textContent = `${completedClients} of ${totalClients} clients completed`;
+        }
+
+        // Get days ago
+        function getDaysAgo(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const diffTime = Math.abs(now - date);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            return diffDays;
+        }
+
+        // Refresh data
+        function refreshData() {
+            console.log('Refreshing onboarding data...');
+            updateClientList();
+            updateProgress();
+        }
+
+        // Export onboarding data
+        function exportOnboardingData() {
+            const dataStr = JSON.stringify(onboardingData, null, 2);
+            const dataBlob = new Blob([dataStr], {type: 'application/json'});
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'onboarding-data.json';
+            link.click();
+        }
+
+        // View onboarding templates
+        function viewOnboardingTemplates() {
+            alert('Onboarding Templates:\n\n1. Healthcare - 5 steps, 3-5 days\n2. Veterinary - 4 steps, 2-3 days\n3. Legal - 6 steps, 5-7 days\n4. Real Estate - 4 steps, 2-3 days\n5. Fitness - 3 steps, 1-2 days');
+        }
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            updateClientList();
+            updateProgress();
+        });
+    </script>
+</body>
+</html>

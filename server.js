@@ -107,6 +107,14 @@ app.get('/setup-guide', (req, res) => {
   res.sendFile(new URL('./public/client-setup-guide.html', import.meta.url).pathname);
 });
 
+app.get('/onboarding', (req, res) => {
+  res.sendFile(new URL('./public/onboarding-dashboard.html', import.meta.url).pathname);
+});
+
+app.get('/onboarding-templates', (req, res) => {
+  res.sendFile(new URL('./public/onboarding-templates.html', import.meta.url).pathname);
+});
+
 // --- healthz: report which integrations are configured (without leaking secrets)
 app.get('/healthz', (req, res) => {
   const flags = {
