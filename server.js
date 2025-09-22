@@ -415,14 +415,6 @@ async function resolveTenantKeyFromInbound({ to, messagingServiceSid }) {
       const phoneMatch = client?.sms?.fromNumber === toE164;
       const mssMatch = messagingServiceSid && client?.sms?.messagingServiceSid === messagingServiceSid;
       
-      console.log('[TENANT DEBUG]', {
-        clientKey: client.clientKey,
-        fromNumber: client?.sms?.fromNumber,
-        toE164,
-        phoneMatch,
-        mssMatch,
-        messagingServiceSid: client?.sms?.messagingServiceSid
-      });
       
       if (phoneMatch || mssMatch) {
         candidates.push({
@@ -440,15 +432,55 @@ async function resolveTenantKeyFromInbound({ to, messagingServiceSid }) {
   return null;
 }
 
-    // If multiple matches, pick the phone match first; otherwise log ambiguity and pick the first deterministic match
+    // If multiple matches, prioritize phone matches over MessagingServiceSid matches
     const phoneMatches = candidates.filter(c => c.phoneMatch);
-    const selected = phoneMatches.length > 0 ? phoneMatches[0] : candidates[0];
-
-    if (candidates.length > 1) {
-      console.log('[TENANT RESOLVE AMBIGUOUS]', { to, toE164, messagingServiceSid, candidates: candidates.map(c => c.clientKey) });
+    const mssMatches = candidates.filter(c => c.mssMatch && !c.phoneMatch);
+    
+    let selected;
+    if (phoneMatches.length > 0) {
+      selected = phoneMatches[0];
+      console.log('[TENANT RESOLVE OK]', { 
+        tenantKey: selected.clientKey, 
+        to, 
+        toE164, 
+        messagingServiceSid, 
+        reason: 'exact_phone_match',
+        priority: 'phone_over_mss'
+      });
+    } else if (mssMatches.length > 0) {
+      selected = mssMatches[0];
+      console.log('[TENANT RESOLVE OK]', { 
+        tenantKey: selected.clientKey, 
+        to, 
+        toE164, 
+        messagingServiceSid, 
+        reason: 'messaging_service_match',
+        priority: 'mss_fallback'
+      });
+    } else {
+      selected = candidates[0];
+      console.log('[TENANT RESOLVE OK]', { 
+        tenantKey: selected.clientKey, 
+        to, 
+        toE164, 
+        messagingServiceSid, 
+        reason: 'first_match',
+        priority: 'fallback'
+      });
     }
 
-    console.log('[TENANT RESOLVE OK]', { tenantKey: selected.clientKey, to, toE164, messagingServiceSid });
+    if (candidates.length > 1) {
+      console.log('[TENANT RESOLVE AMBIGUOUS]', { 
+        to, 
+        toE164, 
+        messagingServiceSid, 
+        candidates: candidates.map(c => c.clientKey),
+        selected: selected.clientKey,
+        phoneMatches: phoneMatches.map(c => c.clientKey),
+        mssMatches: mssMatches.map(c => c.clientKey)
+      });
+    }
+
     return selected.clientKey;
   } catch (error) {
     console.log('[TENANT RESOLVE FAIL]', { to, toE164, messagingServiceSid, error: error.message });
@@ -1113,6 +1145,14 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
   const mss = req.body.MessagingServiceSid || req.body.messagingServiceSid?.trim?.();
   let tenantKey = headerKey || await resolveTenantKeyFromInbound({ to: toE164, messagingServiceSid: mss });
 
+  console.log('[TENANT KEY RESOLVED]', { 
+    tenantKey, 
+    headerKey, 
+    toE164, 
+    messagingServiceSid: mss,
+    resolved: !!tenantKey
+  });
+
   if (!tenantKey) {
     console.log('[TENANT RESOLVE FAIL]', { to: req.body.To, toE164, messagingServiceSid: mss });
     return res.send('OK');
@@ -1155,6 +1195,7 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
       const newLead = {
         id: 'lead_' + nanoid(8),
         phone: from,
+        tenantKey: tenantKey,
         lastInboundAt: now,
         lastInboundText: bodyTxt,
         lastInboundFrom: from,
@@ -1164,6 +1205,14 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
         createdAt: now,
         updatedAt: now,
       };
+      
+      console.log('[LEAD CREATED]', { 
+        phone: from, 
+        tenantKey, 
+        body: bodyTxt, 
+        consentSms: newLead.consentSms,
+        status: newLead.status
+      });
       leads.push(newLead);
     }
 
@@ -1761,7 +1810,11 @@ app.get('/admin/lead-score', async (req, res) => {
     if (!phone) return res.status(400).json({ ok: false, error: 'Missing "phone" parameter' });
 
     const leads = await readJson(LEADS_PATH, []);
-    const lead = leads.find(l => l.phone === phone);
+    const normalizedPhone = normalizePhoneE164(phone, 'GB');
+    const lead = leads.find(l => {
+      const leadPhone = normalizePhoneE164(l.phone, 'GB');
+      return leadPhone === normalizedPhone || l.phone === phone || l.phone === normalizedPhone;
+    });
     
     if (!lead) {
       return res.json({ ok: true, phone, found: false, message: 'Lead not found' });
@@ -1954,7 +2007,16 @@ app.get('/admin/metrics', async (req, res) => {
     // Calculate by tenant
     const tenants = await listFullClients();
     for (const tenant of tenants) {
-      const tenantLeads = leads.filter(l => l.tenantKey === tenant.clientKey);
+      const tenantLeads = leads.filter(l => {
+        // Check both tenantKey and phone number matching
+        if (l.tenantKey === tenant.clientKey) return true;
+        if (l.phone && tenant?.sms?.fromNumber) {
+          const leadPhone = normalizePhoneE164(l.phone, 'GB');
+          const tenantPhone = normalizePhoneE164(tenant.sms.fromNumber, 'GB');
+          return leadPhone === tenantPhone;
+        }
+        return false;
+      });
       const tenantCalls = calls.filter(c => c.tenantKey === tenant.clientKey);
       
       // Calculate lead scores for this tenant
