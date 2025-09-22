@@ -983,7 +983,18 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, async (req, res) => {
       condition: (isYes || isStart) && tenantKey && VAPI_PRIVATE_KEY
     });
     
-    if ((isYes || isStart) && tenantKey && VAPI_PRIVATE_KEY) {
+    // Prevent calls to assistant's own number or invalid numbers
+    const isAssistantNumber = from === '+447403934440'; // Assistant's number - don't call this
+    const isValidCustomerNumber = from && from.length > 10 && !from.includes('000000');
+    
+    console.log('[VAPI NUMBER VALIDATION]', { 
+      from, 
+      isAssistantNumber, 
+      isValidCustomerNumber,
+      willCall: (isYes || isStart) && tenantKey && VAPI_PRIVATE_KEY && isValidCustomerNumber && !isAssistantNumber
+    });
+    
+    if ((isYes || isStart) && tenantKey && VAPI_PRIVATE_KEY && isValidCustomerNumber && !isAssistantNumber) {
       // VAPI Token Protection - prevent unnecessary calls during testing
       console.log('[VAPI DEBUG]', { 
         VAPI_TEST_MODE, 
@@ -999,6 +1010,31 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, async (req, res) => {
           reason: VAPI_TEST_MODE ? 'test_mode' : 'dry_run',
           wouldHaveCalled: true 
         });
+        return res.send('OK');
+      }
+      
+      // If we're blocking the call, send a message explaining why
+      if (isAssistantNumber) {
+        console.log('[VAPI BLOCKED]', { from, reason: 'assistant_number' });
+        try {
+          const client = await getFullClient(tenantKey);
+          if (client) {
+            const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
+            if (configured) {
+              const brand = client?.displayName || client?.clientKey || 'Our Clinic';
+              const ack = `Thanks! ${brand} will call you shortly. Reply STOP to opt out.`;
+              await smsClient.messages.create({
+                from: fromNumber,
+                to: from,
+                body: ack,
+                messagingServiceSid
+              });
+              console.log('[YES ACK SMS]', { from, to: from, brand });
+            }
+          }
+        } catch (e) {
+          console.error('[YES ACK SMS ERROR]', e?.message || String(e));
+        }
         return res.send('OK');
       }
       
@@ -1042,6 +1078,20 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, async (req, res) => {
           const ok = resp.ok;
           console.log('[LEAD OPT-IN YES]', { from, tenantKey, vapiStatus: ok ? 'ok' : resp.status });
           console.log('[LEAD OPT-IN YES]', { from, tenantKey, step: 'calling_vapi', vapiStatus: ok ? 'ok' : resp.status });
+          
+          if (!ok) {
+            const errorResult = await resp.json().catch(() => ({ error: 'Failed to parse error response' }));
+            console.error('[VAPI ERROR]', { 
+              status: resp.status, 
+              error: errorResult, 
+              payload: { 
+                assistantId, 
+                phoneNumberId, 
+                customerNumber: from,
+                maxDurationSeconds: 5
+              }
+            });
+          }
           try {
             const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
             if (configured) {
