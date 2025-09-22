@@ -110,7 +110,7 @@ const API_KEY = process.env.API_KEY || '';
 
 // VAPI Token Protection - prevent unnecessary calls during testing
 const VAPI_TEST_MODE = process.env.VAPI_TEST_MODE === 'true' || process.env.NODE_ENV === 'test';
-const VAPI_DRY_RUN = process.env.VAPI_DRY_RUN === 'true';
+const VAPI_DRY_RUN = process.env.VAPI_DRY_RUN === 'true' || process.env.NODE_ENV === 'development';
 
 // Rate limiting store (in production, use Redis)
 const rateLimitStore = new Map();
@@ -129,8 +129,8 @@ function validateSmsBody(body) {
   return body.trim().length > 0 && body.length <= 1600; // SMS character limit
 }
 
-// Rate limiting middleware
-function rateLimit(req, res, next) {
+// Custom rate limiting middleware for SMS webhooks
+function smsRateLimit(req, res, next) {
   const ip = req.ip || req.connection.remoteAddress;
   const now = Date.now();
   const windowStart = now - RATE_LIMIT_WINDOW;
@@ -873,7 +873,7 @@ const VAPI_PRIVATE_KEY     = process.env.VAPI_PRIVATE_KEY || '';
 const VAPI_ASSISTANT_ID    = process.env.VAPI_ASSISTANT_ID || '';
 const VAPI_PHONE_NUMBER_ID = process.env.VAPI_PHONE_NUMBER_ID || '';
 
-app.post('/webhooks/twilio-inbound', rateLimit, async (req, res) => {
+app.post('/webhooks/twilio-inbound', smsRateLimit, async (req, res) => {
   try {
     const rawFrom = (req.body.From || '').toString();
     const rawTo   = (req.body.To   || '').toString();
@@ -999,6 +999,7 @@ app.post('/webhooks/twilio-inbound', rateLimit, async (req, res) => {
             assistantId,
             phoneNumberId,
             customer: { number: from, numberE164CheckEnabled: true },
+            maxDurationSeconds: 60, // Cut off after 1 minute max to save costs
             assistantOverrides: {
               variableValues: {
                 ClientKey: tenantKey,
@@ -1072,6 +1073,7 @@ app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
       assistantId,
       phoneNumberId,
       customer: { number: e164, numberE164CheckEnabled: true },
+      maxDurationSeconds: 60, // Cut off after 1 minute max to save costs
       assistantOverrides: {
         variableValues: {
           ClientKey: clientKey,
@@ -1775,6 +1777,7 @@ app.post('/api/leads/recall', async (req, res) => {
       assistantId,
       phoneNumberId,
       customer: { number: phone, name: lead.name || 'Lead' },
+      maxDurationSeconds: 60, // Cut off after 1 minute max to save costs
       assistantOverrides: {
         variableValues: {
           ClientKey: clientKey,
