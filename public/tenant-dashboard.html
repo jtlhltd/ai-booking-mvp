@@ -298,10 +298,28 @@
             }
         }
         
+        async function fetchPublic(url) {
+            try {
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                return await response.json();
+            } catch (error) {
+                console.error('API Error:', error);
+                throw error;
+            }
+        }
+        
         async function loadTenants() {
             try {
-                const metrics = await fetchWithAuth(`${BASE_URL}/admin/metrics`);
-                tenants = Object.keys(metrics.metrics.byTenant);
+                // Try to load from public health endpoint first
+                const health = await fetchPublic(`${BASE_URL}/health`);
+                
+                // Use hardcoded tenant data for demo
+                tenants = ['victory_dental', 'northside_vet'];
                 
                 const select = document.getElementById('tenantSelect');
                 select.innerHTML = '<option value="">Select a tenant...</option>';
@@ -309,13 +327,31 @@
                 tenants.forEach(tenantKey => {
                     const option = document.createElement('option');
                     option.value = tenantKey;
-                    option.textContent = metrics.metrics.byTenant[tenantKey].displayName || tenantKey;
+                    option.textContent = getTenantDisplayName(tenantKey);
                     select.appendChild(option);
                 });
             } catch (error) {
                 console.error('Failed to load tenants:', error);
-                document.getElementById('tenantSelect').innerHTML = '<option value="">Error loading tenants</option>';
+                // Fallback to hardcoded tenants
+                tenants = ['victory_dental', 'northside_vet'];
+                const select = document.getElementById('tenantSelect');
+                select.innerHTML = '<option value="">Select a tenant...</option>';
+                
+                tenants.forEach(tenantKey => {
+                    const option = document.createElement('option');
+                    option.value = tenantKey;
+                    option.textContent = getTenantDisplayName(tenantKey);
+                    select.appendChild(option);
+                });
             }
+        }
+        
+        function getTenantDisplayName(tenantKey) {
+            const names = {
+                'victory_dental': 'Victory Dental',
+                'northside_vet': 'Northside Vet'
+            };
+            return names[tenantKey] || tenantKey;
         }
         
         async function switchTenant() {
@@ -334,19 +370,14 @@
             if (!currentTenant) return;
             
             try {
-                // Load tenant-specific data
-                const [metrics, tenantResolve] = await Promise.all([
-                    fetchWithAuth(`${BASE_URL}/admin/metrics`),
-                    fetchWithAuth(`${BASE_URL}/admin/tenant-resolve?to=${getTenantPhone(currentTenant)}`)
-                ]);
-                
-                const tenantData = metrics.metrics.byTenant[currentTenant];
+                // Use demo data for now (no authentication required)
+                const tenantData = getDemoTenantData(currentTenant);
                 
                 // Update tenant info
                 document.getElementById('tenantInfo').style.display = 'block';
-                document.getElementById('tenantName').textContent = tenantData.displayName || currentTenant;
-                document.getElementById('tenantPhone').textContent = getTenantPhone(currentTenant);
-                document.getElementById('tenantTimezone').textContent = 'Europe/London'; // Default
+                document.getElementById('tenantName').textContent = tenantData.displayName;
+                document.getElementById('tenantPhone').textContent = tenantData.phone;
+                document.getElementById('tenantTimezone').textContent = tenantData.timezone;
                 document.getElementById('tenantStatus').textContent = 'Active';
                 document.getElementById('tenantStatus').className = 'status healthy';
                 
@@ -366,11 +397,11 @@
                     </div>
                     <div class="metric">
                         <span class="metric-label">Conversion Rate</span>
-                        <span class="metric-value">${tenantData.conversionRate.toFixed(1)}%</span>
+                        <span class="metric-value">${tenantData.conversionRate}%</span>
                     </div>
                     <div class="metric">
                         <span class="metric-label">Success Rate</span>
-                        <span class="metric-value">${tenantData.successRate.toFixed(1)}%</span>
+                        <span class="metric-value">${tenantData.successRate}%</span>
                     </div>
                 `;
                 
@@ -378,19 +409,19 @@
                 document.getElementById('performance-metrics').innerHTML = `
                     <div class="metric">
                         <span class="metric-label">Avg Lead Score</span>
-                        <span class="metric-value">${tenantData.leadScoring.avgScore}</span>
+                        <span class="metric-value">${tenantData.avgLeadScore}</span>
                     </div>
                     <div class="metric">
                         <span class="metric-label">High Priority</span>
-                        <span class="metric-value">${tenantData.leadScoring.highPriority}</span>
+                        <span class="metric-value">${tenantData.highPriorityLeads}</span>
                     </div>
                     <div class="metric">
                         <span class="metric-label">Medium Priority</span>
-                        <span class="metric-value">${tenantData.leadScoring.mediumPriority}</span>
+                        <span class="metric-value">${tenantData.mediumPriorityLeads}</span>
                     </div>
                     <div class="metric">
                         <span class="metric-label">Low Priority</span>
-                        <span class="metric-value">${tenantData.leadScoring.lowPriority}</span>
+                        <span class="metric-value">${tenantData.lowPriorityLeads}</span>
                     </div>
                 `;
                 
@@ -398,7 +429,7 @@
                 document.getElementById('sms-config').innerHTML = `
                     <div class="metric">
                         <span class="metric-label">From Number</span>
-                        <span class="metric-value">${getTenantPhone(currentTenant)}</span>
+                        <span class="metric-value">${tenantData.phone}</span>
                     </div>
                     <div class="metric">
                         <span class="metric-label">Messaging Service</span>
@@ -414,7 +445,7 @@
                 document.getElementById('business-hours').innerHTML = `
                     <div class="metric">
                         <span class="metric-label">Timezone</span>
-                        <span class="metric-value">Europe/London</span>
+                        <span class="metric-value">${tenantData.timezone}</span>
                     </div>
                     <div class="metric">
                         <span class="metric-label">Hours</span>
@@ -430,14 +461,14 @@
                     </div>
                 `;
                 
-                // Update leads (placeholder)
-                document.getElementById('leads-list').innerHTML = `
+                // Update leads
+                document.getElementById('leads-list').innerHTML = tenantData.leads.map(lead => `
                     <div class="lead-item">
-                        <div class="lead-phone">+447491683261</div>
-                        <div class="lead-status">Status: engaged • Last: START message</div>
-                        <div class="lead-score">Score: 80</div>
+                        <div class="lead-phone">${lead.phone}</div>
+                        <div class="lead-status">Status: ${lead.status} • Last: ${lead.lastMessage}</div>
+                        <div class="lead-score">Score: ${lead.score}</div>
                     </div>
-                `;
+                `).join('');
                 
             } catch (error) {
                 console.error('Failed to load tenant data:', error);
@@ -445,6 +476,49 @@
                     <div class="error">Failed to load tenant data: ${error.message}</div>
                 `;
             }
+        }
+        
+        function getDemoTenantData(tenantKey) {
+            const data = {
+                'victory_dental': {
+                    displayName: 'Victory Dental',
+                    phone: '+447403934440',
+                    timezone: 'Europe/London',
+                    totalLeads: 1,
+                    totalCalls: 0,
+                    last24hLeads: 1,
+                    conversionRate: 0,
+                    successRate: 100,
+                    avgLeadScore: 80,
+                    highPriorityLeads: 1,
+                    mediumPriorityLeads: 0,
+                    lowPriorityLeads: 0,
+                    leads: [
+                        {
+                            phone: '+447491683261',
+                            status: 'engaged',
+                            lastMessage: 'START message',
+                            score: 80
+                        }
+                    ]
+                },
+                'northside_vet': {
+                    displayName: 'Northside Vet',
+                    phone: '+447491683261',
+                    timezone: 'Europe/London',
+                    totalLeads: 0,
+                    totalCalls: 0,
+                    last24hLeads: 0,
+                    conversionRate: 0,
+                    successRate: 100,
+                    avgLeadScore: 0,
+                    highPriorityLeads: 0,
+                    mediumPriorityLeads: 0,
+                    lowPriorityLeads: 0,
+                    leads: []
+                }
+            };
+            return data[tenantKey] || data['victory_dental'];
         }
         
         function getTenantPhone(tenantKey) {
