@@ -977,6 +977,13 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, async (req, res) => {
     // If user texted YES or START && we know the tenant, trigger a Vapi call right away (fire-and-forget)
     if ((isYes || isStart) && tenantKey && VAPI_PRIVATE_KEY) {
       // VAPI Token Protection - prevent unnecessary calls during testing
+      console.log('[VAPI DEBUG]', { 
+        VAPI_TEST_MODE, 
+        VAPI_DRY_RUN, 
+        NODE_ENV: process.env.NODE_ENV,
+        VAPI_PRIVATE_KEY: VAPI_PRIVATE_KEY ? 'present' : 'missing'
+      });
+      
       if (VAPI_TEST_MODE || VAPI_DRY_RUN) {
         console.log('[AUTO-CALL SKIPPED]', { 
           tenantKey, 
