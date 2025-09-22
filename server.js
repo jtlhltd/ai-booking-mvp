@@ -1194,6 +1194,79 @@ app.get('/admin/check-tenants', async (req, res) => {
   }
 });
 
+// Admin endpoint to fix tenant SMS configurations
+app.post('/admin/fix-tenants', async (req, res) => {
+  try {
+    console.log('[TENANT FIX] Starting tenant configuration fix...');
+    
+    // Fix victory_dental configuration
+    await upsertFullClient({
+      clientKey: 'victory_dental',
+      displayName: 'Victory Dental',
+      timezone: 'Europe/London',
+      locale: 'en-GB',
+      numbers: {
+        clinic: '+447491683261',
+        inbound: '+447403934440'
+      },
+      sms: {
+        fromNumber: '+447403934440',
+        messagingServiceSid: 'MG_victory_dental'
+      },
+      vapi: {},
+      calendarId: null,
+      booking: {
+        defaultDurationMin: 30,
+        timezone: 'Europe/London'
+      },
+      smsTemplates: {}
+    });
+    
+    // Fix northside_vet configuration
+    await upsertFullClient({
+      clientKey: 'northside_vet',
+      displayName: 'Northside Vet',
+      timezone: 'Europe/London',
+      locale: 'en-GB',
+      numbers: {
+        clinic: '+447491683261',
+        inbound: '+447491683261'
+      },
+      sms: {
+        fromNumber: '+447491683261',
+        messagingServiceSid: 'MG_northside_vet'
+      },
+      vapi: {},
+      calendarId: null,
+      booking: {
+        defaultDurationMin: 30,
+        timezone: 'Europe/London'
+      },
+      smsTemplates: {}
+    });
+    
+    console.log('[TENANT FIX] Configuration fix completed successfully');
+    
+    res.json({
+      ok: true,
+      message: 'Tenant configurations fixed successfully',
+      changes: {
+        victory_dental: {
+          fromNumber: '+447403934440',
+          messagingServiceSid: 'MG_victory_dental'
+        },
+        northside_vet: {
+          fromNumber: '+447491683261',
+          messagingServiceSid: 'MG_northside_vet'
+        }
+      }
+    });
+  } catch (e) {
+    console.error('[TENANT FIX ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
 // Stats
 app.get('/api/stats', async (_req, res) => {
   const now = Date.now();
