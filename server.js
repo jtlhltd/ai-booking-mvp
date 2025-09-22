@@ -3,11 +3,11 @@
 // Normalizes phone to E.164 (GB default). Returns "+447..." or null.
 function normalizePhoneE164(input, country = 'GB') {
   // Local isE164 helper
-  const isE164 = (s) => typeof s === 'string' && /^\+\d{7,15}$/.test(s);
+const isE164 = (s) => typeof s === 'string' && /^\+\d{7,15}$/.test(s);
   
-  // Keep only + && digits
-  const normalizePhone = (s) => (s || '').trim().replace(/[^\d+]/g, '');
-  
+// Keep only + && digits
+const normalizePhone = (s) => (s || '').trim().replace(/[^\d+]/g, '');
+
   if (input == null) return null;
   const raw = String(input).trim();
   if (!raw) return null;
@@ -409,11 +409,20 @@ async function resolveTenantKeyFromInbound({ to, messagingServiceSid }) {
     const candidates = [];
 
     // Strategy (in order):
-    // a) Match by exact phone: client.sms.fromNumber === toE164
+    // a) Match by exact phone: client.sms.fromNumber === toE164 (the "To" number in SMS)
     // b) Match by Messaging Service SID: client.sms.messagingServiceSid === messagingServiceSid
     for (const client of clients) {
       const phoneMatch = client?.sms?.fromNumber === toE164;
       const mssMatch = messagingServiceSid && client?.sms?.messagingServiceSid === messagingServiceSid;
+      
+      console.log('[TENANT DEBUG]', {
+        clientKey: client.clientKey,
+        fromNumber: client?.sms?.fromNumber,
+        toE164,
+        phoneMatch,
+        mssMatch,
+        messagingServiceSid: client?.sms?.messagingServiceSid
+      });
       
       if (phoneMatch || mssMatch) {
         candidates.push({
@@ -428,8 +437,8 @@ async function resolveTenantKeyFromInbound({ to, messagingServiceSid }) {
 
     if (candidates.length === 0) {
       console.log('[TENANT RESOLVE FAIL]', { to, toE164, messagingServiceSid });
-      return null;
-    }
+  return null;
+}
 
     // If multiple matches, pick the phone match first; otherwise log ambiguity and pick the first deterministic match
     const phoneMatches = candidates.filter(c => c.phoneMatch);
@@ -1161,6 +1170,7 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
     await writeJson(LEADS_PATH, leads);
 
     // Check if already opted in (idempotent)
+    const existingLead = leads.find(l => l.phone === from);
     if ((isYes || isStart) && existingLead && existingLead.consentSms && existingLead.status === 'engaged') {
       console.log('[IDEMPOTENT SKIP]', { from, tenantKey, reason: 'already_opted_in' });
       return res.send('OK');
@@ -1330,8 +1340,8 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
           };
             // Use retry logic for VAPI calls
             const vapiResult = await retryWithBackoff(async () => {
-              const resp = await fetch(`${VAPI_URL}/call`, {
-                method: 'POST',
+          const resp = await fetch(`${VAPI_URL}/call`, {
+            method: 'POST',
                 headers: { 
                   'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`, 
                   'Content-Type': 'application/json',
