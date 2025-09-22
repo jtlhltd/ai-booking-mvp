@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Client Dashboard Setup Guide</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            line-height: 1.6;
+            color: #333;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+        }
+        .step {
+            background: #f8f9fa;
+            padding: 25px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        .step h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+        .code {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            margin: 10px 0;
+            overflow-x: auto;
+        }
+        .highlight {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #ffc107;
+            margin: 15px 0;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #28a745;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚀 Client Dashboard Setup Guide</h1>
+        <p>Simple 3-step setup for your personalized dashboard</p>
+    </div>
+
+    <div class="step">
+        <h3>Step 1: Customize Your Branding</h3>
+        <p>Open the <code>client-dashboard-template.html</code> file and update the <code>CLIENT_CONFIG</code> section:</p>
+        
+        <div class="code">
+const CLIENT_CONFIG = {
+    companyName: "Your Company Name",
+    companyDescription: "Your company description",
+    primaryColor: "#667eea",        // Your brand color
+    secondaryColor: "#764ba2",      // Secondary brand color
+    apiKey: "YOUR_API_KEY_HERE",    // Get this from your dashboard
+    baseUrl: "https://ai-booking-mvp.onrender.com"
+};
+        </div>
+
+        <div class="highlight">
+            <strong>💡 Pro Tip:</strong> Use your brand colors for a professional look. You can find color codes at <a href="https://coolors.co" target="_blank">coolors.co</a>
+        </div>
+    </div>
+
+    <div class="step">
+        <h3>Step 2: Get Your API Key</h3>
+        <p>To connect your dashboard to live data, you'll need an API key:</p>
+        
+        <ol>
+            <li>Go to your main dashboard: <code>https://ai-booking-mvp.onrender.com</code></li>
+            <li>Look for the API key in the admin section</li>
+            <li>Copy the key and paste it in the <code>apiKey</code> field above</li>
+        </ol>
+
+        <div class="success">
+            <strong>✅ Security Note:</strong> Keep your API key private. It's like a password for your dashboard data.
+        </div>
+    </div>
+
+    <div class="step">
+        <h3>Step 3: Deploy Your Dashboard</h3>
+        <p>Choose one of these simple deployment options:</p>
+
+        <h4>Option A: Simple File Hosting (Recommended)</h4>
+        <ul>
+            <li>Upload <code>client-dashboard-template.html</code> to any web hosting service</li>
+            <li>Rename it to <code>index.html</code></li>
+            <li>Share the URL with your client</li>
+        </ul>
+
+        <h4>Option B: GitHub Pages (Free)</h4>
+        <ol>
+            <li>Create a new GitHub repository</li>
+            <li>Upload your customized dashboard file</li>
+            <li>Enable GitHub Pages in repository settings</li>
+            <li>Your dashboard will be live at <code>username.github.io/repository-name</code></li>
+        </ol>
+
+        <h4>Option C: Netlify (Free & Easy)</h4>
+        <ol>
+            <li>Go to <a href="https://netlify.com" target="_blank">netlify.com</a></li>
+            <li>Drag and drop your dashboard file</li>
+            <li>Get an instant live URL</li>
+        </ol>
+    </div>
+
+    <div class="step">
+        <h3>🎉 You're Done!</h3>
+        <p>Your client now has a beautiful, real-time dashboard that shows:</p>
+        <ul>
+            <li>📊 Live metrics and performance data</li>
+            <li>👥 Recent leads and their status</li>
+            <li>📈 Weekly performance charts</li>
+            <li>⚙️ System health monitoring</li>
+            <li>🔄 Auto-refreshing data every 30 seconds</li>
+        </ul>
+
+        <div class="success">
+            <strong>🚀 Pro Features:</strong> The dashboard automatically updates with live data from your AI booking system. No maintenance required!
+        </div>
+    </div>
+
+    <div class="step">
+        <h3>🔧 Customization Options</h3>
+        <p>Want to make it even more personalized? You can easily modify:</p>
+        
+        <ul>
+            <li><strong>Colors:</strong> Change <code>primaryColor</code> and <code>secondaryColor</code></li>
+            <li><strong>Logo:</strong> Replace the emoji with a real logo image</li>
+            <li><strong>Metrics:</strong> Add or remove specific metrics</li>
+            <li><strong>Layout:</strong> Rearrange the dashboard cards</li>
+            <li><strong>Branding:</strong> Add your company logo and colors</li>
+        </ul>
+
+        <div class="highlight">
+            <strong>💼 White-Label Ready:</strong> This dashboard is designed to look like it was built specifically for your client's business.
+        </div>
+    </div>
+
+    <div style="text-align: center; margin-top: 40px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+        <h3>Need Help?</h3>
+        <p>If you need assistance setting up your client dashboard, just ask! The setup process takes less than 10 minutes.</p>
+    </div>
+</body>
+</html>
