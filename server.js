@@ -115,6 +115,214 @@ app.get('/onboarding-templates', (req, res) => {
   res.sendFile(new URL('./public/onboarding-templates.html', import.meta.url).pathname);
 });
 
+app.get('/onboarding-wizard', (req, res) => {
+  res.sendFile(new URL('./public/client-onboarding-wizard.html', import.meta.url).pathname);
+});
+
+// API endpoint to create new client
+app.post('/api/create-client', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    }
+
+    const clientData = req.body;
+    console.log('[CLIENT CREATION]', { 
+      clientName: clientData.basic?.clientName,
+      industry: clientData.basic?.industry,
+      requestedBy: req.ip 
+    });
+
+    // Generate client key
+    const clientKey = clientData.basic.clientName
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '_')
+      .replace(/_+/g, '_')
+      .trim();
+
+    // Generate secondary color
+    const primaryColor = clientData.branding?.primaryColor || '#667eea';
+    const secondaryColor = adjustColorBrightness(primaryColor, -20);
+
+    // Create client configuration
+    const clientConfig = {
+      clientKey,
+      displayName: clientData.basic.clientName,
+      industry: clientData.basic.industry,
+      primaryColor,
+      secondaryColor,
+      timezone: clientData.branding?.timezone || 'Europe/London',
+      locale: clientData.branding?.locale || 'en-GB',
+      businessHours: {
+        start: parseInt(clientData.operations?.businessStart?.split(':')[0]) || 9,
+        end: parseInt(clientData.operations?.businessEnd?.split(':')[0]) || 17,
+        days: clientData.operations?.businessDays || [1, 2, 3, 4, 5]
+      },
+      sms: {
+        fromNumber: clientData.communication?.smsFromNumber || `+4474${Math.floor(Math.random() * 10000000).toString().padStart(7, '0')}`,
+        messagingServiceSid: 'MG852f3cf7b50ef1be50c566be9e7efa04',
+        welcomeMessage: clientData.communication?.welcomeMessage || `Hi! Thanks for contacting ${clientData.basic.clientName}. Reply START to get started.`,
+        confirmationMessage: clientData.communication?.confirmationMessage || 'Your appointment is confirmed. Reply STOP to opt out.',
+        reminderMessage: clientData.communication?.reminderMessage || 'Reminder: You have an appointment tomorrow. Reply YES to confirm or STOP to cancel.',
+        reminderHours: parseInt(clientData.communication?.reminderHours) || 24,
+        maxRetries: parseInt(clientData.communication?.maxRetries) || 3
+      },
+      vapi: {
+        assistantId: `asst_${clientKey}_${Date.now()}`,
+        phoneNumberId: `phone_${clientKey}_${Date.now()}`,
+        maxDurationSeconds: 10
+      },
+      calendar: {
+        calendarId: `calendar_${clientKey}@company.com`,
+        timezone: clientData.branding?.timezone || 'Europe/London',
+        appointmentDuration: parseInt(clientData.operations?.appointmentDuration) || 60,
+        advanceBooking: parseInt(clientData.operations?.advanceBooking) || 7
+      },
+      contact: {
+        name: clientData.basic.contactName,
+        title: clientData.basic.contactTitle,
+        email: clientData.basic.email,
+        phone: clientData.basic.phone,
+        website: clientData.basic.website
+      },
+      onboarding: {
+        status: 'pending',
+        startDate: new Date().toISOString(),
+        estimatedCompletion: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days
+        steps: [
+          { id: 1, name: 'Client Discovery', completed: true, completedAt: new Date().toISOString() },
+          { id: 2, name: 'System Configuration', completed: false, estimatedHours: 2 },
+          { id: 3, name: 'SMS Setup', completed: false, estimatedHours: 1 },
+          { id: 4, name: 'VAPI Configuration', completed: false, estimatedHours: 2 },
+          { id: 5, name: 'Dashboard Branding', completed: false, estimatedHours: 1 },
+          { id: 6, name: 'Testing & Validation', completed: false, estimatedHours: 2 },
+          { id: 7, name: 'Client Training', completed: false, estimatedHours: 1 },
+          { id: 8, name: 'Go Live', completed: false, estimatedHours: 1 }
+        ]
+      },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    // Save client to database
+    await upsertFullClient(clientConfig);
+
+    // Generate branded dashboard
+    const dashboardTemplate = await import('fs').then(fs => 
+      fs.readFileSync(new URL('./public/client-dashboard-template.html', import.meta.url).pathname, 'utf8')
+    );
+
+    const brandedDashboard = dashboardTemplate
+      .replace(/Client Company/g, clientData.basic.clientName)
+      .replace(/"#667eea"/g, `"${primaryColor}"`)
+      .replace(/"#764ba2"/g, `"${secondaryColor}"`)
+      .replace(/YOUR_API_KEY_HERE/g, process.env.API_KEY);
+
+    // Save dashboard file
+    const fs = await import('fs');
+    const path = await import('path');
+    const clientDir = path.join(process.cwd(), 'clients', clientKey);
+    
+    if (!fs.existsSync(clientDir)) {
+      fs.mkdirSync(clientDir, { recursive: true });
+    }
+
+    fs.writeFileSync(
+      path.join(clientDir, 'dashboard.html'),
+      brandedDashboard
+    );
+
+    // Create onboarding checklist
+    const checklistContent = `# ${clientData.basic.clientName} - Onboarding Checklist
+
+**Client Key:** ${clientKey}
+**Industry:** ${clientData.basic.industry}
+**Created:** ${new Date().toLocaleDateString()}
+
+## Client Information
+- **Company:** ${clientData.basic.clientName}
+- **Contact:** ${clientData.basic.contactName} (${clientData.basic.contactTitle || 'N/A'})
+- **Email:** ${clientData.basic.email}
+- **Phone:** ${clientData.basic.phone || 'N/A'}
+- **Website:** ${clientData.basic.website || 'N/A'}
+
+## Branding
+- **Primary Color:** ${primaryColor}
+- **Secondary Color:** ${secondaryColor}
+- **Logo Emoji:** ${clientData.branding?.logoEmoji || '🚀'}
+- **Timezone:** ${clientData.branding?.timezone || 'Europe/London'}
+
+## Business Hours
+- **Hours:** ${clientData.operations?.businessStart || '09:00'} - ${clientData.operations?.businessEnd || '17:00'}
+- **Days:** ${(clientData.operations?.businessDays || [1,2,3,4,5]).map(d => ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][d-1]).join(', ')}
+- **Appointment Duration:** ${clientData.operations?.appointmentDuration || 60} minutes
+- **Advance Booking:** ${clientData.operations?.advanceBooking || 7} days
+
+## Communication
+- **SMS Number:** ${clientData.communication?.smsFromNumber}
+- **Welcome Message:** ${clientData.communication?.welcomeMessage}
+- **Reminder Hours:** ${clientData.communication?.reminderHours || 24} hours before
+- **Max Retries:** ${clientData.communication?.maxRetries || 3}
+
+## Next Steps
+1. Review configuration
+2. Setup SMS numbers in Twilio
+3. Configure VAPI assistant
+4. Test system end-to-end
+5. Schedule client training
+6. Go live
+
+## Files Generated
+- \`clients/${clientKey}/dashboard.html\` - Branded client dashboard
+- \`clients/${clientKey}/checklist.md\` - This checklist
+`;
+
+    fs.writeFileSync(
+      path.join(clientDir, 'checklist.md'),
+      checklistContent
+    );
+
+    console.log('[CLIENT CREATED]', { 
+      clientKey, 
+      clientName: clientData.basic.clientName,
+      industry: clientData.basic.industry 
+    });
+
+    res.json({
+      ok: true,
+      clientKey,
+      clientName: clientData.basic.clientName,
+      industry: clientData.basic.industry,
+      dashboardUrl: `/clients/${clientKey}/dashboard.html`,
+      checklistUrl: `/clients/${clientKey}/checklist.md`,
+      message: 'Client created successfully'
+    });
+
+  } catch (error) {
+    console.error('[CLIENT CREATION ERROR]', error);
+    res.status(500).json({ 
+      ok: false, 
+      error: 'Failed to create client',
+      details: error.message 
+    });
+  }
+});
+
+// Helper function to adjust color brightness
+function adjustColorBrightness(hex, percent) {
+  const num = parseInt(hex.replace("#", ""), 16);
+  const amt = Math.round(2.55 * percent);
+  const R = (num >> 16) + amt;
+  const G = (num >> 8 & 0x00FF) + amt;
+  const B = (num & 0x0000FF) + amt;
+  return "#" + (0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 +
+      (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 +
+      (B < 255 ? B < 1 ? 0 : B : 255)).toString(16).slice(1);
+}
+
 // --- healthz: report which integrations are configured (without leaking secrets)
 app.get('/healthz', (req, res) => {
   const flags = {

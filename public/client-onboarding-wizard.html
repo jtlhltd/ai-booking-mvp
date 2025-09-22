@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Client Onboarding Wizard</title>
+    <style>
+        :root {
+            --primary-color: #667eea;
+            --secondary-color: #764ba2;
+            --success-color: #28a745;
+            --warning-color: #ffc107;
+            --danger-color: #dc3545;
+            --info-color: #17a2b8;
+            --light-color: #f8f9fa;
+            --dark-color: #343a40;
+            --border-radius: 8px;
+            --shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .wizard-header {
+            text-align: center;
+            margin-bottom: 30px;
+            background: white;
+            padding: 30px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+        }
+
+        .wizard-header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .wizard-progress {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 30px;
+        }
+
+        .progress-step {
+            display: flex;
+            align-items: center;
+            margin: 0 10px;
+        }
+
+        .step-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            background: #ddd;
+            transition: all 0.3s ease;
+        }
+
+        .step-circle.active {
+            background: var(--primary-color);
+        }
+
+        .step-circle.completed {
+            background: var(--success-color);
+        }
+
+        .step-line {
+            width: 60px;
+            height: 2px;
+            background: #ddd;
+            margin: 0 10px;
+        }
+
+        .step-line.completed {
+            background: var(--success-color);
+        }
+
+        .wizard-content {
+            background: white;
+            border-radius: var(--border-radius);
+            padding: 40px;
+            box-shadow: var(--shadow);
+            margin-bottom: 30px;
+        }
+
+        .step {
+            display: none;
+        }
+
+        .step.active {
+            display: block;
+        }
+
+        .step h2 {
+            margin-bottom: 20px;
+            color: var(--dark-color);
+            font-size: 1.8rem;
+        }
+
+        .step p {
+            color: #666;
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: var(--dark-color);
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: border-color 0.2s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .form-row-3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 20px;
+        }
+
+        .color-picker-group {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .color-preview {
+            width: 40px;
+            height: 40px;
+            border-radius: 6px;
+            border: 2px solid #ddd;
+        }
+
+        .business-hours {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
+            align-items: end;
+        }
+
+        .days-selector {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .day-checkbox {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .day-checkbox:hover {
+            background: #f8f9fa;
+        }
+
+        .day-checkbox.selected {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        .day-checkbox input {
+            display: none;
+        }
+
+        .wizard-actions {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 40px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5a6fd8;
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: var(--light-color);
+            color: var(--dark-color);
+            border: 1px solid #ddd;
+        }
+
+        .btn-secondary:hover {
+            background: #e9ecef;
+        }
+
+        .btn-success {
+            background: var(--success-color);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .summary-card {
+            background: #f8f9fa;
+            border-radius: var(--border-radius);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .summary-item:last-child {
+            border-bottom: none;
+        }
+
+        .summary-label {
+            font-weight: 500;
+            color: var(--dark-color);
+        }
+
+        .summary-value {
+            color: #666;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .success-message {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .success-icon {
+            font-size: 4rem;
+            color: var(--success-color);
+            margin-bottom: 20px;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border: 1px solid #f5c6cb;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+            
+            .wizard-header h1 {
+                font-size: 2rem;
+            }
+            
+            .form-row,
+            .form-row-3,
+            .business-hours {
+                grid-template-columns: 1fr;
+            }
+            
+            .days-selector {
+                grid-template-columns: repeat(4, 1fr);
+            }
+            
+            .wizard-actions {
+                flex-direction: column;
+                gap: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="wizard-header">
+            <h1>🚀 Client Onboarding Wizard</h1>
+            <p>Let's get your new client set up quickly and professionally</p>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="wizard-progress">
+            <div class="progress-step">
+                <div class="step-circle active" id="step1-circle">1</div>
+                <div class="step-line" id="step1-line"></div>
+            </div>
+            <div class="progress-step">
+                <div class="step-circle" id="step2-circle">2</div>
+                <div class="step-line" id="step2-line"></div>
+            </div>
+            <div class="progress-step">
+                <div class="step-circle" id="step3-circle">3</div>
+                <div class="step-line" id="step3-line"></div>
+            </div>
+            <div class="progress-step">
+                <div class="step-circle" id="step4-circle">4</div>
+                <div class="step-line" id="step4-line"></div>
+            </div>
+            <div class="progress-step">
+                <div class="step-circle" id="step5-circle">5</div>
+            </div>
+        </div>
+
+        <!-- Wizard Content -->
+        <div class="wizard-content">
+            <!-- Step 1: Basic Information -->
+            <div class="step active" id="step1">
+                <h2>📋 Basic Information</h2>
+                <p>Let's start with the essential details about your client.</p>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="clientName">Company Name *</label>
+                        <input type="text" id="clientName" name="clientName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="industry">Industry *</label>
+                        <select id="industry" name="industry" required>
+                            <option value="">Select Industry</option>
+                            <option value="healthcare">Healthcare</option>
+                            <option value="dental">Dental</option>
+                            <option value="veterinary">Veterinary</option>
+                            <option value="legal">Legal</option>
+                            <option value="real-estate">Real Estate</option>
+                            <option value="fitness">Fitness</option>
+                            <option value="beauty">Beauty</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="contactName">Contact Name *</label>
+                        <input type="text" id="contactName" name="contactName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="contactTitle">Job Title</label>
+                        <input type="text" id="contactTitle" name="contactTitle">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="email">Email *</label>
+                        <input type="email" id="email" name="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="phone">Phone</label>
+                        <input type="tel" id="phone" name="phone">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="website">Website</label>
+                    <input type="url" id="website" name="website" placeholder="https://example.com">
+                </div>
+
+                <div class="form-group">
+                    <label for="description">Business Description</label>
+                    <textarea id="description" name="description" rows="3" placeholder="Brief description of the business..."></textarea>
+                </div>
+            </div>
+
+            <!-- Step 2: Branding & Customization -->
+            <div class="step" id="step2">
+                <h2>🎨 Branding & Customization</h2>
+                <p>Customize the look and feel to match your client's brand.</p>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="primaryColor">Primary Brand Color *</label>
+                        <div class="color-picker-group">
+                            <input type="color" id="primaryColor" name="primaryColor" value="#667eea">
+                            <div class="color-preview" id="primaryColorPreview" style="background: #667eea;"></div>
+                            <span id="primaryColorValue">#667eea</span>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="secondaryColor">Secondary Color</label>
+                        <div class="color-picker-group">
+                            <input type="color" id="secondaryColor" name="secondaryColor" value="#764ba2">
+                            <div class="color-preview" id="secondaryColorPreview" style="background: #764ba2;"></div>
+                            <span id="secondaryColorValue">#764ba2</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="logoEmoji">Logo Emoji</label>
+                        <input type="text" id="logoEmoji" name="logoEmoji" value="🚀" maxlength="2">
+                    </div>
+                    <div class="form-group">
+                        <label for="timezone">Timezone</label>
+                        <select id="timezone" name="timezone">
+                            <option value="Europe/London">Europe/London (GMT)</option>
+                            <option value="America/New_York">America/New_York (EST)</option>
+                            <option value="America/Los_Angeles">America/Los_Angeles (PST)</option>
+                            <option value="Europe/Paris">Europe/Paris (CET)</option>
+                            <option value="Asia/Tokyo">Asia/Tokyo (JST)</option>
+                            <option value="Australia/Sydney">Australia/Sydney (AEST)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="locale">Language & Region</label>
+                    <select id="locale" name="locale">
+                        <option value="en-GB">English (UK)</option>
+                        <option value="en-US">English (US)</option>
+                        <option value="es-ES">Spanish (Spain)</option>
+                        <option value="fr-FR">French (France)</option>
+                        <option value="de-DE">German (Germany)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Step 3: Business Hours & Operations -->
+            <div class="step" id="step3">
+                <h2>⏰ Business Hours & Operations</h2>
+                <p>Configure when your client operates and how they handle appointments.</p>
+                
+                <div class="business-hours">
+                    <div class="form-group">
+                        <label for="businessStart">Opening Time</label>
+                        <input type="time" id="businessStart" name="businessStart" value="09:00">
+                    </div>
+                    <div class="form-group">
+                        <label for="businessEnd">Closing Time</label>
+                        <input type="time" id="businessEnd" name="businessEnd" value="17:00">
+                    </div>
+                    <div class="form-group">
+                        <label>Business Days</label>
+                        <div class="days-selector">
+                            <div class="day-checkbox" data-day="1">
+                                <input type="checkbox" id="day1" name="businessDays" value="1">
+                                <label for="day1">Mon</label>
+                            </div>
+                            <div class="day-checkbox" data-day="2">
+                                <input type="checkbox" id="day2" name="businessDays" value="2">
+                                <label for="day2">Tue</label>
+                            </div>
+                            <div class="day-checkbox" data-day="3">
+                                <input type="checkbox" id="day3" name="businessDays" value="3">
+                                <label for="day3">Wed</label>
+                            </div>
+                            <div class="day-checkbox" data-day="4">
+                                <input type="checkbox" id="day4" name="businessDays" value="4">
+                                <label for="day4">Thu</label>
+                            </div>
+                            <div class="day-checkbox" data-day="5">
+                                <input type="checkbox" id="day5" name="businessDays" value="5">
+                                <label for="day5">Fri</label>
+                            </div>
+                            <div class="day-checkbox" data-day="6">
+                                <input type="checkbox" id="day6" name="businessDays" value="6">
+                                <label for="day6">Sat</label>
+                            </div>
+                            <div class="day-checkbox" data-day="7">
+                                <input type="checkbox" id="day7" name="businessDays" value="7">
+                                <label for="day7">Sun</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="appointmentDuration">Default Appointment Duration (minutes)</label>
+                        <select id="appointmentDuration" name="appointmentDuration">
+                            <option value="30">30 minutes</option>
+                            <option value="45">45 minutes</option>
+                            <option value="60" selected>60 minutes</option>
+                            <option value="90">90 minutes</option>
+                            <option value="120">120 minutes</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="advanceBooking">Advance Booking (days)</label>
+                        <select id="advanceBooking" name="advanceBooking">
+                            <option value="1">1 day</option>
+                            <option value="3">3 days</option>
+                            <option value="7" selected>1 week</option>
+                            <option value="14">2 weeks</option>
+                            <option value="30">1 month</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="specialInstructions">Special Instructions</label>
+                    <textarea id="specialInstructions" name="specialInstructions" rows="3" placeholder="Any special requirements or notes..."></textarea>
+                </div>
+            </div>
+
+            <!-- Step 4: SMS & Communication -->
+            <div class="step" id="step4">
+                <h2>📱 SMS & Communication</h2>
+                <p>Set up how your client will communicate with their customers.</p>
+                
+                <div class="form-group">
+                    <label for="smsFromNumber">SMS From Number *</label>
+                    <input type="tel" id="smsFromNumber" name="smsFromNumber" placeholder="+447403934440" required>
+                    <small style="color: #666; font-size: 0.9rem;">This will be the number customers receive SMS from</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="welcomeMessage">Welcome Message Template</label>
+                    <textarea id="welcomeMessage" name="welcomeMessage" rows="3" placeholder="Hi! Thanks for contacting [Company Name]. Reply START to book an appointment."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="confirmationMessage">Appointment Confirmation Template</label>
+                    <textarea id="confirmationMessage" name="confirmationMessage" rows="3" placeholder="Your appointment is confirmed for [Date] at [Time]. Reply STOP to opt out."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="reminderMessage">Reminder Message Template</label>
+                    <textarea id="reminderMessage" name="reminderMessage" rows="3" placeholder="Reminder: You have an appointment tomorrow at [Time]. Reply YES to confirm or STOP to cancel."></textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="reminderHours">Reminder Hours Before Appointment</label>
+                        <select id="reminderHours" name="reminderHours">
+                            <option value="24">24 hours</option>
+                            <option value="48">48 hours</option>
+                            <option value="72">72 hours</option>
+                            <option value="168">1 week</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="maxRetries">Max Retry Attempts</label>
+                        <select id="maxRetries" name="maxRetries">
+                            <option value="1">1 attempt</option>
+                            <option value="2">2 attempts</option>
+                            <option value="3" selected>3 attempts</option>
+                            <option value="5">5 attempts</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 5: Review & Setup -->
+            <div class="step" id="step5">
+                <h2>✅ Review & Setup</h2>
+                <p>Review all the information and create your client's account.</p>
+                
+                <div class="summary-card">
+                    <h3>Client Summary</h3>
+                    <div class="summary-item">
+                        <span class="summary-label">Company Name:</span>
+                        <span class="summary-value" id="summaryClientName">-</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Industry:</span>
+                        <span class="summary-value" id="summaryIndustry">-</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Contact:</span>
+                        <span class="summary-value" id="summaryContact">-</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Email:</span>
+                        <span class="summary-value" id="summaryEmail">-</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Primary Color:</span>
+                        <span class="summary-value" id="summaryPrimaryColor">-</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Business Hours:</span>
+                        <span class="summary-value" id="summaryBusinessHours">-</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">SMS Number:</span>
+                        <span class="summary-value" id="summarySmsNumber">-</span>
+                    </div>
+                </div>
+
+                <div id="setupProgress" style="display: none;">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <h3>Setting up your client...</h3>
+                        <p>This may take a few moments. Please don't close this page.</p>
+                    </div>
+                </div>
+
+                <div id="setupSuccess" style="display: none;">
+                    <div class="success-message">
+                        <div class="success-icon">🎉</div>
+                        <h3>Client Setup Complete!</h3>
+                        <p>Your client has been successfully onboarded and is ready to go live.</p>
+                        <div style="margin-top: 30px;">
+                            <a href="/onboarding" class="btn btn-primary">View Onboarding Dashboard</a>
+                            <a href="/client-template" class="btn btn-secondary">View Client Dashboard</a>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="setupError" style="display: none;">
+                    <div class="error-message">
+                        <h4>Setup Failed</h4>
+                        <p id="errorMessage">There was an error setting up your client. Please try again.</p>
+                        <button class="btn btn-primary" onclick="retrySetup()">Retry Setup</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Wizard Actions -->
+            <div class="wizard-actions" id="wizardActions">
+                <button class="btn btn-secondary" id="prevBtn" onclick="previousStep()" style="display: none;">← Previous</button>
+                <div style="flex: 1;"></div>
+                <button class="btn btn-primary" id="nextBtn" onclick="nextStep()">Next →</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentStep = 1;
+        const totalSteps = 5;
+        let clientData = {};
+
+        // Initialize wizard
+        document.addEventListener('DOMContentLoaded', function() {
+            updateProgress();
+            setupEventListeners();
+            setDefaultBusinessDays();
+            handleUrlParameters();
+        });
+
+        // Handle URL parameters for template pre-selection
+        function handleUrlParameters() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const template = urlParams.get('template');
+            const industry = urlParams.get('industry');
+
+            if (industry) {
+                document.getElementById('industry').value = industry;
+                setIndustryDefaults(industry);
+            }
+
+            if (template) {
+                // Pre-fill any template-specific data
+                console.log('Template pre-selected:', template);
+            }
+        }
+
+        // Setup event listeners
+        function setupEventListeners() {
+            // Color picker updates
+            document.getElementById('primaryColor').addEventListener('input', function() {
+                const color = this.value;
+                document.getElementById('primaryColorPreview').style.background = color;
+                document.getElementById('primaryColorValue').textContent = color;
+            });
+
+            document.getElementById('secondaryColor').addEventListener('input', function() {
+                const color = this.value;
+                document.getElementById('secondaryColorPreview').style.background = color;
+                document.getElementById('secondaryColorValue').textContent = color;
+            });
+
+            // Day checkboxes
+            document.querySelectorAll('.day-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('click', function() {
+                    const input = this.querySelector('input');
+                    input.checked = !input.checked;
+                    this.classList.toggle('selected', input.checked);
+                });
+            });
+
+            // Industry-specific defaults
+            document.getElementById('industry').addEventListener('change', function() {
+                setIndustryDefaults(this.value);
+            });
+        }
+
+        // Set default business days (Monday-Friday)
+        function setDefaultBusinessDays() {
+            for (let i = 1; i <= 5; i++) {
+                const checkbox = document.getElementById(`day${i}`);
+                checkbox.checked = true;
+                checkbox.closest('.day-checkbox').classList.add('selected');
+            }
+        }
+
+        // Set industry-specific defaults
+        function setIndustryDefaults(industry) {
+            const defaults = {
+                healthcare: {
+                    businessStart: '08:00',
+                    businessEnd: '18:00',
+                    appointmentDuration: '60',
+                    welcomeMessage: 'Hi! Thanks for contacting our healthcare services. Reply START to book a consultation.',
+                    logoEmoji: '🏥'
+                },
+                dental: {
+                    businessStart: '09:00',
+                    businessEnd: '17:00',
+                    appointmentDuration: '45',
+                    welcomeMessage: 'Hi! Thanks for contacting our dental practice. Reply START to book an appointment.',
+                    logoEmoji: '🦷'
+                },
+                veterinary: {
+                    businessStart: '08:00',
+                    businessEnd: '19:00',
+                    businessDays: [1, 2, 3, 4, 5, 6],
+                    appointmentDuration: '30',
+                    welcomeMessage: 'Hi! Thanks for contacting our veterinary clinic. Reply START to book an appointment.',
+                    logoEmoji: '🐕'
+                },
+                legal: {
+                    businessStart: '09:00',
+                    businessEnd: '17:00',
+                    appointmentDuration: '60',
+                    welcomeMessage: 'Hi! Thanks for your legal inquiry. Reply START to schedule a consultation.',
+                    logoEmoji: '⚖️'
+                },
+                'real-estate': {
+                    businessStart: '09:00',
+                    businessEnd: '18:00',
+                    businessDays: [1, 2, 3, 4, 5, 6],
+                    appointmentDuration: '60',
+                    welcomeMessage: 'Hi! Thanks for your property inquiry. Reply START to schedule a viewing.',
+                    logoEmoji: '🏠'
+                },
+                fitness: {
+                    businessStart: '06:00',
+                    businessEnd: '22:00',
+                    businessDays: [1, 2, 3, 4, 5, 6, 7],
+                    appointmentDuration: '60',
+                    welcomeMessage: 'Hi! Thanks for your fitness inquiry. Reply START to book a session.',
+                    logoEmoji: '💪'
+                },
+                beauty: {
+                    businessStart: '09:00',
+                    businessEnd: '19:00',
+                    businessDays: [1, 2, 3, 4, 5, 6],
+                    appointmentDuration: '90',
+                    welcomeMessage: 'Hi! Thanks for your beauty service inquiry. Reply START to book an appointment.',
+                    logoEmoji: '💄'
+                }
+            };
+
+            const config = defaults[industry];
+            if (config) {
+                if (config.businessStart) document.getElementById('businessStart').value = config.businessStart;
+                if (config.businessEnd) document.getElementById('businessEnd').value = config.businessEnd;
+                if (config.appointmentDuration) document.getElementById('appointmentDuration').value = config.appointmentDuration;
+                if (config.welcomeMessage) document.getElementById('welcomeMessage').value = config.welcomeMessage;
+                if (config.logoEmoji) document.getElementById('logoEmoji').value = config.logoEmoji;
+                
+                if (config.businessDays) {
+                    // Clear all selections
+                    document.querySelectorAll('.day-checkbox').forEach(cb => {
+                        cb.classList.remove('selected');
+                        cb.querySelector('input').checked = false;
+                    });
+                    
+                    // Select specified days
+                    config.businessDays.forEach(day => {
+                        const checkbox = document.getElementById(`day${day}`);
+                        checkbox.checked = true;
+                        checkbox.closest('.day-checkbox').classList.add('selected');
+                    });
+                }
+            }
+        }
+
+        // Next step
+        function nextStep() {
+            if (currentStep < totalSteps) {
+                // Validate current step
+                if (validateStep(currentStep)) {
+                    // Save current step data
+                    saveStepData(currentStep);
+                    
+                    // Move to next step
+                    currentStep++;
+                    updateProgress();
+                    updateSummary();
+                }
+            } else {
+                // Final step - start setup
+                startClientSetup();
+            }
+        }
+
+        // Previous step
+        function previousStep() {
+            if (currentStep > 1) {
+                currentStep--;
+                updateProgress();
+            }
+        }
+
+        // Update progress indicators
+        function updateProgress() {
+            // Update step circles
+            for (let i = 1; i <= totalSteps; i++) {
+                const circle = document.getElementById(`step${i}-circle`);
+                const line = document.getElementById(`step${i}-line`);
+                
+                if (i < currentStep) {
+                    circle.classList.add('completed');
+                    circle.classList.remove('active');
+                    if (line) line.classList.add('completed');
+                } else if (i === currentStep) {
+                    circle.classList.add('active');
+                    circle.classList.remove('completed');
+                    if (line) line.classList.remove('completed');
+                } else {
+                    circle.classList.remove('active', 'completed');
+                    if (line) line.classList.remove('completed');
+                }
+            }
+
+            // Update step visibility
+            document.querySelectorAll('.step').forEach((step, index) => {
+                step.classList.toggle('active', index + 1 === currentStep);
+            });
+
+            // Update buttons
+            document.getElementById('prevBtn').style.display = currentStep > 1 ? 'block' : 'none';
+            
+            if (currentStep === totalSteps) {
+                document.getElementById('nextBtn').textContent = 'Create Client';
+                document.getElementById('nextBtn').classList.add('btn-success');
+                document.getElementById('nextBtn').classList.remove('btn-primary');
+            } else {
+                document.getElementById('nextBtn').textContent = 'Next →';
+                document.getElementById('nextBtn').classList.add('btn-primary');
+                document.getElementById('nextBtn').classList.remove('btn-success');
+            }
+        }
+
+        // Validate current step
+        function validateStep(step) {
+            const requiredFields = {
+                1: ['clientName', 'industry', 'contactName', 'email'],
+                2: ['primaryColor'],
+                3: ['businessStart', 'businessEnd'],
+                4: ['smsFromNumber']
+            };
+
+            const fields = requiredFields[step] || [];
+            let isValid = true;
+
+            fields.forEach(fieldName => {
+                const field = document.getElementById(fieldName);
+                if (field && !field.value.trim()) {
+                    field.style.borderColor = '#dc3545';
+                    isValid = false;
+                } else if (field) {
+                    field.style.borderColor = '#ddd';
+                }
+            });
+
+            if (!isValid) {
+                alert('Please fill in all required fields before continuing.');
+            }
+
+            return isValid;
+        }
+
+        // Save step data
+        function saveStepData(step) {
+            const stepData = {};
+            
+            switch(step) {
+                case 1:
+                    stepData.basic = {
+                        clientName: document.getElementById('clientName').value,
+                        industry: document.getElementById('industry').value,
+                        contactName: document.getElementById('contactName').value,
+                        contactTitle: document.getElementById('contactTitle').value,
+                        email: document.getElementById('email').value,
+                        phone: document.getElementById('phone').value,
+                        website: document.getElementById('website').value,
+                        description: document.getElementById('description').value
+                    };
+                    break;
+                case 2:
+                    stepData.branding = {
+                        primaryColor: document.getElementById('primaryColor').value,
+                        secondaryColor: document.getElementById('secondaryColor').value,
+                        logoEmoji: document.getElementById('logoEmoji').value,
+                        timezone: document.getElementById('timezone').value,
+                        locale: document.getElementById('locale').value
+                    };
+                    break;
+                case 3:
+                    const businessDays = Array.from(document.querySelectorAll('input[name="businessDays"]:checked'))
+                        .map(input => parseInt(input.value));
+                    stepData.operations = {
+                        businessStart: document.getElementById('businessStart').value,
+                        businessEnd: document.getElementById('businessEnd').value,
+                        businessDays: businessDays,
+                        appointmentDuration: document.getElementById('appointmentDuration').value,
+                        advanceBooking: document.getElementById('advanceBooking').value,
+                        specialInstructions: document.getElementById('specialInstructions').value
+                    };
+                    break;
+                case 4:
+                    stepData.communication = {
+                        smsFromNumber: document.getElementById('smsFromNumber').value,
+                        welcomeMessage: document.getElementById('welcomeMessage').value,
+                        confirmationMessage: document.getElementById('confirmationMessage').value,
+                        reminderMessage: document.getElementById('reminderMessage').value,
+                        reminderHours: document.getElementById('reminderHours').value,
+                        maxRetries: document.getElementById('maxRetries').value
+                    };
+                    break;
+            }
+
+            clientData = { ...clientData, ...stepData };
+        }
+
+        // Update summary
+        function updateSummary() {
+            if (currentStep === 5) {
+                const basic = clientData.basic || {};
+                const branding = clientData.branding || {};
+                const operations = clientData.operations || {};
+                const communication = clientData.communication || {};
+
+                document.getElementById('summaryClientName').textContent = basic.clientName || '-';
+                document.getElementById('summaryIndustry').textContent = basic.industry || '-';
+                document.getElementById('summaryContact').textContent = `${basic.contactName || ''} ${basic.contactTitle ? `(${basic.contactTitle})` : ''}`.trim() || '-';
+                document.getElementById('summaryEmail').textContent = basic.email || '-';
+                document.getElementById('summaryPrimaryColor').textContent = branding.primaryColor || '-';
+                
+                const businessDays = operations.businessDays || [];
+                const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                const selectedDays = businessDays.map(day => dayNames[day - 1]).join(', ');
+                document.getElementById('summaryBusinessHours').textContent = 
+                    `${operations.businessStart || '09:00'} - ${operations.businessEnd || '17:00'} (${selectedDays})`;
+                
+                document.getElementById('summarySmsNumber').textContent = communication.smsFromNumber || '-';
+            }
+        }
+
+        // Start client setup
+        async function startClientSetup() {
+            document.getElementById('setupProgress').style.display = 'block';
+            document.getElementById('wizardActions').style.display = 'none';
+
+            try {
+                // Simulate API call to create client
+                const response = await fetch('/api/create-client', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-Key': 'ad34b1de00c5b7380d6a447abcd78874'
+                    },
+                    body: JSON.stringify(clientData)
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log('Client created successfully:', result);
+                    
+                    // Show success
+                    setTimeout(() => {
+                        document.getElementById('setupProgress').style.display = 'none';
+                        document.getElementById('setupSuccess').style.display = 'block';
+                    }, 2000);
+                } else {
+                    throw new Error('Failed to create client');
+                }
+            } catch (error) {
+                console.error('Error creating client:', error);
+                
+                // Show error
+                document.getElementById('setupProgress').style.display = 'none';
+                document.getElementById('setupError').style.display = 'block';
+                document.getElementById('errorMessage').textContent = error.message;
+            }
+        }
+
+        // Retry setup
+        function retrySetup() {
+            document.getElementById('setupError').style.display = 'none';
+            document.getElementById('setupProgress').style.display = 'block';
+            startClientSetup();
+        }
+    </script>
+</body>
+</html>

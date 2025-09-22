@@ -868,14 +868,13 @@
                 return;
             }
 
-            // Redirect to onboarding dashboard with template pre-selected
+            // Redirect to onboarding wizard with template pre-selected
             const params = new URLSearchParams({
                 template: templateKey,
-                name: template.name,
-                duration: template.duration
+                industry: templateKey
             });
             
-            window.location.href = `onboarding-dashboard.html?${params.toString()}`;
+            window.location.href = `onboarding-wizard.html?${params.toString()}`;
         }
 
         // Preview template
