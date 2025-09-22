@@ -1270,6 +1270,104 @@ app.post('/admin/fix-tenants', async (req, res) => {
   }
 });
 
+// Health check endpoint
+app.get('/health', async (req, res) => {
+  try {
+    const health = {
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
+      version: process.env.npm_package_version || '1.0.0'
+    };
+    
+    // Check database connectivity
+    try {
+      await listFullClients();
+      health.database = 'connected';
+    } catch (e) {
+      health.database = 'disconnected';
+      health.status = 'degraded';
+    }
+    
+    res.json(health);
+  } catch (e) {
+    res.status(500).json({ status: 'unhealthy', error: e.message });
+  }
+});
+
+// Monitoring endpoint for tenant resolution
+app.get('/monitor/tenant-resolution', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const clients = await listFullClients();
+    const tenantStats = {
+      totalTenants: clients.length,
+      tenantsWithSms: clients.filter(c => c?.sms?.fromNumber).length,
+      tenantsWithMessagingService: clients.filter(c => c?.sms?.messagingServiceSid).length,
+      duplicateFromNumbers: {},
+      duplicateMessagingServices: {},
+      lastChecked: new Date().toISOString()
+    };
+    
+    // Check for duplicates
+    const fromNumbers = {};
+    const messagingServices = {};
+    
+    clients.forEach(client => {
+      if (client?.sms?.fromNumber) {
+        fromNumbers[client.sms.fromNumber] = (fromNumbers[client.sms.fromNumber] || 0) + 1;
+      }
+      if (client?.sms?.messagingServiceSid) {
+        messagingServices[client.sms.messagingServiceSid] = (messagingServices[client.sms.messagingServiceSid] || 0) + 1;
+      }
+    });
+    
+    tenantStats.duplicateFromNumbers = Object.entries(fromNumbers).filter(([_, count]) => count > 1);
+    tenantStats.duplicateMessagingServices = Object.entries(messagingServices).filter(([_, count]) => count > 1);
+    
+    res.json(tenantStats);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// SMS delivery monitoring endpoint
+app.get('/monitor/sms-delivery', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    // This would typically query a metrics database
+    // For now, we'll return a basic structure
+    const smsStats = {
+      totalSent: 0, // Would be populated from actual metrics
+      totalDelivered: 0,
+      totalFailed: 0,
+      deliveryRate: 0,
+      last24Hours: {
+        sent: 0,
+        delivered: 0,
+        failed: 0
+      },
+      byTenant: {},
+      lastUpdated: new Date().toISOString()
+    };
+    
+    res.json(smsStats);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Stats
 app.get('/api/stats', async (_req, res) => {
   const now = Date.now();
