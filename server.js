@@ -160,6 +160,59 @@ async function readJson(p, fallback = null) {
 async function writeJson(p, data) { await fs.writeFile(p, JSON.stringify(data, null, 2), 'utf8'); }
 
 // Helpers
+
+// Resolve tenant key from inbound SMS parameters
+async function resolveTenantKeyFromInbound({ to, messagingServiceSid }) {
+  // Normalize `to` via normalizePhoneE164 (country 'GB') before comparing
+  const toE164 = normalizePhoneE164(to, 'GB');
+  if (!toE164) {
+    console.log('[TENANT RESOLVE FAIL]', { to, messagingServiceSid, reason: 'invalid_phone' });
+    return null;
+  }
+
+  try {
+    const clients = await listFullClients();
+    const candidates = [];
+
+    // Strategy (in order):
+    // a) Match by exact phone: client.sms.fromNumber === toE164
+    // b) Match by Messaging Service SID: client.sms.messagingServiceSid === messagingServiceSid
+    for (const client of clients) {
+      const phoneMatch = client?.sms?.fromNumber === toE164;
+      const mssMatch = messagingServiceSid && client?.sms?.messagingServiceSid === messagingServiceSid;
+      
+      if (phoneMatch || mssMatch) {
+        candidates.push({
+          clientKey: client.clientKey,
+          phoneMatch,
+          mssMatch,
+          fromNumber: client?.sms?.fromNumber,
+          messagingServiceSid: client?.sms?.messagingServiceSid
+        });
+      }
+    }
+
+    if (candidates.length === 0) {
+      console.log('[TENANT RESOLVE FAIL]', { to, toE164, messagingServiceSid });
+      return null;
+    }
+
+    // If multiple matches, pick the phone match first; otherwise log ambiguity and pick the first deterministic match
+    const phoneMatches = candidates.filter(c => c.phoneMatch);
+    const selected = phoneMatches.length > 0 ? phoneMatches[0] : candidates[0];
+
+    if (candidates.length > 1) {
+      console.log('[TENANT RESOLVE AMBIGUOUS]', { to, toE164, messagingServiceSid, candidates: candidates.map(c => c.clientKey) });
+    }
+
+    console.log('[TENANT RESOLVE OK]', { tenantKey: selected.clientKey, to, toE164, messagingServiceSid });
+    return selected.clientKey;
+  } catch (error) {
+    console.log('[TENANT RESOLVE FAIL]', { to, toE164, messagingServiceSid, error: error.message });
+    return null;
+  }
+}
+
 // Simple {{var}} template renderer for SMS bodies
 function renderTemplate(str, vars = {}) {
   try {
@@ -784,24 +837,14 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
 
     // Render log for grep
     console.log('[INBOUND SMS]', { from, to, body: bodyTxt });
-  // --- derive tenantKey from header, inbound 'To', or MessagingServiceSid (minimal mapping) ---
-  let tenantKey = (req.headers['x-client-key'] || '').trim();
+  // --- derive tenantKey from header, inbound 'To', or MessagingServiceSid ---
+  const headerKey = req.get('X-Client-Key');
+  const toE164 = normalizePhoneE164(req.body.To, 'GB');
+  const mss = req.body.MessagingServiceSid || req.body.messagingServiceSid?.trim?.();
+  let tenantKey = headerKey || await resolveTenantKeyFromInbound({ to: toE164, messagingServiceSid: mss });
+
   if (!tenantKey) {
-    const mgsid = (req.body.MessagingServiceSid || req.body.messagingServiceSid || '').trim();
-    try {
-      const clients = await listFullClients();
-      const hit = clients.find(c =>
-        (c?.sms?.fromNumber && c.sms.fromNumber === to) ||
-        (mgsid && c?.sms?.messagingServiceSid === mgsid)
-      );
-      if (hit) tenantKey = hit.clientKey;
-      console.log('[INBOUND MAP]', { to, mgsid: mgsid || null, tenantKey: tenantKey || null });
-    } catch (e) {
-      console.log('[INBOUND MAP ERROR]', e?.message || String(e));
-    }
-  }
-  if (!tenantKey) {
-    console.log('[INBOUND MAP MISS]', { to, body: bodyTxt });
+    console.log('[TENANT RESOLVE FAIL]', { to: req.body.To, toE164, messagingServiceSid: mss });
     return res.send('OK');
   }
 
@@ -1087,6 +1130,19 @@ app.post('/api/calendar/check-book', async (req, res) => {
     const body = { error: String(e) };
     setCachedIdem(deriveIdemKey(req), status, body);
     return res.status(status).json(body);
+  }
+});
+
+// Diagnostic endpoint for tenant resolution
+app.get('/admin/tenant-resolve', async (req, res) => {
+  try {
+    const { to, mss } = req.query;
+    if (!to) return res.status(400).json({ ok: false, error: 'Missing "to" parameter' });
+
+    const tenantKey = await resolveTenantKeyFromInbound({ to, messagingServiceSid: mss });
+    res.json({ ok: true, tenantKey, to, messagingServiceSid: mss });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
   }
 });
 
