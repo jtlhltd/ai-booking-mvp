@@ -218,8 +218,12 @@ app.post('/api/create-client', async (req, res) => {
     await upsertFullClient(clientConfig);
 
     // Generate branded dashboard
-    const dashboardTemplate = await import('fs').then(fs => 
-      fs.readFileSync(new URL('./public/client-dashboard-template.html', import.meta.url).pathname, 'utf8')
+    const fs = await import('fs');
+    const path = await import('path');
+    
+    const dashboardTemplate = fs.readFileSync(
+      new URL('./public/client-dashboard-template.html', import.meta.url).pathname, 
+      'utf8'
     );
 
     const brandedDashboard = dashboardTemplate
@@ -227,10 +231,6 @@ app.post('/api/create-client', async (req, res) => {
       .replace(/"#667eea"/g, `"${primaryColor}"`)
       .replace(/"#764ba2"/g, `"${secondaryColor}"`)
       .replace(/YOUR_API_KEY_HERE/g, process.env.API_KEY);
-
-    // Save dashboard file
-    const fs = await import('fs');
-    const path = await import('path');
     const clientDir = path.join(process.cwd(), 'clients', clientKey);
     
     if (!fs.existsSync(clientDir)) {

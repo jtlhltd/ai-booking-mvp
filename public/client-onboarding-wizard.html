@@ -1044,18 +1044,6 @@
             document.getElementById('setupProgress').style.display = 'block';
             document.getElementById('wizardActions').style.display = 'none';
 
-            // Demo mode - skip API call for now
-            console.log('Demo Mode: Creating client with data:', clientData);
-            
-            // Simulate processing time
-            setTimeout(() => {
-                document.getElementById('setupProgress').style.display = 'none';
-                document.getElementById('setupSuccess').style.display = 'block';
-                console.log('Demo Mode: Client created successfully!');
-            }, 2000);
-
-            // Uncomment below to enable real API calls
-            /*
             try {
                 // Get API key from environment or use default
                 const apiKey = 'ad34b1de00c5b7380d6a447abcd78874';
@@ -1096,7 +1084,6 @@
                 document.getElementById('setupError').style.display = 'block';
                 document.getElementById('errorMessage').textContent = error.message;
             }
-            */
         }
 
         // Retry setup
