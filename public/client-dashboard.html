@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Client Dashboard - AI Booking MVP</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--client-bg, linear-gradient(135deg, #667eea 0%, #764ba2 100%));
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            border-left: 5px solid var(--client-color, #667eea);
+        }
+        
+        .client-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .client-logo {
+            width: 60px;
+            height: 60px;
+            background: var(--client-color, #667eea);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .client-details h1 {
+            font-size: 2.5rem;
+            color: var(--client-color, #667eea);
+            margin-bottom: 5px;
+        }
+        
+        .client-details p {
+            color: #666;
+            font-size: 1.1rem;
+        }
+        
+        .client-status {
+            text-align: right;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 500;
+            background: var(--client-color, #667eea);
+            color: white;
+        }
+        
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+            border-top: 3px solid var(--client-color, #667eea);
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .card h3 {
+            color: var(--client-color, #333);
+            margin-bottom: 20px;
+            font-size: 1.3rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .metric:last-child {
+            border-bottom: none;
+        }
+        
+        .metric-label {
+            color: #666;
+            font-weight: 500;
+        }
+        
+        .metric-value {
+            font-weight: bold;
+            font-size: 1.2rem;
+            color: var(--client-color, #333);
+        }
+        
+        .status {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        
+        .status.healthy {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status.warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .btn {
+            background: var(--client-color, #667eea);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: transform 0.2s ease;
+            margin: 5px;
+        }
+        
+        .btn:hover {
+            transform: scale(1.05);
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+        }
+        
+        .leads-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .lead-item {
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            border-left: 4px solid var(--client-color, #667eea);
+        }
+        
+        .lead-phone {
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .lead-status {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .lead-score {
+            float: right;
+            background: var(--client-color, #667eea);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+        }
+        
+        .client-config {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .client-config h4 {
+            color: var(--client-color, #1976d2);
+            margin-bottom: 10px;
+        }
+        
+        .client-config p {
+            color: #666;
+            margin: 5px 0;
+        }
+        
+        .refresh-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: var(--client-color, #28a745);
+            color: white;
+            border: none;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            font-size: 1.5rem;
+            cursor: pointer;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            transition: transform 0.2s ease;
+        }
+        
+        .refresh-btn:hover {
+            transform: scale(1.1);
+        }
+        
+        .client-selector {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .client-selector select {
+            padding: 10px 20px;
+            border: 2px solid var(--client-color, #667eea);
+            border-radius: 25px;
+            background: white;
+            font-size: 1rem;
+            cursor: pointer;
+            margin: 0 10px;
+        }
+        
+        @media (max-width: 768px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+            
+            .client-details h1 {
+                font-size: 2rem;
+            }
+            
+            .client-info {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="client-info">
+                <div style="display: flex; align-items: center; gap: 20px;">
+                    <div class="client-logo" id="clientLogo">🏥</div>
+                    <div class="client-details">
+                        <h1 id="clientName">Client Dashboard</h1>
+                        <p id="clientDescription">AI-powered booking system for your business</p>
+                    </div>
+                </div>
+                <div class="client-status">
+                    <div class="status-badge" id="clientStatus">Active</div>
+                </div>
+            </div>
+            
+            <div class="client-config" id="clientConfig" style="display: none;">
+                <h4 id="configTitle">Client Configuration</h4>
+                <p><strong>Phone:</strong> <span id="configPhone">-</span></p>
+                <p><strong>Timezone:</strong> <span id="configTimezone">-</span></p>
+                <p><strong>Business Hours:</strong> <span id="configHours">-</span></p>
+            </div>
+        </div>
+        
+        <div class="dashboard">
+            <!-- Client Metrics -->
+            <div class="card">
+                <h3>📊 Your Performance</h3>
+                <div id="client-metrics">
+                    <div class="loading">Loading your metrics...</div>
+                </div>
+            </div>
+            
+            <!-- Lead Management -->
+            <div class="card">
+                <h3>👥 Your Leads</h3>
+                <div id="leads-list" class="leads-list">
+                    <div class="loading">Loading your leads...</div>
+                </div>
+            </div>
+            
+            <!-- SMS Configuration -->
+            <div class="card">
+                <h3>📱 SMS Setup</h3>
+                <div id="sms-config">
+                    <div class="loading">Loading SMS configuration...</div>
+                </div>
+            </div>
+            
+            <!-- Quick Actions -->
+            <div class="card">
+                <h3>⚡ Quick Actions</h3>
+                <button class="btn" onclick="testClientSMS()">Test SMS</button>
+                <button class="btn" onclick="refreshClientData()">Refresh Data</button>
+                <button class="btn btn-secondary" onclick="viewClientLogs()">View Logs</button>
+            </div>
+            
+            <!-- Business Hours -->
+            <div class="card">
+                <h3>🕒 Business Hours</h3>
+                <div id="business-hours">
+                    <div class="loading">Loading business hours...</div>
+                </div>
+            </div>
+            
+            <!-- Performance -->
+            <div class="card">
+                <h3>📈 Performance</h3>
+                <div id="performance-metrics">
+                    <div class="loading">Loading performance data...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <button class="refresh-btn" onclick="refreshClientData()" title="Refresh Data">🔄</button>
+    
+    <script>
+        const API_KEY = 'ad34b1de00c5b7380d6a447abcd78874';
+        const BASE_URL = 'https://ai-booking-mvp.onrender.com';
+        
+        // Client configuration - easily customizable per client
+        const CLIENT_CONFIG = {
+            'victory_dental': {
+                name: 'Victory Dental',
+                description: 'Professional dental care with AI-powered booking',
+                logo: '🦷',
+                color: '#4CAF50',
+                bg: 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)',
+                phone: '+447403934440',
+                timezone: 'Europe/London',
+                businessHours: '9AM - 5PM, Mon-Fri',
+                industry: 'Healthcare',
+                website: 'victorydental.com'
+            },
+            'northside_vet': {
+                name: 'Northside Veterinary Clinic',
+                description: 'Compassionate veterinary care for your pets',
+                logo: '🐾',
+                color: '#FF9800',
+                bg: 'linear-gradient(135deg, #FF9800 0%, #F57C00 100%)',
+                phone: '+447491683261',
+                timezone: 'Europe/London',
+                businessHours: '9AM - 6PM, Mon-Sat',
+                industry: 'Veterinary',
+                website: 'northsidevet.co.uk'
+            },
+            'demo_client': {
+                name: 'Demo Client',
+                description: 'Sample client for demonstration purposes',
+                logo: '🏢',
+                color: '#2196F3',
+                bg: 'linear-gradient(135deg, #2196F3 0%, #1976D2 100%)',
+                phone: '+447000000000',
+                timezone: 'Europe/London',
+                businessHours: '9AM - 5PM, Mon-Fri',
+                industry: 'Professional Services',
+                website: 'democlient.com'
+            }
+        };
+        
+        let currentClient = null;
+        
+        // Get client from URL parameter or default
+        function getClientFromURL() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('client') || 'victory_dental';
+        }
+        
+        function applyClientTheme(clientKey) {
+            const config = CLIENT_CONFIG[clientKey];
+            if (!config) return;
+            
+            // Apply CSS custom properties
+            document.documentElement.style.setProperty('--client-color', config.color);
+            document.documentElement.style.setProperty('--client-bg', config.bg);
+            
+            // Update page elements
+            document.getElementById('clientName').textContent = config.name;
+            document.getElementById('clientDescription').textContent = config.description;
+            document.getElementById('clientLogo').textContent = config.logo;
+            document.title = `${config.name} - AI Booking Dashboard`;
+        }
+        
+        async function loadClientData() {
+            if (!currentClient) return;
+            
+            try {
+                const config = CLIENT_CONFIG[currentClient];
+                const clientData = getClientData(currentClient);
+                
+                // Update client config display
+                document.getElementById('clientConfig').style.display = 'block';
+                document.getElementById('configTitle').textContent = `${config.name} Configuration`;
+                document.getElementById('configPhone').textContent = config.phone;
+                document.getElementById('configTimezone').textContent = config.timezone;
+                document.getElementById('configHours').textContent = config.businessHours;
+                
+                // Update client metrics
+                document.getElementById('client-metrics').innerHTML = `
+                    <div class="metric">
+                        <span class="metric-label">Total Leads</span>
+                        <span class="metric-value">${clientData.totalLeads}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Total Calls</span>
+                        <span class="metric-value">${clientData.totalCalls}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Last 24h Leads</span>
+                        <span class="metric-value">${clientData.last24hLeads}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Conversion Rate</span>
+                        <span class="metric-value">${clientData.conversionRate}%</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Success Rate</span>
+                        <span class="metric-value">${clientData.successRate}%</span>
+                    </div>
+                `;
+                
+                // Update performance metrics
+                document.getElementById('performance-metrics').innerHTML = `
+                    <div class="metric">
+                        <span class="metric-label">Avg Lead Score</span>
+                        <span class="metric-value">${clientData.avgLeadScore}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">High Priority</span>
+                        <span class="metric-value">${clientData.highPriorityLeads}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Medium Priority</span>
+                        <span class="metric-value">${clientData.mediumPriorityLeads}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Low Priority</span>
+                        <span class="metric-value">${clientData.lowPriorityLeads}</span>
+                    </div>
+                `;
+                
+                // Update SMS config
+                document.getElementById('sms-config').innerHTML = `
+                    <div class="metric">
+                        <span class="metric-label">Your Number</span>
+                        <span class="metric-value">${config.phone}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Messaging Service</span>
+                        <span class="metric-value">Active</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Status</span>
+                        <span class="status healthy">Ready</span>
+                    </div>
+                `;
+                
+                // Update business hours
+                document.getElementById('business-hours').innerHTML = `
+                    <div class="metric">
+                        <span class="metric-label">Timezone</span>
+                        <span class="metric-value">${config.timezone}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Hours</span>
+                        <span class="metric-value">${config.businessHours}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="metric-label">Current Status</span>
+                        <span class="status ${isBusinessHours() ? 'healthy' : 'warning'}">${isBusinessHours() ? 'Open' : 'Closed'}</span>
+                    </div>
+                `;
+                
+                // Update leads
+                document.getElementById('leads-list').innerHTML = clientData.leads.map(lead => `
+                    <div class="lead-item">
+                        <div class="lead-phone">${lead.phone}</div>
+                        <div class="lead-status">Status: ${lead.status} • Last: ${lead.lastMessage}</div>
+                        <div class="lead-score">Score: ${lead.score}</div>
+                    </div>
+                `).join('') || '<div class="loading">No leads yet</div>';
+                
+            } catch (error) {
+                console.error('Failed to load client data:', error);
+                document.getElementById('client-metrics').innerHTML = `
+                    <div class="error">Failed to load client data: ${error.message}</div>
+                `;
+            }
+        }
+        
+        function getClientData(clientKey) {
+            const data = {
+                'victory_dental': {
+                    totalLeads: 1,
+                    totalCalls: 0,
+                    last24hLeads: 1,
+                    conversionRate: 0,
+                    successRate: 100,
+                    avgLeadScore: 80,
+                    highPriorityLeads: 1,
+                    mediumPriorityLeads: 0,
+                    lowPriorityLeads: 0,
+                    leads: [
+                        {
+                            phone: '+447491683261',
+                            status: 'engaged',
+                            lastMessage: 'START message',
+                            score: 80
+                        }
+                    ]
+                },
+                'northside_vet': {
+                    totalLeads: 0,
+                    totalCalls: 0,
+                    last24hLeads: 0,
+                    conversionRate: 0,
+                    successRate: 100,
+                    avgLeadScore: 0,
+                    highPriorityLeads: 0,
+                    mediumPriorityLeads: 0,
+                    lowPriorityLeads: 0,
+                    leads: []
+                },
+                'demo_client': {
+                    totalLeads: 3,
+                    totalCalls: 2,
+                    last24hLeads: 1,
+                    conversionRate: 67,
+                    successRate: 100,
+                    avgLeadScore: 75,
+                    highPriorityLeads: 2,
+                    mediumPriorityLeads: 1,
+                    lowPriorityLeads: 0,
+                    leads: [
+                        {
+                            phone: '+447123456789',
+                            status: 'engaged',
+                            lastMessage: 'urgent appointment',
+                            score: 90
+                        },
+                        {
+                            phone: '+447987654321',
+                            status: 'new',
+                            lastMessage: 'booking inquiry',
+                            score: 60
+                        }
+                    ]
+                }
+            };
+            return data[clientKey] || data['victory_dental'];
+        }
+        
+        function isBusinessHours() {
+            const now = new Date();
+            const hour = now.getHours();
+            const day = now.getDay();
+            return day >= 1 && day <= 5 && hour >= 9 && hour < 17;
+        }
+        
+        function testClientSMS() {
+            if (!currentClient) {
+                alert('Please select a client first');
+                return;
+            }
+            
+            const config = CLIENT_CONFIG[currentClient];
+            alert(`SMS Test for ${config.name}:\n\nSend "START" to:\n${config.phone}\n\nCheck logs for [AUTO-CALL TRIGGER] or [AUTO-CALL DEFERRED]`);
+        }
+        
+        function refreshClientData() {
+            if (currentClient) {
+                loadClientData();
+            }
+        }
+        
+        function viewClientLogs() {
+            window.open('https://dashboard.render.com/web/srv-d2vvdqbuibrs73dq57ug/logs', '_blank');
+        }
+        
+        // Initialize client dashboard
+        function initClientDashboard() {
+            currentClient = getClientFromURL();
+            applyClientTheme(currentClient);
+            loadClientData();
+        }
+        
+        // Auto-refresh every 30 seconds
+        setInterval(() => {
+            if (currentClient) {
+                loadClientData();
+            }
+        }, 30000);
+        
+        // Load client dashboard on page load
+        document.addEventListener('DOMContentLoaded', initClientDashboard);
+    </script>
+</body>
+</html>

@@ -88,6 +88,14 @@ app.get('/tenant-dashboard', (req, res) => {
   res.sendFile(new URL('./public/tenant-dashboard.html', import.meta.url).pathname);
 });
 
+app.get('/client-dashboard', (req, res) => {
+  res.sendFile(new URL('./public/client-dashboard.html', import.meta.url).pathname);
+});
+
+app.get('/client-setup', (req, res) => {
+  res.sendFile(new URL('./public/client-setup.html', import.meta.url).pathname);
+});
+
 // --- healthz: report which integrations are configured (without leaking secrets)
 app.get('/healthz', (req, res) => {
   const flags = {
