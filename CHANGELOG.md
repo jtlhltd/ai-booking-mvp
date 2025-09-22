@@ -3,6 +3,7 @@
 All notable changes to this project will be documented here.
 
 ## [Unreleased]
+- feat(client-dashboards): add client-specific branded dashboards with custom themes
 - fix(dashboard): remove authentication requirement from tenant dashboard
 - feat(dashboard): add real-time web dashboard for metrics and lead management
 - fix(tenant): preserve tenantKey when updating existing leads to prevent VAPI call failures
