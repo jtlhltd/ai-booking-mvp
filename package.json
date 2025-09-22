@@ -7,7 +7,12 @@
   "scripts": {
     "start": "node server.js",
     "render-start": "node server.js",
-    "render-build": "echo \"no build step\""
+    "render-build": "echo \"no build step\"",
+    "release": "standard-version",
+    "release:patch": "standard-version --release-as patch",
+    "release:minor": "standard-version --release-as minor",
+    "release:major": "standard-version --release-as major",
+    "postrelease": "git push --follow-tags origin main"
   },
   "dependencies": {
     "better-sqlite3": "^9.4.3",
@@ -25,5 +30,8 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "standard-version": "^9.5.0"
   }
 }

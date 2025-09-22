@@ -1,11 +1,13 @@
-const isE164 = (s) => typeof s === 'string' && /^\+\d{7,15}$/.test(s);
-// Keep only + && digits
-const normalizePhone = (s) => (s || '').trim().replace(/[^\d+]/g, '');
+// TEST: Cursor is connected
 
-/**
- * Accepts already-E.164, converts common GB local formats, or returns null.
- */
-function coerceE164(input, region = 'GB') {
+// Normalizes phone to E.164 (GB default). Returns "+447..." or null.
+function normalizePhoneE164(input, country = 'GB') {
+  // Local isE164 helper
+  const isE164 = (s) => typeof s === 'string' && /^\+\d{7,15}$/.test(s);
+  
+  // Keep only + && digits
+  const normalizePhone = (s) => (s || '').trim().replace(/[^\d+]/g, '');
+  
   if (input == null) return null;
   const raw = String(input).trim();
   if (!raw) return null;
@@ -24,7 +26,7 @@ function coerceE164(input, region = 'GB') {
   const digits = cleaned.replace(/\D/g, '');
 
   // GB-specific heuristics
-  const reg = String(region || 'GB').toUpperCase();
+  const reg = String(country || 'GB').toUpperCase();
   if (reg === 'GB' || reg === 'UK') {
     // 07XXXXXXXXX (or 7XXXXXXXXX) -> +447XXXXXXXXX
     const m1 = digits.match(/^0?7(\d{9})$/);
@@ -158,72 +160,6 @@ async function readJson(p, fallback = null) {
 async function writeJson(p, data) { await fs.writeFile(p, JSON.stringify(data, null, 2), 'utf8'); }
 
 // Helpers
-
-  const digits = cleaned.replace(/\D/g, '');
-
-  // GB heuristics
-  const reg = String(region || 'GB').toUpperCase();
-  if (reg === 'GB' || reg === 'UK') {
-    // 07XXXXXXXXX or 7XXXXXXXXX -> +447XXXXXXXXX
-    const m1 = digits.match(/^0?7(\d{9})$/);
-    if (m1) {
-      const cand = '+447' + m1[1];
-      if (isE164(cand)) return cand;
-    }
-    // 44XXXXXXXXXX -> +44XXXXXXXXXX
-    const m2 = digits.match(/^44(\d{9,10})$/);
-    if (m2) {
-      const cand = '+44' + m2[1];
-      if (isE164(cand)) return cand;
-    }
-  }
-
-  // Generic fallback: if it looks like a plausible international number, prefix '+'
-  if (/^\d{7,15}$/.test(digits)) {
-    const cand = '+' + digits;
-    if (isE164(cand)) return cand;
-  }
-
-  return null;
-}
-// Best-effort E.164 coercion (GB-focused)
-// Accepts common UK inputs like "07491 683261" or "7491683261" && returns "+447491683261".
-function ensureE164(input, country = 'GB') {
-  const raw = (input || '').toString().trim();
-  if (!raw) return null;
-  const cleaned = normalizePhone(raw);
-
-  // Already E.164
-  if (isE164(cleaned)) return cleaned;
-
-  // Handle 00 prefix -> +
-  if (/^00\d{6,}$/.test(cleaned)) {
-    const candidate = '+' + cleaned.slice(2);
-    if (isE164(candidate)) return candidate;
-  }
-
-  // GB heuristics
-  if (country === 'GB' || country === 'UK') {
-    // 0-leading UK mobile (07xxxxxxxxx)
-    const m1 = cleaned.match(/^0?7(\d{9})$/);
-    if (m1) return '+447' + m1[1];
-    // Already starts with 44 but missing '+' (44xxxxxxxxxx)
-    const m2 = cleaned.match(/^44(\d{9,10})$/);
-    if (m2) {
-      const cand = '+44' + m2[1];
-      if (isE164(cand)) return cand;
-    }
-  }
-
-  // Fallback: if it looks like a plausible 8-15 digit national, just expose "+" + digits
-  const digits = cleaned.replace(/\D/g, '');
-  if (digits.length >= 7 && digits.length <= 15) {
-      cand = '+' + digits
-      # can't run JS isE164; just return candidate && let downstream fail if truly invalid
-      return cand
-
-  return null;
-}
 // Simple {{var}} template renderer for SMS bodies
 function renderTemplate(str, vars = {}) {
   try {
@@ -309,7 +245,7 @@ app.post('/api/leads', async (req, res) => {
     if (!name || !phoneIn) return res.status(400).json({ ok:false, error:'Missing lead.name or lead.phone' });
 
     const regionHint = (body.region || client?.booking?.country || client?.default_country || client?.country || 'GB');
-    const phone = coerceE164(phoneIn, regionHint);
+    const phone = normalizePhoneE164(phoneIn, regionHint);
     if (!phone) return res.status(400).json({ ok:false, error:`invalid phone (expected E.164 like +447... or convertible with region ${regionHint})` });
 
     const now = new Date().toISOString();
@@ -843,8 +779,8 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
     const bodyTxt = (req.body.Body || '').toString().trim();
 
     // Normalize numbers: strip spaces so E.164 comparisons work
-    const from = normalizePhone(rawFrom);
-    const to   = normalizePhone(rawTo);
+    const from = normalizePhoneE164(rawFrom);
+    const to   = normalizePhoneE164(rawTo);
 
     // Render log for grep
     console.log('[INBOUND SMS]', { from, to, body: bodyTxt });
@@ -871,7 +807,7 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
 
 
     // Validate sender
-    if (!isE164(from)) return res.type('text/plain').send('IGNORED');
+    if (!from) return res.type('text/plain').send('IGNORED');
 
     // YES / STOP intents (extend as needed)
     const isYes  = /^\s*(yes|y|ok|okay|sure|confirm)\s*$/i.test(bodyTxt);
@@ -880,7 +816,7 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
 
     // Load & update the most recent lead matching this phone
     let leads = await readJson(LEADS_PATH, []);
-    const revIdx = [...leads].reverse().findIndex(L => normalizePhone(L.phone || '') === from);
+    const revIdx = [...leads].reverse().findIndex(L => normalizePhoneE164(L.phone || '') === from);
     const idx = revIdx >= 0 ? (leads.length - 1 - revIdx) : -1;
 
     let serviceForCall = '';
@@ -920,13 +856,16 @@ app.post('/webhooks/twilio-inbound', async (req, res) => {
 
     await writeJson(LEADS_PATH, leads);
 
-    // If user texted YES && we know the tenant, trigger a Vapi call right away (fire-and-forget)
-    if (isYes && tenantKey && VAPI_PRIVATE_KEY) {
+    // If user texted YES or START && we know the tenant, trigger a Vapi call right away (fire-and-forget)
+    if ((isYes || isStart) && tenantKey && VAPI_PRIVATE_KEY) {
       try {
         const client = await getFullClient(tenantKey);
         if (client) {
           const assistantId = client?.vapiAssistantId || VAPI_ASSISTANT_ID;
           const phoneNumberId = client?.vapiPhoneNumberId || VAPI_PHONE_NUMBER_ID;
+          if (isStart) {
+            console.log('[LEAD OPT-IN START]', { from, tenantKey });
+          }
           const payload = {
             assistantId,
             phoneNumberId,
@@ -991,8 +930,8 @@ app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
 
     const { phone, service, durationMin } = req.body || {};
     if (!phone) return res.status(400).json({ error: 'Missing phone' });
-    const e164 = normalizePhone(phone);
-    if (!isE164(e164)) return res.status(400).json({ error: 'phone must be E.164 (+447...)' });
+    const e164 = normalizePhoneE164(phone);
+    if (!e164) return res.status(400).json({ error: 'phone must be E.164 (+447...)' });
     if (!VAPI_PRIVATE_KEY) {
       return res.status(500).json({ error: 'Missing VAPI_PRIVATE_KEY' });
     }
@@ -1062,8 +1001,8 @@ app.post('/api/calendar/check-book', async (req, res) => {
 
     const { lead } = req.body || {};
     if (!lead?.name || !lead?.phone) return res.status(400).json({ error: 'Missing lead{name, phone}' });
-    lead.phone = normalizePhone(lead.phone);
-    if (!isE164(lead.phone)) return res.status(400).json({ error: 'lead.phone must be E.164' });
+    lead.phone = normalizePhoneE164(lead.phone);
+    if (!lead.phone) return res.status(400).json({ error: 'lead.phone must be E.164' });
 
     // Default: book tomorrow ~14:00 in tenant TZ
     const base = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -1420,7 +1359,7 @@ app.post('/api/leads', async (req, res) => {
 
     const leadId = (body.id && String(body.id)) || ('lead_' + nanoid(8));
     const regionHint = (body.region || client?.booking?.country || client?.default_country || client?.country || 'GB');
-    const phoneNorm = coerceE164(phoneIn, regionHint);
+    const phoneNorm = normalizePhoneE164(phoneIn, regionHint);
     if (!phoneNorm) return res.status(400).json({ ok:false, error:`invalid phone (expected E.164 like +447... or convertible with region ${regionHint})` });
 
     const now = new Date().toISOString();
