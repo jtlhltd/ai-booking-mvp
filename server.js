@@ -171,6 +171,121 @@ const GOOGLE_PRIVATE_KEY_B64 = process.env.GOOGLE_PRIVATE_KEY_B64 || '';
 const GOOGLE_CALENDAR_ID     = process.env.GOOGLE_CALENDAR_ID     || 'primary';
 const TIMEZONE               = process.env.TZ || process.env.TIMEZONE || 'Europe/London';
 
+// Business hours detection
+function isBusinessHours(tenant = null) {
+  const now = new Date();
+  const tz = tenant?.booking?.timezone || tenant?.timezone || TIMEZONE;
+  
+  // Convert to tenant timezone
+  const tenantTime = new Date(now.toLocaleString("en-US", {timeZone: tz}));
+  const hour = tenantTime.getHours();
+  const day = tenantTime.getDay(); // 0 = Sunday, 6 = Saturday
+  
+  // Default business hours: Mon-Fri 9AM-5PM
+  const businessHours = tenant?.businessHours || {
+    start: 9,
+    end: 17,
+    days: [1, 2, 3, 4, 5] // Monday to Friday
+  };
+  
+  const isWeekday = businessHours.days.includes(day);
+  const isBusinessHour = hour >= businessHours.start && hour < businessHours.end;
+  
+  return isWeekday && isBusinessHour;
+}
+
+function getNextBusinessHour(tenant = null) {
+  const now = new Date();
+  const tz = tenant?.booking?.timezone || tenant?.timezone || TIMEZONE;
+  const tenantTime = new Date(now.toLocaleString("en-US", {timeZone: tz}));
+  
+  const businessHours = tenant?.businessHours || {
+    start: 9,
+    end: 17,
+    days: [1, 2, 3, 4, 5]
+  };
+  
+  let nextBusiness = new Date(tenantTime);
+  nextBusiness.setHours(businessHours.start, 0, 0, 0);
+  
+  // If it's already past business hours today, move to next business day
+  if (tenantTime.getHours() >= businessHours.end || !businessHours.days.includes(tenantTime.getDay())) {
+    do {
+      nextBusiness.setDate(nextBusiness.getDate() + 1);
+    } while (!businessHours.days.includes(nextBusiness.getDay()));
+  }
+  
+  return nextBusiness;
+}
+
+// Lead scoring system
+function calculateLeadScore(lead, tenant = null) {
+  let score = 0;
+  
+  // Base score for opt-in
+  if (lead.consentSms) score += 30;
+  
+  // Engagement level
+  if (lead.status === 'engaged') score += 20;
+  if (lead.status === 'opted_out') score = 0; // Override everything
+  
+  // Response time (faster = higher score)
+  if (lead.lastInboundAt && lead.createdAt) {
+    const responseTime = new Date(lead.lastInboundAt) - new Date(lead.createdAt);
+    const responseMinutes = responseTime / (1000 * 60);
+    if (responseMinutes < 5) score += 25;
+    else if (responseMinutes < 30) score += 15;
+    else if (responseMinutes < 60) score += 10;
+  }
+  
+  // Message content analysis
+  if (lead.lastInboundText) {
+    const text = lead.lastInboundText.toLowerCase();
+    
+    // High-intent keywords
+    if (text.includes('urgent') || text.includes('asap') || text.includes('emergency')) score += 20;
+    if (text.includes('book') || text.includes('appointment') || text.includes('schedule')) score += 15;
+    if (text.includes('price') || text.includes('cost') || text.includes('quote')) score += 10;
+    
+    // Question marks indicate engagement
+    if (text.includes('?')) score += 5;
+    
+    // Length indicates interest
+    if (text.length > 50) score += 5;
+    if (text.length > 100) score += 5;
+  }
+  
+  // Time-based scoring (recent activity)
+  if (lead.lastInboundAt) {
+    const hoursSinceLastContact = (new Date() - new Date(lead.lastInboundAt)) / (1000 * 60 * 60);
+    if (hoursSinceLastContact < 1) score += 15;
+    else if (hoursSinceLastContact < 24) score += 10;
+    else if (hoursSinceLastContact < 72) score += 5;
+  }
+  
+  // Tenant-specific scoring
+  if (tenant?.leadScoring) {
+    const tenantRules = tenant.leadScoring;
+    if (tenantRules.highValueKeywords) {
+      const text = (lead.lastInboundText || '').toLowerCase();
+      for (const keyword of tenantRules.highValueKeywords) {
+        if (text.includes(keyword.toLowerCase())) {
+          score += tenantRules.keywordScore || 10;
+        }
+      }
+    }
+  }
+  
+  return Math.min(score, 100); // Cap at 100
+}
+
+function getLeadPriority(score) {
+  if (score >= 80) return 'high';
+  if (score >= 60) return 'medium';
+  if (score >= 40) return 'low';
+  return 'very_low';
+}
+
 // === Env: Twilio
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || '';
 const TWILIO_AUTH_TOKEN  = process.env.TWILIO_AUTH_TOKEN  || '';
@@ -1018,6 +1133,72 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, async (req, res) => {
         });
         return res.send('OK');
       }
+
+      // Check business hours and lead score before making calls
+      const client = await getFullClient(tenantKey);
+      const isBusinessTime = isBusinessHours(client);
+      
+      // Calculate lead score
+      const leadScore = calculateLeadScore(existingLead, client);
+      const priority = getLeadPriority(leadScore);
+      
+      console.log('[LEAD SCORE]', { 
+        from, 
+        tenantKey, 
+        score: leadScore, 
+        priority,
+        isBusinessTime,
+        willCall: isBusinessTime && leadScore >= 40 // Only call high/medium priority leads
+      });
+      
+      // Skip very low priority leads even during business hours
+      if (leadScore < 40) {
+        console.log('[AUTO-CALL SKIPPED]', { 
+          tenantKey, 
+          from, 
+          reason: 'low_lead_score',
+          score: leadScore,
+          priority
+        });
+        return res.send('OK');
+      }
+      
+      if (!isBusinessTime) {
+        const nextBusiness = getNextBusinessHour(client);
+        console.log('[AUTO-CALL DEFERRED]', { 
+          tenantKey, 
+          from, 
+          reason: 'outside_business_hours',
+          nextBusinessTime: nextBusiness.toISOString(),
+          currentTime: new Date().toISOString()
+        });
+        
+        // Send a message explaining the delay
+        try {
+          const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
+          if (configured) {
+            const brand = client?.displayName || client?.clientKey || 'Our Clinic';
+            const nextBusinessStr = nextBusiness.toLocaleString('en-GB', { 
+              timeZone: client?.booking?.timezone || TIMEZONE,
+              weekday: 'long',
+              hour: '2-digit',
+              minute: '2-digit'
+            });
+            const ack = `Thanks! ${brand} will call you during business hours (${nextBusinessStr}). Reply STOP to opt out.`;
+            await smsClient.messages.create({
+              from: fromNumber,
+              to: from,
+              body: ack,
+              messagingServiceSid
+            });
+            console.log('[BUSINESS HOURS SMS]', { from, to: from, brand, nextBusinessTime: nextBusinessStr });
+          }
+        } catch (e) {
+          console.error('[BUSINESS HOURS SMS ERROR]', e?.message || String(e));
+        }
+        
+        return res.send('OK');
+      }
       
       // If we're blocking the call, send a message explaining why
       if (isAssistantNumber) {
@@ -1466,6 +1647,171 @@ app.get('/admin/changes', async (req, res) => {
     });
   } catch (e) {
     console.error('[CHANGE ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Lead scoring debug endpoint
+app.get('/admin/lead-score', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { phone, tenantKey } = req.query;
+    if (!phone) return res.status(400).json({ ok: false, error: 'Missing "phone" parameter' });
+
+    const leads = await readJson(LEADS_PATH, []);
+    const lead = leads.find(l => l.phone === phone);
+    
+    if (!lead) {
+      return res.json({ ok: true, phone, found: false, message: 'Lead not found' });
+    }
+
+    const tenant = tenantKey ? await getFullClient(tenantKey) : null;
+    const score = calculateLeadScore(lead, tenant);
+    const priority = getLeadPriority(score);
+
+    console.log('[LEAD SCORE DEBUG]', { phone, tenantKey, score, priority, requestedBy: req.ip });
+
+    res.json({
+      ok: true,
+      phone,
+      tenantKey: tenant?.clientKey || null,
+      score,
+      priority,
+      breakdown: {
+        consentSms: lead.consentSms ? 30 : 0,
+        status: lead.status === 'engaged' ? 20 : 0,
+        responseTime: lead.lastInboundAt && lead.createdAt ? 
+          Math.min(25, Math.max(0, 25 - ((new Date(lead.lastInboundAt) - new Date(lead.createdAt)) / (1000 * 60 * 5)))) : 0,
+        keywords: lead.lastInboundText ? 
+          (lead.lastInboundText.toLowerCase().includes('urgent') ? 20 : 0) +
+          (lead.lastInboundText.toLowerCase().includes('book') ? 15 : 0) +
+          (lead.lastInboundText.toLowerCase().includes('?') ? 5 : 0) : 0,
+        recency: lead.lastInboundAt ? 
+          Math.min(15, Math.max(0, 15 - ((new Date() - new Date(lead.lastInboundAt)) / (1000 * 60 * 60)))) : 0
+      },
+      lead: {
+        status: lead.status,
+        consentSms: lead.consentSms,
+        lastInboundText: lead.lastInboundText,
+        lastInboundAt: lead.lastInboundAt,
+        createdAt: lead.createdAt
+      }
+    });
+  } catch (e) {
+    console.error('[LEAD SCORE ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Real-time metrics dashboard
+app.get('/admin/metrics', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const now = new Date();
+    const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const last7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    // Load leads and calls data
+    const leads = await readJson(LEADS_PATH, []);
+    const calls = await readJson(CALLS_PATH, []);
+
+    // Calculate metrics
+    const metrics = {
+      overview: {
+        totalLeads: leads.length,
+        totalCalls: calls.length,
+        activeTenants: (await listFullClients()).length,
+        uptime: process.uptime(),
+        lastUpdated: now.toISOString()
+      },
+      last24h: {
+        newLeads: leads.filter(l => new Date(l.createdAt || l.lastInboundAt) > last24h).length,
+        totalCalls: calls.filter(c => new Date(c.createdAt) > last24h).length,
+        optIns: leads.filter(l => l.consentSms && new Date(l.updatedAt) > last24h).length,
+        optOuts: leads.filter(l => l.status === 'opted_out' && new Date(l.updatedAt) > last24h).length
+      },
+      last7d: {
+        newLeads: leads.filter(l => new Date(l.createdAt || l.lastInboundAt) > last7d).length,
+        totalCalls: calls.filter(c => new Date(c.createdAt) > last7d).length,
+        conversionRate: 0, // Will calculate below
+        avgCallDuration: 0 // Will calculate below
+      },
+      byTenant: {},
+      costs: {
+        estimatedVapiCost: calls.length * 0.05, // Rough estimate
+        last24hCost: calls.filter(c => new Date(c.createdAt) > last24h).length * 0.05,
+        last7dCost: calls.filter(c => new Date(c.createdAt) > last7d).length * 0.05
+      },
+      performance: {
+        successRate: calls.filter(c => c.status === 'completed').length / Math.max(calls.length, 1) * 100,
+        avgResponseTime: 0, // Will calculate from logs if available
+        errorRate: calls.filter(c => c.status === 'failed').length / Math.max(calls.length, 1) * 100
+      }
+    };
+
+    // Calculate conversion rate (leads that got calls)
+    const leadsWithCalls = leads.filter(l => calls.some(c => c.leadPhone === l.phone));
+    metrics.last7d.conversionRate = leadsWithCalls.length / Math.max(leads.length, 1) * 100;
+
+    // Calculate average call duration
+    const completedCalls = calls.filter(c => c.status === 'completed' && c.duration);
+    if (completedCalls.length > 0) {
+      metrics.last7d.avgCallDuration = completedCalls.reduce((sum, c) => sum + (c.duration || 0), 0) / completedCalls.length;
+    }
+
+    // Calculate by tenant
+    const tenants = await listFullClients();
+    for (const tenant of tenants) {
+      const tenantLeads = leads.filter(l => l.tenantKey === tenant.clientKey);
+      const tenantCalls = calls.filter(c => c.tenantKey === tenant.clientKey);
+      
+      // Calculate lead scores for this tenant
+      const leadScores = tenantLeads.map(lead => calculateLeadScore(lead, tenant));
+      const avgLeadScore = leadScores.length > 0 ? leadScores.reduce((sum, score) => sum + score, 0) / leadScores.length : 0;
+      const highPriorityLeads = leadScores.filter(score => score >= 80).length;
+      const mediumPriorityLeads = leadScores.filter(score => score >= 60 && score < 80).length;
+      
+      metrics.byTenant[tenant.clientKey] = {
+        displayName: tenant.displayName || tenant.clientKey,
+        totalLeads: tenantLeads.length,
+        totalCalls: tenantCalls.length,
+        last24hLeads: tenantLeads.filter(l => new Date(l.createdAt || l.lastInboundAt) > last24h).length,
+        last24hCalls: tenantCalls.filter(c => new Date(c.createdAt) > last24h).length,
+        conversionRate: tenantCalls.length / Math.max(tenantLeads.length, 1) * 100,
+        successRate: tenantCalls.filter(c => c.status === 'completed').length / Math.max(tenantCalls.length, 1) * 100,
+        leadScoring: {
+          avgScore: Math.round(avgLeadScore),
+          highPriority: highPriorityLeads,
+          mediumPriority: mediumPriorityLeads,
+          lowPriority: leadScores.filter(score => score < 60).length
+        }
+      };
+    }
+
+    console.log('[METRICS]', { 
+      totalLeads: metrics.overview.totalLeads,
+      totalCalls: metrics.overview.totalCalls,
+      conversionRate: metrics.last7d.conversionRate.toFixed(1) + '%',
+      requestedBy: req.ip 
+    });
+
+    res.json({
+      ok: true,
+      metrics,
+      generatedAt: now.toISOString()
+    });
+  } catch (e) {
+    console.error('[METRICS ERROR]', e?.message || String(e));
     res.status(500).json({ ok: false, error: String(e?.message || e) });
   }
 });
