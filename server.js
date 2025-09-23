@@ -1384,7 +1384,7 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
   try {
     const rawFrom = (req.body.From || '').toString();
     const rawTo   = (req.body.To   || '').toString();
-    const bodyTxt = (req.body.Body || '').toString().trim();
+    const bodyTxt = (req.body.Body || '').toString().trim().replace(/^["']|["']$/g, '');
 
     // Input validation
     if (!validatePhoneNumber(rawFrom)) {
