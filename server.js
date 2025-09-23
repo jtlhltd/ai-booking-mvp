@@ -2307,9 +2307,11 @@ app.get('/admin/metrics', async (req, res) => {
     const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     const last7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    // Load leads and calls data
-    const leads = await readJson(LEADS_PATH, []);
-    const calls = await readJson(CALLS_PATH, []);
+    // Load leads and calls data from database
+    const leads = await listFullClients().then(clients => 
+      clients.flatMap(client => client.leads || [])
+    );
+    const calls = await readJson(CALLS_PATH, []); // Calls still use file storage
 
     // Calculate metrics
     const metrics = {
