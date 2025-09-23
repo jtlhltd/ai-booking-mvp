@@ -80,7 +80,7 @@ router.post('/webhooks/vapi', async (req, res) => {
 async function updateCallTracking({ callId, tenantKey, leadPhone, status, outcome, duration, cost, metadata, timestamp }) {
   try {
     // Import database functions
-    const { upsertCall } = await import('../db.js');
+    const { upsertCall, trackCost } = await import('../db.js');
     
     // Store call data in database
     await upsertCall({
@@ -93,6 +93,31 @@ async function updateCallTracking({ callId, tenantKey, leadPhone, status, outcom
       cost,
       metadata
     });
+    
+    // Track cost if available
+    if (cost && cost > 0) {
+      await trackCost({
+        clientKey: tenantKey,
+        callId,
+        costType: 'vapi_call',
+        amount: cost,
+        currency: 'USD',
+        description: `VAPI call ${status} - ${outcome || 'unknown outcome'}`,
+        metadata: {
+          duration,
+          outcome,
+          leadPhone,
+          timestamp
+        }
+      });
+      
+      console.log('[COST TRACKED]', {
+        callId,
+        tenantKey,
+        cost: `$${cost}`,
+        type: 'vapi_call'
+      });
+    }
     
     console.log('[CALL TRACKING UPDATE]', {
       callId,

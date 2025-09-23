@@ -130,6 +130,127 @@ async function initPostgres() {
     CREATE INDEX IF NOT EXISTS call_queue_priority_idx ON call_queue(priority);
     CREATE INDEX IF NOT EXISTS call_queue_phone_idx ON call_queue(client_key, lead_phone);
 
+    CREATE TABLE IF NOT EXISTS cost_tracking (
+      id BIGSERIAL PRIMARY KEY,
+      client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
+      call_id TEXT,
+      cost_type TEXT NOT NULL,
+      amount DECIMAL(10,4) NOT NULL,
+      currency TEXT DEFAULT 'USD',
+      description TEXT,
+      metadata JSONB,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS cost_tracking_tenant_idx ON cost_tracking(client_key);
+    CREATE INDEX IF NOT EXISTS cost_tracking_type_idx ON cost_tracking(cost_type);
+    CREATE INDEX IF NOT EXISTS cost_tracking_created_idx ON cost_tracking(created_at);
+
+    CREATE TABLE IF NOT EXISTS budget_limits (
+      id BIGSERIAL PRIMARY KEY,
+      client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
+      budget_type TEXT NOT NULL,
+      daily_limit DECIMAL(10,4),
+      weekly_limit DECIMAL(10,4),
+      monthly_limit DECIMAL(10,4),
+      currency TEXT DEFAULT 'USD',
+      is_active BOOLEAN DEFAULT TRUE,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      updated_at TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS budget_limits_tenant_idx ON budget_limits(client_key);
+    CREATE INDEX IF NOT EXISTS budget_limits_type_idx ON budget_limits(budget_type);
+
+    CREATE TABLE IF NOT EXISTS cost_alerts (
+      id BIGSERIAL PRIMARY KEY,
+      client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
+      alert_type TEXT NOT NULL,
+      threshold DECIMAL(10,4) NOT NULL,
+      current_amount DECIMAL(10,4) NOT NULL,
+      period TEXT NOT NULL,
+      status TEXT DEFAULT 'active',
+      triggered_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS cost_alerts_tenant_idx ON cost_alerts(client_key);
+    CREATE INDEX IF NOT EXISTS cost_alerts_status_idx ON cost_alerts(status);
+
+    CREATE TABLE IF NOT EXISTS analytics_events (
+      id BIGSERIAL PRIMARY KEY,
+      client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
+      event_type TEXT NOT NULL,
+      event_category TEXT NOT NULL,
+      event_data JSONB,
+      session_id TEXT,
+      user_agent TEXT,
+      ip_address INET,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS analytics_events_tenant_idx ON analytics_events(client_key);
+    CREATE INDEX IF NOT EXISTS analytics_events_type_idx ON analytics_events(event_type);
+    CREATE INDEX IF NOT EXISTS analytics_events_category_idx ON analytics_events(event_category);
+    CREATE INDEX IF NOT EXISTS analytics_events_created_idx ON analytics_events(created_at);
+    CREATE INDEX IF NOT EXISTS analytics_events_session_idx ON analytics_events(session_id);
+
+    CREATE TABLE IF NOT EXISTS conversion_funnel (
+      id BIGSERIAL PRIMARY KEY,
+      client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
+      lead_phone TEXT NOT NULL,
+      stage TEXT NOT NULL,
+      stage_data JSONB,
+      previous_stage TEXT,
+      time_to_stage INTEGER,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS conversion_funnel_tenant_idx ON conversion_funnel(client_key);
+    CREATE INDEX IF NOT EXISTS conversion_funnel_phone_idx ON conversion_funnel(client_key, lead_phone);
+    CREATE INDEX IF NOT EXISTS conversion_funnel_stage_idx ON conversion_funnel(stage);
+    CREATE INDEX IF NOT EXISTS conversion_funnel_created_idx ON conversion_funnel(created_at);
+
+    CREATE TABLE IF NOT EXISTS performance_metrics (
+      id BIGSERIAL PRIMARY KEY,
+      client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
+      metric_name TEXT NOT NULL,
+      metric_value DECIMAL(15,6) NOT NULL,
+      metric_unit TEXT,
+      metric_category TEXT,
+      metadata JSONB,
+      recorded_at TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS performance_metrics_tenant_idx ON performance_metrics(client_key);
+    CREATE INDEX IF NOT EXISTS performance_metrics_name_idx ON performance_metrics(metric_name);
+    CREATE INDEX IF NOT EXISTS performance_metrics_category_idx ON performance_metrics(metric_category);
+    CREATE INDEX IF NOT EXISTS performance_metrics_recorded_idx ON performance_metrics(recorded_at);
+
+    CREATE TABLE IF NOT EXISTS ab_test_experiments (
+      id BIGSERIAL PRIMARY KEY,
+      client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
+      experiment_name TEXT NOT NULL,
+      variant_name TEXT NOT NULL,
+      variant_config JSONB,
+      is_active BOOLEAN DEFAULT TRUE,
+      start_date TIMESTAMPTZ DEFAULT now(),
+      end_date TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS ab_test_tenant_idx ON ab_test_experiments(client_key);
+    CREATE INDEX IF NOT EXISTS ab_test_name_idx ON ab_test_experiments(experiment_name);
+    CREATE INDEX IF NOT EXISTS ab_test_active_idx ON ab_test_experiments(is_active);
+
+    CREATE TABLE IF NOT EXISTS ab_test_results (
+      id BIGSERIAL PRIMARY KEY,
+      experiment_id BIGINT REFERENCES ab_test_experiments(id) ON DELETE CASCADE,
+      client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
+      lead_phone TEXT NOT NULL,
+      variant_name TEXT NOT NULL,
+      outcome TEXT,
+      outcome_data JSONB,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS ab_test_results_experiment_idx ON ab_test_results(experiment_id);
+    CREATE INDEX IF NOT EXISTS ab_test_results_tenant_idx ON ab_test_results(client_key);
+    CREATE INDEX IF NOT EXISTS ab_test_results_phone_idx ON ab_test_results(client_key, lead_phone);
+    CREATE INDEX IF NOT EXISTS ab_test_results_outcome_idx ON ab_test_results(outcome);
+
     CREATE TABLE IF NOT EXISTS idempotency (
       client_key TEXT NOT NULL,
       key TEXT NOT NULL,
@@ -544,4 +665,401 @@ export async function cleanupOldCallQueue(daysOld = 7) {
     WHERE created_at < now() - interval '${daysOld} days'
     AND status IN ('completed', 'failed', 'cancelled')
   `);
+}
+
+// Cost tracking functions
+export async function trackCost({ clientKey, callId, costType, amount, currency = 'USD', description, metadata }) {
+  const metadataJson = metadata ? JSON.stringify(metadata) : null;
+  
+  const { rows } = await query(`
+    INSERT INTO cost_tracking (client_key, call_id, cost_type, amount, currency, description, metadata)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    RETURNING *
+  `, [clientKey, callId, costType, amount, currency, description, metadataJson]);
+  
+  return rows[0];
+}
+
+export async function getCostsByTenant(clientKey, limit = 100) {
+  const { rows } = await query(`
+    SELECT * FROM cost_tracking 
+    WHERE client_key = $1 
+    ORDER BY created_at DESC 
+    LIMIT $2
+  `, [clientKey, limit]);
+  return rows;
+}
+
+export async function getCostsByPeriod(clientKey, period = 'daily') {
+  let interval;
+  switch (period) {
+    case 'daily': interval = '1 day'; break;
+    case 'weekly': interval = '7 days'; break;
+    case 'monthly': interval = '30 days'; break;
+    default: interval = '1 day';
+  }
+  
+  const { rows } = await query(`
+    SELECT 
+      cost_type,
+      SUM(amount) as total_amount,
+      COUNT(*) as transaction_count,
+      AVG(amount) as avg_amount
+    FROM cost_tracking 
+    WHERE client_key = $1 
+    AND created_at > now() - interval '${interval}'
+    GROUP BY cost_type
+    ORDER BY total_amount DESC
+  `, [clientKey]);
+  return rows;
+}
+
+export async function getTotalCostsByTenant(clientKey, period = 'daily') {
+  let interval;
+  switch (period) {
+    case 'daily': interval = '1 day'; break;
+    case 'weekly': interval = '7 days'; break;
+    case 'monthly': interval = '30 days'; break;
+    default: interval = '1 day';
+  }
+  
+  const { rows } = await query(`
+    SELECT 
+      SUM(amount) as total_cost,
+      COUNT(*) as transaction_count,
+      AVG(amount) as avg_cost
+    FROM cost_tracking 
+    WHERE client_key = $1 
+    AND created_at > now() - interval '${interval}'
+  `, [clientKey]);
+  return rows[0];
+}
+
+// Budget management functions
+export async function setBudgetLimit({ clientKey, budgetType, dailyLimit, weeklyLimit, monthlyLimit, currency = 'USD' }) {
+  const { rows } = await query(`
+    INSERT INTO budget_limits (client_key, budget_type, daily_limit, weekly_limit, monthly_limit, currency)
+    VALUES ($1, $2, $3, $4, $5, $6)
+    ON CONFLICT (client_key, budget_type) 
+    DO UPDATE SET 
+      daily_limit = EXCLUDED.daily_limit,
+      weekly_limit = EXCLUDED.weekly_limit,
+      monthly_limit = EXCLUDED.monthly_limit,
+      currency = EXCLUDED.currency,
+      updated_at = now()
+    RETURNING *
+  `, [clientKey, budgetType, dailyLimit, weeklyLimit, monthlyLimit, currency]);
+  
+  return rows[0];
+}
+
+export async function getBudgetLimits(clientKey) {
+  const { rows } = await query(`
+    SELECT * FROM budget_limits 
+    WHERE client_key = $1 AND is_active = TRUE
+    ORDER BY budget_type
+  `, [clientKey]);
+  return rows;
+}
+
+export async function checkBudgetExceeded(clientKey, budgetType, period = 'daily') {
+  const budgetLimits = await getBudgetLimits(clientKey);
+  const budget = budgetLimits.find(b => b.budget_type === budgetType);
+  
+  if (!budget) return { exceeded: false, limit: 0, current: 0 };
+  
+  const currentCosts = await getTotalCostsByTenant(clientKey, period);
+  const currentAmount = parseFloat(currentCosts.total_cost || 0);
+  
+  let limit;
+  switch (period) {
+    case 'daily': limit = parseFloat(budget.daily_limit || 0); break;
+    case 'weekly': limit = parseFloat(budget.weekly_limit || 0); break;
+    case 'monthly': limit = parseFloat(budget.monthly_limit || 0); break;
+    default: limit = parseFloat(budget.daily_limit || 0);
+  }
+  
+  return {
+    exceeded: currentAmount > limit,
+    limit,
+    current: currentAmount,
+    remaining: Math.max(0, limit - currentAmount),
+    percentage: limit > 0 ? (currentAmount / limit) * 100 : 0
+  };
+}
+
+// Cost alert functions
+export async function createCostAlert({ clientKey, alertType, threshold, currentAmount, period }) {
+  const { rows } = await query(`
+    INSERT INTO cost_alerts (client_key, alert_type, threshold, current_amount, period, status)
+    VALUES ($1, $2, $3, $4, $5, 'active')
+    RETURNING *
+  `, [clientKey, alertType, threshold, currentAmount, period]);
+  
+  return rows[0];
+}
+
+export async function getActiveAlerts(clientKey) {
+  const { rows } = await query(`
+    SELECT * FROM cost_alerts 
+    WHERE client_key = $1 AND status = 'active'
+    ORDER BY created_at DESC
+  `, [clientKey]);
+  return rows;
+}
+
+export async function triggerAlert(alertId) {
+  await query(`
+    UPDATE cost_alerts 
+    SET status = 'triggered', triggered_at = now()
+    WHERE id = $1
+  `, [alertId]);
+}
+
+export async function checkCostAlerts(clientKey) {
+  const alerts = await getActiveAlerts(clientKey);
+  const triggeredAlerts = [];
+  
+  for (const alert of alerts) {
+    const budgetCheck = await checkBudgetExceeded(clientKey, alert.alert_type, alert.period);
+    
+    if (budgetCheck.exceeded && budgetCheck.current >= alert.threshold) {
+      await triggerAlert(alert.id);
+      triggeredAlerts.push({
+        alert,
+        budgetCheck,
+        message: `Budget exceeded: ${alert.alert_type} ${alert.period} limit of $${alert.threshold} reached (current: $${budgetCheck.current.toFixed(2)})`
+      });
+    }
+  }
+  
+  return triggeredAlerts;
+}
+
+// Analytics functions
+export async function trackAnalyticsEvent({ clientKey, eventType, eventCategory, eventData, sessionId, userAgent, ipAddress }) {
+  const eventDataJson = eventData ? JSON.stringify(eventData) : null;
+  
+  const { rows } = await query(`
+    INSERT INTO analytics_events (client_key, event_type, event_category, event_data, session_id, user_agent, ip_address)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    RETURNING *
+  `, [clientKey, eventType, eventCategory, eventDataJson, sessionId, userAgent, ipAddress]);
+  
+  return rows[0];
+}
+
+export async function getAnalyticsEvents(clientKey, limit = 100, eventType = null) {
+  let queryStr = `
+    SELECT * FROM analytics_events 
+    WHERE client_key = $1
+  `;
+  const params = [clientKey];
+  
+  if (eventType) {
+    queryStr += ` AND event_type = $2`;
+    params.push(eventType);
+  }
+  
+  queryStr += ` ORDER BY created_at DESC LIMIT $${params.length + 1}`;
+  params.push(limit);
+  
+  const { rows } = await query(queryStr, params);
+  return rows;
+}
+
+export async function getAnalyticsSummary(clientKey, days = 7) {
+  const { rows } = await query(`
+    SELECT 
+      event_type,
+      event_category,
+      COUNT(*) as event_count,
+      COUNT(DISTINCT session_id) as unique_sessions,
+      COUNT(DISTINCT ip_address) as unique_ips
+    FROM analytics_events 
+    WHERE client_key = $1 
+    AND created_at > now() - interval '${days} days'
+    GROUP BY event_type, event_category
+    ORDER BY event_count DESC
+  `, [clientKey]);
+  return rows;
+}
+
+// Conversion funnel functions
+export async function trackConversionStage({ clientKey, leadPhone, stage, stageData, previousStage = null, timeToStage = null }) {
+  const stageDataJson = stageData ? JSON.stringify(stageData) : null;
+  
+  const { rows } = await query(`
+    INSERT INTO conversion_funnel (client_key, lead_phone, stage, stage_data, previous_stage, time_to_stage)
+    VALUES ($1, $2, $3, $4, $5, $6)
+    RETURNING *
+  `, [clientKey, leadPhone, stage, stageDataJson, previousStage, timeToStage]);
+  
+  return rows[0];
+}
+
+export async function getConversionFunnel(clientKey, days = 30) {
+  const { rows } = await query(`
+    SELECT 
+      stage,
+      COUNT(*) as stage_count,
+      COUNT(DISTINCT lead_phone) as unique_leads,
+      AVG(time_to_stage) as avg_time_to_stage
+    FROM conversion_funnel 
+    WHERE client_key = $1 
+    AND created_at > now() - interval '${days} days'
+    GROUP BY stage
+    ORDER BY stage_count DESC
+  `, [clientKey]);
+  return rows;
+}
+
+export async function getConversionRates(clientKey, days = 30) {
+  const { rows } = await query(`
+    WITH stage_counts AS (
+      SELECT 
+        stage,
+        COUNT(DISTINCT lead_phone) as unique_leads
+      FROM conversion_funnel 
+      WHERE client_key = $1 
+      AND created_at > now() - interval '${days} days'
+      GROUP BY stage
+    ),
+    total_leads AS (
+      SELECT COUNT(DISTINCT lead_phone) as total FROM conversion_funnel 
+      WHERE client_key = $1 
+      AND created_at > now() - interval '${days} days'
+    )
+    SELECT 
+      sc.stage,
+      sc.unique_leads,
+      tl.total,
+      ROUND((sc.unique_leads::DECIMAL / tl.total) * 100, 2) as conversion_rate
+    FROM stage_counts sc
+    CROSS JOIN total_leads tl
+    ORDER BY sc.unique_leads DESC
+  `, [clientKey]);
+  return rows;
+}
+
+// Performance metrics functions
+export async function recordPerformanceMetric({ clientKey, metricName, metricValue, metricUnit = null, metricCategory = null, metadata = null }) {
+  const metadataJson = metadata ? JSON.stringify(metadata) : null;
+  
+  const { rows } = await query(`
+    INSERT INTO performance_metrics (client_key, metric_name, metric_value, metric_unit, metric_category, metadata)
+    VALUES ($1, $2, $3, $4, $5, $6)
+    RETURNING *
+  `, [clientKey, metricName, metricValue, metricUnit, metricCategory, metadataJson]);
+  
+  return rows[0];
+}
+
+export async function getPerformanceMetrics(clientKey, metricName = null, days = 7) {
+  let queryStr = `
+    SELECT 
+      metric_name,
+      metric_category,
+      AVG(metric_value) as avg_value,
+      MIN(metric_value) as min_value,
+      MAX(metric_value) as max_value,
+      COUNT(*) as sample_count
+    FROM performance_metrics 
+    WHERE client_key = $1 
+    AND recorded_at > now() - interval '${days} days'
+  `;
+  const params = [clientKey];
+  
+  if (metricName) {
+    queryStr += ` AND metric_name = $2`;
+    params.push(metricName);
+  }
+  
+  queryStr += ` GROUP BY metric_name, metric_category ORDER BY avg_value DESC`;
+  
+  const { rows } = await query(queryStr, params);
+  return rows;
+}
+
+// A/B Testing functions
+export async function createABTestExperiment({ clientKey, experimentName, variantName, variantConfig, isActive = true }) {
+  const variantConfigJson = variantConfig ? JSON.stringify(variantConfig) : null;
+  
+  const { rows } = await query(`
+    INSERT INTO ab_test_experiments (client_key, experiment_name, variant_name, variant_config, is_active)
+    VALUES ($1, $2, $3, $4, $5)
+    RETURNING *
+  `, [clientKey, experimentName, variantName, variantConfigJson, isActive]);
+  
+  return rows[0];
+}
+
+export async function getActiveABTests(clientKey) {
+  const { rows } = await query(`
+    SELECT * FROM ab_test_experiments 
+    WHERE client_key = $1 AND is_active = TRUE
+    ORDER BY created_at DESC
+  `, [clientKey]);
+  return rows;
+}
+
+export async function recordABTestResult({ experimentId, clientKey, leadPhone, variantName, outcome, outcomeData = null }) {
+  const outcomeDataJson = outcomeData ? JSON.stringify(outcomeData) : null;
+  
+  const { rows } = await query(`
+    INSERT INTO ab_test_results (experiment_id, client_key, lead_phone, variant_name, outcome, outcome_data)
+    VALUES ($1, $2, $3, $4, $5, $6)
+    RETURNING *
+  `, [experimentId, clientKey, leadPhone, variantName, outcome, outcomeDataJson]);
+  
+  return rows[0];
+}
+
+export async function getABTestResults(experimentId) {
+  const { rows } = await query(`
+    SELECT 
+      variant_name,
+      outcome,
+      COUNT(*) as result_count,
+      COUNT(DISTINCT lead_phone) as unique_leads
+    FROM ab_test_results 
+    WHERE experiment_id = $1
+    GROUP BY variant_name, outcome
+    ORDER BY variant_name, result_count DESC
+  `, [experimentId]);
+  return rows;
+}
+
+export async function getABTestConversionRates(experimentId) {
+  const { rows } = await query(`
+    WITH variant_totals AS (
+      SELECT 
+        variant_name,
+        COUNT(DISTINCT lead_phone) as total_leads
+      FROM ab_test_results 
+      WHERE experiment_id = $1
+      GROUP BY variant_name
+    ),
+    variant_conversions AS (
+      SELECT 
+        variant_name,
+        COUNT(DISTINCT lead_phone) as converted_leads
+      FROM ab_test_results 
+      WHERE experiment_id = $1 AND outcome = 'converted'
+      GROUP BY variant_name
+    )
+    SELECT 
+      vt.variant_name,
+      vt.total_leads,
+      COALESCE(vc.converted_leads, 0) as converted_leads,
+      CASE 
+        WHEN vt.total_leads > 0 
+        THEN ROUND((COALESCE(vc.converted_leads, 0)::DECIMAL / vt.total_leads) * 100, 2)
+        ELSE 0 
+      END as conversion_rate
+    FROM variant_totals vt
+    LEFT JOIN variant_conversions vc ON vt.variant_name = vc.variant_name
+    ORDER BY conversion_rate DESC
+  `, [experimentId]);
+  return rows;
 }

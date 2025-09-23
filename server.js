@@ -551,6 +551,163 @@ async function retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000, context = 
   }
 }
 
+// Cost optimization functions
+async function checkBudgetBeforeCall(tenantKey, estimatedCost = 0.05) {
+  try {
+    const { checkBudgetExceeded, checkCostAlerts } = await import('./db.js');
+    
+    // Check daily budget
+    const dailyBudget = await checkBudgetExceeded(tenantKey, 'vapi_calls', 'daily');
+    if (dailyBudget.exceeded) {
+      console.log('[BUDGET EXCEEDED]', {
+        tenantKey,
+        period: 'daily',
+        limit: dailyBudget.limit,
+        current: dailyBudget.current,
+        estimated: estimatedCost
+      });
+      return { allowed: false, reason: 'daily_budget_exceeded', budget: dailyBudget };
+    }
+    
+    // Check if adding this call would exceed budget
+    if (dailyBudget.current + estimatedCost > dailyBudget.limit) {
+      console.log('[BUDGET WOULD EXCEED]', {
+        tenantKey,
+        period: 'daily',
+        limit: dailyBudget.limit,
+        current: dailyBudget.current,
+        estimated: estimatedCost
+      });
+      return { allowed: false, reason: 'would_exceed_daily_budget', budget: dailyBudget };
+    }
+    
+    // Check cost alerts
+    const alerts = await checkCostAlerts(tenantKey);
+    if (alerts.length > 0) {
+      console.log('[COST ALERTS TRIGGERED]', {
+        tenantKey,
+        alerts: alerts.map(a => a.message)
+      });
+    }
+    
+    return { allowed: true, budget: dailyBudget };
+  } catch (error) {
+    console.error('[BUDGET CHECK ERROR]', error);
+    return { allowed: true, reason: 'budget_check_failed' }; // Allow call if budget check fails
+  }
+}
+
+async function trackCallCost(tenantKey, callId, cost, metadata = {}) {
+  try {
+    const { trackCost } = await import('./db.js');
+    
+    await trackCost({
+      clientKey: tenantKey,
+      callId,
+      costType: 'vapi_call',
+      amount: cost,
+      currency: 'USD',
+      description: `VAPI call cost tracking`,
+      metadata: {
+        ...metadata,
+        timestamp: new Date().toISOString()
+      }
+    });
+    
+    console.log('[CALL COST TRACKED]', {
+      tenantKey,
+      callId,
+      cost: `$${cost}`,
+      type: 'vapi_call'
+    });
+  } catch (error) {
+    console.error('[COST TRACKING ERROR]', error);
+  }
+}
+
+async function getCostOptimizationMetrics(tenantKey) {
+  try {
+    const { 
+      getTotalCostsByTenant, 
+      getCostsByPeriod, 
+      getBudgetLimits,
+      checkBudgetExceeded 
+    } = await import('./db.js');
+    
+    const [dailyCosts, weeklyCosts, monthlyCosts, budgetLimits] = await Promise.all([
+      getTotalCostsByTenant(tenantKey, 'daily'),
+      getTotalCostsByTenant(tenantKey, 'weekly'),
+      getTotalCostsByTenant(tenantKey, 'monthly'),
+      getBudgetLimits(tenantKey)
+    ]);
+    
+    const costBreakdown = await getCostsByPeriod(tenantKey, 'daily');
+    
+    // Check budget status
+    const budgetStatus = {};
+    for (const budget of budgetLimits) {
+      budgetStatus[budget.budget_type] = {
+        daily: await checkBudgetExceeded(tenantKey, budget.budget_type, 'daily'),
+        weekly: await checkBudgetExceeded(tenantKey, budget.budget_type, 'weekly'),
+        monthly: await checkBudgetExceeded(tenantKey, budget.budget_type, 'monthly')
+      };
+    }
+    
+    return {
+      costs: {
+        daily: dailyCosts,
+        weekly: weeklyCosts,
+        monthly: monthlyCosts,
+        breakdown: costBreakdown
+      },
+      budgets: budgetLimits,
+      budgetStatus,
+      optimization: {
+        costPerCall: dailyCosts.transaction_count > 0 ? dailyCosts.total_cost / dailyCosts.transaction_count : 0,
+        dailyBudgetUtilization: budgetStatus.vapi_calls?.daily?.percentage || 0,
+        recommendations: generateCostRecommendations(dailyCosts, budgetStatus)
+      }
+    };
+  } catch (error) {
+    console.error('[COST METRICS ERROR]', error);
+    return null;
+  }
+}
+
+function generateCostRecommendations(costs, budgetStatus) {
+  const recommendations = [];
+  
+  if (costs.total_cost > 0) {
+    const avgCostPerCall = costs.total_cost / costs.transaction_count;
+    
+    if (avgCostPerCall > 0.10) {
+      recommendations.push({
+        type: 'cost_optimization',
+        priority: 'high',
+        message: `Average call cost is $${avgCostPerCall.toFixed(2)}. Consider optimizing assistant prompts to reduce call duration.`
+      });
+    }
+    
+    if (budgetStatus.vapi_calls?.daily?.percentage > 80) {
+      recommendations.push({
+        type: 'budget_alert',
+        priority: 'medium',
+        message: `Daily budget utilization is ${budgetStatus.vapi_calls.daily.percentage.toFixed(1)}%. Consider setting up budget alerts.`
+      });
+    }
+    
+    if (costs.transaction_count > 50) {
+      recommendations.push({
+        type: 'volume_optimization',
+        priority: 'low',
+        message: `High call volume (${costs.transaction_count} calls). Consider implementing call scheduling to optimize timing.`
+      });
+    }
+  }
+  
+  return recommendations;
+}
+
 // Categorize errors for appropriate retry handling
 function categorizeError(error) {
   const message = error.message?.toLowerCase() || '';
@@ -2178,6 +2335,28 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
         return res.send('OK');
       }
 
+      // Check budget before making call
+      const budgetCheck = await checkBudgetBeforeCall(tenantKey, 0.05); // Estimated $0.05 per call
+      if (!budgetCheck.allowed) {
+        console.log('[BUDGET BLOCKED CALL]', {
+          tenantKey,
+          from,
+          reason: budgetCheck.reason,
+          budget: budgetCheck.budget
+        });
+        
+        // Send SMS fallback instead of making call
+        await handleVapiFailure({
+          tenantKey,
+          from,
+          error: new Error(`Budget exceeded: ${budgetCheck.reason}`),
+          errorType: 'budget_exceeded',
+          existingLead
+        });
+        
+        return res.send('OK');
+      }
+      
       // Intelligent call scheduling
       const callScheduling = await determineCallScheduling({ tenantKey, from, isYes, isStart, existingLead });
       if (callScheduling.shouldDelay) {
@@ -2967,6 +3146,135 @@ app.get('/admin/call-queue', async (req, res) => {
     });
   } catch (e) {
     console.error('[CALL QUEUE STATUS ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Admin endpoint to get cost optimization metrics
+app.get('/admin/cost-optimization/:tenantKey', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { tenantKey } = req.params;
+    const metrics = await getCostOptimizationMetrics(tenantKey);
+    
+    if (!metrics) {
+      return res.status(404).json({ error: 'Cost metrics not found' });
+    }
+    
+    console.log('[COST OPTIMIZATION METRICS]', { 
+      tenantKey,
+      requestedBy: req.ip,
+      dailyCost: metrics.costs.daily.total_cost,
+      budgetUtilization: metrics.optimization.dailyBudgetUtilization
+    });
+    
+    res.json({
+      ok: true,
+      tenantKey,
+      metrics,
+      lastUpdated: new Date().toISOString()
+    });
+  } catch (e) {
+    console.error('[COST OPTIMIZATION ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Admin endpoint to set budget limits
+app.post('/admin/budget-limits/:tenantKey', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { tenantKey } = req.params;
+    const { budgetType, dailyLimit, weeklyLimit, monthlyLimit, currency = 'USD' } = req.body;
+    
+    if (!budgetType || (!dailyLimit && !weeklyLimit && !monthlyLimit)) {
+      return res.status(400).json({ error: 'Budget type and at least one limit required' });
+    }
+    
+    const { setBudgetLimit } = await import('./db.js');
+    const budget = await setBudgetLimit({
+      clientKey: tenantKey,
+      budgetType,
+      dailyLimit: parseFloat(dailyLimit) || null,
+      weeklyLimit: parseFloat(weeklyLimit) || null,
+      monthlyLimit: parseFloat(monthlyLimit) || null,
+      currency
+    });
+    
+    console.log('[BUDGET LIMIT SET]', { 
+      tenantKey,
+      budgetType,
+      dailyLimit,
+      weeklyLimit,
+      monthlyLimit,
+      currency,
+      requestedBy: req.ip
+    });
+    
+    res.json({
+      ok: true,
+      budget,
+      message: 'Budget limit set successfully'
+    });
+  } catch (e) {
+    console.error('[BUDGET LIMIT ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Admin endpoint to create cost alerts
+app.post('/admin/cost-alerts/:tenantKey', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { tenantKey } = req.params;
+    const { alertType, threshold, period = 'daily' } = req.body;
+    
+    if (!alertType || !threshold) {
+      return res.status(400).json({ error: 'Alert type and threshold required' });
+    }
+    
+    const { createCostAlert, getTotalCostsByTenant } = await import('./db.js');
+    const currentCosts = await getTotalCostsByTenant(tenantKey, period);
+    
+    const alert = await createCostAlert({
+      clientKey: tenantKey,
+      alertType,
+      threshold: parseFloat(threshold),
+      currentAmount: parseFloat(currentCosts.total_cost || 0),
+      period
+    });
+    
+    console.log('[COST ALERT CREATED]', { 
+      tenantKey,
+      alertType,
+      threshold,
+      period,
+      currentAmount: currentCosts.total_cost,
+      requestedBy: req.ip
+    });
+    
+    res.json({
+      ok: true,
+      alert,
+      message: 'Cost alert created successfully'
+    });
+  } catch (e) {
+    console.error('[COST ALERT ERROR]', e?.message || String(e));
     res.status(500).json({ ok: false, error: String(e?.message || e) });
   }
 });
