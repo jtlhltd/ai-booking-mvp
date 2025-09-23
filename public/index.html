@@ -78,46 +78,157 @@
             color: white;
             padding: 8rem 0 4rem;
             text-align: center;
+            position: relative;
+            overflow: hidden;
         }
         
-        .hero h1 {
+        .hero-background {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 1;
+        }
+        
+        .floating-shapes {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .shape {
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            animation: float 6s ease-in-out infinite;
+        }
+        
+        .shape-1 {
+            width: 80px;
+            height: 80px;
+            top: 20%;
+            left: 10%;
+            animation-delay: 0s;
+        }
+        
+        .shape-2 {
+            width: 120px;
+            height: 120px;
+            top: 60%;
+            right: 15%;
+            animation-delay: 2s;
+        }
+        
+        .shape-3 {
+            width: 60px;
+            height: 60px;
+            top: 40%;
+            left: 80%;
+            animation-delay: 4s;
+        }
+        
+        .shape-4 {
+            width: 100px;
+            height: 100px;
+            bottom: 20%;
+            left: 20%;
+            animation-delay: 1s;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(180deg); }
+        }
+        
+        .hero .container {
+            position: relative;
+            z-index: 2;
+        }
+        
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 8px 16px;
+            border-radius: 50px;
+            margin-bottom: 2rem;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        .badge-icon {
+            font-size: 1.2rem;
+        }
+        
+        .badge-text {
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        
+        .hero-title {
             font-size: 3.5rem;
             font-weight: 700;
-            margin-bottom: 1rem;
+            margin-bottom: 1.5rem;
             line-height: 1.2;
         }
         
-        .hero p {
+        .gradient-text {
+            background: linear-gradient(45deg, #ffd700, #ffed4e);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .hero-subtitle {
             font-size: 1.25rem;
-            margin-bottom: 2rem;
+            margin-bottom: 2.5rem;
             opacity: 0.9;
-            max-width: 600px;
+            max-width: 700px;
             margin-left: auto;
             margin-right: auto;
+            line-height: 1.6;
         }
         
         .hero-buttons {
             display: flex;
-            gap: 1rem;
+            gap: 1.5rem;
             justify-content: center;
             margin-bottom: 3rem;
+            flex-wrap: wrap;
         }
         
         .btn {
             padding: 1rem 2rem;
-            border-radius: 8px;
+            border-radius: 12px;
             text-decoration: none;
             font-weight: 600;
-            transition: transform 0.3s;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn-large {
+            padding: 1.25rem 2.5rem;
+            font-size: 1.1rem;
         }
         
         .btn:hover {
-            transform: translateY(-2px);
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
         }
         
         .btn-primary {
             background: white;
             color: #6366f1;
+        }
+        
+        .btn-primary:hover {
+            background: #f8fafc;
         }
         
         .btn-secondary {
@@ -126,24 +237,82 @@
             border: 2px solid white;
         }
         
+        .btn-secondary:hover {
+            background: white;
+            color: #6366f1;
+        }
+        
+        .btn-icon {
+            font-size: 1.2rem;
+        }
+        
+        .btn-arrow {
+            transition: transform 0.3s;
+        }
+        
+        .btn:hover .btn-arrow {
+            transform: translateX(4px);
+        }
+        
+        .hero-social-proof {
+            margin-bottom: 3rem;
+        }
+        
+        .social-proof-text {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            margin-bottom: 1rem;
+        }
+        
+        .social-proof-logos {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            flex-wrap: wrap;
+        }
+        
+        .logo-item {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            font-weight: 500;
+        }
+        
         .stats {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(4, 1fr);
             gap: 2rem;
             margin-top: 3rem;
         }
         
         .stat {
             text-align: center;
+            padding: 1.5rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: transform 0.3s;
+        }
+        
+        .stat:hover {
+            transform: translateY(-5px);
         }
         
         .stat-number {
             font-size: 2.5rem;
             font-weight: 700;
             margin-bottom: 0.5rem;
+            color: #ffd700;
         }
         
         .stat-label {
+            opacity: 0.9;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+        }
+        
+        .stat-icon {
+            font-size: 1.5rem;
             opacity: 0.8;
         }
         
@@ -405,6 +574,39 @@
         }
         
         @media (max-width: 768px) {
+            .hero-title {
+                font-size: 2.5rem;
+            }
+            
+            .hero-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .stats {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 1rem;
+            }
+            
+            .social-proof-logos {
+                flex-direction: column;
+                gap: 1rem;
+            }
+            
+            .pricing-grid {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+            
+            .pricing-card.featured {
+                transform: none;
+            }
+            
+            .faq-grid {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }
+            
             .demo-container {
                 grid-template-columns: 1fr;
                 gap: 2rem;
@@ -418,8 +620,230 @@
                 flex-direction: column;
                 gap: 0.5rem;
             }
+            
+            .nav-links {
+                display: none;
+            }
+            
+            .hero-badge {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
         }
         
+        /* Pricing Section */
+        .pricing {
+            padding: 4rem 0;
+            background: #ffffff;
+        }
+        
+        .pricing-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 3rem;
+        }
+        
+        .toggle-label {
+            font-weight: 500;
+            color: #64748b;
+        }
+        
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 30px;
+        }
+        
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #e2e8f0;
+            transition: .4s;
+            border-radius: 30px;
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 22px;
+            width: 22px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .toggle-slider {
+            background-color: #6366f1;
+        }
+        
+        input:checked + .toggle-slider:before {
+            transform: translateX(30px);
+        }
+        
+        .discount-badge {
+            background: #10b981;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+        
+        .pricing-card {
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 2rem;
+            text-align: center;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        
+        .pricing-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        
+        .pricing-card.featured {
+            border-color: #6366f1;
+            transform: scale(1.05);
+            box-shadow: 0 20px 40px rgba(99, 102, 241, 0.2);
+        }
+        
+        .pricing-badge {
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #6366f1;
+            color: white;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        
+        .pricing-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: #1e293b;
+        }
+        
+        .pricing-price {
+            margin-bottom: 1rem;
+        }
+        
+        .currency {
+            font-size: 1.5rem;
+            color: #64748b;
+            vertical-align: top;
+        }
+        
+        .amount {
+            font-size: 3rem;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        
+        .period {
+            font-size: 1rem;
+            color: #64748b;
+        }
+        
+        .pricing-description {
+            color: #64748b;
+            margin-bottom: 2rem;
+        }
+        
+        .pricing-features {
+            margin-bottom: 2rem;
+        }
+        
+        .feature-list {
+            list-style: none;
+            padding: 0;
+            text-align: left;
+        }
+        
+        .feature-list li {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+            color: #475569;
+        }
+        
+        .check-icon {
+            color: #10b981;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+        
+        .btn-outline {
+            background: transparent;
+            color: #6366f1;
+            border: 2px solid #6366f1;
+        }
+        
+        .btn-outline:hover {
+            background: #6366f1;
+            color: white;
+        }
+        
+        .btn-full {
+            width: 100%;
+            justify-content: center;
+        }
+        
+        .pricing-note {
+            font-size: 0.9rem;
+            color: #64748b;
+            margin-top: 1rem;
+        }
+        
+        .pricing-guarantee {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            background: #f8fafc;
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .guarantee-icon {
+            font-size: 2rem;
+        }
+        
+        .guarantee-text {
+            color: #475569;
+            font-size: 1rem;
+        }
+
         /* Testimonials */
         .testimonials {
             padding: 4rem 0;
@@ -472,6 +896,128 @@
             font-size: 0.875rem;
         }
         
+        /* FAQ Section */
+        .faq {
+            padding: 4rem 0;
+            background: #f8fafc;
+        }
+        
+        .faq-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 3rem;
+            margin-bottom: 3rem;
+        }
+        
+        .faq-category {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        
+        .faq-category-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        
+        .faq-items {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .faq-item {
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .faq-item:hover {
+            border-color: #6366f1;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.1);
+        }
+        
+        .faq-question {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem 1.5rem;
+            cursor: pointer;
+            background: white;
+            transition: background-color 0.3s;
+        }
+        
+        .faq-question:hover {
+            background: #f8fafc;
+        }
+        
+        .faq-icon {
+            font-size: 1.2rem;
+            color: #6366f1;
+        }
+        
+        .faq-text {
+            flex: 1;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        
+        .faq-toggle {
+            font-size: 1.5rem;
+            color: #6366f1;
+            font-weight: bold;
+            transition: transform 0.3s;
+        }
+        
+        .faq-item.active .faq-toggle {
+            transform: rotate(45deg);
+        }
+        
+        .faq-answer {
+            padding: 0 1.5rem;
+            max-height: 0;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            background: #f8fafc;
+        }
+        
+        .faq-item.active .faq-answer {
+            padding: 1rem 1.5rem;
+            max-height: 200px;
+        }
+        
+        .faq-answer p {
+            color: #475569;
+            line-height: 1.6;
+            margin: 0;
+        }
+        
+        .faq-cta {
+            text-align: center;
+            background: white;
+            padding: 2rem;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        
+        .faq-cta h3 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 0.5rem;
+        }
+        
+        .faq-cta p {
+            color: #64748b;
+            margin-bottom: 1.5rem;
+        }
+
         /* CTA Section */
         .cta {
             background: #1e293b;
@@ -530,12 +1076,14 @@
         <div class="container">
             <nav class="nav">
                 <div class="logo">🤖 AI Booking MVP</div>
-                <ul class="nav-links">
-                    <li><a href="#features">Features</a></li>
-                    <li><a href="#demo">Demo</a></li>
-                    <li><a href="#testimonials">Testimonials</a></li>
-                    <li><a href="#contact">Contact</a></li>
-                </ul>
+            <ul class="nav-links">
+                <li><a href="#features">Features</a></li>
+                <li><a href="#demo">Demo</a></li>
+                <li><a href="#pricing">Pricing</a></li>
+                <li><a href="#testimonials">Testimonials</a></li>
+                <li><a href="#faq">FAQ</a></li>
+                <li><a href="#contact">Contact</a></li>
+            </ul>
                 <a href="#contact" class="cta-button">Get Demo</a>
             </nav>
         </div>
@@ -543,25 +1091,67 @@
 
     <!-- Hero Section -->
     <section class="hero">
+        <div class="hero-background">
+            <div class="floating-shapes">
+                <div class="shape shape-1"></div>
+                <div class="shape shape-2"></div>
+                <div class="shape shape-3"></div>
+                <div class="shape shape-4"></div>
+            </div>
+        </div>
         <div class="container">
-            <h1>Transform Your Business with AI-Powered Booking</h1>
-            <p>Increase appointment bookings by 300% with intelligent SMS automation and voice AI. Never miss a lead again.</p>
+            <div class="hero-badge">
+                <span class="badge-icon">🚀</span>
+                <span class="badge-text">Trusted by 500+ businesses worldwide</span>
+            </div>
+            <h1 class="hero-title">
+                Transform Your Business with 
+                <span class="gradient-text">AI-Powered Booking</span>
+            </h1>
+            <p class="hero-subtitle">
+                Increase appointment bookings by <strong>300%</strong> with intelligent SMS automation and voice AI. 
+                Never miss a lead again with our revolutionary booking system.
+            </p>
             <div class="hero-buttons">
-                <a href="#contact" class="btn btn-primary">Get Demo</a>
-                <a href="#features" class="btn btn-secondary">Learn More</a>
+                <a href="#demo" class="btn btn-primary btn-large">
+                    <span class="btn-icon">🎮</span>
+                    <span class="btn-text">Try Interactive Demo</span>
+                    <span class="btn-arrow">→</span>
+                </a>
+                <a href="#contact" class="btn btn-secondary btn-large">
+                    <span class="btn-icon">📞</span>
+                    <span class="btn-text">Book Free Consultation</span>
+                </a>
+            </div>
+            <div class="hero-social-proof">
+                <div class="social-proof-text">Join 500+ businesses already growing with AI Booking MVP</div>
+                <div class="social-proof-logos">
+                    <div class="logo-item">🏥 Victory Dental</div>
+                    <div class="logo-item">⚖️ Smith & Associates</div>
+                    <div class="logo-item">💄 Glamour Beauty</div>
+                    <div class="logo-item">🏥 City Medical</div>
+                </div>
             </div>
             <div class="stats">
                 <div class="stat">
-                    <div class="stat-number">300%</div>
+                    <div class="stat-number" data-target="300">0</div>
                     <div class="stat-label">Increase in Bookings</div>
+                    <div class="stat-icon">📈</div>
                 </div>
                 <div class="stat">
-                    <div class="stat-number">24/7</div>
-                    <div class="stat-label">Automated Service</div>
+                    <div class="stat-number" data-target="24">0</div>
+                    <div class="stat-label">Hours Automated</div>
+                    <div class="stat-icon">⏰</div>
                 </div>
                 <div class="stat">
-                    <div class="stat-number">2min</div>
-                    <div class="stat-label">Average Response Time</div>
+                    <div class="stat-number" data-target="2">0</div>
+                    <div class="stat-label">Min Response Time</div>
+                    <div class="stat-icon">⚡</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number" data-target="98">0</div>
+                    <div class="stat-label">Customer Satisfaction</div>
+                    <div class="stat-icon">⭐</div>
                 </div>
             </div>
         </div>
@@ -680,6 +1270,119 @@
         </div>
     </section>
 
+    <!-- Pricing Section -->
+    <section id="pricing" class="pricing">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">Simple, Transparent Pricing</h2>
+                <p class="section-subtitle">
+                    Choose the plan that fits your business needs. All plans include our core features.
+                </p>
+            </div>
+            <div class="pricing-toggle">
+                <span class="toggle-label">Monthly</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="pricingToggle">
+                    <span class="toggle-slider"></span>
+                </label>
+                <span class="toggle-label">Annual <span class="discount-badge">Save 20%</span></span>
+            </div>
+            <div class="pricing-grid">
+                <div class="pricing-card">
+                    <div class="pricing-header">
+                        <h3 class="pricing-title">Starter</h3>
+                        <div class="pricing-price">
+                            <span class="currency">£</span>
+                            <span class="amount monthly">99</span>
+                            <span class="amount annual" style="display: none;">79</span>
+                            <span class="period">/month</span>
+                        </div>
+                        <p class="pricing-description">Perfect for small businesses getting started</p>
+                    </div>
+                    <div class="pricing-features">
+                        <ul class="feature-list">
+                            <li><span class="check-icon">✓</span> Up to 500 SMS/month</li>
+                            <li><span class="check-icon">✓</span> 100 AI calls/month</li>
+                            <li><span class="check-icon">✓</span> Basic analytics dashboard</li>
+                            <li><span class="check-icon">✓</span> Email support</li>
+                            <li><span class="check-icon">✓</span> Google Calendar integration</li>
+                            <li><span class="check-icon">✓</span> 1 phone number</li>
+                        </ul>
+                    </div>
+                    <div class="pricing-footer">
+                        <a href="#contact" class="btn btn-outline btn-full">Get Started</a>
+                        <p class="pricing-note">No setup fees • Cancel anytime</p>
+                    </div>
+                </div>
+
+                <div class="pricing-card featured">
+                    <div class="pricing-badge">Most Popular</div>
+                    <div class="pricing-header">
+                        <h3 class="pricing-title">Professional</h3>
+                        <div class="pricing-price">
+                            <span class="currency">£</span>
+                            <span class="amount monthly">299</span>
+                            <span class="amount annual" style="display: none;">239</span>
+                            <span class="period">/month</span>
+                        </div>
+                        <p class="pricing-description">Ideal for growing businesses</p>
+                    </div>
+                    <div class="pricing-features">
+                        <ul class="feature-list">
+                            <li><span class="check-icon">✓</span> Up to 2,000 SMS/month</li>
+                            <li><span class="check-icon">✓</span> 500 AI calls/month</li>
+                            <li><span class="check-icon">✓</span> Advanced analytics & insights</li>
+                            <li><span class="check-icon">✓</span> Priority support</li>
+                            <li><span class="check-icon">✓</span> A/B testing</li>
+                            <li><span class="check-icon">✓</span> Custom integrations</li>
+                            <li><span class="check-icon">✓</span> Up to 3 phone numbers</li>
+                            <li><span class="check-icon">✓</span> White-label options</li>
+                        </ul>
+                    </div>
+                    <div class="pricing-footer">
+                        <a href="#contact" class="btn btn-primary btn-full">Get Started</a>
+                        <p class="pricing-note">Free setup • 30-day money-back guarantee</p>
+                    </div>
+                </div>
+
+                <div class="pricing-card">
+                    <div class="pricing-header">
+                        <h3 class="pricing-title">Enterprise</h3>
+                        <div class="pricing-price">
+                            <span class="currency">£</span>
+                            <span class="amount monthly">599</span>
+                            <span class="amount annual" style="display: none;">479</span>
+                            <span class="period">/month</span>
+                        </div>
+                        <p class="pricing-description">For large organizations</p>
+                    </div>
+                    <div class="pricing-features">
+                        <ul class="feature-list">
+                            <li><span class="check-icon">✓</span> Unlimited SMS</li>
+                            <li><span class="check-icon">✓</span> Unlimited AI calls</li>
+                            <li><span class="check-icon">✓</span> Real-time analytics</li>
+                            <li><span class="check-icon">✓</span> 24/7 phone support</li>
+                            <li><span class="check-icon">✓</span> Custom development</li>
+                            <li><span class="check-icon">✓</span> API access</li>
+                            <li><span class="check-icon">✓</span> Unlimited phone numbers</li>
+                            <li><span class="check-icon">✓</span> Dedicated account manager</li>
+                        </ul>
+                    </div>
+                    <div class="pricing-footer">
+                        <a href="#contact" class="btn btn-outline btn-full">Contact Sales</a>
+                        <p class="pricing-note">Custom pricing • Volume discounts</p>
+                    </div>
+                </div>
+            </div>
+            <div class="pricing-guarantee">
+                <div class="guarantee-icon">🛡️</div>
+                <div class="guarantee-text">
+                    <strong>30-day money-back guarantee</strong> - If you're not satisfied, we'll refund your payment in full.
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- Testimonials Section -->
     <section id="testimonials" class="testimonials">
         <div class="container">
@@ -722,6 +1425,168 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ Section -->
+    <section id="faq" class="faq">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">Frequently Asked Questions</h2>
+                <p class="section-subtitle">
+                    Everything you need to know about AI Booking MVP
+                </p>
+            </div>
+            <div class="faq-grid">
+                <div class="faq-category">
+                    <h3 class="faq-category-title">Getting Started</h3>
+                    <div class="faq-items">
+                        <div class="faq-item">
+                            <div class="faq-question">
+                                <span class="faq-icon">❓</span>
+                                <span class="faq-text">How quickly can I get started?</span>
+                                <span class="faq-toggle">+</span>
+                            </div>
+                            <div class="faq-answer">
+                                <p>You can be up and running in under 30 minutes! Our setup process is designed to be simple and straightforward. We provide step-by-step guidance and our support team is available to help you through the entire process.</p>
+                            </div>
+                        </div>
+                        <div class="faq-item">
+                            <div class="faq-question">
+                                <span class="faq-icon">❓</span>
+                                <span class="faq-text">Do I need technical knowledge?</span>
+                                <span class="faq-toggle">+</span>
+                            </div>
+                            <div class="faq-answer">
+                                <p>Not at all! Our platform is designed for business owners, not developers. The interface is intuitive and user-friendly. If you can use a smartphone, you can use AI Booking MVP.</p>
+                            </div>
+                        </div>
+                        <div class="faq-item">
+                            <div class="faq-question">
+                                <span class="faq-icon">❓</span>
+                                <span class="faq-text">What integrations are available?</span>
+                                <span class="faq-toggle">+</span>
+                            </div>
+                            <div class="faq-answer">
+                                <p>We integrate with Google Calendar, Outlook, most CRM systems, and popular booking platforms. We also offer custom integrations for enterprise clients. Contact us to discuss your specific needs.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="faq-category">
+                    <h3 class="faq-category-title">Features & Functionality</h3>
+                    <div class="faq-items">
+                        <div class="faq-item">
+                            <div class="faq-question">
+                                <span class="faq-icon">❓</span>
+                                <span class="faq-text">How does the AI booking work?</span>
+                                <span class="faq-toggle">+</span>
+                            </div>
+                            <div class="faq-answer">
+                                <p>Our AI analyzes incoming messages, understands customer intent, checks your calendar availability, and automatically books appointments. It can handle complex scheduling requests and even reschedule existing appointments.</p>
+                            </div>
+                        </div>
+                        <div class="faq-item">
+                            <div class="faq-question">
+                                <span class="faq-icon">❓</span>
+                                <span class="faq-text">Can I customize the AI responses?</span>
+                                <span class="faq-toggle">+</span>
+                            </div>
+                            <div class="faq-answer">
+                                <p>Absolutely! You can customize the AI's personality, tone, and responses to match your brand. You can also set specific rules and preferences for how the AI handles different types of requests.</p>
+                            </div>
+                        </div>
+                        <div class="faq-item">
+                            <div class="faq-question">
+                                <span class="faq-icon">❓</span>
+                                <span class="faq-text">What happens if the AI can't handle a request?</span>
+                                <span class="faq-toggle">+</span>
+                            </div>
+                            <div class="faq-answer">
+                                <p>The AI will politely explain that it needs human assistance and will forward the conversation to you or your team. You can also set up automatic escalation rules for specific scenarios.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="faq-category">
+                    <h3 class="faq-category-title">Pricing & Billing</h3>
+                    <div class="faq-items">
+                        <div class="faq-item">
+                            <div class="faq-question">
+                                <span class="faq-icon">❓</span>
+                                <span class="faq-text">What's included in the free trial?</span>
+                                <span class="faq-toggle">+</span>
+                            </div>
+                            <div class="faq-answer">
+                                <p>Our free trial includes full access to all features for 14 days, up to 100 SMS messages and 25 AI calls. No credit card required to start your trial.</p>
+                            </div>
+                        </div>
+                        <div class="faq-item">
+                            <div class="faq-question">
+                                <span class="faq-icon">❓</span>
+                                <span class="faq-text">Can I change my plan anytime?</span>
+                                <span class="faq-toggle">+</span>
+                            </div>
+                            <div class="faq-answer">
+                                <p>Yes! You can upgrade or downgrade your plan at any time. Changes take effect immediately, and we'll prorate any billing differences.</p>
+                            </div>
+                        </div>
+                        <div class="faq-item">
+                            <div class="faq-question">
+                                <span class="faq-icon">❓</span>
+                                <span class="faq-text">Do you offer volume discounts?</span>
+                                <span class="faq-toggle">+</span>
+                            </div>
+                            <div class="faq-answer">
+                                <p>Yes! We offer significant discounts for annual billing and volume usage. Contact our sales team to discuss custom pricing for your business needs.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="faq-category">
+                    <h3 class="faq-category-title">Support & Security</h3>
+                    <div class="faq-items">
+                        <div class="faq-item">
+                            <div class="faq-question">
+                                <span class="faq-icon">❓</span>
+                                <span class="faq-text">What kind of support do you provide?</span>
+                                <span class="faq-toggle">+</span>
+                            </div>
+                            <div class="faq-answer">
+                                <p>We provide email support for all plans, priority support for Professional plans, and 24/7 phone support for Enterprise clients. We also have comprehensive documentation and video tutorials.</p>
+                            </div>
+                        </div>
+                        <div class="faq-item">
+                            <div class="faq-question">
+                                <span class="faq-icon">❓</span>
+                                <span class="faq-text">Is my data secure?</span>
+                                <span class="faq-toggle">+</span>
+                            </div>
+                            <div class="faq-answer">
+                                <p>Absolutely! We use enterprise-grade security with SSL encryption, regular security audits, and comply with GDPR and other data protection regulations. Your data is never shared with third parties.</p>
+                            </div>
+                        </div>
+                        <div class="faq-item">
+                            <div class="faq-question">
+                                <span class="faq-icon">❓</span>
+                                <span class="faq-text">Can I export my data?</span>
+                                <span class="faq-toggle">+</span>
+                            </div>
+                            <div class="faq-answer">
+                                <p>Yes! You can export all your data at any time in standard formats (CSV, JSON). We believe in data portability and never lock you into our platform.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="faq-cta">
+                <h3>Still have questions?</h3>
+                <p>Our team is here to help you succeed</p>
+                <a href="#contact" class="btn btn-primary">Contact Support</a>
             </div>
         </div>
     </section>
@@ -772,7 +1637,7 @@
             }
         });
 
-        // Interactive Demo Functionality
+        // Enhanced Landing Page Functionality
         document.addEventListener('DOMContentLoaded', function() {
             const demoInput = document.getElementById('demoInput');
             const demoSend = document.getElementById('demoSend');
@@ -900,6 +1765,187 @@
                     });
                 });
             });
+
+            // Pricing Toggle Functionality
+            const pricingToggle = document.getElementById('pricingToggle');
+            const monthlyPrices = document.querySelectorAll('.amount.monthly');
+            const annualPrices = document.querySelectorAll('.amount.annual');
+            
+            if (pricingToggle) {
+                pricingToggle.addEventListener('change', function() {
+                    if (this.checked) {
+                        // Show annual prices
+                        monthlyPrices.forEach(price => price.style.display = 'none');
+                        annualPrices.forEach(price => price.style.display = 'inline');
+                    } else {
+                        // Show monthly prices
+                        monthlyPrices.forEach(price => price.style.display = 'inline');
+                        annualPrices.forEach(price => price.style.display = 'none');
+                    }
+                });
+            }
+
+            // FAQ Accordion Functionality
+            const faqItems = document.querySelectorAll('.faq-item');
+            faqItems.forEach(item => {
+                const question = item.querySelector('.faq-question');
+                question.addEventListener('click', function() {
+                    // Close other open items
+                    faqItems.forEach(otherItem => {
+                        if (otherItem !== item) {
+                            otherItem.classList.remove('active');
+                        }
+                    });
+                    
+                    // Toggle current item
+                    item.classList.toggle('active');
+                });
+            });
+
+            // Animated Counter Functionality
+            const animateCounter = (element, target, duration = 2000) => {
+                const start = 0;
+                const increment = target / (duration / 16);
+                let current = start;
+                
+                const timer = setInterval(() => {
+                    current += increment;
+                    if (current >= target) {
+                        current = target;
+                        clearInterval(timer);
+                    }
+                    element.textContent = Math.floor(current);
+                }, 16);
+            };
+
+            // Intersection Observer for animations
+            const observerOptions = {
+                threshold: 0.5,
+                rootMargin: '0px 0px -50px 0px'
+            };
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        // Animate counters
+                        const statNumbers = entry.target.querySelectorAll('.stat-number');
+                        statNumbers.forEach(stat => {
+                            const target = parseInt(stat.getAttribute('data-target'));
+                            animateCounter(stat, target);
+                        });
+                        
+                        // Add animation class to elements
+                        entry.target.classList.add('animate-in');
+                        
+                        // Stop observing once animated
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, observerOptions);
+
+            // Observe stats section
+            const statsSection = document.querySelector('.stats');
+            if (statsSection) {
+                observer.observe(statsSection);
+            }
+
+            // Smooth scrolling for all anchor links
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+                anchor.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const target = document.querySelector(this.getAttribute('href'));
+                    if (target) {
+                        target.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'start'
+                        });
+                    }
+                });
+            });
+
+            // Add loading animation to buttons
+            document.querySelectorAll('.btn').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    if (this.href && this.href.includes('mailto:')) {
+                        // Add loading state for contact buttons
+                        const originalText = this.innerHTML;
+                        this.innerHTML = '<span class="btn-icon">⏳</span><span class="btn-text">Opening...</span>';
+                        
+                        setTimeout(() => {
+                            this.innerHTML = originalText;
+                        }, 1000);
+                    }
+                });
+            });
+
+            // Add hover effects to pricing cards
+            const pricingCards = document.querySelectorAll('.pricing-card');
+            pricingCards.forEach(card => {
+                card.addEventListener('mouseenter', function() {
+                    this.style.transform = 'translateY(-10px) scale(1.02)';
+                });
+                
+                card.addEventListener('mouseleave', function() {
+                    this.style.transform = 'translateY(0) scale(1)';
+                });
+            });
+
+            // Add typing animation to hero title
+            const heroTitle = document.querySelector('.hero-title');
+            if (heroTitle) {
+                const text = heroTitle.innerHTML;
+                heroTitle.innerHTML = '';
+                
+                let i = 0;
+                const typeWriter = () => {
+                    if (i < text.length) {
+                        heroTitle.innerHTML += text.charAt(i);
+                        i++;
+                        setTimeout(typeWriter, 50);
+                    }
+                };
+                
+                setTimeout(typeWriter, 1000);
+            }
+
+            // Add parallax effect to floating shapes
+            const shapes = document.querySelectorAll('.shape');
+            window.addEventListener('scroll', () => {
+                const scrolled = window.pageYOffset;
+                shapes.forEach((shape, index) => {
+                    const speed = 0.5 + (index * 0.1);
+                    shape.style.transform = `translateY(${scrolled * speed}px) rotate(${scrolled * 0.1}deg)`;
+                });
+            });
+
+            // Add form validation
+            const contactForm = document.querySelector('form');
+            if (contactForm) {
+                contactForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    const formData = new FormData(this);
+                    const data = Object.fromEntries(formData);
+                    
+                    // Simple validation
+                    if (!data.name || !data.email || !data.message) {
+                        alert('Please fill in all required fields.');
+                        return;
+                    }
+                    
+                    // Show success message
+                    const submitBtn = this.querySelector('button[type="submit"]');
+                    const originalText = submitBtn.textContent;
+                    submitBtn.textContent = 'Message Sent! ✓';
+                    submitBtn.style.background = '#10b981';
+                    
+                    setTimeout(() => {
+                        submitBtn.textContent = originalText;
+                        submitBtn.style.background = '';
+                        this.reset();
+                    }, 3000);
+                });
+            }
         });
     </script>
 </body>
