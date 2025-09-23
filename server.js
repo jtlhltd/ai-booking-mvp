@@ -991,25 +991,25 @@ async function selectABTestVariant(clientKey, experimentName, leadPhone) {
     const { getActiveABTests, recordABTestResult } = await import('./db.js');
     
     const activeTests = await getActiveABTests(clientKey);
-    const experiment = activeTests.find(test => test.experiment_name === experimentName);
+    const experimentVariants = activeTests.filter(test => test.experiment_name === experimentName);
     
-    if (!experiment) {
+    if (!experimentVariants || experimentVariants.length === 0) {
       return null; // No active experiment
     }
     
     // Simple hash-based assignment for consistent results
     const hash = createHash('md5').update(`${clientKey}_${experimentName}_${leadPhone}`).digest('hex');
     const hashValue = parseInt(hash.substring(0, 8), 16);
-    const variantIndex = hashValue % experiment.variants.length;
+    const variantIndex = hashValue % experimentVariants.length;
     
-    const selectedVariant = experiment.variants[variantIndex];
+    const selectedVariant = experimentVariants[variantIndex];
     
     // Record the assignment
     await recordABTestResult({
-      experimentId: experiment.id,
+      experimentId: selectedVariant.id,
       clientKey,
       leadPhone,
-      variantName: selectedVariant.name,
+      variantName: selectedVariant.variant_name,
       outcome: 'assigned',
       outcomeData: {
         assignmentMethod: 'hash_based',
@@ -1022,11 +1022,14 @@ async function selectABTestVariant(clientKey, experimentName, leadPhone) {
       clientKey,
       experimentName,
       leadPhone,
-      variantName: selectedVariant.name,
+      variantName: selectedVariant.variant_name,
       variantIndex
     });
     
-    return selectedVariant;
+    return {
+      name: selectedVariant.variant_name,
+      config: selectedVariant.variant_config
+    };
   } catch (error) {
     console.error('[AB TEST VARIANT SELECTION ERROR]', error);
     return null;

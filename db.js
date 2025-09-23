@@ -551,6 +551,14 @@ export async function findOrCreateLead({ tenantKey, phone, name = null, service 
   return { id: row?.id, client_key: tenantKey, name, phone, service, source };
 }
 
+export async function getLeadsByClient(clientKey, limit = 100) {
+  const result = await query(
+    'SELECT * FROM leads WHERE client_key=$1 ORDER BY created_at DESC LIMIT $2',
+    [clientKey, limit]
+  );
+  return result.rows || [];
+}
+
 export async function setSmsConsent(tenantKey, phone, consent) {
   await query('UPDATE leads SET consent_sms=$3 WHERE client_key=$1 AND phone=$2', [tenantKey, phone, !!consent]);
 }
