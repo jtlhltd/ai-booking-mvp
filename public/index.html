@@ -76,10 +76,13 @@
         .hero {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 8rem 0 4rem;
+            padding: 10rem 0 6rem;
             text-align: center;
             position: relative;
             overflow: hidden;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
         }
         
         .hero-background {
@@ -168,10 +171,11 @@
         }
         
         .hero-title {
-            font-size: 3.5rem;
-            font-weight: 700;
-            margin-bottom: 1.5rem;
-            line-height: 1.2;
+            font-size: 4rem;
+            font-weight: 800;
+            margin-bottom: 2rem;
+            line-height: 1.1;
+            letter-spacing: -0.02em;
         }
         
         .gradient-text {
@@ -318,8 +322,8 @@
         
         /* Features Section */
         .features {
-            padding: 4rem 0;
-            background: #f8fafc;
+            padding: 8rem 0;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
         }
         
         .section-title {
@@ -381,8 +385,8 @@
         
         /* Demo Section */
         .demo {
-            padding: 4rem 0;
-            background: #f8fafc;
+            padding: 8rem 0;
+            background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
         }
         
         .demo-container {
@@ -393,12 +397,13 @@
         }
         
         .phone-mockup {
-            background: #1a1a1a;
-            border-radius: 25px;
-            padding: 20px;
-            max-width: 300px;
+            background: linear-gradient(145deg, #2a2a2a, #1a1a1a);
+            border-radius: 30px;
+            padding: 25px;
+            max-width: 320px;
             margin: 0 auto;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            box-shadow: 0 25px 50px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.1);
         }
         
         .phone-header {
@@ -642,223 +647,11 @@
             }
         }
         
-        /* Pricing Section */
-        .pricing {
-            padding: 4rem 0;
-            background: #ffffff;
-        }
-        
-        .pricing-toggle {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 1rem;
-            margin-bottom: 3rem;
-        }
-        
-        .toggle-label {
-            font-weight: 500;
-            color: #64748b;
-        }
-        
-        .toggle-switch {
-            position: relative;
-            display: inline-block;
-            width: 60px;
-            height: 30px;
-        }
-        
-        .toggle-switch input {
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-        
-        .toggle-slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: #e2e8f0;
-            transition: .4s;
-            border-radius: 30px;
-        }
-        
-        .toggle-slider:before {
-            position: absolute;
-            content: "";
-            height: 22px;
-            width: 22px;
-            left: 4px;
-            bottom: 4px;
-            background-color: white;
-            transition: .4s;
-            border-radius: 50%;
-        }
-        
-        input:checked + .toggle-slider {
-            background-color: #6366f1;
-        }
-        
-        input:checked + .toggle-slider:before {
-            transform: translateX(30px);
-        }
-        
-        .discount-badge {
-            background: #10b981;
-            color: white;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 0.8rem;
-            font-weight: 600;
-        }
-        
-        .pricing-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 2rem;
-            margin-bottom: 3rem;
-        }
-        
-        .pricing-card {
-            background: white;
-            border: 2px solid #e2e8f0;
-            border-radius: 16px;
-            padding: 2rem;
-            text-align: center;
-            position: relative;
-            transition: all 0.3s ease;
-        }
-        
-        .pricing-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-        }
-        
-        .pricing-card.featured {
-            border-color: #6366f1;
-            transform: scale(1.05);
-            box-shadow: 0 20px 40px rgba(99, 102, 241, 0.2);
-        }
-        
-        .pricing-badge {
-            position: absolute;
-            top: -12px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #6366f1;
-            color: white;
-            padding: 6px 16px;
-            border-radius: 20px;
-            font-size: 0.9rem;
-            font-weight: 600;
-        }
-        
-        .pricing-title {
-            font-size: 1.5rem;
-            font-weight: 700;
-            margin-bottom: 1rem;
-            color: #1e293b;
-        }
-        
-        .pricing-price {
-            margin-bottom: 1rem;
-        }
-        
-        .currency {
-            font-size: 1.5rem;
-            color: #64748b;
-            vertical-align: top;
-        }
-        
-        .amount {
-            font-size: 3rem;
-            font-weight: 700;
-            color: #1e293b;
-        }
-        
-        .period {
-            font-size: 1rem;
-            color: #64748b;
-        }
-        
-        .pricing-description {
-            color: #64748b;
-            margin-bottom: 2rem;
-        }
-        
-        .pricing-features {
-            margin-bottom: 2rem;
-        }
-        
-        .feature-list {
-            list-style: none;
-            padding: 0;
-            text-align: left;
-        }
-        
-        .feature-list li {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            margin-bottom: 0.75rem;
-            color: #475569;
-        }
-        
-        .check-icon {
-            color: #10b981;
-            font-weight: bold;
-            font-size: 1.1rem;
-        }
-        
-        .btn-outline {
-            background: transparent;
-            color: #6366f1;
-            border: 2px solid #6366f1;
-        }
-        
-        .btn-outline:hover {
-            background: #6366f1;
-            color: white;
-        }
-        
-        .btn-full {
-            width: 100%;
-            justify-content: center;
-        }
-        
-        .pricing-note {
-            font-size: 0.9rem;
-            color: #64748b;
-            margin-top: 1rem;
-        }
-        
-        .pricing-guarantee {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 1rem;
-            background: #f8fafc;
-            padding: 1.5rem;
-            border-radius: 12px;
-            border: 1px solid #e2e8f0;
-        }
-        
-        .guarantee-icon {
-            font-size: 2rem;
-        }
-        
-        .guarantee-text {
-            color: #475569;
-            font-size: 1rem;
-        }
 
         /* Testimonials */
         .testimonials {
-            padding: 4rem 0;
-            background: white;
+            padding: 8rem 0;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
         }
         
         .testimonials-grid {
@@ -920,8 +713,8 @@
         
         /* FAQ Section */
         .faq {
-            padding: 4rem 0;
-            background: #f8fafc;
+            padding: 8rem 0;
+            background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
         }
         
         .faq-grid {
@@ -1042,10 +835,12 @@
 
         /* CTA Section */
         .cta {
-            background: #1e293b;
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
             color: white;
-            padding: 4rem 0;
+            padding: 8rem 0;
             text-align: center;
+            position: relative;
+            overflow: hidden;
         }
         
         .cta h2 {
@@ -1101,7 +896,6 @@
             <ul class="nav-links">
                 <li><a href="#features">Features</a></li>
                 <li><a href="#demo">Demo</a></li>
-                <li><a href="#pricing">Pricing</a></li>
                 <li><a href="#testimonials">Testimonials</a></li>
                 <li><a href="#faq">FAQ</a></li>
                 <li><a href="#contact">Contact</a></li>
@@ -1296,103 +1090,6 @@
         </div>
     </section>
 
-    <!-- Pricing Section -->
-    <section id="pricing" class="pricing">
-        <div class="container">
-            <div class="section-header">
-                <h2 class="section-title">Service-Based Pricing</h2>
-                <p class="section-subtitle">
-                    Pay only for what you use. No monthly subscriptions, just transparent service fees.
-                </p>
-            </div>
-            <div class="pricing-grid">
-                <div class="pricing-card">
-                    <div class="pricing-header">
-                        <h3 class="pricing-title">Setup & Configuration</h3>
-                        <div class="pricing-price">
-                            <span class="currency">£</span>
-                            <span class="amount">299</span>
-                            <span class="period">one-time</span>
-                        </div>
-                        <p class="pricing-description">Complete system setup and configuration</p>
-                    </div>
-                    <div class="pricing-features">
-                        <ul class="feature-list">
-                            <li><span class="check-icon">✓</span> System installation & setup</li>
-                            <li><span class="check-icon">✓</span> Google Calendar integration</li>
-                            <li><span class="check-icon">✓</span> Phone number configuration</li>
-                            <li><span class="check-icon">✓</span> AI assistant training</li>
-                            <li><span class="check-icon">✓</span> Custom branding setup</li>
-                            <li><span class="check-icon">✓</span> Staff training session</li>
-                        </ul>
-                    </div>
-                    <div class="pricing-footer">
-                        <a href="#contact" class="btn btn-outline btn-full">Get Started</a>
-                        <p class="pricing-note">Includes 30 days of support</p>
-                    </div>
-                </div>
-
-                <div class="pricing-card featured">
-                    <div class="pricing-badge">Most Popular</div>
-                    <div class="pricing-header">
-                        <h3 class="pricing-title">Per SMS Message</h3>
-                        <div class="pricing-price">
-                            <span class="currency">£</span>
-                            <span class="amount">0.15</span>
-                            <span class="period">per SMS</span>
-                        </div>
-                        <p class="pricing-description">Pay only for messages sent</p>
-                    </div>
-                    <div class="pricing-features">
-                        <ul class="feature-list">
-                            <li><span class="check-icon">✓</span> AI-powered responses</li>
-                            <li><span class="check-icon">✓</span> Appointment booking</li>
-                            <li><span class="check-icon">✓</span> Calendar integration</li>
-                            <li><span class="check-icon">✓</span> Lead capture & scoring</li>
-                            <li><span class="check-icon">✓</span> Analytics dashboard</li>
-                            <li><span class="check-icon">✓</span> Email notifications</li>
-                        </ul>
-                    </div>
-                    <div class="pricing-footer">
-                        <a href="#contact" class="btn btn-primary btn-full">Get Started</a>
-                        <p class="pricing-note">No monthly minimums</p>
-                    </div>
-                </div>
-
-                <div class="pricing-card">
-                    <div class="pricing-header">
-                        <h3 class="pricing-title">Per AI Call</h3>
-                        <div class="pricing-price">
-                            <span class="currency">£</span>
-                            <span class="amount">2.50</span>
-                            <span class="period">per call</span>
-                        </div>
-                        <p class="pricing-description">Voice AI calls to customers</p>
-                    </div>
-                    <div class="pricing-features">
-                        <ul class="feature-list">
-                            <li><span class="check-icon">✓</span> Natural voice conversations</li>
-                            <li><span class="check-icon">✓</span> Appointment scheduling</li>
-                            <li><span class="check-icon">✓</span> Follow-up calls</li>
-                            <li><span class="check-icon">✓</span> Call recording & analytics</li>
-                            <li><span class="check-icon">✓</span> Custom voice training</li>
-                            <li><span class="check-icon">✓</span> Integration with SMS system</li>
-                        </ul>
-                    </div>
-                    <div class="pricing-footer">
-                        <a href="#contact" class="btn btn-outline btn-full">Contact Sales</a>
-                        <p class="pricing-note">Volume discounts available</p>
-                    </div>
-                </div>
-            </div>
-            <div class="pricing-guarantee">
-                <div class="guarantee-icon">🛡️</div>
-                <div class="guarantee-text">
-                    <strong>No monthly fees</strong> - Pay only for the services you use. Cancel anytime with no penalties.
-                </div>
-            </div>
-        </div>
-    </section>
 
     <!-- Testimonials Section -->
     <section id="testimonials" class="testimonials">
@@ -1655,23 +1352,45 @@
             const smsDemo = document.getElementById('smsDemo');
             const suggestionBtns = document.querySelectorAll('.suggestion-btn');
 
-            // AI responses for different messages
+            // AI conversation state
+            let conversationState = {
+                stage: 'greeting', // greeting, service, time, confirmation, complete
+                service: null,
+                time: null,
+                name: null
+            };
+
+            // AI responses with conversation flow
             const aiResponses = {
-                'cleaning': 'Perfect! I can help you schedule a dental cleaning. We have availability this week. Would you prefer morning or afternoon appointments?',
-                'clean': 'Perfect! I can help you schedule a dental cleaning. We have availability this week. Would you prefer morning or afternoon appointments?',
-                'prices': 'Great question! Our cleaning is £80, checkup is £60, and fillings start at £120. We also offer payment plans. Would you like to book a consultation to discuss your needs?',
-                'price': 'Great question! Our cleaning is £80, checkup is £60, and fillings start at £120. We also offer payment plans. Would you like to book a consultation to discuss your needs?',
-                'cost': 'Great question! Our cleaning is £80, checkup is £60, and fillings start at £120. We also offer payment plans. Would you like to book a consultation to discuss your needs?',
-                'tomorrow': 'Let me check our availability for tomorrow. We have slots at 9 AM, 2 PM, and 4 PM available. Which time works best for you?',
-                'available': 'Let me check our availability for tomorrow. We have slots at 9 AM, 2 PM, and 4 PM available. Which time works best for you?',
-                'appointment': 'Let me check our availability for tomorrow. We have slots at 9 AM, 2 PM, and 4 PM available. Which time works best for you?',
-                'cancel': 'I understand you need to cancel. No problem at all! Can you provide your name and appointment time so I can help you reschedule or cancel?',
-                'reschedule': 'I understand you need to reschedule. No problem at all! Can you provide your name and appointment time so I can help you find a new time?',
+                'greeting': 'Hello! I\'m Sarah from Victory Dental. How can I help you today?',
+                'cleaning': 'Perfect! I can help you schedule a dental cleaning. We have availability this week. What day works best for you?',
+                'clean': 'Perfect! I can help you schedule a dental cleaning. We have availability this week. What day works best for you?',
+                'checkup': 'Great! I can help you schedule a dental checkup. We have availability this week. What day works best for you?',
+                'exam': 'Great! I can help you schedule a dental checkup. We have availability this week. What day works best for you?',
+                'filling': 'I can help you schedule a filling appointment. We have availability this week. What day works best for you?',
+                'cavity': 'I can help you schedule a filling appointment. We have availability this week. What day works best for you?',
+                'whitening': 'Perfect! I can help you schedule a teeth whitening appointment. We have availability this week. What day works best for you?',
+                'white': 'Perfect! I can help you schedule a teeth whitening appointment. We have availability this week. What day works best for you?',
+                'prices': 'Our cleaning is £80, checkup is £60, and fillings start at £120. We also offer payment plans. Would you like to book an appointment?',
+                'price': 'Our cleaning is £80, checkup is £60, and fillings start at £120. We also offer payment plans. Would you like to book an appointment?',
+                'cost': 'Our cleaning is £80, checkup is £60, and fillings start at £120. We also offer payment plans. Would you like to book an appointment?',
+                'tomorrow': 'Great! We have slots at 9 AM, 2 PM, and 4 PM tomorrow. Which time works best for you?',
+                'monday': 'Perfect! We have slots at 10 AM, 2 PM, and 3 PM on Monday. Which time works best for you?',
+                'tuesday': 'Perfect! We have slots at 9 AM, 1 PM, and 4 PM on Tuesday. Which time works best for you?',
+                'wednesday': 'Perfect! We have slots at 10 AM, 2 PM, and 5 PM on Wednesday. Which time works best for you?',
+                'thursday': 'Perfect! We have slots at 9 AM, 1 PM, and 3 PM on Thursday. Which time works best for you?',
+                'friday': 'Perfect! We have slots at 10 AM, 2 PM, and 4 PM on Friday. Which time works best for you?',
+                'morning': 'Excellent! I have 9 AM and 10 AM available. Which would you prefer?',
+                'afternoon': 'Great! I have 2 PM and 3 PM available. Which would you prefer?',
+                '9am': 'Perfect! 9 AM on [day] works great. What\'s your name and phone number for the booking?',
+                '10am': 'Perfect! 10 AM on [day] works great. What\'s your name and phone number for the booking?',
+                '2pm': 'Perfect! 2 PM on [day] works great. What\'s your name and phone number for the booking?',
+                '3pm': 'Perfect! 3 PM on [day] works great. What\'s your name and phone number for the booking?',
                 'emergency': 'I understand this is urgent. For dental emergencies, please call us directly at (555) 123-4567. For non-emergency appointments, I can help you schedule one.',
                 'pain': 'I\'m sorry to hear you\'re in pain. For urgent dental issues, please call us directly at (555) 123-4567. For regular appointments, I can help you schedule one.',
-                'checkup': 'Great! I can help you schedule a dental checkup. We have availability this week. Would you prefer morning or afternoon appointments?',
-                'filling': 'I can help you schedule a filling appointment. We have availability this week. Would you prefer morning or afternoon appointments?',
-                'whitening': 'Perfect! I can help you schedule a teeth whitening appointment. We have availability this week. Would you prefer morning or afternoon appointments?',
+                'cancel': 'I understand you need to cancel. Can you provide your name and appointment time so I can help you reschedule or cancel?',
+                'reschedule': 'I understand you need to reschedule. Can you provide your name and appointment time so I can help you find a new time?',
+                'confirmation': 'Perfect! I\'ve booked your appointment for [time] on [day]. You\'ll receive a confirmation text shortly. Is there anything else I can help you with?',
                 'default': 'Thank you for your message! I\'m here to help with all your dental needs. Would you like to schedule an appointment, ask about our services, or get pricing information?'
             };
 
@@ -1710,33 +1429,102 @@
                 smsDemo.scrollTop = smsDemo.scrollHeight;
             }
 
-            // Function to get AI response
+            // Function to get AI response with conversation flow
             function getAIResponse(message) {
                 const lowerMessage = message.toLowerCase();
                 
-                // Check for specific keywords in order of priority
-                if (lowerMessage.includes('emergency') || lowerMessage.includes('urgent')) {
-                    return aiResponses.emergency;
-                } else if (lowerMessage.includes('pain') || lowerMessage.includes('hurt')) {
-                    return aiResponses.pain;
-                } else if (lowerMessage.includes('cleaning') || lowerMessage.includes('clean')) {
-                    return aiResponses.cleaning;
-                } else if (lowerMessage.includes('checkup') || lowerMessage.includes('exam')) {
-                    return aiResponses.checkup;
-                } else if (lowerMessage.includes('filling') || lowerMessage.includes('cavity')) {
-                    return aiResponses.filling;
-                } else if (lowerMessage.includes('whitening') || lowerMessage.includes('white')) {
-                    return aiResponses.whitening;
-                } else if (lowerMessage.includes('price') || lowerMessage.includes('cost') || lowerMessage.includes('how much')) {
-                    return aiResponses.prices;
-                } else if (lowerMessage.includes('tomorrow') || lowerMessage.includes('available') || lowerMessage.includes('appointment')) {
-                    return aiResponses.tomorrow;
-                } else if (lowerMessage.includes('cancel')) {
-                    return aiResponses.cancel;
-                } else if (lowerMessage.includes('reschedule')) {
-                    return aiResponses.reschedule;
+                // Handle conversation flow based on current stage
+                if (conversationState.stage === 'greeting') {
+                    if (lowerMessage.includes('emergency') || lowerMessage.includes('urgent')) {
+                        return aiResponses.emergency;
+                    } else if (lowerMessage.includes('pain') || lowerMessage.includes('hurt')) {
+                        return aiResponses.pain;
+                    } else if (lowerMessage.includes('cleaning') || lowerMessage.includes('clean')) {
+                        conversationState.stage = 'service';
+                        conversationState.service = 'cleaning';
+                        return aiResponses.cleaning;
+                    } else if (lowerMessage.includes('checkup') || lowerMessage.includes('exam')) {
+                        conversationState.stage = 'service';
+                        conversationState.service = 'checkup';
+                        return aiResponses.checkup;
+                    } else if (lowerMessage.includes('filling') || lowerMessage.includes('cavity')) {
+                        conversationState.stage = 'service';
+                        conversationState.service = 'filling';
+                        return aiResponses.filling;
+                    } else if (lowerMessage.includes('whitening') || lowerMessage.includes('white')) {
+                        conversationState.stage = 'service';
+                        conversationState.service = 'whitening';
+                        return aiResponses.whitening;
+                    } else if (lowerMessage.includes('price') || lowerMessage.includes('cost') || lowerMessage.includes('how much')) {
+                        return aiResponses.prices;
+                    } else if (lowerMessage.includes('cancel')) {
+                        return aiResponses.cancel;
+                    } else if (lowerMessage.includes('reschedule')) {
+                        return aiResponses.reschedule;
+                    } else {
+                        return aiResponses.default;
+                    }
+                } else if (conversationState.stage === 'service') {
+                    // User is selecting a day
+                    if (lowerMessage.includes('tomorrow')) {
+                        conversationState.stage = 'time';
+                        return aiResponses.tomorrow;
+                    } else if (lowerMessage.includes('monday')) {
+                        conversationState.stage = 'time';
+                        return aiResponses.monday;
+                    } else if (lowerMessage.includes('tuesday')) {
+                        conversationState.stage = 'time';
+                        return aiResponses.tuesday;
+                    } else if (lowerMessage.includes('wednesday')) {
+                        conversationState.stage = 'time';
+                        return aiResponses.wednesday;
+                    } else if (lowerMessage.includes('thursday')) {
+                        conversationState.stage = 'time';
+                        return aiResponses.thursday;
+                    } else if (lowerMessage.includes('friday')) {
+                        conversationState.stage = 'time';
+                        return aiResponses.friday;
+                    } else {
+                        return 'What day works best for you? We have availability Monday through Friday.';
+                    }
+                } else if (conversationState.stage === 'time') {
+                    // User is selecting a time
+                    if (lowerMessage.includes('morning')) {
+                        return aiResponses.morning;
+                    } else if (lowerMessage.includes('afternoon')) {
+                        return aiResponses.afternoon;
+                    } else if (lowerMessage.includes('9am') || lowerMessage.includes('9 am')) {
+                        conversationState.stage = 'confirmation';
+                        conversationState.time = '9 AM';
+                        return aiResponses['9am'].replace('[day]', 'tomorrow');
+                    } else if (lowerMessage.includes('10am') || lowerMessage.includes('10 am')) {
+                        conversationState.stage = 'confirmation';
+                        conversationState.time = '10 AM';
+                        return aiResponses['10am'].replace('[day]', 'tomorrow');
+                    } else if (lowerMessage.includes('2pm') || lowerMessage.includes('2 pm')) {
+                        conversationState.stage = 'confirmation';
+                        conversationState.time = '2 PM';
+                        return aiResponses['2pm'].replace('[day]', 'tomorrow');
+                    } else if (lowerMessage.includes('3pm') || lowerMessage.includes('3 pm')) {
+                        conversationState.stage = 'confirmation';
+                        conversationState.time = '3 PM';
+                        return aiResponses['3pm'].replace('[day]', 'tomorrow');
+                    } else {
+                        return 'Which time works best for you? We have 9 AM, 10 AM, 2 PM, and 3 PM available.';
+                    }
+                } else if (conversationState.stage === 'confirmation') {
+                    // User is providing their details
+                    if (lowerMessage.includes('name') || lowerMessage.includes('phone') || lowerMessage.length > 10) {
+                        conversationState.stage = 'complete';
+                        conversationState.name = 'Customer';
+                        return aiResponses.confirmation.replace('[time]', conversationState.time).replace('[day]', 'tomorrow');
+                    } else {
+                        return 'What\'s your name and phone number for the booking?';
+                    }
                 } else {
-                    return aiResponses.default;
+                    // Reset conversation
+                    conversationState = { stage: 'greeting', service: null, time: null, name: null };
+                    return aiResponses.greeting;
                 }
             }
 
