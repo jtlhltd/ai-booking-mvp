@@ -2220,7 +2220,7 @@ function deriveIdemKey(req) {
 function requireApiKey(req, res, next) {
   if (req.method === 'GET' && (req.path === '/health' || req.path === '/gcal/ping' || req.path === '/healthz')) return next();
   if (req.path.startsWith('/webhooks/twilio-status') || req.path.startsWith('/webhooks/twilio-inbound') || req.path.startsWith('/webhooks/twilio/sms-inbound') || req.path.startsWith('/webhooks/vapi')) return next();
-  if (req.path === '/api/uk-business-search' || req.path === '/api/decision-maker-contacts') return next();
+  if (req.path === '/api/test' || req.path === '/api/uk-business-search' || req.path === '/api/decision-maker-contacts') return next();
   if (!API_KEY) return res.status(500).json({ error: 'Server missing API_KEY' });
   const key = req.get('X-API-Key');
   if (key && key === API_KEY) return next();
@@ -2228,6 +2228,11 @@ function requireApiKey(req, res, next) {
 }
 
 // === PUBLIC ENDPOINTS (no auth required) ===
+
+// Simple test endpoint
+app.get('/api/test', (req, res) => {
+  res.json({ success: true, message: 'Test endpoint working', timestamp: new Date().toISOString() });
+});
 
 // UK Business Search endpoint with real APIs (PUBLIC - no auth required)
 app.post('/api/uk-business-search', async (req, res) => {
