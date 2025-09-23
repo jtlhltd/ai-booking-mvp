@@ -82,8 +82,8 @@ import cron from 'node-cron';
 import leadsRouter from './routes/leads.js';
 import twilioWebhooks from './routes/twilio-webhooks.js';
 import vapiWebhooks from './routes/vapi-webhooks.js';
-import RealUKBusinessSearch from './real-uk-business-search.js';
-import DecisionMakerContactFinder from './decision-maker-contact-finder.js';
+// import RealUKBusinessSearch from './real-uk-business-search.js';
+// import DecisionMakerContactFinder from './decision-maker-contact-finder.js';
 
 
 const app = express();
@@ -2243,21 +2243,11 @@ app.post('/api/uk-business-search', async (req, res) => {
       return res.status(400).json({ error: 'Query is required' });
     }
     
-    console.log(`[UK BUSINESS SEARCH] Starting real search for: "${query}"`);
+    console.log(`[UK BUSINESS SEARCH] Starting search for: "${query}"`);
     
-    // Initialize real business search
-    const realSearcher = new RealUKBusinessSearch();
-    
-    // Try real API search first
+    // Sample data (real API integration disabled for now)
     let results = [];
     let usingRealData = false;
-    
-    try {
-      results = await realSearcher.searchRealBusinesses(query, filters);
-      usingRealData = true;
-      console.log(`[UK BUSINESS SEARCH] Real API search found ${results.length} businesses`);
-    } catch (realApiError) {
-      console.log(`[UK BUSINESS SEARCH] Real API failed, falling back to sample data:`, realApiError.message);
       
       // Fallback to sample data
       const sampleBusinesses = {
@@ -2397,14 +2387,43 @@ app.post('/api/decision-maker-contacts', async (req, res) => {
     
     console.log(`[DECISION MAKER CONTACT] Researching contacts for ${targetRole} at ${business.name}`);
     
-    // Initialize contact finder
-    const contactFinder = new DecisionMakerContactFinder();
+    // Sample contact data (real API integration disabled for now)
+    const contacts = {
+      primary: [
+        {
+          type: "email",
+          value: `${targetRole.toLowerCase().replace(' ', '.')}@${business.name.toLowerCase().replace(/\s+/g, '')}.co.uk`,
+          confidence: 0.7,
+          source: "email_pattern",
+          title: targetRole
+        }
+      ],
+      secondary: [
+        {
+          type: "phone",
+          value: business.phone || "+44 20 1234 5678",
+          confidence: 0.8,
+          source: "business_contact",
+          title: "Reception"
+        }
+      ],
+      gatekeeper: [
+        {
+          type: "email",
+          value: `info@${business.name.toLowerCase().replace(/\s+/g, '')}.co.uk`,
+          confidence: 0.9,
+          source: "business_contact",
+          title: "General Contact"
+        }
+      ]
+    };
     
-    // Find decision maker contacts
-    const contacts = await contactFinder.findDecisionMakerContacts(business, industry, targetRole);
-    
-    // Generate outreach strategy
-    const strategy = contactFinder.generateOutreachStrategy(contacts, business, industry, targetRole);
+    const strategy = {
+      approach: "Direct outreach to decision maker",
+      message: `Hi ${targetRole}, I noticed ${business.name} and wanted to reach out about our AI booking system that could help streamline your appointment scheduling.`,
+      followUp: "Follow up in 3-5 days if no response",
+      bestTime: "Tuesday-Thursday, 10am-2pm"
+    };
     
     console.log(`[DECISION MAKER CONTACT] Found ${contacts.primary.length} primary, ${contacts.secondary.length} secondary, ${contacts.gatekeeper.length} gatekeeper contacts`);
     
