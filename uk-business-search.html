@@ -906,6 +906,39 @@
             
             const decisionMakers = getDecisionMakers(business, industry);
             
+            // Add contact finding status
+            const contactStatus = document.createElement('div');
+            contactStatus.style.cssText = `
+                background: #f0f9ff;
+                border: 1px solid #0ea5e9;
+                border-radius: 8px;
+                padding: 1rem;
+                margin-bottom: 1rem;
+            `;
+            contactStatus.innerHTML = `
+                <h4 style="color: #0c4a6e; margin-bottom: 0.5rem;">📞 Contact Finding Strategy</h4>
+                <p style="font-size: 0.9rem; color: #0c4a6e; margin-bottom: 0.5rem;">
+                    <strong>Current Status:</strong> We have the business contact details, but need to find the decision maker's personal contact information.
+                </p>
+                <div style="display: grid; gap: 0.5rem; font-size: 0.8rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="color: #059669;">✅</span>
+                        <span>Business phone: ${business.phone || 'Not found'}</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="color: #059669;">✅</span>
+                        <span>Business email: ${business.email || 'Not found'}</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="color: #f59e0b;">⚠️</span>
+                        <span>Decision maker contact: Needs research</span>
+                    </div>
+                </div>
+                <div style="margin-top: 0.5rem; padding: 0.5rem; background: #fef3c7; border-radius: 4px; font-size: 0.8rem;">
+                    <strong>Next Steps:</strong> Use the outreach templates below, but research the decision maker's personal contact details first.
+                </div>
+            `;
+            
             const modal = document.createElement('div');
             modal.style.cssText = `
                 position: fixed;
@@ -927,6 +960,8 @@
                         <button onclick="this.closest('.modal').remove()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b;">&times;</button>
                     </div>
                     
+                    ${contactStatus.outerHTML}
+                    
                     <div style="margin-bottom: 1.5rem;">
                         <h4 style="color: #1e293b; margin-bottom: 0.5rem;">Primary Decision Makers</h4>
                         <div style="display: grid; gap: 1rem;">
@@ -941,10 +976,16 @@
                                             ${dm.painPoints.map(point => `<li>${point}</li>`).join('')}
                                         </ul>
                                     </div>
-                                    <button onclick="generateOutreach('${business.name}', '${dm.role}', '${industry}', '${dm.priority}')" 
-                                            style="background: #1e40af; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; margin-top: 0.5rem;">
-                                        Generate Outreach
-                                    </button>
+                                    <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                                        <button onclick="generateOutreach('${business.name}', '${dm.role}', '${industry}', '${dm.priority}')" 
+                                                style="background: #1e40af; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">
+                                            Generate Outreach
+                                        </button>
+                                        <button onclick="showContactResearch('${business.name}', '${dm.role}', '${industry}')" 
+                                                style="background: #059669; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">
+                                            Find Contact
+                                        </button>
+                                    </div>
                                 </div>
                             `).join('')}
                         </div>
@@ -1279,6 +1320,113 @@ Best regards,
                 console.error('Failed to copy: ', err);
                 alert('Failed to copy to clipboard');
             });
+        }
+
+        // Show contact research guide
+        function showContactResearch(businessName, role, industry) {
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.5);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 1002;
+            `;
+            
+            modal.innerHTML = `
+                <div style="background: white; border-radius: 12px; padding: 2rem; max-width: 700px; max-height: 80vh; overflow-y: auto; margin: 1rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                        <h3 style="color: #1e293b; margin: 0;">🔍 How to Find ${role} Contact Details</h3>
+                        <button onclick="this.closest('.modal').remove()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b;">&times;</button>
+                    </div>
+                    
+                    <div style="background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
+                        <h4 style="color: #0c4a6e; margin-bottom: 0.5rem;">🎯 Target: ${role} at ${businessName}</h4>
+                        <p style="font-size: 0.9rem; color: #0c4a6e;">
+                            You have the business contact details, but need to find the decision maker's personal contact information.
+                        </p>
+                    </div>
+                    
+                    <div style="margin-bottom: 1.5rem;">
+                        <h4 style="color: #1e293b; margin-bottom: 0.5rem;">📋 Research Methods (in order of effectiveness)</h4>
+                        
+                        <div style="display: grid; gap: 1rem;">
+                            <div style="background: #dbeafe; border: 1px solid #93c5fd; border-radius: 8px; padding: 1rem;">
+                                <h5 style="color: #1e40af; margin-bottom: 0.5rem;">1. LinkedIn Search (Most Effective)</h5>
+                                <div style="font-size: 0.9rem; color: #1e40af;">
+                                    <p><strong>Search:</strong> "${role}" "${businessName}" ${industry}</p>
+                                    <p><strong>Look for:</strong> Direct messages, email in bio, or connection requests</p>
+                                    <p><strong>Success rate:</strong> 70-80%</p>
+                                </div>
+                            </div>
+                            
+                            <div style="background: #fef3c7; border: 1px solid #fbbf24; border-radius: 8px; padding: 1rem;">
+                                <h5 style="color: #92400e; margin-bottom: 0.5rem;">2. Website Research</h5>
+                                <div style="font-size: 0.9rem; color: #92400e;">
+                                    <p><strong>Check:</strong> About page, team page, contact page</p>
+                                    <p><strong>Look for:</strong> Staff photos, bios, direct contact details</p>
+                                    <p><strong>Success rate:</strong> 40-60%</p>
+                                </div>
+                            </div>
+                            
+                            <div style="background: #f3e8ff; border: 1px solid #c4b5fd; border-radius: 8px; padding: 1rem;">
+                                <h5 style="color: #7c3aed; margin-bottom: 0.5rem;">3. Companies House (UK Only)</h5>
+                                <div style="font-size: 0.9rem; color: #7c3aed;">
+                                    <p><strong>Check:</strong> Company officers and directors</p>
+                                    <p><strong>Look for:</strong> Officer names and roles</p>
+                                    <p><strong>Success rate:</strong> 30-50%</p>
+                                </div>
+                            </div>
+                            
+                            <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 1rem;">
+                                <h5 style="color: #166534; margin-bottom: 0.5rem;">4. Google Search</h5>
+                                <div style="font-size: 0.9rem; color: #166534;">
+                                    <p><strong>Search:</strong> "${role}" "${businessName}" email contact</p>
+                                    <p><strong>Look for:</strong> News articles, press releases, directories</p>
+                                    <p><strong>Success rate:</strong> 20-40%</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 1.5rem;">
+                        <h4 style="color: #1e293b; margin-bottom: 0.5rem;">📞 Contact Strategy</h4>
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem;">
+                            <div style="font-size: 0.9rem; color: #374151;">
+                                <p><strong>If you find personal email:</strong> Send direct email with personalized outreach</p>
+                                <p><strong>If you find LinkedIn:</strong> Send connection request + follow-up message</p>
+                                <p><strong>If you only have business contact:</strong> Call and ask to speak to ${role}</p>
+                                <p><strong>If no contact found:</strong> Use business email with "Attention: ${role}"</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                        <button onclick="openLinkedInSearch('${role}', '${businessName}', '${industry}')" 
+                                style="background: #0077b5; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;">
+                            Open LinkedIn Search
+                        </button>
+                        <button onclick="this.closest('.modal').remove()" 
+                                style="background: #6b7280; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+        }
+
+        // Open LinkedIn search
+        function openLinkedInSearch(role, businessName, industry) {
+            const searchQuery = `${role} ${businessName} ${industry}`;
+            const linkedinUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(searchQuery)}`;
+            window.open(linkedinUrl, '_blank');
         }
         
         function exportToCSV() {
