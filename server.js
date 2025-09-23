@@ -2244,21 +2244,9 @@ app.post('/api/uk-business-search', async (req, res) => {
     
     console.log(`[UK BUSINESS SEARCH] Starting search for: "${query}"`);
     
-    // Try real API first, fallback to sample data
+    // Sample data (real API integration temporarily disabled due to deployment issues)
     let results = [];
     let usingRealData = false;
-    
-    try {
-      // Dynamic import of real API module
-      const realSearchModule = await import('./real-uk-business-search.js');
-      const RealUKBusinessSearch = realSearchModule.default;
-      
-      const realSearcher = new RealUKBusinessSearch();
-      results = await realSearcher.searchRealBusinesses(query, filters);
-      usingRealData = true;
-      console.log(`[UK BUSINESS SEARCH] Real API search found ${results.length} businesses`);
-    } catch (realApiError) {
-      console.log(`[UK BUSINESS SEARCH] Real API failed, falling back to sample data:`, realApiError.message);
       
       // Fallback to sample data
       const sampleBusinesses = {
@@ -2398,24 +2386,8 @@ app.post('/api/decision-maker-contacts', async (req, res) => {
     
     console.log(`[DECISION MAKER CONTACT] Researching contacts for ${targetRole} at ${business.name}`);
     
-    // Try real API first, fallback to sample data
-    let contacts, strategy;
-    
-    try {
-      // Dynamic import of simple contact finder module
-      const contactFinderModule = await import('./simple-decision-maker-contact-finder.js');
-      const DecisionMakerContactFinder = contactFinderModule.SimpleDecisionMakerContactFinder;
-      
-      const contactFinder = new DecisionMakerContactFinder();
-      contacts = await contactFinder.findDecisionMakerContacts(business, industry, targetRole);
-      strategy = contactFinder.generateOutreachStrategy(contacts, business, industry, targetRole);
-      
-      console.log(`[DECISION MAKER CONTACT] Real API found contacts successfully`);
-    } catch (realApiError) {
-      console.log(`[DECISION MAKER CONTACT] Real API failed, using sample data:`, realApiError.message);
-      
-      // Fallback to sample data
-      contacts = {
+    // Sample contact data (real API integration temporarily disabled due to deployment issues)
+    const contacts = {
         primary: [
           {
             type: "email",
@@ -2445,13 +2417,12 @@ app.post('/api/decision-maker-contacts', async (req, res) => {
         ]
       };
       
-      strategy = {
-        approach: "Direct outreach to decision maker",
-        message: `Hi ${targetRole}, I noticed ${business.name} and wanted to reach out about our AI booking system that could help streamline your appointment scheduling.`,
-        followUp: "Follow up in 3-5 days if no response",
-        bestTime: "Tuesday-Thursday, 10am-2pm"
-      };
-    }
+    const strategy = {
+      approach: "Direct outreach to decision maker",
+      message: `Hi ${targetRole}, I noticed ${business.name} and wanted to reach out about our AI booking system that could help streamline your appointment scheduling.`,
+      followUp: "Follow up in 3-5 days if no response",
+      bestTime: "Tuesday-Thursday, 10am-2pm"
+    };
     
     console.log(`[DECISION MAKER CONTACT] Found ${contacts.primary.length} primary, ${contacts.secondary.length} secondary, ${contacts.gatekeeper.length} gatekeeper contacts`);
     
