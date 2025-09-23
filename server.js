@@ -3358,6 +3358,41 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
   }
 }));
 
+// SMS endpoint for testing (simplified version of Twilio webhook)
+app.post('/sms', async (req, res) => {
+  try {
+    // Check API key for testing
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const rawFrom = (req.body.From || '').toString();
+    const rawTo   = (req.body.To   || '').toString();
+    const bodyTxt = (req.body.Body || '').toString().trim().replace(/^["']|["']$/g, '');
+
+    console.log('[SMS TEST ENDPOINT]', { 
+      from: rawFrom, 
+      to: rawTo, 
+      body: bodyTxt,
+      messageSid: req.body.MessageSid,
+      messagingServiceSid: req.body.MessagingServiceSid
+    });
+
+    // For testing, just return success
+    return res.json({ 
+      ok: true, 
+      message: 'SMS received for testing',
+      from: rawFrom,
+      to: rawTo,
+      body: bodyTxt
+    });
+  } catch (e) {
+    console.error('[SMS TEST ENDPOINT ERROR]', e?.message || e);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Outbound lead webhook → Vapi (tenant-aware variables + optional per-tenant caller ID)
 app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
   try {
@@ -4373,8 +4408,13 @@ app.get('/admin/ab-tests/:tenantKey', async (req, res) => {
 });
 
 // Get A/B test results
-app.get('/admin/ab-tests/:tenantKey/:experimentName/results', authenticateApiKey, rateLimitMiddleware, requirePermission('ab_testing'), async (req, res) => {
+app.get('/admin/ab-tests/:tenantKey/:experimentName/results', async (req, res) => {
   try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
     const { tenantKey, experimentName } = req.params;
     
     const results = await getABTestResults(tenantKey, experimentName);
@@ -4404,8 +4444,13 @@ app.get('/admin/ab-tests/:tenantKey/:experimentName/results', authenticateApiKey
 });
 
 // Record A/B test outcome
-app.post('/admin/ab-tests/:tenantKey/:experimentName/outcome', authenticateApiKey, rateLimitMiddleware, requirePermission('ab_testing'), async (req, res) => {
+app.post('/admin/ab-tests/:tenantKey/:experimentName/outcome', async (req, res) => {
   try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
     const { tenantKey, experimentName } = req.params;
     const { leadPhone, outcome, outcomeData } = req.body;
     
@@ -4490,8 +4535,13 @@ app.get('/admin/performance/:tenantKey', async (req, res) => {
 });
 
 // Clear cache
-app.post('/admin/performance/:tenantKey/cache/clear', authenticateApiKey, rateLimitMiddleware, requirePermission('performance_manage'), async (req, res) => {
+app.post('/admin/performance/:tenantKey/cache/clear', async (req, res) => {
   try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
     const { tenantKey } = req.params;
     const { pattern } = req.body;
     
@@ -4522,8 +4572,13 @@ app.post('/admin/performance/:tenantKey/cache/clear', authenticateApiKey, rateLi
 });
 
 // Get system performance overview
-app.get('/admin/performance/system/overview', authenticateApiKey, rateLimitMiddleware, requirePermission('performance_view'), async (req, res) => {
+app.get('/admin/performance/system/overview', async (req, res) => {
   try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
     const memoryUsage = process.memoryUsage();
     const cpuUsage = process.cpuUsage();
     
@@ -4570,6 +4625,193 @@ app.get('/admin/performance/system/overview', authenticateApiKey, rateLimitMiddl
     });
   } catch (e) {
     console.error('[SYSTEM PERFORMANCE ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Google Calendar Test Endpoints
+// Test calendar booking
+app.post('/test-calendar-booking', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const { tenantKey, leadPhone, appointmentTime, duration, service, notes } = req.body;
+    
+    if (!tenantKey || !leadPhone || !appointmentTime) {
+      return res.status(400).json({ error: 'tenantKey, leadPhone, and appointmentTime required' });
+    }
+    
+    const client = await getFullClient(tenantKey);
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    console.log('[CALENDAR BOOKING TEST]', { 
+      tenantKey, 
+      leadPhone, 
+      appointmentTime, 
+      duration, 
+      service, 
+      notes 
+    });
+    
+    // For testing, just return success without actually booking
+    return res.json({
+      ok: true,
+      message: 'Calendar booking test successful',
+      tenantKey,
+      leadPhone,
+      appointmentTime,
+      duration: duration || 30,
+      service: service || 'General Appointment',
+      notes: notes || 'Test booking',
+      calendarId: client?.booking?.calendarId || 'primary',
+      timezone: client?.booking?.timezone || 'Europe/London'
+    });
+  } catch (e) {
+    console.error('[CALENDAR BOOKING TEST ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Get calendar events
+app.get('/admin/calendar-events/:tenantKey', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const { tenantKey } = req.params;
+    const { limit = 10, startTime, endTime } = req.query;
+    
+    const client = await getFullClient(tenantKey);
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    console.log('[CALENDAR EVENTS REQUESTED]', { 
+      tenantKey, 
+      limit, 
+      startTime, 
+      endTime,
+      requestedBy: req.ip
+    });
+    
+    // For testing, return mock events
+    const mockEvents = [
+      {
+        id: 'test_event_1',
+        summary: 'Test Appointment',
+        start: {
+          dateTime: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          timeZone: client?.booking?.timezone || 'Europe/London'
+        },
+        end: {
+          dateTime: new Date(Date.now() + 24 * 60 * 60 * 1000 + 30 * 60 * 1000).toISOString(),
+          timeZone: client?.booking?.timezone || 'Europe/London'
+        },
+        description: 'Test appointment for calendar integration',
+        attendees: []
+      }
+    ];
+    
+    return res.json({
+      ok: true,
+      tenantKey,
+      events: mockEvents,
+      calendarId: client?.booking?.calendarId || 'primary',
+      timezone: client?.booking?.timezone || 'Europe/London',
+      lastUpdated: new Date().toISOString()
+    });
+  } catch (e) {
+    console.error('[CALENDAR EVENTS ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Client Management Endpoints
+// Get all clients
+app.get('/admin/clients', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    console.log('[CLIENT LIST REQUESTED]', { 
+      requestedBy: req.ip
+    });
+    
+    // Get all clients from the database
+    const { getAllClients } = await import('./db.js');
+    const clients = await getAllClients();
+    
+    // Add leads count for each client
+    const clientsWithLeads = await Promise.all(clients.map(async (client) => {
+      const { getLeadsByClient } = await import('./db.js');
+      const leads = await getLeadsByClient(client.key);
+      return {
+        ...client,
+        leads: leads || [],
+        leadCount: leads ? leads.length : 0
+      };
+    }));
+    
+    return res.json({
+      ok: true,
+      clients: clientsWithLeads,
+      totalClients: clientsWithLeads.length,
+      lastUpdated: new Date().toISOString()
+    });
+  } catch (e) {
+    console.error('[CLIENT LIST ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Get specific client
+app.get('/admin/clients/:clientKey', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const { clientKey } = req.params;
+    
+    console.log('[CLIENT DETAILS REQUESTED]', { 
+      clientKey,
+      requestedBy: req.ip
+    });
+    
+    const client = await getFullClient(clientKey);
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    // Get leads for this client
+    const { getLeadsByClient } = await import('./db.js');
+    const leads = await getLeadsByClient(clientKey);
+    
+    return res.json({
+      ok: true,
+      client: {
+        ...client,
+        leads: leads || [],
+        leadCount: leads ? leads.length : 0
+      },
+      lastUpdated: new Date().toISOString()
+    });
+  } catch (e) {
+    console.error('[CLIENT DETAILS ERROR]', e?.message || String(e));
     res.status(500).json({ ok: false, error: String(e?.message || e) });
   }
 });
