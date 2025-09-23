@@ -1445,10 +1445,11 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
     // YES / STOP intents (extend as needed)
     const isYes  = /^\s*(yes|y|ok|okay|sure|confirm)\s*$/i.test(bodyTxt);
     const isStart = /^\s*(start|unstop)\s*$/i.test(bodyTxt);
-    const isStop = /^\\s*(stop|unsubscribe|cancel|end|quit)\\s*$/i.test(bodyTxt);
+    const isStop = /^\s*(stop|unsubscribe|cancel|end|quit)\s*$/i.test(bodyTxt);
 
-    // Load & update the most recent lead matching this phone
-    let leads = await readJson(LEADS_PATH, []);
+    // Load & update the most recent lead matching this phone from database
+    const clients = await listFullClients();
+    let leads = clients.flatMap(client => client.leads || []);
     const revIdx = [...leads].reverse().findIndex(L => normalizePhoneE164(L.phone || '') === from);
     const idx = revIdx >= 0 ? (leads.length - 1 - revIdx) : -1;
 
@@ -1496,7 +1497,15 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
       leads.push(newLead);
     }
 
-    await writeJson(LEADS_PATH, leads);
+    // Save leads to database by updating the client
+    if (tenantKey) {
+      const client = await getFullClient(tenantKey);
+      if (client) {
+        client.leads = leads.filter(lead => lead.tenantKey === tenantKey);
+        client.updatedAt = new Date().toISOString();
+        await upsertFullClient(client);
+      }
+    }
 
     // Check if already opted in (idempotent)
     const existingLead = leads.find(l => l.phone === from);
