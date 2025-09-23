@@ -537,6 +537,25 @@
             margin-top: 8px;
             color: #9ca3af;
             font-size: 11px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .reset-btn {
+            background: #f3f4f6;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 10px;
+            color: #6b7280;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .reset-btn:hover {
+            background: #e5e7eb;
+            color: #374151;
         }
         
         .demo-controls h3 {
@@ -1056,6 +1075,7 @@
                               </div>
                               <div class="demo-input-hint">
                                   <small>Try: "I need a cleaning", "What are your prices?", or "Emergency"</small>
+                                  <button id="resetDemo" class="reset-btn">Reset Demo</button>
                               </div>
                         </div>
                     </div>
@@ -1569,14 +1589,80 @@
                 }
             });
 
-            // Suggestion buttons
+            // Enhanced suggestion buttons
             suggestionBtns.forEach(btn => {
                 btn.addEventListener('click', function() {
                     const message = this.getAttribute('data-message');
+                    
+                    // Add visual feedback
+                    this.style.transform = 'scale(0.95)';
+                    this.style.background = '#6366f1';
+                    this.style.color = 'white';
+                    
+                    // Reset visual state
+                    setTimeout(() => {
+                        this.style.transform = '';
+                        this.style.background = '';
+                        this.style.color = '';
+                    }, 150);
+                    
+                    // Set message and send
                     demoInput.value = message;
-                    sendMessage();
+                    demoInput.focus();
+                    
+                    // Add slight delay for better UX
+                    setTimeout(() => {
+                        sendMessage();
+                    }, 200);
                 });
             });
+
+            // Demo reset functionality
+            const resetDemoBtn = document.getElementById('resetDemo');
+            if (resetDemoBtn) {
+                resetDemoBtn.addEventListener('click', function() {
+                    // Reset conversation state
+                    conversationState = {
+                        stage: 'greeting',
+                        service: null,
+                        time: null,
+                        name: null
+                    };
+                    
+                    // Clear conversation
+                    smsDemo.innerHTML = `
+                        <div class="sms-bubble incoming">
+                            <div class="sms-avatar">👤</div>
+                            <div class="sms-content">
+                                <div class="sms-text">Hi, I'd like to book a dental appointment</div>
+                                <div class="sms-time">2:30 PM</div>
+                            </div>
+                        </div>
+                        <div class="sms-bubble outgoing">
+                            <div class="sms-content">
+                                <div class="sms-text">Hello! I'm Sarah from Victory Dental. How can I help you today?</div>
+                                <div class="sms-time">2:30 PM</div>
+                            </div>
+                            <div class="sms-avatar">🤖</div>
+                        </div>
+                    `;
+                    
+                    // Clear input
+                    demoInput.value = '';
+                    demoInput.focus();
+                    
+                    // Visual feedback
+                    this.style.background = '#10b981';
+                    this.style.color = 'white';
+                    this.textContent = 'Reset!';
+                    
+                    setTimeout(() => {
+                        this.style.background = '';
+                        this.style.color = '';
+                        this.textContent = 'Reset Demo';
+                    }, 1000);
+                });
+            }
 
             // Auto-scroll to demo section when demo button is clicked
             document.querySelectorAll('a[href="#demo"]').forEach(link => {
@@ -1669,17 +1755,54 @@
                 });
             });
 
-            // Add loading animation to buttons
+            // Enhanced CTA button functionality
             document.querySelectorAll('.btn').forEach(btn => {
                 btn.addEventListener('click', function(e) {
+                    // Handle different button types
                     if (this.href && this.href.includes('mailto:')) {
-                        // Add loading state for contact buttons
+                        // Email buttons - add loading state
                         const originalText = this.innerHTML;
                         this.innerHTML = '<span class="btn-icon">⏳</span><span class="btn-text">Opening...</span>';
                         
                         setTimeout(() => {
                             this.innerHTML = originalText;
                         }, 1000);
+                    } else if (this.href && this.href.includes('#contact')) {
+                        // Contact buttons - scroll to contact section
+                        e.preventDefault();
+                        const contactSection = document.querySelector('#contact');
+                        if (contactSection) {
+                            contactSection.scrollIntoView({
+                                behavior: 'smooth',
+                                block: 'start'
+                            });
+                            
+                            // Focus on first input after scrolling
+                            setTimeout(() => {
+                                const firstInput = contactSection.querySelector('input');
+                                if (firstInput) {
+                                    firstInput.focus();
+                                }
+                            }, 500);
+                        }
+                    } else if (this.href && this.href.includes('#demo')) {
+                        // Demo buttons - scroll to demo section
+                        e.preventDefault();
+                        const demoSection = document.querySelector('#demo');
+                        if (demoSection) {
+                            demoSection.scrollIntoView({
+                                behavior: 'smooth',
+                                block: 'start'
+                            });
+                            
+                            // Focus on demo input after scrolling
+                            setTimeout(() => {
+                                const demoInput = document.getElementById('demoInput');
+                                if (demoInput) {
+                                    demoInput.focus();
+                                }
+                            }, 500);
+                        }
                     }
                 });
             });
@@ -1724,7 +1847,30 @@
                 });
             });
 
-            // Add form validation
+            // Add form input enhancements
+            const formInputs = document.querySelectorAll('input, textarea');
+            formInputs.forEach(input => {
+                // Add focus/blur effects
+                input.addEventListener('focus', function() {
+                    this.style.borderColor = '#6366f1';
+                    this.style.boxShadow = '0 0 0 3px rgba(99, 102, 241, 0.1)';
+                });
+                
+                input.addEventListener('blur', function() {
+                    this.style.borderColor = '';
+                    this.style.boxShadow = '';
+                });
+                
+                // Real-time validation
+                input.addEventListener('input', function() {
+                    const errorDiv = document.querySelector('.form-error');
+                    if (errorDiv) {
+                        errorDiv.remove();
+                    }
+                });
+            });
+
+            // Enhanced contact form functionality
             const contactForm = document.querySelector('form');
             if (contactForm) {
                 contactForm.addEventListener('submit', function(e) {
@@ -1733,24 +1879,112 @@
                     const formData = new FormData(this);
                     const data = Object.fromEntries(formData);
                     
-                    // Simple validation
-                    if (!data.name || !data.email || !data.message) {
-                        alert('Please fill in all required fields.');
+                    // Enhanced validation
+                    if (!data.name || data.name.trim().length < 2) {
+                        showFormError('Please enter a valid name (at least 2 characters).');
                         return;
                     }
                     
-                    // Show success message
-                    const submitBtn = this.querySelector('button[type="submit"]');
-                    const originalText = submitBtn.textContent;
-                    submitBtn.textContent = 'Message Sent! ✓';
-                    submitBtn.style.background = '#10b981';
+                    if (!data.email || !isValidEmail(data.email)) {
+                        showFormError('Please enter a valid email address.');
+                        return;
+                    }
                     
+                    if (!data.message || data.message.trim().length < 10) {
+                        showFormError('Please enter a message (at least 10 characters).');
+                        return;
+                    }
+                    
+                    // Show loading state
+                    const submitBtn = this.querySelector('button[type="submit"]');
+                    const originalText = submitBtn.innerHTML;
+                    submitBtn.innerHTML = '<span class="btn-icon">⏳</span><span class="btn-text">Sending...</span>';
+                    submitBtn.disabled = true;
+                    
+                    // Simulate form submission (replace with actual endpoint)
                     setTimeout(() => {
-                        submitBtn.textContent = originalText;
-                        submitBtn.style.background = '';
+                        // Success state
+                        submitBtn.innerHTML = '<span class="btn-icon">✓</span><span class="btn-text">Message Sent!</span>';
+                        submitBtn.style.background = '#10b981';
+                        
+                        // Show success message
+                        showFormSuccess('Thank you! Your message has been sent. We\'ll get back to you within 24 hours.');
+                        
+                        // Reset form
                         this.reset();
-                    }, 3000);
+                        
+                        // Reset button after delay
+                        setTimeout(() => {
+                            submitBtn.innerHTML = originalText;
+                            submitBtn.style.background = '';
+                            submitBtn.disabled = false;
+                        }, 3000);
+                    }, 2000);
                 });
+            }
+            
+            // Email validation function
+            function isValidEmail(email) {
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                return emailRegex.test(email);
+            }
+            
+            // Form error display
+            function showFormError(message) {
+                const existingError = document.querySelector('.form-error');
+                if (existingError) existingError.remove();
+                
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'form-error';
+                errorDiv.innerHTML = `❌ ${message}`;
+                errorDiv.style.cssText = `
+                    background: #fef2f2;
+                    border: 1px solid #fecaca;
+                    color: #dc2626;
+                    padding: 12px;
+                    border-radius: 8px;
+                    margin-top: 1rem;
+                    font-size: 14px;
+                `;
+                
+                const form = document.querySelector('form');
+                form.appendChild(errorDiv);
+                
+                // Auto-remove after 5 seconds
+                setTimeout(() => {
+                    if (errorDiv.parentNode) {
+                        errorDiv.remove();
+                    }
+                }, 5000);
+            }
+            
+            // Form success display
+            function showFormSuccess(message) {
+                const existingSuccess = document.querySelector('.form-success');
+                if (existingSuccess) existingSuccess.remove();
+                
+                const successDiv = document.createElement('div');
+                successDiv.className = 'form-success';
+                successDiv.innerHTML = `✅ ${message}`;
+                successDiv.style.cssText = `
+                    background: #f0fdf4;
+                    border: 1px solid #bbf7d0;
+                    color: #16a34a;
+                    padding: 12px;
+                    border-radius: 8px;
+                    margin-top: 1rem;
+                    font-size: 14px;
+                `;
+                
+                const form = document.querySelector('form');
+                form.appendChild(successDiv);
+                
+                // Auto-remove after 8 seconds
+                setTimeout(() => {
+                    if (successDiv.parentNode) {
+                        successDiv.remove();
+                    }
+                }, 8000);
             }
         });
     </script>
