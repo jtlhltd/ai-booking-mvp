@@ -136,6 +136,25 @@ app.post('/api/create-client', async (req, res) => {
     }
 
     const clientData = req.body;
+    console.log('[CLIENT CREATION DEBUG]', { 
+      bodyExists: !!clientData,
+      bodyType: typeof clientData,
+      bodyKeys: clientData ? Object.keys(clientData) : 'no body',
+      contentType: req.get('Content-Type'),
+      contentLength: req.get('Content-Length'),
+      requestedBy: req.ip 
+    });
+    
+    if (!clientData) {
+      console.log('[CLIENT CREATION ERROR] No request body received');
+      return res.status(400).json({ ok: false, error: 'No request body received' });
+    }
+    
+    if (!clientData.basic) {
+      console.log('[CLIENT CREATION ERROR] Missing basic client data');
+      return res.status(400).json({ ok: false, error: 'Missing basic client data' });
+    }
+    
     console.log('[CLIENT CREATION]', { 
       clientName: clientData.basic?.clientName,
       industry: clientData.basic?.industry,
