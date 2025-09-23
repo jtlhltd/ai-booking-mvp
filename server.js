@@ -218,13 +218,14 @@ app.post('/api/create-client', async (req, res) => {
     await upsertFullClient(clientConfig);
 
     // Generate branded dashboard
-    const fs = await import('fs');
-    const path = await import('path');
-    
-    const dashboardTemplate = fs.readFileSync(
-      new URL('./public/client-dashboard-template.html', import.meta.url).pathname, 
-      'utf8'
-    );
+    try {
+      const fs = await import('fs');
+      const path = await import('path');
+      
+      const templatePath = path.join(process.cwd(), 'public', 'client-dashboard-template.html');
+      console.log('[FILE DEBUG]', { templatePath, exists: fs.existsSync(templatePath) });
+      
+      const dashboardTemplate = fs.readFileSync(templatePath, 'utf8');
 
     const brandedDashboard = dashboardTemplate
       .replace(/Client Company/g, clientData.basic.clientName)
@@ -287,10 +288,16 @@ app.post('/api/create-client', async (req, res) => {
 - \`clients/${clientKey}/checklist.md\` - This checklist
 `;
 
-    fs.writeFileSync(
-      path.join(clientDir, 'checklist.md'),
-      checklistContent
-    );
+      fs.writeFileSync(
+        path.join(clientDir, 'checklist.md'),
+        checklistContent
+      );
+      
+      console.log('[FILES CREATED]', { clientDir, dashboardFile: path.join(clientDir, 'dashboard.html'), checklistFile: path.join(clientDir, 'checklist.md') });
+    } catch (fileError) {
+      console.error('[FILE ERROR]', { error: fileError.message, stack: fileError.stack });
+      // Don't fail the entire request if file creation fails
+    }
 
     console.log('[CLIENT CREATED]', { 
       clientKey, 
