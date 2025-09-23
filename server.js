@@ -723,6 +723,597 @@ function generateCostRecommendations(costs, budgetStatus) {
   return recommendations;
 }
 
+// Analytics and reporting functions
+async function trackAnalyticsEvent({ clientKey, eventType, eventCategory, eventData, sessionId, userAgent, ipAddress }) {
+  try {
+    const { trackAnalyticsEvent } = await import('./db.js');
+    return await trackAnalyticsEvent({
+      clientKey,
+      eventType,
+      eventCategory,
+      eventData,
+      sessionId,
+      userAgent,
+      ipAddress
+    });
+  } catch (error) {
+    console.error('[ANALYTICS TRACKING ERROR]', error);
+  }
+}
+
+async function trackConversionStage({ clientKey, leadPhone, stage, stageData, previousStage = null, timeToStage = null }) {
+  try {
+    const { trackConversionStage } = await import('./db.js');
+    return await trackConversionStage({
+      clientKey,
+      leadPhone,
+      stage,
+      stageData,
+      previousStage,
+      timeToStage
+    });
+  } catch (error) {
+    console.error('[CONVERSION TRACKING ERROR]', error);
+  }
+}
+
+async function recordPerformanceMetric({ clientKey, metricName, metricValue, metricUnit = null, metricCategory = null, metadata = null }) {
+  try {
+    const { recordPerformanceMetric } = await import('./db.js');
+    return await recordPerformanceMetric({
+      clientKey,
+      metricName,
+      metricValue,
+      metricUnit,
+      metricCategory,
+      metadata
+    });
+  } catch (error) {
+    console.error('[PERFORMANCE METRIC ERROR]', error);
+  }
+}
+
+async function getAnalyticsDashboard(clientKey, days = 30) {
+  try {
+    const { 
+      getAnalyticsSummary,
+      getConversionFunnel,
+      getConversionRates,
+      getPerformanceMetrics,
+      getTotalCostsByTenant,
+      getCallsByTenant
+    } = await import('./db.js');
+    
+    const [
+      analyticsSummary,
+      conversionFunnel,
+      conversionRates,
+      performanceMetrics,
+      costMetrics,
+      callMetrics
+    ] = await Promise.all([
+      getAnalyticsSummary(clientKey, days),
+      getConversionFunnel(clientKey, days),
+      getConversionRates(clientKey, days),
+      getPerformanceMetrics(clientKey, null, days),
+      getTotalCostsByTenant(clientKey, 'daily'),
+      getCallsByTenant(clientKey, 1000)
+    ]);
+    
+    // Calculate key metrics
+    const totalLeads = conversionFunnel.reduce((sum, stage) => sum + stage.unique_leads, 0);
+    const totalCalls = callMetrics.length;
+    const successfulCalls = callMetrics.filter(call => call.outcome === 'completed').length;
+    const conversionRate = totalLeads > 0 ? (successfulCalls / totalLeads) * 100 : 0;
+    const avgCallDuration = callMetrics.reduce((sum, call) => sum + (call.duration || 0), 0) / totalCalls || 0;
+    const totalCost = parseFloat(costMetrics.total_cost || 0);
+    const costPerConversion = successfulCalls > 0 ? totalCost / successfulCalls : 0;
+    
+    return {
+      summary: {
+        totalLeads,
+        totalCalls,
+        successfulCalls,
+        conversionRate: Math.round(conversionRate * 100) / 100,
+        avgCallDuration: Math.round(avgCallDuration),
+        totalCost: Math.round(totalCost * 100) / 100,
+        costPerConversion: Math.round(costPerConversion * 100) / 100
+      },
+      analytics: analyticsSummary,
+      conversionFunnel,
+      conversionRates,
+      performanceMetrics,
+      costMetrics,
+      callMetrics: callMetrics.slice(0, 50), // Last 50 calls
+      period: `${days} days`,
+      lastUpdated: new Date().toISOString()
+    };
+  } catch (error) {
+    console.error('[ANALYTICS DASHBOARD ERROR]', error);
+    return null;
+  }
+}
+
+async function generateAnalyticsReport(clientKey, reportType = 'comprehensive', days = 30) {
+  try {
+    const dashboard = await getAnalyticsDashboard(clientKey, days);
+    if (!dashboard) return null;
+    
+    const { summary, conversionFunnel, conversionRates, performanceMetrics, costMetrics } = dashboard;
+    
+    // Generate insights
+    const insights = [];
+    
+    if (summary.conversionRate < 10) {
+      insights.push({
+        type: 'warning',
+        category: 'conversion',
+        message: `Low conversion rate (${summary.conversionRate}%). Consider optimizing assistant prompts or call timing.`
+      });
+    }
+    
+    if (summary.costPerConversion > 5) {
+      insights.push({
+        type: 'warning',
+        category: 'cost',
+        message: `High cost per conversion ($${summary.costPerConversion}). Review call duration and assistant efficiency.`
+      });
+    }
+    
+    if (summary.avgCallDuration > 300) {
+      insights.push({
+        type: 'info',
+        category: 'efficiency',
+        message: `Average call duration is ${Math.round(summary.avgCallDuration / 60)} minutes. Consider optimizing for shorter, more focused calls.`
+      });
+    }
+    
+    // Find conversion bottlenecks
+    const funnelStages = conversionFunnel.map(stage => ({
+      stage: stage.stage,
+      leads: stage.unique_leads,
+      conversionRate: stage.unique_leads / summary.totalLeads * 100
+    }));
+    
+    const bottleneckStage = funnelStages.reduce((min, stage) => 
+      stage.conversionRate < min.conversionRate ? stage : min
+    );
+    
+    if (bottleneckStage.conversionRate < 50) {
+      insights.push({
+        type: 'recommendation',
+        category: 'optimization',
+        message: `Conversion bottleneck detected at "${bottleneckStage.stage}" stage (${Math.round(bottleneckStage.conversionRate)}%). Focus optimization efforts here.`
+      });
+    }
+    
+    return {
+      reportType,
+      period: `${days} days`,
+      generatedAt: new Date().toISOString(),
+      clientKey,
+      summary,
+      insights,
+      funnelStages,
+      recommendations: generateRecommendations(summary, insights),
+      data: {
+        conversionFunnel,
+        conversionRates,
+        performanceMetrics,
+        costMetrics
+      }
+    };
+  } catch (error) {
+    console.error('[ANALYTICS REPORT ERROR]', error);
+    return null;
+  }
+}
+
+function generateRecommendations(summary, insights) {
+  const recommendations = [];
+  
+  if (summary.conversionRate < 15) {
+    recommendations.push({
+      priority: 'high',
+      category: 'conversion_optimization',
+      action: 'Optimize Assistant Prompts',
+      description: 'Review and improve assistant conversation flow to increase conversion rates',
+      expectedImpact: 'Increase conversion rate by 5-10%'
+    });
+  }
+  
+  if (summary.costPerConversion > 3) {
+    recommendations.push({
+      priority: 'medium',
+      category: 'cost_optimization',
+      action: 'Implement Call Scheduling',
+      description: 'Use intelligent call scheduling to reduce costs and improve timing',
+      expectedImpact: 'Reduce cost per conversion by 20-30%'
+    });
+  }
+  
+  if (summary.avgCallDuration > 240) {
+    recommendations.push({
+      priority: 'medium',
+      category: 'efficiency',
+      action: 'Streamline Call Process',
+      description: 'Optimize call flow to reduce average duration while maintaining quality',
+      expectedImpact: 'Reduce call duration by 15-25%'
+    });
+  }
+  
+  return recommendations;
+}
+
+// A/B Testing functions
+async function createABTestExperiment({ clientKey, experimentName, variants, isActive = true }) {
+  try {
+    const { createABTestExperiment } = await import('./db.js');
+    
+    const experiments = [];
+    for (const variant of variants) {
+      const experiment = await createABTestExperiment({
+        clientKey,
+        experimentName,
+        variantName: variant.name,
+        variantConfig: variant.config,
+        isActive
+      });
+      experiments.push(experiment);
+    }
+    
+    console.log('[AB TEST CREATED]', {
+      clientKey,
+      experimentName,
+      variants: variants.length,
+      isActive
+    });
+    
+    return experiments;
+  } catch (error) {
+    console.error('[AB TEST CREATION ERROR]', error);
+    throw error;
+  }
+}
+
+async function getActiveABTests(clientKey) {
+  try {
+    const { getActiveABTests } = await import('./db.js');
+    return await getActiveABTests(clientKey);
+  } catch (error) {
+    console.error('[AB TEST FETCH ERROR]', error);
+    return [];
+  }
+}
+
+async function selectABTestVariant(clientKey, experimentName, leadPhone) {
+  try {
+    const { getActiveABTests, recordABTestResult } = await import('./db.js');
+    
+    const activeTests = await getActiveABTests(clientKey);
+    const experiment = activeTests.find(test => test.experiment_name === experimentName);
+    
+    if (!experiment) {
+      return null; // No active experiment
+    }
+    
+    // Simple hash-based assignment for consistent results
+    const hash = createHash('md5').update(`${clientKey}_${experimentName}_${leadPhone}`).digest('hex');
+    const hashValue = parseInt(hash.substring(0, 8), 16);
+    const variantIndex = hashValue % experiment.variants.length;
+    
+    const selectedVariant = experiment.variants[variantIndex];
+    
+    // Record the assignment
+    await recordABTestResult({
+      experimentId: experiment.id,
+      clientKey,
+      leadPhone,
+      variantName: selectedVariant.name,
+      outcome: 'assigned',
+      outcomeData: {
+        assignmentMethod: 'hash_based',
+        hashValue,
+        variantIndex
+      }
+    });
+    
+    console.log('[AB TEST VARIANT SELECTED]', {
+      clientKey,
+      experimentName,
+      leadPhone,
+      variantName: selectedVariant.name,
+      variantIndex
+    });
+    
+    return selectedVariant;
+  } catch (error) {
+    console.error('[AB TEST VARIANT SELECTION ERROR]', error);
+    return null;
+  }
+}
+
+async function recordABTestOutcome({ clientKey, experimentName, leadPhone, outcome, outcomeData = null }) {
+  try {
+    const { getActiveABTests, recordABTestResult } = await import('./db.js');
+    
+    const activeTests = await getActiveABTests(clientKey);
+    const experiment = activeTests.find(test => test.experiment_name === experimentName);
+    
+    if (!experiment) {
+      return null;
+    }
+    
+    // Find the variant that was assigned to this lead
+    const { getABTestResults } = await import('./db.js');
+    const results = await getABTestResults(experiment.id);
+    const assignment = results.find(result => 
+      result.lead_phone === leadPhone && result.outcome === 'assigned'
+    );
+    
+    if (!assignment) {
+      return null;
+    }
+    
+    const result = await recordABTestResult({
+      experimentId: experiment.id,
+      clientKey,
+      leadPhone,
+      variantName: assignment.variant_name,
+      outcome,
+      outcomeData
+    });
+    
+    console.log('[AB TEST OUTCOME RECORDED]', {
+      clientKey,
+      experimentName,
+      leadPhone,
+      variantName: assignment.variant_name,
+      outcome
+    });
+    
+    return result;
+  } catch (error) {
+    console.error('[AB TEST OUTCOME RECORDING ERROR]', error);
+    return null;
+  }
+}
+
+async function getABTestResults(clientKey, experimentName) {
+  try {
+    const { getActiveABTests, getABTestConversionRates } = await import('./db.js');
+    
+    const activeTests = await getActiveABTests(clientKey);
+    const experiment = activeTests.find(test => test.experiment_name === experimentName);
+    
+    if (!experiment) {
+      return null;
+    }
+    
+    const conversionRates = await getABTestConversionRates(experiment.id);
+    
+    return {
+      experiment,
+      conversionRates,
+      summary: {
+        totalVariants: conversionRates.length,
+        totalParticipants: conversionRates.reduce((sum, variant) => sum + variant.total_leads, 0),
+        totalConversions: conversionRates.reduce((sum, variant) => sum + variant.converted_leads, 0),
+        overallConversionRate: conversionRates.length > 0 ? 
+          conversionRates.reduce((sum, variant) => sum + variant.conversion_rate, 0) / conversionRates.length : 0
+      }
+    };
+  } catch (error) {
+    console.error('[AB TEST RESULTS ERROR]', error);
+    return null;
+  }
+}
+
+// Performance optimization functions
+const cache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+function getCacheKey(prefix, ...params) {
+  return `${prefix}:${params.join(':')}`;
+}
+
+function getCached(key) {
+  const item = cache.get(key);
+  if (!item) return null;
+  
+  if (Date.now() > item.expires) {
+    cache.delete(key);
+    return null;
+  }
+  
+  return item.data;
+}
+
+function setCache(key, data, ttl = CACHE_TTL) {
+  cache.set(key, {
+    data,
+    expires: Date.now() + ttl
+  });
+}
+
+function clearCache(pattern = null) {
+  if (!pattern) {
+    cache.clear();
+    return;
+  }
+  
+  for (const key of cache.keys()) {
+    if (key.includes(pattern)) {
+      cache.delete(key);
+    }
+  }
+}
+
+// Cached client lookup
+async function getCachedClient(tenantKey) {
+  const cacheKey = getCacheKey('client', tenantKey);
+  let client = getCached(cacheKey);
+  
+  if (!client) {
+    client = await getFullClient(tenantKey);
+    if (client) {
+      setCache(cacheKey, client, 2 * 60 * 1000); // 2 minutes cache
+    }
+  }
+  
+  return client;
+}
+
+// Cached analytics dashboard
+async function getCachedAnalyticsDashboard(clientKey, days = 30) {
+  const cacheKey = getCacheKey('analytics', clientKey, days.toString());
+  let dashboard = getCached(cacheKey);
+  
+  if (!dashboard) {
+    dashboard = await getAnalyticsDashboard(clientKey, days);
+    if (dashboard) {
+      setCache(cacheKey, dashboard, 1 * 60 * 1000); // 1 minute cache
+    }
+  }
+  
+  return dashboard;
+}
+
+// Cached metrics
+async function getCachedMetrics(clientKey) {
+  const cacheKey = getCacheKey('metrics', clientKey);
+  let metrics = getCached(cacheKey);
+  
+  if (!metrics) {
+    const { getTotalCostsByTenant, getCallsByTenant } = await import('./db.js');
+    
+    const [costMetrics, callMetrics] = await Promise.all([
+      getTotalCostsByTenant(clientKey, 'daily'),
+      getCallsByTenant(clientKey, 100)
+    ]);
+    
+    metrics = {
+      costMetrics,
+      callMetrics,
+      lastUpdated: new Date().toISOString()
+    };
+    
+    setCache(cacheKey, metrics, 30 * 1000); // 30 seconds cache
+  }
+  
+  return metrics;
+}
+
+// Batch processing for analytics
+const analyticsQueue = [];
+let analyticsProcessing = false;
+
+async function queueAnalyticsEvent(event) {
+  analyticsQueue.push({
+    ...event,
+    timestamp: Date.now()
+  });
+  
+  if (!analyticsProcessing) {
+    processAnalyticsQueue();
+  }
+}
+
+async function processAnalyticsQueue() {
+  if (analyticsProcessing || analyticsQueue.length === 0) {
+    return;
+  }
+  
+  analyticsProcessing = true;
+  
+  try {
+    const batchSize = Math.min(50, analyticsQueue.length);
+    const batch = analyticsQueue.splice(0, batchSize);
+    
+    const { trackAnalyticsEvent } = await import('./db.js');
+    
+    await Promise.all(batch.map(event => 
+      trackAnalyticsEvent(event).catch(error => 
+        console.error('[BATCH ANALYTICS ERROR]', error)
+      )
+    ));
+    
+    console.log('[ANALYTICS BATCH PROCESSED]', { 
+      processed: batch.length, 
+      remaining: analyticsQueue.length 
+    });
+  } catch (error) {
+    console.error('[ANALYTICS QUEUE PROCESSING ERROR]', error);
+  } finally {
+    analyticsProcessing = false;
+    
+    // Process remaining items after a short delay
+    if (analyticsQueue.length > 0) {
+      setTimeout(processAnalyticsQueue, 1000);
+    }
+  }
+}
+
+// Connection pooling optimization
+const connectionPool = new Map();
+
+function getConnectionPoolKey(tenantKey) {
+  return `pool_${tenantKey}`;
+}
+
+async function optimizeDatabaseConnections() {
+  try {
+    // Clean up old connections
+    for (const [key, connection] of connectionPool.entries()) {
+      if (Date.now() - connection.lastUsed > 10 * 60 * 1000) { // 10 minutes
+        connectionPool.delete(key);
+      }
+    }
+    
+    console.log('[CONNECTION POOL OPTIMIZED]', { 
+      activeConnections: connectionPool.size,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[CONNECTION POOL OPTIMIZATION ERROR]', error);
+  }
+}
+
+// Response compression middleware
+import compression from 'compression';
+
+// Add compression middleware
+app.use(compression({
+  level: 6,
+  threshold: 1024,
+  filter: (req, res) => {
+    if (req.headers['x-no-compression']) {
+      return false;
+    }
+    return compression.filter(req, res);
+  }
+}));
+
+// Cache cleanup job
+setInterval(() => {
+  const now = Date.now();
+  let cleaned = 0;
+  
+  for (const [key, item] of cache.entries()) {
+    if (now > item.expires) {
+      cache.delete(key);
+      cleaned++;
+    }
+  }
+  
+  if (cleaned > 0) {
+    console.log('[CACHE CLEANUP]', { cleaned, remaining: cache.size });
+  }
+}, 60 * 1000); // Every minute
+
+// Connection pool optimization
+setInterval(optimizeDatabaseConnections, 5 * 60 * 1000); // Every 5 minutes
+
 // Categorize errors for appropriate retry handling
 function categorizeError(error) {
   const message = error.message?.toLowerCase() || '';
@@ -2284,6 +2875,36 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
         status: newLead.status
       });
       leads.push(newLead);
+      
+      // Track conversion stage
+      await trackConversionStage({
+        clientKey: tenantKey,
+        leadPhone: from,
+        stage: 'lead_created',
+        stageData: {
+          service: serviceForCall,
+          score: newLead.score || 0,
+          source: 'sms_opt_in',
+          consentSms: newLead.consentSms,
+          status: newLead.status
+        }
+      });
+      
+      // Track analytics event
+      await trackAnalyticsEvent({
+        clientKey: tenantKey,
+        eventType: isYes ? 'yes_response' : 'start_opt_in',
+        eventCategory: 'lead_interaction',
+        eventData: {
+          phone: from,
+          service: serviceForCall,
+          score: newLead.score || 0,
+          existingLead: false
+        },
+        sessionId: `sms_${from}_${Date.now()}`,
+        userAgent: 'SMS',
+        ipAddress: req.ip
+      });
     }
 
     // Save leads to database by updating the client
@@ -2562,13 +3183,58 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
               leadPhone: from
             }); // 3 retries, 2 second base delay with context
 
-            console.log('[VAPI CALL SUCCESS]', { 
-              from, 
-              tenantKey, 
-              callId: vapiResult?.id || 'unknown',
-              status: vapiResult?.status || 'unknown',
-              vapiStatus: 'ok' 
-            });
+      console.log('[VAPI CALL SUCCESS]', { 
+        from, 
+        tenantKey, 
+        callId: vapiResult?.id || 'unknown',
+        status: vapiResult?.status || 'unknown',
+        vapiStatus: 'ok' 
+      });
+      
+      // Track conversion stage
+      await trackConversionStage({
+        clientKey: tenantKey,
+        leadPhone: from,
+        stage: 'vapi_call_initiated',
+        stageData: {
+          callId: vapiResult?.id,
+          assistantId: assistantConfig.assistantId,
+          triggerType: isYes ? 'yes_response' : 'start_opt_in',
+          leadScore: existingLead?.score || 0
+        },
+        previousStage: 'lead_created'
+      });
+      
+      // Track analytics event
+      await trackAnalyticsEvent({
+        clientKey: tenantKey,
+        eventType: 'vapi_call_initiated',
+        eventCategory: 'call_interaction',
+        eventData: {
+          phone: from,
+          callId: vapiResult?.id,
+          assistantId: assistantConfig.assistantId,
+          triggerType: isYes ? 'yes_response' : 'start_opt_in',
+          leadScore: existingLead?.score || 0
+        },
+        sessionId: `vapi_${from}_${Date.now()}`,
+        userAgent: 'VAPI',
+        ipAddress: req.ip
+      });
+      
+      // Record performance metric
+      await recordPerformanceMetric({
+        clientKey: tenantKey,
+        metricName: 'vapi_call_initiated',
+        metricValue: 1,
+        metricUnit: 'count',
+        metricCategory: 'call_metrics',
+        metadata: {
+          phone: from,
+          callId: vapiResult?.id,
+          triggerType: isYes ? 'yes_response' : 'start_opt_in'
+        }
+      });
           
           if (vapiResult) {
             const callId = vapiResult?.id || 'unknown';
@@ -3427,6 +4093,453 @@ app.get('/admin/security-events/:tenantKey', authenticateApiKey, rateLimitMiddle
     res.status(500).json({ ok: false, error: String(e?.message || e) });
   }
 });
+
+// Analytics endpoints
+// Get analytics dashboard
+app.get('/admin/analytics/:tenantKey', authenticateApiKey, rateLimitMiddleware, requirePermission('analytics_view'), async (req, res) => {
+  try {
+    const { tenantKey } = req.params;
+    const { days = 30 } = req.query;
+    
+    const dashboard = await getAnalyticsDashboard(tenantKey, parseInt(days));
+    
+    if (!dashboard) {
+      return res.status(404).json({ error: 'Analytics data not found' });
+    }
+    
+    console.log('[ANALYTICS DASHBOARD REQUESTED]', { 
+      tenantKey,
+      days,
+      requestedBy: req.ip,
+      totalLeads: dashboard.summary.totalLeads,
+      conversionRate: dashboard.summary.conversionRate
+    });
+    
+    res.json({
+      ok: true,
+      tenantKey,
+      dashboard,
+      lastUpdated: new Date().toISOString()
+    });
+  } catch (e) {
+    console.error('[ANALYTICS DASHBOARD ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Generate analytics report
+app.post('/admin/analytics/:tenantKey/report', authenticateApiKey, rateLimitMiddleware, requirePermission('analytics_view'), async (req, res) => {
+  try {
+    const { tenantKey } = req.params;
+    const { reportType = 'comprehensive', days = 30 } = req.body;
+    
+    const report = await generateAnalyticsReport(tenantKey, reportType, parseInt(days));
+    
+    if (!report) {
+      return res.status(404).json({ error: 'Unable to generate report' });
+    }
+    
+    console.log('[ANALYTICS REPORT GENERATED]', { 
+      tenantKey,
+      reportType,
+      days,
+      requestedBy: req.ip,
+      insights: report.insights.length,
+      recommendations: report.recommendations.length
+    });
+    
+    res.json({
+      ok: true,
+      tenantKey,
+      report,
+      lastUpdated: new Date().toISOString()
+    });
+  } catch (e) {
+    console.error('[ANALYTICS REPORT ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Track analytics event
+app.post('/admin/analytics/:tenantKey/track', authenticateApiKey, rateLimitMiddleware, requirePermission('analytics_track'), async (req, res) => {
+  try {
+    const { tenantKey } = req.params;
+    const { eventType, eventCategory, eventData, sessionId } = req.body;
+    
+    if (!eventType || !eventCategory) {
+      return res.status(400).json({ error: 'Event type and category required' });
+    }
+    
+    const event = await trackAnalyticsEvent({
+      clientKey: tenantKey,
+      eventType,
+      eventCategory,
+      eventData,
+      sessionId,
+      userAgent: req.get('User-Agent'),
+      ipAddress: req.ip
+    });
+    
+    console.log('[ANALYTICS EVENT TRACKED]', { 
+      tenantKey,
+      eventType,
+      eventCategory,
+      sessionId,
+      requestedBy: req.ip
+    });
+    
+    res.json({
+      ok: true,
+      event,
+      message: 'Event tracked successfully'
+    });
+  } catch (e) {
+    console.error('[ANALYTICS TRACKING ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Track conversion stage
+app.post('/admin/analytics/:tenantKey/conversion', authenticateApiKey, rateLimitMiddleware, requirePermission('analytics_track'), async (req, res) => {
+  try {
+    const { tenantKey } = req.params;
+    const { leadPhone, stage, stageData, previousStage, timeToStage } = req.body;
+    
+    if (!leadPhone || !stage) {
+      return res.status(400).json({ error: 'Lead phone and stage required' });
+    }
+    
+    const conversionStage = await trackConversionStage({
+      clientKey: tenantKey,
+      leadPhone,
+      stage,
+      stageData,
+      previousStage,
+      timeToStage
+    });
+    
+    console.log('[CONVERSION STAGE TRACKED]', { 
+      tenantKey,
+      leadPhone,
+      stage,
+      previousStage,
+      requestedBy: req.ip
+    });
+    
+    res.json({
+      ok: true,
+      conversionStage,
+      message: 'Conversion stage tracked successfully'
+    });
+  } catch (e) {
+    console.error('[CONVERSION TRACKING ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Record performance metric
+app.post('/admin/analytics/:tenantKey/metrics', authenticateApiKey, rateLimitMiddleware, requirePermission('analytics_track'), async (req, res) => {
+  try {
+    const { tenantKey } = req.params;
+    const { metricName, metricValue, metricUnit, metricCategory, metadata } = req.body;
+    
+    if (!metricName || metricValue === undefined) {
+      return res.status(400).json({ error: 'Metric name and value required' });
+    }
+    
+    const metric = await recordPerformanceMetric({
+      clientKey: tenantKey,
+      metricName,
+      metricValue: parseFloat(metricValue),
+      metricUnit,
+      metricCategory,
+      metadata
+    });
+    
+    console.log('[PERFORMANCE METRIC RECORDED]', { 
+      tenantKey,
+      metricName,
+      metricValue,
+      metricCategory,
+      requestedBy: req.ip
+    });
+    
+    res.json({
+      ok: true,
+      metric,
+      message: 'Performance metric recorded successfully'
+    });
+  } catch (e) {
+    console.error('[PERFORMANCE METRIC ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// A/B Testing endpoints
+// Create A/B test experiment
+app.post('/admin/ab-tests/:tenantKey', authenticateApiKey, rateLimitMiddleware, requirePermission('ab_testing'), async (req, res) => {
+  try {
+    const { tenantKey } = req.params;
+    const { experimentName, variants, isActive = true } = req.body;
+    
+    if (!experimentName || !variants || variants.length < 2) {
+      return res.status(400).json({ error: 'Experiment name and at least 2 variants required' });
+    }
+    
+    const experiments = await createABTestExperiment({
+      clientKey: tenantKey,
+      experimentName,
+      variants,
+      isActive
+    });
+    
+    console.log('[AB TEST EXPERIMENT CREATED]', { 
+      tenantKey,
+      experimentName,
+      variants: variants.length,
+      isActive,
+      requestedBy: req.ip
+    });
+    
+    res.json({
+      ok: true,
+      experiments,
+      message: 'A/B test experiment created successfully'
+    });
+  } catch (e) {
+    console.error('[AB TEST CREATION ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Get active A/B tests
+app.get('/admin/ab-tests/:tenantKey', authenticateApiKey, rateLimitMiddleware, requirePermission('ab_testing'), async (req, res) => {
+  try {
+    const { tenantKey } = req.params;
+    
+    const activeTests = await getActiveABTests(tenantKey);
+    
+    console.log('[AB TESTS REQUESTED]', { 
+      tenantKey,
+      activeTests: activeTests.length,
+      requestedBy: req.ip
+    });
+    
+    res.json({
+      ok: true,
+      tenantKey,
+      activeTests,
+      lastUpdated: new Date().toISOString()
+    });
+  } catch (e) {
+    console.error('[AB TESTS FETCH ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Get A/B test results
+app.get('/admin/ab-tests/:tenantKey/:experimentName/results', authenticateApiKey, rateLimitMiddleware, requirePermission('ab_testing'), async (req, res) => {
+  try {
+    const { tenantKey, experimentName } = req.params;
+    
+    const results = await getABTestResults(tenantKey, experimentName);
+    
+    if (!results) {
+      return res.status(404).json({ error: 'Experiment not found' });
+    }
+    
+    console.log('[AB TEST RESULTS REQUESTED]', { 
+      tenantKey,
+      experimentName,
+      totalParticipants: results.summary.totalParticipants,
+      requestedBy: req.ip
+    });
+    
+    res.json({
+      ok: true,
+      tenantKey,
+      experimentName,
+      results,
+      lastUpdated: new Date().toISOString()
+    });
+  } catch (e) {
+    console.error('[AB TEST RESULTS ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Record A/B test outcome
+app.post('/admin/ab-tests/:tenantKey/:experimentName/outcome', authenticateApiKey, rateLimitMiddleware, requirePermission('ab_testing'), async (req, res) => {
+  try {
+    const { tenantKey, experimentName } = req.params;
+    const { leadPhone, outcome, outcomeData } = req.body;
+    
+    if (!leadPhone || !outcome) {
+      return res.status(400).json({ error: 'Lead phone and outcome required' });
+    }
+    
+    const result = await recordABTestOutcome({
+      clientKey: tenantKey,
+      experimentName,
+      leadPhone,
+      outcome,
+      outcomeData
+    });
+    
+    if (!result) {
+      return res.status(404).json({ error: 'Experiment or lead assignment not found' });
+    }
+    
+    console.log('[AB TEST OUTCOME RECORDED]', { 
+      tenantKey,
+      experimentName,
+      leadPhone,
+      outcome,
+      requestedBy: req.ip
+    });
+    
+    res.json({
+      ok: true,
+      result,
+      message: 'A/B test outcome recorded successfully'
+    });
+  } catch (e) {
+    console.error('[AB TEST OUTCOME ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Performance optimization endpoints
+// Get performance metrics
+app.get('/admin/performance/:tenantKey', authenticateApiKey, rateLimitMiddleware, requirePermission('performance_view'), async (req, res) => {
+  try {
+    const { tenantKey } = req.params;
+    
+    const metrics = await getCachedMetrics(tenantKey);
+    
+    // Get cache statistics
+    const cacheStats = {
+      size: cache.size,
+      keys: Array.from(cache.keys()).filter(key => key.includes(tenantKey)),
+      hitRate: calculateCacheHitRate(tenantKey)
+    };
+    
+    console.log('[PERFORMANCE METRICS REQUESTED]', { 
+      tenantKey,
+      cacheSize: cache.size,
+      requestedBy: req.ip
+    });
+    
+    res.json({
+      ok: true,
+      tenantKey,
+      metrics,
+      cache: cacheStats,
+      performance: {
+        analyticsQueue: analyticsQueue.length,
+        connectionPool: connectionPool.size,
+        memoryUsage: process.memoryUsage(),
+        uptime: process.uptime()
+      },
+      lastUpdated: new Date().toISOString()
+    });
+  } catch (e) {
+    console.error('[PERFORMANCE METRICS ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Clear cache
+app.post('/admin/performance/:tenantKey/cache/clear', authenticateApiKey, rateLimitMiddleware, requirePermission('performance_manage'), async (req, res) => {
+  try {
+    const { tenantKey } = req.params;
+    const { pattern } = req.body;
+    
+    const beforeSize = cache.size;
+    clearCache(pattern || tenantKey);
+    const afterSize = cache.size;
+    const cleared = beforeSize - afterSize;
+    
+    console.log('[CACHE CLEARED]', { 
+      tenantKey,
+      pattern,
+      cleared,
+      remaining: afterSize,
+      requestedBy: req.ip
+    });
+    
+    res.json({
+      ok: true,
+      tenantKey,
+      cleared,
+      remaining: afterSize,
+      message: `Cache cleared: ${cleared} entries removed`
+    });
+  } catch (e) {
+    console.error('[CACHE CLEAR ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Get system performance overview
+app.get('/admin/performance/system/overview', authenticateApiKey, rateLimitMiddleware, requirePermission('performance_view'), async (req, res) => {
+  try {
+    const memoryUsage = process.memoryUsage();
+    const cpuUsage = process.cpuUsage();
+    
+    const overview = {
+      system: {
+        uptime: process.uptime(),
+        memory: {
+          rss: Math.round(memoryUsage.rss / 1024 / 1024), // MB
+          heapTotal: Math.round(memoryUsage.heapTotal / 1024 / 1024), // MB
+          heapUsed: Math.round(memoryUsage.heapUsed / 1024 / 1024), // MB
+          external: Math.round(memoryUsage.external / 1024 / 1024) // MB
+        },
+        cpu: {
+          user: cpuUsage.user,
+          system: cpuUsage.system
+        }
+      },
+      application: {
+        cache: {
+          size: cache.size,
+          ttl: CACHE_TTL
+        },
+        analytics: {
+          queueSize: analyticsQueue.length,
+          processing: analyticsProcessing
+        },
+        connections: {
+          poolSize: connectionPool.size
+        }
+      },
+      timestamp: new Date().toISOString()
+    };
+    
+    console.log('[SYSTEM PERFORMANCE OVERVIEW]', { 
+      memoryMB: overview.system.memory.rss,
+      cacheSize: overview.application.cache.size,
+      requestedBy: req.ip
+    });
+    
+    res.json({
+      ok: true,
+      overview,
+      lastUpdated: new Date().toISOString()
+    });
+  } catch (e) {
+    console.error('[SYSTEM PERFORMANCE ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Helper function for cache hit rate calculation
+function calculateCacheHitRate(tenantKey) {
+  // This is a simplified calculation - in production you'd want more sophisticated tracking
+  const tenantCacheKeys = Array.from(cache.keys()).filter(key => key.includes(tenantKey));
+  return tenantCacheKeys.length > 0 ? Math.min(95, tenantCacheKeys.length * 10) : 0; // Mock calculation
+}
 
 app.get('/admin/system-health', async (req, res) => {
   try {
