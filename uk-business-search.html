@@ -660,7 +660,7 @@
                 
                 if (data.success) {
                     currentResults = data.results;
-                    displayResults(data.results);
+                    displayResults(data.results, data.usingRealData);
                     updateStats();
                 } else {
                     throw new Error(data.error || 'Search failed');
@@ -697,15 +697,8 @@
                 results = results.slice(0, limit);
                 
                 currentResults = results;
-                displayResults(results);
+                displayResults(results, false); // false = using sample data
                 updateStats();
-                
-                // Show fallback message
-                const resultsContent = document.getElementById('resultsContent');
-                const fallbackMessage = document.createElement('div');
-                fallbackMessage.style.cssText = 'background: #fef3c7; border: 1px solid #f59e0b; color: #92400e; padding: 12px; border-radius: 8px; margin-bottom: 1rem; font-size: 0.9rem;';
-                fallbackMessage.textContent = '⚠️ Using sample data - API connection failed. Results may be limited.';
-                resultsContent.insertBefore(fallbackMessage, resultsContent.firstChild);
             }
         }
         
@@ -751,7 +744,7 @@
         }
         
         // Display results
-        function displayResults(results) {
+        function displayResults(results, usingRealData = false) {
             const resultsSection = document.getElementById('resultsSection');
             const resultsCount = document.getElementById('resultsCount');
             const resultsContent = document.getElementById('resultsContent');
@@ -769,6 +762,35 @@
                 exportSection.style.display = 'none';
                 return;
             }
+            
+            // Show data source indicator
+            const dataSourceIndicator = document.createElement('div');
+            dataSourceIndicator.style.cssText = `
+                background: ${usingRealData ? '#d1fae5' : '#fef3c7'};
+                border: 1px solid ${usingRealData ? '#10b981' : '#f59e0b'};
+                color: ${usingRealData ? '#065f46' : '#92400e'};
+                padding: 12px;
+                border-radius: 8px;
+                margin-bottom: 1rem;
+                font-size: 0.9rem;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            `;
+            
+            if (usingRealData) {
+                dataSourceIndicator.innerHTML = `
+                    <span>✅</span>
+                    <span><strong>Live Data:</strong> Results from real UK business APIs (Google Places, Companies House)</span>
+                `;
+            } else {
+                dataSourceIndicator.innerHTML = `
+                    <span>⚠️</span>
+                    <span><strong>Sample Data:</strong> Using demo data. <a href="API_SETUP_GUIDE.md" target="_blank" style="color: #92400e; text-decoration: underline;">Set up real APIs</a> for live business data.</span>
+                `;
+            }
+            
+            resultsContent.appendChild(dataSourceIndicator);
             
             const tableBody = document.createElement('tbody');
             
