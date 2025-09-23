@@ -1507,9 +1507,9 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
       }
     }
 
-    // Check if already opted in (idempotent)
+    // Check if already opted in (idempotent) - but allow VAPI calls for YES/START messages
     const existingLead = leads.find(l => l.phone === from);
-    if ((isYes || isStart) && existingLead && existingLead.consentSms && existingLead.status === 'engaged') {
+    if (existingLead && existingLead.consentSms && existingLead.status === 'engaged' && !(isYes || isStart)) {
       console.log('[IDEMPOTENT SKIP]', { from, tenantKey, reason: 'already_opted_in' });
       return res.send('OK');
     }
