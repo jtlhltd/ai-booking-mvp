@@ -559,6 +559,89 @@ function getNextBusinessHour(tenant = null) {
   return nextBusiness;
 }
 
+// Intelligent call scheduling
+async function determineCallScheduling({ tenantKey, from, isYes, isStart, existingLead }) {
+  try {
+    const client = await getFullClient(tenantKey);
+    const now = new Date();
+    const tz = client?.booking?.timezone || client?.timezone || TIMEZONE;
+    const tenantTime = new Date(now.toLocaleString("en-US", {timeZone: tz}));
+    const hour = tenantTime.getHours();
+    const day = tenantTime.getDay();
+    
+    // High priority calls (immediate)
+    if (isYes && existingLead?.score >= 80) {
+      return { shouldDelay: false, priority: 'high', reason: 'high_score_yes_response' };
+    }
+    
+    // Business hours optimization
+    if (!isBusinessHours(client)) {
+      const nextBusinessHour = getNextBusinessHour(client);
+      return {
+        shouldDelay: true,
+        reason: 'outside_business_hours',
+        scheduledFor: nextBusinessHour,
+        priority: 'normal'
+      };
+    }
+    
+    // Peak hours optimization (avoid lunch time)
+    if (hour >= 12 && hour <= 14) {
+      const delayUntil = new Date(tenantTime.getTime() + 2 * 60 * 60 * 1000); // 2 hours later
+      return {
+        shouldDelay: true,
+        reason: 'lunch_hours',
+        scheduledFor: delayUntil,
+        priority: 'normal'
+      };
+    }
+    
+    // Weekend optimization
+    if (day === 0 || day === 6) { // Sunday or Saturday
+      const nextMonday = new Date(tenantTime);
+      nextMonday.setDate(tenantTime.getDate() + (8 - day)); // Next Monday
+      nextMonday.setHours(9, 0, 0, 0);
+      return {
+        shouldDelay: true,
+        reason: 'weekend',
+        scheduledFor: nextMonday,
+        priority: 'low'
+      };
+    }
+    
+    // Rate limiting for high-volume periods
+    const recentCalls = await getRecentCallsCount(tenantKey, 60); // Last hour
+    if (recentCalls > 10) { // More than 10 calls in last hour
+      const delayUntil = new Date(tenantTime.getTime() + 30 * 60 * 1000); // 30 minutes later
+      return {
+        shouldDelay: true,
+        reason: 'rate_limit',
+        scheduledFor: delayUntil,
+        priority: 'normal'
+      };
+    }
+    
+    // Default: proceed with call
+    return { shouldDelay: false, priority: 'normal', reason: 'optimal_timing' };
+    
+  } catch (error) {
+    console.error('[CALL SCHEDULING ERROR]', error);
+    return { shouldDelay: false, priority: 'normal', reason: 'error_fallback' };
+  }
+}
+
+// Get count of recent calls for rate limiting
+async function getRecentCallsCount(tenantKey, minutesBack = 60) {
+  try {
+    // This would query the calls database
+    // For now, return 0 (no rate limiting)
+    return 0;
+  } catch (error) {
+    console.error('[RECENT CALLS COUNT ERROR]', error);
+    return 0;
+  }
+}
+
 // Lead scoring system
 function calculateLeadScore(lead, tenant = null) {
   let score = 0;
@@ -1561,6 +1644,20 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
         return res.send('OK');
       }
 
+      // Intelligent call scheduling
+      const callScheduling = await determineCallScheduling({ tenantKey, from, isYes, isStart, existingLead });
+      if (callScheduling.shouldDelay) {
+        console.log('[CALL SCHEDULED]', {
+          tenantKey,
+          from,
+          reason: callScheduling.reason,
+          scheduledFor: callScheduling.scheduledFor,
+          priority: callScheduling.priority
+        });
+        // TODO: Implement call queue/scheduling system
+        return res.send('OK');
+      }
+
       // Check business hours and lead score before making calls
       const client = await getFullClient(tenantKey);
       const isBusinessTime = isBusinessHours(client);
@@ -1665,6 +1762,16 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
             phoneNumberId,
             customer: { number: from, numberE164CheckEnabled: true },
             maxDurationSeconds: 10, // VAPI minimum is 10 seconds - still much cheaper than 10 minutes
+            metadata: {
+              tenantKey,
+              leadPhone: from,
+              triggerType: isYes ? 'yes_response' : 'start_opt_in',
+              timestamp: new Date().toISOString(),
+              leadScore: existingLead?.score || 0,
+              leadStatus: existingLead?.status || 'new',
+              businessHours: isBusinessHours() ? 'within' : 'outside',
+              retryAttempt: 0 // Track retry attempts
+            },
             assistantOverrides: {
               variableValues: {
                 ClientKey: tenantKey,
@@ -1680,7 +1787,10 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
                 Locale: client?.locale || 'en-GB',
                 ScriptHints: client?.scriptHints || '',
                 FAQJSON: client?.faqJson || '[]',
-                Currency: client?.currency || 'GBP'
+                Currency: client?.currency || 'GBP',
+                LeadScore: existingLead?.score || 0,
+                LeadStatus: existingLead?.status || 'new',
+                BusinessHours: isBusinessHours() ? 'within' : 'outside'
               }
             }
           };
@@ -2398,6 +2508,28 @@ app.get('/admin/metrics', async (req, res) => {
         successRate: calls.filter(c => c.status === 'completed').length / Math.max(calls.length, 1) * 100,
         avgResponseTime: 0, // Will calculate from logs if available
         errorRate: calls.filter(c => c.status === 'failed').length / Math.max(calls.length, 1) * 100
+      },
+      vapi: {
+        totalCalls: calls.length,
+        callsToday: calls.filter(c => new Date(c.createdAt) > last24h).length,
+        callsThisWeek: calls.filter(c => new Date(c.createdAt) > last7d).length,
+        successfulCalls: calls.filter(c => c.outcome === 'completed' || c.outcome === 'booked').length,
+        failedCalls: calls.filter(c => ['no-answer', 'busy', 'declined', 'failed'].includes(c.outcome)).length,
+        averageCallDuration: calls.length > 0 ? calls.reduce((sum, c) => sum + (c.duration || 0), 0) / calls.length : 0,
+        totalCallCost: calls.reduce((sum, c) => sum + (c.cost || 0.05), 0),
+        callSuccessRate: calls.length > 0 ? (calls.filter(c => c.outcome === 'completed' || c.outcome === 'booked').length / calls.length * 100).toFixed(1) : 0,
+        costPerConversion: calls.length > 0 ? (calls.reduce((sum, c) => sum + (c.cost || 0.05), 0) / Math.max(leads.filter(l => l.status === 'booked').length, 1)).toFixed(2) : 0,
+        retryRate: calls.filter(c => c.retryAttempt > 0).length / Math.max(calls.length, 1) * 100,
+        businessHoursCalls: calls.filter(c => {
+          const callTime = new Date(c.createdAt);
+          const hour = callTime.getHours();
+          return hour >= 9 && hour < 17; // 9 AM to 5 PM
+        }).length,
+        afterHoursCalls: calls.filter(c => {
+          const callTime = new Date(c.createdAt);
+          const hour = callTime.getHours();
+          return hour < 9 || hour >= 17;
+        }).length
       }
     };
 
