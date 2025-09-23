@@ -82,8 +82,7 @@ import cron from 'node-cron';
 import leadsRouter from './routes/leads.js';
 import twilioWebhooks from './routes/twilio-webhooks.js';
 import vapiWebhooks from './routes/vapi-webhooks.js';
-// import RealUKBusinessSearch from './real-uk-business-search.js';
-// import DecisionMakerContactFinder from './decision-maker-contact-finder.js';
+// Real API integration - dynamic imports will be used in endpoints
 
 
 const app = express();
@@ -2245,9 +2244,21 @@ app.post('/api/uk-business-search', async (req, res) => {
     
     console.log(`[UK BUSINESS SEARCH] Starting search for: "${query}"`);
     
-    // Sample data (real API integration disabled for now)
+    // Try real API first, fallback to sample data
     let results = [];
     let usingRealData = false;
+    
+    try {
+      // Dynamic import of real API module
+      const realSearchModule = await import('./real-uk-business-search.js');
+      const RealUKBusinessSearch = realSearchModule.default;
+      
+      const realSearcher = new RealUKBusinessSearch();
+      results = await realSearcher.searchRealBusinesses(query, filters);
+      usingRealData = true;
+      console.log(`[UK BUSINESS SEARCH] Real API search found ${results.length} businesses`);
+    } catch (realApiError) {
+      console.log(`[UK BUSINESS SEARCH] Real API failed, falling back to sample data:`, realApiError.message);
       
       // Fallback to sample data
       const sampleBusinesses = {
@@ -2387,43 +2398,60 @@ app.post('/api/decision-maker-contacts', async (req, res) => {
     
     console.log(`[DECISION MAKER CONTACT] Researching contacts for ${targetRole} at ${business.name}`);
     
-    // Sample contact data (real API integration disabled for now)
-    const contacts = {
-      primary: [
-        {
-          type: "email",
-          value: `${targetRole.toLowerCase().replace(' ', '.')}@${business.name.toLowerCase().replace(/\s+/g, '')}.co.uk`,
-          confidence: 0.7,
-          source: "email_pattern",
-          title: targetRole
-        }
-      ],
-      secondary: [
-        {
-          type: "phone",
-          value: business.phone || "+44 20 1234 5678",
-          confidence: 0.8,
-          source: "business_contact",
-          title: "Reception"
-        }
-      ],
-      gatekeeper: [
-        {
-          type: "email",
-          value: `info@${business.name.toLowerCase().replace(/\s+/g, '')}.co.uk`,
-          confidence: 0.9,
-          source: "business_contact",
-          title: "General Contact"
-        }
-      ]
-    };
+    // Try real API first, fallback to sample data
+    let contacts, strategy;
     
-    const strategy = {
-      approach: "Direct outreach to decision maker",
-      message: `Hi ${targetRole}, I noticed ${business.name} and wanted to reach out about our AI booking system that could help streamline your appointment scheduling.`,
-      followUp: "Follow up in 3-5 days if no response",
-      bestTime: "Tuesday-Thursday, 10am-2pm"
-    };
+    try {
+      // Dynamic import of contact finder module
+      const contactFinderModule = await import('./decision-maker-contact-finder.js');
+      const DecisionMakerContactFinder = contactFinderModule.DecisionMakerContactFinder;
+      
+      const contactFinder = new DecisionMakerContactFinder();
+      contacts = await contactFinder.findDecisionMakerContacts(business, industry, targetRole);
+      strategy = contactFinder.generateOutreachStrategy(contacts, business, industry, targetRole);
+      
+      console.log(`[DECISION MAKER CONTACT] Real API found contacts successfully`);
+    } catch (realApiError) {
+      console.log(`[DECISION MAKER CONTACT] Real API failed, using sample data:`, realApiError.message);
+      
+      // Fallback to sample data
+      contacts = {
+        primary: [
+          {
+            type: "email",
+            value: `${targetRole.toLowerCase().replace(' ', '.')}@${business.name.toLowerCase().replace(/\s+/g, '')}.co.uk`,
+            confidence: 0.7,
+            source: "email_pattern",
+            title: targetRole
+          }
+        ],
+        secondary: [
+          {
+            type: "phone",
+            value: business.phone || "+44 20 1234 5678",
+            confidence: 0.8,
+            source: "business_contact",
+            title: "Reception"
+          }
+        ],
+        gatekeeper: [
+          {
+            type: "email",
+            value: `info@${business.name.toLowerCase().replace(/\s+/g, '')}.co.uk`,
+            confidence: 0.9,
+            source: "business_contact",
+            title: "General Contact"
+          }
+        ]
+      };
+      
+      strategy = {
+        approach: "Direct outreach to decision maker",
+        message: `Hi ${targetRole}, I noticed ${business.name} and wanted to reach out about our AI booking system that could help streamline your appointment scheduling.`,
+        followUp: "Follow up in 3-5 days if no response",
+        bestTime: "Tuesday-Thursday, 10am-2pm"
+      };
+    }
     
     console.log(`[DECISION MAKER CONTACT] Found ${contacts.primary.length} primary, ${contacts.secondary.length} secondary, ${contacts.gatekeeper.length} gatekeeper contacts`);
     
