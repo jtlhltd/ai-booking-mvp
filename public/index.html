@@ -210,6 +210,216 @@
             margin-bottom: 1rem;
         }
         
+        /* Demo Section */
+        .demo {
+            padding: 4rem 0;
+            background: #f8fafc;
+        }
+        
+        .demo-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3rem;
+            align-items: center;
+        }
+        
+        .phone-mockup {
+            background: #1a1a1a;
+            border-radius: 25px;
+            padding: 20px;
+            max-width: 300px;
+            margin: 0 auto;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+        
+        .phone-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            color: white;
+            font-size: 14px;
+        }
+        
+        .phone-dots {
+            display: flex;
+            gap: 4px;
+        }
+        
+        .phone-dots span {
+            width: 4px;
+            height: 4px;
+            background: white;
+            border-radius: 50%;
+        }
+        
+        .phone-title {
+            font-weight: 600;
+        }
+        
+        .phone-screen {
+            background: white;
+            border-radius: 15px;
+            padding: 15px;
+            height: 400px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .sms-conversation {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 15px;
+        }
+        
+        .sms-bubble {
+            display: flex;
+            margin-bottom: 10px;
+            align-items: flex-end;
+        }
+        
+        .sms-bubble.incoming {
+            justify-content: flex-start;
+        }
+        
+        .sms-bubble.outgoing {
+            justify-content: flex-end;
+        }
+        
+        .sms-avatar {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            margin: 0 8px;
+        }
+        
+        .sms-bubble.incoming .sms-avatar {
+            background: #e5e7eb;
+        }
+        
+        .sms-bubble.outgoing .sms-avatar {
+            background: #6366f1;
+            color: white;
+        }
+        
+        .sms-content {
+            max-width: 70%;
+            background: #f3f4f6;
+            padding: 8px 12px;
+            border-radius: 12px;
+        }
+        
+        .sms-bubble.outgoing .sms-content {
+            background: #6366f1;
+            color: white;
+        }
+        
+        .sms-text {
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        
+        .sms-time {
+            font-size: 11px;
+            opacity: 0.7;
+            margin-top: 4px;
+        }
+        
+        .demo-input {
+            display: flex;
+            gap: 8px;
+            padding-top: 10px;
+            border-top: 1px solid #e5e7eb;
+        }
+        
+        .demo-input input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+        
+        .demo-input button {
+            background: #6366f1;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            padding: 8px 16px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        
+        .demo-controls h3 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: #1e293b;
+        }
+        
+        .demo-controls p {
+            color: #64748b;
+            margin-bottom: 1.5rem;
+        }
+        
+        .demo-suggestions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 2rem;
+        }
+        
+        .suggestion-btn {
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .suggestion-btn:hover {
+            border-color: #6366f1;
+            background: #f8fafc;
+        }
+        
+        .demo-features {
+            display: flex;
+            gap: 1rem;
+        }
+        
+        .demo-feature {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #64748b;
+        }
+        
+        .feature-icon {
+            font-size: 18px;
+        }
+        
+        @media (max-width: 768px) {
+            .demo-container {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }
+            
+            .demo-suggestions {
+                grid-template-columns: 1fr;
+            }
+            
+            .demo-features {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+        }
+        
         /* Testimonials */
         .testimonials {
             padding: 4rem 0;
@@ -322,6 +532,7 @@
                 <div class="logo">🤖 AI Booking MVP</div>
                 <ul class="nav-links">
                     <li><a href="#features">Features</a></li>
+                    <li><a href="#demo">Demo</a></li>
                     <li><a href="#testimonials">Testimonials</a></li>
                     <li><a href="#contact">Contact</a></li>
                 </ul>
@@ -391,6 +602,79 @@
                     <div class="feature-icon">⚡</div>
                     <h3 class="feature-title">Easy Integration</h3>
                     <p class="feature-description">Simple setup with existing systems. Connect your phone numbers and calendars in minutes.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Interactive Demo Section -->
+    <section id="demo" class="demo">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">See It In Action</h2>
+                <p class="section-subtitle">
+                    Try our interactive demo and see how AI Booking MVP works
+                </p>
+            </div>
+            <div class="demo-container">
+                <div class="demo-phone">
+                    <div class="phone-mockup">
+                        <div class="phone-header">
+                            <div class="phone-dots">
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                            </div>
+                            <div class="phone-title">AI Booking MVP</div>
+                            <div class="phone-battery">100%</div>
+                        </div>
+                        <div class="phone-screen">
+                            <div class="sms-conversation" id="smsDemo">
+                                <div class="sms-bubble incoming">
+                                    <div class="sms-avatar">👤</div>
+                                    <div class="sms-content">
+                                        <div class="sms-text">Hi, I'd like to book a dental appointment</div>
+                                        <div class="sms-time">2:30 PM</div>
+                                    </div>
+                                </div>
+                                <div class="sms-bubble outgoing">
+                                    <div class="sms-content">
+                                        <div class="sms-text">Hello! I'm Sarah from Victory Dental. I'd be happy to help you book an appointment. What type of service do you need?</div>
+                                        <div class="sms-time">2:30 PM</div>
+                                    </div>
+                                    <div class="sms-avatar">🤖</div>
+                                </div>
+                            </div>
+                            <div class="demo-input">
+                                <input type="text" id="demoInput" placeholder="Type your message..." maxlength="100">
+                                <button id="demoSend">Send</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="demo-controls">
+                    <h3>Try the Demo</h3>
+                    <p>Send a message to see how our AI responds:</p>
+                    <div class="demo-suggestions">
+                        <button class="suggestion-btn" data-message="I need a cleaning">I need a cleaning</button>
+                        <button class="suggestion-btn" data-message="What are your prices?">What are your prices?</button>
+                        <button class="suggestion-btn" data-message="Do you have availability tomorrow?">Do you have availability tomorrow?</button>
+                        <button class="suggestion-btn" data-message="I want to cancel my appointment">I want to cancel my appointment</button>
+                    </div>
+                    <div class="demo-features">
+                        <div class="demo-feature">
+                            <span class="feature-icon">⚡</span>
+                            <span>Instant Response</span>
+                        </div>
+                        <div class="demo-feature">
+                            <span class="feature-icon">🧠</span>
+                            <span>AI-Powered</span>
+                        </div>
+                        <div class="demo-feature">
+                            <span class="feature-icon">📅</span>
+                            <span>Smart Scheduling</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -486,6 +770,136 @@
                 header.style.background = '#fff';
                 header.style.backdropFilter = 'none';
             }
+        });
+
+        // Interactive Demo Functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const demoInput = document.getElementById('demoInput');
+            const demoSend = document.getElementById('demoSend');
+            const smsDemo = document.getElementById('smsDemo');
+            const suggestionBtns = document.querySelectorAll('.suggestion-btn');
+
+            // AI responses for different messages
+            const aiResponses = {
+                'cleaning': 'Perfect! I can help you schedule a dental cleaning. We have availability this week. Would you prefer morning or afternoon appointments?',
+                'prices': 'Great question! Our cleaning is £80, checkup is £60, and fillings start at £120. We also offer payment plans. Would you like to book a consultation to discuss your needs?',
+                'tomorrow': 'Let me check our availability for tomorrow. We have slots at 9 AM, 2 PM, and 4 PM available. Which time works best for you?',
+                'cancel': 'I understand you need to cancel. No problem at all! Can you provide your name and appointment time so I can help you reschedule or cancel?',
+                'default': 'Thank you for your message! I\'m here to help with all your dental needs. Would you like to schedule an appointment, ask about our services, or get pricing information?'
+            };
+
+            // Function to add a message to the conversation
+            function addMessage(text, isIncoming = true) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `sms-bubble ${isIncoming ? 'incoming' : 'outgoing'}`;
+                
+                const avatar = document.createElement('div');
+                avatar.className = 'sms-avatar';
+                avatar.textContent = isIncoming ? '👤' : '🤖';
+                
+                const content = document.createElement('div');
+                content.className = 'sms-content';
+                
+                const textDiv = document.createElement('div');
+                textDiv.className = 'sms-text';
+                textDiv.textContent = text;
+                
+                const timeDiv = document.createElement('div');
+                timeDiv.className = 'sms-time';
+                timeDiv.textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                
+                content.appendChild(textDiv);
+                content.appendChild(timeDiv);
+                
+                if (isIncoming) {
+                    messageDiv.appendChild(avatar);
+                    messageDiv.appendChild(content);
+                } else {
+                    messageDiv.appendChild(content);
+                    messageDiv.appendChild(avatar);
+                }
+                
+                smsDemo.appendChild(messageDiv);
+                smsDemo.scrollTop = smsDemo.scrollHeight;
+            }
+
+            // Function to get AI response
+            function getAIResponse(message) {
+                const lowerMessage = message.toLowerCase();
+                
+                if (lowerMessage.includes('cleaning') || lowerMessage.includes('clean')) {
+                    return aiResponses.cleaning;
+                } else if (lowerMessage.includes('price') || lowerMessage.includes('cost') || lowerMessage.includes('how much')) {
+                    return aiResponses.prices;
+                } else if (lowerMessage.includes('tomorrow') || lowerMessage.includes('available') || lowerMessage.includes('appointment')) {
+                    return aiResponses.tomorrow;
+                } else if (lowerMessage.includes('cancel') || lowerMessage.includes('reschedule')) {
+                    return aiResponses.cancel;
+                } else {
+                    return aiResponses.default;
+                }
+            }
+
+            // Send message function
+            function sendMessage() {
+                const message = demoInput.value.trim();
+                if (!message) return;
+
+                // Add user message
+                addMessage(message, true);
+                demoInput.value = '';
+
+                // Show typing indicator
+                const typingDiv = document.createElement('div');
+                typingDiv.className = 'sms-bubble outgoing';
+                typingDiv.innerHTML = `
+                    <div class="sms-content">
+                        <div class="sms-text" style="opacity: 0.7;">Sarah is typing...</div>
+                        <div class="sms-time">${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                    </div>
+                    <div class="sms-avatar">🤖</div>
+                `;
+                smsDemo.appendChild(typingDiv);
+                smsDemo.scrollTop = smsDemo.scrollHeight;
+
+                // Simulate AI thinking time
+                setTimeout(() => {
+                    // Remove typing indicator
+                    smsDemo.removeChild(typingDiv);
+                    
+                    // Add AI response
+                    const aiResponse = getAIResponse(message);
+                    addMessage(aiResponse, false);
+                }, 1500);
+            }
+
+            // Event listeners
+            demoSend.addEventListener('click', sendMessage);
+            demoInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    sendMessage();
+                }
+            });
+
+            // Suggestion buttons
+            suggestionBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const message = this.getAttribute('data-message');
+                    demoInput.value = message;
+                    sendMessage();
+                });
+            });
+
+            // Auto-scroll to demo section when demo button is clicked
+            document.querySelectorAll('a[href="#demo"]').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    document.getElementById('demo').scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                });
+            });
         });
     </script>
 </body>
