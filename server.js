@@ -1443,15 +1443,9 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
     if (!from) return res.type('text/plain').send('IGNORED');
 
     // YES / STOP intents (extend as needed)
-    console.log('[REGEX DEBUG]', { 
-      bodyTxt: JSON.stringify(bodyTxt), 
-      bodyLength: bodyTxt.length,
-      bodyChars: bodyTxt.split('').map(c => c.charCodeAt(0))
-    });
     const isYes  = /^\s*(yes|y|ok|okay|sure|confirm)\s*$/i.test(bodyTxt);
     const isStart = /^\s*(start|unstop)\s*$/i.test(bodyTxt);
     const isStop = /^\s*(stop|unsubscribe|cancel|end|quit)\s*$/i.test(bodyTxt);
-    console.log('[REGEX RESULTS]', { isYes, isStart, isStop });
 
     // Load & update the most recent lead matching this phone from database
     const clients = await listFullClients();
@@ -1692,8 +1686,8 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
           };
             // Use retry logic for VAPI calls
             const vapiResult = await retryWithBackoff(async () => {
-          const resp = await fetch(`${VAPI_URL}/call`, {
-            method: 'POST',
+              const resp = await fetch(`${VAPI_URL}/call`, {
+                method: 'POST',
                 headers: { 
                   'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`, 
                   'Content-Type': 'application/json',
@@ -1708,11 +1702,21 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
                 throw new Error(`VAPI call failed: ${resp.status} ${errorText}`);
               }
               
-              return await resp.json();
+              const result = await resp.json().catch(() => null);
+              if (!result) {
+                throw new Error('Failed to parse VAPI response');
+              }
+              
+              return result;
             }, 3, 2000); // 3 retries, 2 second base delay
 
-            console.log('[LEAD OPT-IN YES]', { from, tenantKey, vapiStatus: 'ok' });
-            console.log('[LEAD OPT-IN YES]', { from, tenantKey, step: 'calling_vapi', vapiStatus: 'ok' });
+            console.log('[VAPI CALL SUCCESS]', { 
+              from, 
+              tenantKey, 
+              callId: vapiResult?.id || 'unknown',
+              status: vapiResult?.status || 'unknown',
+              vapiStatus: 'ok' 
+            });
           
           if (vapiResult) {
             const callId = vapiResult?.id || 'unknown';
@@ -1722,10 +1726,21 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
             try {
               const calendarId = pickCalendarId(client);
               if (GOOGLE_CLIENT_EMAIL && (GOOGLE_PRIVATE_KEY || GOOGLE_PRIVATE_KEY_B64) && calendarId) {
+                // Handle private key formatting - ensure it's properly formatted
+                let privateKey = GOOGLE_PRIVATE_KEY;
+                if (!privateKey && GOOGLE_PRIVATE_KEY_B64) {
+                  privateKey = Buffer.from(GOOGLE_PRIVATE_KEY_B64, 'base64').toString();
+                }
+                
+                // Ensure private key has proper line breaks
+                if (privateKey && !privateKey.includes('\n')) {
+                  privateKey = privateKey.replace(/\\n/g, '\n');
+                }
+                
                 const auth = new google.auth.GoogleAuth({
                   credentials: {
                     client_email: GOOGLE_CLIENT_EMAIL,
-                    private_key: (GOOGLE_PRIVATE_KEY || Buffer.from(GOOGLE_PRIVATE_KEY_B64, 'base64').toString()),
+                    private_key: privateKey,
                   },
                   scopes: ['https://www.googleapis.com/auth/calendar'],
                 });
@@ -1776,21 +1791,26 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
                 from, 
                 tenantKey, 
                 callId, 
-                error: calendarError?.message || String(calendarError) 
+                error: calendarError?.message || String(calendarError),
+                errorType: calendarError?.name || 'Unknown',
+                stack: calendarError?.stack?.substring(0, 200) // First 200 chars of stack trace
               });
+              
+              // Don't fail the entire process if calendar booking fails
+              // The VAPI call was successful, calendar is just a nice-to-have
             }
           }
           
-          if (!ok) {
-            const errorResult = await resp.json().catch(() => ({ error: 'Failed to parse error response' }));
+          if (!vapiResult || vapiResult.error) {
             console.error('[VAPI ERROR]', { 
-              status: resp.status, 
-              error: errorResult, 
+              from,
+              tenantKey,
+              error: vapiResult?.error || 'VAPI call failed',
               payload: { 
                 assistantId, 
                 phoneNumberId, 
                 customerNumber: from,
-                maxDurationSeconds: 5
+                maxDurationSeconds: 10
               }
             });
           }
