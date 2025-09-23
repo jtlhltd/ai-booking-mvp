@@ -2382,9 +2382,7 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
                     dateTime: endTime.toISOString(),
                     timeZone: client?.booking?.timezone || 'Europe/London',
                   },
-                  attendees: [
-                    { email: from.replace('+', '') + '@example.com', displayName: 'Lead' }
-                  ],
+                  attendees: [], // Removed to avoid Google Calendar service account limitations
                   reminders: {
                     useDefault: false,
                     overrides: [
