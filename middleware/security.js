@@ -1,0 +1,376 @@
+import crypto from 'crypto';
+import bcrypt from 'bcrypt';
+
+// Enhanced security middleware for multi-tenant authentication and rate limiting
+
+// Generate secure API key
+export function generateApiKey() {
+  return 'ak_' + crypto.randomBytes(32).toString('hex');
+}
+
+// Hash API key for storage
+export function hashApiKey(apiKey) {
+  return crypto.createHash('sha256').update(apiKey).digest('hex');
+}
+
+// Hash password
+export async function hashPassword(password) {
+  const saltRounds = 12;
+  return await bcrypt.hash(password, saltRounds);
+}
+
+// Verify password
+export async function verifyPassword(password, hash) {
+  return await bcrypt.compare(password, hash);
+}
+
+// Enhanced API key authentication middleware
+export async function authenticateApiKey(req, res, next) {
+  try {
+    const apiKey = req.get('X-API-Key') || req.get('Authorization')?.replace('Bearer ', '');
+    
+    if (!apiKey) {
+      return res.status(401).json({ 
+        error: 'API key required',
+        code: 'MISSING_API_KEY'
+      });
+    }
+
+    // Import database functions
+    const { getApiKeyByHash, updateApiKeyLastUsed, logSecurityEvent } = await import('../db.js');
+    
+    // Hash the provided key to compare with stored hash
+    const keyHash = hashApiKey(apiKey);
+    const apiKeyData = await getApiKeyByHash(keyHash);
+    
+    if (!apiKeyData) {
+      // Log failed authentication attempt
+      await logSecurityEvent({
+        clientKey: 'unknown',
+        eventType: 'api_auth_failed',
+        eventSeverity: 'warning',
+        eventData: { reason: 'invalid_api_key', providedKey: apiKey.substring(0, 8) + '...' },
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+      
+      return res.status(401).json({ 
+        error: 'Invalid API key',
+        code: 'INVALID_API_KEY'
+      });
+    }
+
+    // Update last used timestamp
+    await updateApiKeyLastUsed(apiKeyData.id);
+    
+    // Attach API key data to request
+    req.apiKey = apiKeyData;
+    req.clientKey = apiKeyData.client_key;
+    
+    next();
+  } catch (error) {
+    console.error('[API KEY AUTH ERROR]', error);
+    res.status(500).json({ 
+      error: 'Authentication error',
+      code: 'AUTH_ERROR'
+    });
+  }
+}
+
+// Enhanced rate limiting middleware
+export async function rateLimitMiddleware(req, res, next) {
+  try {
+    const { checkRateLimit, recordRateLimitRequest, logSecurityEvent } = await import('../db.js');
+    
+    const clientKey = req.clientKey || 'unknown';
+    const apiKeyId = req.apiKey?.id || null;
+    const endpoint = req.path;
+    const ipAddress = req.ip;
+    
+    // Get rate limits from API key or use defaults
+    const limitPerMinute = req.apiKey?.rate_limit_per_minute || 100;
+    const limitPerHour = req.apiKey?.rate_limit_per_hour || 1000;
+    
+    // Check current rate limit status
+    const rateLimitStatus = await checkRateLimit({
+      clientKey,
+      apiKeyId,
+      endpoint,
+      ipAddress,
+      limitPerMinute,
+      limitPerHour
+    });
+    
+    // Record this request
+    await recordRateLimitRequest({
+      clientKey,
+      apiKeyId,
+      endpoint,
+      ipAddress
+    });
+    
+    // Add rate limit headers
+    res.set({
+      'X-RateLimit-Limit-Minute': limitPerMinute.toString(),
+      'X-RateLimit-Limit-Hour': limitPerHour.toString(),
+      'X-RateLimit-Remaining-Minute': rateLimitStatus.remainingMinute.toString(),
+      'X-RateLimit-Remaining-Hour': rateLimitStatus.remainingHour.toString(),
+      'X-RateLimit-Reset-Minute': new Date(Date.now() + 60 * 1000).toISOString(),
+      'X-RateLimit-Reset-Hour': new Date(Date.now() + 60 * 60 * 1000).toISOString()
+    });
+    
+    if (rateLimitStatus.exceeded) {
+      // Log rate limit exceeded
+      await logSecurityEvent({
+        clientKey,
+        eventType: 'rate_limit_exceeded',
+        eventSeverity: 'warning',
+        eventData: {
+          endpoint,
+          minuteCount: rateLimitStatus.minuteCount,
+          hourCount: rateLimitStatus.hourCount,
+          limitPerMinute,
+          limitPerHour
+        },
+        ipAddress,
+        userAgent: req.get('User-Agent')
+      });
+      
+      return res.status(429).json({
+        error: 'Rate limit exceeded',
+        code: 'RATE_LIMIT_EXCEEDED',
+        details: {
+          minuteCount: rateLimitStatus.minuteCount,
+          hourCount: rateLimitStatus.hourCount,
+          limitPerMinute,
+          limitPerHour,
+          retryAfter: 60 // seconds
+        }
+      });
+    }
+    
+    next();
+  } catch (error) {
+    console.error('[RATE LIMIT ERROR]', error);
+    // Allow request to proceed if rate limiting fails
+    next();
+  }
+}
+
+// Permission checking middleware
+export function requirePermission(permission) {
+  return (req, res, next) => {
+    try {
+      if (!req.apiKey) {
+        return res.status(401).json({ 
+          error: 'Authentication required',
+          code: 'AUTH_REQUIRED'
+        });
+      }
+      
+      const permissions = req.apiKey.permissions || [];
+      
+      if (!permissions.includes(permission) && !permissions.includes('*')) {
+        return res.status(403).json({ 
+          error: 'Insufficient permissions',
+          code: 'INSUFFICIENT_PERMISSIONS',
+          required: permission
+        });
+      }
+      
+      next();
+    } catch (error) {
+      console.error('[PERMISSION CHECK ERROR]', error);
+      res.status(500).json({ 
+        error: 'Permission check error',
+        code: 'PERMISSION_ERROR'
+      });
+    }
+  };
+}
+
+// Tenant isolation middleware
+export function requireTenantAccess(req, res, next) {
+  try {
+    const requestedTenant = req.params.tenantKey || req.body.clientKey;
+    const userTenant = req.clientKey;
+    
+    if (!requestedTenant) {
+      return res.status(400).json({ 
+        error: 'Tenant key required',
+        code: 'MISSING_TENANT_KEY'
+      });
+    }
+    
+    if (requestedTenant !== userTenant) {
+      return res.status(403).json({ 
+        error: 'Access denied to tenant',
+        code: 'TENANT_ACCESS_DENIED',
+        requested: requestedTenant,
+        authorized: userTenant
+      });
+    }
+    
+    next();
+  } catch (error) {
+    console.error('[TENANT ACCESS ERROR]', error);
+    res.status(500).json({ 
+      error: 'Tenant access check error',
+      code: 'TENANT_ERROR'
+    });
+  }
+}
+
+// Input validation and sanitization middleware
+export function validateAndSanitizeInput(schema) {
+  return (req, res, next) => {
+    try {
+      const { body, query, params } = req;
+      
+      // Basic XSS protection
+      const sanitizeObject = (obj) => {
+        if (typeof obj === 'string') {
+          return obj.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+        }
+        if (typeof obj === 'object' && obj !== null) {
+          const sanitized = {};
+          for (const [key, value] of Object.entries(obj)) {
+            sanitized[key] = sanitizeObject(value);
+          }
+          return sanitized;
+        }
+        return obj;
+      };
+      
+      req.body = sanitizeObject(body);
+      req.query = sanitizeObject(query);
+      req.params = sanitizeObject(params);
+      
+      next();
+    } catch (error) {
+      console.error('[INPUT SANITIZATION ERROR]', error);
+      res.status(400).json({ 
+        error: 'Invalid input',
+        code: 'INVALID_INPUT'
+      });
+    }
+  };
+}
+
+// Security headers middleware
+export function securityHeaders(req, res, next) {
+  res.set({
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'X-XSS-Protection': '1; mode=block',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Permissions-Policy': 'geolocation=(), microphone=(), camera=()',
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+    'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+  });
+  
+  next();
+}
+
+// Request logging middleware
+export async function requestLogging(req, res, next) {
+  try {
+    const startTime = Date.now();
+    
+    // Log request
+    console.log('[REQUEST]', {
+      method: req.method,
+      url: req.url,
+      ip: req.ip,
+      userAgent: req.get('User-Agent'),
+      clientKey: req.clientKey || 'anonymous',
+      apiKeyId: req.apiKey?.id || 'none',
+      timestamp: new Date().toISOString()
+    });
+    
+    // Override res.end to log response
+    const originalEnd = res.end;
+    res.end = function(chunk, encoding) {
+      const duration = Date.now() - startTime;
+      
+      console.log('[RESPONSE]', {
+        method: req.method,
+        url: req.url,
+        statusCode: res.statusCode,
+        duration: `${duration}ms`,
+        clientKey: req.clientKey || 'anonymous',
+        apiKeyId: req.apiKey?.id || 'none',
+        timestamp: new Date().toISOString()
+      });
+      
+      originalEnd.call(this, chunk, encoding);
+    };
+    
+    next();
+  } catch (error) {
+    console.error('[REQUEST LOGGING ERROR]', error);
+    next();
+  }
+}
+
+// Error handling middleware
+export async function errorHandler(error, req, res, next) {
+  try {
+    console.error('[ERROR HANDLER]', {
+      error: error.message,
+      stack: error.stack,
+      url: req.url,
+      method: req.method,
+      clientKey: req.clientKey || 'unknown',
+      ip: req.ip,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Log security event for errors
+    if (req.clientKey) {
+      const { logSecurityEvent } = await import('../db.js');
+      await logSecurityEvent({
+        clientKey: req.clientKey,
+        eventType: 'server_error',
+        eventSeverity: 'error',
+        eventData: {
+          error: error.message,
+          url: req.url,
+          method: req.method
+        },
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+    }
+    
+    // Don't expose internal errors to client
+    const statusCode = error.statusCode || error.status || 500;
+    const message = statusCode === 500 ? 'Internal server error' : error.message;
+    
+    res.status(statusCode).json({
+      error: message,
+      code: error.code || 'INTERNAL_ERROR',
+      timestamp: new Date().toISOString()
+    });
+  } catch (handlerError) {
+    console.error('[ERROR HANDLER FAILED]', handlerError);
+    res.status(500).json({
+      error: 'Internal server error',
+      code: 'HANDLER_ERROR'
+    });
+  }
+}
+
+// Cleanup old rate limit records (run periodically)
+export async function cleanupRateLimitRecords() {
+  try {
+    const { cleanupOldRateLimitRecords } = await import('../db.js');
+    await cleanupOldRateLimitRecords(24); // Clean records older than 24 hours
+    console.log('[RATE LIMIT CLEANUP]', { completed: true, timestamp: new Date().toISOString() });
+  } catch (error) {
+    console.error('[RATE LIMIT CLEANUP ERROR]', error);
+  }
+}
+
+// Run cleanup every hour
+setInterval(cleanupRateLimitRecords, 60 * 60 * 1000);

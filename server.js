@@ -66,6 +66,16 @@ import { createHash } from 'crypto';
 
 import { makeJwtAuth, insertEvent, freeBusy } from './gcal.js';
 import { init as initDb,  upsertFullClient, getFullClient, listFullClients, deleteClient, DB_PATH } from './db.js'; // SQLite-backed tenants
+import { 
+  authenticateApiKey, 
+  rateLimitMiddleware, 
+  requirePermission, 
+  requireTenantAccess,
+  validateAndSanitizeInput,
+  securityHeaders,
+  requestLogging,
+  errorHandler
+} from './middleware/security.js';
 await initDb();
 import { google } from 'googleapis';
 import cron from 'node-cron';
@@ -78,6 +88,11 @@ const app = express();
 
 // Trust proxy for rate limiting (required for Render)
 app.set('trust proxy', 1);
+
+// Enhanced security middleware
+app.use(securityHeaders);
+app.use(requestLogging);
+app.use(validateAndSanitizeInput());
 
 // Serve static files from public directory
 app.use(express.static('public'));
@@ -3279,6 +3294,140 @@ app.post('/admin/cost-alerts/:tenantKey', async (req, res) => {
   }
 });
 
+// Security endpoints
+// Create user account
+app.post('/admin/users/:tenantKey', authenticateApiKey, rateLimitMiddleware, requirePermission('user_management'), async (req, res) => {
+  try {
+    const { tenantKey } = req.params;
+    const { username, email, password, role = 'user', permissions = [] } = req.body;
+    
+    if (!username || !email || !password) {
+      return res.status(400).json({ error: 'Username, email, and password required' });
+    }
+    
+    const { createUserAccount, hashPassword } = await import('./db.js');
+    const passwordHash = await hashPassword(password);
+    
+    const user = await createUserAccount({
+      clientKey: tenantKey,
+      username,
+      email,
+      passwordHash,
+      role,
+      permissions
+    });
+    
+    console.log('[USER CREATED]', { 
+      tenantKey,
+      username,
+      email,
+      role,
+      requestedBy: req.ip
+    });
+    
+    res.json({
+      ok: true,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        permissions: user.permissions,
+        is_active: user.is_active,
+        created_at: user.created_at
+      },
+      message: 'User created successfully'
+    });
+  } catch (e) {
+    console.error('[USER CREATION ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Create API key
+app.post('/admin/api-keys/:tenantKey', authenticateApiKey, rateLimitMiddleware, requirePermission('api_management'), async (req, res) => {
+  try {
+    const { tenantKey } = req.params;
+    const { keyName, permissions = [], rateLimitPerMinute = 100, rateLimitPerHour = 1000, expiresAt = null } = req.body;
+    
+    if (!keyName) {
+      return res.status(400).json({ error: 'Key name required' });
+    }
+    
+    const { createApiKey, generateApiKey, hashApiKey } = await import('./db.js');
+    const apiKey = generateApiKey();
+    const keyHash = hashApiKey(apiKey);
+    
+    const keyData = await createApiKey({
+      clientKey: tenantKey,
+      keyName,
+      keyHash,
+      permissions,
+      rateLimitPerMinute,
+      rateLimitPerHour,
+      expiresAt
+    });
+    
+    console.log('[API KEY CREATED]', { 
+      tenantKey,
+      keyName,
+      permissions,
+      requestedBy: req.ip
+    });
+    
+    res.json({
+      ok: true,
+      apiKey: {
+        id: keyData.id,
+        keyName: keyData.key_name,
+        permissions: keyData.permissions,
+        rateLimitPerMinute: keyData.rate_limit_per_minute,
+        rateLimitPerHour: keyData.rate_limit_per_hour,
+        is_active: keyData.is_active,
+        expires_at: keyData.expires_at,
+        created_at: keyData.created_at
+      },
+      secretKey: apiKey, // Only returned once
+      message: 'API key created successfully'
+    });
+  } catch (e) {
+    console.error('[API KEY CREATION ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Get security events
+app.get('/admin/security-events/:tenantKey', authenticateApiKey, rateLimitMiddleware, requirePermission('security_view'), async (req, res) => {
+  try {
+    const { tenantKey } = req.params;
+    const { limit = 100, eventType, severity } = req.query;
+    
+    const { getSecurityEvents, getSecurityEventSummary } = await import('./db.js');
+    
+    const events = await getSecurityEvents(tenantKey, parseInt(limit), eventType, severity);
+    const summary = await getSecurityEventSummary(tenantKey, 7);
+    
+    console.log('[SECURITY EVENTS REQUESTED]', { 
+      tenantKey,
+      limit,
+      eventType,
+      severity,
+      requestedBy: req.ip
+    });
+    
+    res.json({
+      ok: true,
+      tenantKey,
+      events,
+      summary,
+      lastUpdated: new Date().toISOString()
+    });
+  } catch (e) {
+    console.error('[SECURITY EVENTS ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
 app.get('/admin/system-health', async (req, res) => {
   try {
     // Check API key
@@ -4325,6 +4474,10 @@ async function processVapiCallFromQueue(call) {
 setInterval(processRetryQueue, 5 * 60 * 1000); // Every 5 minutes
 setInterval(processCallQueue, 2 * 60 * 1000); // Every 2 minutes
 
+// Error handling middleware (must be last)
+app.use(errorHandler);
+
 app.listen(process.env.PORT ? Number(process.env.PORT) : 10000, '0.0.0.0', () => {
   console.log(`AI Booking MVP listening on http://localhost:${PORT} (DB: ${DB_PATH})`);
+  console.log(`Security middleware: Enhanced authentication and rate limiting enabled`);
 });

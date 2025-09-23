@@ -251,6 +251,71 @@ async function initPostgres() {
     CREATE INDEX IF NOT EXISTS ab_test_results_phone_idx ON ab_test_results(client_key, lead_phone);
     CREATE INDEX IF NOT EXISTS ab_test_results_outcome_idx ON ab_test_results(outcome);
 
+    CREATE TABLE IF NOT EXISTS user_accounts (
+      id BIGSERIAL PRIMARY KEY,
+      client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
+      username TEXT UNIQUE NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'user',
+      permissions JSONB DEFAULT '[]',
+      is_active BOOLEAN DEFAULT TRUE,
+      last_login TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      updated_at TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS user_accounts_client_idx ON user_accounts(client_key);
+    CREATE INDEX IF NOT EXISTS user_accounts_username_idx ON user_accounts(username);
+    CREATE INDEX IF NOT EXISTS user_accounts_email_idx ON user_accounts(email);
+    CREATE INDEX IF NOT EXISTS user_accounts_role_idx ON user_accounts(role);
+
+    CREATE TABLE IF NOT EXISTS api_keys (
+      id BIGSERIAL PRIMARY KEY,
+      client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
+      key_name TEXT NOT NULL,
+      key_hash TEXT UNIQUE NOT NULL,
+      permissions JSONB DEFAULT '[]',
+      rate_limit_per_minute INTEGER DEFAULT 100,
+      rate_limit_per_hour INTEGER DEFAULT 1000,
+      is_active BOOLEAN DEFAULT TRUE,
+      last_used TIMESTAMPTZ,
+      expires_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS api_keys_client_idx ON api_keys(client_key);
+    CREATE INDEX IF NOT EXISTS api_keys_hash_idx ON api_keys(key_hash);
+    CREATE INDEX IF NOT EXISTS api_keys_active_idx ON api_keys(is_active);
+
+    CREATE TABLE IF NOT EXISTS rate_limit_tracking (
+      id BIGSERIAL PRIMARY KEY,
+      client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
+      api_key_id BIGINT REFERENCES api_keys(id) ON DELETE CASCADE,
+      endpoint TEXT NOT NULL,
+      ip_address INET,
+      request_count INTEGER DEFAULT 1,
+      window_start TIMESTAMPTZ DEFAULT now(),
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS rate_limit_client_idx ON rate_limit_tracking(client_key);
+    CREATE INDEX IF NOT EXISTS rate_limit_api_key_idx ON rate_limit_tracking(api_key_id);
+    CREATE INDEX IF NOT EXISTS rate_limit_endpoint_idx ON rate_limit_tracking(endpoint);
+    CREATE INDEX IF NOT EXISTS rate_limit_window_idx ON rate_limit_tracking(window_start);
+
+    CREATE TABLE IF NOT EXISTS security_events (
+      id BIGSERIAL PRIMARY KEY,
+      client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
+      event_type TEXT NOT NULL,
+      event_severity TEXT NOT NULL DEFAULT 'info',
+      event_data JSONB,
+      ip_address INET,
+      user_agent TEXT,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS security_events_client_idx ON security_events(client_key);
+    CREATE INDEX IF NOT EXISTS security_events_type_idx ON security_events(event_type);
+    CREATE INDEX IF NOT EXISTS security_events_severity_idx ON security_events(event_severity);
+    CREATE INDEX IF NOT EXISTS security_events_created_idx ON security_events(created_at);
+
     CREATE TABLE IF NOT EXISTS idempotency (
       client_key TEXT NOT NULL,
       key TEXT NOT NULL,
@@ -1061,5 +1126,208 @@ export async function getABTestConversionRates(experimentId) {
     LEFT JOIN variant_conversions vc ON vt.variant_name = vc.variant_name
     ORDER BY conversion_rate DESC
   `, [experimentId]);
+  return rows;
+}
+
+// Security and Authentication functions
+export async function createUserAccount({ clientKey, username, email, passwordHash, role = 'user', permissions = [] }) {
+  const permissionsJson = JSON.stringify(permissions);
+  
+  const { rows } = await query(`
+    INSERT INTO user_accounts (client_key, username, email, password_hash, role, permissions)
+    VALUES ($1, $2, $3, $4, $5, $6)
+    RETURNING id, username, email, role, permissions, is_active, created_at
+  `, [clientKey, username, email, passwordHash, role, permissionsJson]);
+  
+  return rows[0];
+}
+
+export async function getUserByUsername(username) {
+  const { rows } = await query(`
+    SELECT u.*, t.display_name as client_name
+    FROM user_accounts u
+    JOIN tenants t ON u.client_key = t.client_key
+    WHERE u.username = $1 AND u.is_active = TRUE
+  `, [username]);
+  return rows[0];
+}
+
+export async function getUserByEmail(email) {
+  const { rows } = await query(`
+    SELECT u.*, t.display_name as client_name
+    FROM user_accounts u
+    JOIN tenants t ON u.client_key = t.client_key
+    WHERE u.email = $1 AND u.is_active = TRUE
+  `, [email]);
+  return rows[0];
+}
+
+export async function updateUserLastLogin(userId) {
+  await query(`
+    UPDATE user_accounts 
+    SET last_login = now(), updated_at = now()
+    WHERE id = $1
+  `, [userId]);
+}
+
+export async function getUsersByClient(clientKey) {
+  const { rows } = await query(`
+    SELECT id, username, email, role, permissions, is_active, last_login, created_at
+    FROM user_accounts 
+    WHERE client_key = $1
+    ORDER BY created_at DESC
+  `, [clientKey]);
+  return rows;
+}
+
+// API Key management functions
+export async function createApiKey({ clientKey, keyName, keyHash, permissions = [], rateLimitPerMinute = 100, rateLimitPerHour = 1000, expiresAt = null }) {
+  const permissionsJson = JSON.stringify(permissions);
+  
+  const { rows } = await query(`
+    INSERT INTO api_keys (client_key, key_name, key_hash, permissions, rate_limit_per_minute, rate_limit_per_hour, expires_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    RETURNING id, key_name, permissions, rate_limit_per_minute, rate_limit_per_hour, is_active, expires_at, created_at
+  `, [clientKey, keyName, keyHash, permissionsJson, rateLimitPerMinute, rateLimitPerHour, expiresAt]);
+  
+  return rows[0];
+}
+
+export async function getApiKeyByHash(keyHash) {
+  const { rows } = await query(`
+    SELECT ak.*, t.display_name as client_name
+    FROM api_keys ak
+    JOIN tenants t ON ak.client_key = t.client_key
+    WHERE ak.key_hash = $1 AND ak.is_active = TRUE
+    AND (ak.expires_at IS NULL OR ak.expires_at > now())
+  `, [keyHash]);
+  return rows[0];
+}
+
+export async function updateApiKeyLastUsed(keyId) {
+  await query(`
+    UPDATE api_keys 
+    SET last_used = now()
+    WHERE id = $1
+  `, [keyId]);
+}
+
+export async function getApiKeysByClient(clientKey) {
+  const { rows } = await query(`
+    SELECT id, key_name, permissions, rate_limit_per_minute, rate_limit_per_hour, is_active, last_used, expires_at, created_at
+    FROM api_keys 
+    WHERE client_key = $1
+    ORDER BY created_at DESC
+  `, [clientKey]);
+  return rows;
+}
+
+// Rate limiting functions
+export async function checkRateLimit({ clientKey, apiKeyId, endpoint, ipAddress, limitPerMinute, limitPerHour }) {
+  const now = new Date();
+  const minuteAgo = new Date(now.getTime() - 60 * 1000);
+  const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+  
+  // Check minute limit
+  const { rows: minuteRows } = await query(`
+    SELECT COUNT(*) as count FROM rate_limit_tracking 
+    WHERE client_key = $1 
+    AND (api_key_id = $2 OR api_key_id IS NULL)
+    AND endpoint = $3
+    AND (ip_address = $4 OR ip_address IS NULL)
+    AND window_start > $5
+  `, [clientKey, apiKeyId, endpoint, ipAddress, minuteAgo]);
+  
+  const minuteCount = parseInt(minuteRows[0]?.count || 0);
+  
+  // Check hour limit
+  const { rows: hourRows } = await query(`
+    SELECT COUNT(*) as count FROM rate_limit_tracking 
+    WHERE client_key = $1 
+    AND (api_key_id = $2 OR api_key_id IS NULL)
+    AND endpoint = $3
+    AND (ip_address = $4 OR ip_address IS NULL)
+    AND window_start > $5
+  `, [clientKey, apiKeyId, endpoint, ipAddress, hourAgo]);
+  
+  const hourCount = parseInt(hourRows[0]?.count || 0);
+  
+  const exceeded = minuteCount >= limitPerMinute || hourCount >= limitPerHour;
+  
+  return {
+    exceeded,
+    minuteCount,
+    hourCount,
+    minuteLimit: limitPerMinute,
+    hourLimit: limitPerHour,
+    remainingMinute: Math.max(0, limitPerMinute - minuteCount),
+    remainingHour: Math.max(0, limitPerHour - hourCount)
+  };
+}
+
+export async function recordRateLimitRequest({ clientKey, apiKeyId, endpoint, ipAddress }) {
+  await query(`
+    INSERT INTO rate_limit_tracking (client_key, api_key_id, endpoint, ip_address)
+    VALUES ($1, $2, $3, $4)
+  `, [clientKey, apiKeyId, endpoint, ipAddress]);
+}
+
+export async function cleanupOldRateLimitRecords(hoursOld = 24) {
+  await query(`
+    DELETE FROM rate_limit_tracking 
+    WHERE window_start < now() - interval '${hoursOld} hours'
+  `);
+}
+
+// Security event logging functions
+export async function logSecurityEvent({ clientKey, eventType, eventSeverity = 'info', eventData = null, ipAddress = null, userAgent = null }) {
+  const eventDataJson = eventData ? JSON.stringify(eventData) : null;
+  
+  const { rows } = await query(`
+    INSERT INTO security_events (client_key, event_type, event_severity, event_data, ip_address, user_agent)
+    VALUES ($1, $2, $3, $4, $5, $6)
+    RETURNING *
+  `, [clientKey, eventType, eventSeverity, eventDataJson, ipAddress, userAgent]);
+  
+  return rows[0];
+}
+
+export async function getSecurityEvents(clientKey, limit = 100, eventType = null, severity = null) {
+  let queryStr = `
+    SELECT * FROM security_events 
+    WHERE client_key = $1
+  `;
+  const params = [clientKey];
+  
+  if (eventType) {
+    queryStr += ` AND event_type = $${params.length + 1}`;
+    params.push(eventType);
+  }
+  
+  if (severity) {
+    queryStr += ` AND event_severity = $${params.length + 1}`;
+    params.push(severity);
+  }
+  
+  queryStr += ` ORDER BY created_at DESC LIMIT $${params.length + 1}`;
+  params.push(limit);
+  
+  const { rows } = await query(queryStr, params);
+  return rows;
+}
+
+export async function getSecurityEventSummary(clientKey, days = 7) {
+  const { rows } = await query(`
+    SELECT 
+      event_type,
+      event_severity,
+      COUNT(*) as event_count,
+      COUNT(DISTINCT ip_address) as unique_ips
+    FROM security_events 
+    WHERE client_key = $1 
+    AND created_at > now() - interval '${days} days'
+    GROUP BY event_type, event_severity
+    ORDER BY event_count DESC
+  `, [clientKey]);
   return rows;
 }
