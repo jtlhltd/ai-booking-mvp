@@ -2188,7 +2188,23 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
           scheduledFor: callScheduling.scheduledFor,
           priority: callScheduling.priority
         });
-        // TODO: Implement call queue/scheduling system
+        
+        // Add to call queue
+        const { addToCallQueue } = await import('./db.js');
+        await addToCallQueue({
+          clientKey: tenantKey,
+          leadPhone: from,
+          priority: callScheduling.priority || 5,
+          scheduledFor: callScheduling.scheduledFor,
+          callType: 'vapi_call',
+          callData: {
+            triggerType: isYes ? 'yes_response' : 'start_opt_in',
+            leadScore: existingLead?.score || 0,
+            leadStatus: existingLead?.status || 'new',
+            businessHours: isBusinessHours(client) ? 'within' : 'outside'
+          }
+        });
+        
         return res.send('OK');
       }
 
@@ -2903,6 +2919,54 @@ app.get('/admin/tenants/:tenantKey', async (req, res) => {
     });
   } catch (e) {
     console.error('[TENANT DETAIL ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Admin endpoint to get call queue status
+app.get('/admin/call-queue', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { getPendingCalls, getCallQueueByTenant } = await import('./db.js');
+    
+    // Get pending calls
+    const pendingCalls = await getPendingCalls(100);
+    
+    // Get queue by tenant
+    const tenants = await listFullClients();
+    const queueByTenant = {};
+    
+    for (const tenant of tenants) {
+      const tenantQueue = await getCallQueueByTenant(tenant.clientKey, 50);
+      queueByTenant[tenant.clientKey] = {
+        displayName: tenant.displayName,
+        queue: tenantQueue
+      };
+    }
+    
+    console.log('[CALL QUEUE STATUS]', { 
+      pendingCount: pendingCalls.length, 
+      tenantCount: Object.keys(queueByTenant).length,
+      requestedBy: req.ip 
+    });
+    
+    res.json({
+      ok: true,
+      pendingCalls,
+      queueByTenant,
+      summary: {
+        totalPending: pendingCalls.length,
+        tenantsWithQueue: Object.keys(queueByTenant).filter(key => queueByTenant[key].queue.length > 0).length,
+        lastUpdated: new Date().toISOString()
+      }
+    });
+  } catch (e) {
+    console.error('[CALL QUEUE STATUS ERROR]', e?.message || String(e));
     res.status(500).json({ ok: false, error: String(e?.message || e) });
   }
 });
@@ -3812,8 +3876,146 @@ async function processVapiRetry(retry) {
   }
 }
 
-// Start retry processor
+// Call queue processor - runs every 2 minutes to process pending calls
+async function processCallQueue() {
+  try {
+    const { getPendingCalls, updateCallQueueStatus } = await import('./db.js');
+    const pendingCalls = await getPendingCalls(20); // Process up to 20 calls at a time
+    
+    if (pendingCalls.length === 0) {
+      return;
+    }
+    
+    console.log('[CALL QUEUE PROCESSOR]', { pendingCount: pendingCalls.length });
+    
+    for (const call of pendingCalls) {
+      try {
+        // Mark as processing
+        await updateCallQueueStatus(call.id, 'processing');
+        
+        // Process the call based on type
+        if (call.call_type === 'vapi_call') {
+          await processVapiCallFromQueue(call);
+        }
+        
+        // Mark as completed
+        await updateCallQueueStatus(call.id, 'completed');
+        
+      } catch (callError) {
+        console.error('[CALL QUEUE PROCESSING ERROR]', {
+          callId: call.id,
+          error: callError.message
+        });
+        
+        // Mark as failed
+        await updateCallQueueStatus(call.id, 'failed');
+        
+        // Add to retry queue if it's a retryable error
+        const errorType = categorizeError({ message: callError.message });
+        if (['network', 'server_error', 'rate_limit'].includes(errorType)) {
+          const { addToRetryQueue } = await import('./db.js');
+          await addToRetryQueue({
+            clientKey: call.client_key,
+            leadPhone: call.lead_phone,
+            retryType: 'vapi_call',
+            retryReason: errorType,
+            retryData: call.call_data,
+            scheduledFor: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes later
+            retryAttempt: 1,
+            maxRetries: 3
+          });
+        }
+      }
+    }
+    
+  } catch (error) {
+    console.error('[CALL QUEUE PROCESSOR ERROR]', error);
+  }
+}
+
+// Process VAPI call from queue
+async function processVapiCallFromQueue(call) {
+  try {
+    const callData = call.call_data ? JSON.parse(call.call_data) : {};
+    const { client_key: clientKey, lead_phone: leadPhone } = call;
+    
+    // Get client configuration
+    const client = await getFullClient(clientKey);
+    if (!client) {
+      throw new Error('Client not found');
+    }
+    
+    // Get existing lead for context
+    const clients = await listFullClients();
+    const leads = clients.flatMap(c => c.leads || []);
+    const existingLead = leads.find(l => l.phone === leadPhone && l.tenantKey === clientKey);
+    
+    // Select optimal assistant
+    const assistantConfig = await selectOptimalAssistant({ 
+      client, 
+      existingLead, 
+      isYes: callData.triggerType === 'yes_response',
+      isStart: callData.triggerType === 'start_opt_in'
+    });
+    
+    // Generate assistant variables
+    const assistantVariables = await generateAssistantVariables({
+      client,
+      existingLead,
+      tenantKey: clientKey,
+      serviceForCall: existingLead?.service || '',
+      isYes: callData.triggerType === 'yes_response',
+      isStart: callData.triggerType === 'start_opt_in',
+      assistantConfig
+    });
+    
+    // Make VAPI call
+    const vapiResult = await makeVapiCall({
+      assistantId: assistantConfig.assistantId,
+      phoneNumberId: assistantConfig.phoneNumberId,
+      customerNumber: leadPhone,
+      maxDurationSeconds: 10,
+      metadata: {
+        tenantKey: clientKey,
+        leadPhone,
+        triggerType: callData.triggerType,
+        timestamp: new Date().toISOString(),
+        leadScore: callData.leadScore || 0,
+        leadStatus: callData.leadStatus || 'new',
+        businessHours: callData.businessHours || 'unknown',
+        retryAttempt: 0,
+        fromQueue: true,
+        queueId: call.id
+      },
+      assistantOverrides: {
+        variableValues: assistantVariables
+      }
+    });
+    
+    if (!vapiResult || vapiResult.error) {
+      throw new Error(vapiResult?.error || 'VAPI call failed');
+    }
+    
+    console.log('[QUEUE CALL SUCCESS]', {
+      queueId: call.id,
+      clientKey,
+      leadPhone,
+      callId: vapiResult.id,
+      priority: call.priority
+    });
+    
+  } catch (error) {
+    console.error('[QUEUE VAPI CALL ERROR]', {
+      queueId: call.id,
+      error: error.message
+    });
+    throw error;
+  }
+}
+
+// Start processors
 setInterval(processRetryQueue, 5 * 60 * 1000); // Every 5 minutes
+setInterval(processCallQueue, 2 * 60 * 1000); // Every 2 minutes
 
 app.listen(process.env.PORT ? Number(process.env.PORT) : 10000, '0.0.0.0', () => {
   console.log(`AI Booking MVP listening on http://localhost:${PORT} (DB: ${DB_PATH})`);

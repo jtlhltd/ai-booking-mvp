@@ -112,6 +112,24 @@ async function initPostgres() {
     CREATE INDEX IF NOT EXISTS retry_queue_status_idx ON retry_queue(status);
     CREATE INDEX IF NOT EXISTS retry_queue_phone_idx ON retry_queue(client_key, lead_phone);
 
+    CREATE TABLE IF NOT EXISTS call_queue (
+      id BIGSERIAL PRIMARY KEY,
+      client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
+      lead_phone TEXT NOT NULL,
+      priority INTEGER DEFAULT 5,
+      scheduled_for TIMESTAMPTZ NOT NULL,
+      call_type TEXT NOT NULL,
+      call_data JSONB,
+      status TEXT DEFAULT 'pending',
+      created_at TIMESTAMPTZ DEFAULT now(),
+      updated_at TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS call_queue_tenant_idx ON call_queue(client_key);
+    CREATE INDEX IF NOT EXISTS call_queue_scheduled_idx ON call_queue(scheduled_for);
+    CREATE INDEX IF NOT EXISTS call_queue_status_idx ON call_queue(status);
+    CREATE INDEX IF NOT EXISTS call_queue_priority_idx ON call_queue(priority);
+    CREATE INDEX IF NOT EXISTS call_queue_phone_idx ON call_queue(client_key, lead_phone);
+
     CREATE TABLE IF NOT EXISTS idempotency (
       client_key TEXT NOT NULL,
       key TEXT NOT NULL,
@@ -464,6 +482,65 @@ export async function getRetriesByPhone(clientKey, leadPhone, limit = 50) {
 export async function cleanupOldRetries(daysOld = 7) {
   await query(`
     DELETE FROM retry_queue 
+    WHERE created_at < now() - interval '${daysOld} days'
+    AND status IN ('completed', 'failed', 'cancelled')
+  `);
+}
+
+// Call queue functions
+export async function addToCallQueue({ clientKey, leadPhone, priority = 5, scheduledFor, callType, callData }) {
+  const callDataJson = callData ? JSON.stringify(callData) : null;
+  
+  const { rows } = await query(`
+    INSERT INTO call_queue (client_key, lead_phone, priority, scheduled_for, call_type, call_data, status)
+    VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+    RETURNING *
+  `, [clientKey, leadPhone, priority, scheduledFor, callType, callDataJson]);
+  
+  return rows[0];
+}
+
+export async function getPendingCalls(limit = 100) {
+  const { rows } = await query(`
+    SELECT * FROM call_queue 
+    WHERE status = 'pending' AND scheduled_for <= now()
+    ORDER BY priority ASC, scheduled_for ASC
+    LIMIT $1
+  `, [limit]);
+  return rows;
+}
+
+export async function updateCallQueueStatus(id, status) {
+  await query(`
+    UPDATE call_queue 
+    SET status = $2, updated_at = now()
+    WHERE id = $1
+  `, [id, status]);
+}
+
+export async function getCallQueueByTenant(clientKey, limit = 100) {
+  const { rows } = await query(`
+    SELECT * FROM call_queue 
+    WHERE client_key = $1 
+    ORDER BY scheduled_for ASC
+    LIMIT $2
+  `, [clientKey, limit]);
+  return rows;
+}
+
+export async function getCallQueueByPhone(clientKey, leadPhone, limit = 50) {
+  const { rows } = await query(`
+    SELECT * FROM call_queue 
+    WHERE client_key = $1 AND lead_phone = $2 
+    ORDER BY scheduled_for ASC
+    LIMIT $3
+  `, [clientKey, leadPhone, limit]);
+  return rows;
+}
+
+export async function cleanupOldCallQueue(daysOld = 7) {
+  await query(`
+    DELETE FROM call_queue 
     WHERE created_at < now() - interval '${daysOld} days'
     AND status IN ('completed', 'failed', 'cancelled')
   `);
