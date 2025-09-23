@@ -1048,12 +1048,12 @@ async function recordABTestOutcome({ clientKey, experimentName, leadPhone, outco
     }
     
     // Find the variant that was assigned to this lead across all experiments with this name
-    const { getABTestResults } = await import('./db.js');
+    const { getABTestIndividualResults } = await import('./db.js');
     let assignment = null;
     
     // Try each experiment variant to find the assignment
     for (const variant of experimentVariants) {
-      const results = await getABTestResults(variant.id);
+      const results = await getABTestIndividualResults(variant.id);
       assignment = results.find(result => 
         result.lead_phone === leadPhone && result.outcome === 'assigned'
       );

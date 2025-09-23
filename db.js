@@ -1103,6 +1103,24 @@ export async function getABTestResults(experimentId) {
   return rows;
 }
 
+export async function getABTestIndividualResults(experimentId) {
+  const { rows } = await query(`
+    SELECT 
+      id,
+      experiment_id,
+      client_key,
+      lead_phone,
+      variant_name,
+      outcome,
+      outcome_data,
+      created_at
+    FROM ab_test_results 
+    WHERE experiment_id = $1
+    ORDER BY created_at DESC
+  `, [experimentId]);
+  return rows;
+}
+
 export async function getABTestConversionRates(experimentId) {
   const { rows } = await query(`
     WITH variant_totals AS (
