@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Campaign Manager - AI Booking MVP</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .header {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 0.5rem;
+        }
+        
+        .subtitle {
+            color: #64748b;
+            font-size: 1.1rem;
+        }
+        
+        .campaign-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        .campaign-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+        }
+        
+        .card-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 1rem;
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-label {
+            display: block;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 0.5rem;
+        }
+        
+        .form-input,
+        .form-select,
+        .form-textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+        
+        .form-input:focus,
+        .form-select:focus,
+        .form-textarea:focus {
+            outline: none;
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+        
+        .form-textarea {
+            resize: vertical;
+            min-height: 120px;
+        }
+        
+        .btn {
+            background: #6366f1;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+        
+        .btn:hover {
+            background: #5b21b6;
+            transform: translateY(-2px);
+        }
+        
+        .btn-secondary {
+            background: #f8fafc;
+            color: #374151;
+            border: 1px solid #d1d5db;
+        }
+        
+        .btn-secondary:hover {
+            background: #f1f5f9;
+        }
+        
+        .btn-full {
+            width: 100%;
+        }
+        
+        .btn-success {
+            background: #10b981;
+        }
+        
+        .btn-success:hover {
+            background: #059669;
+        }
+        
+        .btn-warning {
+            background: #f59e0b;
+        }
+        
+        .btn-warning:hover {
+            background: #d97706;
+        }
+        
+        .btn-danger {
+            background: #ef4444;
+        }
+        
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+        
+        .campaigns-section {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+            margin-top: 2rem;
+        }
+        
+        .campaigns-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .campaigns-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        
+        .campaigns-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .campaigns-table th,
+        .campaigns-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .campaigns-table th {
+            background: #f8fafc;
+            font-weight: 600;
+            color: #374151;
+        }
+        
+        .campaigns-table tr:hover {
+            background: #f8fafc;
+        }
+        
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        
+        .status-draft {
+            background: #f3f4f6;
+            color: #374151;
+        }
+        
+        .status-scheduled {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        
+        .status-sending {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        
+        .status-sent {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .status-paused {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 0.8rem;
+        }
+        
+        .template-preview {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .template-preview h4 {
+            color: #374151;
+            margin-bottom: 0.5rem;
+        }
+        
+        .template-preview p {
+            color: #64748b;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 8px;
+            padding: 1rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #6366f1;
+            margin-bottom: 0.25rem;
+        }
+        
+        .stat-label {
+            color: #64748b;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        
+        @media (max-width: 768px) {
+            .campaign-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .container {
+                padding: 1rem;
+            }
+            
+            .title {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">📧 Email Campaign Manager</h1>
+            <p class="subtitle">Create, send, and track email campaigns to your prospects</p>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number" id="totalCampaigns">0</div>
+                <div class="stat-label">Total Campaigns</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="emailsSent">0</div>
+                <div class="stat-label">Emails Sent</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="openRate">0%</div>
+                <div class="stat-label">Open Rate</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="replyRate">0%</div>
+                <div class="stat-label">Reply Rate</div>
+            </div>
+        </div>
+        
+        <div class="campaign-grid">
+            <div class="campaign-card">
+                <h3 class="card-title">Create New Campaign</h3>
+                <form id="campaignForm">
+                    <div class="form-group">
+                        <label class="form-label">Campaign Name</label>
+                        <input type="text" class="form-input" id="campaignName" placeholder="e.g., Dental Practices Q1 2024" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Industry</label>
+                        <select class="form-select" id="campaignIndustry" required>
+                            <option value="">Select Industry</option>
+                            <option value="dental">🦷 Dental Practice</option>
+                            <option value="legal">⚖️ Law Firm</option>
+                            <option value="beauty">💄 Beauty Salon</option>
+                            <option value="medical">🏥 Medical Practice</option>
+                            <option value="fitness">💪 Fitness Studio</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Email Template</label>
+                        <select class="form-select" id="emailTemplate" required>
+                            <option value="">Select Template</option>
+                            <option value="cold-outreach">Cold Outreach</option>
+                            <option value="follow-up">Follow-up</option>
+                            <option value="demo-invite">Demo Invitation</option>
+                            <option value="case-study">Case Study</option>
+                            <option value="partnership">Partnership Proposal</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Subject Line</label>
+                        <input type="text" class="form-input" id="subjectLine" placeholder="e.g., 300% More Appointments for [Company]?" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Email Content</label>
+                        <textarea class="form-textarea" id="emailContent" placeholder="Enter your email content here..." required></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Send Schedule</label>
+                        <select class="form-select" id="sendSchedule">
+                            <option value="immediate">Send Immediately</option>
+                            <option value="scheduled">Schedule for Later</option>
+                            <option value="drip">Drip Campaign</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group" id="scheduleDateGroup" style="display: none;">
+                        <label class="form-label">Schedule Date & Time</label>
+                        <input type="datetime-local" class="form-input" id="scheduleDate">
+                    </div>
+                    
+                    <button type="submit" class="btn btn-full">🚀 Create Campaign</button>
+                </form>
+            </div>
+            
+            <div class="campaign-card">
+                <h3 class="card-title">Email Templates</h3>
+                <div class="template-preview">
+                    <h4>Cold Outreach Template</h4>
+                    <p><strong>Subject:</strong> 300% More Appointments for [Company]?</p>
+                    <p><strong>Preview:</strong> Hi [Name], I noticed [Company] has been growing - that's fantastic! But I'm curious: how many potential patients are you losing because they can't book appointments outside business hours?</p>
+                </div>
+                
+                <div class="template-preview">
+                    <h4>Follow-up Template</h4>
+                    <p><strong>Subject:</strong> Following up on [Company]'s booking challenges</p>
+                    <p><strong>Preview:</strong> Hi [Name], I wanted to follow up on my previous email about automating your appointment booking process. Are you still interested in learning how we can help?</p>
+                </div>
+                
+                <div class="template-preview">
+                    <h4>Demo Invitation Template</h4>
+                    <p><strong>Subject:</strong> Quick 15-minute demo for [Company]</p>
+                    <p><strong>Preview:</strong> Hi [Name], I'd love to show you how our AI booking system can help [Company] increase appointments by 300%. Would you be available for a quick 15-minute demo this week?</p>
+                </div>
+                
+                <button class="btn btn-secondary btn-full" onclick="loadTemplate()">📝 Load Template</button>
+            </div>
+        </div>
+        
+        <div class="campaigns-section">
+            <div class="campaigns-header">
+                <h3 class="campaigns-title">Email Campaigns</h3>
+                <button class="btn btn-secondary" onclick="refreshCampaigns()">Refresh</button>
+            </div>
+            <table class="campaigns-table">
+                <thead>
+                    <tr>
+                        <th>Campaign Name</th>
+                        <th>Industry</th>
+                        <th>Status</th>
+                        <th>Recipients</th>
+                        <th>Open Rate</th>
+                        <th>Reply Rate</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="campaignsTableBody">
+                    <!-- Campaigns will be populated by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <script>
+        // Sample campaigns data
+        const sampleCampaigns = [
+            {
+                id: 1,
+                name: "Dental Practices Q1 2024",
+                industry: "Dental",
+                status: "sent",
+                recipients: 150,
+                openRate: 24.5,
+                replyRate: 8.2,
+                created: "2024-01-15",
+                template: "cold-outreach"
+            },
+            {
+                id: 2,
+                name: "Legal Firms Follow-up",
+                industry: "Legal",
+                status: "sending",
+                recipients: 75,
+                openRate: 0,
+                replyRate: 0,
+                created: "2024-01-16",
+                template: "follow-up"
+            },
+            {
+                id: 3,
+                name: "Beauty Salons Demo Invites",
+                industry: "Beauty",
+                status: "scheduled",
+                recipients: 50,
+                openRate: 0,
+                replyRate: 0,
+                created: "2024-01-17",
+                template: "demo-invite"
+            },
+            {
+                id: 4,
+                name: "Partnership Proposals",
+                industry: "All",
+                status: "draft",
+                recipients: 0,
+                openRate: 0,
+                replyRate: 0,
+                created: "2024-01-18",
+                template: "partnership"
+            }
+        ];
+        
+        // Email templates
+        const emailTemplates = {
+            'cold-outreach': {
+                subject: '300% More Appointments for [Company]?',
+                content: `Hi [Name],
+
+I noticed [Company] has been growing - that's fantastic! 
+
+But I'm curious: how many potential patients are you losing because they can't book appointments outside business hours?
+
+Most [industry] businesses miss 40-60% of booking opportunities because:
+- Patients call when you're closed
+- Staff are busy with patients during calls
+- Manual scheduling creates errors
+
+Our AI booking system has helped practices like yours:
+✅ Increase bookings by 300%
+✅ Reduce no-shows by 50%
+✅ Free up staff time for patient care
+
+Would you be open to a 15-minute call to see how this could work for [Company]?
+
+Best regards,
+[Your Name]
+
+P.S. We're offering a free 30-day trial with no setup fees for the first 10 [industry] businesses this month.`
+            },
+            'follow-up': {
+                subject: 'Following up on [Company]\'s booking challenges',
+                content: `Hi [Name],
+
+I wanted to follow up on my previous email about automating your appointment booking process.
+
+Are you still interested in learning how we can help [Company] increase bookings by 300%?
+
+I'd love to schedule a quick 15-minute call to show you how our AI booking system works.
+
+Would you be available this week?
+
+Best regards,
+[Your Name]`
+            },
+            'demo-invite': {
+                subject: 'Quick 15-minute demo for [Company]',
+                content: `Hi [Name],
+
+I'd love to show you how our AI booking system can help [Company] increase appointments by 300%.
+
+Would you be available for a quick 15-minute demo this week?
+
+I can show you:
+✅ How the AI handles customer inquiries
+✅ Integration with your existing calendar
+✅ Real-time analytics and reporting
+✅ ROI calculator for your business
+
+What day works best for you?
+
+Best regards,
+[Your Name]`
+            },
+            'case-study': {
+                subject: 'How [Similar Company] increased bookings by 300%',
+                content: `Hi [Name],
+
+I thought you'd be interested in this case study about [Similar Company], a [industry] business similar to [Company].
+
+They implemented our AI booking system and saw:
+✅ 300% increase in appointment bookings
+✅ 50% reduction in no-shows
+✅ 10+ hours saved per week
+✅ Improved customer satisfaction
+
+Would you like to see how this could work for [Company]?
+
+Best regards,
+[Your Name]`
+            },
+            'partnership': {
+                subject: 'Partnership Opportunity - AI Booking Integration',
+                content: `Hi [Name],
+
+I'm reaching out about a potential partnership between AI Booking MVP and [Company].
+
+We've developed an AI-powered booking system that integrates seamlessly with [Company]'s software. Our clients are seeing:
+- 300% increase in bookings
+- 50% reduction in no-shows
+- 24/7 appointment availability
+
+We're looking for integration partners who can offer this to their existing customer base. In return, we offer:
+✅ White-label solution
+✅ Revenue sharing (20% of bookings)
+✅ Technical support
+✅ Marketing materials
+
+Would you be interested in a 30-minute call to discuss this opportunity?
+
+Best regards,
+[Your Name]`
+            }
+        };
+        
+        // Initialize form handlers
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('campaignForm').addEventListener('submit', handleCampaignSubmit);
+            document.getElementById('sendSchedule').addEventListener('change', handleScheduleChange);
+            document.getElementById('emailTemplate').addEventListener('change', handleTemplateChange);
+            
+            updateStats();
+            populateCampaignsTable();
+        });
+        
+        // Handle campaign form submission
+        function handleCampaignSubmit(e) {
+            e.preventDefault();
+            
+            const campaignData = {
+                name: document.getElementById('campaignName').value,
+                industry: document.getElementById('campaignIndustry').value,
+                template: document.getElementById('emailTemplate').value,
+                subject: document.getElementById('subjectLine').value,
+                content: document.getElementById('emailContent').value,
+                schedule: document.getElementById('sendSchedule').value,
+                scheduleDate: document.getElementById('scheduleDate').value
+            };
+            
+            // Validate required fields
+            if (!campaignData.name || !campaignData.industry || !campaignData.template || !campaignData.subject || !campaignData.content) {
+                alert('Please fill in all required fields');
+                return;
+            }
+            
+            // Create campaign
+            createCampaign(campaignData);
+        }
+        
+        // Handle schedule change
+        function handleScheduleChange(e) {
+            const scheduleDateGroup = document.getElementById('scheduleDateGroup');
+            if (e.target.value === 'scheduled') {
+                scheduleDateGroup.style.display = 'block';
+            } else {
+                scheduleDateGroup.style.display = 'none';
+            }
+        }
+        
+        // Handle template change
+        function handleTemplateChange(e) {
+            const template = emailTemplates[e.target.value];
+            if (template) {
+                document.getElementById('subjectLine').value = template.subject;
+                document.getElementById('emailContent').value = template.content;
+            }
+        }
+        
+        // Create campaign
+        function createCampaign(campaignData) {
+            const newCampaign = {
+                id: Date.now(),
+                name: campaignData.name,
+                industry: campaignData.industry,
+                status: campaignData.schedule === 'immediate' ? 'sending' : 'draft',
+                recipients: 0,
+                openRate: 0,
+                replyRate: 0,
+                created: new Date().toISOString().split('T')[0],
+                template: campaignData.template
+            };
+            
+            sampleCampaigns.push(newCampaign);
+            populateCampaignsTable();
+            updateStats();
+            
+            // Reset form
+            document.getElementById('campaignForm').reset();
+            document.getElementById('scheduleDateGroup').style.display = 'none';
+            
+            alert('Campaign created successfully!');
+        }
+        
+        // Load template
+        function loadTemplate() {
+            const template = document.getElementById('emailTemplate').value;
+            if (template) {
+                handleTemplateChange({ target: { value: template } });
+            } else {
+                alert('Please select a template first');
+            }
+        }
+        
+        // Update statistics
+        function updateStats() {
+            const totalCampaigns = sampleCampaigns.length;
+            const emailsSent = sampleCampaigns.reduce((sum, campaign) => sum + campaign.recipients, 0);
+            const totalOpens = sampleCampaigns.reduce((sum, campaign) => sum + (campaign.recipients * campaign.openRate / 100), 0);
+            const totalReplies = sampleCampaigns.reduce((sum, campaign) => sum + (campaign.recipients * campaign.replyRate / 100), 0);
+            
+            const openRate = emailsSent > 0 ? (totalOpens / emailsSent * 100).toFixed(1) : 0;
+            const replyRate = emailsSent > 0 ? (totalReplies / emailsSent * 100).toFixed(1) : 0;
+            
+            document.getElementById('totalCampaigns').textContent = totalCampaigns;
+            document.getElementById('emailsSent').textContent = emailsSent;
+            document.getElementById('openRate').textContent = openRate + '%';
+            document.getElementById('replyRate').textContent = replyRate + '%';
+        }
+        
+        // Populate campaigns table
+        function populateCampaignsTable() {
+            const tbody = document.getElementById('campaignsTableBody');
+            tbody.innerHTML = '';
+            
+            sampleCampaigns.forEach(campaign => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${campaign.name}</td>
+                    <td>${campaign.industry}</td>
+                    <td><span class="status-badge status-${campaign.status}">${campaign.status.charAt(0).toUpperCase() + campaign.status.slice(1)}</span></td>
+                    <td>${campaign.recipients}</td>
+                    <td>${campaign.openRate}%</td>
+                    <td>${campaign.replyRate}%</td>
+                    <td>${campaign.created}</td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn btn-small btn-secondary" onclick="viewCampaign(${campaign.id})">View</button>
+                            <button class="btn btn-small ${getActionButtonClass(campaign.status)}" onclick="performAction(${campaign.id}, '${campaign.status}')">${getActionButtonText(campaign.status)}</button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+        
+        // Get action button class
+        function getActionButtonClass(status) {
+            switch (status) {
+                case 'draft': return 'btn-success';
+                case 'scheduled': return 'btn-warning';
+                case 'sending': return 'btn-secondary';
+                case 'sent': return 'btn-secondary';
+                case 'paused': return 'btn-success';
+                default: return 'btn-secondary';
+            }
+        }
+        
+        // Get action button text
+        function getActionButtonText(status) {
+            switch (status) {
+                case 'draft': return 'Send';
+                case 'scheduled': return 'Edit';
+                case 'sending': return 'Pause';
+                case 'sent': return 'View';
+                case 'paused': return 'Resume';
+                default: return 'View';
+            }
+        }
+        
+        // Perform action
+        function performAction(campaignId, status) {
+            const campaign = sampleCampaigns.find(c => c.id === campaignId);
+            if (!campaign) return;
+            
+            switch (status) {
+                case 'draft':
+                    campaign.status = 'sending';
+                    campaign.recipients = Math.floor(Math.random() * 100) + 50;
+                    break;
+                case 'scheduled':
+                    alert('Edit campaign functionality would open here');
+                    break;
+                case 'sending':
+                    campaign.status = 'paused';
+                    break;
+                case 'sent':
+                    alert('View campaign details would open here');
+                    break;
+                case 'paused':
+                    campaign.status = 'sending';
+                    break;
+            }
+            
+            populateCampaignsTable();
+            updateStats();
+        }
+        
+        // View campaign
+        function viewCampaign(campaignId) {
+            const campaign = sampleCampaigns.find(c => c.id === campaignId);
+            if (campaign) {
+                alert(`Campaign Details:\n\nName: ${campaign.name}\nIndustry: ${campaign.industry}\nStatus: ${campaign.status}\nRecipients: ${campaign.recipients}\nOpen Rate: ${campaign.openRate}%\nReply Rate: ${campaign.replyRate}%`);
+            }
+        }
+        
+        // Refresh campaigns
+        function refreshCampaigns() {
+            populateCampaignsTable();
+            updateStats();
+        }
+    </script>
+</body>
+</html>

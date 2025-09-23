@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lead Generator - AI Booking MVP</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .header {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 0.5rem;
+        }
+        
+        .subtitle {
+            color: #64748b;
+            font-size: 1.1rem;
+        }
+        
+        .generator-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        .generator-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+        }
+        
+        .card-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 1rem;
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-label {
+            display: block;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 0.5rem;
+        }
+        
+        .form-input,
+        .form-select,
+        .form-textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+        
+        .form-input:focus,
+        .form-select:focus,
+        .form-textarea:focus {
+            outline: none;
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+        
+        .form-textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+        
+        .btn {
+            background: #6366f1;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+        
+        .btn:hover {
+            background: #5b21b6;
+            transform: translateY(-2px);
+        }
+        
+        .btn-secondary {
+            background: #f8fafc;
+            color: #374151;
+            border: 1px solid #d1d5db;
+        }
+        
+        .btn-secondary:hover {
+            background: #f1f5f9;
+        }
+        
+        .btn-full {
+            width: 100%;
+        }
+        
+        .results-section {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+            margin-top: 2rem;
+        }
+        
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .results-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        
+        .results-count {
+            background: #6366f1;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        
+        .leads-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .leads-table th,
+        .leads-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .leads-table th {
+            background: #f8fafc;
+            font-weight: 600;
+            color: #374151;
+        }
+        
+        .leads-table tr:hover {
+            background: #f8fafc;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 0.8rem;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #64748b;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #6366f1;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 768px) {
+            .generator-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .container {
+                padding: 1rem;
+            }
+            
+            .title {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">🎯 Lead Generator</h1>
+            <p class="subtitle">Find and qualify potential clients in your target industries</p>
+        </div>
+        
+        <div class="generator-grid">
+            <div class="generator-card">
+                <h3 class="card-title">Search Criteria</h3>
+                <form id="leadSearchForm">
+                    <div class="form-group">
+                        <label class="form-label">Industry</label>
+                        <select class="form-select" id="industry" required>
+                            <option value="">Select Industry</option>
+                            <option value="dental">🦷 Dental Practice</option>
+                            <option value="legal">⚖️ Law Firm</option>
+                            <option value="beauty">💄 Beauty Salon</option>
+                            <option value="medical">🏥 Medical Practice</option>
+                            <option value="fitness">💪 Fitness Studio</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Location</label>
+                        <input type="text" class="form-input" id="location" placeholder="e.g., London, Manchester, Birmingham">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Company Size</label>
+                        <select class="form-select" id="companySize">
+                            <option value="">Any Size</option>
+                            <option value="small">Small (1-10 employees)</option>
+                            <option value="medium">Medium (11-50 employees)</option>
+                            <option value="large">Large (50+ employees)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Keywords</label>
+                        <input type="text" class="form-input" id="keywords" placeholder="e.g., appointment booking, scheduling software">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Search Sources</label>
+                        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                            <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" value="google" checked> Google Maps
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" value="linkedin" checked> LinkedIn
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" value="yellowpages" checked> Yellow Pages
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" value="industry-directories" checked> Industry Directories
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-full">🔍 Generate Leads</button>
+                </form>
+            </div>
+            
+            <div class="generator-card">
+                <h3 class="card-title">Lead Qualification</h3>
+                <form id="qualificationForm">
+                    <div class="form-group">
+                        <label class="form-label">Decision Maker Title</label>
+                        <input type="text" class="form-input" id="decisionMaker" placeholder="e.g., Practice Manager, Office Manager">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Pain Points to Look For</label>
+                        <textarea class="form-textarea" id="painPoints" placeholder="e.g., manual scheduling, missed appointments, staff time on phone calls"></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Budget Range</label>
+                        <select class="form-select" id="budgetRange">
+                            <option value="">Any Budget</option>
+                            <option value="low">£100-500/month</option>
+                            <option value="medium">£500-1500/month</option>
+                            <option value="high">£1500+/month</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Technology Adoption</label>
+                        <select class="form-select" id="techAdoption">
+                            <option value="">Any Level</option>
+                            <option value="early">Early Adopters</option>
+                            <option value="mainstream">Mainstream</option>
+                            <option value="laggards">Late Adopters</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Competitors to Avoid</label>
+                        <input type="text" class="form-input" id="competitors" placeholder="e.g., Acuity, Calendly, SimplyBook">
+                    </div>
+                    
+                    <button type="submit" class="btn btn-full">✅ Qualify Leads</button>
+                </form>
+            </div>
+        </div>
+        
+        <div class="results-section" id="resultsSection" style="display: none;">
+            <div class="results-header">
+                <h3 class="results-title">Generated Leads</h3>
+                <span class="results-count" id="resultsCount">0 leads</span>
+            </div>
+            <div id="resultsContent">
+                <table class="leads-table">
+                    <thead>
+                        <tr>
+                            <th>Company</th>
+                            <th>Contact</th>
+                            <th>Industry</th>
+                            <th>Location</th>
+                            <th>Score</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leadsTableBody">
+                        <!-- Leads will be populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Sample lead data
+        const sampleLeads = {
+            dental: [
+                {
+                    company: "Bright Smile Dental",
+                    contact: "Dr. Sarah Johnson",
+                    industry: "Dental",
+                    location: "London",
+                    score: 95,
+                    email: "sarah@brightsmile.com",
+                    phone: "+44 20 7123 4567",
+                    website: "https://brightsmile.com",
+                    employees: "15",
+                    painPoints: ["Manual scheduling", "Missed appointments", "Staff time on calls"]
+                },
+                {
+                    company: "Family Dental Care",
+                    contact: "Dr. Michael Chen",
+                    industry: "Dental",
+                    location: "Manchester",
+                    score: 88,
+                    email: "michael@familydental.com",
+                    phone: "+44 20 7123 4568",
+                    website: "https://familydental.com",
+                    employees: "25",
+                    painPoints: ["Double bookings", "Patient communication"]
+                },
+                {
+                    company: "Modern Dentistry",
+                    contact: "Dr. Emma Williams",
+                    industry: "Dental",
+                    location: "Birmingham",
+                    score: 92,
+                    email: "emma@moderndentistry.com",
+                    phone: "+44 20 7123 4569",
+                    website: "https://moderndentistry.com",
+                    employees: "20",
+                    painPoints: ["Appointment management", "Patient reminders"]
+                }
+            ],
+            legal: [
+                {
+                    company: "Thompson & Associates",
+                    contact: "James Thompson",
+                    industry: "Legal",
+                    location: "London",
+                    score: 90,
+                    email: "james@thompsonlaw.com",
+                    phone: "+44 20 7123 4570",
+                    website: "https://thompsonlaw.com",
+                    employees: "12",
+                    painPoints: ["Client intake", "Consultation scheduling"]
+                },
+                {
+                    company: "Davis Legal Group",
+                    contact: "Sarah Davis",
+                    industry: "Legal",
+                    location: "Manchester",
+                    score: 85,
+                    email: "sarah@davislegal.com",
+                    phone: "+44 20 7123 4571",
+                    website: "https://davislegal.com",
+                    employees: "18",
+                    painPoints: ["Lead qualification", "Follow-up automation"]
+                }
+            ],
+            beauty: [
+                {
+                    company: "Glamour Studio",
+                    contact: "Lisa Martinez",
+                    industry: "Beauty",
+                    location: "London",
+                    score: 87,
+                    email: "lisa@glamourstudio.com",
+                    phone: "+44 20 7123 4573",
+                    website: "https://glamourstudio.com",
+                    employees: "8",
+                    painPoints: ["Double bookings", "Customer retention"]
+                },
+                {
+                    company: "Beauty Haven",
+                    contact: "Anna Taylor",
+                    industry: "Beauty",
+                    location: "Manchester",
+                    score: 93,
+                    email: "anna@beautyhaven.com",
+                    phone: "+44 20 7123 4574",
+                    website: "https://beautyhaven.com",
+                    employees: "12",
+                    painPoints: ["Appointment scheduling", "Staff efficiency"]
+                }
+            ]
+        };
+        
+        // Initialize form handlers
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('leadSearchForm').addEventListener('submit', handleLeadSearch);
+            document.getElementById('qualificationForm').addEventListener('submit', handleQualification);
+        });
+        
+        // Handle lead search
+        function handleLeadSearch(e) {
+            e.preventDefault();
+            
+            const industry = document.getElementById('industry').value;
+            const location = document.getElementById('location').value;
+            const companySize = document.getElementById('companySize').value;
+            const keywords = document.getElementById('keywords').value;
+            
+            if (!industry) {
+                alert('Please select an industry');
+                return;
+            }
+            
+            // Show loading
+            showLoading();
+            
+            // Simulate API call
+            setTimeout(() => {
+                generateLeads(industry, location, companySize, keywords);
+            }, 2000);
+        }
+        
+        // Handle qualification
+        function handleQualification(e) {
+            e.preventDefault();
+            
+            const decisionMaker = document.getElementById('decisionMaker').value;
+            const painPoints = document.getElementById('painPoints').value;
+            const budgetRange = document.getElementById('budgetRange').value;
+            const techAdoption = document.getElementById('techAdoption').value;
+            const competitors = document.getElementById('competitors').value;
+            
+            // Show loading
+            showLoading();
+            
+            // Simulate qualification
+            setTimeout(() => {
+                qualifyLeads(decisionMaker, painPoints, budgetRange, techAdoption, competitors);
+            }, 1500);
+        }
+        
+        // Show loading state
+        function showLoading() {
+            const resultsSection = document.getElementById('resultsSection');
+            const resultsContent = document.getElementById('resultsContent');
+            
+            resultsSection.style.display = 'block';
+            resultsContent.innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Generating leads...</p>
+                </div>
+            `;
+        }
+        
+        // Generate leads
+        function generateLeads(industry, location, companySize, keywords) {
+            const leads = sampleLeads[industry] || [];
+            const filteredLeads = leads.filter(lead => {
+                if (location && !lead.location.toLowerCase().includes(location.toLowerCase())) {
+                    return false;
+                }
+                return true;
+            });
+            
+            displayLeads(filteredLeads);
+        }
+        
+        // Qualify leads
+        function qualifyLeads(decisionMaker, painPoints, budgetRange, techAdoption, competitors) {
+            const industry = document.getElementById('industry').value;
+            const leads = sampleLeads[industry] || [];
+            
+            // Apply qualification criteria
+            const qualifiedLeads = leads.map(lead => {
+                let score = lead.score;
+                
+                // Adjust score based on qualification criteria
+                if (decisionMaker && lead.contact.includes(decisionMaker)) {
+                    score += 5;
+                }
+                
+                if (painPoints && lead.painPoints.some(point => 
+                    painPoints.toLowerCase().includes(point.toLowerCase()))) {
+                    score += 10;
+                }
+                
+                return { ...lead, score: Math.min(100, score) };
+            }).filter(lead => lead.score >= 70); // Only show qualified leads
+            
+            displayLeads(qualifiedLeads);
+        }
+        
+        // Display leads
+        function displayLeads(leads) {
+            const resultsSection = document.getElementById('resultsSection');
+            const resultsCount = document.getElementById('resultsCount');
+            const resultsContent = document.getElementById('resultsContent');
+            
+            resultsSection.style.display = 'block';
+            resultsCount.textContent = `${leads.length} leads`;
+            
+            if (leads.length === 0) {
+                resultsContent.innerHTML = `
+                    <div class="loading">
+                        <p>No leads found matching your criteria. Try adjusting your search parameters.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            const tableBody = document.createElement('tbody');
+            tableBody.id = 'leadsTableBody';
+            
+            leads.forEach(lead => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${lead.company}</td>
+                    <td>${lead.contact}</td>
+                    <td>${lead.industry}</td>
+                    <td>${lead.location}</td>
+                    <td>
+                        <span style="background: ${getScoreColor(lead.score)}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem;">
+                            ${lead.score}%
+                        </span>
+                    </td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn btn-small btn-secondary" onclick="viewLead('${lead.email}')">View</button>
+                            <button class="btn btn-small" onclick="addToCRM('${lead.email}')">Add to CRM</button>
+                            <button class="btn btn-small btn-secondary" onclick="sendEmail('${lead.email}')">Email</button>
+                        </div>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+            
+            resultsContent.innerHTML = `
+                <table class="leads-table">
+                    <thead>
+                        <tr>
+                            <th>Company</th>
+                            <th>Contact</th>
+                            <th>Industry</th>
+                            <th>Location</th>
+                            <th>Score</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                </table>
+            `;
+            
+            resultsContent.querySelector('table').appendChild(tableBody);
+        }
+        
+        // Get score color
+        function getScoreColor(score) {
+            if (score >= 90) return '#10b981';
+            if (score >= 80) return '#3b82f6';
+            if (score >= 70) return '#f59e0b';
+            return '#ef4444';
+        }
+        
+        // Action functions
+        function viewLead(email) {
+            const lead = findLeadByEmail(email);
+            if (lead) {
+                alert(`Lead Details:\n\nCompany: ${lead.company}\nContact: ${lead.contact}\nEmail: ${lead.email}\nPhone: ${lead.phone}\nWebsite: ${lead.website}\nEmployees: ${lead.employees}\nPain Points: ${lead.painPoints.join(', ')}`);
+            }
+        }
+        
+        function addToCRM(email) {
+            alert(`Lead ${email} added to CRM successfully!`);
+        }
+        
+        function sendEmail(email) {
+            alert(`Opening email composer for ${email}...`);
+        }
+        
+        function findLeadByEmail(email) {
+            for (const industry in sampleLeads) {
+                const lead = sampleLeads[industry].find(l => l.email === email);
+                if (lead) return lead;
+            }
+            return null;
+        }
+    </script>
+</body>
+</html>
