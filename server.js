@@ -5926,6 +5926,197 @@ async function processVapiCallFromQueue(call) {
 setInterval(processRetryQueue, 5 * 60 * 1000); // Every 5 minutes
 setInterval(processCallQueue, 2 * 60 * 1000); // Every 2 minutes
 
+// VAPI Management Endpoints
+// Create VAPI Assistant
+app.post('/admin/vapi/assistants', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const { name, model, voice, firstMessage, systemMessage, maxDurationSeconds, endCallMessage, endCallPhrases, recordingEnabled, voicemailDetectionEnabled, backgroundSound } = req.body;
+    
+    if (!name || !model || !voice || !firstMessage || !systemMessage) {
+      return res.status(400).json({ error: 'Name, model, voice, firstMessage, and systemMessage are required' });
+    }
+    
+    console.log('[VAPI ASSISTANT CREATION REQUESTED]', { 
+      name,
+      requestedBy: req.ip
+    });
+    
+    // Create assistant via VAPI API
+    const vapiResponse = await fetch('https://api.vapi.ai/assistant', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.VAPI_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        name,
+        model,
+        voice,
+        firstMessage,
+        systemMessage,
+        maxDurationSeconds: maxDurationSeconds || 120,
+        endCallMessage: endCallMessage || 'Thank you for your time. Have a great day!',
+        endCallPhrases: endCallPhrases || ['goodbye', 'bye', 'thank you'],
+        recordingEnabled: recordingEnabled !== false,
+        voicemailDetectionEnabled: voicemailDetectionEnabled !== false,
+        backgroundSound: backgroundSound || 'office'
+      })
+    });
+    
+    if (!vapiResponse.ok) {
+      const errorText = await vapiResponse.text();
+      throw new Error(`VAPI API error: ${vapiResponse.status} ${errorText}`);
+    }
+    
+    const assistant = await vapiResponse.json();
+    
+    console.log('[VAPI ASSISTANT CREATED]', { 
+      assistantId: assistant.id,
+      name: assistant.name,
+      requestedBy: req.ip
+    });
+    
+    res.json({
+      ok: true,
+      assistant,
+      message: 'VAPI assistant created successfully'
+    });
+  } catch (e) {
+    console.error('[VAPI ASSISTANT CREATION ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Create VAPI Phone Number
+app.post('/admin/vapi/phone-numbers', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const { assistantId, number } = req.body;
+    
+    if (!assistantId) {
+      return res.status(400).json({ error: 'Assistant ID is required' });
+    }
+    
+    console.log('[VAPI PHONE NUMBER CREATION REQUESTED]', { 
+      assistantId,
+      number,
+      requestedBy: req.ip
+    });
+    
+    // Create phone number via VAPI API
+    const vapiResponse = await fetch('https://api.vapi.ai/phone-number', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.VAPI_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        assistantId,
+        number: number || null // Let VAPI assign a number if none provided
+      })
+    });
+    
+    if (!vapiResponse.ok) {
+      const errorText = await vapiResponse.text();
+      throw new Error(`VAPI API error: ${vapiResponse.status} ${errorText}`);
+    }
+    
+    const phoneNumber = await vapiResponse.json();
+    
+    console.log('[VAPI PHONE NUMBER CREATED]', { 
+      phoneNumberId: phoneNumber.id,
+      number: phoneNumber.number,
+      assistantId,
+      requestedBy: req.ip
+    });
+    
+    res.json({
+      ok: true,
+      phoneNumber,
+      message: 'VAPI phone number created successfully'
+    });
+  } catch (e) {
+    console.error('[VAPI PHONE NUMBER CREATION ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Make VAPI Call
+app.post('/admin/vapi/calls', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const { assistantId, phoneNumberId, customerNumber, customerName } = req.body;
+    
+    if (!assistantId || !customerNumber) {
+      return res.status(400).json({ error: 'Assistant ID and customer number are required' });
+    }
+    
+    console.log('[VAPI CALL REQUESTED]', { 
+      assistantId,
+      phoneNumberId,
+      customerNumber,
+      customerName,
+      requestedBy: req.ip
+    });
+    
+    // Make call via VAPI API
+    const vapiResponse = await fetch('https://api.vapi.ai/call', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.VAPI_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        assistantId,
+        phoneNumberId,
+        customer: {
+          number: customerNumber,
+          name: customerName || 'Customer'
+        }
+      })
+    });
+    
+    if (!vapiResponse.ok) {
+      const errorText = await vapiResponse.text();
+      throw new Error(`VAPI API error: ${vapiResponse.status} ${errorText}`);
+    }
+    
+    const call = await vapiResponse.json();
+    
+    console.log('[VAPI CALL INITIATED]', { 
+      callId: call.id,
+      assistantId,
+      customerNumber,
+      requestedBy: req.ip
+    });
+    
+    res.json({
+      ok: true,
+      call,
+      message: 'VAPI call initiated successfully'
+    });
+  } catch (e) {
+    console.error('[VAPI CALL ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
 // Error handling middleware (must be last)
 app.use(errorHandler);
 
