@@ -1,4 +1,6 @@
 // Decision Maker Contact Finder - Find actual decision maker contact details
+import axios from 'axios';
+
 export class DecisionMakerContactFinder {
     constructor() {
         this.decisionMakerPatterns = {

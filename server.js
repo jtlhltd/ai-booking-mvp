@@ -6119,6 +6119,7 @@ app.post('/admin/vapi/calls', async (req, res) => {
 
 // Import real UK business search (ESM)
 import RealUKBusinessSearch from './real-uk-business-search.js';
+import DecisionMakerContactFinder from './decision-maker-contact-finder.js';
 
 // UK Business Search endpoint with real APIs
 app.post('/api/uk-business-search', async (req, res) => {
@@ -6265,6 +6266,48 @@ app.post('/api/uk-business-search', async (req, res) => {
     console.error('[UK BUSINESS SEARCH ERROR]', error);
     res.status(500).json({ 
       error: 'Failed to search businesses',
+      message: error.message 
+    });
+  }
+});
+
+// Decision Maker Contact Research endpoint
+app.post('/api/decision-maker-contacts', async (req, res) => {
+  try {
+    const { business, industry, targetRole } = req.body;
+    
+    if (!business || !industry || !targetRole) {
+      return res.status(400).json({ 
+        error: 'Business, industry, and targetRole are required' 
+      });
+    }
+    
+    console.log(`[DECISION MAKER CONTACT] Researching contacts for ${targetRole} at ${business.name}`);
+    
+    // Initialize contact finder
+    const contactFinder = new DecisionMakerContactFinder();
+    
+    // Find decision maker contacts
+    const contacts = await contactFinder.findDecisionMakerContacts(business, industry, targetRole);
+    
+    // Generate outreach strategy
+    const strategy = contactFinder.generateOutreachStrategy(contacts, business, industry, targetRole);
+    
+    console.log(`[DECISION MAKER CONTACT] Found ${contacts.primary.length} primary, ${contacts.secondary.length} secondary, ${contacts.gatekeeper.length} gatekeeper contacts`);
+    
+    res.json({
+      success: true,
+      contacts,
+      strategy,
+      business,
+      industry,
+      targetRole,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[DECISION MAKER CONTACT ERROR]', error);
+    res.status(500).json({ 
+      error: 'Failed to research decision maker contacts',
       message: error.message 
     });
   }
