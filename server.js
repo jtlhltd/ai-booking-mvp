@@ -1148,9 +1148,8 @@ async function determineCallScheduling({ tenantKey, from, isYes, isStart, existi
 // Get count of recent calls for rate limiting
 async function getRecentCallsCount(tenantKey, minutesBack = 60) {
   try {
-    // This would query the calls database
-    // For now, return 0 (no rate limiting)
-    return 0;
+    const { getRecentCallsCount } = await import('./db.js');
+    return await getRecentCallsCount(tenantKey, minutesBack);
   } catch (error) {
     console.error('[RECENT CALLS COUNT ERROR]', error);
     return 0;
@@ -1360,8 +1359,8 @@ async function resolveTenantKeyFromInbound({ to, messagingServiceSid }) {
     return selected.clientKey;
   } catch (error) {
     console.log('[TENANT RESOLVE FAIL]', { to, toE164, messagingServiceSid, error: error.message });
-    return null;
-  }
+  return null;
+}
 }
 
 // Simple {{var}} template renderer for SMS bodies
@@ -2240,9 +2239,9 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
       // If we're blocking the call, send a message explaining why
       if (isAssistantNumber) {
         console.log('[VAPI BLOCKED]', { from, reason: 'assistant_number' });
-        try {
-          const client = await getFullClient(tenantKey);
-          if (client) {
+      try {
+        const client = await getFullClient(tenantKey);
+        if (client) {
             const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
             if (configured) {
               const brand = client?.displayName || client?.clientKey || 'Our Clinic';
@@ -2301,8 +2300,8 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
           };
             // Use enhanced retry logic for VAPI calls
             const vapiResult = await retryWithBackoff(async () => {
-              const resp = await fetch(`${VAPI_URL}/call`, {
-                method: 'POST',
+          const resp = await fetch(`${VAPI_URL}/call`, {
+            method: 'POST',
                 headers: { 
                   'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`, 
                   'Content-Type': 'application/json',
@@ -2987,7 +2986,16 @@ app.get('/admin/metrics', async (req, res) => {
     const leads = await listFullClients().then(clients => 
       clients.flatMap(client => client.leads || [])
     );
-    const calls = await readJson(CALLS_PATH, []); // Calls still use file storage
+    
+    // Load calls from database
+    const { getCallsByTenant } = await import('./db.js');
+    const allCalls = [];
+    const clients = await listFullClients();
+    for (const client of clients) {
+      const clientCalls = await getCallsByTenant(client.clientKey, 1000);
+      allCalls.push(...clientCalls);
+    }
+    const calls = allCalls;
 
     // Calculate metrics
     const metrics = {

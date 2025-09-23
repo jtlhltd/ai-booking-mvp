@@ -79,8 +79,21 @@ router.post('/webhooks/vapi', async (req, res) => {
 // Update call tracking in the database
 async function updateCallTracking({ callId, tenantKey, leadPhone, status, outcome, duration, cost, metadata, timestamp }) {
   try {
-    // This would update a calls table in the database
-    // For now, we'll log the call data
+    // Import database functions
+    const { upsertCall } = await import('../db.js');
+    
+    // Store call data in database
+    await upsertCall({
+      callId,
+      clientKey: tenantKey,
+      leadPhone,
+      status,
+      outcome,
+      duration,
+      cost,
+      metadata
+    });
+    
     console.log('[CALL TRACKING UPDATE]', {
       callId,
       tenantKey,
@@ -89,21 +102,9 @@ async function updateCallTracking({ callId, tenantKey, leadPhone, status, outcom
       outcome,
       duration: duration ? `${duration}s` : 'unknown',
       cost: cost ? `$${cost}` : 'unknown',
-      timestamp
+      timestamp,
+      stored: true
     });
-    
-    // TODO: Implement actual database storage
-    // await store.calls.upsert({
-    //   callId,
-    //   tenantKey,
-    //   leadPhone,
-    //   status,
-    //   outcome,
-    //   duration,
-    //   cost,
-    //   metadata,
-    //   timestamp
-    // });
   } catch (error) {
     console.error('[CALL TRACKING ERROR]', error);
   }

@@ -73,6 +73,26 @@ async function initPostgres() {
     );
     CREATE INDEX IF NOT EXISTS msg_tenant_time_idx ON messages(client_key, created_at);
 
+    CREATE TABLE IF NOT EXISTS calls (
+      id BIGSERIAL PRIMARY KEY,
+      call_id TEXT UNIQUE NOT NULL,
+      client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
+      lead_phone TEXT NOT NULL,
+      status TEXT NOT NULL,
+      outcome TEXT,
+      duration INTEGER,
+      cost DECIMAL(10,4),
+      metadata JSONB,
+      retry_attempt INTEGER DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      updated_at TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS calls_tenant_idx ON calls(client_key);
+    CREATE INDEX IF NOT EXISTS calls_phone_idx ON calls(client_key, lead_phone);
+    CREATE INDEX IF NOT EXISTS calls_status_idx ON calls(status);
+    CREATE INDEX IF NOT EXISTS calls_outcome_idx ON calls(outcome);
+    CREATE INDEX IF NOT EXISTS calls_created_idx ON calls(created_at);
+
     CREATE TABLE IF NOT EXISTS idempotency (
       client_key TEXT NOT NULL,
       key TEXT NOT NULL,
@@ -324,4 +344,51 @@ export async function markBooked({ tenantKey, leadId = null, eventId, slot }) {
     'INSERT INTO appointments (client_key, lead_id, gcal_event_id, start_iso, end_iso, status) VALUES ($1,$2,$3,$4,$5,\'booked\')',
     [tenantKey, leadId, eventId, slot.start, slot.end]
   );
+}
+
+// Call tracking functions
+export async function upsertCall({ callId, clientKey, leadPhone, status, outcome, duration, cost, metadata, retryAttempt = 0 }) {
+  const metadataJson = metadata ? JSON.stringify(metadata) : null;
+  
+  await query(`
+    INSERT INTO calls (call_id, client_key, lead_phone, status, outcome, duration, cost, metadata, retry_attempt, updated_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+    ON CONFLICT (call_id) 
+    DO UPDATE SET 
+      status = EXCLUDED.status,
+      outcome = EXCLUDED.outcome,
+      duration = EXCLUDED.duration,
+      cost = EXCLUDED.cost,
+      metadata = EXCLUDED.metadata,
+      retry_attempt = EXCLUDED.retry_attempt,
+      updated_at = now()
+  `, [callId, clientKey, leadPhone, status, outcome, duration, cost, metadataJson, retryAttempt]);
+}
+
+export async function getCallsByTenant(clientKey, limit = 100) {
+  const { rows } = await query(`
+    SELECT * FROM calls 
+    WHERE client_key = $1 
+    ORDER BY created_at DESC 
+    LIMIT $2
+  `, [clientKey, limit]);
+  return rows;
+}
+
+export async function getCallsByPhone(clientKey, leadPhone, limit = 50) {
+  const { rows } = await query(`
+    SELECT * FROM calls 
+    WHERE client_key = $1 AND lead_phone = $2 
+    ORDER BY created_at DESC 
+    LIMIT $3
+  `, [clientKey, leadPhone, limit]);
+  return rows;
+}
+
+export async function getRecentCallsCount(clientKey, minutesBack = 60) {
+  const { rows } = await query(`
+    SELECT COUNT(*) as count FROM calls 
+    WHERE client_key = $1 AND created_at > now() - interval '${minutesBack} minutes'
+  `, [clientKey]);
+  return parseInt(rows[0]?.count || 0);
 }
