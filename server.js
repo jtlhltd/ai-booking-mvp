@@ -726,16 +726,38 @@ async function scheduleRetryCall({ from, tenantKey, client, error }) {
     
     const retryTime = new Date(Date.now() + retryDelay);
     
+    // Import database functions
+    const { addToRetryQueue } = await import('./db.js');
+    
+    // Add to retry queue
+    const retryData = {
+      originalError: error,
+      errorType,
+      clientConfig: {
+        assistantId: client?.vapi?.assistantId,
+        phoneNumberId: client?.vapi?.phoneNumberId
+      }
+    };
+    
+    await addToRetryQueue({
+      clientKey: tenantKey,
+      leadPhone: from,
+      retryType: 'vapi_call',
+      retryReason: errorType,
+      retryData,
+      scheduledFor: retryTime,
+      retryAttempt: 1,
+      maxRetries: 3
+    });
+    
     console.log('[RETRY SCHEDULED]', {
       from,
       tenantKey,
       errorType,
       retryTime: retryTime.toISOString(),
-      retryDelay: `${retryDelay / 1000 / 60} minutes`
+      retryDelay: `${retryDelay / 1000 / 60} minutes`,
+      queued: true
     });
-    
-    // TODO: Implement actual retry queue/scheduling system
-    // This would store the retry request in a database or queue
     
   } catch (retryError) {
     console.error('[RETRY SCHEDULE ERROR]', { from, tenantKey, error: retryError.message });
@@ -3702,6 +3724,96 @@ const { id } = req.body || {};
 
 
 await bootstrapClients(); // <--- run after routes loaded & DB ready
+
+// Retry processor - runs every 5 minutes to process pending retries
+async function processRetryQueue() {
+  try {
+    const { getPendingRetries, updateRetryStatus } = await import('./db.js');
+    const pendingRetries = await getPendingRetries(50);
+    
+    if (pendingRetries.length === 0) {
+      return;
+    }
+    
+    console.log('[RETRY PROCESSOR]', { pendingCount: pendingRetries.length });
+    
+    for (const retry of pendingRetries) {
+      try {
+        // Mark as processing
+        await updateRetryStatus(retry.id, 'processing');
+        
+        // Process the retry based on type
+        if (retry.retry_type === 'vapi_call') {
+          await processVapiRetry(retry);
+        }
+        
+        // Mark as completed
+        await updateRetryStatus(retry.id, 'completed');
+        
+      } catch (retryError) {
+        console.error('[RETRY PROCESSING ERROR]', {
+          retryId: retry.id,
+          error: retryError.message
+        });
+        
+        // Check if we should retry again or mark as failed
+        if (retry.retry_attempt < retry.max_retries) {
+          // Schedule another retry
+          await updateRetryStatus(retry.id, 'pending', retry.retry_attempt + 1);
+        } else {
+          // Max retries reached, mark as failed
+          await updateRetryStatus(retry.id, 'failed');
+        }
+      }
+    }
+    
+  } catch (error) {
+    console.error('[RETRY PROCESSOR ERROR]', error);
+  }
+}
+
+// Process VAPI retry
+async function processVapiRetry(retry) {
+  try {
+    const retryData = retry.retry_data ? JSON.parse(retry.retry_data) : {};
+    const { client_key: clientKey, lead_phone: leadPhone } = retry;
+    
+    // Get client configuration
+    const client = await getFullClient(clientKey);
+    if (!client) {
+      throw new Error('Client not found');
+    }
+    
+    // Make VAPI call
+    const vapiResult = await makeVapiCall({
+      assistantId: retryData.clientConfig?.assistantId || client.vapi?.assistantId,
+      phoneNumberId: retryData.clientConfig?.phoneNumberId || client.vapi?.phoneNumberId,
+      customerNumber: leadPhone,
+      maxDurationSeconds: 10
+    });
+    
+    if (!vapiResult || vapiResult.error) {
+      throw new Error(vapiResult?.error || 'VAPI call failed');
+    }
+    
+    console.log('[RETRY SUCCESS]', {
+      retryId: retry.id,
+      clientKey,
+      leadPhone,
+      callId: vapiResult.id
+    });
+    
+  } catch (error) {
+    console.error('[VAPI RETRY ERROR]', {
+      retryId: retry.id,
+      error: error.message
+    });
+    throw error;
+  }
+}
+
+// Start retry processor
+setInterval(processRetryQueue, 5 * 60 * 1000); // Every 5 minutes
 
 app.listen(process.env.PORT ? Number(process.env.PORT) : 10000, '0.0.0.0', () => {
   console.log(`AI Booking MVP listening on http://localhost:${PORT} (DB: ${DB_PATH})`);

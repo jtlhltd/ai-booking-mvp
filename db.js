@@ -93,6 +93,25 @@ async function initPostgres() {
     CREATE INDEX IF NOT EXISTS calls_outcome_idx ON calls(outcome);
     CREATE INDEX IF NOT EXISTS calls_created_idx ON calls(created_at);
 
+    CREATE TABLE IF NOT EXISTS retry_queue (
+      id BIGSERIAL PRIMARY KEY,
+      client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
+      lead_phone TEXT NOT NULL,
+      retry_type TEXT NOT NULL,
+      retry_reason TEXT,
+      retry_data JSONB,
+      scheduled_for TIMESTAMPTZ NOT NULL,
+      retry_attempt INTEGER DEFAULT 1,
+      max_retries INTEGER DEFAULT 3,
+      status TEXT DEFAULT 'pending',
+      created_at TIMESTAMPTZ DEFAULT now(),
+      updated_at TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS retry_queue_tenant_idx ON retry_queue(client_key);
+    CREATE INDEX IF NOT EXISTS retry_queue_scheduled_idx ON retry_queue(scheduled_for);
+    CREATE INDEX IF NOT EXISTS retry_queue_status_idx ON retry_queue(status);
+    CREATE INDEX IF NOT EXISTS retry_queue_phone_idx ON retry_queue(client_key, lead_phone);
+
     CREATE TABLE IF NOT EXISTS idempotency (
       client_key TEXT NOT NULL,
       key TEXT NOT NULL,
@@ -391,4 +410,61 @@ export async function getRecentCallsCount(clientKey, minutesBack = 60) {
     WHERE client_key = $1 AND created_at > now() - interval '${minutesBack} minutes'
   `, [clientKey]);
   return parseInt(rows[0]?.count || 0);
+}
+
+// Retry queue functions
+export async function addToRetryQueue({ clientKey, leadPhone, retryType, retryReason, retryData, scheduledFor, retryAttempt = 1, maxRetries = 3 }) {
+  const retryDataJson = retryData ? JSON.stringify(retryData) : null;
+  
+  const { rows } = await query(`
+    INSERT INTO retry_queue (client_key, lead_phone, retry_type, retry_reason, retry_data, scheduled_for, retry_attempt, max_retries, status)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
+    RETURNING *
+  `, [clientKey, leadPhone, retryType, retryReason, retryDataJson, scheduledFor, retryAttempt, maxRetries]);
+  
+  return rows[0];
+}
+
+export async function getPendingRetries(limit = 100) {
+  const { rows } = await query(`
+    SELECT * FROM retry_queue 
+    WHERE status = 'pending' AND scheduled_for <= now()
+    ORDER BY scheduled_for ASC
+    LIMIT $1
+  `, [limit]);
+  return rows;
+}
+
+export async function updateRetryStatus(id, status, retryAttempt = null) {
+  const updates = ['status = $2', 'updated_at = now()'];
+  const params = [id, status];
+  
+  if (retryAttempt !== null) {
+    updates.push('retry_attempt = $3');
+    params.push(retryAttempt);
+  }
+  
+  await query(`
+    UPDATE retry_queue 
+    SET ${updates.join(', ')}
+    WHERE id = $1
+  `, params);
+}
+
+export async function getRetriesByPhone(clientKey, leadPhone, limit = 50) {
+  const { rows } = await query(`
+    SELECT * FROM retry_queue 
+    WHERE client_key = $1 AND lead_phone = $2 
+    ORDER BY created_at DESC 
+    LIMIT $3
+  `, [clientKey, leadPhone, limit]);
+  return rows;
+}
+
+export async function cleanupOldRetries(daysOld = 7) {
+  await query(`
+    DELETE FROM retry_queue 
+    WHERE created_at < now() - interval '${daysOld} days'
+    AND status IN ('completed', 'failed', 'cancelled')
+  `);
 }
