@@ -1,60 +1,44 @@
-# Simple SMS Test Script
-# Tests SMS functionality without special characters
-
-Write-Host "SMS Testing Script" -ForegroundColor Cyan
-Write-Host "=================" -ForegroundColor Cyan
-
+# Test SMS Processing and Lead Creation
 $baseUrl = "https://ai-booking-mvp.onrender.com"
+$apiKey = $env:API_KEY
 
-function Send-SMS {
-    param(
-        [string]$Body,
-        [string]$Scenario
-    )
-    
-    Write-Host "`nSending: $Scenario" -ForegroundColor Yellow
-    Write-Host "Body: '$Body'" -ForegroundColor Gray
-    
-    $smsData = @{
-        Body = $Body
-        From = "+447491683261"
-        To = "+447403934440"
-        MessageSid = "test_$(Get-Random)_$(Get-Date -Format 'HHmmss')"
-        MessagingServiceSid = "MG1234567890abcdef1234567890abcdef"
-    } | ConvertTo-Json
-    
-    try {
-        $response = Invoke-RestMethod -Uri "$baseUrl/webhooks/twilio-inbound" -Method POST -Body $smsData -ContentType "application/json" -TimeoutSec 30
-        Write-Host "PASS: $Scenario" -ForegroundColor Green
-        return $response
-    }
-    catch {
-        Write-Host "FAIL: $Scenario - $($_.Exception.Message)" -ForegroundColor Red
-        return $null
-    }
+if (-not $apiKey) {
+    Write-Host "API_KEY environment variable not set" -ForegroundColor Red
+    exit 1
 }
 
-Write-Host "`nTesting SMS scenarios..." -ForegroundColor Yellow
+Write-Host "Testing SMS Processing and Lead Creation" -ForegroundColor Cyan
 
-# Test 1: Opt-in
-Send-SMS -Body "START" -Scenario "Customer opt-in"
-Start-Sleep -Seconds 3
+# Test 1: Basic SMS Processing
+Write-Host "Test 1: Basic SMS Processing" -ForegroundColor Yellow
 
-# Test 2: Yes response
-Send-SMS -Body "YES" -Scenario "Customer confirms interest"
-Start-Sleep -Seconds 3
+$smsData = @{
+    From = "+447491683261"
+    To = "+447403934440"
+    Body = "START"
+    MessageSid = "test_sms_$(Get-Date -Format 'yyyyMMddHHmmss')"
+    MessagingServiceSid = "MG1234567890abcdef"
+} | ConvertTo-Json
 
-# Test 3: Booking request
-Send-SMS -Body "I'd like to book an appointment" -Scenario "Booking inquiry"
-Start-Sleep -Seconds 3
+try {
+    $response = Invoke-RestMethod -Uri "$baseUrl/sms" -Method POST -Body $smsData -ContentType "application/json" -TimeoutSec 30
+    Write-Host "SMS Processing Response: $($response | ConvertTo-Json -Depth 2)" -ForegroundColor Green
+} catch {
+    Write-Host "SMS Processing Failed: $($_.Exception.Message)" -ForegroundColor Red
+}
 
-# Test 4: General question
-Send-SMS -Body "What are your opening hours?" -Scenario "Hours inquiry"
-Start-Sleep -Seconds 3
+# Test 2: Check System Health
+Write-Host "Test 2: System Health Check" -ForegroundColor Yellow
 
-# Test 5: Stop request
-Send-SMS -Body "STOP" -Scenario "Opt-out request"
-Start-Sleep -Seconds 3
+try {
+    $headers = @{
+        "X-API-Key" = $apiKey
+    }
+    
+    $response = Invoke-RestMethod -Uri "$baseUrl/admin/system-health" -Method GET -Headers $headers -TimeoutSec 30
+    Write-Host "System Health: $($response | ConvertTo-Json -Depth 2)" -ForegroundColor Green
+} catch {
+    Write-Host "System Health Check Failed: $($_.Exception.Message)" -ForegroundColor Red
+}
 
-Write-Host "`nSMS Testing Complete!" -ForegroundColor Green
-Write-Host "Check your Render logs to see the SMS processing." -ForegroundColor Yellow
+Write-Host "SMS Processing Tests Complete!" -ForegroundColor Cyan

@@ -4735,6 +4735,51 @@ app.get('/admin/calendar-events/:tenantKey', async (req, res) => {
   }
 });
 
+// A/B Test Assignment Endpoint
+app.post('/admin/ab-tests/:tenantKey/assign', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const { tenantKey } = req.params;
+    const { leadPhone, experimentName } = req.body;
+    
+    if (!leadPhone || !experimentName) {
+      return res.status(400).json({ error: 'Lead phone and experiment name required' });
+    }
+    
+    console.log('[AB TEST ASSIGNMENT REQUESTED]', { 
+      tenantKey,
+      leadPhone,
+      experimentName,
+      requestedBy: req.ip
+    });
+    
+    // Select variant for this lead
+    const variant = await selectABTestVariant(tenantKey, experimentName, leadPhone);
+    
+    if (!variant) {
+      return res.status(404).json({ error: 'No active experiment found' });
+    }
+    
+    return res.json({
+      ok: true,
+      tenantKey,
+      leadPhone,
+      experimentName,
+      variant: variant.name,
+      config: variant.config,
+      message: 'Lead assigned to A/B test variant successfully'
+    });
+  } catch (e) {
+    console.error('[AB TEST ASSIGNMENT ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
 // Client Management Endpoints
 // Get all clients
 app.get('/admin/clients', async (req, res) => {
@@ -4750,8 +4795,8 @@ app.get('/admin/clients', async (req, res) => {
     });
     
     // Get all clients from the database
-    const { getAllClients } = await import('./db.js');
-    const clients = await getAllClients();
+    const { listFullClients } = await import('./db.js');
+    const clients = await listFullClients();
     
     // Add leads count for each client
     const clientsWithLeads = await Promise.all(clients.map(async (client) => {
