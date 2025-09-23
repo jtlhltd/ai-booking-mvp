@@ -863,6 +863,17 @@
             border-left: 4px solid #6366f1;
         }
         
+        .testimonial-card.placeholder {
+            opacity: 0.7;
+            border: 2px dashed #e2e8f0;
+            background: #f9fafb;
+        }
+        
+        .testimonial-card.placeholder:hover {
+            opacity: 0.9;
+            border-color: #6366f1;
+        }
+        
         .testimonial-quote {
             font-style: italic;
             margin-bottom: 1rem;
@@ -1105,8 +1116,7 @@
                 <span class="badge-text">Trusted by 500+ businesses worldwide</span>
             </div>
             <h1 class="hero-title">
-                Transform Your Business with 
-                <span class="gradient-text">AI-Powered Booking</span>
+                Transform Your Business with AI-Powered Booking
             </h1>
             <p class="hero-subtitle">
                 Increase appointment bookings by <strong>300%</strong> with intelligent SMS automation and voice AI. 
@@ -1274,110 +1284,95 @@
     <section id="pricing" class="pricing">
         <div class="container">
             <div class="section-header">
-                <h2 class="section-title">Simple, Transparent Pricing</h2>
+                <h2 class="section-title">Service-Based Pricing</h2>
                 <p class="section-subtitle">
-                    Choose the plan that fits your business needs. All plans include our core features.
+                    Pay only for what you use. No monthly subscriptions, just transparent service fees.
                 </p>
-            </div>
-            <div class="pricing-toggle">
-                <span class="toggle-label">Monthly</span>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="pricingToggle">
-                    <span class="toggle-slider"></span>
-                </label>
-                <span class="toggle-label">Annual <span class="discount-badge">Save 20%</span></span>
             </div>
             <div class="pricing-grid">
                 <div class="pricing-card">
                     <div class="pricing-header">
-                        <h3 class="pricing-title">Starter</h3>
+                        <h3 class="pricing-title">Setup & Configuration</h3>
                         <div class="pricing-price">
                             <span class="currency">£</span>
-                            <span class="amount monthly">99</span>
-                            <span class="amount annual" style="display: none;">79</span>
-                            <span class="period">/month</span>
+                            <span class="amount">299</span>
+                            <span class="period">one-time</span>
                         </div>
-                        <p class="pricing-description">Perfect for small businesses getting started</p>
+                        <p class="pricing-description">Complete system setup and configuration</p>
                     </div>
                     <div class="pricing-features">
                         <ul class="feature-list">
-                            <li><span class="check-icon">✓</span> Up to 500 SMS/month</li>
-                            <li><span class="check-icon">✓</span> 100 AI calls/month</li>
-                            <li><span class="check-icon">✓</span> Basic analytics dashboard</li>
-                            <li><span class="check-icon">✓</span> Email support</li>
+                            <li><span class="check-icon">✓</span> System installation & setup</li>
                             <li><span class="check-icon">✓</span> Google Calendar integration</li>
-                            <li><span class="check-icon">✓</span> 1 phone number</li>
+                            <li><span class="check-icon">✓</span> Phone number configuration</li>
+                            <li><span class="check-icon">✓</span> AI assistant training</li>
+                            <li><span class="check-icon">✓</span> Custom branding setup</li>
+                            <li><span class="check-icon">✓</span> Staff training session</li>
                         </ul>
                     </div>
                     <div class="pricing-footer">
                         <a href="#contact" class="btn btn-outline btn-full">Get Started</a>
-                        <p class="pricing-note">No setup fees • Cancel anytime</p>
+                        <p class="pricing-note">Includes 30 days of support</p>
                     </div>
                 </div>
 
                 <div class="pricing-card featured">
                     <div class="pricing-badge">Most Popular</div>
                     <div class="pricing-header">
-                        <h3 class="pricing-title">Professional</h3>
+                        <h3 class="pricing-title">Per SMS Message</h3>
                         <div class="pricing-price">
                             <span class="currency">£</span>
-                            <span class="amount monthly">299</span>
-                            <span class="amount annual" style="display: none;">239</span>
-                            <span class="period">/month</span>
+                            <span class="amount">0.15</span>
+                            <span class="period">per SMS</span>
                         </div>
-                        <p class="pricing-description">Ideal for growing businesses</p>
+                        <p class="pricing-description">Pay only for messages sent</p>
                     </div>
                     <div class="pricing-features">
                         <ul class="feature-list">
-                            <li><span class="check-icon">✓</span> Up to 2,000 SMS/month</li>
-                            <li><span class="check-icon">✓</span> 500 AI calls/month</li>
-                            <li><span class="check-icon">✓</span> Advanced analytics & insights</li>
-                            <li><span class="check-icon">✓</span> Priority support</li>
-                            <li><span class="check-icon">✓</span> A/B testing</li>
-                            <li><span class="check-icon">✓</span> Custom integrations</li>
-                            <li><span class="check-icon">✓</span> Up to 3 phone numbers</li>
-                            <li><span class="check-icon">✓</span> White-label options</li>
+                            <li><span class="check-icon">✓</span> AI-powered responses</li>
+                            <li><span class="check-icon">✓</span> Appointment booking</li>
+                            <li><span class="check-icon">✓</span> Calendar integration</li>
+                            <li><span class="check-icon">✓</span> Lead capture & scoring</li>
+                            <li><span class="check-icon">✓</span> Analytics dashboard</li>
+                            <li><span class="check-icon">✓</span> Email notifications</li>
                         </ul>
                     </div>
                     <div class="pricing-footer">
                         <a href="#contact" class="btn btn-primary btn-full">Get Started</a>
-                        <p class="pricing-note">Free setup • 30-day money-back guarantee</p>
+                        <p class="pricing-note">No monthly minimums</p>
                     </div>
                 </div>
 
                 <div class="pricing-card">
                     <div class="pricing-header">
-                        <h3 class="pricing-title">Enterprise</h3>
+                        <h3 class="pricing-title">Per AI Call</h3>
                         <div class="pricing-price">
                             <span class="currency">£</span>
-                            <span class="amount monthly">599</span>
-                            <span class="amount annual" style="display: none;">479</span>
-                            <span class="period">/month</span>
+                            <span class="amount">2.50</span>
+                            <span class="period">per call</span>
                         </div>
-                        <p class="pricing-description">For large organizations</p>
+                        <p class="pricing-description">Voice AI calls to customers</p>
                     </div>
                     <div class="pricing-features">
                         <ul class="feature-list">
-                            <li><span class="check-icon">✓</span> Unlimited SMS</li>
-                            <li><span class="check-icon">✓</span> Unlimited AI calls</li>
-                            <li><span class="check-icon">✓</span> Real-time analytics</li>
-                            <li><span class="check-icon">✓</span> 24/7 phone support</li>
-                            <li><span class="check-icon">✓</span> Custom development</li>
-                            <li><span class="check-icon">✓</span> API access</li>
-                            <li><span class="check-icon">✓</span> Unlimited phone numbers</li>
-                            <li><span class="check-icon">✓</span> Dedicated account manager</li>
+                            <li><span class="check-icon">✓</span> Natural voice conversations</li>
+                            <li><span class="check-icon">✓</span> Appointment scheduling</li>
+                            <li><span class="check-icon">✓</span> Follow-up calls</li>
+                            <li><span class="check-icon">✓</span> Call recording & analytics</li>
+                            <li><span class="check-icon">✓</span> Custom voice training</li>
+                            <li><span class="check-icon">✓</span> Integration with SMS system</li>
                         </ul>
                     </div>
                     <div class="pricing-footer">
                         <a href="#contact" class="btn btn-outline btn-full">Contact Sales</a>
-                        <p class="pricing-note">Custom pricing • Volume discounts</p>
+                        <p class="pricing-note">Volume discounts available</p>
                     </div>
                 </div>
             </div>
             <div class="pricing-guarantee">
                 <div class="guarantee-icon">🛡️</div>
                 <div class="guarantee-text">
-                    <strong>30-day money-back guarantee</strong> - If you're not satisfied, we'll refund your payment in full.
+                    <strong>No monthly fees</strong> - Pay only for the services you use. Cancel anytime with no penalties.
                 </div>
             </div>
         </div>
@@ -1386,42 +1381,42 @@
     <!-- Testimonials Section -->
     <section id="testimonials" class="testimonials">
         <div class="container">
-            <h2 class="section-title">What Our Clients Say</h2>
-            <p class="section-subtitle">Real results from businesses using AI Booking MVP</p>
+            <h2 class="section-title">Client Testimonials</h2>
+            <p class="section-subtitle">Hear from businesses using AI Booking MVP</p>
             <div class="testimonials-grid">
-                <div class="testimonial-card">
+                <div class="testimonial-card placeholder">
                     <div class="testimonial-quote">
-                        "AI Booking MVP transformed our dental practice. We've seen a 300% increase in appointment bookings and our staff can focus on patient care instead of scheduling."
+                        "Your testimonial will appear here once you start using our service. We're excited to hear about your success story!"
                     </div>
                     <div class="testimonial-author">
-                        <div class="author-avatar">👩‍⚕️</div>
+                        <div class="author-avatar">👤</div>
                         <div>
-                            <div class="author-name">Dr. Sarah Johnson</div>
-                            <div class="author-title">Victory Dental Practice</div>
+                            <div class="author-name">Your Name Here</div>
+                            <div class="author-title">Your Business Name</div>
                         </div>
                     </div>
                 </div>
-                <div class="testimonial-card">
+                <div class="testimonial-card placeholder">
                     <div class="testimonial-quote">
-                        "The AI voice assistant sounds so natural that our clients think they're talking to a real person. It's revolutionized our consultation booking process."
+                        "Share your experience with AI Booking MVP and help other businesses discover the benefits of automated appointment booking."
                     </div>
                     <div class="testimonial-author">
-                        <div class="author-avatar">⚖️</div>
+                        <div class="author-avatar">👤</div>
                         <div>
-                            <div class="author-name">Michael Chen</div>
-                            <div class="author-title">Smith & Associates Law</div>
+                            <div class="author-name">Your Name Here</div>
+                            <div class="author-title">Your Business Name</div>
                         </div>
                     </div>
                 </div>
-                <div class="testimonial-card">
+                <div class="testimonial-card placeholder">
                     <div class="testimonial-quote">
-                        "The analytics dashboard gives us incredible insights into our booking patterns. We've optimized our scheduling and increased revenue by 40%."
+                        "We'd love to feature your success story here. Contact us to share how AI Booking MVP has helped your business grow."
                     </div>
                     <div class="testimonial-author">
-                        <div class="author-avatar">💄</div>
+                        <div class="author-avatar">👤</div>
                         <div>
-                            <div class="author-name">Emma Rodriguez</div>
-                            <div class="author-title">Glamour Beauty Salon</div>
+                            <div class="author-name">Your Name Here</div>
+                            <div class="author-title">Your Business Name</div>
                         </div>
                     </div>
                 </div>
@@ -1766,24 +1761,7 @@
                 });
             });
 
-            // Pricing Toggle Functionality
-            const pricingToggle = document.getElementById('pricingToggle');
-            const monthlyPrices = document.querySelectorAll('.amount.monthly');
-            const annualPrices = document.querySelectorAll('.amount.annual');
-            
-            if (pricingToggle) {
-                pricingToggle.addEventListener('change', function() {
-                    if (this.checked) {
-                        // Show annual prices
-                        monthlyPrices.forEach(price => price.style.display = 'none');
-                        annualPrices.forEach(price => price.style.display = 'inline');
-                    } else {
-                        // Show monthly prices
-                        monthlyPrices.forEach(price => price.style.display = 'inline');
-                        annualPrices.forEach(price => price.style.display = 'none');
-                    }
-                });
-            }
+            // Pricing functionality removed - now using service-based pricing
 
             // FAQ Accordion Functionality
             const faqItems = document.querySelectorAll('.faq-item');
