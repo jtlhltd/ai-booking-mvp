@@ -1047,23 +1047,24 @@ async function recordABTestOutcome({ clientKey, experimentName, leadPhone, outco
       return null;
     }
     
-    // Find the variant that was assigned to this lead
+    // Find the variant that was assigned to this lead across all experiments with this name
     const { getABTestResults } = await import('./db.js');
-    const results = await getABTestResults(experimentVariants[0].id);
-    const assignment = results.find(result => 
-      result.lead_phone === leadPhone && result.outcome === 'assigned'
-    );
+    let assignment = null;
+    
+    // Try each experiment variant to find the assignment
+    for (const variant of experimentVariants) {
+      const results = await getABTestResults(variant.id);
+      assignment = results.find(result => 
+        result.lead_phone === leadPhone && result.outcome === 'assigned'
+      );
+      if (assignment) {
+        break; // Found the assignment
+      }
+    }
     
     if (!assignment) {
-      // If no assignment found, try to find any result for this lead
-      const anyResult = results.find(result => result.lead_phone === leadPhone);
-      if (!anyResult) {
-        console.log('[AB TEST OUTCOME] No assignment found for lead', { clientKey, experimentName, leadPhone });
-        return null;
-      }
-      // Use the most recent result
-      const recentResult = results.filter(r => r.lead_phone === leadPhone).sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
-      assignment = recentResult;
+      console.log('[AB TEST OUTCOME] No assignment found for lead', { clientKey, experimentName, leadPhone });
+      return null;
     }
     
     const result = await recordABTestResult({
