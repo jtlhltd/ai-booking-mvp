@@ -1443,9 +1443,15 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
     if (!from) return res.type('text/plain').send('IGNORED');
 
     // YES / STOP intents (extend as needed)
+    console.log('[REGEX DEBUG]', { 
+      bodyTxt: JSON.stringify(bodyTxt), 
+      bodyLength: bodyTxt.length,
+      bodyChars: bodyTxt.split('').map(c => c.charCodeAt(0))
+    });
     const isYes  = /^\s*(yes|y|ok|okay|sure|confirm)\s*$/i.test(bodyTxt);
     const isStart = /^\s*(start|unstop)\s*$/i.test(bodyTxt);
     const isStop = /^\s*(stop|unsubscribe|cancel|end|quit)\s*$/i.test(bodyTxt);
+    console.log('[REGEX RESULTS]', { isYes, isStart, isStop });
 
     // Load & update the most recent lead matching this phone from database
     const clients = await listFullClients();
