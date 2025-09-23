@@ -119,6 +119,10 @@ app.get('/onboarding-wizard', (req, res) => {
   res.sendFile(new URL('./public/client-onboarding-wizard.html', import.meta.url).pathname);
 });
 
+// Middleware for parsing JSON bodies (must be before routes that need it)
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
 // API endpoint to create new client
 app.post('/api/create-client', async (req, res) => {
   try {
@@ -1241,8 +1245,6 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(morgan('dev'));
 app.use(cors({
   origin: ORIGIN === '*' ? true : ORIGIN,
