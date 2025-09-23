@@ -791,6 +791,28 @@
             }
             
             resultsContent.appendChild(dataSourceIndicator);
+
+            // Add decision maker identification section
+            const decisionMakerSection = document.createElement('div');
+            decisionMakerSection.style.cssText = `
+                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                padding: 1rem;
+                margin-bottom: 1rem;
+            `;
+            decisionMakerSection.innerHTML = `
+                <h4 style="margin-bottom: 0.5rem; color: #1e293b;">🎯 Decision Maker Identification</h4>
+                <p style="font-size: 0.9rem; color: #64748b; margin-bottom: 0.5rem;">
+                    Each business result now includes decision maker roles and personalized outreach templates.
+                </p>
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    <span style="background: #dbeafe; color: #1e40af; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem;">Primary Decision Makers</span>
+                    <span style="background: #fef3c7; color: #92400e; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem;">Secondary Decision Makers</span>
+                    <span style="background: #f3e8ff; color: #7c3aed; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem;">Gatekeepers</span>
+                </div>
+            `;
+            resultsContent.appendChild(decisionMakerSection);
             
             const tableBody = document.createElement('tbody');
             
@@ -815,6 +837,7 @@
                         <div class="action-buttons">
                             <button class="btn btn-secondary" onclick="viewBusiness(${index})">View</button>
                             <button class="btn btn-success" onclick="addToLeads(${index})">Add Lead</button>
+                            <button class="btn btn-primary" onclick="showDecisionMakers(${index})">Decision Makers</button>
                         </div>
                     </td>
                 `;
@@ -874,6 +897,388 @@
             if (business) {
                 alert(`Business "${business.name}" added to leads successfully!`);
             }
+        }
+
+        // Show decision makers for a business
+        function showDecisionMakers(index) {
+            const business = currentResults[index];
+            const industry = categorizeBusiness(business);
+            
+            const decisionMakers = getDecisionMakers(business, industry);
+            
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.5);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 1000;
+            `;
+            
+            modal.innerHTML = `
+                <div style="background: white; border-radius: 12px; padding: 2rem; max-width: 800px; max-height: 80vh; overflow-y: auto; margin: 1rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                        <h3 style="color: #1e293b; margin: 0;">🎯 Decision Makers for ${business.name}</h3>
+                        <button onclick="this.closest('.modal').remove()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b;">&times;</button>
+                    </div>
+                    
+                    <div style="margin-bottom: 1.5rem;">
+                        <h4 style="color: #1e293b; margin-bottom: 0.5rem;">Primary Decision Makers</h4>
+                        <div style="display: grid; gap: 1rem;">
+                            ${decisionMakers.filter(dm => dm.priority === 'primary').map(dm => `
+                                <div style="background: #dbeafe; border: 1px solid #93c5fd; border-radius: 8px; padding: 1rem;">
+                                    <div style="font-weight: 600; color: #1e40af; margin-bottom: 0.5rem;">${dm.role}</div>
+                                    <div style="font-size: 0.9rem; color: #1e40af; margin-bottom: 0.5rem;">Contact Method: ${dm.contactMethod}</div>
+                                    <div style="font-size: 0.9rem; color: #1e40af; margin-bottom: 0.5rem;">Approach: ${dm.approach}</div>
+                                    <div style="font-size: 0.9rem; color: #1e40af;">
+                                        <strong>Pain Points:</strong>
+                                        <ul style="margin: 0.5rem 0 0 1rem;">
+                                            ${dm.painPoints.map(point => `<li>${point}</li>`).join('')}
+                                        </ul>
+                                    </div>
+                                    <button onclick="generateOutreach('${business.name}', '${dm.role}', '${industry}', '${dm.priority}')" 
+                                            style="background: #1e40af; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; margin-top: 0.5rem;">
+                                        Generate Outreach
+                                    </button>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 1.5rem;">
+                        <h4 style="color: #1e293b; margin-bottom: 0.5rem;">Secondary Decision Makers</h4>
+                        <div style="display: grid; gap: 1rem;">
+                            ${decisionMakers.filter(dm => dm.priority === 'secondary').map(dm => `
+                                <div style="background: #fef3c7; border: 1px solid #fbbf24; border-radius: 8px; padding: 1rem;">
+                                    <div style="font-weight: 600; color: #92400e; margin-bottom: 0.5rem;">${dm.role}</div>
+                                    <div style="font-size: 0.9rem; color: #92400e; margin-bottom: 0.5rem;">Contact Method: ${dm.contactMethod}</div>
+                                    <div style="font-size: 0.9rem; color: #92400e; margin-bottom: 0.5rem;">Approach: ${dm.approach}</div>
+                                    <div style="font-size: 0.9rem; color: #92400e;">
+                                        <strong>Pain Points:</strong>
+                                        <ul style="margin: 0.5rem 0 0 1rem;">
+                                            ${dm.painPoints.map(point => `<li>${point}</li>`).join('')}
+                                        </ul>
+                                    </div>
+                                    <button onclick="generateOutreach('${business.name}', '${dm.role}', '${industry}', '${dm.priority}')" 
+                                            style="background: #92400e; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; margin-top: 0.5rem;">
+                                        Generate Outreach
+                                    </button>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 1.5rem;">
+                        <h4 style="color: #1e293b; margin-bottom: 0.5rem;">Gatekeepers</h4>
+                        <div style="display: grid; gap: 1rem;">
+                            ${decisionMakers.filter(dm => dm.priority === 'gatekeeper').map(dm => `
+                                <div style="background: #f3e8ff; border: 1px solid #c4b5fd; border-radius: 8px; padding: 1rem;">
+                                    <div style="font-weight: 600; color: #7c3aed; margin-bottom: 0.5rem;">${dm.role}</div>
+                                    <div style="font-size: 0.9rem; color: #7c3aed; margin-bottom: 0.5rem;">Contact Method: ${dm.contactMethod}</div>
+                                    <div style="font-size: 0.9rem; color: #7c3aed; margin-bottom: 0.5rem;">Approach: ${dm.approach}</div>
+                                    <div style="font-size: 0.9rem; color: #7c3aed;">
+                                        <strong>Pain Points:</strong>
+                                        <ul style="margin: 0.5rem 0 0 1rem;">
+                                            ${dm.painPoints.map(point => `<li>${point}</li>`).join('')}
+                                        </ul>
+                                    </div>
+                                    <button onclick="generateOutreach('${business.name}', '${dm.role}', '${industry}', '${dm.priority}')" 
+                                            style="background: #7c3aed; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; margin-top: 0.5rem;">
+                                        Generate Outreach
+                                    </button>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+        }
+
+        // Categorize business by industry
+        function categorizeBusiness(business) {
+            const name = business.name.toLowerCase();
+            const services = business.services.join(' ').toLowerCase();
+            
+            if (name.includes('dental') || name.includes('dentist') || services.includes('dental')) return 'dental';
+            if (name.includes('law') || name.includes('legal') || name.includes('solicitor') || services.includes('legal')) return 'legal';
+            if (name.includes('beauty') || name.includes('salon') || name.includes('hair') || name.includes('nail') || services.includes('beauty')) return 'beauty';
+            if (name.includes('medical') || name.includes('clinic') || name.includes('doctor') || name.includes('health') || services.includes('medical')) return 'medical';
+            if (name.includes('gym') || name.includes('fitness') || name.includes('studio') || services.includes('fitness')) return 'fitness';
+            
+            return 'dental'; // Default
+        }
+
+        // Get decision makers for a business
+        function getDecisionMakers(business, industry) {
+            const decisionMakerRoles = {
+                dental: {
+                    primary: ['Practice Owner', 'Principal Dentist', 'Practice Manager'],
+                    secondary: ['Office Manager', 'Reception Supervisor'],
+                    gatekeepers: ['Receptionist', 'Administrative Assistant']
+                },
+                legal: {
+                    primary: ['Managing Partner', 'Senior Partner', 'Practice Manager'],
+                    secondary: ['IT Director', 'Operations Manager'],
+                    gatekeepers: ['Legal Secretary', 'Paralegal']
+                },
+                beauty: {
+                    primary: ['Salon Owner', 'Manager', 'Senior Stylist'],
+                    secondary: ['Reception Manager', 'Assistant Manager'],
+                    gatekeepers: ['Receptionist', 'Stylist']
+                },
+                medical: {
+                    primary: ['Practice Manager', 'Senior Partner', 'IT Director'],
+                    secondary: ['Office Manager', 'Operations Manager'],
+                    gatekeepers: ['Receptionist', 'Medical Secretary']
+                },
+                fitness: {
+                    primary: ['Gym Owner', 'Manager', 'Operations Director'],
+                    secondary: ['Assistant Manager', 'Membership Manager'],
+                    gatekeepers: ['Receptionist', 'Personal Trainer']
+                }
+            };
+
+            const industryRoles = decisionMakerRoles[industry] || decisionMakerRoles.dental;
+            const decisionMakers = [];
+
+            // Primary decision makers
+            industryRoles.primary.forEach(role => {
+                decisionMakers.push({
+                    role: role,
+                    priority: 'primary',
+                    contactMethod: 'direct',
+                    approach: 'business-focused',
+                    painPoints: getPainPoints(industry, role)
+                });
+            });
+
+            // Secondary decision makers
+            industryRoles.secondary.forEach(role => {
+                decisionMakers.push({
+                    role: role,
+                    priority: 'secondary',
+                    contactMethod: 'professional',
+                    approach: 'efficiency-focused',
+                    painPoints: getPainPoints(industry, role)
+                });
+            });
+
+            // Gatekeepers
+            industryRoles.gatekeepers.forEach(role => {
+                decisionMakers.push({
+                    role: role,
+                    priority: 'gatekeeper',
+                    contactMethod: 'friendly',
+                    approach: 'relationship-building',
+                    painPoints: getPainPoints(industry, role)
+                });
+            });
+
+            return decisionMakers;
+        }
+
+        // Get pain points for specific roles
+        function getPainPoints(industry, role) {
+            const painPoints = {
+                dental: {
+                    'Practice Owner': [
+                        'Missing 40-60% of booking opportunities',
+                        'Staff spending time on phone instead of patients',
+                        'Manual scheduling errors and double bookings',
+                        'No-shows costing £200+ per missed appointment'
+                    ],
+                    'Practice Manager': [
+                        'Managing appointment schedules manually',
+                        'Staff training on booking systems',
+                        'Patient complaints about booking process',
+                        'Reporting on appointment metrics'
+                    ],
+                    'Office Manager': [
+                        'Answering phones during busy periods',
+                        'Managing appointment cancellations',
+                        'Following up on missed appointments',
+                        'Coordinating with dental staff schedules'
+                    ]
+                },
+                legal: {
+                    'Managing Partner': [
+                        'Client intake inefficiency',
+                        'Missed consultation opportunities',
+                        'Staff time on administrative tasks',
+                        'Competition for new clients'
+                    ],
+                    'Practice Manager': [
+                        'Managing consultation schedules',
+                        'Client follow-up processes',
+                        'Staff productivity metrics',
+                        'Client satisfaction tracking'
+                    ],
+                    'IT Director': [
+                        'System integration challenges',
+                        'Data security compliance',
+                        'Staff training on new systems',
+                        'Technical support requirements'
+                    ]
+                },
+                beauty: {
+                    'Salon Owner': [
+                        'Double bookings causing customer complaints',
+                        'Last-minute cancellations',
+                        'Staff scheduling conflicts',
+                        'Revenue lost to no-shows'
+                    ],
+                    'Manager': [
+                        'Managing stylist schedules',
+                        'Customer booking preferences',
+                        'Inventory management',
+                        'Customer retention'
+                    ],
+                    'Receptionist': [
+                        'Answering phones during busy periods',
+                        'Managing appointment changes',
+                        'Customer service complaints',
+                        'Scheduling conflicts'
+                    ]
+                }
+            };
+
+            return painPoints[industry]?.[role] || [
+                'Manual booking process',
+                'Missed appointment opportunities',
+                'Staff time on administrative tasks',
+                'Customer service challenges'
+            ];
+        }
+
+        // Generate outreach message
+        function generateOutreach(businessName, role, industry, priority) {
+            const templates = {
+                dental: {
+                    primary: `Hi [Name],
+
+I noticed ${businessName} has been growing - that's fantastic!
+
+But I'm curious: how many potential patients are you losing because they can't book appointments outside business hours?
+
+Most dental practices miss 40-60% of booking opportunities because:
+- Patients call when you're closed
+- Staff are busy with patients during calls
+- Manual scheduling creates errors
+
+Our AI booking system has helped practices like yours:
+✅ Increase bookings by 300%
+✅ Reduce no-shows by 50%
+✅ Free up staff time for patient care
+
+Would you be open to a 15-minute call to see how this could work for ${businessName}?
+
+Best regards,
+[Your Name]`,
+
+                    secondary: `Hi [Name],
+
+I hope this email finds you well. I'm reaching out because I noticed ${businessName} is a growing dental practice, and I believe I can help streamline your appointment booking process.
+
+As a ${role}, you probably deal with the daily challenges of:
+- Managing appointment schedules
+- Training staff on booking systems
+- Handling patient complaints about booking
+- Reporting on appointment metrics
+
+Our AI booking system has helped practice managers like you:
+✅ Reduce administrative workload by 70%
+✅ Improve patient satisfaction scores
+✅ Generate detailed booking reports
+✅ Integrate seamlessly with existing systems
+
+Would you be interested in a brief 15-minute call to see how this could benefit ${businessName}?
+
+Best regards,
+[Your Name]`,
+
+                    gatekeeper: `Hi [Name],
+
+I hope you're having a great day! I'm reaching out because I believe I can help make your job easier at ${businessName}.
+
+As a ${role}, you probably deal with:
+- Answering phones during busy periods
+- Managing appointment changes
+- Customer service complaints
+- Scheduling conflicts
+
+Our AI booking system can help by:
+✅ Automating appointment booking 24/7
+✅ Reducing phone calls during busy periods
+✅ Preventing scheduling conflicts
+✅ Improving customer satisfaction
+
+I'd love to show you how this could make your day easier. Would you be open to a brief 15-minute call?
+
+Best regards,
+[Your Name]`
+                }
+            };
+
+            const template = templates[industry]?.[priority] || templates.dental.primary;
+            
+            // Create modal to show the outreach message
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.5);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 1001;
+            `;
+            
+            modal.innerHTML = `
+                <div style="background: white; border-radius: 12px; padding: 2rem; max-width: 600px; max-height: 80vh; overflow-y: auto; margin: 1rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                        <h3 style="color: #1e293b; margin: 0;">📧 Outreach Message for ${role} at ${businessName}</h3>
+                        <button onclick="this.closest('.modal').remove()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b;">&times;</button>
+                    </div>
+                    
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
+                        <h4 style="color: #1e293b; margin-bottom: 0.5rem;">Email Template</h4>
+                        <textarea readonly style="width: 100%; height: 300px; border: 1px solid #d1d5db; border-radius: 6px; padding: 1rem; font-family: monospace; font-size: 0.9rem; resize: vertical;">${template}</textarea>
+                    </div>
+                    
+                    <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                        <button onclick="copyToClipboard('${template.replace(/'/g, "\\'")}')" 
+                                style="background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;">
+                            Copy to Clipboard
+                        </button>
+                        <button onclick="this.closest('.modal').remove()" 
+                                style="background: #6b7280; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+        }
+
+        // Copy to clipboard
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Copied to clipboard!');
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+                alert('Failed to copy to clipboard');
+            });
         }
         
         function exportToCSV() {
