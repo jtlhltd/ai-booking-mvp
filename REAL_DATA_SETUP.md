@@ -65,9 +65,10 @@ COMPANIES_HOUSE_API_KEY=your_companies_house_api_key_here
 
 ## 🔧 Current Status
 
-- ✅ Real API integration enabled
+- ✅ System working with sample data
+- ⏳ Real API integration temporarily disabled (deployment issues)
 - ✅ Fallback to sample data working
 - ⏳ Waiting for API keys to be configured
-- ✅ System ready for real data
+- ✅ System ready for real data (once imports are fixed)
 
-Once you add the API keys, the system will automatically start using real data instead of sample data!
+**Note**: The real API integration is temporarily disabled due to deployment issues. The system is working perfectly with sample data. To enable real data, the import statements need to be fixed first.
