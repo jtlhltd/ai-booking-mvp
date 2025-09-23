@@ -6117,6 +6117,132 @@ app.post('/admin/vapi/calls', async (req, res) => {
   }
 });
 
+// UK Business Search endpoint
+app.post('/api/uk-business-search', async (req, res) => {
+  try {
+    const { query, filters = {} } = req.body;
+    
+    if (!query) {
+      return res.status(400).json({ error: 'Query is required' });
+    }
+    
+    // Sample UK business data for demonstration
+    const sampleBusinesses = {
+      'gardeners': [
+        {
+          name: "Green Thumb Gardeners",
+          address: "123 High Street, London, SW1A 1AA",
+          phone: "+44 20 7123 4567",
+          email: "info@greenthumbgardeners.co.uk",
+          website: "https://greenthumbgardeners.co.uk",
+          employees: "5-10",
+          services: ["Garden Design", "Landscaping", "Tree Surgery"],
+          rating: 4.8,
+          category: "gardening",
+          leadScore: 85
+        },
+        {
+          name: "Perfect Gardens Ltd",
+          address: "45 Church Road, Manchester, M1 1AA",
+          phone: "+44 161 123 4567",
+          email: "hello@perfectgardens.co.uk",
+          website: "https://perfectgardens.co.uk",
+          employees: "10-20",
+          services: ["Garden Maintenance", "Patio Installation", "Hedge Trimming"],
+          rating: 4.6,
+          category: "gardening",
+          leadScore: 82
+        }
+      ],
+      'dental': [
+        {
+          name: "Bright Smile Dental Practice",
+          address: "12 Harley Street, London, W1G 9QD",
+          phone: "+44 20 7580 1234",
+          email: "info@brightsmile.co.uk",
+          website: "https://brightsmile.co.uk",
+          employees: "15-25",
+          services: ["General Dentistry", "Cosmetic Dentistry", "Orthodontics"],
+          rating: 4.9,
+          category: "dental",
+          leadScore: 95
+        }
+      ],
+      'legal': [
+        {
+          name: "Thompson & Associates Solicitors",
+          address: "56 Fleet Street, London, EC4Y 1AA",
+          phone: "+44 20 7400 1234",
+          email: "info@thompsonlaw.co.uk",
+          website: "https://thompsonlaw.co.uk",
+          employees: "25-50",
+          services: ["Commercial Law", "Property Law", "Family Law"],
+          rating: 4.7,
+          category: "legal",
+          leadScore: 88
+        }
+      ]
+    };
+    
+    // Search through sample data
+    let results = [];
+    const queryLower = query.toLowerCase();
+    
+    for (const [category, businesses] of Object.entries(sampleBusinesses)) {
+      if (category.includes(queryLower) || queryLower.includes(category)) {
+        results = results.concat(businesses);
+      }
+    }
+    
+    // If no exact match, try partial matches
+    if (results.length === 0) {
+      for (const [category, businesses] of Object.entries(sampleBusinesses)) {
+        businesses.forEach(business => {
+          if (business.name.toLowerCase().includes(queryLower) ||
+              business.services.some(service => service.toLowerCase().includes(queryLower))) {
+            results.push(business);
+          }
+        });
+      }
+    }
+    
+    // Apply filters
+    if (filters.location && filters.location !== 'all') {
+      results = results.filter(business => 
+        business.address.toLowerCase().includes(filters.location.toLowerCase())
+      );
+    }
+    
+    if (filters.contactInfo && filters.contactInfo !== 'all') {
+      if (filters.contactInfo === 'phone') {
+        results = results.filter(business => business.phone);
+      } else if (filters.contactInfo === 'email') {
+        results = results.filter(business => business.email);
+      } else if (filters.contactInfo === 'both') {
+        results = results.filter(business => business.phone && business.email);
+      }
+    }
+    
+    // Limit results
+    const limit = filters.limit || 100;
+    results = results.slice(0, limit);
+    
+    res.json({
+      success: true,
+      results,
+      count: results.length,
+      query,
+      filters
+    });
+  } catch (error) {
+    console.error('UK Business Search error:', error);
+    res.status(500).json({ 
+      error: 'Failed to search businesses',
+      message: error.message 
+    });
+  }
+});
+
 // Error handling middleware (must be last)
 app.use(errorHandler);
 

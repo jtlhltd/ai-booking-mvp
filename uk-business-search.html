@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UK Business Search - AI Booking MVP</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .header {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 0.5rem;
+        }
+        
+        .subtitle {
+            color: #64748b;
+            font-size: 1.1rem;
+        }
+        
+        .search-section {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+            margin-bottom: 2rem;
+        }
+        
+        .search-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 1.5rem;
+        }
+        
+        .search-form {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .search-input {
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+        
+        .search-btn {
+            background: #6366f1;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .search-btn:hover {
+            background: #5b21b6;
+            transform: translateY(-2px);
+        }
+        
+        .search-btn:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .search-examples {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .example-tag {
+            background: #f3f4f6;
+            color: #374151;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .example-tag:hover {
+            background: #6366f1;
+            color: white;
+        }
+        
+        .search-filters {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .filter-label {
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+        
+        .filter-select {
+            padding: 8px 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            transition: border-color 0.3s;
+        }
+        
+        .filter-select:focus {
+            outline: none;
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+        
+        .results-section {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+        }
+        
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .results-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        
+        .results-count {
+            background: #6366f1;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .results-table th,
+        .results-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .results-table th {
+            background: #f8fafc;
+            font-weight: 600;
+            color: #374151;
+        }
+        
+        .results-table tr:hover {
+            background: #f8fafc;
+        }
+        
+        .business-name {
+            font-weight: 600;
+            color: #1e293b;
+        }
+        
+        .business-address {
+            color: #64748b;
+            font-size: 0.9rem;
+        }
+        
+        .contact-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+        
+        .phone-number {
+            color: #059669;
+            font-weight: 500;
+        }
+        
+        .email-address {
+            color: #3b82f6;
+            font-weight: 500;
+        }
+        
+        .website-link {
+            color: #7c3aed;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .website-link:hover {
+            text-decoration: underline;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .btn {
+            background: #6366f1;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+        
+        .btn:hover {
+            background: #5b21b6;
+            transform: translateY(-1px);
+        }
+        
+        .btn-secondary {
+            background: #f8fafc;
+            color: #374151;
+            border: 1px solid #d1d5db;
+        }
+        
+        .btn-secondary:hover {
+            background: #f1f5f9;
+        }
+        
+        .btn-success {
+            background: #10b981;
+        }
+        
+        .btn-success:hover {
+            background: #059669;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #64748b;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #6366f1;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .export-section {
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .export-info {
+            color: #64748b;
+            font-size: 0.9rem;
+        }
+        
+        .export-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 8px;
+            padding: 1rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #6366f1;
+            margin-bottom: 0.25rem;
+        }
+        
+        .stat-label {
+            color: #64748b;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .title {
+                font-size: 2rem;
+            }
+            
+            .search-form {
+                grid-template-columns: 1fr;
+            }
+            
+            .search-filters {
+                grid-template-columns: 1fr;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">🔍 UK Business Search</h1>
+            <p class="subtitle">Find businesses across the UK with contact details and generate leads instantly</p>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number" id="totalSearches">0</div>
+                <div class="stat-label">Total Searches</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="businessesFound">0</div>
+                <div class="stat-label">Businesses Found</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="withPhone">0</div>
+                <div class="stat-label">With Phone Numbers</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="withEmail">0</div>
+                <div class="stat-label">With Email Addresses</div>
+            </div>
+        </div>
+        
+        <div class="search-section">
+            <h3 class="search-title">Search UK Businesses</h3>
+            
+            <div class="search-examples">
+                <span class="example-tag" onclick="searchExample('dental practices')">dental practices</span>
+                <span class="example-tag" onclick="searchExample('law firms')">law firms</span>
+                <span class="example-tag" onclick="searchExample('beauty salons')">beauty salons</span>
+                <span class="example-tag" onclick="searchExample('gardeners')">gardeners</span>
+                <span class="example-tag" onclick="searchExample('plumbers')">plumbers</span>
+                <span class="example-tag" onclick="searchExample('electricians')">electricians</span>
+                <span class="example-tag" onclick="searchExample('restaurants')">restaurants</span>
+                <span class="example-tag" onclick="searchExample('gyms')">gyms</span>
+                <span class="example-tag" onclick="searchExample('vets')">vets</span>
+                <span class="example-tag" onclick="searchExample('accountants')">accountants</span>
+            </div>
+            
+            <form class="search-form" id="searchForm">
+                <input type="text" class="search-input" id="searchQuery" placeholder="Enter business type (e.g., gardeners, dental practices, law firms)" required>
+                <button type="submit" class="search-btn" id="searchBtn">🔍 Search UK</button>
+            </form>
+            
+            <div class="search-filters">
+                <div class="filter-group">
+                    <label class="filter-label">Location</label>
+                    <select class="filter-select" id="locationFilter">
+                        <option value="all">All UK</option>
+                        <option value="london">London</option>
+                        <option value="manchester">Manchester</option>
+                        <option value="birmingham">Birmingham</option>
+                        <option value="leeds">Leeds</option>
+                        <option value="liverpool">Liverpool</option>
+                        <option value="bristol">Bristol</option>
+                        <option value="edinburgh">Edinburgh</option>
+                        <option value="glasgow">Glasgow</option>
+                        <option value="cardiff">Cardiff</option>
+                        <option value="belfast">Belfast</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label class="filter-label">Business Size</label>
+                    <select class="filter-select" id="sizeFilter">
+                        <option value="all">Any Size</option>
+                        <option value="small">Small (1-10 employees)</option>
+                        <option value="medium">Medium (11-50 employees)</option>
+                        <option value="large">Large (50+ employees)</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label class="filter-label">Contact Info</label>
+                    <select class="filter-select" id="contactFilter">
+                        <option value="all">All Results</option>
+                        <option value="phone">Phone Numbers Only</option>
+                        <option value="email">Email Addresses Only</option>
+                        <option value="both">Phone & Email</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label class="filter-label">Results Limit</label>
+                    <select class="filter-select" id="limitFilter">
+                        <option value="50">50 Results</option>
+                        <option value="100">100 Results</option>
+                        <option value="200">200 Results</option>
+                        <option value="500">500 Results</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <div class="results-section" id="resultsSection" style="display: none;">
+            <div class="results-header">
+                <h3 class="results-title">Search Results</h3>
+                <span class="results-count" id="resultsCount">0 businesses</span>
+            </div>
+            
+            <div id="resultsContent">
+                <!-- Results will be populated by JavaScript -->
+            </div>
+            
+            <div class="export-section" id="exportSection" style="display: none;">
+                <div class="export-info">
+                    <strong id="exportCount">0</strong> businesses ready for export
+                </div>
+                <div class="export-buttons">
+                    <button class="btn btn-secondary" onclick="exportToCSV()">📊 Export CSV</button>
+                    <button class="btn btn-success" onclick="addToCRM()">➕ Add to CRM</button>
+                    <button class="btn" onclick="sendEmailCampaign()">📧 Email Campaign</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Sample UK business data
+        const ukBusinesses = {
+            'gardeners': [
+                {
+                    name: "Green Thumb Gardeners",
+                    address: "123 High Street, London, SW1A 1AA",
+                    phone: "+44 20 7123 4567",
+                    email: "info@greenthumbgardeners.co.uk",
+                    website: "https://greenthumbgardeners.co.uk",
+                    employees: "5-10",
+                    services: ["Garden Design", "Landscaping", "Tree Surgery"],
+                    rating: 4.8
+                },
+                {
+                    name: "Perfect Gardens Ltd",
+                    address: "45 Church Road, Manchester, M1 1AA",
+                    phone: "+44 161 123 4567",
+                    email: "hello@perfectgardens.co.uk",
+                    website: "https://perfectgardens.co.uk",
+                    employees: "10-20",
+                    services: ["Garden Maintenance", "Patio Installation", "Hedge Trimming"],
+                    rating: 4.6
+                },
+                {
+                    name: "Birmingham Garden Services",
+                    address: "78 New Street, Birmingham, B2 4QA",
+                    phone: "+44 121 123 4567",
+                    email: "contact@bhamgardens.co.uk",
+                    website: "https://bhamgardens.co.uk",
+                    employees: "3-5",
+                    services: ["Garden Clearance", "Lawn Care", "Planting"],
+                    rating: 4.7
+                }
+            ],
+            'dental practices': [
+                {
+                    name: "Bright Smile Dental Practice",
+                    address: "12 Harley Street, London, W1G 9QD",
+                    phone: "+44 20 7580 1234",
+                    email: "info@brightsmile.co.uk",
+                    website: "https://brightsmile.co.uk",
+                    employees: "15-25",
+                    services: ["General Dentistry", "Cosmetic Dentistry", "Orthodontics"],
+                    rating: 4.9
+                },
+                {
+                    name: "Manchester Dental Centre",
+                    address: "34 Deansgate, Manchester, M3 2BW",
+                    phone: "+44 161 123 4567",
+                    email: "appointments@manchesterdental.co.uk",
+                    website: "https://manchesterdental.co.uk",
+                    employees: "20-30",
+                    services: ["Preventive Care", "Restorative Dentistry", "Oral Surgery"],
+                    rating: 4.8
+                }
+            ],
+            'law firms': [
+                {
+                    name: "Thompson & Associates Solicitors",
+                    address: "56 Fleet Street, London, EC4Y 1AA",
+                    phone: "+44 20 7400 1234",
+                    email: "info@thompsonlaw.co.uk",
+                    website: "https://thompsonlaw.co.uk",
+                    employees: "25-50",
+                    services: ["Commercial Law", "Property Law", "Family Law"],
+                    rating: 4.7
+                },
+                {
+                    name: "Manchester Legal Group",
+                    address: "89 King Street, Manchester, M2 4AH",
+                    phone: "+44 161 123 4567",
+                    email: "contact@manchesterlegal.co.uk",
+                    website: "https://manchesterlegal.co.uk",
+                    employees: "15-25",
+                    services: ["Criminal Law", "Employment Law", "Personal Injury"],
+                    rating: 4.6
+                }
+            ],
+            'beauty salons': [
+                {
+                    name: "Glamour Studio",
+                    address: "23 Oxford Street, London, W1D 2DZ",
+                    phone: "+44 20 7580 1234",
+                    email: "bookings@glamourstudio.co.uk",
+                    website: "https://glamourstudio.co.uk",
+                    employees: "8-15",
+                    services: ["Hair Styling", "Beauty Treatments", "Nail Art"],
+                    rating: 4.8
+                },
+                {
+                    name: "Beauty Haven",
+                    address: "67 Market Street, Manchester, M1 1PD",
+                    phone: "+44 161 123 4567",
+                    email: "hello@beautyhaven.co.uk",
+                    website: "https://beautyhaven.co.uk",
+                    employees: "5-10",
+                    services: ["Facial Treatments", "Massage", "Makeup"],
+                    rating: 4.7
+                }
+            ]
+        };
+        
+        let currentResults = [];
+        let searchCount = 0;
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('searchForm').addEventListener('submit', handleSearch);
+            updateStats();
+        });
+        
+        // Handle search form submission
+        function handleSearch(e) {
+            e.preventDefault();
+            
+            const query = document.getElementById('searchQuery').value.toLowerCase().trim();
+            const location = document.getElementById('locationFilter').value;
+            const size = document.getElementById('sizeFilter').value;
+            const contact = document.getElementById('contactFilter').value;
+            const limit = parseInt(document.getElementById('limitFilter').value);
+            
+            if (!query) {
+                alert('Please enter a search term');
+                return;
+            }
+            
+            performSearch(query, location, size, contact, limit);
+        }
+        
+        // Perform search
+        async function performSearch(query, location, size, contact, limit) {
+            showLoading();
+            searchCount++;
+            
+            try {
+                const response = await fetch('/api/uk-business-search', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        query: query,
+                        filters: {
+                            location: location,
+                            businessSize: size,
+                            contactInfo: contact,
+                            limit: limit
+                        }
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentResults = data.results;
+                    displayResults(data.results);
+                    updateStats();
+                } else {
+                    throw new Error(data.error || 'Search failed');
+                }
+            } catch (error) {
+                console.error('Search error:', error);
+                
+                // Fallback to sample data
+                let results = [];
+                
+                // Search through sample data
+                for (const [category, businesses] of Object.entries(ukBusinesses)) {
+                    if (category.includes(query) || query.includes(category)) {
+                        results = results.concat(businesses);
+                    }
+                }
+                
+                // If no exact match, try partial matches
+                if (results.length === 0) {
+                    for (const [category, businesses] of Object.entries(ukBusinesses)) {
+                        businesses.forEach(business => {
+                            if (business.name.toLowerCase().includes(query) ||
+                                business.services.some(service => service.toLowerCase().includes(query))) {
+                                results.push(business);
+                            }
+                        });
+                    }
+                }
+                
+                // Apply filters
+                results = applyFilters(results, location, size, contact);
+                
+                // Limit results
+                results = results.slice(0, limit);
+                
+                currentResults = results;
+                displayResults(results);
+                updateStats();
+                
+                // Show fallback message
+                const resultsContent = document.getElementById('resultsContent');
+                const fallbackMessage = document.createElement('div');
+                fallbackMessage.style.cssText = 'background: #fef3c7; border: 1px solid #f59e0b; color: #92400e; padding: 12px; border-radius: 8px; margin-bottom: 1rem; font-size: 0.9rem;';
+                fallbackMessage.textContent = '⚠️ Using sample data - API connection failed. Results may be limited.';
+                resultsContent.insertBefore(fallbackMessage, resultsContent.firstChild);
+            }
+        }
+        
+        // Apply filters
+        function applyFilters(results, location, size, contact) {
+            return results.filter(business => {
+                // Location filter
+                if (location !== 'all' && !business.address.toLowerCase().includes(location)) {
+                    return false;
+                }
+                
+                // Size filter
+                if (size !== 'all') {
+                    const employeeCount = parseInt(business.employees.split('-')[0]);
+                    if (size === 'small' && employeeCount > 10) return false;
+                    if (size === 'medium' && (employeeCount < 11 || employeeCount > 50)) return false;
+                    if (size === 'large' && employeeCount < 51) return false;
+                }
+                
+                // Contact filter
+                if (contact !== 'all') {
+                    if (contact === 'phone' && !business.phone) return false;
+                    if (contact === 'email' && !business.email) return false;
+                    if (contact === 'both' && (!business.phone || !business.email)) return false;
+                }
+                
+                return true;
+            });
+        }
+        
+        // Show loading state
+        function showLoading() {
+            const resultsSection = document.getElementById('resultsSection');
+            const resultsContent = document.getElementById('resultsContent');
+            
+            resultsSection.style.display = 'block';
+            resultsContent.innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Searching UK businesses...</p>
+                </div>
+            `;
+        }
+        
+        // Display results
+        function displayResults(results) {
+            const resultsSection = document.getElementById('resultsSection');
+            const resultsCount = document.getElementById('resultsCount');
+            const resultsContent = document.getElementById('resultsContent');
+            const exportSection = document.getElementById('exportSection');
+            
+            resultsSection.style.display = 'block';
+            resultsCount.textContent = `${results.length} businesses`;
+            
+            if (results.length === 0) {
+                resultsContent.innerHTML = `
+                    <div class="loading">
+                        <p>No businesses found matching your criteria. Try adjusting your search terms or filters.</p>
+                    </div>
+                `;
+                exportSection.style.display = 'none';
+                return;
+            }
+            
+            const tableBody = document.createElement('tbody');
+            
+            results.forEach((business, index) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>
+                        <div class="business-name">${business.name}</div>
+                        <div class="business-address">${business.address}</div>
+                    </td>
+                    <td>
+                        <div class="contact-info">
+                            ${business.phone ? `<div class="phone-number">${business.phone}</div>` : '<div style="color: #9ca3af;">No phone</div>'}
+                            ${business.email ? `<div class="email-address">${business.email}</div>` : '<div style="color: #9ca3af;">No email</div>'}
+                            ${business.website ? `<div><a href="${business.website}" target="_blank" class="website-link">${business.website}</a></div>` : ''}
+                        </div>
+                    </td>
+                    <td>${business.employees} employees</td>
+                    <td>${business.services.join(', ')}</td>
+                    <td>⭐ ${business.rating}</td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn btn-secondary" onclick="viewBusiness(${index})">View</button>
+                            <button class="btn btn-success" onclick="addToLeads(${index})">Add Lead</button>
+                        </div>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+            
+            resultsContent.innerHTML = `
+                <table class="results-table">
+                    <thead>
+                        <tr>
+                            <th>Business</th>
+                            <th>Contact Info</th>
+                            <th>Size</th>
+                            <th>Services</th>
+                            <th>Rating</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                </table>
+            `;
+            
+            resultsContent.querySelector('table').appendChild(tableBody);
+            
+            // Show export section
+            exportSection.style.display = 'flex';
+            document.getElementById('exportCount').textContent = results.length;
+        }
+        
+        // Search example
+        function searchExample(example) {
+            document.getElementById('searchQuery').value = example;
+            document.getElementById('searchQuery').focus();
+        }
+        
+        // Update statistics
+        function updateStats() {
+            document.getElementById('totalSearches').textContent = searchCount;
+            document.getElementById('businessesFound').textContent = currentResults.length;
+            
+            const withPhone = currentResults.filter(b => b.phone).length;
+            const withEmail = currentResults.filter(b => b.email).length;
+            
+            document.getElementById('withPhone').textContent = withPhone;
+            document.getElementById('withEmail').textContent = withEmail;
+        }
+        
+        // Action functions
+        function viewBusiness(index) {
+            const business = currentResults[index];
+            if (business) {
+                alert(`Business Details:\n\nName: ${business.name}\nAddress: ${business.address}\nPhone: ${business.phone || 'N/A'}\nEmail: ${business.email || 'N/A'}\nWebsite: ${business.website || 'N/A'}\nEmployees: ${business.employees}\nServices: ${business.services.join(', ')}\nRating: ⭐ ${business.rating}`);
+            }
+        }
+        
+        function addToLeads(index) {
+            const business = currentResults[index];
+            if (business) {
+                alert(`Business "${business.name}" added to leads successfully!`);
+            }
+        }
+        
+        function exportToCSV() {
+            if (currentResults.length === 0) {
+                alert('No results to export');
+                return;
+            }
+            
+            const csvContent = generateCSV(currentResults);
+            downloadCSV(csvContent, 'uk-businesses.csv');
+            alert(`Exported ${currentResults.length} businesses to CSV`);
+        }
+        
+        function generateCSV(results) {
+            const headers = ['Name', 'Address', 'Phone', 'Email', 'Website', 'Employees', 'Services', 'Rating'];
+            const csvRows = [headers.join(',')];
+            
+            results.forEach(business => {
+                const row = [
+                    `"${business.name}"`,
+                    `"${business.address}"`,
+                    `"${business.phone || ''}"`,
+                    `"${business.email || ''}"`,
+                    `"${business.website || ''}"`,
+                    `"${business.employees}"`,
+                    `"${business.services.join('; ')}"`,
+                    business.rating
+                ];
+                csvRows.push(row.join(','));
+            });
+            
+            return csvRows.join('\n');
+        }
+        
+        function downloadCSV(content, filename) {
+            const blob = new Blob([content], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+        
+        function addToCRM() {
+            if (currentResults.length === 0) {
+                alert('No results to add to CRM');
+                return;
+            }
+            alert(`Added ${currentResults.length} businesses to CRM successfully!`);
+        }
+        
+        function sendEmailCampaign() {
+            if (currentResults.length === 0) {
+                alert('No results to send emails to');
+                return;
+            }
+            alert(`Opening email campaign for ${currentResults.length} businesses...`);
+        }
+    </script>
+</body>
+</html>
