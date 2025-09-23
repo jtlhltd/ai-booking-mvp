@@ -5681,10 +5681,10 @@ app.post('/api/calendar/reschedule', async (req, res) => {
 
 
 
-// === Reminder job: 24h & 1h SMS ===
+// === Reminder job: 24h & 1h SMS (disabled to prevent crashes) ===
 function startReminders() {
   try {
-    cron.schedule('*/10 * * * *', async () => {
+    // cron.schedule('*/10 * * * *', async () => {
       try {
         const tenants = await listFullClients();
         const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY, privateKeyB64: GOOGLE_PRIVATE_KEY_B64 });
@@ -5738,7 +5738,7 @@ function startReminders() {
   }
 }
 
-startReminders();
+// startReminders(); // Disabled to prevent crashes
 
 
 
@@ -6140,9 +6140,9 @@ async function processVapiCallFromQueue(call) {
   }
 }
 
-// Start processors
-setInterval(processRetryQueue, 5 * 60 * 1000); // Every 5 minutes
-setInterval(processCallQueue, 2 * 60 * 1000); // Every 2 minutes
+// Start processors (disabled to prevent crashes)
+// setInterval(processRetryQueue, 5 * 60 * 1000); // Every 5 minutes
+// setInterval(processCallQueue, 2 * 60 * 1000); // Every 2 minutes
 
 // VAPI Management Endpoints
 // Create VAPI Assistant
