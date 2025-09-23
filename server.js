@@ -82,6 +82,8 @@ import cron from 'node-cron';
 import leadsRouter from './routes/leads.js';
 import twilioWebhooks from './routes/twilio-webhooks.js';
 import vapiWebhooks from './routes/vapi-webhooks.js';
+import RealUKBusinessSearch from './real-uk-business-search.js';
+import DecisionMakerContactFinder from './decision-maker-contact-finder.js';
 
 
 const app = express();
@@ -2226,9 +2228,6 @@ function requireApiKey(req, res, next) {
 }
 
 // === PUBLIC ENDPOINTS (no auth required) ===
-// Import real UK business search (ESM)
-import RealUKBusinessSearch from './real-uk-business-search.js';
-import DecisionMakerContactFinder from './decision-maker-contact-finder.js';
 
 // UK Business Search endpoint with real APIs (PUBLIC - no auth required)
 app.post('/api/uk-business-search', async (req, res) => {
