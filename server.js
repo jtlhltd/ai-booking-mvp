@@ -469,20 +469,531 @@ const GOOGLE_PRIVATE_KEY_B64 = process.env.GOOGLE_PRIVATE_KEY_B64 || '';
 const GOOGLE_CALENDAR_ID     = process.env.GOOGLE_CALENDAR_ID     || 'primary';
 const TIMEZONE               = process.env.TZ || process.env.TIMEZONE || 'Europe/London';
 
-// Retry logic for external API calls
-async function retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000) {
+// Enhanced retry logic with exponential backoff and circuit breaker
+async function retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000, context = {}) {
+  const { operation = 'unknown', tenantKey = 'unknown', leadPhone = 'unknown' } = context;
+  
+  // Check circuit breaker
+  if (isCircuitBreakerOpen(operation)) {
+    throw new Error(`Circuit breaker is open for operation: ${operation}`);
+  }
+  
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      return await fn();
+      const result = await fn();
+      
+      // Log successful retry if it wasn't the first attempt
+      if (attempt > 1) {
+        console.log(`[RETRY SUCCESS]`, {
+          operation,
+          tenantKey,
+          leadPhone,
+          attempt,
+          totalAttempts: attempt
+        });
+      }
+      
+      // Reset circuit breaker on success
+      if (attempt > 1) {
+        await updateCircuitBreakerState(operation, 'closed');
+      }
+      
+      return result;
     } catch (error) {
-      if (attempt === maxRetries) {
+      const errorType = categorizeError(error);
+      const shouldRetry = shouldRetryError(errorType, attempt, maxRetries);
+      
+      console.error(`[RETRY ATTEMPT ${attempt}/${maxRetries}]`, {
+        operation,
+        tenantKey,
+        leadPhone,
+        errorType,
+        error: error.message,
+        shouldRetry,
+        attempt
+      });
+      
+      if (!shouldRetry || attempt === maxRetries) {
+        // Log final failure
+        console.error(`[RETRY FAILED]`, {
+          operation,
+          tenantKey,
+          leadPhone,
+          finalAttempt: attempt,
+          errorType,
+          error: error.message
+        });
+        
+        // Implement circuit breaker for critical failures
+        if (errorType === 'critical') {
+          await updateCircuitBreakerState(operation, 'open');
+        }
+        
         throw error;
       }
       
-      const delay = baseDelay * Math.pow(2, attempt - 1) + Math.random() * 1000;
-      console.log(`[RETRY] Attempt ${attempt}/${maxRetries} failed, retrying in ${Math.round(delay)}ms`, { error: error.message });
+      // Calculate delay with jitter to avoid thundering herd
+      const delay = calculateRetryDelay(baseDelay, attempt, errorType);
+      console.log(`[RETRY DELAY]`, {
+        operation,
+        tenantKey,
+        delay: `${delay}ms`,
+        nextAttempt: attempt + 1,
+        errorType
+      });
+      
       await new Promise(resolve => setTimeout(resolve, delay));
     }
+  }
+}
+
+// Categorize errors for appropriate retry handling
+function categorizeError(error) {
+  const message = error.message?.toLowerCase() || '';
+  const status = error.status || error.statusCode;
+  
+  // Network/connectivity errors (retryable)
+  if (message.includes('timeout') || message.includes('econnreset') || message.includes('enotfound')) {
+    return 'network';
+  }
+  
+  // Rate limiting (retryable with longer delay)
+  if (status === 429 || message.includes('rate limit') || message.includes('too many requests')) {
+    return 'rate_limit';
+  }
+  
+  // Server errors (retryable)
+  if (status >= 500 && status < 600) {
+    return 'server_error';
+  }
+  
+  // Client errors (not retryable)
+  if (status >= 400 && status < 500) {
+    return 'client_error';
+  }
+  
+  // VAPI-specific errors
+  if (message.includes('vapi') || message.includes('assistant') || message.includes('phone number')) {
+    return 'vapi_error';
+  }
+  
+  // Critical errors (circuit breaker)
+  if (message.includes('unauthorized') || message.includes('forbidden') || message.includes('invalid key')) {
+    return 'critical';
+  }
+  
+  return 'unknown';
+}
+
+// Determine if error should be retried
+function shouldRetryError(errorType, attempt, maxRetries) {
+  const retryableErrors = ['network', 'server_error', 'rate_limit'];
+  const nonRetryableErrors = ['client_error', 'critical'];
+  
+  if (nonRetryableErrors.includes(errorType)) {
+    return false;
+  }
+  
+  if (retryableErrors.includes(errorType)) {
+    return attempt < maxRetries;
+  }
+  
+  // Unknown errors: retry once
+  return attempt === 1;
+}
+
+// Calculate retry delay with jitter
+function calculateRetryDelay(baseDelay, attempt, errorType) {
+  let delay = baseDelay * Math.pow(2, attempt - 1);
+  
+  // Special handling for rate limiting
+  if (errorType === 'rate_limit') {
+    delay = Math.max(delay, 5000); // Minimum 5 seconds for rate limits
+  }
+  
+  // Add jitter (±25% random variation)
+  const jitter = delay * 0.25 * (Math.random() - 0.5);
+  delay = Math.max(100, delay + jitter);
+  
+  return Math.floor(delay);
+}
+
+// Circuit breaker state management
+const circuitBreakerState = new Map();
+
+async function updateCircuitBreakerState(operation, state) {
+  circuitBreakerState.set(operation, {
+    state,
+    timestamp: Date.now(),
+    failureCount: state === 'open' ? (circuitBreakerState.get(operation)?.failureCount || 0) + 1 : 0
+  });
+  
+  console.log(`[CIRCUIT BREAKER]`, {
+    operation,
+    state,
+    failureCount: circuitBreakerState.get(operation)?.failureCount || 0
+  });
+}
+
+function isCircuitBreakerOpen(operation) {
+  const state = circuitBreakerState.get(operation);
+  if (!state) return false;
+  
+  // Auto-recovery after 5 minutes
+  const recoveryTime = 5 * 60 * 1000;
+  if (state.state === 'open' && Date.now() - state.timestamp > recoveryTime) {
+    circuitBreakerState.set(operation, { state: 'half-open', timestamp: Date.now() });
+    console.log(`[CIRCUIT BREAKER RECOVERY]`, { operation, state: 'half-open' });
+    return false;
+  }
+  
+  return state.state === 'open';
+}
+
+// Handle VAPI failures with fallback mechanisms
+async function handleVapiFailure({ from, tenantKey, error }) {
+  try {
+    console.log('[VAPI FALLBACK]', { from, tenantKey, error });
+    
+    const client = await getFullClient(tenantKey);
+    if (!client) {
+      console.error('[VAPI FALLBACK ERROR]', { reason: 'client_not_found', tenantKey });
+      return;
+    }
+    
+    // Option 1: Send SMS fallback message
+    await sendSmsFallback({ from, tenantKey, client, error });
+    
+    // Option 2: Schedule retry call
+    await scheduleRetryCall({ from, tenantKey, client, error });
+    
+    // Option 3: Update lead status
+    await updateLeadOnVapiFailure({ from, tenantKey, error });
+    
+  } catch (fallbackError) {
+    console.error('[VAPI FALLBACK ERROR]', {
+      from,
+      tenantKey,
+      originalError: error,
+      fallbackError: fallbackError.message
+    });
+  }
+}
+
+// Send SMS fallback when VAPI fails
+async function sendSmsFallback({ from, tenantKey, client, error }) {
+  try {
+    const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
+    if (!configured) {
+      console.log('[SMS FALLBACK SKIP]', { reason: 'sms_not_configured', tenantKey });
+      return;
+    }
+    
+    const brand = client?.displayName || client?.clientKey || 'Our Clinic';
+    const fallbackMessage = `Hi! ${brand} tried to call you but had a technical issue. Please call us back at ${client?.phone || 'our main number'} or reply with your preferred time.`;
+    
+    await smsClient.messages.create({
+      body: fallbackMessage,
+      messagingServiceSid,
+      to: from
+    });
+    
+    console.log('[SMS FALLBACK SENT]', { from, tenantKey, message: fallbackMessage });
+    
+  } catch (smsError) {
+    console.error('[SMS FALLBACK ERROR]', { from, tenantKey, error: smsError.message });
+  }
+}
+
+// Schedule retry call for later
+async function scheduleRetryCall({ from, tenantKey, client, error }) {
+  try {
+    // Determine retry delay based on error type
+    const errorType = categorizeError({ message: error });
+    let retryDelay = 30 * 60 * 1000; // Default 30 minutes
+    
+    if (errorType === 'rate_limit') {
+      retryDelay = 60 * 60 * 1000; // 1 hour for rate limits
+    } else if (errorType === 'server_error') {
+      retryDelay = 15 * 60 * 1000; // 15 minutes for server errors
+    } else if (errorType === 'critical') {
+      retryDelay = 2 * 60 * 60 * 1000; // 2 hours for critical errors
+    }
+    
+    const retryTime = new Date(Date.now() + retryDelay);
+    
+    console.log('[RETRY SCHEDULED]', {
+      from,
+      tenantKey,
+      errorType,
+      retryTime: retryTime.toISOString(),
+      retryDelay: `${retryDelay / 1000 / 60} minutes`
+    });
+    
+    // TODO: Implement actual retry queue/scheduling system
+    // This would store the retry request in a database or queue
+    
+  } catch (retryError) {
+    console.error('[RETRY SCHEDULE ERROR]', { from, tenantKey, error: retryError.message });
+  }
+}
+
+// Update lead status when VAPI fails
+async function updateLeadOnVapiFailure({ from, tenantKey, error }) {
+  try {
+    const clients = await listFullClients();
+    const leads = clients.flatMap(client => client.leads || []);
+    const lead = leads.find(l => l.phone === from && l.tenantKey === tenantKey);
+    
+    if (lead) {
+      lead.status = 'vapi_failed';
+      lead.lastVapiError = error;
+      lead.lastVapiAttempt = new Date().toISOString();
+      
+      // Update the client in the database
+      const client = await getFullClient(tenantKey);
+      if (client) {
+        client.leads = leads.filter(l => l.tenantKey === tenantKey);
+        client.updatedAt = new Date().toISOString();
+        await upsertFullClient(client);
+        
+        console.log('[LEAD STATUS UPDATED]', {
+          from,
+          tenantKey,
+          newStatus: 'vapi_failed',
+          error
+        });
+      }
+    }
+    
+  } catch (updateError) {
+    console.error('[LEAD UPDATE ERROR]', { from, tenantKey, error: updateError.message });
+  }
+}
+
+// Dynamic assistant selection based on lead characteristics
+async function selectOptimalAssistant({ client, existingLead, isYes, isStart }) {
+  try {
+    const leadScore = existingLead?.score || 0;
+    const leadStatus = existingLead?.status || 'new';
+    const industry = client?.industry || 'general';
+    const timeOfDay = new Date().getHours();
+    
+    // Default configuration
+    let assistantId = client?.vapiAssistantId || VAPI_ASSISTANT_ID;
+    let phoneNumberId = client?.vapiPhoneNumberId || VAPI_PHONE_NUMBER_ID;
+    
+    // High-value lead optimization
+    if (leadScore >= 80) {
+      assistantId = client?.vapiHighValueAssistantId || assistantId;
+      phoneNumberId = client?.vapiHighValuePhoneNumberId || phoneNumberId;
+      
+      console.log('[ASSISTANT SELECTION]', {
+        reason: 'high_value_lead',
+        leadScore,
+        assistantId,
+        phoneNumberId
+      });
+    }
+    
+    // Industry-specific assistants
+    else if (client?.vapiIndustryAssistants && client.vapiIndustryAssistants[industry]) {
+      const industryConfig = client.vapiIndustryAssistants[industry];
+      assistantId = industryConfig.assistantId || assistantId;
+      phoneNumberId = industryConfig.phoneNumberId || phoneNumberId;
+      
+      console.log('[ASSISTANT SELECTION]', {
+        reason: 'industry_specific',
+        industry,
+        assistantId,
+        phoneNumberId
+      });
+    }
+    
+    // Time-based optimization
+    else if (timeOfDay >= 9 && timeOfDay <= 17) {
+      assistantId = client?.vapiBusinessHoursAssistantId || assistantId;
+      phoneNumberId = client?.vapiBusinessHoursPhoneNumberId || phoneNumberId;
+      
+      console.log('[ASSISTANT SELECTION]', {
+        reason: 'business_hours',
+        timeOfDay,
+        assistantId,
+        phoneNumberId
+      });
+    }
+    
+    // After-hours optimization
+    else {
+      assistantId = client?.vapiAfterHoursAssistantId || assistantId;
+      phoneNumberId = client?.vapiAfterHoursPhoneNumberId || phoneNumberId;
+      
+      console.log('[ASSISTANT SELECTION]', {
+        reason: 'after_hours',
+        timeOfDay,
+        assistantId,
+        phoneNumberId
+      });
+    }
+    
+    // Validate assistant configuration
+    if (!assistantId || !phoneNumberId) {
+      console.warn('[ASSISTANT VALIDATION]', {
+        warning: 'missing_assistant_config',
+        assistantId: !!assistantId,
+        phoneNumberId: !!phoneNumberId,
+        fallbackToDefault: true
+      });
+      
+      assistantId = VAPI_ASSISTANT_ID;
+      phoneNumberId = VAPI_PHONE_NUMBER_ID;
+    }
+    
+    return { assistantId, phoneNumberId };
+    
+  } catch (error) {
+    console.error('[ASSISTANT SELECTION ERROR]', error);
+    return {
+      assistantId: client?.vapiAssistantId || VAPI_ASSISTANT_ID,
+      phoneNumberId: client?.vapiPhoneNumberId || VAPI_PHONE_NUMBER_ID
+    };
+  }
+}
+
+// Generate intelligent assistant variables based on context
+async function generateAssistantVariables({ client, existingLead, tenantKey, serviceForCall, isYes, isStart, assistantConfig }) {
+  try {
+    const now = new Date();
+    const leadScore = existingLead?.score || 0;
+    const leadStatus = existingLead?.status || 'new';
+    const industry = client?.industry || 'general';
+    const timeOfDay = now.getHours();
+    const dayOfWeek = now.getDay();
+    const isBusinessTime = isBusinessHours(client);
+    
+    // Base variables
+    const variables = {
+      ClientKey: tenantKey,
+      BusinessName: client.displayName || client.clientKey,
+      ConsentLine: 'This call may be recorded for quality.',
+      DefaultService: serviceForCall || '',
+      DefaultDurationMin: client?.booking?.defaultDurationMin || 30,
+      Timezone: client?.booking?.timezone || TIMEZONE,
+      ServicesJSON: client?.servicesJson || '[]',
+      PricesJSON: client?.pricesJson || '{}',
+      HoursJSON: client?.hoursJson || '{}',
+      ClosedDatesJSON: client?.closedDatesJson || '[]',
+      Locale: client?.locale || 'en-GB',
+      ScriptHints: client?.scriptHints || '',
+      FAQJSON: client?.faqJson || '[]',
+      Currency: client?.currency || 'GBP',
+      LeadScore: leadScore,
+      LeadStatus: leadStatus,
+      BusinessHours: isBusinessTime ? 'within' : 'outside'
+    };
+    
+    // Context-aware variables
+    variables.CallContext = isYes ? 'yes_response' : 'start_opt_in';
+    variables.TimeOfDay = timeOfDay;
+    variables.DayOfWeek = dayOfWeek;
+    variables.Industry = industry;
+    
+    // Lead-specific variables
+    if (existingLead) {
+      variables.LeadAge = existingLead.createdAt ? 
+        Math.floor((now - new Date(existingLead.createdAt)) / (1000 * 60 * 60 * 24)) : 0;
+      variables.PreviousInteractions = existingLead.messageCount || 0;
+      variables.LastInteraction = existingLead.lastInboundAt || existingLead.createdAt;
+    }
+    
+    // Dynamic greeting based on context
+    if (isYes) {
+      variables.GreetingStyle = 'enthusiastic';
+      variables.CallPurpose = 'booking_confirmation';
+    } else if (isStart) {
+      variables.GreetingStyle = 'welcoming';
+      variables.CallPurpose = 'initial_consultation';
+    } else {
+      variables.GreetingStyle = 'professional';
+      variables.CallPurpose = 'follow_up';
+    }
+    
+    // Industry-specific customization
+    switch (industry.toLowerCase()) {
+      case 'healthcare':
+      case 'medical':
+      case 'dental':
+        variables.IndustryTone = 'caring';
+        variables.PrivacyNotice = 'Your health information is confidential.';
+        break;
+      case 'legal':
+        variables.IndustryTone = 'authoritative';
+        variables.PrivacyNotice = 'Attorney-client privilege applies.';
+        break;
+      case 'financial':
+        variables.IndustryTone = 'trustworthy';
+        variables.PrivacyNotice = 'Your financial information is secure.';
+        break;
+      default:
+        variables.IndustryTone = 'professional';
+        variables.PrivacyNotice = 'Your information is confidential.';
+    }
+    
+    // Time-based customization
+    if (timeOfDay < 12) {
+      variables.TimeGreeting = 'Good morning';
+    } else if (timeOfDay < 17) {
+      variables.TimeGreeting = 'Good afternoon';
+    } else {
+      variables.TimeGreeting = 'Good evening';
+    }
+    
+    // Lead score-based customization
+    if (leadScore >= 80) {
+      variables.PriorityLevel = 'high';
+      variables.CallDuration = 'extended';
+      variables.FollowUpRequired = 'yes';
+    } else if (leadScore >= 50) {
+      variables.PriorityLevel = 'medium';
+      variables.CallDuration = 'standard';
+      variables.FollowUpRequired = 'maybe';
+    } else {
+      variables.PriorityLevel = 'low';
+      variables.CallDuration = 'brief';
+      variables.FollowUpRequired = 'no';
+    }
+    
+    // Business hours customization
+    if (!isBusinessTime) {
+      variables.AfterHoursMessage = 'We appreciate you reaching out after hours.';
+      variables.AvailabilityNote = 'Our regular hours are Monday-Friday 9AM-5PM.';
+    }
+    
+    console.log('[ASSISTANT VARIABLES]', {
+      tenantKey,
+      leadScore,
+      industry,
+      timeOfDay,
+      variablesCount: Object.keys(variables).length
+    });
+    
+    return variables;
+    
+  } catch (error) {
+    console.error('[ASSISTANT VARIABLES ERROR]', error);
+    
+    // Return basic variables as fallback
+    return {
+      ClientKey: tenantKey,
+      BusinessName: client?.displayName || client?.clientKey || 'Our Business',
+      ConsentLine: 'This call may be recorded for quality.',
+      DefaultService: serviceForCall || '',
+      DefaultDurationMin: client?.booking?.defaultDurationMin || 30,
+      Timezone: client?.booking?.timezone || TIMEZONE,
+      LeadScore: existingLead?.score || 0,
+      LeadStatus: existingLead?.status || 'new',
+      BusinessHours: isBusinessHours(client) ? 'within' : 'outside'
+    };
   }
 }
 
@@ -1752,8 +2263,10 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
       try {
         const client = await getFullClient(tenantKey);
         if (client) {
-          const assistantId = client?.vapiAssistantId || VAPI_ASSISTANT_ID;
-          const phoneNumberId = client?.vapiPhoneNumberId || VAPI_PHONE_NUMBER_ID;
+          // Dynamic assistant selection based on lead characteristics
+          const assistantConfig = await selectOptimalAssistant({ client, existingLead, isYes, isStart });
+          const assistantId = assistantConfig.assistantId;
+          const phoneNumberId = assistantConfig.phoneNumberId;
           if (isStart) {
             console.log('[LEAD OPT-IN START]', { from, tenantKey });
           }
@@ -1773,28 +2286,18 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
               retryAttempt: 0 // Track retry attempts
             },
             assistantOverrides: {
-              variableValues: {
-                ClientKey: tenantKey,
-                BusinessName: client.displayName || client.clientKey,
-                ConsentLine: 'This call may be recorded for quality.',
-                DefaultService: serviceForCall || '',
-                DefaultDurationMin: client?.booking?.defaultDurationMin || 30,
-                Timezone: client?.booking?.timezone || TIMEZONE,
-                ServicesJSON: client?.servicesJson || '[]',
-                PricesJSON: client?.pricesJson || '{}',
-                HoursJSON: client?.hoursJson || '{}',
-                ClosedDatesJSON: client?.closedDatesJson || '[]',
-                Locale: client?.locale || 'en-GB',
-                ScriptHints: client?.scriptHints || '',
-                FAQJSON: client?.faqJson || '[]',
-                Currency: client?.currency || 'GBP',
-                LeadScore: existingLead?.score || 0,
-                LeadStatus: existingLead?.status || 'new',
-                BusinessHours: isBusinessHours() ? 'within' : 'outside'
-              }
+              variableValues: await generateAssistantVariables({
+                client,
+                existingLead,
+                tenantKey,
+                serviceForCall,
+                isYes,
+                isStart,
+                assistantConfig
+              })
             }
           };
-            // Use retry logic for VAPI calls
+            // Use enhanced retry logic for VAPI calls
             const vapiResult = await retryWithBackoff(async () => {
               const resp = await fetch(`${VAPI_URL}/call`, {
                 method: 'POST',
@@ -1809,7 +2312,9 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
               
               if (!resp.ok) {
                 const errorText = await resp.text().catch(() => resp.statusText);
-                throw new Error(`VAPI call failed: ${resp.status} ${errorText}`);
+                const error = new Error(`VAPI call failed: ${resp.status} ${errorText}`);
+                error.status = resp.status;
+                throw error;
               }
               
               const result = await resp.json().catch(() => null);
@@ -1818,7 +2323,11 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
               }
               
               return result;
-            }, 3, 2000); // 3 retries, 2 second base delay
+            }, 3, 2000, {
+              operation: 'vapi_call',
+              tenantKey,
+              leadPhone: from
+            }); // 3 retries, 2 second base delay with context
 
             console.log('[VAPI CALL SUCCESS]', { 
               from, 
@@ -1911,19 +2420,22 @@ app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) =>
             }
           }
           
-          if (!vapiResult || vapiResult.error) {
-            console.error('[VAPI ERROR]', { 
-              from,
-              tenantKey,
-              error: vapiResult?.error || 'VAPI call failed',
-              payload: { 
-                assistantId, 
-                phoneNumberId, 
-                customerNumber: from,
-                maxDurationSeconds: 10
-              }
-            });
-          }
+            if (!vapiResult || vapiResult.error) {
+              console.error('[VAPI ERROR]', { 
+                from,
+                tenantKey,
+                error: vapiResult?.error || 'VAPI call failed',
+                payload: { 
+                  assistantId, 
+                  phoneNumberId, 
+                  customerNumber: from,
+                  maxDurationSeconds: 10
+                }
+              });
+              
+              // Implement fallback mechanism
+              await handleVapiFailure({ from, tenantKey, error: vapiResult?.error || 'VAPI call failed' });
+            }
           try {
             const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
             if (configured) {
