@@ -201,8 +201,8 @@ app.post('/api/create-client', async (req, res) => {
         maxRetries: parseInt(clientData.communication?.maxRetries) || 3
       },
       vapi: {
-        assistantId: `asst_${clientKey}_${Date.now()}`,
-        phoneNumberId: `phone_${clientKey}_${Date.now()}`,
+        assistantId: VAPI_ASSISTANT_ID,
+        phoneNumberId: VAPI_PHONE_NUMBER_ID,
         maxDurationSeconds: 10
       },
       calendar: {
