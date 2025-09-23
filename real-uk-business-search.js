@@ -1,6 +1,6 @@
-// Real UK Business Search with Live APIs
-const axios = require('axios');
-const fs = require('fs').promises;
+// Real UK Business Search with Live APIs (ESM)
+import axios from 'axios';
+import { promises as fs } from 'fs';
 
 class RealUKBusinessSearch {
     constructor() {
@@ -544,4 +544,4 @@ class RealUKBusinessSearch {
     }
 }
 
-module.exports = RealUKBusinessSearch;
+export default RealUKBusinessSearch;

@@ -6117,8 +6117,8 @@ app.post('/admin/vapi/calls', async (req, res) => {
   }
 });
 
-// Import real UK business search
-const RealUKBusinessSearch = require('./real-uk-business-search');
+// Import real UK business search (ESM)
+import RealUKBusinessSearch from './real-uk-business-search.js';
 
 // UK Business Search endpoint with real APIs
 app.post('/api/uk-business-search', async (req, res) => {
