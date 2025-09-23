@@ -500,27 +500,38 @@
         
         .demo-input {
             display: flex;
-            gap: 8px;
+            gap: 6px;
             padding-top: 10px;
             border-top: 1px solid #e5e7eb;
+            align-items: center;
         }
         
         .demo-input input {
             flex: 1;
-            padding: 8px 12px;
+            padding: 6px 10px;
             border: 1px solid #d1d5db;
-            border-radius: 20px;
-            font-size: 14px;
+            border-radius: 16px;
+            font-size: 12px;
+            min-width: 0;
         }
         
         .demo-input button {
             background: #6366f1;
             color: white;
             border: none;
-            border-radius: 20px;
-            padding: 8px 16px;
-            font-size: 14px;
+            border-radius: 16px;
+            padding: 6px 12px;
+            font-size: 12px;
             cursor: pointer;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        
+        .demo-input-hint {
+            text-align: center;
+            margin-top: 8px;
+            color: #9ca3af;
+            font-size: 11px;
         }
         
         .demo-controls h3 {
@@ -536,8 +547,8 @@
         
         .demo-suggestions {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
             margin-bottom: 2rem;
         }
         
@@ -1134,12 +1145,12 @@
                 </a>
             </div>
             <div class="hero-social-proof">
-                <div class="social-proof-text">Join 500+ businesses already growing with AI Booking MVP</div>
+                <div class="social-proof-text">Join businesses already growing with AI Booking MVP</div>
                 <div class="social-proof-logos">
-                    <div class="logo-item">🏥 Victory Dental</div>
-                    <div class="logo-item">⚖️ Smith & Associates</div>
-                    <div class="logo-item">💄 Glamour Beauty</div>
-                    <div class="logo-item">🏥 City Medical</div>
+                    <div class="logo-item">🏥 Dental Practices</div>
+                    <div class="logo-item">⚖️ Law Firms</div>
+                    <div class="logo-item">💄 Beauty Salons</div>
+                    <div class="logo-item">🏥 Medical Centers</div>
                 </div>
             </div>
             <div class="stats">
@@ -1245,22 +1256,27 @@
                                     <div class="sms-avatar">🤖</div>
                                 </div>
                             </div>
-                            <div class="demo-input">
-                                <input type="text" id="demoInput" placeholder="Type your message..." maxlength="100">
-                                <button id="demoSend">Send</button>
-                            </div>
+                              <div class="demo-input">
+                                  <input type="text" id="demoInput" placeholder="Type your message..." maxlength="80">
+                                  <button id="demoSend">Send</button>
+                              </div>
+                              <div class="demo-input-hint">
+                                  <small>Try: "I need a cleaning", "What are your prices?", or "Emergency"</small>
+                              </div>
                         </div>
                     </div>
                 </div>
                 <div class="demo-controls">
                     <h3>Try the Demo</h3>
                     <p>Send a message to see how our AI responds:</p>
-                    <div class="demo-suggestions">
-                        <button class="suggestion-btn" data-message="I need a cleaning">I need a cleaning</button>
-                        <button class="suggestion-btn" data-message="What are your prices?">What are your prices?</button>
-                        <button class="suggestion-btn" data-message="Do you have availability tomorrow?">Do you have availability tomorrow?</button>
-                        <button class="suggestion-btn" data-message="I want to cancel my appointment">I want to cancel my appointment</button>
-                    </div>
+                      <div class="demo-suggestions">
+                          <button class="suggestion-btn" data-message="I need a cleaning">I need a cleaning</button>
+                          <button class="suggestion-btn" data-message="What are your prices?">What are your prices?</button>
+                          <button class="suggestion-btn" data-message="Do you have availability tomorrow?">Do you have availability tomorrow?</button>
+                          <button class="suggestion-btn" data-message="I have a dental emergency">I have a dental emergency</button>
+                          <button class="suggestion-btn" data-message="I want to cancel my appointment">I want to cancel my appointment</button>
+                          <button class="suggestion-btn" data-message="I need a checkup">I need a checkup</button>
+                      </div>
                     <div class="demo-features">
                         <div class="demo-feature">
                             <span class="feature-icon">⚡</span>
@@ -1642,9 +1658,20 @@
             // AI responses for different messages
             const aiResponses = {
                 'cleaning': 'Perfect! I can help you schedule a dental cleaning. We have availability this week. Would you prefer morning or afternoon appointments?',
+                'clean': 'Perfect! I can help you schedule a dental cleaning. We have availability this week. Would you prefer morning or afternoon appointments?',
                 'prices': 'Great question! Our cleaning is £80, checkup is £60, and fillings start at £120. We also offer payment plans. Would you like to book a consultation to discuss your needs?',
+                'price': 'Great question! Our cleaning is £80, checkup is £60, and fillings start at £120. We also offer payment plans. Would you like to book a consultation to discuss your needs?',
+                'cost': 'Great question! Our cleaning is £80, checkup is £60, and fillings start at £120. We also offer payment plans. Would you like to book a consultation to discuss your needs?',
                 'tomorrow': 'Let me check our availability for tomorrow. We have slots at 9 AM, 2 PM, and 4 PM available. Which time works best for you?',
+                'available': 'Let me check our availability for tomorrow. We have slots at 9 AM, 2 PM, and 4 PM available. Which time works best for you?',
+                'appointment': 'Let me check our availability for tomorrow. We have slots at 9 AM, 2 PM, and 4 PM available. Which time works best for you?',
                 'cancel': 'I understand you need to cancel. No problem at all! Can you provide your name and appointment time so I can help you reschedule or cancel?',
+                'reschedule': 'I understand you need to reschedule. No problem at all! Can you provide your name and appointment time so I can help you find a new time?',
+                'emergency': 'I understand this is urgent. For dental emergencies, please call us directly at (555) 123-4567. For non-emergency appointments, I can help you schedule one.',
+                'pain': 'I\'m sorry to hear you\'re in pain. For urgent dental issues, please call us directly at (555) 123-4567. For regular appointments, I can help you schedule one.',
+                'checkup': 'Great! I can help you schedule a dental checkup. We have availability this week. Would you prefer morning or afternoon appointments?',
+                'filling': 'I can help you schedule a filling appointment. We have availability this week. Would you prefer morning or afternoon appointments?',
+                'whitening': 'Perfect! I can help you schedule a teeth whitening appointment. We have availability this week. Would you prefer morning or afternoon appointments?',
                 'default': 'Thank you for your message! I\'m here to help with all your dental needs. Would you like to schedule an appointment, ask about our services, or get pricing information?'
             };
 
@@ -1687,14 +1714,27 @@
             function getAIResponse(message) {
                 const lowerMessage = message.toLowerCase();
                 
-                if (lowerMessage.includes('cleaning') || lowerMessage.includes('clean')) {
+                // Check for specific keywords in order of priority
+                if (lowerMessage.includes('emergency') || lowerMessage.includes('urgent')) {
+                    return aiResponses.emergency;
+                } else if (lowerMessage.includes('pain') || lowerMessage.includes('hurt')) {
+                    return aiResponses.pain;
+                } else if (lowerMessage.includes('cleaning') || lowerMessage.includes('clean')) {
                     return aiResponses.cleaning;
+                } else if (lowerMessage.includes('checkup') || lowerMessage.includes('exam')) {
+                    return aiResponses.checkup;
+                } else if (lowerMessage.includes('filling') || lowerMessage.includes('cavity')) {
+                    return aiResponses.filling;
+                } else if (lowerMessage.includes('whitening') || lowerMessage.includes('white')) {
+                    return aiResponses.whitening;
                 } else if (lowerMessage.includes('price') || lowerMessage.includes('cost') || lowerMessage.includes('how much')) {
                     return aiResponses.prices;
                 } else if (lowerMessage.includes('tomorrow') || lowerMessage.includes('available') || lowerMessage.includes('appointment')) {
                     return aiResponses.tomorrow;
-                } else if (lowerMessage.includes('cancel') || lowerMessage.includes('reschedule')) {
+                } else if (lowerMessage.includes('cancel')) {
                     return aiResponses.cancel;
+                } else if (lowerMessage.includes('reschedule')) {
+                    return aiResponses.reschedule;
                 } else {
                     return aiResponses.default;
                 }
