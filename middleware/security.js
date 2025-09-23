@@ -44,15 +44,20 @@ export async function authenticateApiKey(req, res, next) {
     const apiKeyData = await getApiKeyByHash(keyHash);
     
     if (!apiKeyData) {
-      // Log failed authentication attempt
-      await logSecurityEvent({
-        clientKey: 'unknown',
-        eventType: 'api_auth_failed',
-        eventSeverity: 'warning',
-        eventData: { reason: 'invalid_api_key', providedKey: apiKey.substring(0, 8) + '...' },
-        ipAddress: req.ip,
-        userAgent: req.get('User-Agent')
-      });
+      // Log failed authentication attempt (with error handling)
+      try {
+        await logSecurityEvent({
+          clientKey: 'victory_dental',
+          eventType: 'api_auth_failed',
+          eventSeverity: 'warning',
+          eventData: { reason: 'invalid_api_key', providedKey: apiKey.substring(0, 8) + '...' },
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent')
+        });
+      } catch (logError) {
+        console.error('[SECURITY LOG ERROR]', logError);
+        // Continue without logging if it fails
+      }
       
       return res.status(401).json({ 
         error: 'Invalid API key',
@@ -82,7 +87,7 @@ export async function rateLimitMiddleware(req, res, next) {
   try {
     const { checkRateLimit, recordRateLimitRequest, logSecurityEvent } = await import('../db.js');
     
-    const clientKey = req.clientKey || 'unknown';
+    const clientKey = req.clientKey || 'victory_dental';
     const apiKeyId = req.apiKey?.id || null;
     const endpoint = req.path;
     const ipAddress = req.ip;
@@ -321,7 +326,7 @@ export async function errorHandler(error, req, res, next) {
       stack: error.stack,
       url: req.url,
       method: req.method,
-      clientKey: req.clientKey || 'unknown',
+      clientKey: req.clientKey || 'victory_dental',
       ip: req.ip,
       timestamp: new Date().toISOString()
     });
