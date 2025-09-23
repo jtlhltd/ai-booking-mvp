@@ -268,6 +268,35 @@
             margin-bottom: 1rem;
         }
         
+        .industry-selector {
+            margin-bottom: 1.5rem;
+        }
+        
+        .industry-selector label {
+            display: block;
+            font-size: 0.9rem;
+            color: #374151;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+        
+        .industry-dropdown {
+            padding: 8px 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            background: white;
+            font-size: 0.9rem;
+            color: #374151;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+        
+        .industry-dropdown:focus {
+            outline: none;
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+        
         .social-proof-logos {
             display: flex;
             justify-content: center;
@@ -1086,6 +1115,16 @@
             </div>
             <div class="hero-social-proof">
                 <div class="social-proof-text">Join businesses already growing with AI Booking MVP</div>
+                <div class="industry-selector">
+                    <label for="industrySelect">Choose your industry:</label>
+                    <select id="industrySelect" class="industry-dropdown">
+                        <option value="dental">🦷 Dental Practice</option>
+                        <option value="legal">⚖️ Law Firm</option>
+                        <option value="beauty">💄 Beauty Salon</option>
+                        <option value="medical">🏥 Medical Practice</option>
+                        <option value="fitness">💪 Fitness Studio</option>
+                    </select>
+                </div>
                 <div class="social-proof-logos">
                     <div class="logo-item">🏥 Dental Practices</div>
                     <div class="logo-item">⚖️ Law Firms</div>
@@ -1546,13 +1585,53 @@
             const smsDemo = document.getElementById('smsDemo');
             const suggestionBtns = document.querySelectorAll('.suggestion-btn');
 
-            // AI conversation state
-            let conversationState = {
-                stage: 'greeting', // greeting, service, time, confirmation, complete
-                service: null,
-                time: null,
-                name: null
-            };
+        // AI conversation state
+        let conversationState = {
+            stage: 'greeting', // greeting, service, time, confirmation, complete
+            service: null,
+            time: null,
+            name: null,
+            industry: 'dental'
+        };
+        
+        // Industry templates
+        const industryTemplates = {
+            dental: {
+                name: "Victory Dental",
+                aiPersonality: "Sarah",
+                services: ["cleaning", "checkup", "filling", "whitening"],
+                pricing: { cleaning: "£80", checkup: "£60", filling: "£120", whitening: "£200" },
+                emergencyMessage: "For dental emergencies, please call us directly at (555) 123-4567"
+            },
+            legal: {
+                name: "Johnson & Associates",
+                aiPersonality: "Michael",
+                services: ["consultation", "case review", "document preparation"],
+                pricing: { consultation: "£150/hour", caseReview: "£200/hour", documentPrep: "£100/hour" },
+                emergencyMessage: "For urgent legal matters, please call us directly at (555) 123-4567"
+            },
+            beauty: {
+                name: "Glamour Studio",
+                aiPersonality: "Emma",
+                services: ["haircut", "coloring", "facial", "manicure"],
+                pricing: { haircut: "£45", coloring: "£80", facial: "£60", manicure: "£25" },
+                emergencyMessage: "For urgent beauty services, please call us directly at (555) 123-4567"
+            },
+            medical: {
+                name: "HealthCare Plus",
+                aiPersonality: "Dr. Johnson",
+                services: ["consultation", "checkup", "blood work", "vaccination"],
+                pricing: { consultation: "£100", checkup: "£80", bloodWork: "£50", vaccination: "£30" },
+                emergencyMessage: "For medical emergencies, please call 999 or visit A&E immediately"
+            },
+            fitness: {
+                name: "FitLife Studio",
+                aiPersonality: "Alex",
+                services: ["personal training", "group classes", "nutrition consultation"],
+                pricing: { personalTraining: "£60/session", groupClass: "£15/class", nutritionConsult: "£80" },
+                emergencyMessage: "For fitness emergencies, please call us directly at (555) 123-4567"
+            }
+        };
 
             // AI responses with conversation flow
             const aiResponses = {
@@ -1623,104 +1702,100 @@
                 smsDemo.scrollTop = smsDemo.scrollHeight;
             }
 
-            // Function to get AI response with conversation flow
-            function getAIResponse(message) {
-                const lowerMessage = message.toLowerCase();
-                
-                // Handle conversation flow based on current stage
-                if (conversationState.stage === 'greeting') {
-                    if (lowerMessage.includes('emergency') || lowerMessage.includes('urgent')) {
-                        return aiResponses.emergency;
-                    } else if (lowerMessage.includes('pain') || lowerMessage.includes('hurt')) {
-                        return aiResponses.pain;
-                    } else if (lowerMessage.includes('cleaning') || lowerMessage.includes('clean')) {
-                        conversationState.stage = 'service';
-                        conversationState.service = 'cleaning';
-                        return aiResponses.cleaning;
-                    } else if (lowerMessage.includes('checkup') || lowerMessage.includes('exam')) {
-                        conversationState.stage = 'service';
-                        conversationState.service = 'checkup';
-                        return aiResponses.checkup;
-                    } else if (lowerMessage.includes('filling') || lowerMessage.includes('cavity')) {
-                        conversationState.stage = 'service';
-                        conversationState.service = 'filling';
-                        return aiResponses.filling;
-                    } else if (lowerMessage.includes('whitening') || lowerMessage.includes('white')) {
-                        conversationState.stage = 'service';
-                        conversationState.service = 'whitening';
-                        return aiResponses.whitening;
-                    } else if (lowerMessage.includes('price') || lowerMessage.includes('cost') || lowerMessage.includes('how much')) {
-                        return aiResponses.prices;
-                    } else if (lowerMessage.includes('cancel')) {
-                        return aiResponses.cancel;
-                    } else if (lowerMessage.includes('reschedule')) {
-                        return aiResponses.reschedule;
-                    } else {
-                        return aiResponses.default;
-                    }
-                } else if (conversationState.stage === 'service') {
-                    // User is selecting a day
-                    if (lowerMessage.includes('tomorrow')) {
-                        conversationState.stage = 'time';
-                        return aiResponses.tomorrow;
-                    } else if (lowerMessage.includes('monday')) {
-                        conversationState.stage = 'time';
-                        return aiResponses.monday;
-                    } else if (lowerMessage.includes('tuesday')) {
-                        conversationState.stage = 'time';
-                        return aiResponses.tuesday;
-                    } else if (lowerMessage.includes('wednesday')) {
-                        conversationState.stage = 'time';
-                        return aiResponses.wednesday;
-                    } else if (lowerMessage.includes('thursday')) {
-                        conversationState.stage = 'time';
-                        return aiResponses.thursday;
-                    } else if (lowerMessage.includes('friday')) {
-                        conversationState.stage = 'time';
-                        return aiResponses.friday;
-                    } else {
-                        return 'What day works best for you? We have availability Monday through Friday.';
-                    }
-                } else if (conversationState.stage === 'time') {
-                    // User is selecting a time
-                    if (lowerMessage.includes('morning')) {
-                        return aiResponses.morning;
-                    } else if (lowerMessage.includes('afternoon')) {
-                        return aiResponses.afternoon;
-                    } else if (lowerMessage.includes('9am') || lowerMessage.includes('9 am')) {
-                        conversationState.stage = 'confirmation';
-                        conversationState.time = '9 AM';
-                        return aiResponses['9am'].replace('[day]', 'tomorrow');
-                    } else if (lowerMessage.includes('10am') || lowerMessage.includes('10 am')) {
-                        conversationState.stage = 'confirmation';
-                        conversationState.time = '10 AM';
-                        return aiResponses['10am'].replace('[day]', 'tomorrow');
-                    } else if (lowerMessage.includes('2pm') || lowerMessage.includes('2 pm')) {
-                        conversationState.stage = 'confirmation';
-                        conversationState.time = '2 PM';
-                        return aiResponses['2pm'].replace('[day]', 'tomorrow');
-                    } else if (lowerMessage.includes('3pm') || lowerMessage.includes('3 pm')) {
-                        conversationState.stage = 'confirmation';
-                        conversationState.time = '3 PM';
-                        return aiResponses['3pm'].replace('[day]', 'tomorrow');
-                    } else {
-                        return 'Which time works best for you? We have 9 AM, 10 AM, 2 PM, and 3 PM available.';
-                    }
-                } else if (conversationState.stage === 'confirmation') {
-                    // User is providing their details
-                    if (lowerMessage.includes('name') || lowerMessage.includes('phone') || lowerMessage.length > 10) {
-                        conversationState.stage = 'complete';
-                        conversationState.name = 'Customer';
-                        return aiResponses.confirmation.replace('[time]', conversationState.time).replace('[day]', 'tomorrow');
-                    } else {
-                        return 'What\'s your name and phone number for the booking?';
-                    }
+        // Function to get AI response with conversation flow
+        function getAIResponse(message) {
+            const lowerMessage = message.toLowerCase();
+            const template = industryTemplates[conversationState.industry];
+            
+            // Handle conversation flow based on current stage
+            if (conversationState.stage === 'greeting') {
+                if (lowerMessage.includes('emergency') || lowerMessage.includes('urgent')) {
+                    return template.emergencyMessage;
+                } else if (lowerMessage.includes('price') || lowerMessage.includes('cost') || lowerMessage.includes('how much')) {
+                    const services = Object.entries(template.pricing)
+                        .map(([service, price]) => `${service}: ${price}`)
+                        .join(', ');
+                    return `Our services include: ${services}. Would you like to book an appointment?`;
+                } else if (lowerMessage.includes('available') || lowerMessage.includes('tomorrow')) {
+                    return 'We have availability this week. What day works best for you?';
+                } else if (lowerMessage.includes('cancel')) {
+                    return 'I understand you need to cancel. Can you provide your name and appointment time so I can help you reschedule or cancel?';
+                } else if (lowerMessage.includes('reschedule')) {
+                    return 'I understand you need to reschedule. Can you provide your name and appointment time so I can help you find a new time?';
                 } else {
-                    // Reset conversation
-                    conversationState = { stage: 'greeting', service: null, time: null, name: null };
-                    return aiResponses.greeting;
+                    // Check for industry-specific services
+                    for (const service of template.services) {
+                        if (lowerMessage.includes(service)) {
+                            conversationState.stage = 'service';
+                            conversationState.service = service;
+                            return `Perfect! I can help you schedule a ${service}. We have availability this week. What day works best for you?`;
+                        }
+                    }
+                    return `Hello! I'm ${template.aiPersonality} from ${template.name}. How can I help you today?`;
                 }
+            } else if (conversationState.stage === 'service') {
+                // User is selecting a day
+                if (lowerMessage.includes('tomorrow')) {
+                    conversationState.stage = 'time';
+                    return 'Great! We have slots at 9 AM, 2 PM, and 4 PM tomorrow. Which time works best for you?';
+                } else if (lowerMessage.includes('monday')) {
+                    conversationState.stage = 'time';
+                    return 'Perfect! We have slots at 10 AM, 2 PM, and 3 PM on Monday. Which time works best for you?';
+                } else if (lowerMessage.includes('tuesday')) {
+                    conversationState.stage = 'time';
+                    return 'Perfect! We have slots at 9 AM, 1 PM, and 4 PM on Tuesday. Which time works best for you?';
+                } else if (lowerMessage.includes('wednesday')) {
+                    conversationState.stage = 'time';
+                    return 'Perfect! We have slots at 10 AM, 2 PM, and 5 PM on Wednesday. Which time works best for you?';
+                } else if (lowerMessage.includes('thursday')) {
+                    conversationState.stage = 'time';
+                    return 'Perfect! We have slots at 9 AM, 1 PM, and 3 PM on Thursday. Which time works best for you?';
+                } else if (lowerMessage.includes('friday')) {
+                    conversationState.stage = 'time';
+                    return 'Perfect! We have slots at 10 AM, 2 PM, and 4 PM on Friday. Which time works best for you?';
+                } else {
+                    return 'What day works best for you? We have availability Monday through Friday.';
+                }
+            } else if (conversationState.stage === 'time') {
+                // User is selecting a time
+                if (lowerMessage.includes('morning')) {
+                    return 'Excellent! I have 9 AM and 10 AM available. Which would you prefer?';
+                } else if (lowerMessage.includes('afternoon')) {
+                    return 'Great! I have 2 PM and 3 PM available. Which would you prefer?';
+                } else if (lowerMessage.includes('9am') || lowerMessage.includes('9 am')) {
+                    conversationState.stage = 'confirmation';
+                    conversationState.time = '9 AM';
+                    return 'Perfect! 9 AM works great. What\'s your name and phone number for the booking?';
+                } else if (lowerMessage.includes('10am') || lowerMessage.includes('10 am')) {
+                    conversationState.stage = 'confirmation';
+                    conversationState.time = '10 AM';
+                    return 'Perfect! 10 AM works great. What\'s your name and phone number for the booking?';
+                } else if (lowerMessage.includes('2pm') || lowerMessage.includes('2 pm')) {
+                    conversationState.stage = 'confirmation';
+                    conversationState.time = '2 PM';
+                    return 'Perfect! 2 PM works great. What\'s your name and phone number for the booking?';
+                } else if (lowerMessage.includes('3pm') || lowerMessage.includes('3 pm')) {
+                    conversationState.stage = 'confirmation';
+                    conversationState.time = '3 PM';
+                    return 'Perfect! 3 PM works great. What\'s your name and phone number for the booking?';
+                } else {
+                    return 'Which time works best for you? We have 9 AM, 10 AM, 2 PM, and 3 PM available.';
+                }
+            } else if (conversationState.stage === 'confirmation') {
+                // User is providing their details
+                if (lowerMessage.includes('name') || lowerMessage.includes('phone') || lowerMessage.length > 10) {
+                    conversationState.stage = 'complete';
+                    conversationState.name = 'Customer';
+                    return `Perfect! I've booked your ${conversationState.service} appointment for ${conversationState.time}. You'll receive a confirmation text shortly. Is there anything else I can help you with?`;
+                } else {
+                    return 'What\'s your name and phone number for the booking?';
+                }
+            } else {
+                // Reset conversation
+                conversationState = { stage: 'greeting', service: null, time: null, name: null, industry: conversationState.industry };
+                return `Hello! I'm ${template.aiPersonality} from ${template.name}. How can I help you today?`;
             }
+        }
 
             // Send message function
             function sendMessage() {
@@ -1791,52 +1866,118 @@
                 });
             });
 
-            // Demo reset functionality
-            const resetDemoBtn = document.getElementById('resetDemo');
-            if (resetDemoBtn) {
-                resetDemoBtn.addEventListener('click', function() {
-                    // Reset conversation state
-                    conversationState = {
-                        stage: 'greeting',
-                        service: null,
-                        time: null,
-                        name: null
-                    };
-                    
-                    // Clear conversation
-                    smsDemo.innerHTML = `
-                        <div class="sms-bubble incoming">
-                            <div class="sms-avatar">👤</div>
-                            <div class="sms-content">
-                                <div class="sms-text">Hi, I'd like to book a dental appointment</div>
-                                <div class="sms-time">2:30 PM</div>
-                            </div>
+        // Industry selector functionality
+        const industrySelect = document.getElementById('industrySelect');
+        if (industrySelect) {
+            industrySelect.addEventListener('change', function() {
+                const selectedIndustry = this.value;
+                conversationState.industry = selectedIndustry;
+                
+                // Update demo with new industry
+                const template = industryTemplates[selectedIndustry];
+                
+                // Clear conversation
+                smsDemo.innerHTML = `
+                    <div class="sms-bubble incoming">
+                        <div class="sms-avatar">👤</div>
+                        <div class="sms-content">
+                            <div class="sms-text">Hi, I'd like to book an appointment</div>
+                            <div class="sms-time">2:30 PM</div>
                         </div>
-                        <div class="sms-bubble outgoing">
-                            <div class="sms-content">
-                                <div class="sms-text">Hello! I'm Sarah from Victory Dental. How can I help you today?</div>
-                                <div class="sms-time">2:30 PM</div>
-                            </div>
-                            <div class="sms-avatar">🤖</div>
+                    </div>
+                    <div class="sms-bubble outgoing">
+                        <div class="sms-content">
+                            <div class="sms-text">Hello! I'm ${template.aiPersonality} from ${template.name}. How can I help you today?</div>
+                            <div class="sms-time">2:30 PM</div>
                         </div>
-                    `;
-                    
-                    // Clear input
-                    demoInput.value = '';
-                    demoInput.focus();
-                    
-                    // Visual feedback
-                    this.style.background = '#10b981';
-                    this.style.color = 'white';
-                    this.textContent = 'Reset!';
-                    
-                    setTimeout(() => {
-                        this.style.background = '';
-                        this.style.color = '';
-                        this.textContent = 'Reset Demo';
-                    }, 1000);
-                });
-            }
+                        <div class="sms-avatar">🤖</div>
+                    </div>
+                `;
+                
+                // Reset conversation state
+                conversationState = {
+                    stage: 'greeting',
+                    service: null,
+                    time: null,
+                    name: null,
+                    industry: selectedIndustry
+                };
+                
+                // Update suggestion buttons based on industry
+                updateSuggestionButtons(selectedIndustry);
+            });
+        }
+        
+        // Function to update suggestion buttons based on industry
+        function updateSuggestionButtons(industry) {
+            const template = industryTemplates[industry];
+            const suggestionBtns = document.querySelectorAll('.suggestion-btn');
+            
+            // Update suggestion buttons with industry-specific messages
+            const suggestions = [
+                `I need a ${template.services[0]}`,
+                "What are your prices?",
+                "Do you have availability tomorrow?",
+                `I have an emergency`
+            ];
+            
+            suggestionBtns.forEach((btn, index) => {
+                if (suggestions[index]) {
+                    btn.textContent = suggestions[index];
+                    btn.setAttribute('data-message', suggestions[index]);
+                }
+            });
+        }
+
+        // Demo reset functionality
+        const resetDemoBtn = document.getElementById('resetDemo');
+        if (resetDemoBtn) {
+            resetDemoBtn.addEventListener('click', function() {
+                // Reset conversation state
+                conversationState = {
+                    stage: 'greeting',
+                    service: null,
+                    time: null,
+                    name: null,
+                    industry: conversationState.industry
+                };
+                
+                const template = industryTemplates[conversationState.industry];
+                
+                // Clear conversation
+                smsDemo.innerHTML = `
+                    <div class="sms-bubble incoming">
+                        <div class="sms-avatar">👤</div>
+                        <div class="sms-content">
+                            <div class="sms-text">Hi, I'd like to book an appointment</div>
+                            <div class="sms-time">2:30 PM</div>
+                        </div>
+                    </div>
+                    <div class="sms-bubble outgoing">
+                        <div class="sms-content">
+                            <div class="sms-text">Hello! I'm ${template.aiPersonality} from ${template.name}. How can I help you today?</div>
+                            <div class="sms-time">2:30 PM</div>
+                        </div>
+                        <div class="sms-avatar">🤖</div>
+                    </div>
+                `;
+                
+                // Clear input
+                demoInput.value = '';
+                demoInput.focus();
+                
+                // Visual feedback
+                this.style.background = '#10b981';
+                this.style.color = 'white';
+                this.textContent = 'Reset!';
+                
+                setTimeout(() => {
+                    this.style.background = '';
+                    this.style.color = '';
+                    this.textContent = 'Reset Demo';
+                }, 1000);
+            });
+        }
 
             // Auto-scroll to demo section when demo button is clicked
             document.querySelectorAll('a[href="#demo"]').forEach(link => {
