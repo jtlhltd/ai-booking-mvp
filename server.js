@@ -4096,8 +4096,13 @@ app.get('/admin/security-events/:tenantKey', authenticateApiKey, rateLimitMiddle
 
 // Analytics endpoints
 // Get analytics dashboard
-app.get('/admin/analytics/:tenantKey', authenticateApiKey, rateLimitMiddleware, requirePermission('analytics_view'), async (req, res) => {
+app.get('/admin/analytics/:tenantKey', async (req, res) => {
   try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
     const { tenantKey } = req.params;
     const { days = 30 } = req.query;
     
@@ -4128,8 +4133,13 @@ app.get('/admin/analytics/:tenantKey', authenticateApiKey, rateLimitMiddleware, 
 });
 
 // Generate analytics report
-app.post('/admin/analytics/:tenantKey/report', authenticateApiKey, rateLimitMiddleware, requirePermission('analytics_view'), async (req, res) => {
+app.post('/admin/analytics/:tenantKey/report', async (req, res) => {
   try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
     const { tenantKey } = req.params;
     const { reportType = 'comprehensive', days = 30 } = req.body;
     
@@ -4161,8 +4171,13 @@ app.post('/admin/analytics/:tenantKey/report', authenticateApiKey, rateLimitMidd
 });
 
 // Track analytics event
-app.post('/admin/analytics/:tenantKey/track', authenticateApiKey, rateLimitMiddleware, requirePermission('analytics_track'), async (req, res) => {
+app.post('/admin/analytics/:tenantKey/track', async (req, res) => {
   try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
     const { tenantKey } = req.params;
     const { eventType, eventCategory, eventData, sessionId } = req.body;
     
@@ -4200,8 +4215,13 @@ app.post('/admin/analytics/:tenantKey/track', authenticateApiKey, rateLimitMiddl
 });
 
 // Track conversion stage
-app.post('/admin/analytics/:tenantKey/conversion', authenticateApiKey, rateLimitMiddleware, requirePermission('analytics_track'), async (req, res) => {
+app.post('/admin/analytics/:tenantKey/conversion', async (req, res) => {
   try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
     const { tenantKey } = req.params;
     const { leadPhone, stage, stageData, previousStage, timeToStage } = req.body;
     
@@ -4238,8 +4258,13 @@ app.post('/admin/analytics/:tenantKey/conversion', authenticateApiKey, rateLimit
 });
 
 // Record performance metric
-app.post('/admin/analytics/:tenantKey/metrics', authenticateApiKey, rateLimitMiddleware, requirePermission('analytics_track'), async (req, res) => {
+app.post('/admin/analytics/:tenantKey/metrics', async (req, res) => {
   try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
     const { tenantKey } = req.params;
     const { metricName, metricValue, metricUnit, metricCategory, metadata } = req.body;
     
@@ -4277,8 +4302,13 @@ app.post('/admin/analytics/:tenantKey/metrics', authenticateApiKey, rateLimitMid
 
 // A/B Testing endpoints
 // Create A/B test experiment
-app.post('/admin/ab-tests/:tenantKey', authenticateApiKey, rateLimitMiddleware, requirePermission('ab_testing'), async (req, res) => {
+app.post('/admin/ab-tests/:tenantKey', async (req, res) => {
   try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
     const { tenantKey } = req.params;
     const { experimentName, variants, isActive = true } = req.body;
     
@@ -4313,8 +4343,13 @@ app.post('/admin/ab-tests/:tenantKey', authenticateApiKey, rateLimitMiddleware, 
 });
 
 // Get active A/B tests
-app.get('/admin/ab-tests/:tenantKey', authenticateApiKey, rateLimitMiddleware, requirePermission('ab_testing'), async (req, res) => {
+app.get('/admin/ab-tests/:tenantKey', async (req, res) => {
   try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
     const { tenantKey } = req.params;
     
     const activeTests = await getActiveABTests(tenantKey);
@@ -4411,8 +4446,13 @@ app.post('/admin/ab-tests/:tenantKey/:experimentName/outcome', authenticateApiKe
 
 // Performance optimization endpoints
 // Get performance metrics
-app.get('/admin/performance/:tenantKey', authenticateApiKey, rateLimitMiddleware, requirePermission('performance_view'), async (req, res) => {
+app.get('/admin/performance/:tenantKey', async (req, res) => {
   try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
     const { tenantKey } = req.params;
     
     const metrics = await getCachedMetrics(tenantKey);
