@@ -2247,9 +2247,9 @@ app.post('/api/uk-business-search', async (req, res) => {
     // Sample data (real API integration temporarily disabled due to deployment issues)
     let results = [];
     let usingRealData = false;
-      
-      // Fallback to sample data
-      const sampleBusinesses = {
+    
+    // Sample data
+    const sampleBusinesses = {
         'gardeners': [
           {
             name: "Green Thumb Gardeners",
@@ -2310,42 +2310,41 @@ app.post('/api/uk-business-search', async (req, res) => {
         ]
       };
       
-      // Search through sample data
-      const queryLower = query.toLowerCase();
-      
+    // Search through sample data
+    const queryLower = query.toLowerCase();
+    
+    for (const [category, businesses] of Object.entries(sampleBusinesses)) {
+      if (category.includes(queryLower) || queryLower.includes(category)) {
+        results = results.concat(businesses);
+      }
+    }
+    
+    // If no exact match, try partial matches
+    if (results.length === 0) {
       for (const [category, businesses] of Object.entries(sampleBusinesses)) {
-        if (category.includes(queryLower) || queryLower.includes(category)) {
-          results = results.concat(businesses);
-        }
+        businesses.forEach(business => {
+          if (business.name.toLowerCase().includes(queryLower) ||
+              business.services.some(service => service.toLowerCase().includes(queryLower))) {
+            results.push(business);
+          }
+        });
       }
-      
-      // If no exact match, try partial matches
-      if (results.length === 0) {
-        for (const [category, businesses] of Object.entries(sampleBusinesses)) {
-          businesses.forEach(business => {
-            if (business.name.toLowerCase().includes(queryLower) ||
-                business.services.some(service => service.toLowerCase().includes(queryLower))) {
-              results.push(business);
-            }
-          });
-        }
-      }
-      
-      // Apply filters to sample data
-      if (filters.location && filters.location !== 'all') {
-        results = results.filter(business => 
-          business.address.toLowerCase().includes(filters.location.toLowerCase())
-        );
-      }
-      
-      if (filters.contactInfo && filters.contactInfo !== 'all') {
-        if (filters.contactInfo === 'phone') {
-          results = results.filter(business => business.phone);
-        } else if (filters.contactInfo === 'email') {
-          results = results.filter(business => business.email);
-        } else if (filters.contactInfo === 'both') {
-          results = results.filter(business => business.phone && business.email);
-        }
+    }
+    
+    // Apply filters to sample data
+    if (filters.location && filters.location !== 'all') {
+      results = results.filter(business => 
+        business.address.toLowerCase().includes(filters.location.toLowerCase())
+      );
+    }
+    
+    if (filters.contactInfo && filters.contactInfo !== 'all') {
+      if (filters.contactInfo === 'phone') {
+        results = results.filter(business => business.phone);
+      } else if (filters.contactInfo === 'email') {
+        results = results.filter(business => business.email);
+      } else if (filters.contactInfo === 'both') {
+        results = results.filter(business => business.phone && business.email);
       }
     }
     
@@ -5686,59 +5685,8 @@ app.post('/api/calendar/reschedule', async (req, res) => {
 
 // === Reminder job: 24h & 1h SMS (disabled to prevent crashes) ===
 function startReminders() {
-  try {
-    // cron.schedule('*/10 * * * *', async () => {
-      try {
-        const tenants = await listFullClients();
-        const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY, privateKeyB64: GOOGLE_PRIVATE_KEY_B64 });
-        await auth.authorize();
-        const cal = google.calendar({ version:'v3', auth });
-
-        const now = new Date();
-        const in26h = new Date(now.getTime() + 26*60*60*1000);
-
-        for (const t of tenants) {
-          const calendarId = t.calendarId || t.gcalCalendarId || 'primary';
-          const tz = t?.booking?.timezone || TIMEZONE;
-          const resp = await cal.events.list({
-            calendarId,
-            timeMin: now.toISOString(),
-            timeMax: in26h.toISOString(),
-            singleEvents: true,
-            orderBy: 'startTime'
-          });
-          const items = resp.data.items || [];
-          for (const ev of items) {
-            const startISO = ev.start?.dateTime || ev.start?.date;
-            if (!startISO) continue;
-            const start = new Date(startISO);
-            const mins  = Math.floor((start - now)/60000);
-            const leadPhone = ev.extendedProperties?.private?.leadPhone;
-            if (!leadPhone) continue;
-
-            const { messagingServiceSid, fromNumber, smsClient } = smsConfig(t);
-            if (!smsClient || !(messagingServiceSid || fromNumber)) continue;
-
-            if (mins <= 1440 && mins > 1380) {
-              const body = `Reminder: ${ev.summary || 'appointment'} tomorrow at ${start.toLocaleTimeString('en-GB', { timeZone: tz })}.`;
-              const payload = { to: leadPhone, body };
-              if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid; else if (fromNumber) payload.from = fromNumber;
-              await smsClient.messages.create(payload);
-            } else if (mins <= 60 && mins > 50) {
-              const body = `Reminder: ${ev.summary || 'appointment'} in ~1 hour. Details: ${ev.htmlLink || ''}`.trim();
-              const payload = { to: leadPhone, body };
-              if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid; else if (fromNumber) payload.from = fromNumber;
-              await smsClient.messages.create(payload);
-            }
-          }
-        }
-      } catch (e) {
-        const sc = e?.response?.status; if (sc === 404 || sc === 410) return; console.error('reminders loop error', e?.message || e);
-      }
-    });
-  } catch (e) {
-    console.error('reminders setup error', e?.message || e);
-  }
+  // Disabled to prevent crashes
+  console.log('[REMINDERS] Reminder system disabled');
 }
 
 // startReminders(); // Disabled to prevent crashes
