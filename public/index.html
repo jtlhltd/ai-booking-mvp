@@ -664,6 +664,23 @@
                 flex-direction: column;
                 gap: 0.5rem;
             }
+            
+            .contact-content {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }
+            
+            .contact-methods {
+                gap: 1rem;
+            }
+            
+            .contact-method {
+                padding: 1rem;
+            }
+            
+            .contact-form-container {
+                padding: 1.5rem;
+            }
         }
         
 
@@ -852,19 +869,129 @@
             margin-bottom: 1.5rem;
         }
 
-        /* CTA Section */
-        .cta {
-            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
-            color: white;
+        /* Contact Section */
+        .contact {
             padding: 8rem 0;
-            text-align: center;
-            position: relative;
-            overflow: hidden;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
         }
         
-        .cta h2 {
-            font-size: 2.5rem;
+        .contact-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4rem;
+            margin-top: 3rem;
+        }
+        
+        .contact-info h3 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1e293b;
             margin-bottom: 1rem;
+        }
+        
+        .contact-info p {
+            color: #64748b;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+        
+        .contact-methods {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        
+        .contact-method {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1.5rem;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+        }
+        
+        .contact-icon {
+            font-size: 2rem;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f8fafc;
+            border-radius: 12px;
+        }
+        
+        .contact-details h4 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 0.25rem;
+        }
+        
+        .contact-details p {
+            color: #64748b;
+            margin-bottom: 0.5rem;
+        }
+        
+        .contact-link {
+            color: #6366f1;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+        
+        .contact-link:hover {
+            text-decoration: underline;
+        }
+        
+        .contact-form-container {
+            background: white;
+            padding: 2rem;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            border: 1px solid #e2e8f0;
+        }
+        
+        .contact-form h3 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 0.5rem;
+        }
+        
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+        
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+        
+        .form-group textarea {
+            resize: vertical;
+            min-height: 120px;
         }
         
         .cta p {
@@ -1319,14 +1446,61 @@
         </div>
     </section>
 
-    <!-- CTA Section -->
-    <section id="contact" class="cta">
+    <!-- Contact Section -->
+    <section id="contact" class="contact">
         <div class="container">
-            <h2>Ready to Transform Your Business?</h2>
-            <p>Join hundreds of businesses already using AI Booking MVP to increase their appointment bookings</p>
-            <div class="hero-buttons">
-                <a href="mailto:hello@aibookingmvp.com" class="btn btn-primary">Contact Us</a>
-                <a href="tel:+1234567890" class="btn btn-secondary">Call Now</a>
+            <div class="section-header">
+                <h2 class="section-title">Ready to Transform Your Business?</h2>
+                <p class="section-subtitle">Get in touch to learn how AI Booking MVP can help your business grow</p>
+            </div>
+            <div class="contact-content">
+                <div class="contact-info">
+                    <h3>Get Started Today</h3>
+                    <p>Ready to see how AI Booking MVP can transform your appointment booking process? Contact us for a free consultation.</p>
+                    <div class="contact-methods">
+                        <div class="contact-method">
+                            <div class="contact-icon">📧</div>
+                            <div class="contact-details">
+                                <h4>Email Us</h4>
+                                <p>hello@aibookingmvp.com</p>
+                                <a href="mailto:hello@aibookingmvp.com" class="contact-link">Send Email</a>
+                            </div>
+                        </div>
+                        <div class="contact-method">
+                            <div class="contact-icon">📞</div>
+                            <div class="contact-details">
+                                <h4>Call Us</h4>
+                                <p>+1 (555) 123-4567</p>
+                                <a href="tel:+15551234567" class="contact-link">Call Now</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="contact-form-container">
+                    <form class="contact-form">
+                        <h3>Send us a Message</h3>
+                        <div class="form-group">
+                            <label for="name">Name *</label>
+                            <input type="text" id="name" name="name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="email">Email *</label>
+                            <input type="email" id="email" name="email" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="company">Company</label>
+                            <input type="text" id="company" name="company">
+                        </div>
+                        <div class="form-group">
+                            <label for="message">Message *</label>
+                            <textarea id="message" name="message" rows="5" required placeholder="Tell us about your business and how we can help..."></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-full">
+                            <span class="btn-icon">📤</span>
+                            <span class="btn-text">Send Message</span>
+                        </button>
+                    </form>
+                </div>
             </div>
         </div>
     </section>
