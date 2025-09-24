@@ -599,11 +599,11 @@ export class RealDecisionMakerContactFinder {
                                 const enhancedContact = {
                                     ...contact,
                                     type: 'linkedin',
-                                    value: linkedinProfile.link,
+                                    value: linkedinProfile.link || linkedinProfile.url || 'LinkedIn Profile',
                                     confidence: linkedinProfile.confidence || 0.7,
                                     source: 'linkedin_search',
-                                    linkedinUrl: linkedinProfile.link,
-                                    note: 'LinkedIn profile found - manual contact research needed',
+                                    linkedinUrl: linkedinProfile.link || linkedinProfile.url,
+                                    note: `LinkedIn profile found for ${contact.name} - manual contact research needed`,
                                     googleSearchUrl: `https://www.google.com/search?q=${encodeURIComponent(contact.name + ' ' + business.name + ' contact email')}`
                                 };
                                 
@@ -618,6 +618,28 @@ export class RealDecisionMakerContactFinder {
                                 
                                 console.log(`[LINKEDIN SEARCH] Found LinkedIn profile for ${contact.name}: ${linkedinProfile.link}`);
                             }
+                        } else {
+                            // No LinkedIn profile found, but still show the decision maker with manual research note
+                            const manualContact = {
+                                ...contact,
+                                type: 'manual_research',
+                                value: `Research ${contact.name}`,
+                                confidence: 0.5,
+                                source: 'companies_house',
+                                note: `Decision maker found in Companies House - manual LinkedIn research needed`,
+                                googleSearchUrl: `https://www.google.com/search?q=${encodeURIComponent(contact.name + ' ' + business.name + ' LinkedIn')}`
+                            };
+                            
+                            // Add to appropriate category
+                            if (contacts.primary.includes(contact)) {
+                                linkedinContacts.primary.push(manualContact);
+                            } else if (contacts.secondary.includes(contact)) {
+                                linkedinContacts.secondary.push(manualContact);
+                            } else {
+                                linkedinContacts.gatekeeper.push(manualContact);
+                            }
+                            
+                            console.log(`[LINKEDIN SEARCH] No LinkedIn profile found for ${contact.name}, added manual research note`);
                         }
                     } catch (searchError) {
                         console.log(`[LINKEDIN SEARCH] Skipped ${contact.name} due to timeout/error: ${searchError.message}`);
@@ -664,7 +686,12 @@ export class RealDecisionMakerContactFinder {
                             const bestMatch = this.findBestLinkedInMatch(response.data.items, personName, companyName);
                             if (bestMatch) {
                                 console.log(`[LINKEDIN SEARCH] Found profile: ${bestMatch.title} - ${bestMatch.link}`);
-                                return bestMatch;
+                                return {
+                                    link: bestMatch.link,
+                                    url: bestMatch.link,
+                                    title: bestMatch.title,
+                                    confidence: bestMatch.confidence || 0.7
+                                };
                             } else {
                                 console.log(`[LINKEDIN SEARCH] No good LinkedIn match found in results`);
                             }
