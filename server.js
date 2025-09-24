@@ -2230,7 +2230,15 @@ function requireApiKey(req, res, next) {
 
 // Simple test endpoint
 app.get('/api/test', (req, res) => {
-  res.json({ success: true, message: 'Test endpoint working', timestamp: new Date().toISOString() });
+  res.json({ 
+    success: true, 
+    message: 'Test endpoint working', 
+    timestamp: new Date().toISOString(),
+    env: {
+      googlePlaces: process.env.GOOGLE_PLACES_API_KEY ? 'SET' : 'NOT SET',
+      companiesHouse: process.env.COMPANIES_HOUSE_API_KEY ? 'SET' : 'NOT SET'
+    }
+  });
 });
 
 // UK Business Search endpoint (PUBLIC - no auth required) - WITH REAL API
@@ -2249,6 +2257,12 @@ app.post('/api/uk-business-search', async (req, res) => {
     let usingRealData = false;
     
     try {
+      // Debug API keys
+      console.log(`[UK BUSINESS SEARCH] API Keys Status:`, {
+        googlePlaces: process.env.GOOGLE_PLACES_API_KEY ? 'SET' : 'NOT SET',
+        companiesHouse: process.env.COMPANIES_HOUSE_API_KEY ? 'SET' : 'NOT SET'
+      });
+      
       // Dynamic import of real API module
       const realSearchModule = await import('./real-uk-business-search.js');
       const RealUKBusinessSearch = realSearchModule.default;
