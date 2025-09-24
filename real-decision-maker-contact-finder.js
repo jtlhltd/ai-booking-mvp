@@ -48,6 +48,7 @@ export class RealDecisionMakerContactFinder {
         
         try {
             console.log(`[REAL DECISION MAKER] Starting real search for ${business.name}`);
+            console.log(`[REAL DECISION MAKER] API Keys - Companies House: ${this.companiesHouseApiKey ? 'SET' : 'NOT SET'}, Google: ${this.googleApiKey ? 'SET' : 'NOT SET'}`);
             
             // Method 1: Companies House officers (for UK companies)
             if (this.companiesHouseApiKey) {
@@ -108,7 +109,12 @@ export class RealDecisionMakerContactFinder {
 
     // Find company number from Companies House with multiple search strategies
     async findCompanyNumber(businessName) {
-        if (!this.companiesHouseApiKey || !businessName) return null;
+        if (!this.companiesHouseApiKey || !businessName) {
+            console.log(`[COMPANIES HOUSE SEARCH] Missing API key or business name. API Key: ${this.companiesHouseApiKey ? 'SET' : 'NOT SET'}, Business: ${businessName}`);
+            return null;
+        }
+        
+        console.log(`[COMPANIES HOUSE SEARCH] Starting search for "${businessName}" with API key: ${this.companiesHouseApiKey.substring(0, 8)}...`);
         
         // Try multiple search strategies
         const searchTerms = [
@@ -155,9 +161,14 @@ export class RealDecisionMakerContactFinder {
                     }
                 }
                 
-            } catch (error) {
-                console.error(`[COMPANIES HOUSE SEARCH ERROR] for "${searchTerm}":`, error.message);
+        } catch (error) {
+            console.error(`[COMPANIES HOUSE SEARCH ERROR] for "${searchTerm}":`, error.message);
+            console.error(`[COMPANIES HOUSE SEARCH ERROR] Full error:`, error);
+            if (error.response) {
+                console.error(`[COMPANIES HOUSE SEARCH ERROR] Response status:`, error.response.status);
+                console.error(`[COMPANIES HOUSE SEARCH ERROR] Response data:`, error.response.data);
             }
+        }
         }
         
         console.log(`[COMPANIES HOUSE SEARCH] No suitable company found for "${businessName}"`);
@@ -249,6 +260,11 @@ export class RealDecisionMakerContactFinder {
             
         } catch (error) {
             console.error(`[COMPANIES HOUSE OFFICERS ERROR]`, error.message);
+            console.error(`[COMPANIES HOUSE OFFICERS ERROR] Full error:`, error);
+            if (error.response) {
+                console.error(`[COMPANIES HOUSE OFFICERS ERROR] Response status:`, error.response.status);
+                console.error(`[COMPANIES HOUSE OFFICERS ERROR] Response data:`, error.response.data);
+            }
         }
         
         return contacts;
