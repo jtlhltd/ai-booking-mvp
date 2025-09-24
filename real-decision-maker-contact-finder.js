@@ -100,11 +100,12 @@ export class RealDecisionMakerContactFinder {
                     q: businessName,
                     items_per_page: 5
                 },
-                auth: {
-                    username: this.companiesHouseApiKey,
-                    password: ''
+                headers: {
+                    'Authorization': `Basic ${Buffer.from(this.companiesHouseApiKey + ':').toString('base64')}`
                 }
             });
+            
+            console.log(`[COMPANIES HOUSE SEARCH] Found ${response.data.items?.length || 0} companies for "${businessName}"`);
             
             if (response.data.items && response.data.items.length > 0) {
                 // Find best match
@@ -113,7 +114,10 @@ export class RealDecisionMakerContactFinder {
                     businessName.toLowerCase().includes(item.title.toLowerCase())
                 );
                 
-                return bestMatch ? bestMatch.company_number : response.data.items[0].company_number;
+                const companyNumber = bestMatch ? bestMatch.company_number : response.data.items[0].company_number;
+                console.log(`[COMPANIES HOUSE SEARCH] Selected company: ${bestMatch?.title || response.data.items[0].title} (${companyNumber})`);
+                
+                return companyNumber;
             }
             
         } catch (error) {
@@ -131,14 +135,16 @@ export class RealDecisionMakerContactFinder {
         
         try {
             const response = await axios.get(`${this.companiesHouseBaseUrl}/company/${companyNumber}/officers`, {
-                auth: {
-                    username: this.companiesHouseApiKey,
-                    password: ''
+                headers: {
+                    'Authorization': `Basic ${Buffer.from(this.companiesHouseApiKey + ':').toString('base64')}`
                 }
             });
             
+            console.log(`[COMPANIES HOUSE OFFICERS] Found ${response.data.items?.length || 0} officers for company ${companyNumber}`);
+            
             if (response.data.items) {
                 response.data.items.forEach(officer => {
+                    console.log(`[COMPANIES HOUSE OFFICER] ${officer.name?.full} - ${officer.officer_role}`);
                     if (officer.name && officer.officer_role) {
                         const contact = {
                             type: 'email',

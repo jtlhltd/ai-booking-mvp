@@ -2261,9 +2261,8 @@ app.get('/api/test-companies-house', async (req, res) => {
         q: 'Sherwood Dental Practice',
         items_per_page: 5
       },
-      auth: {
-        username: process.env.COMPANIES_HOUSE_API_KEY,
-        password: ''
+      headers: {
+        'Authorization': `Basic ${Buffer.from(process.env.COMPANIES_HOUSE_API_KEY + ':').toString('base64')}`
       }
     });
 
