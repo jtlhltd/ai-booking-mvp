@@ -2292,6 +2292,47 @@ app.get('/api/test-companies-house', async (req, res) => {
   }
 });
 
+// Test Companies House officers endpoint
+app.get('/api/test-officers/:companyNumber', async (req, res) => {
+  try {
+    const { companyNumber } = req.params;
+    const apiKey = process.env.COMPANIES_HOUSE_API_KEY;
+    
+    if (!apiKey) {
+      return res.json({ error: 'Companies House API key not set' });
+    }
+
+    const response = await axios.get(`https://api.company-information.service.gov.uk/company/${companyNumber}/officers`, {
+      headers: {
+        'Authorization': `Basic ${Buffer.from(apiKey + ':').toString('base64')}`
+      }
+    });
+    
+    res.json({
+      success: true,
+      companyNumber,
+      officers: response.data.items?.map(officer => ({
+        name: officer.name,
+        role: officer.officer_role,
+        appointed: officer.appointed_on,
+        resigned: officer.resigned_on,
+        nationality: officer.nationality,
+        occupation: officer.occupation,
+        address: officer.address,
+        contact_details: officer.contact_details,
+        links: officer.links
+      })) || []
+    });
+  } catch (error) {
+    res.json({
+      success: false,
+      error: error.message,
+      status: error.response?.status,
+      data: error.response?.data
+    });
+  }
+});
+
 // Test LinkedIn search endpoint
 app.get('/api/test-linkedin', async (req, res) => {
   try {
