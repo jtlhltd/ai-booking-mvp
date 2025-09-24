@@ -843,7 +843,6 @@
                     phone: "+44 20 7123 4567",
                     email: "info@greenthumbgardeners.co.uk",
                     website: "https://greenthumbgardeners.co.uk",
-                    employees: "5-10",
                     services: ["Garden Design", "Landscaping", "Tree Surgery"],
                     rating: 4.8
                 },
@@ -853,7 +852,6 @@
                     phone: "+44 161 123 4567",
                     email: "hello@perfectgardens.co.uk",
                     website: "https://perfectgardens.co.uk",
-                    employees: "10-20",
                     services: ["Garden Maintenance", "Patio Installation", "Hedge Trimming"],
                     rating: 4.6
                 },
@@ -863,7 +861,6 @@
                     phone: "+44 121 123 4567",
                     email: "contact@bhamgardens.co.uk",
                     website: "https://bhamgardens.co.uk",
-                    employees: "3-5",
                     services: ["Garden Clearance", "Lawn Care", "Planting"],
                     rating: 4.7
                 }
@@ -875,7 +872,6 @@
                     phone: "+44 20 7580 1234",
                     email: "info@brightsmile.co.uk",
                     website: "https://brightsmile.co.uk",
-                    employees: "15-25",
                     services: ["General Dentistry", "Cosmetic Dentistry", "Orthodontics"],
                     rating: 4.9
                 },
@@ -885,7 +881,6 @@
                     phone: "+44 161 123 4567",
                     email: "appointments@manchesterdental.co.uk",
                     website: "https://manchesterdental.co.uk",
-                    employees: "20-30",
                     services: ["Preventive Care", "Restorative Dentistry", "Oral Surgery"],
                     rating: 4.8
                 }
@@ -897,7 +892,6 @@
                     phone: "+44 20 7400 1234",
                     email: "info@thompsonlaw.co.uk",
                     website: "https://thompsonlaw.co.uk",
-                    employees: "25-50",
                     services: ["Commercial Law", "Property Law", "Family Law"],
                     rating: 4.7
                 },
@@ -907,7 +901,6 @@
                     phone: "+44 161 123 4567",
                     email: "contact@manchesterlegal.co.uk",
                     website: "https://manchesterlegal.co.uk",
-                    employees: "15-25",
                     services: ["Criminal Law", "Employment Law", "Personal Injury"],
                     rating: 4.6
                 }
@@ -919,7 +912,6 @@
                     phone: "+44 20 7580 1234",
                     email: "bookings@glamourstudio.co.uk",
                     website: "https://glamourstudio.co.uk",
-                    employees: "8-15",
                     services: ["Hair Styling", "Beauty Treatments", "Nail Art"],
                     rating: 4.8
                 },
@@ -929,7 +921,6 @@
                     phone: "+44 161 123 4567",
                     email: "hello@beautyhaven.co.uk",
                     website: "https://beautyhaven.co.uk",
-                    employees: "5-10",
                     services: ["Facial Treatments", "Massage", "Makeup"],
                     rating: 4.7
                 }
@@ -976,8 +967,10 @@
         // Handle search form submission
         function handleSearch(e) {
             e.preventDefault();
+            console.log('Search button clicked!');
             
             const query = document.getElementById('searchQuery').value.toLowerCase().trim();
+            console.log('Search query:', query);
             const location = document.getElementById('locationFilter').value;
             const contact = document.getElementById('contactFilter').value;
             const limit = parseInt(document.getElementById('limitFilter').value);
@@ -996,6 +989,7 @@
         
         // Perform search
         async function performSearch(query, location, contact, limit, category, minRating, sortBy) {
+            console.log('performSearch called with:', { query, location, contact, limit, category, minRating, sortBy });
             showLoading();
             searchCount++;
             
