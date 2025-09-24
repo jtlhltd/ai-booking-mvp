@@ -55,6 +55,9 @@ export class RealDecisionMakerContactFinder {
                 if (companyNumber) {
                     const officerContacts = await this.getCompaniesHouseOfficers(companyNumber, business, industry, targetRole);
                     this.mergeContacts(contacts, officerContacts);
+                    console.log(`[DECISION MAKER CONTACT] Found ${officerContacts.primary.length + officerContacts.secondary.length} Companies House contacts`);
+                } else {
+                    console.log(`[DECISION MAKER CONTACT] No company number found for "${business.name}"`);
                 }
             }
             
@@ -62,6 +65,25 @@ export class RealDecisionMakerContactFinder {
             if (business.website) {
                 const websiteContacts = await this.scrapeWebsiteForTeam(business.website, business, industry, targetRole);
                 this.mergeContacts(contacts, websiteContacts);
+                console.log(`[DECISION MAKER CONTACT] Found ${websiteContacts.primary.length + websiteContacts.secondary.length} website contacts`);
+            }
+            
+            // Method 3: Try alternative company name variations if no contacts found
+            if (contacts.primary.length === 0 && contacts.secondary.length === 0 && this.companiesHouseApiKey) {
+                console.log(`[DECISION MAKER CONTACT] No contacts found, trying alternative company names`);
+                
+                const alternativeNames = this.generateAlternativeCompanyNames(business.name);
+                for (const altName of alternativeNames) {
+                    const altCompanyNumber = await this.findCompanyNumber(altName);
+                    if (altCompanyNumber) {
+                        const altContacts = await this.getCompaniesHouseOfficers(altCompanyNumber, business, industry, targetRole);
+                        this.mergeContacts(contacts, altContacts);
+                        if (contacts.primary.length > 0 || contacts.secondary.length > 0) {
+                            console.log(`[DECISION MAKER CONTACT] Found contacts using alternative name: "${altName}"`);
+                            break;
+                        }
+                    }
+                }
             }
             
             // Only use Companies House and website scraping for real data
@@ -84,51 +106,98 @@ export class RealDecisionMakerContactFinder {
         return contacts;
     }
 
-    // Find company number from Companies House
+    // Find company number from Companies House with multiple search strategies
     async findCompanyNumber(businessName) {
         if (!this.companiesHouseApiKey || !businessName) return null;
         
-        try {
-            const response = await axios.get(`${this.companiesHouseBaseUrl}/search/companies`, {
-                params: {
-                    q: businessName,
-                    items_per_page: 5
-                },
-                headers: {
-                    'Authorization': `Basic ${Buffer.from(this.companiesHouseApiKey + ':').toString('base64')}`
+        // Try multiple search strategies
+        const searchTerms = [
+            businessName, // Original name
+            businessName.replace(/\s+(dental|practice|clinic|surgery|centre|center)/gi, ''), // Remove common suffixes
+            businessName.replace(/\s+(ltd|limited|llp|plc|inc)/gi, ''), // Remove company suffixes
+            businessName.split(' ')[0], // First word only
+            businessName.split(' ').slice(0, 2).join(' ') // First two words
+        ];
+        
+        for (const searchTerm of searchTerms) {
+            if (!searchTerm.trim()) continue;
+            
+            try {
+                console.log(`[COMPANIES HOUSE SEARCH] Trying search term: "${searchTerm}"`);
+                
+                const response = await axios.get(`${this.companiesHouseBaseUrl}/search/companies`, {
+                    params: {
+                        q: searchTerm,
+                        items_per_page: 20 // Get more results
+                    },
+                    headers: {
+                        'Authorization': `Basic ${Buffer.from(this.companiesHouseApiKey + ':').toString('base64')}`
+                    }
+                });
+                
+                console.log(`[COMPANIES HOUSE SEARCH] Found ${response.data.items?.length || 0} companies for "${searchTerm}"`);
+                
+                if (response.data.items && response.data.items.length > 0) {
+                    // Score and rank companies
+                    const scoredCompanies = response.data.items.map(item => ({
+                        ...item,
+                        score: this.calculateCompanyMatchScore(item.title, businessName, searchTerm)
+                    })).sort((a, b) => b.score - a.score);
+                    
+                    // Find best match
+                    const bestMatch = scoredCompanies.find(item => 
+                        item.score > 0.7 && item.company_status === 'active'
+                    ) || scoredCompanies.find(item => item.company_status === 'active') || scoredCompanies[0];
+                    
+                    if (bestMatch && bestMatch.score > 0.3) {
+                        console.log(`[COMPANIES HOUSE SEARCH] Selected company: ${bestMatch.title} (${bestMatch.company_number}) - Score: ${bestMatch.score} - Status: ${bestMatch.company_status}`);
+                        return bestMatch.company_number;
+                    }
                 }
-            });
-            
-            console.log(`[COMPANIES HOUSE SEARCH] Found ${response.data.items?.length || 0} companies for "${businessName}"`);
-            
-            if (response.data.items && response.data.items.length > 0) {
-                // Find best match - prioritize exact matches and active companies
-                const exactMatch = response.data.items.find(item => 
-                    item.title.toLowerCase() === businessName.toLowerCase() && 
-                    item.company_status === 'active'
-                );
                 
-                const partialMatch = response.data.items.find(item => 
-                    (item.title.toLowerCase().includes(businessName.toLowerCase()) ||
-                     businessName.toLowerCase().includes(item.title.toLowerCase())) &&
-                    item.company_status === 'active'
-                );
-                
-                const activeCompany = response.data.items.find(item => 
-                    item.company_status === 'active'
-                );
-                
-                const selectedCompany = exactMatch || partialMatch || activeCompany || response.data.items[0];
-                console.log(`[COMPANIES HOUSE SEARCH] Selected company: ${selectedCompany.title} (${selectedCompany.company_number}) - Status: ${selectedCompany.company_status}`);
-                
-                return selectedCompany.company_number;
+            } catch (error) {
+                console.error(`[COMPANIES HOUSE SEARCH ERROR] for "${searchTerm}":`, error.message);
             }
-            
-        } catch (error) {
-            console.error(`[COMPANIES HOUSE SEARCH ERROR]`, error.message);
         }
         
+        console.log(`[COMPANIES HOUSE SEARCH] No suitable company found for "${businessName}"`);
         return null;
+    }
+
+    // Calculate how well a company name matches the search term
+    calculateCompanyMatchScore(companyTitle, originalName, searchTerm) {
+        const company = companyTitle.toLowerCase();
+        const original = originalName.toLowerCase();
+        const search = searchTerm.toLowerCase();
+        
+        let score = 0;
+        
+        // Exact match gets highest score
+        if (company === original) score += 1.0;
+        else if (company === search) score += 0.9;
+        
+        // Contains match
+        if (company.includes(original)) score += 0.8;
+        else if (original.includes(company)) score += 0.7;
+        else if (company.includes(search)) score += 0.6;
+        
+        // Word overlap
+        const companyWords = company.split(/\s+/);
+        const originalWords = original.split(/\s+/);
+        const searchWords = search.split(/\s+/);
+        
+        const overlapWithOriginal = originalWords.filter(word => 
+            companyWords.some(cWord => cWord.includes(word) || word.includes(cWord))
+        ).length;
+        
+        const overlapWithSearch = searchWords.filter(word => 
+            companyWords.some(cWord => cWord.includes(word) || word.includes(cWord))
+        ).length;
+        
+        score += (overlapWithOriginal / originalWords.length) * 0.5;
+        score += (overlapWithSearch / searchWords.length) * 0.4;
+        
+        return Math.min(score, 1.0);
     }
 
     // Get real company officers from Companies House
@@ -165,8 +234,11 @@ export class RealDecisionMakerContactFinder {
                             occupation: officer.occupation
                         };
                         
-                        // Only add directors and secretaries as primary decision makers
-                        if (officer.officer_role.toLowerCase() === 'director' || officer.officer_role.toLowerCase() === 'secretary') {
+                        // Categorize officers by role importance
+                        const role = officer.officer_role.toLowerCase();
+                        if (role === 'director' || role === 'secretary' || role === 'managing director') {
+                            contacts.primary.push(contact);
+                        } else if (role.includes('manager') || role.includes('partner') || role.includes('owner')) {
                             contacts.primary.push(contact);
                         } else {
                             contacts.secondary.push(contact);
@@ -368,7 +440,36 @@ export class RealDecisionMakerContactFinder {
         return contacts;
     }
 
-    // Only use real data sources - no simulated LinkedIn data
+    // Generate alternative company names for better matching
+    generateAlternativeCompanyNames(businessName) {
+        const alternatives = [];
+        const name = businessName.toLowerCase();
+        
+        // Remove common suffixes and try variations
+        const suffixes = ['ltd', 'limited', 'llp', 'plc', 'inc', 'dental', 'practice', 'clinic', 'surgery', 'centre', 'center', 'group', 'services', 'healthcare'];
+        
+        for (const suffix of suffixes) {
+            const withoutSuffix = name.replace(new RegExp(`\\s+${suffix}\\b`, 'gi'), '').trim();
+            if (withoutSuffix && withoutSuffix !== name) {
+                alternatives.push(withoutSuffix);
+            }
+        }
+        
+        // Try first word only
+        const firstWord = name.split(' ')[0];
+        if (firstWord.length > 3) {
+            alternatives.push(firstWord);
+        }
+        
+        // Try first two words
+        const firstTwoWords = name.split(' ').slice(0, 2).join(' ');
+        if (firstTwoWords !== name && firstTwoWords.length > 5) {
+            alternatives.push(firstTwoWords);
+        }
+        
+        // Remove duplicates and return
+        return [...new Set(alternatives)].slice(0, 5); // Limit to 5 alternatives
+    }
 
     // Helper methods
     removeDuplicateContacts(contacts) {
