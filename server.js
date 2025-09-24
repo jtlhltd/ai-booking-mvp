@@ -55,6 +55,7 @@ const normalizePhone = (s) => (s || '').trim().replace(/[^\d+]/g, '');
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import axios from 'axios';
 import { generateUKBusinesses, getIndustryCategories, fuzzySearch } from './enhanced-business-search.js';
 import RealUKBusinessSearch from './real-uk-business-search.js';
 import morgan from 'morgan';
@@ -2254,7 +2255,6 @@ app.get('/api/test', (req, res) => {
 // Test Companies House API endpoint
 app.get('/api/test-companies-house', async (req, res) => {
   try {
-    const axios = await import('axios');
     const apiKey = process.env.COMPANIES_HOUSE_API_KEY;
     
     if (!apiKey) {
@@ -2262,7 +2262,7 @@ app.get('/api/test-companies-house', async (req, res) => {
     }
     
     // Test search for "Scott Arms Dental Practice"
-    const response = await axios.default.get('https://api.company-information.service.gov.uk/search/companies', {
+    const response = await axios.get('https://api.company-information.service.gov.uk/search/companies', {
       params: {
         q: 'Scott Arms Dental Practice',
         items_per_page: 5
