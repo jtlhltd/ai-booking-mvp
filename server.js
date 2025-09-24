@@ -2225,7 +2225,7 @@ function deriveIdemKey(req) {
 function requireApiKey(req, res, next) {
   if (req.method === 'GET' && (req.path === '/health' || req.path === '/gcal/ping' || req.path === '/healthz')) return next();
   if (req.path.startsWith('/webhooks/twilio-status') || req.path.startsWith('/webhooks/twilio-inbound') || req.path.startsWith('/webhooks/twilio/sms-inbound') || req.path.startsWith('/webhooks/vapi')) return next();
-  if (req.path === '/api/test' || req.path === '/api/uk-business-search' || req.path === '/api/decision-maker-contacts' || req.path === '/api/industry-categories') return next();
+  if (req.path === '/api/test' || req.path === '/api/test-linkedin' || req.path === '/api/uk-business-search' || req.path === '/api/decision-maker-contacts' || req.path === '/api/industry-categories') return next();
   if (req.path === '/uk-business-search') return next();
   if (!API_KEY) return res.status(500).json({ error: 'Server missing API_KEY' });
   const key = req.get('X-API-Key');
@@ -2243,9 +2243,58 @@ app.get('/api/test', (req, res) => {
     timestamp: new Date().toISOString(),
     env: {
       googlePlaces: process.env.GOOGLE_PLACES_API_KEY ? 'SET' : 'NOT SET',
-      companiesHouse: process.env.COMPANIES_HOUSE_API_KEY ? 'SET' : 'NOT SET'
+      companiesHouse: process.env.COMPANIES_HOUSE_API_KEY ? 'SET' : 'NOT SET',
+      googleSearch: process.env.GOOGLE_SEARCH_API_KEY ? 'SET' : 'NOT SET'
     }
   });
+});
+
+// Test LinkedIn search endpoint
+app.get('/api/test-linkedin', async (req, res) => {
+  try {
+    const { name, company } = req.query;
+    
+    if (!name || !company) {
+      return res.status(400).json({ error: 'Name and company parameters required' });
+    }
+    
+    console.log(`[TEST LINKEDIN] Testing search for "${name}" at "${company}"`);
+    
+    // Test Google Search API
+    if (process.env.GOOGLE_SEARCH_API_KEY) {
+      const response = await axios.get('https://www.googleapis.com/customsearch/v1', {
+        params: {
+          key: process.env.GOOGLE_SEARCH_API_KEY,
+          cx: '017576662512468239146:omuauf_lfve',
+          q: `"${name}" "${company}" site:linkedin.com/in/`,
+          num: 3
+        },
+        timeout: 5000
+      });
+      
+      res.json({
+        success: true,
+        query: `"${name}" "${company}" site:linkedin.com/in/`,
+        results: response.data.items ? response.data.items.length : 0,
+        items: response.data.items || [],
+        googleApiKey: 'SET'
+      });
+    } else {
+      res.json({
+        success: false,
+        error: 'Google Search API key not set',
+        googleApiKey: 'NOT SET'
+      });
+    }
+    
+  } catch (error) {
+    console.error('[TEST LINKEDIN ERROR]', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      googleApiKey: process.env.GOOGLE_SEARCH_API_KEY ? 'SET' : 'NOT SET'
+    });
+  }
 });
 
 // Test Companies House API directly

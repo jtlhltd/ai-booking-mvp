@@ -592,6 +592,7 @@ export class RealDecisionMakerContactFinder {
                             const personalEmail = await this.extractPersonalEmailFromLinkedIn(linkedinProfile, contact.name);
                             
                             if (personalEmail) {
+                                // Found personal email
                                 const enhancedContact = {
                                     ...contact,
                                     type: 'email',
@@ -613,6 +614,29 @@ export class RealDecisionMakerContactFinder {
                                 }
                                 
                                 console.log(`[LINKEDIN SEARCH] Found personal email for ${contact.name}: ${personalEmail}`);
+                            } else {
+                                // No email found, but we have a LinkedIn profile - return the profile link
+                                const enhancedContact = {
+                                    ...contact,
+                                    type: 'linkedin',
+                                    value: linkedinProfile.link,
+                                    confidence: linkedinProfile.confidence || 0.7,
+                                    source: 'linkedin_search',
+                                    linkedinUrl: linkedinProfile.link,
+                                    note: 'LinkedIn profile found - manual contact research needed',
+                                    googleSearchUrl: `https://www.google.com/search?q=${encodeURIComponent(contact.name + ' ' + business.name + ' contact email')}`
+                                };
+                                
+                                // Add to appropriate category
+                                if (contacts.primary.includes(contact)) {
+                                    linkedinContacts.primary.push(enhancedContact);
+                                } else if (contacts.secondary.includes(contact)) {
+                                    linkedinContacts.secondary.push(enhancedContact);
+                                } else {
+                                    linkedinContacts.gatekeeper.push(enhancedContact);
+                                }
+                                
+                                console.log(`[LINKEDIN SEARCH] Found LinkedIn profile for ${contact.name}: ${linkedinProfile.link}`);
                             }
                         }
                     } catch (searchError) {
@@ -632,12 +656,14 @@ export class RealDecisionMakerContactFinder {
     async findLinkedInProfile(personName, companyName) {
         try {
             console.log(`[LINKEDIN SEARCH] Starting comprehensive search for "${personName}" at "${companyName}"`);
+            console.log(`[LINKEDIN SEARCH] Google API Key available: ${this.googleApiKey ? 'YES' : 'NO'}`);
             
             // Strategy 1: Google Search with multiple query variations
             if (this.googleApiKey) {
                 const searchQueries = this.generateLinkedInSearchQueries(personName, companyName);
+                console.log(`[LINKEDIN SEARCH] Generated ${searchQueries.length} search queries`);
                 
-                for (const query of searchQueries) {
+                for (const query of searchQueries.slice(0, 3)) { // Limit to first 3 queries to prevent timeout
                     console.log(`[LINKEDIN SEARCH] Trying query: "${query}"`);
                     
                     try {
@@ -646,17 +672,24 @@ export class RealDecisionMakerContactFinder {
                                 key: this.googleApiKey,
                                 cx: '017576662512468239146:omuauf_lfve',
                                 q: query,
-                                num: 5
-                            }
+                                num: 3 // Reduced from 5 to 3
+                            },
+                            timeout: 4000 // 4 second timeout
                         });
+                        
+                        console.log(`[LINKEDIN SEARCH] Google API returned ${response.data.items ? response.data.items.length : 0} results`);
                         
                         if (response.data.items && response.data.items.length > 0) {
                             // Find the best match
                             const bestMatch = this.findBestLinkedInMatch(response.data.items, personName, companyName);
                             if (bestMatch) {
-                                console.log(`[LINKEDIN SEARCH] Found profile: ${bestMatch.title}`);
+                                console.log(`[LINKEDIN SEARCH] Found profile: ${bestMatch.title} - ${bestMatch.link}`);
                                 return bestMatch;
+                            } else {
+                                console.log(`[LINKEDIN SEARCH] No good LinkedIn match found in results`);
                             }
+                        } else {
+                            console.log(`[LINKEDIN SEARCH] No results returned for query: "${query}"`);
                         }
                     } catch (queryError) {
                         console.error(`[LINKEDIN SEARCH] Query failed: "${query}"`, queryError.message);
