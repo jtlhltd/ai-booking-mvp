@@ -2280,6 +2280,34 @@ app.get('/api/test-companies-house', async (req, res) => {
   }
 });
 
+// Test Companies House Officers API directly
+app.get('/api/test-companies-house-officers/:companyNumber', async (req, res) => {
+  try {
+    if (!process.env.COMPANIES_HOUSE_API_KEY) {
+      return res.json({ error: 'Companies House API key not set' });
+    }
+
+    const axios = (await import('axios')).default;
+    const response = await axios.get(`https://api.company-information.service.gov.uk/company/${req.params.companyNumber}/officers`, {
+      headers: {
+        'Authorization': `Basic ${Buffer.from(process.env.COMPANIES_HOUSE_API_KEY + ':').toString('base64')}`
+      }
+    });
+
+    res.json({
+      success: true,
+      officers: response.data.items?.slice(0, 5) || [],
+      message: `Companies House Officers API is working for company ${req.params.companyNumber}`
+    });
+  } catch (error) {
+    res.json({
+      success: false,
+      error: error.message,
+      message: `Companies House Officers API failed for company ${req.params.companyNumber}`
+    });
+  }
+});
+
 // UK Business Search endpoint (PUBLIC - no auth required) - WITH REAL API
 app.post('/api/uk-business-search', async (req, res) => {
   try {
