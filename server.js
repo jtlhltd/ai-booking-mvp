@@ -2251,6 +2251,47 @@ app.get('/api/test', (req, res) => {
   });
 });
 
+// Test Companies House API endpoint
+app.get('/api/test-companies-house', async (req, res) => {
+  try {
+    const { get } = await import('axios');
+    const apiKey = process.env.COMPANIES_HOUSE_API_KEY;
+    
+    if (!apiKey) {
+      return res.json({ success: false, error: 'Companies House API key not set' });
+    }
+    
+    // Test search for "Scott Arms Dental Practice"
+    const response = await get('https://api.company-information.service.gov.uk/search/companies', {
+      params: {
+        q: 'Scott Arms Dental Practice',
+        items_per_page: 5
+      },
+      headers: {
+        'Authorization': `Basic ${Buffer.from(apiKey + ':').toString('base64')}`
+      }
+    });
+    
+    res.json({
+      success: true,
+      apiKey: apiKey.substring(0, 8) + '...',
+      results: response.data.items?.length || 0,
+      companies: response.data.items?.map(item => ({
+        name: item.title,
+        number: item.company_number,
+        status: item.company_status
+      })) || []
+    });
+  } catch (error) {
+    res.json({
+      success: false,
+      error: error.message,
+      status: error.response?.status,
+      data: error.response?.data
+    });
+  }
+});
+
 // Test LinkedIn search endpoint
 app.get('/api/test-linkedin', async (req, res) => {
   try {

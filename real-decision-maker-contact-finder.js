@@ -52,7 +52,10 @@ export class RealDecisionMakerContactFinder {
             
             // Method 1: Companies House officers (for UK companies)
             if (this.companiesHouseApiKey) {
+                console.log(`[REAL DECISION MAKER] Searching Companies House for "${business.name}"`);
                 const companyNumber = await this.findCompanyNumber(business.name);
+                console.log(`[REAL DECISION MAKER] Company number result: ${companyNumber || 'NOT FOUND'}`);
+                
                 if (companyNumber) {
                     const officerContacts = await this.getCompaniesHouseOfficers(companyNumber, business, industry, targetRole);
                     this.mergeContacts(contacts, officerContacts);
@@ -60,6 +63,8 @@ export class RealDecisionMakerContactFinder {
                 } else {
                     console.log(`[DECISION MAKER CONTACT] No company number found for "${business.name}"`);
                 }
+            } else {
+                console.log(`[REAL DECISION MAKER] Companies House API key not set - skipping`);
             }
             
             // Method 2: Website scraping for team pages
