@@ -2241,6 +2241,45 @@ app.get('/api/test', (req, res) => {
   });
 });
 
+// Test Google Places API directly
+app.get('/api/test-google-places', async (req, res) => {
+  try {
+    const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+    
+    if (!apiKey) {
+      return res.json({ 
+        success: false, 
+        error: 'Google Places API key not found',
+        apiKey: 'NOT SET'
+      });
+    }
+    
+    // Test Google Places API with a simple search
+    const testUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=dental+practice+london&key=${apiKey}`;
+    
+    const response = await fetch(testUrl);
+    const data = await response.json();
+    
+    res.json({
+      success: true,
+      apiKey: apiKey.substring(0, 10) + '...',
+      status: data.status,
+      resultsCount: data.results ? data.results.length : 0,
+      firstResult: data.results && data.results[0] ? {
+        name: data.results[0].name,
+        address: data.results[0].formatted_address
+      } : null,
+      error: data.error_message || null
+    });
+  } catch (error) {
+    res.json({
+      success: false,
+      error: error.message,
+      apiKey: process.env.GOOGLE_PLACES_API_KEY ? 'SET' : 'NOT SET'
+    });
+  }
+});
+
 // UK Business Search endpoint (PUBLIC - no auth required) - WITH REAL API
 app.post('/api/uk-business-search', async (req, res) => {
   try {
@@ -2263,16 +2302,30 @@ app.post('/api/uk-business-search', async (req, res) => {
         companiesHouse: process.env.COMPANIES_HOUSE_API_KEY ? 'SET' : 'NOT SET'
       });
       
+      // Debug API key values (first few characters only)
+      console.log(`[UK BUSINESS SEARCH] API Key Values:`, {
+        googlePlaces: process.env.GOOGLE_PLACES_API_KEY ? process.env.GOOGLE_PLACES_API_KEY.substring(0, 10) + '...' : 'NOT SET',
+        companiesHouse: process.env.COMPANIES_HOUSE_API_KEY ? process.env.COMPANIES_HOUSE_API_KEY.substring(0, 10) + '...' : 'NOT SET'
+      });
+      
       // Dynamic import of real API module
       const realSearchModule = await import('./real-uk-business-search.js');
       const RealUKBusinessSearch = realSearchModule.default;
       
       const realSearcher = new RealUKBusinessSearch();
+      
+      // Debug the searcher's API keys
+      console.log(`[UK BUSINESS SEARCH] RealSearcher API Keys:`, {
+        googlePlaces: realSearcher.apiKeys.googlePlaces ? 'SET' : 'NOT SET',
+        companiesHouse: realSearcher.apiKeys.companiesHouse ? 'SET' : 'NOT SET'
+      });
+      
       results = await realSearcher.searchRealBusinesses(query, filters);
       usingRealData = true;
       console.log(`[UK BUSINESS SEARCH] Real API search found ${results.length} businesses`);
     } catch (realApiError) {
       console.log(`[UK BUSINESS SEARCH] Real API failed, falling back to sample data:`, realApiError.message);
+      console.log(`[UK BUSINESS SEARCH] Real API error details:`, realApiError);
       
       // Fallback to sample data
       results = [
