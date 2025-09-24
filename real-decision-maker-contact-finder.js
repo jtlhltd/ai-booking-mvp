@@ -235,8 +235,8 @@ export class RealDecisionMakerContactFinder {
                     if (officer.name && officer.officer_role && !officer.resigned_on) {
                         const officerName = officer.name?.full || officer.name || 'Unknown Officer';
                         const contact = {
-                            type: 'email',
-                            value: this.generateEmailFromName(officerName, business.name),
+                            type: 'contact_info',
+                            value: `Director: ${officerName}`,
                             confidence: 0.95, // Higher confidence for real Companies House data
                             source: 'companies_house',
                             title: officer.officer_role,
@@ -244,7 +244,8 @@ export class RealDecisionMakerContactFinder {
                             companyNumber: companyNumber,
                             appointedOn: officer.appointed_on,
                             nationality: officer.nationality,
-                            occupation: officer.occupation
+                            occupation: officer.occupation,
+                            note: 'Personal email not available - requires manual research'
                         };
                         
                         // Categorize officers by role importance
@@ -554,10 +555,11 @@ export class RealDecisionMakerContactFinder {
         
         if (primaryContact) {
             return {
-                approach: `Direct outreach to ${primaryContact.name} (${primaryContact.title})`,
+                approach: `Research contact details for ${primaryContact.name} (${primaryContact.title})`,
                 message: `Hi ${primaryContact.name}, I noticed ${business.name} and wanted to reach out about our AI booking system that could help streamline your ${industry === 'restaurant' ? 'reservation system' : industry === 'fitness' ? 'member bookings' : industry === 'dentist' ? 'appointment scheduling' : industry === 'beauty_salon' ? 'booking system' : 'operations'} and improve customer experience.`,
-                followUp: "Follow up in 3-5 days if no response",
-                bestTime: "Tuesday-Thursday, 10am-2pm"
+                followUp: "Research personal email/LinkedIn before outreach",
+                bestTime: "Tuesday-Thursday, 10am-2pm",
+                note: "Personal contact details need to be researched separately - Companies House only provides names and roles"
             };
         }
         
