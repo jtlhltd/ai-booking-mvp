@@ -228,17 +228,19 @@ export class RealDecisionMakerContactFinder {
             
             if (response.data.items) {
                 response.data.items.forEach(officer => {
-                    console.log(`[COMPANIES HOUSE OFFICER] ${officer.name?.full} - ${officer.officer_role} - Status: ${officer.resigned_on ? 'RESIGNED' : 'ACTIVE'}`);
+                    console.log(`[COMPANIES HOUSE OFFICER] Raw officer data:`, JSON.stringify(officer, null, 2));
+                    console.log(`[COMPANIES HOUSE OFFICER] ${officer.name?.full || officer.name} - ${officer.officer_role} - Status: ${officer.resigned_on ? 'RESIGNED' : 'ACTIVE'}`);
                     
                     // Only process active officers (not resigned)
                     if (officer.name && officer.officer_role && !officer.resigned_on) {
+                        const officerName = officer.name?.full || officer.name || 'Unknown Officer';
                         const contact = {
                             type: 'email',
-                            value: this.generateEmailFromName(officer.name.full, business.name),
+                            value: this.generateEmailFromName(officerName, business.name),
                             confidence: 0.95, // Higher confidence for real Companies House data
                             source: 'companies_house',
                             title: officer.officer_role,
-                            name: officer.name.full,
+                            name: officerName,
                             companyNumber: companyNumber,
                             appointedOn: officer.appointed_on,
                             nationality: officer.nationality,
