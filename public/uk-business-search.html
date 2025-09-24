@@ -382,6 +382,164 @@
                 flex-direction: column;
             }
         }
+
+        /* Decision Maker Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 30px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .modal-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #333;
+        }
+
+        .close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close:hover {
+            color: #000;
+        }
+
+        .decision-maker-section {
+            margin-bottom: 25px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .section-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .contact-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            margin-bottom: 10px;
+            background: white;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .contact-info {
+            flex: 1;
+        }
+
+        .contact-type {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .contact-value {
+            font-size: 1.1rem;
+            color: #333;
+        }
+
+        .contact-source {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .confidence-badge {
+            padding: 6px 12px;
+            border-radius: 15px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .confidence-high {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .confidence-medium {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .confidence-low {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .outreach-strategy {
+            background: #e7f3ff;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+
+        .strategy-title {
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .strategy-item {
+            margin-bottom: 8px;
+            color: #555;
+        }
+
+        .loading-spinner {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -503,7 +661,20 @@
             </div>
         </div>
     </div>
-    
+
+    <!-- Decision Maker Contact Research Modal -->
+    <div id="decisionMakerModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Decision Maker Contacts</h2>
+                <span class="close" onclick="closeModal()">&times;</span>
+            </div>
+            <div id="modalContent">
+                <!-- Content will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+
     <script>
         // Sample UK business data
         const ukBusinesses = {
@@ -937,7 +1108,159 @@
             const business = currentResults[index];
             const industry = categorizeBusiness(business);
             
-            const decisionMakers = getDecisionMakers(business, industry);
+            // Open modal and start contact research
+            const modal = document.getElementById('decisionMakerModal');
+            const modalContent = document.getElementById('modalContent');
+            
+            modalContent.innerHTML = `
+                <div class="loading-spinner">
+                    <div class="spinner"></div>
+                    <p>Researching decision makers for ${business.name}...</p>
+                </div>
+            `;
+            
+            modal.style.display = 'block';
+            
+            // Call the decision maker contact research API
+            findDecisionMakerContacts(business, industry);
+        }
+
+        // Find decision maker contacts via API
+        async function findDecisionMakerContacts(business, industry) {
+            try {
+                const response = await fetch('/api/decision-maker-contacts', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        business: business,
+                        industry: industry,
+                        targetRole: 'primary'
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayDecisionMakerContacts(data);
+                } else {
+                    showContactResearchError(data.error || 'Failed to research contacts');
+                }
+            } catch (error) {
+                console.error('Decision maker contact research error:', error);
+                showContactResearchError('Failed to research decision maker contacts. Please try again.');
+            }
+        }
+
+        // Display decision maker contacts in modal
+        function displayDecisionMakerContacts(data) {
+            const modalContent = document.getElementById('modalContent');
+            
+            let html = `
+                <div class="decision-maker-section">
+                    <h3 class="section-title">🎯 Primary Decision Makers</h3>
+                    ${data.contacts.primary.map(contact => createContactItem(contact)).join('')}
+                </div>
+            `;
+            
+            if (data.contacts.secondary && data.contacts.secondary.length > 0) {
+                html += `
+                    <div class="decision-maker-section">
+                        <h3 class="section-title">👥 Secondary Decision Makers</h3>
+                        ${data.contacts.secondary.map(contact => createContactItem(contact)).join('')}
+                    </div>
+                `;
+            }
+            
+            if (data.contacts.gatekeeper && data.contacts.gatekeeper.length > 0) {
+                html += `
+                    <div class="decision-maker-section">
+                        <h3 class="section-title">🚪 Gatekeepers</h3>
+                        ${data.contacts.gatekeeper.map(contact => createContactItem(contact)).join('')}
+                    </div>
+                `;
+            }
+            
+            if (data.strategy) {
+                html += `
+                    <div class="outreach-strategy">
+                        <h3 class="strategy-title">📋 Recommended Outreach Strategy</h3>
+                        <div class="strategy-item"><strong>Approach:</strong> ${data.strategy.approach}</div>
+                        <div class="strategy-item"><strong>Message:</strong> ${data.strategy.message}</div>
+                        <div class="strategy-item"><strong>Follow-up:</strong> ${data.strategy.followUp}</div>
+                        <div class="strategy-item"><strong>Best Time:</strong> ${data.strategy.bestTime}</div>
+                    </div>
+                `;
+            }
+            
+            modalContent.innerHTML = html;
+        }
+
+        // Create contact item HTML
+        function createContactItem(contact) {
+            const confidenceClass = getConfidenceClass(contact.confidence);
+            const confidenceText = getConfidenceText(contact.confidence);
+            
+            return `
+                <div class="contact-item">
+                    <div class="contact-info">
+                        <div class="contact-type">${contact.type.toUpperCase()}</div>
+                        <div class="contact-value">${contact.value}</div>
+                        <div class="contact-source">Source: ${contact.source} | ${contact.title || 'Contact'}</div>
+                    </div>
+                    <div class="confidence-badge ${confidenceClass}">${confidenceText}</div>
+                </div>
+            `;
+        }
+
+        // Get confidence class for styling
+        function getConfidenceClass(confidence) {
+            if (confidence >= 0.8) return 'confidence-high';
+            if (confidence >= 0.5) return 'confidence-medium';
+            return 'confidence-low';
+        }
+
+        // Get confidence text
+        function getConfidenceText(confidence) {
+            if (confidence >= 0.8) return 'High';
+            if (confidence >= 0.5) return 'Medium';
+            return 'Low';
+        }
+
+        // Show contact research error
+        function showContactResearchError(message) {
+            const modalContent = document.getElementById('modalContent');
+            modalContent.innerHTML = `
+                <div class="error">
+                    <h3>❌ Contact Research Failed</h3>
+                    <p>${message}</p>
+                    <p>You can try manual research methods:</p>
+                    <ul>
+                        <li>LinkedIn search for the business name</li>
+                        <li>Company website contact page</li>
+                        <li>Companies House officer search</li>
+                        <li>Google search for decision maker names</li>
+                    </ul>
+                </div>
+            `;
+        }
+
+        // Close modal
+        function closeModal() {
+            document.getElementById('decisionMakerModal').style.display = 'none';
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('decisionMakerModal');
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        // Legacy function for compatibility
+        function getDecisionMakers(business, industry) {
             
             // Add contact finding status
             const contactStatus = document.createElement('div');
