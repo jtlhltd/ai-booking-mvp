@@ -2514,6 +2514,7 @@ app.post('/api/decision-maker-contacts', async (req, res) => {
     }
     
     console.log(`[DECISION MAKER CONTACT] Researching contacts for ${targetRole} at ${business.name}`);
+    console.log(`[DECISION MAKER CONTACT] Business data:`, { name: business.name, website: business.website, address: business.address });
     
     // Try real API first, fallback to sample data
     let contacts, strategy;
@@ -2553,7 +2554,8 @@ app.post('/api/decision-maker-contacts', async (req, res) => {
           bestTime: "N/A"
         };
       } else {
-        console.log(`[DECISION MAKER CONTACT] Real API failed, generating fallback contacts`);
+        console.log(`[DECISION MAKER CONTACT] Real API failed:`, realApiError.message);
+        console.log(`[DECISION MAKER CONTACT] Generating fallback contacts for ${business.name}`);
         
         // Generate realistic fallback contacts when real API fails
         contacts = {
@@ -2589,6 +2591,13 @@ app.post('/api/decision-maker-contacts', async (req, res) => {
         };
       }
     }
+    
+    console.log(`[DECISION MAKER CONTACT] Returning contacts:`, { 
+      primaryCount: contacts.primary.length, 
+      secondaryCount: contacts.secondary.length, 
+      gatekeeperCount: contacts.gatekeeper.length,
+      found: contacts.found 
+    });
     
     res.json({
       success: true,
