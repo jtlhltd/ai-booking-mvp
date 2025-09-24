@@ -252,7 +252,10 @@ export class RealDecisionMakerContactFinder {
                             appointedOn: officer.appointed_on,
                             nationality: officer.nationality,
                             occupation: officer.occupation,
-                            note: 'Personal email not available - requires manual research'
+                            note: 'Personal email not available - requires manual research',
+                            companiesHouseUrl: `https://find-and-update.company-information.service.gov.uk/officers/${officer.links?.self?.replace('/officers/', '') || 'unknown'}`,
+                            companyUrl: `https://find-and-update.company-information.service.gov.uk/company/${companyNumber}`,
+                            businessWebsite: business.website || null
                         };
                         
                         // Categorize officers by role importance
@@ -524,7 +527,8 @@ export class RealDecisionMakerContactFinder {
                                 confidence: 0.85, // High confidence for LinkedIn-found emails
                                 source: 'linkedin',
                                 linkedinUrl: linkedinProfile.url,
-                                note: 'Personal email found via LinkedIn'
+                                note: 'Personal email found via LinkedIn',
+                                googleSearchUrl: `https://www.google.com/search?q="${contact.name}" "${business.name}" site:linkedin.com/in/`
                             };
                             
                             // Add to appropriate category
