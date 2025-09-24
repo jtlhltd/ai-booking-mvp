@@ -452,7 +452,7 @@ export class RealDecisionMakerContactFinder {
         if (primaryContact) {
             return {
                 approach: `Direct outreach to ${primaryContact.name} (${primaryContact.title})`,
-                message: `Hi ${primaryContact.name}, I noticed ${business.name} and wanted to reach out about our AI booking system that could help streamline your ${industry} operations and improve customer experience.`,
+                message: `Hi ${primaryContact.name}, I noticed ${business.name} and wanted to reach out about our AI booking system that could help streamline your ${industry === 'restaurant' ? 'reservation system' : industry === 'fitness' ? 'member bookings' : industry === 'dentist' ? 'appointment scheduling' : industry === 'beauty_salon' ? 'booking system' : 'operations'} and improve customer experience.`,
                 followUp: "Follow up in 3-5 days if no response",
                 bestTime: "Tuesday-Thursday, 10am-2pm"
             };

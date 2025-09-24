@@ -2335,9 +2335,14 @@ app.post('/api/decision-maker-contacts', async (req, res) => {
       // Fallback to realistic decision maker data
       contacts = generateRealisticDecisionMakers(business, industry, targetRole);
       
+      // Create personalized outreach strategy using the actual contact
+      const primaryContact = contacts.primary[0];
+      const contactName = primaryContact?.name || `${primaryContact?.firstName} ${primaryContact?.lastName}` || 'there';
+      const contactTitle = primaryContact?.title || 'Manager';
+      
       strategy = {
-        approach: "Direct outreach to decision maker",
-        message: `Hi ${targetRole}, I noticed ${business.name} and wanted to reach out about our AI booking system that could help streamline your appointment scheduling.`,
+        approach: `Direct outreach to ${contactName} (${contactTitle})`,
+        message: `Hi ${contactName}, I noticed ${business.name} and wanted to reach out about our AI booking system that could help streamline your ${industry === 'restaurant' ? 'reservation system' : industry === 'fitness' ? 'member bookings' : 'appointment scheduling'} and improve customer experience.`,
         followUp: "Follow up in 3-5 days if no response",
         bestTime: "Tuesday-Thursday, 10am-2pm"
       };
