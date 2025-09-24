@@ -876,6 +876,10 @@ export class RealDecisionMakerContactFinder {
                         officer.name && 
                         officer.name.trim() !== '' && 
                         officer.name !== 'undefined') {
+                        
+                        // Extract contact information from officer data
+                        const contactInfo = this.extractOfficerContactInfo(officer, business);
+                        
                         const contact = {
                             name: officer.name,
                             type: 'officer',
@@ -884,7 +888,10 @@ export class RealDecisionMakerContactFinder {
                             note: `Current officer at ${business.name} (appointed ${officer.appointed_on})`,
                             companiesHouseUrl: `https://find-and-update.company-information.service.gov.uk/officers/${officer.name.replace(/\s+/g, '-').toLowerCase()}/appointments`,
                             appointmentDate: officer.appointed_on,
-                            role: officer.officer_role || 'director'
+                            role: officer.officer_role || 'director',
+                            email: contactInfo.email,
+                            phone: contactInfo.phone,
+                            address: contactInfo.address
                         };
                         contacts.push(contact);
                     }
@@ -898,6 +905,118 @@ export class RealDecisionMakerContactFinder {
         }
         
         return contacts;
+    }
+
+    // Extract contact information from Companies House officer data
+    extractOfficerContactInfo(officer, business) {
+        const contactInfo = { email: null, phone: null, address: null };
+        
+        try {
+            // Companies House provides limited contact info, but we can extract what's available
+            if (officer.contact_details) {
+                // Extract email if available
+                if (officer.contact_details.email) {
+                    contactInfo.email = officer.contact_details.email;
+                }
+                
+                // Extract phone if available
+                if (officer.contact_details.phone) {
+                    contactInfo.phone = officer.contact_details.phone;
+                }
+                
+                // Extract address if available
+                if (officer.contact_details.address) {
+                    contactInfo.address = officer.contact_details.address;
+                }
+            }
+            
+            // If no direct contact info, try to extract from other fields
+            if (!contactInfo.email && officer.email) {
+                contactInfo.email = officer.email;
+            }
+            
+            if (!contactInfo.phone && officer.phone) {
+                contactInfo.phone = officer.phone;
+            }
+            
+            // Extract address from officer data
+            if (!contactInfo.address && officer.address) {
+                contactInfo.address = officer.address;
+            }
+            
+            console.log(`[OFFICER CONTACT] Extracted contact info for ${officer.name}:`, contactInfo);
+            
+        } catch (error) {
+            console.error(`[OFFICER CONTACT ERROR]`, error.message);
+        }
+        
+        return contactInfo;
+    }
+
+    // Extract contact information from website text
+    extractContactFromText(text, name) {
+        const contactInfo = { email: null, phone: null, role: null };
+        
+        try {
+            // Extract email addresses
+            const emailRegex = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g;
+            const emails = text.match(emailRegex);
+            if (emails && emails.length > 0) {
+                // Find email closest to the name
+                const nameIndex = text.indexOf(name);
+                let closestEmail = emails[0];
+                let closestDistance = Math.abs(text.indexOf(emails[0]) - nameIndex);
+                
+                for (const email of emails) {
+                    const distance = Math.abs(text.indexOf(email) - nameIndex);
+                    if (distance < closestDistance) {
+                        closestDistance = distance;
+                        closestEmail = email;
+                    }
+                }
+                contactInfo.email = closestEmail;
+            }
+            
+            // Extract phone numbers
+            const phoneRegex = /(\+?44\s?[0-9]{2,4}\s?[0-9]{3,4}\s?[0-9]{3,4}|0[0-9]{2,4}\s?[0-9]{3,4}\s?[0-9]{3,4})/g;
+            const phones = text.match(phoneRegex);
+            if (phones && phones.length > 0) {
+                // Find phone closest to the name
+                const nameIndex = text.indexOf(name);
+                let closestPhone = phones[0];
+                let closestDistance = Math.abs(text.indexOf(phones[0]) - nameIndex);
+                
+                for (const phone of phones) {
+                    const distance = Math.abs(text.indexOf(phone) - nameIndex);
+                    if (distance < closestDistance) {
+                        closestDistance = distance;
+                        closestPhone = phone;
+                    }
+                }
+                contactInfo.phone = closestPhone;
+            }
+            
+            // Extract role/title
+            const rolePatterns = [
+                /(?:Dr\.?|Mr\.?|Ms\.?|Mrs\.?)\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s*[-,\n\r]*\s*([A-Z][a-z\s]+(?:Director|Manager|Owner|Partner|Principal|Lead|Head|Chief))/gi,
+                /([A-Z][a-z\s]+(?:Director|Manager|Owner|Partner|Principal|Lead|Head|Chief))/gi
+            ];
+            
+            for (const pattern of rolePatterns) {
+                const roleMatch = text.match(pattern);
+                if (roleMatch) {
+                    contactInfo.role = roleMatch[0].trim();
+                    break;
+                }
+            }
+            
+            console.log(`[CONTACT EXTRACTION] Extracted contact info for ${name}:`, contactInfo);
+            
+        } catch (error) {
+            console.error(`[CONTACT EXTRACTION ERROR]`, error.message);
+        }
+        
+        return contactInfo;
     }
 
     // Find team/owner information on business website
@@ -925,19 +1044,25 @@ export class RealDecisionMakerContactFinder {
                 const matches = html.match(pattern);
                 if (matches) {
                     for (const match of matches) {
-                        // Extract names from the team section
+                        // Extract names and contact info from the team section
                         const nameMatches = match.match(/(?:Dr\.?|Mr\.?|Ms\.?|Mrs\.?)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/g);
                         if (nameMatches) {
                             nameMatches.forEach(nameMatch => {
                                 const cleanName = nameMatch.replace(/(?:Dr\.?|Mr\.?|Ms\.?|Mrs\.?)\s+/, '').trim();
                                 if (cleanName.length > 2 && cleanName.length < 50) {
+                                    // Extract contact information from the surrounding text
+                                    const contactInfo = this.extractContactFromText(match, cleanName);
+                                    
                                     contacts.push({
                                         name: cleanName,
                                         type: 'team_member',
                                         source: 'website_team_page',
                                         confidence: 0.7,
                                         note: `Found on ${business.name} team/about page`,
-                                        websiteUrl: business.website
+                                        websiteUrl: business.website,
+                                        email: contactInfo.email,
+                                        phone: contactInfo.phone,
+                                        role: contactInfo.role
                                     });
                                 }
                             });
