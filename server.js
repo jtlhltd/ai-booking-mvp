@@ -2385,22 +2385,45 @@ app.post('/api/decision-maker-contacts', async (req, res) => {
       const RealDecisionMakerContactFinder = contactFinderModule.default;
       
       const contactFinder = new RealDecisionMakerContactFinder();
-      contacts = await contactFinder.findDecisionMakerContacts(business, industry, targetRole);
-      strategy = contactFinder.generateOutreachStrategy(contacts, business, industry, targetRole);
+      
+      // Set a 15-second timeout for the entire research process
+      const result = await Promise.race([
+        Promise.all([
+          contactFinder.findDecisionMakerContacts(business, industry, targetRole),
+          contactFinder.generateOutreachStrategy({ primary: [], secondary: [], gatekeeper: [] }, business, industry, targetRole)
+        ]),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Contact research timed out after 15 seconds')), 15000)
+        )
+      ]);
+      
+      contacts = result[0];
+      strategy = result[1];
       
       console.log(`[DECISION MAKER CONTACT] Real API found contacts successfully`);
     } catch (realApiError) {
       console.log(`[DECISION MAKER CONTACT] Real API failed:`, realApiError.message);
       
-      // No fallback to fake data - only show real data
-      contacts = { primary: [], secondary: [], gatekeeper: [], found: false };
-      
-      strategy = {
-        approach: "No decision maker contacts found",
-        message: "Unable to find decision maker contacts for this business. Please try manual research.",
-        followUp: "Manual research required",
-        bestTime: "N/A"
-      };
+      // Check if it's a timeout error
+      if (realApiError.message.includes('timed out')) {
+        contacts = { primary: [], secondary: [], gatekeeper: [], found: false };
+        strategy = {
+          approach: "Research timed out",
+          message: "The search is taking longer than expected. Please try again.",
+          followUp: "Try again with a different business or check your internet connection",
+          bestTime: "N/A"
+        };
+      } else {
+        // No fallback to fake data - only show real data
+        contacts = { primary: [], secondary: [], gatekeeper: [], found: false };
+        
+        strategy = {
+          approach: "No decision maker contacts found",
+          message: "Unable to find decision maker contacts for this business. Please try manual research.",
+          followUp: "Manual research required",
+          bestTime: "N/A"
+        };
+      }
     }
     
     res.json({

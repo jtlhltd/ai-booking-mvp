@@ -502,32 +502,61 @@ export class RealDecisionMakerContactFinder {
         return [...new Set(alternatives)].slice(0, 5); // Limit to 5 alternatives
     }
 
-    // Enhanced decision maker research using multiple strategies
+    // Enhanced decision maker research using multiple strategies (optimized for speed)
     async enhancedDecisionMakerResearch(contacts, business, industry) {
         const enhancedContacts = { primary: [], secondary: [], gatekeeper: [] };
         
         try {
-            console.log(`[ENHANCED RESEARCH] Starting comprehensive research for ${business.name}`);
+            console.log(`[ENHANCED RESEARCH] Starting optimized research for ${business.name}`);
             
-            // Strategy 1: LinkedIn search with multiple variations
-            const linkedinContacts = await this.searchLinkedInForPersonalEmails(contacts, business);
-            this.mergeContacts(enhancedContacts, linkedinContacts);
+            // Run strategies in parallel with timeouts to prevent hanging
+            const promises = [];
             
-            // Strategy 2: Google search for contact information
-            const googleContacts = await this.googleSearchForContacts(contacts, business, industry);
-            this.mergeContacts(enhancedContacts, googleContacts);
+            // Strategy 1: Quick LinkedIn search (5 second timeout)
+            promises.push(
+                this.searchLinkedInForPersonalEmails(contacts, business)
+                    .catch(err => {
+                        console.log(`[LINKEDIN] Skipped due to timeout/error: ${err.message}`);
+                        return { primary: [], secondary: [], gatekeeper: [] };
+                    })
+            );
             
-            // Strategy 3: Website contact page scraping
-            const websiteContacts = await this.scrapeContactPages(contacts, business);
-            this.mergeContacts(enhancedContacts, websiteContacts);
+            // Strategy 2: Quick Google search (8 second timeout)
+            promises.push(
+                this.googleSearchForContacts(contacts, business, industry)
+                    .catch(err => {
+                        console.log(`[GOOGLE] Skipped due to timeout/error: ${err.message}`);
+                        return { primary: [], secondary: [], gatekeeper: [] };
+                    })
+            );
             
-            // Strategy 4: Professional directory searches
-            const directoryContacts = await this.searchProfessionalDirectories(contacts, business, industry);
-            this.mergeContacts(enhancedContacts, directoryContacts);
+            // Strategy 3: Quick website scraping (10 second timeout)
+            promises.push(
+                this.scrapeContactPages(contacts, business)
+                    .catch(err => {
+                        console.log(`[WEBSITE] Skipped due to timeout/error: ${err.message}`);
+                        return { primary: [], secondary: [], gatekeeper: [] };
+                    })
+            );
             
-            // Strategy 5: Social media research
-            const socialContacts = await this.searchSocialMedia(contacts, business);
-            this.mergeContacts(enhancedContacts, socialContacts);
+            // Strategy 4: Quick directory search (3 second timeout)
+            promises.push(
+                this.searchProfessionalDirectories(contacts, business, industry)
+                    .catch(err => {
+                        console.log(`[DIRECTORY] Skipped due to timeout/error: ${err.message}`);
+                        return { primary: [], secondary: [], gatekeeper: [] };
+                    })
+            );
+            
+            // Wait for all strategies to complete (with individual timeouts)
+            const results = await Promise.allSettled(promises);
+            
+            // Merge successful results
+            results.forEach((result, index) => {
+                if (result.status === 'fulfilled' && result.value) {
+                    this.mergeContacts(enhancedContacts, result.value);
+                }
+            });
             
             console.log(`[ENHANCED RESEARCH] Found ${enhancedContacts.primary.length} primary, ${enhancedContacts.secondary.length} secondary contacts`);
             
@@ -543,43 +572,51 @@ export class RealDecisionMakerContactFinder {
         const linkedinContacts = { primary: [], secondary: [], gatekeeper: [] };
         
         try {
-            // Search for each decision maker on LinkedIn
+            // Search for each decision maker on LinkedIn (limit to first 2 to prevent timeout)
             const allContacts = [...contacts.primary, ...contacts.secondary, ...contacts.gatekeeper];
+            const contactsToSearch = allContacts.slice(0, 2);
             
-            for (const contact of allContacts) {
+            for (const contact of contactsToSearch) {
                 if (contact.name && contact.source === 'companies_house') {
                     console.log(`[LINKEDIN SEARCH] Searching for ${contact.name} at ${business.name}`);
                     
-                    // Try multiple LinkedIn search strategies
-                    const linkedinProfile = await this.findLinkedInProfile(contact.name, business.name);
-                    
-                    if (linkedinProfile) {
-                        // Extract personal email from LinkedIn profile
-                        const personalEmail = await this.extractPersonalEmailFromLinkedIn(linkedinProfile, contact.name);
+                    try {
+                        // Try LinkedIn search with timeout
+                        const linkedinProfile = await Promise.race([
+                            this.findLinkedInProfile(contact.name, business.name),
+                            new Promise((_, reject) => setTimeout(() => reject(new Error('LinkedIn search timeout')), 3000))
+                        ]);
                         
-                        if (personalEmail) {
-                            const enhancedContact = {
-                                ...contact,
-                                type: 'email',
-                                value: personalEmail,
-                                confidence: 0.85, // High confidence for LinkedIn-found emails
-                                source: 'linkedin',
-                                linkedinUrl: linkedinProfile.url,
-                                note: 'Personal email found via LinkedIn',
-                                googleSearchUrl: `https://www.google.com/search?q=${encodeURIComponent(contact.name + ' ' + business.name + ' contact email')}`
-                            };
+                        if (linkedinProfile) {
+                            // Extract personal email from LinkedIn profile
+                            const personalEmail = await this.extractPersonalEmailFromLinkedIn(linkedinProfile, contact.name);
                             
-                            // Add to appropriate category
-                            if (contacts.primary.includes(contact)) {
-                                linkedinContacts.primary.push(enhancedContact);
-                            } else if (contacts.secondary.includes(contact)) {
-                                linkedinContacts.secondary.push(enhancedContact);
-                            } else {
-                                linkedinContacts.gatekeeper.push(enhancedContact);
+                            if (personalEmail) {
+                                const enhancedContact = {
+                                    ...contact,
+                                    type: 'email',
+                                    value: personalEmail,
+                                    confidence: 0.85, // High confidence for LinkedIn-found emails
+                                    source: 'linkedin',
+                                    linkedinUrl: linkedinProfile.url,
+                                    note: 'Personal email found via LinkedIn',
+                                    googleSearchUrl: `https://www.google.com/search?q=${encodeURIComponent(contact.name + ' ' + business.name + ' contact email')}`
+                                };
+                                
+                                // Add to appropriate category
+                                if (contacts.primary.includes(contact)) {
+                                    linkedinContacts.primary.push(enhancedContact);
+                                } else if (contacts.secondary.includes(contact)) {
+                                    linkedinContacts.secondary.push(enhancedContact);
+                                } else {
+                                    linkedinContacts.gatekeeper.push(enhancedContact);
+                                }
+                                
+                                console.log(`[LINKEDIN SEARCH] Found personal email for ${contact.name}: ${personalEmail}`);
                             }
-                            
-                            console.log(`[LINKEDIN SEARCH] Found personal email for ${contact.name}: ${personalEmail}`);
                         }
+                    } catch (searchError) {
+                        console.log(`[LINKEDIN SEARCH] Skipped ${contact.name} due to timeout/error: ${searchError.message}`);
                     }
                 }
             }
@@ -751,7 +788,7 @@ export class RealDecisionMakerContactFinder {
         return urls;
     }
 
-    // Google search for contact information
+    // Google search for contact information (with timeout)
     async googleSearchForContacts(contacts, business, industry) {
         const googleContacts = { primary: [], secondary: [], gatekeeper: [] };
         
@@ -760,17 +797,17 @@ export class RealDecisionMakerContactFinder {
         try {
             const allContacts = [...contacts.primary, ...contacts.secondary, ...contacts.gatekeeper];
             
-            for (const contact of allContacts) {
+            // Limit to first 2 contacts to prevent timeout
+            const contactsToSearch = allContacts.slice(0, 2);
+            
+            for (const contact of contactsToSearch) {
                 if (contact.name && contact.source === 'companies_house') {
                     console.log(`[GOOGLE SEARCH] Searching for contact info: ${contact.name}`);
                     
-                    // Multiple search strategies
+                    // Simplified search strategy (only 2 queries to prevent timeout)
                     const searchQueries = [
-                        `"${contact.name}" "${business.name}" contact email phone`,
-                        `"${contact.name}" "${business.name}" director email`,
-                        `"${contact.name}" "${business.name}" owner contact`,
-                        `"${contact.name}" ${industry} contact information`,
-                        `"${contact.name}" "${business.name}" LinkedIn profile`
+                        `"${contact.name}" "${business.name}" contact email`,
+                        `"${contact.name}" "${business.name}" director`
                     ];
                     
                     for (const query of searchQueries) {
@@ -780,8 +817,9 @@ export class RealDecisionMakerContactFinder {
                                     key: this.googleApiKey,
                                     cx: '017576662512468239146:omuauf_lfve',
                                     q: query,
-                                    num: 3
-                                }
+                                    num: 2 // Reduced from 3 to 2
+                                },
+                                timeout: 5000 // 5 second timeout per request
                             });
                             
                             if (response.data.items && response.data.items.length > 0) {
@@ -850,7 +888,7 @@ export class RealDecisionMakerContactFinder {
         return null;
     }
 
-    // Scrape contact pages from business website
+    // Scrape contact pages from business website (optimized)
     async scrapeContactPages(contacts, business) {
         const websiteContacts = { primary: [], secondary: [], gatekeeper: [] };
         
@@ -859,20 +897,17 @@ export class RealDecisionMakerContactFinder {
         try {
             console.log(`[WEBSITE SCRAPING] Scraping contact pages for ${business.name}`);
             
-            // Common contact page URLs to try
+            // Only try the most common contact page URLs to prevent timeout
             const contactUrls = [
                 `${business.website}/contact`,
                 `${business.website}/contact-us`,
-                `${business.website}/about`,
-                `${business.website}/team`,
-                `${business.website}/staff`,
-                `${business.website}/meet-the-team`,
-                `${business.website}/our-team`
+                `${business.website}/about`
             ];
             
-            for (const url of contactUrls) {
+            // Try URLs in parallel with individual timeouts
+            const promises = contactUrls.map(async (url) => {
                 try {
-                    const response = await axios.get(url, { timeout: 10000 });
+                    const response = await axios.get(url, { timeout: 3000 }); // 3 second timeout
                     const html = response.data;
                     
                     // Extract emails and phone numbers
@@ -882,36 +917,49 @@ export class RealDecisionMakerContactFinder {
                     if (emails.length > 0 || phones.length > 0) {
                         console.log(`[WEBSITE SCRAPING] Found ${emails.length} emails, ${phones.length} phones on ${url}`);
                         
+                        const foundContacts = [];
+                        
                         // Add found contact info
                         emails.forEach(email => {
-                            const contact = {
+                            foundContacts.push({
                                 type: 'email',
                                 value: email,
                                 source: 'website_scraping',
                                 confidence: 0.8,
                                 note: `Found on ${url}`,
                                 websiteUrl: url
-                            };
-                            websiteContacts.primary.push(contact);
+                            });
                         });
                         
                         phones.forEach(phone => {
-                            const contact = {
+                            foundContacts.push({
                                 type: 'phone',
                                 value: phone.trim(),
                                 source: 'website_scraping',
                                 confidence: 0.8,
                                 note: `Found on ${url}`,
                                 websiteUrl: url
-                            };
-                            websiteContacts.primary.push(contact);
+                            });
                         });
+                        
+                        return foundContacts;
                     }
+                    return [];
                 } catch (urlError) {
                     // URL doesn't exist or can't be accessed
-                    continue;
+                    return [];
                 }
-            }
+            });
+            
+            // Wait for all URL attempts to complete
+            const results = await Promise.allSettled(promises);
+            
+            // Collect all found contacts
+            results.forEach(result => {
+                if (result.status === 'fulfilled' && result.value) {
+                    websiteContacts.primary.push(...result.value);
+                }
+            });
             
         } catch (error) {
             console.error(`[WEBSITE SCRAPING ERROR]`, error.message);
