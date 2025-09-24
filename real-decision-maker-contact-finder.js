@@ -253,7 +253,7 @@ export class RealDecisionMakerContactFinder {
                             nationality: officer.nationality,
                             occupation: officer.occupation,
                             note: 'Personal email not available - requires manual research',
-                            companiesHouseUrl: `https://find-and-update.company-information.service.gov.uk/company/${companyNumber}/officers`,
+                            companiesHouseUrl: `https://find-and-update.company-information.service.gov.uk/company/${companyNumber}`,
                             companyUrl: `https://find-and-update.company-information.service.gov.uk/company/${companyNumber}`,
                             businessWebsite: business.website || null
                         };
@@ -528,7 +528,7 @@ export class RealDecisionMakerContactFinder {
                                 source: 'linkedin',
                                 linkedinUrl: linkedinProfile.url,
                                 note: 'Personal email found via LinkedIn',
-                                googleSearchUrl: `https://www.google.com/search?q="${contact.name}" "${business.name}" contact email`
+                                googleSearchUrl: `https://www.google.com/search?q=${encodeURIComponent(contact.name + ' ' + business.name + ' contact email')}`
                             };
                             
                             // Add to appropriate category
@@ -583,7 +583,7 @@ export class RealDecisionMakerContactFinder {
             if (nameParts.length >= 2) {
                 const firstName = nameParts[0];
                 const lastName = nameParts[nameParts.length - 1];
-                const linkedinUrl = `https://linkedin.com/search/results/people/?keywords="${personName}" "${companyName}"`;
+                const linkedinUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(personName + ' ' + companyName)}`;
                 
                 return {
                     url: linkedinUrl,
