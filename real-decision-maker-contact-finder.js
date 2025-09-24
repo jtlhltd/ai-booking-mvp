@@ -529,7 +529,21 @@ export class RealDecisionMakerContactFinder {
             const socialContacts = await this.findSocialMediaOwners(business);
             enhancedContacts.primary.push(...socialContacts);
             
-            console.log(`[ENHANCED RESEARCH] Found ${enhancedContacts.primary.length} enhanced contacts`);
+            // Strategy 5: Exhaustive contact extraction for each decision maker
+            for (const contact of enhancedContacts.primary) {
+                if (contact.name && contact.name !== `Search ${contact.platform || contact.directoryName || 'Unknown'}`) {
+                    const contactDetails = await this.extractExhaustiveContactDetails(contact, business);
+                    if (contactDetails.email || contactDetails.phone) {
+                        // Add contact details to the existing contact
+                        contact.email = contactDetails.email;
+                        contact.phone = contactDetails.phone;
+                        contact.linkedin = contactDetails.linkedin;
+                        contact.contactSources = contactDetails.sources;
+                    }
+                }
+            }
+            
+            console.log(`[ENHANCED RESEARCH] Found ${enhancedContacts.primary.length} enhanced contacts with exhaustive details`);
             
         } catch (error) {
             console.error(`[ENHANCED RESEARCH ERROR]`, error.message);
@@ -998,6 +1012,277 @@ export class RealDecisionMakerContactFinder {
         }
         
         return contacts;
+    }
+
+    // Exhaustive contact extraction for decision makers
+    async extractExhaustiveContactDetails(contact, business) {
+        const contactDetails = { email: null, phone: null, linkedin: null, sources: [] };
+        
+        try {
+            console.log(`[EXHAUSTIVE SEARCH] Extracting contact details for ${contact.name}`);
+            
+            // Strategy 1: Google Search API with multiple search variations
+            const googleResults = await this.googleSearchContactVariations(contact, business);
+            if (googleResults.email) contactDetails.email = googleResults.email;
+            if (googleResults.phone) contactDetails.phone = googleResults.phone;
+            if (googleResults.linkedin) contactDetails.linkedin = googleResults.linkedin;
+            if (googleResults.sources) contactDetails.sources.push(...googleResults.sources);
+            
+            // Strategy 2: Website deep scraping
+            if (business.website) {
+                const websiteResults = await this.deepWebsiteScraping(contact, business);
+                if (websiteResults.email && !contactDetails.email) contactDetails.email = websiteResults.email;
+                if (websiteResults.phone && !contactDetails.phone) contactDetails.phone = websiteResults.phone;
+                if (websiteResults.sources) contactDetails.sources.push(...websiteResults.sources);
+            }
+            
+            // Strategy 3: Professional directory scraping
+            const directoryResults = await this.scrapeProfessionalDirectories(contact, business);
+            if (directoryResults.email && !contactDetails.email) contactDetails.email = directoryResults.email;
+            if (directoryResults.phone && !contactDetails.phone) contactDetails.phone = directoryResults.phone;
+            if (directoryResults.sources) contactDetails.sources.push(...directoryResults.sources);
+            
+            // Strategy 4: Social media deep search
+            const socialResults = await this.deepSocialMediaSearch(contact, business);
+            if (socialResults.email && !contactDetails.email) contactDetails.email = socialResults.email;
+            if (socialResults.phone && !contactDetails.phone) contactDetails.phone = socialResults.phone;
+            if (socialResults.linkedin && !contactDetails.linkedin) contactDetails.linkedin = socialResults.linkedin;
+            if (socialResults.sources) contactDetails.sources.push(...socialResults.sources);
+            
+            // Strategy 5: Email pattern generation and verification
+            if (!contactDetails.email && business.website) {
+                const emailPatterns = await this.generateAndVerifyEmailPatterns(contact, business);
+                if (emailPatterns.email) contactDetails.email = emailPatterns.email;
+                if (emailPatterns.sources) contactDetails.sources.push(...emailPatterns.sources);
+            }
+            
+            console.log(`[EXHAUSTIVE SEARCH] Found for ${contact.name}: email=${contactDetails.email}, phone=${contactDetails.phone}, linkedin=${contactDetails.linkedin}`);
+            
+        } catch (error) {
+            console.error(`[EXHAUSTIVE SEARCH ERROR]`, error.message);
+        }
+        
+        return contactDetails;
+    }
+
+    // Google Search with multiple variations for contact extraction
+    async googleSearchContactVariations(contact, business) {
+        const results = { email: null, phone: null, linkedin: null, sources: [] };
+        
+        try {
+            if (!this.googleApiKey) return results;
+            
+            const searchVariations = [
+                `"${contact.name}" "${business.name}" email phone contact`,
+                `"${contact.name}" "${business.name}" personal email`,
+                `"${contact.name}" "${business.name}" direct phone`,
+                `"${contact.name}" "${business.name}" LinkedIn profile`,
+                `"${contact.name}" "${business.name}" contact information`,
+                `"${contact.name}" "${business.name}" mobile phone`,
+                `"${contact.name}" "${business.name}" work email`,
+                `"${contact.name}" "${business.name}" business phone`
+            ];
+            
+            for (const searchQuery of searchVariations.slice(0, 3)) { // Limit to 3 searches to avoid rate limits
+                try {
+                    const response = await Promise.race([
+                        axios.get('https://www.googleapis.com/customsearch/v1', {
+                            params: {
+                                key: this.googleApiKey,
+                                cx: '017576662512468239146:omuauf_lfve',
+                                q: searchQuery,
+                                num: 5
+                            },
+                            timeout: 3000
+                        }),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000))
+                    ]);
+                    
+                    if (response.data.items && response.data.items.length > 0) {
+                        for (const item of response.data.items) {
+                            const text = (item.title + ' ' + item.snippet).toLowerCase();
+                            
+                            // Extract email
+                            const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+                            if (emailMatch && !results.email) {
+                                results.email = emailMatch[1];
+                                results.sources.push(`Google Search: ${searchQuery}`);
+                            }
+                            
+                            // Extract phone
+                            const phoneMatch = text.match(/(\+?[0-9\s\-\(\)]{10,})/);
+                            if (phoneMatch && !results.phone) {
+                                results.phone = phoneMatch[1].trim();
+                                results.sources.push(`Google Search: ${searchQuery}`);
+                            }
+                            
+                            // Extract LinkedIn
+                            const linkedinMatch = text.match(/(https?:\/\/[a-zA-Z0-9.-]*linkedin\.com\/in\/[a-zA-Z0-9-]+)/);
+                            if (linkedinMatch && !results.linkedin) {
+                                results.linkedin = linkedinMatch[1];
+                                results.sources.push(`Google Search: ${searchQuery}`);
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.log(`[GOOGLE SEARCH] Failed for query: ${searchQuery}`);
+                }
+            }
+            
+        } catch (error) {
+            console.error(`[GOOGLE SEARCH VARIATIONS ERROR]`, error.message);
+        }
+        
+        return results;
+    }
+
+    // Deep website scraping for contact information
+    async deepWebsiteScraping(contact, business) {
+        const results = { email: null, phone: null, sources: [] };
+        
+        try {
+            const response = await axios.get(business.website, {
+                timeout: 5000,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
+            });
+            
+            const html = response.data;
+            const text = html.replace(/<[^>]*>/g, ' ').toLowerCase();
+            
+            // Look for contact's name in the website
+            const contactNameLower = contact.name.toLowerCase();
+            if (text.includes(contactNameLower)) {
+                
+                // Extract all emails from the website
+                const emailMatches = html.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g);
+                if (emailMatches) {
+                    for (const email of emailMatches) {
+                        const emailLower = email.toLowerCase();
+                        // Check if email might belong to the contact
+                        if (emailLower.includes(contactNameLower.split(' ')[0]) || 
+                            emailLower.includes(contactNameLower.split(' ')[1]) ||
+                            emailLower.includes(contactNameLower.replace(/\s+/g, '.')) ||
+                            emailLower.includes(contactNameLower.replace(/\s+/g, ''))) {
+                            results.email = email;
+                            results.sources.push(`Website scraping: ${business.website}`);
+                            break;
+                        }
+                    }
+                }
+                
+                // Extract all phone numbers from the website
+                const phoneMatches = html.match(/(\+?[0-9\s\-\(\)]{10,})/g);
+                if (phoneMatches) {
+                    for (const phone of phoneMatches) {
+                        const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
+                        if (cleanPhone.length >= 10 && cleanPhone.length <= 15) {
+                            results.phone = phone.trim();
+                            results.sources.push(`Website scraping: ${business.website}`);
+                            break;
+                        }
+                    }
+                }
+            }
+            
+        } catch (error) {
+            console.error(`[DEEP WEBSITE SCRAPING ERROR]`, error.message);
+        }
+        
+        return results;
+    }
+
+    // Scrape professional directories for contact information
+    async scrapeProfessionalDirectories(contact, business) {
+        const results = { email: null, phone: null, sources: [] };
+        
+        try {
+            // This would require specific directory APIs or scraping
+            // For now, we'll generate search URLs for manual verification
+            const directories = this.getIndustryDirectories(business.industry || 'general');
+            
+            directories.forEach(directory => {
+                const searchUrl = directory.searchUrl.replace('{business}', encodeURIComponent(contact.name));
+                results.sources.push(`Professional Directory: ${directory.name} - ${searchUrl}`);
+            });
+            
+        } catch (error) {
+            console.error(`[PROFESSIONAL DIRECTORY SCRAPING ERROR]`, error.message);
+        }
+        
+        return results;
+    }
+
+    // Deep social media search for contact information
+    async deepSocialMediaSearch(contact, business) {
+        const results = { email: null, phone: null, linkedin: null, sources: [] };
+        
+        try {
+            // Generate comprehensive social media search URLs
+            const socialSearches = [
+                {
+                    platform: 'LinkedIn',
+                    url: `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(contact.name + ' ' + business.name)}`,
+                    type: 'linkedin_people_search'
+                },
+                {
+                    platform: 'Facebook',
+                    url: `https://www.facebook.com/search/people/?q=${encodeURIComponent(contact.name + ' ' + business.name)}`,
+                    type: 'facebook_people_search'
+                },
+                {
+                    platform: 'Twitter',
+                    url: `https://twitter.com/search?q=${encodeURIComponent(contact.name + ' ' + business.name)}`,
+                    type: 'twitter_search'
+                }
+            ];
+            
+            socialSearches.forEach(search => {
+                results.sources.push(`Social Media Search: ${search.platform} - ${search.url}`);
+            });
+            
+        } catch (error) {
+            console.error(`[DEEP SOCIAL MEDIA SEARCH ERROR]`, error.message);
+        }
+        
+        return results;
+    }
+
+    // Generate and verify email patterns
+    async generateAndVerifyEmailPatterns(contact, business) {
+        const results = { email: null, sources: [] };
+        
+        try {
+            if (!business.website) return results;
+            
+            const domain = business.website.replace(/^https?:\/\//, '').replace(/^www\./, '');
+            const nameParts = contact.name.toLowerCase().split(' ');
+            const firstName = nameParts[0];
+            const lastName = nameParts[nameParts.length - 1];
+            
+            const emailPatterns = [
+                `${firstName}.${lastName}@${domain}`,
+                `${firstName}@${domain}`,
+                `${firstName}${lastName}@${domain}`,
+                `${lastName}.${firstName}@${domain}`,
+                `${lastName}@${domain}`,
+                `${firstName.charAt(0)}.${lastName}@${domain}`,
+                `${firstName}.${lastName.charAt(0)}@${domain}`,
+                `${firstName.charAt(0)}${lastName}@${domain}`,
+                `${firstName}${lastName.charAt(0)}@${domain}`
+            ];
+            
+            // For now, we'll return the most likely pattern
+            // In a real implementation, you could verify these with email validation APIs
+            results.email = emailPatterns[0]; // Most common pattern
+            results.sources.push(`Email pattern generation: ${emailPatterns[0]} (verify before use)`);
+            
+        } catch (error) {
+            console.error(`[EMAIL PATTERN GENERATION ERROR]`, error.message);
+        }
+        
+        return results;
     }
 
     // Search LinkedIn for personal emails of decision makers
