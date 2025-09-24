@@ -2233,95 +2233,7 @@ function requireApiKey(req, res, next) {
   return res.status(401).json({ error: 'Unauthorized' });
 }
 
-// Helper functions for generating realistic fallback contacts
-function generateRealisticDecisionMakerName(businessName, industry, type = 'owner') {
-  const commonNames = {
-    'owner': ['James', 'Sarah', 'Michael', 'Emma', 'David', 'Lisa', 'Robert', 'Jennifer', 'William', 'Amanda'],
-    'manager': ['Mark', 'Helen', 'Paul', 'Rachel', 'Steven', 'Claire', 'Andrew', 'Nicola', 'Daniel', 'Katherine']
-  };
-  
-  const surnames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez'];
-  
-  const names = commonNames[type] || commonNames.owner;
-  const firstName = names[Math.floor(Math.random() * names.length)];
-  const lastName = surnames[Math.floor(Math.random() * surnames.length)];
-  
-  return `${firstName} ${lastName}`;
-}
-
-function getIndustryRole(industry, level) {
-  const roles = {
-    'dentist': {
-      'primary': 'Practice Owner',
-      'gatekeeper': 'Practice Manager'
-    },
-    'plumber': {
-      'primary': 'Business Owner',
-      'gatekeeper': 'Office Manager'
-    },
-    'restaurant': {
-      'primary': 'Restaurant Owner',
-      'gatekeeper': 'General Manager'
-    },
-    'fitness': {
-      'primary': 'Gym Owner',
-      'gatekeeper': 'Membership Manager'
-    },
-    'beauty_salon': {
-      'primary': 'Salon Owner',
-      'gatekeeper': 'Salon Manager'
-    },
-    'lawyer': {
-      'primary': 'Senior Partner',
-      'gatekeeper': 'Legal Secretary'
-    },
-    'default': {
-      'primary': 'Business Owner',
-      'gatekeeper': 'Office Manager'
-    }
-  };
-  
-  const industryRoles = roles[industry] || roles.default;
-  return industryRoles[level] || industryRoles.primary;
-}
-
-function generateRealisticEmail(businessName, website, type = 'owner') {
-  const businessNameClean = businessName.toLowerCase().replace(/[^a-z0-9]/g, '');
-  
-  if (website) {
-    const domain = website.replace(/^https?:\/\//, '').replace(/^www\./, '');
-    return `info@${domain}`;
-  } else {
-    return `info@${businessNameClean}.co.uk`;
-  }
-}
-
-function generateRealisticPhone(address) {
-  if (!address) return '020 1234 5678'; // Default London number
-  
-  const addressLower = address.toLowerCase();
-  
-  if (addressLower.includes('london')) return '020 1234 5678';
-  if (addressLower.includes('manchester')) return '0161 123 4567';
-  if (addressLower.includes('birmingham')) return '0121 123 4567';
-  if (addressLower.includes('leeds')) return '0113 123 4567';
-  if (addressLower.includes('sheffield')) return '0114 123 4567';
-  if (addressLower.includes('nottingham')) return '0115 123 4567';
-  if (addressLower.includes('leicester')) return '0116 123 4567';
-  if (addressLower.includes('bristol')) return '0117 123 4567';
-  if (addressLower.includes('reading')) return '0118 123 4567';
-  if (addressLower.includes('edinburgh')) return '0131 123 4567';
-  if (addressLower.includes('glasgow')) return '0141 123 4567';
-  if (addressLower.includes('liverpool')) return '0151 123 4567';
-  if (addressLower.includes('newcastle')) return '0191 123 4567';
-  
-  return '020 1234 5678'; // Default
-}
-
-function generateRealisticLinkedIn(businessName, industry, type = 'owner') {
-  const businessNameClean = businessName.toLowerCase().replace(/[^a-z0-9]/g, '');
-  return `https://linkedin.com/company/${businessNameClean}`;
-}
+// Real decision maker contact research only - no fake contacts
 
 // === PUBLIC ENDPOINTS (no auth required) ===
 
@@ -2588,39 +2500,16 @@ app.post('/api/decision-maker-contacts', async (req, res) => {
         console.log(`[DECISION MAKER CONTACT] Real API successful - contacts found`);
       } else {
         contacts.found = false;
-        console.log(`[DECISION MAKER CONTACT] Real API returned empty contacts - generating realistic contacts`);
+        console.log(`[DECISION MAKER CONTACT] Real API returned empty contacts - no decision makers found`);
         
-        // Generate realistic contacts when real API returns empty results
-        contacts = {
-          primary: [{
-            name: generateRealisticDecisionMakerName(business.name, industry),
-            role: getIndustryRole(industry, 'primary'),
-            email: generateRealisticEmail(business.name, business.website),
-            phone: generateRealisticPhone(business.address),
-            linkedin: generateRealisticLinkedIn(business.name, industry),
-            source: 'generated_fallback',
-            confidence: 0.6,
-            note: 'Generated contact - verify before outreach'
-          }],
-          secondary: [],
-          gatekeeper: [{
-            name: generateRealisticDecisionMakerName(business.name, industry, 'manager'),
-            role: getIndustryRole(industry, 'gatekeeper'),
-            email: generateRealisticEmail(business.name, business.website, 'manager'),
-            phone: generateRealisticPhone(business.address),
-            linkedin: generateRealisticLinkedIn(business.name, industry, 'manager'),
-            source: 'generated_fallback',
-            confidence: 0.5,
-            note: 'Generated contact - verify before outreach'
-          }],
-          found: true
-        };
+        // No fake contacts - only real data
+        contacts = { primary: [], secondary: [], gatekeeper: [], found: false };
         
         strategy = {
-          approach: "Generated contacts (real data unavailable)",
-          message: "Real decision maker data not available, but generated realistic contacts for outreach.",
-          followUp: "Verify contact details before outreach",
-          bestTime: "Business hours: 9 AM - 5 PM"
+          approach: "No decision makers found",
+          message: "No decision maker contacts found for this business. The business may not be registered with Companies House or may not have active directors.",
+          followUp: "Try manual research methods: LinkedIn search, company website, or Google search",
+          bestTime: "N/A"
         };
       }
     } catch (realApiError) {
@@ -2636,39 +2525,16 @@ app.post('/api/decision-maker-contacts', async (req, res) => {
           bestTime: "N/A"
         };
       } else {
-        console.log(`[DECISION MAKER CONTACT] Real API failed - generating fallback contacts`);
+        console.log(`[DECISION MAKER CONTACT] Real API failed - no fallback contacts generated`);
         
-        // Generate realistic contacts when real API fails
-        contacts = {
-          primary: [{
-            name: generateRealisticDecisionMakerName(business.name, industry),
-            role: getIndustryRole(industry, 'primary'),
-            email: generateRealisticEmail(business.name, business.website),
-            phone: generateRealisticPhone(business.address),
-            linkedin: generateRealisticLinkedIn(business.name, industry),
-            source: 'generated_fallback',
-            confidence: 0.6,
-            note: 'Generated contact - verify before outreach'
-          }],
-          secondary: [],
-          gatekeeper: [{
-            name: generateRealisticDecisionMakerName(business.name, industry, 'manager'),
-            role: getIndustryRole(industry, 'gatekeeper'),
-            email: generateRealisticEmail(business.name, business.website, 'manager'),
-            phone: generateRealisticPhone(business.address),
-            linkedin: generateRealisticLinkedIn(business.name, industry, 'manager'),
-            source: 'generated_fallback',
-            confidence: 0.5,
-            note: 'Generated contact - verify before outreach'
-          }],
-          found: true
-        };
+        // No fake contacts - only real data
+        contacts = { primary: [], secondary: [], gatekeeper: [], found: false };
         
         strategy = {
-          approach: "Generated contacts (API unavailable)",
-          message: "Real decision maker data unavailable, but generated realistic contacts for outreach.",
-          followUp: "Verify contact details before outreach",
-          bestTime: "Business hours: 9 AM - 5 PM"
+          approach: "API failed",
+          message: "Unable to retrieve decision maker contacts. The search service may be temporarily unavailable.",
+          followUp: "Try again later or use manual research methods",
+          bestTime: "N/A"
         };
       }
     }

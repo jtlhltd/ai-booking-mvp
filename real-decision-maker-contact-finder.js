@@ -130,13 +130,18 @@ export class RealDecisionMakerContactFinder {
         
         console.log(`[COMPANIES HOUSE SEARCH] Starting search for "${businessName}" with API key: ${this.companiesHouseApiKey.substring(0, 8)}...`);
         
-        // Try multiple search strategies
+        // Try multiple search strategies - more aggressive for dental practices
         const searchTerms = [
             businessName, // Original name
             businessName.replace(/\s+(dental|practice|clinic|surgery|centre|center)/gi, ''), // Remove common suffixes
             businessName.replace(/\s+(ltd|limited|llp|plc|inc)/gi, ''), // Remove company suffixes
             businessName.split(' ')[0], // First word only
-            businessName.split(' ').slice(0, 2).join(' ') // First two words
+            businessName.split(' ').slice(0, 2).join(' '), // First two words
+            businessName.replace(/\s+(dental practice|dental surgery|dental clinic)/gi, ''), // Remove dental-specific terms
+            businessName.split(' ').filter(word => !['dental', 'practice', 'clinic', 'surgery', 'centre', 'center'].includes(word.toLowerCase())).join(' '), // Remove all dental terms
+            businessName.replace(/[^a-zA-Z0-9\s]/g, ''), // Remove special characters
+            businessName.toLowerCase().replace(/\s+/g, ''), // Remove all spaces
+            businessName.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ') // Proper case
         ];
         
         for (const searchTerm of searchTerms) {
@@ -164,12 +169,12 @@ export class RealDecisionMakerContactFinder {
                         score: this.calculateCompanyMatchScore(item.title, businessName, searchTerm)
                     })).sort((a, b) => b.score - a.score);
                     
-                    // Find best match
+                    // Find best match - be more lenient for dental practices
                     const bestMatch = scoredCompanies.find(item => 
-                        item.score > 0.7 && item.company_status === 'active'
+                        item.score > 0.5 && item.company_status === 'active'
                     ) || scoredCompanies.find(item => item.company_status === 'active') || scoredCompanies[0];
                     
-                    if (bestMatch && bestMatch.score > 0.3) {
+                    if (bestMatch && bestMatch.score > 0.2) {
                         console.log(`[COMPANIES HOUSE SEARCH] Selected company: ${bestMatch.title} (${bestMatch.company_number}) - Score: ${bestMatch.score} - Status: ${bestMatch.company_status}`);
                         return bestMatch.company_number;
                     }
