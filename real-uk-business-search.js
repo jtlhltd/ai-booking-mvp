@@ -329,7 +329,8 @@ class RealUKBusinessSearch {
   calculateLeadScore(rating, reviewCount) {
     const ratingScore = parseFloat(rating) * 20; // 0-100 based on rating
     const reviewScore = Math.min(reviewCount / 10, 20); // 0-20 based on review count
-    return Math.floor(ratingScore + reviewScore + Math.random() * 10);
+    const randomBonus = Math.random() * 10; // 0-10 random bonus
+    return Math.min(100, Math.floor(ratingScore + reviewScore + randomBonus)); // Cap at 100
   }
 
   formatCompanyAddress(address) {
