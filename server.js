@@ -2320,11 +2320,11 @@ app.post('/api/decision-maker-contacts', async (req, res) => {
     let contacts, strategy;
     
     try {
-      // Dynamic import of enhanced contact finder module
-      const contactFinderModule = await import('./enhanced-decision-maker-contact-finder.js');
-      const EnhancedDecisionMakerContactFinder = contactFinderModule.default;
+      // Dynamic import of real contact finder module
+      const contactFinderModule = await import('./real-decision-maker-contact-finder.js');
+      const RealDecisionMakerContactFinder = contactFinderModule.default;
       
-      const contactFinder = new EnhancedDecisionMakerContactFinder();
+      const contactFinder = new RealDecisionMakerContactFinder();
       contacts = await contactFinder.findDecisionMakerContacts(business, industry, targetRole);
       strategy = contactFinder.generateOutreachStrategy(contacts, business, industry, targetRole);
       
