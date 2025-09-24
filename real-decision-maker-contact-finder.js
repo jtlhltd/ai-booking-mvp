@@ -74,6 +74,11 @@ export class RealDecisionMakerContactFinder {
             const linkedinContacts = await this.searchLinkedInForBusiness(business.name, industry, targetRole);
             this.mergeContacts(contacts, linkedinContacts);
             
+            // Remove duplicates based on email/phone and name
+            contacts.primary = this.removeDuplicateContacts(contacts.primary);
+            contacts.secondary = this.removeDuplicateContacts(contacts.secondary);
+            contacts.gatekeeper = this.removeDuplicateContacts(contacts.gatekeeper);
+            
             contacts.found = contacts.primary.length > 0 || contacts.secondary.length > 0 || contacts.gatekeeper.length > 0;
             
             console.log(`[REAL DECISION MAKER] Found ${contacts.primary.length} primary, ${contacts.secondary.length} secondary, ${contacts.gatekeeper.length} gatekeeper contacts`);
@@ -137,7 +142,7 @@ export class RealDecisionMakerContactFinder {
                     if (officer.name && officer.officer_role) {
                         const contact = {
                             type: 'email',
-                            value: this.generateEmailFromName(officer.name.full),
+                            value: this.generateEmailFromName(officer.name.full, business.name),
                             confidence: 0.9,
                             source: 'companies_house',
                             title: officer.officer_role,
@@ -235,7 +240,7 @@ export class RealDecisionMakerContactFinder {
             teamMembers.forEach(member => {
                 const contact = {
                     type: 'email',
-                    value: this.generateEmailFromName(member.name),
+                    value: this.generateEmailFromName(member.name, business.name),
                     confidence: 0.8,
                     source: 'website_team_page',
                     title: member.title,
@@ -401,12 +406,26 @@ export class RealDecisionMakerContactFinder {
     }
 
     // Helper methods
-    generateEmailFromName(fullName) {
+    removeDuplicateContacts(contacts) {
+        const seen = new Set();
+        return contacts.filter(contact => {
+            const key = `${contact.value}-${contact.name}`;
+            if (seen.has(key)) {
+                return false;
+            }
+            seen.add(key);
+            return true;
+        });
+    }
+
+    generateEmailFromName(fullName, businessName = 'company') {
         const nameParts = fullName.toLowerCase().split(' ');
+        const businessDomain = businessName.toLowerCase().replace(/[^a-z0-9]/g, '') + '.co.uk';
+        
         if (nameParts.length >= 2) {
-            return `${nameParts[0]}.${nameParts[nameParts.length - 1]}@company.co.uk`;
+            return `${nameParts[0]}.${nameParts[nameParts.length - 1]}@${businessDomain}`;
         }
-        return `${nameParts[0]}@company.co.uk`;
+        return `${nameParts[0]}@${businessDomain}`;
     }
 
     isPrimaryRole(role) {

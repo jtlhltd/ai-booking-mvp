@@ -2391,7 +2391,7 @@ function generateRealisticDecisionMakers(business, industry, targetRole) {
   
   const industryTitles = {
     'dentist': {
-      'primary': ['Practice Owner', 'Principal Dentist', 'Clinical Director', 'Managing Partner'],
+      'primary': ['Practice Owner', 'Principal Dentist', 'Clinical Director', 'Managing Partner', 'Owner', 'Manager'],
       'secondary': ['Practice Manager', 'Clinical Lead', 'Senior Dentist'],
       'gatekeeper': ['Reception Manager', 'Patient Coordinator', 'Office Manager']
     },
@@ -2401,12 +2401,12 @@ function generateRealisticDecisionMakers(business, industry, targetRole) {
       'gatekeeper': ['Office Manager', 'Customer Service Manager', 'Receptionist']
     },
     'restaurant': {
-      'primary': ['Restaurant Owner', 'Managing Director', 'General Manager'],
+      'primary': ['Restaurant Owner', 'Managing Director', 'General Manager', 'Owner', 'Manager'],
       'secondary': ['Head Chef', 'Operations Manager', 'Assistant Manager'],
       'gatekeeper': ['Reception Manager', 'Host Manager', 'Customer Service Lead']
     },
     'fitness': {
-      'primary': ['Gym Owner', 'Managing Director', 'Franchise Owner'],
+      'primary': ['Gym Owner', 'Managing Director', 'Franchise Owner', 'Owner', 'Manager'],
       'secondary': ['General Manager', 'Operations Manager', 'Head Trainer'],
       'gatekeeper': ['Membership Manager', 'Reception Manager', 'Customer Service Lead']
     },
