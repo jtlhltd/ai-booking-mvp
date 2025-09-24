@@ -253,7 +253,7 @@ export class RealDecisionMakerContactFinder {
                             nationality: officer.nationality,
                             occupation: officer.occupation,
                             note: 'Personal email not available - requires manual research',
-                            companiesHouseUrl: `https://find-and-update.company-information.service.gov.uk/officers/${officer.links?.self?.replace('/officers/', '') || 'unknown'}`,
+                            companiesHouseUrl: `https://find-and-update.company-information.service.gov.uk/company/${companyNumber}/officers`,
                             companyUrl: `https://find-and-update.company-information.service.gov.uk/company/${companyNumber}`,
                             businessWebsite: business.website || null
                         };
@@ -528,7 +528,7 @@ export class RealDecisionMakerContactFinder {
                                 source: 'linkedin',
                                 linkedinUrl: linkedinProfile.url,
                                 note: 'Personal email found via LinkedIn',
-                                googleSearchUrl: `https://www.google.com/search?q="${contact.name}" "${business.name}" site:linkedin.com/in/`
+                                googleSearchUrl: `https://www.google.com/search?q="${contact.name}" "${business.name}" contact email`
                             };
                             
                             // Add to appropriate category
@@ -583,12 +583,12 @@ export class RealDecisionMakerContactFinder {
             if (nameParts.length >= 2) {
                 const firstName = nameParts[0];
                 const lastName = nameParts[nameParts.length - 1];
-                const linkedinUrl = `https://linkedin.com/in/${firstName}-${lastName}`;
+                const linkedinUrl = `https://linkedin.com/search/results/people/?keywords="${personName}" "${companyName}"`;
                 
                 return {
                     url: linkedinUrl,
                     title: `${personName} - ${companyName}`,
-                    snippet: `LinkedIn profile for ${personName}`
+                    snippet: `LinkedIn search for ${personName}`
                 };
             }
             
