@@ -774,15 +774,6 @@
                     </select>
                 </div>
                 
-                <div class="filter-group">
-                    <label class="filter-label">Business Size</label>
-                    <select class="filter-select" id="sizeFilter">
-                        <option value="all">Any Size</option>
-                        <option value="small">Small (1-10 employees)</option>
-                        <option value="medium">Medium (11-50 employees)</option>
-                        <option value="large">Large (50+ employees)</option>
-                    </select>
-                </div>
                 
                 <div class="filter-group">
                     <label class="filter-label">Contact Info</label>
@@ -988,7 +979,6 @@
             
             const query = document.getElementById('searchQuery').value.toLowerCase().trim();
             const location = document.getElementById('locationFilter').value;
-            const size = document.getElementById('sizeFilter').value;
             const contact = document.getElementById('contactFilter').value;
             const limit = parseInt(document.getElementById('limitFilter').value);
             
@@ -1081,13 +1071,6 @@
                     return false;
                 }
                 
-                // Size filter
-                if (size !== 'all') {
-                    const employeeCount = parseInt(business.employees.split('-')[0]);
-                    if (size === 'small' && employeeCount > 10) return false;
-                    if (size === 'medium' && (employeeCount < 11 || employeeCount > 50)) return false;
-                    if (size === 'large' && employeeCount < 51) return false;
-                }
                 
                 // Contact filter
                 if (contact !== 'all') {
@@ -1201,7 +1184,6 @@
                             ${business.website ? `<div><a href="${business.website}" target="_blank" class="website-link">${business.website}</a></div>` : ''}
                         </div>
                     </td>
-                    <td>${business.employees} employees</td>
                     <td>${business.services.join(', ')}</td>
                     <td>⭐ ${business.rating}</td>
                     <td>
@@ -1221,7 +1203,6 @@
                         <tr>
                             <th>Business</th>
                             <th>Contact Info</th>
-                            <th>Size</th>
                             <th>Services</th>
                             <th>Rating</th>
                             <th>Actions</th>
@@ -2325,7 +2306,7 @@ Best regards,
         }
         
         function generateCSV(results) {
-            const headers = ['Name', 'Address', 'Phone', 'Email', 'Website', 'Employees', 'Services', 'Rating'];
+            const headers = ['Name', 'Address', 'Phone', 'Email', 'Website', 'Services', 'Rating'];
             const csvRows = [headers.join(',')];
             
             results.forEach(business => {
@@ -2335,7 +2316,6 @@ Best regards,
                     `"${business.phone || ''}"`,
                     `"${business.email || ''}"`,
                     `"${business.website || ''}"`,
-                    `"${business.employees}"`,
                     `"${business.services.join('; ')}"`,
                     business.rating
                 ];
