@@ -2254,7 +2254,7 @@ app.get('/api/test', (req, res) => {
 // Test Companies House API endpoint
 app.get('/api/test-companies-house', async (req, res) => {
   try {
-    const { get } = await import('axios');
+    const axios = await import('axios');
     const apiKey = process.env.COMPANIES_HOUSE_API_KEY;
     
     if (!apiKey) {
@@ -2262,7 +2262,7 @@ app.get('/api/test-companies-house', async (req, res) => {
     }
     
     // Test search for "Scott Arms Dental Practice"
-    const response = await get('https://api.company-information.service.gov.uk/search/companies', {
+    const response = await axios.default.get('https://api.company-information.service.gov.uk/search/companies', {
       params: {
         q: 'Scott Arms Dental Practice',
         items_per_page: 5
