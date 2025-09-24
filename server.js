@@ -102,43 +102,43 @@ app.use(express.static('public'));
 
 // Dashboard routes
 app.get('/', (req, res) => {
-  res.sendFile(new URL('./public/index.html', import.meta.url).pathname);
+  res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
 });
 
 app.get('/tenant-dashboard', (req, res) => {
-  res.sendFile(new URL('./public/tenant-dashboard.html', import.meta.url).pathname);
+  res.sendFile(path.join(process.cwd(), 'public', 'tenant-dashboard.html'));
 });
 
 app.get('/client-dashboard', (req, res) => {
-  res.sendFile(new URL('./public/client-dashboard.html', import.meta.url).pathname);
+  res.sendFile(path.join(process.cwd(), 'public', 'client-dashboard.html'));
 });
 
 app.get('/client-setup', (req, res) => {
-  res.sendFile(new URL('./public/client-setup.html', import.meta.url).pathname);
+  res.sendFile(path.join(process.cwd(), 'public', 'client-setup.html'));
 });
 
 app.get('/client-template', (req, res) => {
-  res.sendFile(new URL('./public/client-dashboard-template.html', import.meta.url).pathname);
+  res.sendFile(path.join(process.cwd(), 'public', 'client-dashboard-template.html'));
 });
 
 app.get('/setup-guide', (req, res) => {
-  res.sendFile(new URL('./public/client-setup-guide.html', import.meta.url).pathname);
+  res.sendFile(path.join(process.cwd(), 'public', 'client-setup-guide.html'));
 });
 
 app.get('/onboarding', (req, res) => {
-  res.sendFile(new URL('./public/onboarding-dashboard.html', import.meta.url).pathname);
+  res.sendFile(path.join(process.cwd(), 'public', 'onboarding-dashboard.html'));
 });
 
 app.get('/onboarding-templates', (req, res) => {
-  res.sendFile(new URL('./public/onboarding-templates.html', import.meta.url).pathname);
+  res.sendFile(path.join(process.cwd(), 'public', 'onboarding-templates.html'));
 });
 
 app.get('/onboarding-wizard', (req, res) => {
-  res.sendFile(new URL('./public/client-onboarding-wizard.html', import.meta.url).pathname);
+  res.sendFile(path.join(process.cwd(), 'public', 'client-onboarding-wizard.html'));
 });
 
 app.get('/uk-business-search', (req, res) => {
-  res.sendFile(new URL('./public/uk-business-search.html', import.meta.url).pathname);
+  res.sendFile(path.join(process.cwd(), 'public', 'uk-business-search.html'));
 });
 
 // Middleware for parsing JSON bodies (must be before routes that need it)
