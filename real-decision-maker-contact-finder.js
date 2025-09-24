@@ -502,32 +502,37 @@ export class RealDecisionMakerContactFinder {
         return [...new Set(alternatives)].slice(0, 5); // Limit to 5 alternatives
     }
 
-    // Practical decision maker contact research (optimized for stability)
+    // Enhanced decision maker research (multiple strategies)
     async enhancedDecisionMakerResearch(contacts, business, industry) {
         const enhancedContacts = { primary: [], secondary: [], gatekeeper: [] };
         
         try {
-            console.log(`[PRACTICAL RESEARCH] Finding real contacts for ${business.name}`);
+            console.log(`[ENHANCED RESEARCH] Finding real owner contacts for ${business.name}`);
             
             const allContacts = [...contacts.primary, ...contacts.secondary, ...contacts.gatekeeper];
             
-            // Only process the first decision maker to avoid overwhelming the server
-            const firstContact = allContacts.find(contact => contact.name && contact.source === 'companies_house');
+            // Strategy 1: Enhanced Companies House with current officers
+            const companiesHouseContacts = await this.getCurrentOfficers(business);
+            enhancedContacts.primary.push(...companiesHouseContacts);
             
-            if (firstContact) {
-                // Generate practical contact research tools with timeout
-                const contactTools = await Promise.race([
-                    this.generatePracticalContactTools(firstContact, business),
-                    new Promise((resolve) => setTimeout(() => resolve([]), 8000)) // 8 second timeout
-                ]);
-                
-                enhancedContacts.primary.push(...contactTools);
+            // Strategy 2: Website team/about pages
+            if (business.website) {
+                const websiteContacts = await this.findWebsiteTeamInfo(business);
+                enhancedContacts.primary.push(...websiteContacts);
             }
             
-            console.log(`[PRACTICAL RESEARCH] Generated ${enhancedContacts.primary.length} contact tools`);
+            // Strategy 3: Professional directory searches
+            const directoryContacts = await this.searchProfessionalDirectories(business, industry);
+            enhancedContacts.primary.push(...directoryContacts);
+            
+            // Strategy 4: Social media intelligence
+            const socialContacts = await this.findSocialMediaOwners(business);
+            enhancedContacts.primary.push(...socialContacts);
+            
+            console.log(`[ENHANCED RESEARCH] Found ${enhancedContacts.primary.length} enhanced contacts`);
             
         } catch (error) {
-            console.error(`[PRACTICAL RESEARCH ERROR]`, error.message);
+            console.error(`[ENHANCED RESEARCH ERROR]`, error.message);
         }
         
         return enhancedContacts;
@@ -806,6 +811,190 @@ export class RealDecisionMakerContactFinder {
             
         } catch (error) {
             console.error(`[WEBSITE SCRAPING ERROR]`, error.message);
+        }
+        
+        return contacts;
+    }
+
+    // Get current officers from Companies House with enhanced data
+    async getCurrentOfficers(business) {
+        const contacts = [];
+        
+        try {
+            if (!this.companiesHouseApiKey) {
+                console.log('[COMPANIES HOUSE] No API key available');
+                return contacts;
+            }
+
+            // Search for company
+            const companyNumber = await this.findCompanyNumber(business.name);
+            if (!companyNumber) {
+                console.log(`[COMPANIES HOUSE] No company number found for ${business.name}`);
+                return contacts;
+            }
+
+            // Get officers with current appointments
+            const officersResponse = await axios.get(`https://api.company-information.service.gov.uk/company/${companyNumber}/officers`, {
+                headers: {
+                    'Authorization': `Basic ${Buffer.from(this.companiesHouseApiKey + ':').toString('base64')}`
+                },
+                timeout: 5000
+            });
+
+            if (officersResponse.data.items && officersResponse.data.items.length > 0) {
+                for (const officer of officersResponse.data.items) {
+                    // Only include active officers
+                    if (officer.resigned_on === null || officer.resigned_on === undefined) {
+                        const contact = {
+                            name: officer.name,
+                            type: 'officer',
+                            source: 'companies_house_current',
+                            confidence: 0.9,
+                            note: `Current officer at ${business.name} (appointed ${officer.appointed_on})`,
+                            companiesHouseUrl: `https://find-and-update.company-information.service.gov.uk/officers/${officer.name.replace(/\s+/g, '-').toLowerCase()}/appointments`,
+                            appointmentDate: officer.appointed_on,
+                            role: officer.officer_role || 'director'
+                        };
+                        contacts.push(contact);
+                    }
+                }
+            }
+
+            console.log(`[COMPANIES HOUSE] Found ${contacts.length} current officers for ${business.name}`);
+            
+        } catch (error) {
+            console.error(`[COMPANIES HOUSE ERROR]`, error.message);
+        }
+        
+        return contacts;
+    }
+
+    // Find team/owner information on business website
+    async findWebsiteTeamInfo(business) {
+        const contacts = [];
+        
+        try {
+            const response = await axios.get(business.website, {
+                timeout: 3000,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
+            });
+            
+            const html = response.data;
+            
+            // Look for common team/about page patterns
+            const teamPatterns = [
+                /<h[1-6][^>]*>.*?(?:meet the team|our team|about us|staff|directors|owners|founders).*?<\/h[1-6]>/gi,
+                /<div[^>]*class="[^"]*(?:team|about|staff|directors)[^"]*"[^>]*>.*?<\/div>/gi,
+                /<section[^>]*class="[^"]*(?:team|about|staff)[^"]*"[^>]*>.*?<\/section>/gi
+            ];
+            
+            for (const pattern of teamPatterns) {
+                const matches = html.match(pattern);
+                if (matches) {
+                    for (const match of matches) {
+                        // Extract names from the team section
+                        const nameMatches = match.match(/(?:Dr\.?|Mr\.?|Ms\.?|Mrs\.?)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/g);
+                        if (nameMatches) {
+                            nameMatches.forEach(nameMatch => {
+                                const cleanName = nameMatch.replace(/(?:Dr\.?|Mr\.?|Ms\.?|Mrs\.?)\s+/, '').trim();
+                                if (cleanName.length > 2 && cleanName.length < 50) {
+                                    contacts.push({
+                                        name: cleanName,
+                                        type: 'team_member',
+                                        source: 'website_team_page',
+                                        confidence: 0.7,
+                                        note: `Found on ${business.name} team/about page`,
+                                        websiteUrl: business.website
+                                    });
+                                }
+                            });
+                        }
+                    }
+                }
+            }
+            
+            console.log(`[WEBSITE TEAM] Found ${contacts.length} team members on ${business.website}`);
+            
+        } catch (error) {
+            console.error(`[WEBSITE TEAM ERROR]`, error.message);
+        }
+        
+        return contacts;
+    }
+
+    // Search professional directories for business owners
+    async searchProfessionalDirectories(business, industry) {
+        const contacts = [];
+        
+        try {
+            const directories = this.getIndustryDirectories(industry);
+            
+            for (const directory of directories) {
+                // Generate search URLs for manual verification
+                const searchUrl = directory.searchUrl.replace('{business}', encodeURIComponent(business.name));
+                
+                contacts.push({
+                    name: `Search ${directory.name}`,
+                    type: 'directory_search',
+                    source: 'professional_directory',
+                    confidence: 0.6,
+                    note: `Search ${directory.name} for ${business.name} owner information`,
+                    directoryUrl: searchUrl,
+                    directoryName: directory.name
+                });
+            }
+            
+            console.log(`[PROFESSIONAL DIRECTORIES] Generated ${contacts.length} directory searches`);
+            
+        } catch (error) {
+            console.error(`[PROFESSIONAL DIRECTORIES ERROR]`, error.message);
+        }
+        
+        return contacts;
+    }
+
+    // Find social media owner information
+    async findSocialMediaOwners(business) {
+        const contacts = [];
+        
+        try {
+            // Generate social media search URLs
+            const socialSearches = [
+                {
+                    platform: 'LinkedIn',
+                    url: `https://www.linkedin.com/search/results/companies/?keywords=${encodeURIComponent(business.name)}`,
+                    type: 'linkedin_company_search'
+                },
+                {
+                    platform: 'Facebook',
+                    url: `https://www.facebook.com/search/pages/?q=${encodeURIComponent(business.name)}`,
+                    type: 'facebook_business_search'
+                },
+                {
+                    platform: 'Google My Business',
+                    url: `https://www.google.com/search?q=${encodeURIComponent(business.name + ' owner')}`,
+                    type: 'google_business_search'
+                }
+            ];
+            
+            socialSearches.forEach(search => {
+                contacts.push({
+                    name: `Search ${search.platform}`,
+                    type: search.type,
+                    source: 'social_media_search',
+                    confidence: 0.5,
+                    note: `Search ${search.platform} for ${business.name} owner information`,
+                    searchUrl: search.url,
+                    platform: search.platform
+                });
+            });
+            
+            console.log(`[SOCIAL MEDIA] Generated ${contacts.length} social media searches`);
+            
+        } catch (error) {
+            console.error(`[SOCIAL MEDIA ERROR]`, error.message);
         }
         
         return contacts;
