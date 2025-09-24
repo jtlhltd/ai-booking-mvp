@@ -8,6 +8,19 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
+// Serve static files from public directory
+app.use(express.static('public'));
+
+// Root route - serve the landing page
+app.get('/', (req, res) => {
+  res.sendFile('index.html', { root: 'public' });
+});
+
+// UK Business Search page
+app.get('/uk-business-search', (req, res) => {
+  res.sendFile('uk-business-search.html', { root: 'public' });
+});
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({
