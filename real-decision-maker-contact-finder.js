@@ -514,7 +514,7 @@ export class RealDecisionMakerContactFinder {
             for (const contact of allContacts) {
                 if (contact.name && contact.source === 'companies_house') {
                     // Generate practical contact research tools
-                    const contactTools = this.generatePracticalContactTools(contact, business);
+                    const contactTools = await this.generatePracticalContactTools(contact, business);
                     enhancedContacts.primary.push(...contactTools);
                 }
             }
@@ -529,38 +529,82 @@ export class RealDecisionMakerContactFinder {
     }
 
     // Generate practical tools to find personal contacts
-    generatePracticalContactTools(contact, business) {
+    async generatePracticalContactTools(contact, business) {
         const tools = [];
         
-        // 1. Google Search for personal contact info
-        const googleSearches = [
-            {
-                type: 'google_search',
-                value: `"${contact.name}" "${business.name}" email phone contact`,
-                confidence: 0.8,
-                source: 'google_search',
-                note: `Google search for ${contact.name}'s personal contact info`,
-                searchUrl: `https://www.google.com/search?q=${encodeURIComponent(`"${contact.name}" "${business.name}" email phone contact`)}`
-            },
-            {
-                type: 'google_search',
-                value: `"${contact.name}" "${business.name}" LinkedIn profile`,
-                confidence: 0.7,
-                source: 'google_search',
-                note: `Google search for ${contact.name}'s LinkedIn profile`,
-                searchUrl: `https://www.google.com/search?q=${encodeURIComponent(`"${contact.name}" "${business.name}" LinkedIn profile`)}`
-            },
-            {
-                type: 'google_search',
-                value: `"${contact.name}" "${business.name}" personal email`,
-                confidence: 0.6,
-                source: 'google_search',
-                note: `Google search for ${contact.name}'s personal email`,
-                searchUrl: `https://www.google.com/search?q=${encodeURIComponent(`"${contact.name}" "${business.name}" personal email`)}`
+        // 1. Actually search for contact info using Google Search API
+        if (this.googleApiKey) {
+            try {
+                const contactInfo = await this.searchForActualContactInfo(contact, business);
+                if (contactInfo.email) {
+                    tools.push({
+                        type: 'email',
+                        value: contactInfo.email,
+                        confidence: 0.8,
+                        source: 'google_search_extracted',
+                        note: `Email found via Google search for ${contact.name}`,
+                        searchUrl: contactInfo.searchUrl
+                    });
+                }
+                if (contactInfo.phone) {
+                    tools.push({
+                        type: 'phone',
+                        value: contactInfo.phone,
+                        confidence: 0.8,
+                        source: 'google_search_extracted',
+                        note: `Phone found via Google search for ${contact.name}`,
+                        searchUrl: contactInfo.searchUrl
+                    });
+                }
+                if (contactInfo.linkedin) {
+                    tools.push({
+                        type: 'linkedin',
+                        value: contactInfo.linkedin,
+                        confidence: 0.7,
+                        source: 'google_search_extracted',
+                        note: `LinkedIn profile found for ${contact.name}`,
+                        linkedinUrl: contactInfo.linkedin
+                    });
+                }
+            } catch (error) {
+                console.log(`[CONTACT SEARCH] Failed to find contact info for ${contact.name}: ${error.message}`);
             }
-        ];
+        }
         
-        tools.push(...googleSearches);
+        // 2. Scrape business website for contact info
+        if (business.website) {
+            try {
+                const websiteContacts = await this.scrapeWebsiteForContacts(contact, business);
+                tools.push(...websiteContacts);
+            } catch (error) {
+                console.log(`[WEBSITE SCRAPING] Failed for ${business.website}: ${error.message}`);
+            }
+        }
+        
+        // 3. Generate email patterns as fallback
+        if (business.website) {
+            const domain = business.website.replace(/^https?:\/\//, '').replace(/^www\./, '');
+            const nameParts = contact.name.toLowerCase().split(' ');
+            const firstName = nameParts[0];
+            const lastName = nameParts[nameParts.length - 1];
+            
+            const emailPatterns = [
+                `${firstName}.${lastName}@${domain}`,
+                `${firstName}@${domain}`,
+                `${firstName}${lastName}@${domain}`
+            ];
+            
+            emailPatterns.forEach(email => {
+                tools.push({
+                    type: 'email_pattern',
+                    value: email,
+                    confidence: 0.4,
+                    source: 'email_generation',
+                    note: `Generated email pattern for ${contact.name} - verify before using`,
+                    searchUrl: `https://www.google.com/search?q="${email}" verify`
+                });
+            });
+        }
         
         // 2. Social Media Searches
         const socialSearches = [
@@ -633,6 +677,125 @@ export class RealDecisionMakerContactFinder {
         });
         
         return tools;
+    }
+
+    // Actually search for contact information using Google Search API
+    async searchForActualContactInfo(contact, business) {
+        const contactInfo = { email: null, phone: null, linkedin: null, searchUrl: null };
+        
+        try {
+            // Search for contact information
+            const searchQuery = `"${contact.name}" "${business.name}" email phone contact`;
+            const response = await axios.get('https://www.googleapis.com/customsearch/v1', {
+                params: {
+                    key: this.googleApiKey,
+                    cx: '017576662512468239146:omuauf_lfve',
+                    q: searchQuery,
+                    num: 5
+                },
+                timeout: 5000
+            });
+            
+            contactInfo.searchUrl = `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`;
+            
+            if (response.data.items && response.data.items.length > 0) {
+                // Extract contact information from search results
+                for (const item of response.data.items) {
+                    const text = (item.title + ' ' + item.snippet).toLowerCase();
+                    
+                    // Look for email patterns
+                    const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+                    if (emailMatch && !contactInfo.email) {
+                        contactInfo.email = emailMatch[1];
+                    }
+                    
+                    // Look for phone patterns
+                    const phoneMatch = text.match(/(\+?[0-9\s\-\(\)]{10,})/);
+                    if (phoneMatch && !contactInfo.phone) {
+                        contactInfo.phone = phoneMatch[1].trim();
+                    }
+                    
+                    // Look for LinkedIn profiles
+                    const linkedinMatch = text.match(/(https?:\/\/[a-zA-Z0-9.-]*linkedin\.com\/in\/[a-zA-Z0-9-]+)/);
+                    if (linkedinMatch && !contactInfo.linkedin) {
+                        contactInfo.linkedin = linkedinMatch[1];
+                    }
+                }
+            }
+            
+            console.log(`[CONTACT SEARCH] Found for ${contact.name}: email=${contactInfo.email}, phone=${contactInfo.phone}, linkedin=${contactInfo.linkedin}`);
+            
+        } catch (error) {
+            console.error(`[CONTACT SEARCH ERROR]`, error.message);
+        }
+        
+        return contactInfo;
+    }
+
+    // Scrape business website for contact information
+    async scrapeWebsiteForContacts(contact, business) {
+        const contacts = [];
+        
+        try {
+            const response = await axios.get(business.website, {
+                timeout: 5000,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
+            });
+            
+            const html = response.data;
+            const text = html.replace(/<[^>]*>/g, ' ').toLowerCase();
+            
+            // Look for the contact's name in the website content
+            const contactNameLower = contact.name.toLowerCase();
+            if (text.includes(contactNameLower)) {
+                // Extract emails from the website
+                const emailMatches = html.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g);
+                if (emailMatches) {
+                    emailMatches.forEach(email => {
+                        // Check if this email might belong to the contact
+                        const emailLower = email.toLowerCase();
+                        if (emailLower.includes(contactNameLower.split(' ')[0]) || 
+                            emailLower.includes(contactNameLower.split(' ')[1])) {
+                            contacts.push({
+                                type: 'email',
+                                value: email,
+                                confidence: 0.7,
+                                source: 'website_scraping',
+                                note: `Email found on ${business.name} website for ${contact.name}`,
+                                websiteUrl: business.website
+                            });
+                        }
+                    });
+                }
+                
+                // Extract phone numbers from the website
+                const phoneMatches = html.match(/(\+?[0-9\s\-\(\)]{10,})/g);
+                if (phoneMatches) {
+                    phoneMatches.forEach(phone => {
+                        const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
+                        if (cleanPhone.length >= 10) {
+                            contacts.push({
+                                type: 'phone',
+                                value: phone.trim(),
+                                confidence: 0.6,
+                                source: 'website_scraping',
+                                note: `Phone found on ${business.name} website`,
+                                websiteUrl: business.website
+                            });
+                        }
+                    });
+                }
+            }
+            
+            console.log(`[WEBSITE SCRAPING] Found ${contacts.length} contacts on ${business.website}`);
+            
+        } catch (error) {
+            console.error(`[WEBSITE SCRAPING ERROR]`, error.message);
+        }
+        
+        return contacts;
     }
 
     // Search LinkedIn for personal emails of decision makers
