@@ -540,6 +540,173 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        
+        /* Business Details Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .business-details-modal {
+            background: white;
+            border-radius: 12px;
+            max-width: 800px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .modal-header h2 {
+            margin: 0;
+            color: #1e293b;
+            font-size: 1.5rem;
+        }
+        
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #64748b;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .close-btn:hover {
+            color: #1e293b;
+        }
+        
+        .modal-body {
+            padding: 1.5rem;
+        }
+        
+        .business-info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .info-section h3 {
+            color: #1e293b;
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+            border-bottom: 2px solid #6366f1;
+            padding-bottom: 0.5rem;
+        }
+        
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        
+        .info-item strong {
+            color: #475569;
+            font-weight: 600;
+        }
+        
+        .info-item span {
+            color: #1e293b;
+            text-align: right;
+        }
+        
+        .category-badge {
+            background: #6366f1;
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+        
+        .rating {
+            color: #f59e0b;
+            font-weight: 600;
+        }
+        
+        .lead-score {
+            background: #10b981;
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+        
+        .services-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        
+        .service-tag {
+            background: #f1f5f9;
+            color: #475569;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .modal-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .modal-actions .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .modal-actions .btn-primary {
+            background: #6366f1;
+            color: white;
+        }
+        
+        .modal-actions .btn-success {
+            background: #10b981;
+            color: white;
+        }
+        
+        .modal-actions .btn-secondary {
+            background: #64748b;
+            color: white;
+        }
+        
+        .modal-actions .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
     </style>
 </head>
 <body>
@@ -1092,7 +1259,7 @@
         function viewBusiness(index) {
             const business = currentResults[index];
             if (business) {
-                alert(`Business Details:\n\nName: ${business.name}\nAddress: ${business.address}\nPhone: ${business.phone || 'N/A'}\nEmail: ${business.email || 'N/A'}\nWebsite: ${business.website || 'N/A'}\nEmployees: ${business.employees}\nServices: ${business.services.join(', ')}\nRating: ⭐ ${business.rating}`);
+                showBusinessDetailsModal(business);
             }
         }
         
@@ -1100,6 +1267,100 @@
             const business = currentResults[index];
             if (business) {
                 alert(`Business "${business.name}" added to leads successfully!`);
+            }
+        }
+
+        function showBusinessDetailsModal(business) {
+            // Create modal HTML
+            const modalHTML = `
+                <div id="businessDetailsModal" class="modal-overlay">
+                    <div class="modal-content business-details-modal">
+                        <div class="modal-header">
+                            <h2>Business Details</h2>
+                            <button class="close-btn" onclick="closeBusinessDetailsModal()">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="business-info-grid">
+                                <div class="info-section">
+                                    <h3>📋 Basic Information</h3>
+                                    <div class="info-item">
+                                        <strong>Business Name:</strong>
+                                        <span>${business.name}</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <strong>Address:</strong>
+                                        <span>${business.address}</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <strong>Category:</strong>
+                                        <span class="category-badge">${business.category}</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <strong>Rating:</strong>
+                                        <span class="rating">⭐ ${business.rating}</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="info-section">
+                                    <h3>📞 Contact Information</h3>
+                                    <div class="info-item">
+                                        <strong>Phone:</strong>
+                                        <span>${business.phone || 'Not available'}</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <strong>Email:</strong>
+                                        <span>${business.email || 'Not available'}</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <strong>Website:</strong>
+                                        <span>${business.website ? `<a href="${business.website}" target="_blank">${business.website}</a>` : 'Not available'}</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="info-section">
+                                    <h3>🛠️ Services</h3>
+                                    <div class="services-list">
+                                        ${business.services.map(service => `<span class="service-tag">${service}</span>`).join('')}
+                                    </div>
+                                </div>
+                                
+                                <div class="info-section">
+                                    <h3>📊 Business Metrics</h3>
+                                    <div class="info-item">
+                                        <strong>Lead Score:</strong>
+                                        <span class="lead-score">${business.leadScore}/100</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <strong>Source:</strong>
+                                        <span>${business.source}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="modal-actions">
+                                <button class="btn btn-primary" onclick="showDecisionMakers(${currentResults.indexOf(business)})">
+                                    👥 View Decision Makers
+                                </button>
+                                <button class="btn btn-success" onclick="addToLeads(${currentResults.indexOf(business)})">
+                                    ➕ Add to Leads
+                                </button>
+                                <button class="btn btn-secondary" onclick="closeBusinessDetailsModal()">
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Add modal to page
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+        }
+
+        function closeBusinessDetailsModal() {
+            const modal = document.getElementById('businessDetailsModal');
+            if (modal) {
+                modal.remove();
             }
         }
 
