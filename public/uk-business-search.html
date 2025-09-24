@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UK Business Search - AI Booking MVP</title>
+    <title>UK Business Search - AI Booking System</title>
     <style>
         * {
             margin: 0;
@@ -613,8 +613,36 @@
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('searchForm').addEventListener('submit', handleSearch);
+            loadIndustryCategories();
             updateStats();
         });
+
+        // Load industry categories
+        async function loadIndustryCategories() {
+            try {
+                const response = await fetch('/api/industry-categories');
+                const data = await response.json();
+                
+                if (data.success) {
+                    populateCategoryFilter(data.categories);
+                }
+            } catch (error) {
+                console.error('Failed to load industry categories:', error);
+            }
+        }
+
+        // Populate category filter
+        function populateCategoryFilter(categories) {
+            const categoryFilter = document.getElementById('categoryFilter');
+            if (categoryFilter) {
+                categories.forEach(category => {
+                    const option = document.createElement('option');
+                    option.value = category.value;
+                    option.textContent = category.label;
+                    categoryFilter.appendChild(option);
+                });
+            }
+        }
         
         // Handle search form submission
         function handleSearch(e) {
@@ -631,11 +659,15 @@
                 return;
             }
             
-            performSearch(query, location, size, contact, limit);
+            const category = document.getElementById('categoryFilter') ? document.getElementById('categoryFilter').value : '';
+            const minRating = document.getElementById('minRatingFilter') ? document.getElementById('minRatingFilter').value : '';
+            const sortBy = document.getElementById('sortByFilter') ? document.getElementById('sortByFilter').value : 'leadScore';
+            
+            performSearch(query, location, size, contact, limit, category, minRating, sortBy);
         }
         
         // Perform search
-        async function performSearch(query, location, size, contact, limit) {
+        async function performSearch(query, location, size, contact, limit, category, minRating, sortBy) {
             showLoading();
             searchCount++;
             
@@ -649,8 +681,9 @@
                         query: query,
                         filters: {
                             location: location,
-                            businessSize: size,
-                            contactInfo: contact,
+                            category: category,
+                            minRating: minRating,
+                            sortBy: sortBy,
                             limit: limit
                         }
                     })

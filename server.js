@@ -55,7 +55,8 @@ const normalizePhone = (s) => (s || '').trim().replace(/[^\d+]/g, '');
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import { generateUKBusinesses } from './enhanced-business-search.js';
+import { generateUKBusinesses, getIndustryCategories, fuzzySearch } from './enhanced-business-search.js';
+import RealUKBusinessSearch from './real-uk-business-search.js';
 import morgan from 'morgan';
 import fs from 'fs/promises';
 import path from 'path';
@@ -2220,7 +2221,7 @@ function deriveIdemKey(req) {
 function requireApiKey(req, res, next) {
   if (req.method === 'GET' && (req.path === '/health' || req.path === '/gcal/ping' || req.path === '/healthz')) return next();
   if (req.path.startsWith('/webhooks/twilio-status') || req.path.startsWith('/webhooks/twilio-inbound') || req.path.startsWith('/webhooks/twilio/sms-inbound') || req.path.startsWith('/webhooks/vapi')) return next();
-  if (req.path === '/api/test' || req.path === '/api/uk-business-search' || req.path === '/api/decision-maker-contacts') return next();
+  if (req.path === '/api/test' || req.path === '/api/uk-business-search' || req.path === '/api/decision-maker-contacts' || req.path === '/api/industry-categories') return next();
   if (!API_KEY) return res.status(500).json({ error: 'Server missing API_KEY' });
   const key = req.get('X-API-Key');
   if (key && key === API_KEY) return next();
@@ -2269,14 +2270,14 @@ app.post('/api/uk-business-search', async (req, res) => {
       const RealUKBusinessSearch = realSearchModule.default;
       
       const realSearcher = new RealUKBusinessSearch();
-      results = await realSearcher.searchRealBusinesses(query, filters);
+      results = await realSearcher.searchBusinesses(query, filters);
       usingRealData = true;
       console.log(`[UK BUSINESS SEARCH] Real API search found ${results.length} businesses`);
     } catch (realApiError) {
       console.log(`[UK BUSINESS SEARCH] Real API failed, falling back to sample data:`, realApiError.message);
       
-      // Fallback to enhanced sample data
-      results = generateUKBusinesses(query);
+      // Fallback to enhanced sample data with filters
+      results = generateUKBusinesses(query, filters);
     }
     
     res.json({
@@ -2378,6 +2379,24 @@ app.post('/api/decision-maker-contacts', async (req, res) => {
     console.error('[DECISION MAKER CONTACT ERROR]', error);
     res.status(500).json({ 
       error: 'Failed to research decision maker contacts',
+      message: error.message 
+    });
+  }
+});
+
+// Get industry categories endpoint (PUBLIC - no auth required)
+app.get('/api/industry-categories', (req, res) => {
+  try {
+    const categories = getIndustryCategories();
+    res.json({
+      success: true,
+      categories,
+      total: categories.length
+    });
+  } catch (error) {
+    console.error('[INDUSTRY CATEGORIES ERROR]', error);
+    res.status(500).json({ 
+      error: 'Failed to get industry categories',
       message: error.message 
     });
   }
