@@ -1391,9 +1391,15 @@
 
                 const data = await response.json();
                 console.log('Received decision maker data:', data);
+                console.log('Contacts breakdown:', {
+                    primary: data.contacts?.primary?.length || 0,
+                    secondary: data.contacts?.secondary?.length || 0,
+                    gatekeeper: data.contacts?.gatekeeper?.length || 0,
+                    found: data.contacts?.found
+                });
                 
                 if (data.success) {
-                    if (data.contacts && (data.contacts.primary.length > 0 || data.contacts.secondary.length > 0)) {
+                    if (data.contacts && (data.contacts.primary.length > 0 || data.contacts.secondary.length > 0 || data.contacts.gatekeeper.length > 0)) {
                         displayDecisionMakerContacts(data);
                     } else {
                         showContactResearchError('No decision maker contacts found for this business. The business may not be registered with Companies House or may not have active directors.');
