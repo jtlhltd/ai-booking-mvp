@@ -137,6 +137,10 @@ app.get('/onboarding-wizard', (req, res) => {
   res.sendFile(new URL('./public/client-onboarding-wizard.html', import.meta.url).pathname);
 });
 
+app.get('/uk-business-search', (req, res) => {
+  res.sendFile(new URL('./public/uk-business-search.html', import.meta.url).pathname);
+});
+
 // Middleware for parsing JSON bodies (must be before routes that need it)
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -2222,6 +2226,7 @@ function requireApiKey(req, res, next) {
   if (req.method === 'GET' && (req.path === '/health' || req.path === '/gcal/ping' || req.path === '/healthz')) return next();
   if (req.path.startsWith('/webhooks/twilio-status') || req.path.startsWith('/webhooks/twilio-inbound') || req.path.startsWith('/webhooks/twilio/sms-inbound') || req.path.startsWith('/webhooks/vapi')) return next();
   if (req.path === '/api/test' || req.path === '/api/uk-business-search' || req.path === '/api/decision-maker-contacts' || req.path === '/api/industry-categories') return next();
+  if (req.path === '/uk-business-search') return next();
   if (!API_KEY) return res.status(500).json({ error: 'Server missing API_KEY' });
   const key = req.get('X-API-Key');
   if (key && key === API_KEY) return next();
