@@ -1143,7 +1143,11 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    displayDecisionMakerContacts(data);
+                    if (data.contacts && (data.contacts.primary.length > 0 || data.contacts.secondary.length > 0)) {
+                        displayDecisionMakerContacts(data);
+                    } else {
+                        showContactResearchError('No decision maker contacts found for this business. The business may not be registered with Companies House or may not have active directors.');
+                    }
                 } else {
                     showContactResearchError(data.error || 'Failed to research contacts');
                 }
@@ -1202,12 +1206,37 @@
             const confidenceClass = getConfidenceClass(contact.confidence);
             const confidenceText = getConfidenceText(contact.confidence);
             
+            // Handle different contact types
+            let contactType = contact.type || 'contact_info';
+            if (contactType === 'contact_info') {
+                contactType = 'DIRECTOR INFO';
+            } else if (contactType === 'email') {
+                contactType = 'EMAIL';
+            }
+            
+            // Create source links
+            let sourceLinks = '';
+            if (contact.companiesHouseUrl) {
+                sourceLinks += `<a href="${contact.companiesHouseUrl}" target="_blank" style="color: #0ea5e9; text-decoration: none; margin-right: 8px;">📋 Companies House</a>`;
+            }
+            if (contact.linkedinUrl) {
+                sourceLinks += `<a href="${contact.linkedinUrl}" target="_blank" style="color: #0ea5e9; text-decoration: none; margin-right: 8px;">💼 LinkedIn</a>`;
+            }
+            if (contact.googleSearchUrl) {
+                sourceLinks += `<a href="${contact.googleSearchUrl}" target="_blank" style="color: #0ea5e9; text-decoration: none; margin-right: 8px;">🔍 Google Search</a>`;
+            }
+            if (contact.businessWebsite) {
+                sourceLinks += `<a href="${contact.businessWebsite}" target="_blank" style="color: #0ea5e9; text-decoration: none; margin-right: 8px;">🌐 Website</a>`;
+            }
+            
             return `
                 <div class="contact-item">
                     <div class="contact-info">
-                        <div class="contact-type">${contact.type.toUpperCase()}</div>
+                        <div class="contact-type">${contactType}</div>
                         <div class="contact-value">${contact.value}</div>
                         <div class="contact-source">Source: ${contact.source} | ${contact.title || 'Contact'}</div>
+                        ${sourceLinks ? `<div class="source-links" style="margin-top: 8px; font-size: 0.8rem;">${sourceLinks}</div>` : ''}
+                        ${contact.note ? `<div class="contact-note" style="margin-top: 4px; font-size: 0.8rem; color: #64748b; font-style: italic;">${contact.note}</div>` : ''}
                     </div>
                     <div class="confidence-badge ${confidenceClass}">${confidenceText}</div>
                 </div>
