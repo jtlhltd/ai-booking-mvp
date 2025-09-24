@@ -55,7 +55,6 @@ const normalizePhone = (s) => (s || '').trim().replace(/[^\d+]/g, '');
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import { generateUKBusinesses } from './enhanced-business-search.js';
 import morgan from 'morgan';
 import fs from 'fs/promises';
 import path from 'path';
@@ -2275,8 +2274,22 @@ app.post('/api/uk-business-search', async (req, res) => {
     } catch (realApiError) {
       console.log(`[UK BUSINESS SEARCH] Real API failed, falling back to sample data:`, realApiError.message);
       
-      // Fallback to enhanced sample data
-      results = generateUKBusinesses(query);
+      // Fallback to sample data
+      results = [
+        {
+          name: "Bright Smile Dental Practice",
+          address: "12 Harley Street, London, W1G 9QD",
+          phone: "+44 20 7580 1234",
+          email: "info@brightsmile.co.uk",
+          website: "https://brightsmile.co.uk",
+          employees: "15-25",
+          services: ["General Dentistry", "Cosmetic Dentistry", "Orthodontics"],
+          rating: 4.9,
+          category: "dental",
+          leadScore: 95,
+          source: "sample"
+        }
+      ];
     }
     
     res.json({
