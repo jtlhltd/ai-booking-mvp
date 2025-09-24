@@ -290,9 +290,9 @@ export class RealDecisionMakerContactFinder {
     parseTeamMember(text) {
         // Common patterns: "John Smith - Manager", "Sarah Johnson, Director", etc.
         const patterns = [
-            /^([^,-\n]+)[\s]*[-–]\s*([^,-\n]+)$/,
-            /^([^,-\n]+)[\s]*,\s*([^,-\n]+)$/,
-            /^([^,-\n]+)[\s]*\|\s*([^,-\n]+)$/
+            /^([^,\-\n]+)[\s]*[-–]\s*([^,\-\n]+)$/,
+            /^([^,\-\n]+)[\s]*,\s*([^,\-\n]+)$/,
+            /^([^,\-\n]+)[\s]*\|\s*([^,\-\n]+)$/
         ];
         
         for (const pattern of patterns) {

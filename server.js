@@ -2333,7 +2333,7 @@ app.post('/api/decision-maker-contacts', async (req, res) => {
       console.log(`[DECISION MAKER CONTACT] Real API failed, using sample data:`, realApiError.message);
       
       // Fallback to realistic decision maker data
-      contacts = this.generateRealisticDecisionMakers(business, industry, targetRole);
+      contacts = generateRealisticDecisionMakers(business, industry, targetRole);
       
       strategy = {
         approach: "Direct outreach to decision maker",
