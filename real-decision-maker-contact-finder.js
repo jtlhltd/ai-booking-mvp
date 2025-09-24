@@ -502,14 +502,14 @@ export class RealDecisionMakerContactFinder {
         return [...new Set(alternatives)].slice(0, 5); // Limit to 5 alternatives
     }
 
-    // Enhanced decision maker research using multiple strategies (comprehensive approach)
+    // Enhanced decision maker research using multiple strategies (stable approach)
     async enhancedDecisionMakerResearch(contacts, business, industry) {
         const enhancedContacts = { primary: [], secondary: [], gatekeeper: [] };
         
         try {
-            console.log(`[ENHANCED RESEARCH] Starting comprehensive research for ${business.name}`);
+            console.log(`[ENHANCED RESEARCH] Starting stable research for ${business.name}`);
             
-            // Strategy 1: Enhanced Companies House data
+            // Strategy 1: Enhanced Companies House data (no API calls)
             try {
                 const enhancedCompaniesHouse = await this.enhanceCompaniesHouseData(contacts, business);
                 this.mergeContacts(enhancedContacts, enhancedCompaniesHouse);
@@ -518,7 +518,7 @@ export class RealDecisionMakerContactFinder {
                 console.log(`[COMPANIES HOUSE] Skipped due to error: ${err.message}`);
             }
             
-            // Strategy 2: Website intelligence
+            // Strategy 2: Website intelligence (no API calls)
             try {
                 const websiteContacts = await this.extractWebsiteIntelligence(contacts, business);
                 this.mergeContacts(enhancedContacts, websiteContacts);
@@ -527,7 +527,7 @@ export class RealDecisionMakerContactFinder {
                 console.log(`[WEBSITE] Skipped due to error: ${err.message}`);
             }
             
-            // Strategy 3: Professional directories
+            // Strategy 3: Professional directories (no API calls)
             try {
                 const directories = this.getIndustryDirectories(industry);
                 directories.forEach(directory => {
@@ -547,7 +547,7 @@ export class RealDecisionMakerContactFinder {
                 console.log(`[DIRECTORY] Skipped due to error: ${err.message}`);
             }
             
-            // Strategy 4: Social media research
+            // Strategy 4: Social media research (no API calls)
             try {
                 const socialContacts = await this.generateSocialMediaSearches(contacts, business);
                 this.mergeContacts(enhancedContacts, socialContacts);
@@ -556,7 +556,7 @@ export class RealDecisionMakerContactFinder {
                 console.log(`[SOCIAL] Skipped due to error: ${err.message}`);
             }
             
-            // Strategy 5: Email pattern generation
+            // Strategy 5: Email pattern generation (no API calls)
             try {
                 const emailContacts = await this.generateEmailPatterns(contacts, business);
                 this.mergeContacts(enhancedContacts, emailContacts);

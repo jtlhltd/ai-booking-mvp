@@ -2435,14 +2435,14 @@ app.post('/api/decision-maker-contacts', async (req, res) => {
       
       const contactFinder = new RealDecisionMakerContactFinder();
       
-      // Set a 15-second timeout for the entire research process
+      // Set a 10-second timeout for the entire research process
       const result = await Promise.race([
         Promise.all([
           contactFinder.findDecisionMakerContacts(business, industry, targetRole),
           contactFinder.generateOutreachStrategy({ primary: [], secondary: [], gatekeeper: [] }, business, industry, targetRole)
         ]),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Contact research timed out after 15 seconds')), 15000)
+          setTimeout(() => reject(new Error('Contact research timed out after 10 seconds')), 10000)
         )
       ]);
       
