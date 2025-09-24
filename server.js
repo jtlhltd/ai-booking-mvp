@@ -2233,40 +2233,58 @@ app.get('/api/test', (req, res) => {
   res.json({ success: true, message: 'Test endpoint working', timestamp: new Date().toISOString() });
 });
 
-// UK Business Search endpoint (PUBLIC - no auth required) - SIMPLIFIED
-app.post('/api/uk-business-search', (req, res) => {
+// UK Business Search endpoint (PUBLIC - no auth required) - WITH REAL API
+app.post('/api/uk-business-search', async (req, res) => {
   try {
-    const { query } = req.body;
+    const { query, filters = {} } = req.body;
     
     if (!query) {
       return res.status(400).json({ error: 'Query is required' });
     }
     
-    console.log(`[UK BUSINESS SEARCH] Simple search for: "${query}"`);
+    console.log(`[UK BUSINESS SEARCH] Starting real search for: "${query}"`);
     
-    // Simple sample data
-    const results = [
-      {
-        name: "Bright Smile Dental Practice",
-        address: "12 Harley Street, London, W1G 9QD",
-        phone: "+44 20 7580 1234",
-        email: "info@brightsmile.co.uk",
-        website: "https://brightsmile.co.uk",
-        employees: "15-25",
-        services: ["General Dentistry", "Cosmetic Dentistry", "Orthodontics"],
-        rating: 4.9,
-        category: "dental",
-        leadScore: 95,
-        source: "sample"
-      }
-    ];
+    // Try real API first, fallback to sample data
+    let results = [];
+    let usingRealData = false;
+    
+    try {
+      // Dynamic import of real API module
+      const realSearchModule = await import('./real-uk-business-search.js');
+      const RealUKBusinessSearch = realSearchModule.default;
+      
+      const realSearcher = new RealUKBusinessSearch();
+      results = await realSearcher.searchRealBusinesses(query, filters);
+      usingRealData = true;
+      console.log(`[UK BUSINESS SEARCH] Real API search found ${results.length} businesses`);
+    } catch (realApiError) {
+      console.log(`[UK BUSINESS SEARCH] Real API failed, falling back to sample data:`, realApiError.message);
+      
+      // Fallback to sample data
+      results = [
+        {
+          name: "Bright Smile Dental Practice",
+          address: "12 Harley Street, London, W1G 9QD",
+          phone: "+44 20 7580 1234",
+          email: "info@brightsmile.co.uk",
+          website: "https://brightsmile.co.uk",
+          employees: "15-25",
+          services: ["General Dentistry", "Cosmetic Dentistry", "Orthodontics"],
+          rating: 4.9,
+          category: "dental",
+          leadScore: 95,
+          source: "sample"
+        }
+      ];
+    }
     
     res.json({
       success: true,
       results,
       count: results.length,
       query,
-      usingRealData: false,
+      filters,
+      usingRealData,
       timestamp: new Date().toISOString()
     });
   } catch (error) {
@@ -2278,8 +2296,8 @@ app.post('/api/uk-business-search', (req, res) => {
   }
 });
 
-// Decision Maker Contact Research endpoint (PUBLIC - no auth required) - SIMPLIFIED
-app.post('/api/decision-maker-contacts', (req, res) => {
+// Decision Maker Contact Research endpoint (PUBLIC - no auth required) - WITH REAL API
+app.post('/api/decision-maker-contacts', async (req, res) => {
   try {
     const { business, industry, targetRole } = req.body;
     
@@ -2289,45 +2307,62 @@ app.post('/api/decision-maker-contacts', (req, res) => {
       });
     }
     
-    console.log(`[DECISION MAKER CONTACT] Simple contact research for ${targetRole} at ${business.name}`);
+    console.log(`[DECISION MAKER CONTACT] Researching contacts for ${targetRole} at ${business.name}`);
     
-    // Simple sample contact data
-    const contacts = {
-      primary: [
-        {
-          type: "email",
-          value: `${targetRole.toLowerCase().replace(' ', '.')}@${business.name.toLowerCase().replace(/\s+/g, '')}.co.uk`,
-          confidence: 0.7,
-          source: "email_pattern",
-          title: targetRole
-        }
-      ],
-      secondary: [
-        {
-          type: "phone",
-          value: business.phone || "+44 20 1234 5678",
-          confidence: 0.8,
-          source: "business_contact",
-          title: "Reception"
-        }
-      ],
-      gatekeeper: [
-        {
-          type: "email",
-          value: `info@${business.name.toLowerCase().replace(/\s+/g, '')}.co.uk`,
-          confidence: 0.9,
-          source: "business_contact",
-          title: "General Contact"
-        }
-      ]
-    };
+    // Try real API first, fallback to sample data
+    let contacts, strategy;
     
-    const strategy = {
-      approach: "Direct outreach to decision maker",
-      message: `Hi ${targetRole}, I noticed ${business.name} and wanted to reach out about our AI booking system that could help streamline your appointment scheduling.`,
-      followUp: "Follow up in 3-5 days if no response",
-      bestTime: "Tuesday-Thursday, 10am-2pm"
-    };
+    try {
+      // Dynamic import of contact finder module
+      const contactFinderModule = await import('./simple-decision-maker-contact-finder.js');
+      const DecisionMakerContactFinder = contactFinderModule.SimpleDecisionMakerContactFinder;
+      
+      const contactFinder = new DecisionMakerContactFinder();
+      contacts = await contactFinder.findDecisionMakerContacts(business, industry, targetRole);
+      strategy = contactFinder.generateOutreachStrategy(contacts, business, industry, targetRole);
+      
+      console.log(`[DECISION MAKER CONTACT] Real API found contacts successfully`);
+    } catch (realApiError) {
+      console.log(`[DECISION MAKER CONTACT] Real API failed, using sample data:`, realApiError.message);
+      
+      // Fallback to sample data
+      contacts = {
+        primary: [
+          {
+            type: "email",
+            value: `${targetRole.toLowerCase().replace(' ', '.')}@${business.name.toLowerCase().replace(/\s+/g, '')}.co.uk`,
+            confidence: 0.7,
+            source: "email_pattern",
+            title: targetRole
+          }
+        ],
+        secondary: [
+          {
+            type: "phone",
+            value: business.phone || "+44 20 1234 5678",
+            confidence: 0.8,
+            source: "business_contact",
+            title: "Reception"
+          }
+        ],
+        gatekeeper: [
+          {
+            type: "email",
+            value: `info@${business.name.toLowerCase().replace(/\s+/g, '')}.co.uk`,
+            confidence: 0.9,
+            source: "business_contact",
+            title: "General Contact"
+          }
+        ]
+      };
+      
+      strategy = {
+        approach: "Direct outreach to decision maker",
+        message: `Hi ${targetRole}, I noticed ${business.name} and wanted to reach out about our AI booking system that could help streamline your appointment scheduling.`,
+        followUp: "Follow up in 3-5 days if no response",
+        bestTime: "Tuesday-Thursday, 10am-2pm"
+      };
+    }
     
     res.json({
       success: true,
