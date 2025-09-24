@@ -502,76 +502,137 @@ export class RealDecisionMakerContactFinder {
         return [...new Set(alternatives)].slice(0, 5); // Limit to 5 alternatives
     }
 
-    // Enhanced decision maker research using multiple strategies (stable approach)
+    // Practical decision maker contact research (what actually works)
     async enhancedDecisionMakerResearch(contacts, business, industry) {
         const enhancedContacts = { primary: [], secondary: [], gatekeeper: [] };
         
         try {
-            console.log(`[ENHANCED RESEARCH] Starting stable research for ${business.name}`);
+            console.log(`[PRACTICAL RESEARCH] Finding real contacts for ${business.name}`);
             
-            // Strategy 1: Enhanced Companies House data (no API calls)
-            try {
-                const enhancedCompaniesHouse = await this.enhanceCompaniesHouseData(contacts, business);
-                this.mergeContacts(enhancedContacts, enhancedCompaniesHouse);
-                console.log(`[COMPANIES HOUSE] Enhanced ${enhancedCompaniesHouse.primary.length} contacts`);
-            } catch (err) {
-                console.log(`[COMPANIES HOUSE] Skipped due to error: ${err.message}`);
+            const allContacts = [...contacts.primary, ...contacts.secondary, ...contacts.gatekeeper];
+            
+            for (const contact of allContacts) {
+                if (contact.name && contact.source === 'companies_house') {
+                    // Generate practical contact research tools
+                    const contactTools = this.generatePracticalContactTools(contact, business);
+                    enhancedContacts.primary.push(...contactTools);
+                }
             }
             
-            // Strategy 2: Website intelligence (no API calls)
-            try {
-                const websiteContacts = await this.extractWebsiteIntelligence(contacts, business);
-                this.mergeContacts(enhancedContacts, websiteContacts);
-                console.log(`[WEBSITE] Found ${websiteContacts.primary.length} website contacts`);
-            } catch (err) {
-                console.log(`[WEBSITE] Skipped due to error: ${err.message}`);
-            }
-            
-            // Strategy 3: Professional directories (no API calls)
-            try {
-                const directories = this.getIndustryDirectories(industry);
-                directories.forEach(directory => {
-                    const searchUrl = directory.searchUrl.replace('{business}', encodeURIComponent(business.name));
-                    const contact = {
-                        type: 'directory_search',
-                        value: `Search ${directory.name}`,
-                        source: 'professional_directory',
-                        confidence: 0.6,
-                        note: `Search ${directory.name} for ${business.name}`,
-                        directoryUrl: searchUrl
-                    };
-                    enhancedContacts.primary.push(contact);
-                });
-                console.log(`[DIRECTORY] Added ${directories.length} directory search links`);
-            } catch (err) {
-                console.log(`[DIRECTORY] Skipped due to error: ${err.message}`);
-            }
-            
-            // Strategy 4: Social media research (no API calls)
-            try {
-                const socialContacts = await this.generateSocialMediaSearches(contacts, business);
-                this.mergeContacts(enhancedContacts, socialContacts);
-                console.log(`[SOCIAL] Generated ${socialContacts.primary.length} social media searches`);
-            } catch (err) {
-                console.log(`[SOCIAL] Skipped due to error: ${err.message}`);
-            }
-            
-            // Strategy 5: Email pattern generation (no API calls)
-            try {
-                const emailContacts = await this.generateEmailPatterns(contacts, business);
-                this.mergeContacts(enhancedContacts, emailContacts);
-                console.log(`[EMAIL] Generated ${emailContacts.primary.length} email patterns`);
-            } catch (err) {
-                console.log(`[EMAIL] Skipped due to error: ${err.message}`);
-            }
-            
-            console.log(`[ENHANCED RESEARCH] Found ${enhancedContacts.primary.length} primary, ${enhancedContacts.secondary.length} secondary contacts`);
+            console.log(`[PRACTICAL RESEARCH] Generated ${enhancedContacts.primary.length} contact tools`);
             
         } catch (error) {
-            console.error(`[ENHANCED RESEARCH ERROR]`, error.message);
+            console.error(`[PRACTICAL RESEARCH ERROR]`, error.message);
         }
         
         return enhancedContacts;
+    }
+
+    // Generate practical tools to find personal contacts
+    generatePracticalContactTools(contact, business) {
+        const tools = [];
+        
+        // 1. Google Search for personal contact info
+        const googleSearches = [
+            {
+                type: 'google_search',
+                value: `"${contact.name}" "${business.name}" email phone contact`,
+                confidence: 0.8,
+                source: 'google_search',
+                note: `Google search for ${contact.name}'s personal contact info`,
+                searchUrl: `https://www.google.com/search?q=${encodeURIComponent(`"${contact.name}" "${business.name}" email phone contact`)}`
+            },
+            {
+                type: 'google_search',
+                value: `"${contact.name}" "${business.name}" LinkedIn profile`,
+                confidence: 0.7,
+                source: 'google_search',
+                note: `Google search for ${contact.name}'s LinkedIn profile`,
+                searchUrl: `https://www.google.com/search?q=${encodeURIComponent(`"${contact.name}" "${business.name}" LinkedIn profile`)}`
+            },
+            {
+                type: 'google_search',
+                value: `"${contact.name}" "${business.name}" personal email`,
+                confidence: 0.6,
+                source: 'google_search',
+                note: `Google search for ${contact.name}'s personal email`,
+                searchUrl: `https://www.google.com/search?q=${encodeURIComponent(`"${contact.name}" "${business.name}" personal email`)}`
+            }
+        ];
+        
+        tools.push(...googleSearches);
+        
+        // 2. Social Media Searches
+        const socialSearches = [
+            {
+                type: 'facebook_search',
+                value: `Search Facebook for ${contact.name}`,
+                confidence: 0.5,
+                source: 'facebook',
+                note: `Facebook search for ${contact.name}`,
+                searchUrl: `https://www.facebook.com/search/people/?q=${encodeURIComponent(contact.name + ' ' + business.name)}`
+            },
+            {
+                type: 'twitter_search',
+                value: `Search Twitter for ${contact.name}`,
+                confidence: 0.5,
+                source: 'twitter',
+                note: `Twitter search for ${contact.name}`,
+                searchUrl: `https://twitter.com/search?q=${encodeURIComponent(contact.name + ' ' + business.name)}`
+            }
+        ];
+        
+        tools.push(...socialSearches);
+        
+        // 3. Professional Directories
+        const directories = this.getIndustryDirectories(business.industry || 'general');
+        directories.forEach(directory => {
+            tools.push({
+                type: 'professional_directory',
+                value: `Search ${directory.name}`,
+                confidence: 0.6,
+                source: 'professional_directory',
+                note: `Search ${directory.name} for ${contact.name}`,
+                searchUrl: directory.searchUrl.replace('{business}', encodeURIComponent(contact.name))
+            });
+        });
+        
+        // 4. Email Patterns (if business has website)
+        if (business.website) {
+            const domain = business.website.replace(/^https?:\/\//, '').replace(/^www\./, '');
+            const nameParts = contact.name.toLowerCase().split(' ');
+            const firstName = nameParts[0];
+            const lastName = nameParts[nameParts.length - 1];
+            
+            const emailPatterns = [
+                `${firstName}.${lastName}@${domain}`,
+                `${firstName}@${domain}`,
+                `${firstName}${lastName}@${domain}`
+            ];
+            
+            emailPatterns.forEach(email => {
+                tools.push({
+                    type: 'email_pattern',
+                    value: email,
+                    confidence: 0.4,
+                    source: 'email_generation',
+                    note: `Try this email pattern for ${contact.name}`,
+                    searchUrl: `https://www.google.com/search?q="${email}" verify`
+                });
+            });
+        }
+        
+        // 5. Companies House Officer Details
+        tools.push({
+            type: 'companies_house_officer',
+            value: `${contact.name} - Officer Details`,
+            confidence: 0.9,
+            source: 'companies_house',
+            note: `Official Companies House record for ${contact.name}`,
+            searchUrl: `https://find-and-update.company-information.service.gov.uk/officers/${contact.name.replace(/\s+/g, '-').toLowerCase()}/appointments`
+        });
+        
+        return tools;
     }
 
     // Search LinkedIn for personal emails of decision makers
