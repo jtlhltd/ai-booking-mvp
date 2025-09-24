@@ -502,61 +502,41 @@ export class RealDecisionMakerContactFinder {
         return [...new Set(alternatives)].slice(0, 5); // Limit to 5 alternatives
     }
 
-    // Enhanced decision maker research using multiple strategies (optimized for speed)
+    // Enhanced decision maker research using multiple strategies (simplified to prevent crashes)
     async enhancedDecisionMakerResearch(contacts, business, industry) {
         const enhancedContacts = { primary: [], secondary: [], gatekeeper: [] };
         
         try {
-            console.log(`[ENHANCED RESEARCH] Starting optimized research for ${business.name}`);
+            console.log(`[ENHANCED RESEARCH] Starting simplified research for ${business.name}`);
             
-            // Run strategies in parallel with timeouts to prevent hanging
-            const promises = [];
+            // Only run LinkedIn search to prevent server overload
+            try {
+                const linkedinContacts = await this.searchLinkedInForPersonalEmails(contacts, business);
+                this.mergeContacts(enhancedContacts, linkedinContacts);
+                console.log(`[LINKEDIN] Found ${linkedinContacts.primary.length} primary contacts`);
+            } catch (err) {
+                console.log(`[LINKEDIN] Skipped due to error: ${err.message}`);
+            }
             
-            // Strategy 1: Quick LinkedIn search (5 second timeout)
-            promises.push(
-                this.searchLinkedInForPersonalEmails(contacts, business)
-                    .catch(err => {
-                        console.log(`[LINKEDIN] Skipped due to timeout/error: ${err.message}`);
-                        return { primary: [], secondary: [], gatekeeper: [] };
-                    })
-            );
-            
-            // Strategy 2: Quick Google search (8 second timeout)
-            promises.push(
-                this.googleSearchForContacts(contacts, business, industry)
-                    .catch(err => {
-                        console.log(`[GOOGLE] Skipped due to timeout/error: ${err.message}`);
-                        return { primary: [], secondary: [], gatekeeper: [] };
-                    })
-            );
-            
-            // Strategy 3: Quick website scraping (10 second timeout)
-            promises.push(
-                this.scrapeContactPages(contacts, business)
-                    .catch(err => {
-                        console.log(`[WEBSITE] Skipped due to timeout/error: ${err.message}`);
-                        return { primary: [], secondary: [], gatekeeper: [] };
-                    })
-            );
-            
-            // Strategy 4: Quick directory search (3 second timeout)
-            promises.push(
-                this.searchProfessionalDirectories(contacts, business, industry)
-                    .catch(err => {
-                        console.log(`[DIRECTORY] Skipped due to timeout/error: ${err.message}`);
-                        return { primary: [], secondary: [], gatekeeper: [] };
-                    })
-            );
-            
-            // Wait for all strategies to complete (with individual timeouts)
-            const results = await Promise.allSettled(promises);
-            
-            // Merge successful results
-            results.forEach((result, index) => {
-                if (result.status === 'fulfilled' && result.value) {
-                    this.mergeContacts(enhancedContacts, result.value);
-                }
-            });
+            // Add professional directory search URLs (no API calls)
+            try {
+                const directories = this.getIndustryDirectories(industry);
+                directories.forEach(directory => {
+                    const searchUrl = directory.searchUrl.replace('{business}', encodeURIComponent(business.name));
+                    const contact = {
+                        type: 'directory_search',
+                        value: `Search ${directory.name}`,
+                        source: 'professional_directory',
+                        confidence: 0.6,
+                        note: `Search ${directory.name} for ${business.name}`,
+                        directoryUrl: searchUrl
+                    };
+                    enhancedContacts.primary.push(contact);
+                });
+                console.log(`[DIRECTORY] Added ${directories.length} directory search links`);
+            } catch (err) {
+                console.log(`[DIRECTORY] Skipped due to error: ${err.message}`);
+            }
             
             console.log(`[ENHANCED RESEARCH] Found ${enhancedContacts.primary.length} primary, ${enhancedContacts.secondary.length} secondary contacts`);
             
@@ -572,19 +552,19 @@ export class RealDecisionMakerContactFinder {
         const linkedinContacts = { primary: [], secondary: [], gatekeeper: [] };
         
         try {
-            // Search for each decision maker on LinkedIn (limit to first 2 to prevent timeout)
+            // Only search for the first contact to prevent server overload
             const allContacts = [...contacts.primary, ...contacts.secondary, ...contacts.gatekeeper];
-            const contactsToSearch = allContacts.slice(0, 2);
+            const contactsToSearch = allContacts.slice(0, 1); // Only first contact
             
             for (const contact of contactsToSearch) {
                 if (contact.name && contact.source === 'companies_house') {
                     console.log(`[LINKEDIN SEARCH] Searching for ${contact.name} at ${business.name}`);
                     
                     try {
-                        // Try LinkedIn search with timeout
+                        // Try LinkedIn search with shorter timeout
                         const linkedinProfile = await Promise.race([
                             this.findLinkedInProfile(contact.name, business.name),
-                            new Promise((_, reject) => setTimeout(() => reject(new Error('LinkedIn search timeout')), 3000))
+                            new Promise((_, reject) => setTimeout(() => reject(new Error('LinkedIn search timeout')), 2000))
                         ]);
                         
                         if (linkedinProfile) {
@@ -663,7 +643,7 @@ export class RealDecisionMakerContactFinder {
                 const searchQueries = this.generateLinkedInSearchQueries(personName, companyName);
                 console.log(`[LINKEDIN SEARCH] Generated ${searchQueries.length} search queries`);
                 
-                for (const query of searchQueries.slice(0, 3)) { // Limit to first 3 queries to prevent timeout
+                for (const query of searchQueries.slice(0, 1)) { // Only first query to prevent timeout
                     console.log(`[LINKEDIN SEARCH] Trying query: "${query}"`);
                     
                     try {
