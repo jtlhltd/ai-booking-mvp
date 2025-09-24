@@ -1473,12 +1473,19 @@
             const confidenceClass = getConfidenceClass(contact.confidence);
             const confidenceText = getConfidenceText(contact.confidence);
             
-            // Handle different contact types
-            let contactType = contact.type || 'contact_info';
-            if (contactType === 'contact_info') {
-                contactType = 'DIRECTOR INFO';
-            } else if (contactType === 'email') {
-                contactType = 'EMAIL';
+            // Handle different contact types and formats
+            let contactType = 'DIRECTOR INFO';
+            let contactValue = '';
+            
+            // Check if this is a generated contact (has name and role)
+            if (contact.name && contact.role) {
+                contactValue = `${contact.name} - ${contact.role}`;
+            } else if (contact.value) {
+                // Original format with contact.value
+                contactValue = contact.value;
+                contactType = contact.type === 'email' ? 'EMAIL' : 'DIRECTOR INFO';
+            } else {
+                contactValue = 'Contact information not available';
             }
             
             // Create source links
@@ -1486,8 +1493,9 @@
             if (contact.companiesHouseUrl) {
                 sourceLinks += `<a href="${contact.companiesHouseUrl}" target="_blank" style="color: #0ea5e9; text-decoration: none; margin-right: 8px;">📋 Companies House</a>`;
             }
-            if (contact.linkedinUrl) {
-                sourceLinks += `<a href="${contact.linkedinUrl}" target="_blank" style="color: #0ea5e9; text-decoration: none; margin-right: 8px;">💼 LinkedIn</a>`;
+            if (contact.linkedinUrl || contact.linkedin) {
+                const linkedinUrl = contact.linkedinUrl || contact.linkedin;
+                sourceLinks += `<a href="${linkedinUrl}" target="_blank" style="color: #0ea5e9; text-decoration: none; margin-right: 8px;">💼 LinkedIn</a>`;
             }
             if (contact.googleSearchUrl) {
                 sourceLinks += `<a href="${contact.googleSearchUrl}" target="_blank" style="color: #0ea5e9; text-decoration: none; margin-right: 8px;">🔍 Google Search</a>`;
@@ -1496,11 +1504,21 @@
                 sourceLinks += `<a href="${contact.businessWebsite}" target="_blank" style="color: #0ea5e9; text-decoration: none; margin-right: 8px;">🌐 Website</a>`;
             }
             
+            // Add contact details if available
+            let contactDetails = '';
+            if (contact.email) {
+                contactDetails += `<div style="margin-top: 4px; font-size: 0.9rem;"><strong>Email:</strong> ${contact.email}</div>`;
+            }
+            if (contact.phone) {
+                contactDetails += `<div style="margin-top: 4px; font-size: 0.9rem;"><strong>Phone:</strong> ${contact.phone}</div>`;
+            }
+            
             return `
                 <div class="contact-item">
                     <div class="contact-info">
                         <div class="contact-type">${contactType}</div>
-                        <div class="contact-value">${contact.value}</div>
+                        <div class="contact-value">${contactValue}</div>
+                        ${contactDetails}
                         <div class="contact-source">Source: ${contact.source} | ${contact.title || 'Contact'}</div>
                         ${sourceLinks ? `<div class="source-links" style="margin-top: 8px; font-size: 0.8rem;">${sourceLinks}</div>` : ''}
                         ${contact.note ? `<div class="contact-note" style="margin-top: 4px; font-size: 0.8rem; color: #64748b; font-style: italic;">${contact.note}</div>` : ''}
