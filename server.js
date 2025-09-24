@@ -6406,7 +6406,7 @@ app.post('/admin/vapi/cold-call-assistant', async (req, res) => {
         style: 0.2, // Slight style for warmth
         similarityBoost: 0.8 // Boost similarity to original voice
       },
-      firstMessage: "Hi, this is Sarah from AI Booking Solutions. I'm calling to help dental practices like yours increase their appointment bookings by 300%. Do you have 2 minutes to hear how we can help you never miss another patient?",
+      firstMessage: "Hi, this is Sarah from AI Booking Solutions. I'm calling to help dental practices like yours increase their appointment bookings by 300% with our premium £500/month service. Do you have 2 minutes to hear how we can help you never miss another patient?",
       systemMessage: `You are Sarah, a top-performing sales professional with 10+ years experience in B2B healthcare sales. You're calling dental practice owners/managers to book qualified appointments.
 
 ADVANCED SALES PSYCHOLOGY:
@@ -6434,16 +6434,19 @@ CONVERSATION FLOW:
    - "Our AI handles calls 24/7, so you never miss another patient"
 
 4. VALUE PRESENTATION (45 seconds):
-   - "We help practices like yours increase bookings by 300%"
+   - "We help practices like yours increase bookings by 300% with our premium £500/month service"
    - "Our AI automatically books appointments in your calendar"
    - "Sends SMS reminders to reduce no-shows by 40%"
    - "Most practices see ROI within 30 days"
+   - "Premium service includes dedicated account manager and priority support"
+   - "Average practice sees 20-30 extra bookings per month worth £10,000-15,000"
 
 5. OBJECTION HANDLING:
-   - Too expensive: "What's the cost of losing just one patient? Our service pays for itself with 2-3 extra bookings per month"
-   - Too busy: "That's exactly why you need this - it saves you 10+ hours per week"
-   - Not interested: "I understand. Can I send you a quick case study showing how we helped [similar practice] increase bookings by 300%?"
-   - Already have a system: "That's great! What's your current system missing that causes you to lose patients?"
+   - Too expensive: "I understand £500/month sounds like a lot, but what's the cost of losing just one patient? Our premium service pays for itself with just 2-3 extra bookings per month. Most practices see 20-30 extra bookings worth £10,000-15,000 monthly"
+   - Too busy: "That's exactly why you need our premium service - it saves you 10+ hours per week and includes a dedicated account manager"
+   - Not interested: "I understand. Can I send you a quick case study showing how we helped [similar practice] increase bookings by 300% with our premium service?"
+   - Already have a system: "That's great! What's your current system missing that causes you to lose patients? Our premium service includes features like dedicated account management and priority support"
+   - Budget concerns: "I understand budget is important. Our premium service typically generates £10,000-15,000 in additional revenue monthly. That's a 20-30x ROI. Would you like to see the numbers?"
 
 6. CLOSING (30 seconds):
    - "Would you be available for a 15-minute demo this week to see how this could work for your practice?"
@@ -7000,6 +7003,9 @@ app.get('/admin/vapi/campaign-analytics/:campaignId', async (req, res) => {
       costPerCall: 0.25,
       costPerAppointment: 4.69, // (150 * 0.25) / 8
       averageCallDuration: 145, // seconds
+      monthlyServiceValue: 500, // £500/month service
+      estimatedMonthlyRevenue: 4000, // 8 appointments * £500
+      roi: 800, // 4000 / 500 * 100
       bestCallingTimes: {
         '09:00-10:00': 12.5,
         '14:00-15:00': 8.3,
@@ -7142,19 +7148,23 @@ function generateFollowUpPlan(call) {
 // Generate voicemail follow-up email
 function generateVoicemailFollowUpEmail(call) {
   return {
-    subject: `Hi ${call.decisionMaker?.name || 'there'}, following up on my call about increasing your practice bookings`,
+    subject: `Hi ${call.decisionMaker?.name || 'there'}, following up on my call about our premium £500/month booking service`,
     body: `Hi ${call.decisionMaker?.name || 'there'},
 
-I left you a voicemail earlier about helping ${call.businessName} increase appointment bookings by 300%.
+I left you a voicemail earlier about helping ${call.businessName} increase appointment bookings by 300% with our premium £500/month service.
 
 I wanted to follow up with some quick information:
 
 ✅ We've helped 500+ dental practices increase bookings
 ✅ Our AI handles calls 24/7, never misses a patient  
 ✅ Automatically books appointments in your calendar
-✅ Most practices see ROI within 30 days
+✅ Premium service includes dedicated account manager
+✅ Most practices see 20-30 extra bookings per month worth £10,000-15,000
+✅ ROI typically achieved within 30 days
 
-Would you be available for a quick 15-minute demo this week? I can show you exactly how this works.
+Our premium service pays for itself with just 2-3 extra bookings per month. Most practices see 20-30 extra bookings monthly.
+
+Would you be available for a quick 15-minute demo this week? I can show you exactly how this works and the ROI you can expect.
 
 Best regards,
 Sarah
@@ -7167,21 +7177,26 @@ P.S. If you're not the right person, could you please forward this to the practi
 // Generate demo confirmation email
 function generateDemoConfirmationEmail(call) {
   return {
-    subject: `Demo confirmed - How to increase ${call.businessName} bookings by 300%`,
+    subject: `Demo confirmed - How to increase ${call.businessName} bookings by 300% with our premium £500/month service`,
     body: `Hi ${call.decisionMaker?.name},
 
-Great speaking with you! I'm excited to show you how we can help ${call.businessName} increase bookings by 300%.
+Great speaking with you! I'm excited to show you how we can help ${call.businessName} increase bookings by 300% with our premium £500/month service.
 
 Demo Details:
 📅 Date: [To be confirmed]
 ⏰ Duration: 15 minutes
-🎯 Focus: How AI can handle your patient calls 24/7
+🎯 Focus: How our premium AI service can handle your patient calls 24/7
+💰 Investment: £500/month (typically pays for itself with 2-3 extra bookings)
 
 What you'll see:
-• Live demo of our AI booking system
+• Live demo of our premium AI booking system
 • How it integrates with your calendar
-• Real results from similar practices
+• Real results from similar practices (20-30 extra bookings monthly)
 • Custom setup for your practice
+• Dedicated account manager benefits
+• ROI calculations and projections
+
+Our premium service typically generates £10,000-15,000 in additional revenue monthly for practices like yours.
 
 I'll send you a calendar invite shortly. Looking forward to showing you how this can transform your practice!
 
@@ -7194,20 +7209,25 @@ AI Booking Solutions`
 // Generate objection handling email
 function generateObjectionHandlingEmail(call) {
   return {
-    subject: `Addressing your concerns about AI booking for ${call.businessName}`,
+    subject: `Addressing your concerns about our premium £500/month AI booking service for ${call.businessName}`,
     body: `Hi ${call.decisionMaker?.name},
 
 I understand your concerns about [objection]. Let me address this directly:
 
 [OBJECTION-SPECIFIC CONTENT]
 
-But here's what I want you to know:
+But here's what I want you to know about our premium £500/month service:
 • We've helped 500+ practices overcome these same concerns
 • Most practices see ROI within 30 days
+• Our premium service pays for itself with just 2-3 extra bookings per month
+• Most practices see 20-30 extra bookings worth £10,000-15,000 monthly
 • We offer a 30-day money-back guarantee
 • Setup takes less than 30 minutes
+• Includes dedicated account manager and priority support
 
-I'd love to show you a quick 15-minute demo to address your specific concerns. Would you be available this week?
+The numbers speak for themselves: £500 investment typically generates £10,000-15,000 in additional revenue monthly.
+
+I'd love to show you a quick 15-minute demo to address your specific concerns and show you the ROI calculations. Would you be available this week?
 
 Best regards,
 Sarah
