@@ -53,25 +53,25 @@ export class RealDecisionMakerContactFinder {
             if (this.companiesHouseApiKey) {
                 const companyNumber = await this.findCompanyNumber(business.name);
                 if (companyNumber) {
-                    const officerContacts = await this.getCompaniesHouseOfficers(companyNumber, industry, targetRole);
+                    const officerContacts = await this.getCompaniesHouseOfficers(companyNumber, business, industry, targetRole);
                     this.mergeContacts(contacts, officerContacts);
                 }
             }
             
             // Method 2: Website scraping for team pages
             if (business.website) {
-                const websiteContacts = await this.scrapeWebsiteForTeam(business.website, industry, targetRole);
+                const websiteContacts = await this.scrapeWebsiteForTeam(business.website, business, industry, targetRole);
                 this.mergeContacts(contacts, websiteContacts);
             }
             
             // Method 3: Google Search for public business owner info
             if (this.googleApiKey) {
-                const googleContacts = await this.searchGoogleForBusinessOwner(business.name, industry, targetRole);
+                const googleContacts = await this.searchGoogleForBusinessOwner(business.name, business, industry, targetRole);
                 this.mergeContacts(contacts, googleContacts);
             }
             
             // Method 4: LinkedIn search (simulated - would need LinkedIn API)
-            const linkedinContacts = await this.searchLinkedInForBusiness(business.name, industry, targetRole);
+            const linkedinContacts = await this.searchLinkedInForBusiness(business.name, business, industry, targetRole);
             this.mergeContacts(contacts, linkedinContacts);
             
             // Remove duplicates based on email/phone and name
@@ -124,7 +124,7 @@ export class RealDecisionMakerContactFinder {
     }
 
     // Get real company officers from Companies House
-    async getCompaniesHouseOfficers(companyNumber, industry, targetRole) {
+    async getCompaniesHouseOfficers(companyNumber, business, industry, targetRole) {
         const contacts = { primary: [], secondary: [], gatekeeper: [] };
         
         if (!this.companiesHouseApiKey) return contacts;
@@ -170,7 +170,7 @@ export class RealDecisionMakerContactFinder {
     }
 
     // Scrape website for team/management information
-    async scrapeWebsiteForTeam(website, industry, targetRole) {
+    async scrapeWebsiteForTeam(website, business, industry, targetRole) {
         const contacts = { primary: [], secondary: [], gatekeeper: [] };
         
         try {
@@ -322,7 +322,7 @@ export class RealDecisionMakerContactFinder {
     }
 
     // Google Search for business owner information
-    async searchGoogleForBusinessOwner(businessName, industry, targetRole) {
+    async searchGoogleForBusinessOwner(businessName, business, industry, targetRole) {
         const contacts = { primary: [], secondary: [], gatekeeper: [] };
         
         if (!this.googleApiKey) return contacts;
@@ -356,7 +356,7 @@ export class RealDecisionMakerContactFinder {
     }
 
     // LinkedIn search (simulated - would need LinkedIn Sales Navigator API)
-    async searchLinkedInForBusiness(businessName, industry, targetRole) {
+    async searchLinkedInForBusiness(businessName, business, industry, targetRole) {
         const contacts = { primary: [], secondary: [], gatekeeper: [] };
         
         try {
