@@ -599,29 +599,15 @@ export class RealDecisionMakerContactFinder {
         return null;
     }
 
-    // Extract personal email from LinkedIn profile (simulated)
+    // Extract personal email from LinkedIn profile (real implementation needed)
     async extractPersonalEmailFromLinkedIn(profile, personName) {
         try {
-            // In a real implementation, this would scrape the LinkedIn profile
-            // For now, we'll generate realistic personal emails based on the name
+            // TODO: Implement real LinkedIn profile scraping
+            // This would require LinkedIn API access or web scraping
+            // For now, we don't generate fake emails
             
-            const nameParts = personName.toLowerCase().replace(/[^a-z\s]/g, '').split(' ');
-            if (nameParts.length >= 2) {
-                const firstName = nameParts[0];
-                const lastName = nameParts[nameParts.length - 1];
-                
-                // Generate realistic personal email patterns
-                const emailPatterns = [
-                    `${firstName}.${lastName}@gmail.com`,
-                    `${firstName}${lastName}@gmail.com`,
-                    `${firstName}.${lastName}@outlook.com`,
-                    `${firstName}${lastName}@yahoo.co.uk`,
-                    `${firstName}.${lastName}@hotmail.com`
-                ];
-                
-                // Return the most common pattern
-                return emailPatterns[0];
-            }
+            console.log(`[LINKEDIN EMAIL EXTRACTION] No real email extraction implemented yet for ${personName}`);
+            return null;
             
         } catch (error) {
             console.error(`[LINKEDIN EMAIL EXTRACTION ERROR]`, error.message);
@@ -694,20 +680,12 @@ export class RealDecisionMakerContactFinder {
         const primaryContact = contacts.primary[0];
         
         if (primaryContact) {
-            const hasPersonalEmail = primaryContact.type === 'email' && primaryContact.source === 'linkedin';
-            
             return {
-                approach: hasPersonalEmail ? 
-                    `Direct outreach to ${primaryContact.name} (${primaryContact.title})` : 
-                    `Research contact details for ${primaryContact.name} (${primaryContact.title})`,
+                approach: `Research contact details for ${primaryContact.name} (${primaryContact.title})`,
                 message: `Hi ${primaryContact.name}, I noticed ${business.name} and wanted to reach out about our AI booking system that could help streamline your ${industry === 'restaurant' ? 'reservation system' : industry === 'fitness' ? 'member bookings' : industry === 'dentist' ? 'appointment scheduling' : industry === 'beauty_salon' ? 'booking system' : 'operations'} and improve customer experience.`,
-                followUp: hasPersonalEmail ? 
-                    "Follow up in 3-5 days if no response" : 
-                    "Research personal email/LinkedIn before outreach",
+                followUp: "Research personal email/LinkedIn before outreach",
                 bestTime: "Tuesday-Thursday, 10am-2pm",
-                note: hasPersonalEmail ? 
-                    "Personal email found via LinkedIn" : 
-                    "Personal contact details need to be researched separately - Companies House only provides names and roles"
+                note: "Personal contact details need to be researched separately - Companies House only provides names and roles. LinkedIn search did not find their profile."
             };
         }
         
