@@ -2362,21 +2362,16 @@ app.post('/api/decision-maker-contacts', async (req, res) => {
       
       console.log(`[DECISION MAKER CONTACT] Real API found contacts successfully`);
     } catch (realApiError) {
-      console.log(`[DECISION MAKER CONTACT] Real API failed, using sample data:`, realApiError.message);
+      console.log(`[DECISION MAKER CONTACT] Real API failed:`, realApiError.message);
       
-      // Fallback to realistic decision maker data
-      contacts = generateRealisticDecisionMakers(business, industry, targetRole);
-      
-      // Create personalized outreach strategy using the actual contact
-      const primaryContact = contacts.primary[0];
-      const contactName = primaryContact?.name || `${primaryContact?.firstName} ${primaryContact?.lastName}` || 'there';
-      const contactTitle = primaryContact?.title || 'Manager';
+      // No fallback to fake data - only show real data
+      contacts = { primary: [], secondary: [], gatekeeper: [], found: false };
       
       strategy = {
-        approach: `Direct outreach to ${contactName} (${contactTitle})`,
-        message: `Hi ${contactName}, I noticed ${business.name} and wanted to reach out about our AI booking system that could help streamline your ${industry === 'restaurant' ? 'reservation system' : industry === 'fitness' ? 'member bookings' : 'appointment scheduling'} and improve customer experience.`,
-        followUp: "Follow up in 3-5 days if no response",
-        bestTime: "Tuesday-Thursday, 10am-2pm"
+        approach: "No decision maker contacts found",
+        message: "Unable to find decision maker contacts for this business. Please try manual research.",
+        followUp: "Manual research required",
+        bestTime: "N/A"
       };
     }
     

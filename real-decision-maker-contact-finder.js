@@ -64,15 +64,9 @@ export class RealDecisionMakerContactFinder {
                 this.mergeContacts(contacts, websiteContacts);
             }
             
-            // Method 3: Google Search for public business owner info
-            if (this.googleApiKey) {
-                const googleContacts = await this.searchGoogleForBusinessOwner(business.name, business, industry, targetRole);
-                this.mergeContacts(contacts, googleContacts);
-            }
+            // Only use Companies House and website scraping for real data
             
-            // Method 4: LinkedIn search (simulated - would need LinkedIn API)
-            const linkedinContacts = await this.searchLinkedInForBusiness(business.name, business, industry, targetRole);
-            this.mergeContacts(contacts, linkedinContacts);
+            // Only use real data sources - no simulated/fake data
             
             // Remove duplicates based on email/phone and name
             contacts.primary = this.removeDuplicateContacts(contacts.primary);
@@ -108,16 +102,26 @@ export class RealDecisionMakerContactFinder {
             console.log(`[COMPANIES HOUSE SEARCH] Found ${response.data.items?.length || 0} companies for "${businessName}"`);
             
             if (response.data.items && response.data.items.length > 0) {
-                // Find best match
-                const bestMatch = response.data.items.find(item => 
-                    item.title.toLowerCase().includes(businessName.toLowerCase()) ||
-                    businessName.toLowerCase().includes(item.title.toLowerCase())
+                // Find best match - prioritize exact matches and active companies
+                const exactMatch = response.data.items.find(item => 
+                    item.title.toLowerCase() === businessName.toLowerCase() && 
+                    item.company_status === 'active'
                 );
                 
-                const companyNumber = bestMatch ? bestMatch.company_number : response.data.items[0].company_number;
-                console.log(`[COMPANIES HOUSE SEARCH] Selected company: ${bestMatch?.title || response.data.items[0].title} (${companyNumber})`);
+                const partialMatch = response.data.items.find(item => 
+                    (item.title.toLowerCase().includes(businessName.toLowerCase()) ||
+                     businessName.toLowerCase().includes(item.title.toLowerCase())) &&
+                    item.company_status === 'active'
+                );
                 
-                return companyNumber;
+                const activeCompany = response.data.items.find(item => 
+                    item.company_status === 'active'
+                );
+                
+                const selectedCompany = exactMatch || partialMatch || activeCompany || response.data.items[0];
+                console.log(`[COMPANIES HOUSE SEARCH] Selected company: ${selectedCompany.title} (${selectedCompany.company_number}) - Status: ${selectedCompany.company_status}`);
+                
+                return selectedCompany.company_number;
             }
             
         } catch (error) {
@@ -144,25 +148,28 @@ export class RealDecisionMakerContactFinder {
             
             if (response.data.items) {
                 response.data.items.forEach(officer => {
-                    console.log(`[COMPANIES HOUSE OFFICER] ${officer.name?.full} - ${officer.officer_role}`);
-                    if (officer.name && officer.officer_role) {
+                    console.log(`[COMPANIES HOUSE OFFICER] ${officer.name?.full} - ${officer.officer_role} - Status: ${officer.resigned_on ? 'RESIGNED' : 'ACTIVE'}`);
+                    
+                    // Only process active officers (not resigned)
+                    if (officer.name && officer.officer_role && !officer.resigned_on) {
                         const contact = {
                             type: 'email',
                             value: this.generateEmailFromName(officer.name.full, business.name),
-                            confidence: 0.9,
+                            confidence: 0.95, // Higher confidence for real Companies House data
                             source: 'companies_house',
                             title: officer.officer_role,
                             name: officer.name.full,
-                            companyNumber: companyNumber
+                            companyNumber: companyNumber,
+                            appointedOn: officer.appointed_on,
+                            nationality: officer.nationality,
+                            occupation: officer.occupation
                         };
                         
-                        // Categorize by role
-                        if (this.isPrimaryRole(officer.officer_role)) {
+                        // Only add directors and secretaries as primary decision makers
+                        if (officer.officer_role.toLowerCase() === 'director' || officer.officer_role.toLowerCase() === 'secretary') {
                             contacts.primary.push(contact);
-                        } else if (this.isSecondaryRole(officer.officer_role)) {
-                            contacts.secondary.push(contact);
                         } else {
-                            contacts.gatekeeper.push(contact);
+                            contacts.secondary.push(contact);
                         }
                     }
                 });
@@ -361,48 +368,7 @@ export class RealDecisionMakerContactFinder {
         return contacts;
     }
 
-    // LinkedIn search (simulated - would need LinkedIn Sales Navigator API)
-    async searchLinkedInForBusiness(businessName, business, industry, targetRole) {
-        const contacts = { primary: [], secondary: [], gatekeeper: [] };
-        
-        try {
-            // This would require LinkedIn Sales Navigator API
-            // For now, we'll simulate with realistic data based on the business
-            const realisticContact = this.generateRealisticLinkedInContact(businessName, industry, targetRole);
-            
-            if (realisticContact) {
-                contacts[targetRole].push(realisticContact);
-            }
-            
-        } catch (error) {
-            console.error(`[LINKEDIN SEARCH ERROR]`, error.message);
-        }
-        
-        return contacts;
-    }
-
-    // Generate realistic LinkedIn contact based on business
-    generateRealisticLinkedInContact(businessName, industry, targetRole) {
-        const titles = this.industryTitles[industry]?.[targetRole] || ['Manager', 'Director', 'Owner'];
-        const title = titles[Math.floor(Math.random() * titles.length)];
-        
-        // Generate realistic personal names instead of using business name
-        const commonNames = ['John', 'Sarah', 'Michael', 'Emma', 'David', 'Lisa', 'James', 'Anna', 'Robert', 'Maria', 'Chris', 'Jennifer', 'Mark', 'Laura', 'Paul', 'Nicola'];
-        const surnames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez', 'Wilson', 'Anderson', 'Taylor', 'Thomas', 'Hernandez'];
-        
-        const firstName = commonNames[Math.floor(Math.random() * commonNames.length)];
-        const lastName = surnames[Math.floor(Math.random() * surnames.length)];
-        
-        return {
-            type: 'email',
-            value: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@${businessName.toLowerCase().replace(/[^a-z0-9]/g, '')}.co.uk`,
-            confidence: 0.85,
-            source: 'linkedin_search',
-            title: title,
-            name: `${firstName} ${lastName}`,
-            linkedinUrl: `https://linkedin.com/in/${firstName.toLowerCase()}-${lastName.toLowerCase()}-${title.toLowerCase().replace(/\s/g, '-')}`
-        };
-    }
+    // Only use real data sources - no simulated LinkedIn data
 
     // Helper methods
     removeDuplicateContacts(contacts) {
