@@ -6843,6 +6843,139 @@ app.post('/admin/vapi/ab-test-assistant', async (req, res) => {
   }
 });
 
+// Lead Scoring and Qualification System
+app.post('/admin/vapi/lead-scoring', async (req, res) => {
+  try {
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const { businesses } = req.body;
+    
+    if (!businesses || !Array.isArray(businesses)) {
+      return res.status(400).json({ error: 'Businesses array is required' });
+    }
+    
+    console.log(`[LEAD SCORING] Scoring ${businesses.length} businesses`);
+    
+    const scoredBusinesses = businesses.map(business => {
+      let score = 0;
+      const factors = [];
+      
+      // Decision maker availability (40 points)
+      if (business.decisionMaker?.name) {
+        score += 40;
+        factors.push('Decision maker identified (+40)');
+      }
+      
+      // Website quality (20 points)
+      if (business.website) {
+        score += 20;
+        factors.push('Website available (+20)');
+        
+        // Check if website looks professional
+        if (business.website.includes('https://')) {
+          score += 5;
+          factors.push('Secure website (+5)');
+        }
+      }
+      
+      // Contact information completeness (15 points)
+      if (business.email && business.phone) {
+        score += 15;
+        factors.push('Complete contact info (+15)');
+      } else if (business.phone) {
+        score += 10;
+        factors.push('Phone available (+10)');
+      }
+      
+      // Business size indicators (10 points)
+      if (business.rating && parseFloat(business.rating) > 4.0) {
+        score += 10;
+        factors.push('High rating (+10)');
+      }
+      
+      // Location quality (10 points)
+      if (business.address) {
+        const address = business.address.toLowerCase();
+        if (address.includes('london') || address.includes('manchester') || 
+            address.includes('birmingham') || address.includes('leeds')) {
+          score += 10;
+          factors.push('Major city location (+10)');
+        } else {
+          score += 5;
+          factors.push('UK location (+5)');
+        }
+      }
+      
+      // Industry-specific factors (5 points)
+      if (business.services && business.services.length > 0) {
+        score += 5;
+        factors.push('Services listed (+5)');
+      }
+      
+      // Determine priority level
+      let priority = 'Low';
+      if (score >= 80) priority = 'High';
+      else if (score >= 60) priority = 'Medium';
+      
+      return {
+        ...business,
+        leadScore: Math.min(score, 100),
+        priority,
+        scoringFactors: factors,
+        recommendedCallTime: getOptimalCallTime(business),
+        estimatedConversionProbability: Math.min(score * 0.8, 80) // Max 80% probability
+      };
+    });
+    
+    // Sort by lead score
+    scoredBusinesses.sort((a, b) => b.leadScore - a.leadScore);
+    
+    res.json({
+      success: true,
+      totalBusinesses: scoredBusinesses.length,
+      highPriority: scoredBusinesses.filter(b => b.priority === 'High').length,
+      mediumPriority: scoredBusinesses.filter(b => b.priority === 'Medium').length,
+      lowPriority: scoredBusinesses.filter(b => b.priority === 'Low').length,
+      businesses: scoredBusinesses
+    });
+    
+  } catch (error) {
+    console.error('[LEAD SCORING ERROR]', error);
+    res.status(500).json({ 
+      error: 'Failed to score leads',
+      message: error.message 
+    });
+  }
+});
+
+// Get optimal calling time based on business data
+function getOptimalCallTime(business) {
+  // Analyze business name and location for optimal timing
+  const name = business.name.toLowerCase();
+  const address = business.address?.toLowerCase() || '';
+  
+  // Dental practices typically best called 9-10 AM or 2-3 PM
+  if (name.includes('dental') || name.includes('dentist')) {
+    return '09:00-10:00 or 14:00-15:00';
+  }
+  
+  // Law firms prefer morning calls
+  if (name.includes('law') || name.includes('legal')) {
+    return '09:00-11:00';
+  }
+  
+  // Beauty salons prefer afternoon
+  if (name.includes('beauty') || name.includes('salon')) {
+    return '14:00-16:00';
+  }
+  
+  // Default optimal times
+  return '09:00-10:00 or 14:00-15:00';
+}
+
 // Advanced Analytics and Optimization
 app.get('/admin/vapi/campaign-analytics/:campaignId', async (req, res) => {
   try {
@@ -6904,6 +7037,395 @@ app.get('/admin/vapi/campaign-analytics/:campaignId', async (req, res) => {
     });
   }
 });
+
+// Multi-Channel Follow-up System
+app.post('/admin/vapi/follow-up-sequence', async (req, res) => {
+  try {
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const { callResults, campaignId } = req.body;
+    
+    if (!callResults || !Array.isArray(callResults)) {
+      return res.status(400).json({ error: 'Call results array is required' });
+    }
+    
+    console.log(`[FOLLOW-UP SEQUENCE] Creating follow-up for ${callResults.length} calls`);
+    
+    const followUpResults = [];
+    
+    for (const call of callResults) {
+      const followUp = {
+        businessId: call.businessId,
+        businessName: call.businessName,
+        phone: call.phone,
+        email: call.email,
+        callOutcome: call.outcome || 'no_answer',
+        followUpPlan: generateFollowUpPlan(call),
+        scheduledActions: []
+      };
+      
+      // Schedule follow-up actions based on call outcome
+      if (call.outcome === 'voicemail') {
+        followUp.scheduledActions.push({
+          type: 'email',
+          delay: 'immediate',
+          template: 'voicemail_follow_up',
+          content: generateVoicemailFollowUpEmail(call)
+        });
+        followUp.scheduledActions.push({
+          type: 'call',
+          delay: '2_hours',
+          note: 'Retry call after email follow-up'
+        });
+      } else if (call.outcome === 'interested') {
+        followUp.scheduledActions.push({
+          type: 'email',
+          delay: 'immediate',
+          template: 'demo_confirmation',
+          content: generateDemoConfirmationEmail(call)
+        });
+        followUp.scheduledActions.push({
+          type: 'calendar_invite',
+          delay: 'immediate',
+          note: 'Send calendar invite for demo'
+        });
+      } else if (call.outcome === 'objection') {
+        followUp.scheduledActions.push({
+          type: 'email',
+          delay: '1_day',
+          template: 'objection_handling',
+          content: generateObjectionHandlingEmail(call)
+        });
+        followUp.scheduledActions.push({
+          type: 'call',
+          delay: '3_days',
+          note: 'Follow-up call to address objections'
+        });
+      }
+      
+      followUpResults.push(followUp);
+    }
+    
+    res.json({
+      success: true,
+      campaignId,
+      totalFollowUps: followUpResults.length,
+      followUps: followUpResults
+    });
+    
+  } catch (error) {
+    console.error('[FOLLOW-UP SEQUENCE ERROR]', error);
+    res.status(500).json({ 
+      error: 'Failed to create follow-up sequence',
+      message: error.message 
+    });
+  }
+});
+
+// Generate follow-up plan based on call outcome
+function generateFollowUpPlan(call) {
+  const outcomes = {
+    'voicemail': 'Email immediately, retry call in 2 hours',
+    'interested': 'Send demo confirmation email and calendar invite',
+    'objection': 'Send objection handling email, follow-up call in 3 days',
+    'not_interested': 'Send case study email, follow-up call in 1 week',
+    'no_answer': 'Retry call at different time, send email',
+    'busy': 'Send email, retry call next day'
+  };
+  
+  return outcomes[call.outcome] || 'Standard follow-up sequence';
+}
+
+// Generate voicemail follow-up email
+function generateVoicemailFollowUpEmail(call) {
+  return {
+    subject: `Hi ${call.decisionMaker?.name || 'there'}, following up on my call about increasing your practice bookings`,
+    body: `Hi ${call.decisionMaker?.name || 'there'},
+
+I left you a voicemail earlier about helping ${call.businessName} increase appointment bookings by 300%.
+
+I wanted to follow up with some quick information:
+
+✅ We've helped 500+ dental practices increase bookings
+✅ Our AI handles calls 24/7, never misses a patient  
+✅ Automatically books appointments in your calendar
+✅ Most practices see ROI within 30 days
+
+Would you be available for a quick 15-minute demo this week? I can show you exactly how this works.
+
+Best regards,
+Sarah
+AI Booking Solutions
+
+P.S. If you're not the right person, could you please forward this to the practice owner or manager?`
+  };
+}
+
+// Generate demo confirmation email
+function generateDemoConfirmationEmail(call) {
+  return {
+    subject: `Demo confirmed - How to increase ${call.businessName} bookings by 300%`,
+    body: `Hi ${call.decisionMaker?.name},
+
+Great speaking with you! I'm excited to show you how we can help ${call.businessName} increase bookings by 300%.
+
+Demo Details:
+📅 Date: [To be confirmed]
+⏰ Duration: 15 minutes
+🎯 Focus: How AI can handle your patient calls 24/7
+
+What you'll see:
+• Live demo of our AI booking system
+• How it integrates with your calendar
+• Real results from similar practices
+• Custom setup for your practice
+
+I'll send you a calendar invite shortly. Looking forward to showing you how this can transform your practice!
+
+Best regards,
+Sarah
+AI Booking Solutions`
+  };
+}
+
+// Generate objection handling email
+function generateObjectionHandlingEmail(call) {
+  return {
+    subject: `Addressing your concerns about AI booking for ${call.businessName}`,
+    body: `Hi ${call.decisionMaker?.name},
+
+I understand your concerns about [objection]. Let me address this directly:
+
+[OBJECTION-SPECIFIC CONTENT]
+
+But here's what I want you to know:
+• We've helped 500+ practices overcome these same concerns
+• Most practices see ROI within 30 days
+• We offer a 30-day money-back guarantee
+• Setup takes less than 30 minutes
+
+I'd love to show you a quick 15-minute demo to address your specific concerns. Would you be available this week?
+
+Best regards,
+Sarah
+AI Booking Solutions`
+  };
+}
+
+// Dynamic Script Personalization System
+app.post('/admin/vapi/personalized-assistant', async (req, res) => {
+  try {
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const { business, industry, region } = req.body;
+    
+    if (!business || !industry) {
+      return res.status(400).json({ error: 'Business and industry are required' });
+    }
+    
+    console.log(`[PERSONALIZED ASSISTANT] Creating personalized script for ${business.name}`);
+    
+    // Generate personalized script based on business data
+    const personalizedScript = generatePersonalizedScript(business, industry, region);
+    
+    const assistant = {
+      name: `Personalized Assistant - ${business.name}`,
+      model: {
+        provider: "openai",
+        model: "gpt-4o",
+        temperature: 0.3,
+        maxTokens: 200
+      },
+      voice: {
+        provider: "elevenlabs",
+        voiceId: "21m00Tcm4TlvDq8ikWAM",
+        stability: 0.7,
+        clarity: 0.85,
+        style: 0.2
+      },
+      firstMessage: personalizedScript.firstMessage,
+      systemMessage: personalizedScript.systemMessage,
+      maxDurationSeconds: 180,
+      endCallMessage: "Thank you for your time. I'll send you some information about how we can help your practice increase bookings. Have a great day!",
+      endCallPhrases: ["not interested", "not right now", "call back later", "send me information"],
+      recordingEnabled: true,
+      voicemailDetectionEnabled: true,
+      backgroundSound: "office"
+    };
+    
+    // Create assistant via VAPI API
+    const vapiResponse = await fetch('https://api.vapi.ai/assistant', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.VAPI_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(assistant)
+    });
+    
+    if (!vapiResponse.ok) {
+      const errorData = await vapiResponse.json();
+      return res.status(400).json({ 
+        error: 'Failed to create personalized assistant',
+        details: errorData 
+      });
+    }
+    
+    const assistantData = await vapiResponse.json();
+    
+    res.json({
+      success: true,
+      message: 'Personalized assistant created successfully',
+      assistant: {
+        id: assistantData.id,
+        name: assistantData.name,
+        personalizedScript: personalizedScript
+      }
+    });
+    
+  } catch (error) {
+    console.error('[PERSONALIZED ASSISTANT ERROR]', error);
+    res.status(500).json({ 
+      error: 'Failed to create personalized assistant',
+      message: error.message 
+    });
+  }
+});
+
+// Generate personalized script based on business data
+function generatePersonalizedScript(business, industry, region) {
+  const businessName = business.name;
+  const decisionMaker = business.decisionMaker?.name || 'there';
+  const location = business.address || '';
+  const website = business.website ? `I noticed you have a website at ${business.website}` : '';
+  
+  // Industry-specific personalization
+  const industryContext = getIndustryContext(industry);
+  
+  // Regional personalization
+  const regionalContext = getRegionalContext(region || location);
+  
+  const firstMessage = `Hi ${decisionMaker}, this is Sarah from AI Booking Solutions. I'm calling because we've helped ${industryContext.examplePractice} in ${regionalContext.city} increase their appointment bookings by 300%. ${website} Do you have 90 seconds to hear how this could work for ${businessName}?`;
+  
+  const systemMessage = `You are Sarah, calling ${decisionMaker} at ${businessName} in ${regionalContext.city}.
+
+BUSINESS CONTEXT:
+- Practice: ${businessName}
+- Location: ${location}
+- Decision Maker: ${decisionMaker}
+- Industry: ${industry}
+- Website: ${business.website || 'Not available'}
+
+INDUSTRY-SPECIFIC INSIGHTS:
+${industryContext.insights}
+
+REGIONAL CONTEXT:
+${regionalContext.insights}
+
+PERSONALIZATION RULES:
+- Use ${decisionMaker}'s name frequently
+- Reference ${businessName} specifically
+- Mention ${regionalContext.city} when relevant
+- Use ${industryContext.language} appropriate for ${industry}
+- Reference ${industryContext.painPoints} as pain points
+- Use ${regionalContext.examples} as local examples
+
+CONVERSATION FLOW:
+1. RAPPORT: "Hi ${decisionMaker}, this is Sarah from AI Booking Solutions"
+2. CONTEXT: "I'm calling because we've helped ${industryContext.examplePractice} in ${regionalContext.city} increase bookings by 300%"
+3. PERSONAL: "${website} Do you have 90 seconds to hear how this could work for ${businessName}?"
+4. QUALIFY: "Are you the owner or manager of ${businessName}?"
+5. PAIN: "What's your biggest challenge with patient scheduling at ${businessName}?"
+6. VALUE: "We help practices like ${businessName} increase bookings by 300%"
+7. CLOSE: "Would you be available for a 15-minute demo to see how this could work for ${businessName}?"
+
+OBJECTION HANDLING:
+- Too expensive: "What's the cost of losing patients at ${businessName}? Our service pays for itself with 2-3 extra bookings per month"
+- Too busy: "That's exactly why ${businessName} needs this - it saves you time by handling bookings automatically"
+- Not interested: "I understand. Can I send you a case study showing how we helped ${industryContext.examplePractice} increase bookings by 300%?"
+
+RULES:
+- Always use ${decisionMaker}'s name
+- Always reference ${businessName}
+- Keep calls under 3 minutes
+- Focus on ${industryContext.painPoints}
+- Use ${regionalContext.examples} for social proof`;
+  
+  return {
+    firstMessage,
+    systemMessage,
+    personalization: {
+      businessName,
+      decisionMaker,
+      industry,
+      region: regionalContext.city,
+      website: !!business.website
+    }
+  };
+}
+
+// Get industry-specific context
+function getIndustryContext(industry) {
+  const contexts = {
+    'dentist': {
+      examplePractice: 'Birmingham Dental Care',
+      language: 'professional medical',
+      painPoints: 'missed calls, no-shows, scheduling conflicts',
+      insights: 'Dental practices typically lose 4-5 patients monthly from missed calls. Most practices see 15-20 extra bookings per month with our system.'
+    },
+    'lawyer': {
+      examplePractice: 'Manchester Legal Associates',
+      language: 'professional legal',
+      painPoints: 'missed consultations, scheduling conflicts, client communication',
+      insights: 'Law firms typically lose 3-4 consultations monthly from missed calls. Most firms see 12-18 extra consultations per month with our system.'
+    },
+    'beauty_salon': {
+      examplePractice: 'London Beauty Studio',
+      language: 'friendly professional',
+      painPoints: 'missed appointments, no-shows, last-minute cancellations',
+      insights: 'Beauty salons typically lose 6-8 appointments monthly from missed calls. Most salons see 20-25 extra bookings per month with our system.'
+    }
+  };
+  
+  return contexts[industry] || contexts['dentist'];
+}
+
+// Get regional context
+function getRegionalContext(location) {
+  const locationLower = location.toLowerCase();
+  
+  if (locationLower.includes('london')) {
+    return {
+      city: 'London',
+      insights: 'London practices face high competition and need every advantage. We\'ve helped 50+ London practices increase bookings.',
+      examples: 'London Dental Care, Central London Practice'
+    };
+  } else if (locationLower.includes('manchester')) {
+    return {
+      city: 'Manchester',
+      insights: 'Manchester practices benefit from our system\'s efficiency. We\'ve helped 30+ Manchester practices increase bookings.',
+      examples: 'Manchester Dental Group, Northern Practice'
+    };
+  } else if (locationLower.includes('birmingham')) {
+    return {
+      city: 'Birmingham',
+      insights: 'Birmingham practices see great results with our system. We\'ve helped 25+ Birmingham practices increase bookings.',
+      examples: 'Birmingham Dental Care, Midlands Practice'
+    };
+  } else {
+    return {
+      city: 'your area',
+      insights: 'Practices in your area benefit from our system\'s efficiency. We\'ve helped hundreds of UK practices increase bookings.',
+      examples: 'local practices, similar businesses'
+    };
+  }
+}
 
 // VAPI Management Endpoints
 // Create VAPI Assistant
