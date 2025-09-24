@@ -87,11 +87,13 @@ export class RealDecisionMakerContactFinder {
                 }
             }
             
-            // Method 4: LinkedIn search for personal emails
+            // Method 4: Enhanced decision maker research
             if (contacts.primary.length > 0 || contacts.secondary.length > 0) {
-                console.log(`[DECISION MAKER CONTACT] Searching LinkedIn for personal emails`);
-                const linkedinContacts = await this.searchLinkedInForPersonalEmails(contacts, business);
-                this.mergeContacts(contacts, linkedinContacts);
+                console.log(`[DECISION MAKER CONTACT] Starting enhanced decision maker research`);
+                
+                // Try multiple research methods
+                const enhancedContacts = await this.enhancedDecisionMakerResearch(contacts, business, industry);
+                this.mergeContacts(contacts, enhancedContacts);
             }
             
             // Only use Companies House and website scraping for real data
@@ -500,6 +502,42 @@ export class RealDecisionMakerContactFinder {
         return [...new Set(alternatives)].slice(0, 5); // Limit to 5 alternatives
     }
 
+    // Enhanced decision maker research using multiple strategies
+    async enhancedDecisionMakerResearch(contacts, business, industry) {
+        const enhancedContacts = { primary: [], secondary: [], gatekeeper: [] };
+        
+        try {
+            console.log(`[ENHANCED RESEARCH] Starting comprehensive research for ${business.name}`);
+            
+            // Strategy 1: LinkedIn search with multiple variations
+            const linkedinContacts = await this.searchLinkedInForPersonalEmails(contacts, business);
+            this.mergeContacts(enhancedContacts, linkedinContacts);
+            
+            // Strategy 2: Google search for contact information
+            const googleContacts = await this.googleSearchForContacts(contacts, business, industry);
+            this.mergeContacts(enhancedContacts, googleContacts);
+            
+            // Strategy 3: Website contact page scraping
+            const websiteContacts = await this.scrapeContactPages(contacts, business);
+            this.mergeContacts(enhancedContacts, websiteContacts);
+            
+            // Strategy 4: Professional directory searches
+            const directoryContacts = await this.searchProfessionalDirectories(contacts, business, industry);
+            this.mergeContacts(enhancedContacts, directoryContacts);
+            
+            // Strategy 5: Social media research
+            const socialContacts = await this.searchSocialMedia(contacts, business);
+            this.mergeContacts(enhancedContacts, socialContacts);
+            
+            console.log(`[ENHANCED RESEARCH] Found ${enhancedContacts.primary.length} primary, ${enhancedContacts.secondary.length} secondary contacts`);
+            
+        } catch (error) {
+            console.error(`[ENHANCED RESEARCH ERROR]`, error.message);
+        }
+        
+        return enhancedContacts;
+    }
+
     // Search LinkedIn for personal emails of decision makers
     async searchLinkedInForPersonalEmails(contacts, business) {
         const linkedinContacts = { primary: [], secondary: [], gatekeeper: [] };
@@ -711,6 +749,291 @@ export class RealDecisionMakerContactFinder {
         }
         
         return urls;
+    }
+
+    // Google search for contact information
+    async googleSearchForContacts(contacts, business, industry) {
+        const googleContacts = { primary: [], secondary: [], gatekeeper: [] };
+        
+        if (!this.googleApiKey) return googleContacts;
+        
+        try {
+            const allContacts = [...contacts.primary, ...contacts.secondary, ...contacts.gatekeeper];
+            
+            for (const contact of allContacts) {
+                if (contact.name && contact.source === 'companies_house') {
+                    console.log(`[GOOGLE SEARCH] Searching for contact info: ${contact.name}`);
+                    
+                    // Multiple search strategies
+                    const searchQueries = [
+                        `"${contact.name}" "${business.name}" contact email phone`,
+                        `"${contact.name}" "${business.name}" director email`,
+                        `"${contact.name}" "${business.name}" owner contact`,
+                        `"${contact.name}" ${industry} contact information`,
+                        `"${contact.name}" "${business.name}" LinkedIn profile`
+                    ];
+                    
+                    for (const query of searchQueries) {
+                        try {
+                            const response = await axios.get('https://www.googleapis.com/customsearch/v1', {
+                                params: {
+                                    key: this.googleApiKey,
+                                    cx: '017576662512468239146:omuauf_lfve',
+                                    q: query,
+                                    num: 3
+                                }
+                            });
+                            
+                            if (response.data.items && response.data.items.length > 0) {
+                                const contactInfo = this.extractContactInfoFromGoogleResults(response.data.items, contact.name, business.name);
+                                if (contactInfo) {
+                                    const enhancedContact = {
+                                        ...contact,
+                                        ...contactInfo,
+                                        source: 'google_search',
+                                        confidence: 0.7,
+                                        note: 'Contact information found via Google search'
+                                    };
+                                    
+                                    if (contacts.primary.includes(contact)) {
+                                        googleContacts.primary.push(enhancedContact);
+                                    } else if (contacts.secondary.includes(contact)) {
+                                        googleContacts.secondary.push(enhancedContact);
+                                    } else {
+                                        googleContacts.gatekeeper.push(enhancedContact);
+                                    }
+                                    
+                                    console.log(`[GOOGLE SEARCH] Found contact info for ${contact.name}`);
+                                    break; // Found info, move to next contact
+                                }
+                            }
+                        } catch (queryError) {
+                            console.error(`[GOOGLE SEARCH] Query failed: "${query}"`, queryError.message);
+                        }
+                    }
+                }
+            }
+            
+        } catch (error) {
+            console.error(`[GOOGLE SEARCH ERROR]`, error.message);
+        }
+        
+        return googleContacts;
+    }
+
+    // Extract contact information from Google search results
+    extractContactInfoFromGoogleResults(items, personName, businessName) {
+        for (const item of items) {
+            const text = (item.title + ' ' + item.snippet).toLowerCase();
+            
+            // Look for email patterns
+            const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+            if (emailMatch) {
+                return {
+                    type: 'email',
+                    value: emailMatch[1],
+                    googleSearchUrl: item.link
+                };
+            }
+            
+            // Look for phone patterns
+            const phoneMatch = text.match(/(\+?[0-9\s\-\(\)]{10,})/);
+            if (phoneMatch) {
+                return {
+                    type: 'phone',
+                    value: phoneMatch[1].trim(),
+                    googleSearchUrl: item.link
+                };
+            }
+        }
+        
+        return null;
+    }
+
+    // Scrape contact pages from business website
+    async scrapeContactPages(contacts, business) {
+        const websiteContacts = { primary: [], secondary: [], gatekeeper: [] };
+        
+        if (!business.website) return websiteContacts;
+        
+        try {
+            console.log(`[WEBSITE SCRAPING] Scraping contact pages for ${business.name}`);
+            
+            // Common contact page URLs to try
+            const contactUrls = [
+                `${business.website}/contact`,
+                `${business.website}/contact-us`,
+                `${business.website}/about`,
+                `${business.website}/team`,
+                `${business.website}/staff`,
+                `${business.website}/meet-the-team`,
+                `${business.website}/our-team`
+            ];
+            
+            for (const url of contactUrls) {
+                try {
+                    const response = await axios.get(url, { timeout: 10000 });
+                    const html = response.data;
+                    
+                    // Extract emails and phone numbers
+                    const emails = html.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g) || [];
+                    const phones = html.match(/(\+?[0-9\s\-\(\)]{10,})/g) || [];
+                    
+                    if (emails.length > 0 || phones.length > 0) {
+                        console.log(`[WEBSITE SCRAPING] Found ${emails.length} emails, ${phones.length} phones on ${url}`);
+                        
+                        // Add found contact info
+                        emails.forEach(email => {
+                            const contact = {
+                                type: 'email',
+                                value: email,
+                                source: 'website_scraping',
+                                confidence: 0.8,
+                                note: `Found on ${url}`,
+                                websiteUrl: url
+                            };
+                            websiteContacts.primary.push(contact);
+                        });
+                        
+                        phones.forEach(phone => {
+                            const contact = {
+                                type: 'phone',
+                                value: phone.trim(),
+                                source: 'website_scraping',
+                                confidence: 0.8,
+                                note: `Found on ${url}`,
+                                websiteUrl: url
+                            };
+                            websiteContacts.primary.push(contact);
+                        });
+                    }
+                } catch (urlError) {
+                    // URL doesn't exist or can't be accessed
+                    continue;
+                }
+            }
+            
+        } catch (error) {
+            console.error(`[WEBSITE SCRAPING ERROR]`, error.message);
+        }
+        
+        return websiteContacts;
+    }
+
+    // Search professional directories
+    async searchProfessionalDirectories(contacts, business, industry) {
+        const directoryContacts = { primary: [], secondary: [], gatekeeper: [] };
+        
+        try {
+            console.log(`[PROFESSIONAL DIRECTORIES] Searching directories for ${business.name}`);
+            
+            // Industry-specific directories
+            const directories = this.getIndustryDirectories(industry);
+            
+            for (const directory of directories) {
+                try {
+                    // This would require directory-specific APIs
+                    // For now, we'll generate search URLs
+                    const searchUrl = directory.searchUrl.replace('{business}', encodeURIComponent(business.name));
+                    
+                    const contact = {
+                        type: 'directory_search',
+                        value: `Search ${directory.name}`,
+                        source: 'professional_directory',
+                        confidence: 0.6,
+                        note: `Search ${directory.name} for ${business.name}`,
+                        directoryUrl: searchUrl
+                    };
+                    
+                    directoryContacts.primary.push(contact);
+                    
+                } catch (dirError) {
+                    console.error(`[DIRECTORY ERROR] ${directory.name}:`, dirError.message);
+                }
+            }
+            
+        } catch (error) {
+            console.error(`[PROFESSIONAL DIRECTORIES ERROR]`, error.message);
+        }
+        
+        return directoryContacts;
+    }
+
+    // Get industry-specific professional directories
+    getIndustryDirectories(industry) {
+        const directories = {
+            'dentist': [
+                { name: 'General Dental Council', searchUrl: 'https://www.gdc-uk.org/search?q={business}' },
+                { name: 'British Dental Association', searchUrl: 'https://www.bda.org/search?q={business}' },
+                { name: 'Dental Directory', searchUrl: 'https://www.dental-directory.co.uk/search?q={business}' }
+            ],
+            'restaurant': [
+                { name: 'Restaurant Association', searchUrl: 'https://www.restaurantassociation.org/search?q={business}' },
+                { name: 'Chef Directory', searchUrl: 'https://www.chef-directory.co.uk/search?q={business}' }
+            ],
+            'fitness': [
+                { name: 'UK Fitness Directory', searchUrl: 'https://www.ukfitness.co.uk/search?q={business}' },
+                { name: 'Gym Directory', searchUrl: 'https://www.gym-directory.co.uk/search?q={business}' }
+            ]
+        };
+        
+        return directories[industry] || [];
+    }
+
+    // Search social media platforms
+    async searchSocialMedia(contacts, business) {
+        const socialContacts = { primary: [], secondary: [], gatekeeper: [] };
+        
+        try {
+            console.log(`[SOCIAL MEDIA] Searching social platforms for ${business.name}`);
+            
+            const allContacts = [...contacts.primary, ...contacts.secondary, ...contacts.gatekeeper];
+            
+            for (const contact of allContacts) {
+                if (contact.name && contact.source === 'companies_house') {
+                    // Generate social media search URLs
+                    const socialSearches = [
+                        {
+                            platform: 'Facebook',
+                            url: `https://www.facebook.com/search/people/?q=${encodeURIComponent(contact.name + ' ' + business.name)}`
+                        },
+                        {
+                            platform: 'Twitter',
+                            url: `https://twitter.com/search?q=${encodeURIComponent(contact.name + ' ' + business.name)}`
+                        },
+                        {
+                            platform: 'Instagram',
+                            url: `https://www.instagram.com/explore/tags/${encodeURIComponent(business.name.replace(/\s/g, ''))}/`
+                        }
+                    ];
+                    
+                    socialSearches.forEach(social => {
+                        const socialContact = {
+                            ...contact,
+                            type: 'social_search',
+                            value: `Search ${social.platform}`,
+                            source: 'social_media',
+                            confidence: 0.5,
+                            note: `Search ${social.platform} for ${contact.name}`,
+                            socialUrl: social.url
+                        };
+                        
+                        if (contacts.primary.includes(contact)) {
+                            socialContacts.primary.push(socialContact);
+                        } else if (contacts.secondary.includes(contact)) {
+                            socialContacts.secondary.push(socialContact);
+                        } else {
+                            socialContacts.gatekeeper.push(socialContact);
+                        }
+                    });
+                }
+            }
+            
+        } catch (error) {
+            console.error(`[SOCIAL MEDIA ERROR]`, error.message);
+        }
+        
+        return socialContacts;
     }
 
     // Extract personal email from LinkedIn profile (real implementation needed)

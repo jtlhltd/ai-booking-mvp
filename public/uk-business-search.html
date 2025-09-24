@@ -1837,12 +1837,17 @@ Best regards,
                                         <div style="font-size: 0.8rem; color: #1e40af;">Confidence: ${contact.confidence}%</div>
                                     </div>
                                     <div style="font-size: 0.9rem; color: #1e40af; margin-bottom: 0.5rem;">
-                                        <strong>Contact:</strong> ${contact.value}
+                                        <strong>Contact:</strong> ${contact.type === 'directory_search' || contact.type === 'social_search' ? 
+                                            `<a href="${contact.directoryUrl || contact.socialUrl}" target="_blank" style="color: #1e40af; text-decoration: underline;">${contact.value}</a>` : 
+                                            contact.value}
                                     </div>
                                     <div style="font-size: 0.8rem; color: #1e40af;">
                                         <strong>Source:</strong> ${contact.source}
                                     </div>
                                     ${contact.title ? `<div style="font-size: 0.8rem; color: #1e40af;"><strong>Title:</strong> ${contact.title}</div>` : ''}
+                                    ${contact.note ? `<div style="font-size: 0.8rem; color: #1e40af; font-style: italic; margin-top: 0.25rem;">${contact.note}</div>` : ''}
+                                    ${contact.websiteUrl ? `<div style="font-size: 0.8rem; color: #1e40af; margin-top: 0.25rem;"><a href="${contact.websiteUrl}" target="_blank" style="color: #1e40af; text-decoration: underline;">🌐 View Source Page</a></div>` : ''}
+                                    ${contact.googleSearchUrl ? `<div style="font-size: 0.8rem; color: #1e40af; margin-top: 0.25rem;"><a href="${contact.googleSearchUrl}" target="_blank" style="color: #1e40af; text-decoration: underline;">🔍 View Google Result</a></div>` : ''}
                                 </div>
                             `).join('')}
                         </div>
@@ -1860,12 +1865,17 @@ Best regards,
                                         <div style="font-size: 0.8rem; color: #92400e;">Confidence: ${contact.confidence}%</div>
                                     </div>
                                     <div style="font-size: 0.9rem; color: #92400e; margin-bottom: 0.5rem;">
-                                        <strong>Contact:</strong> ${contact.value}
+                                        <strong>Contact:</strong> ${contact.type === 'directory_search' || contact.type === 'social_search' ? 
+                                            `<a href="${contact.directoryUrl || contact.socialUrl}" target="_blank" style="color: #92400e; text-decoration: underline;">${contact.value}</a>` : 
+                                            contact.value}
                                     </div>
                                     <div style="font-size: 0.8rem; color: #92400e;">
                                         <strong>Source:</strong> ${contact.source}
                                     </div>
                                     ${contact.title ? `<div style="font-size: 0.8rem; color: #92400e;"><strong>Title:</strong> ${contact.title}</div>` : ''}
+                                    ${contact.note ? `<div style="font-size: 0.8rem; color: #92400e; font-style: italic; margin-top: 0.25rem;">${contact.note}</div>` : ''}
+                                    ${contact.websiteUrl ? `<div style="font-size: 0.8rem; color: #92400e; margin-top: 0.25rem;"><a href="${contact.websiteUrl}" target="_blank" style="color: #92400e; text-decoration: underline;">🌐 View Source Page</a></div>` : ''}
+                                    ${contact.googleSearchUrl ? `<div style="font-size: 0.8rem; color: #92400e; margin-top: 0.25rem;"><a href="${contact.googleSearchUrl}" target="_blank" style="color: #92400e; text-decoration: underline;">🔍 View Google Result</a></div>` : ''}
                                 </div>
                             `).join('')}
                         </div>
@@ -1883,11 +1893,16 @@ Best regards,
                                         <div style="font-size: 0.8rem; color: #7c3aed;">Confidence: ${contact.confidence}%</div>
                                     </div>
                                     <div style="font-size: 0.9rem; color: #7c3aed; margin-bottom: 0.5rem;">
-                                        <strong>Contact:</strong> ${contact.value}
+                                        <strong>Contact:</strong> ${contact.type === 'directory_search' || contact.type === 'social_search' ? 
+                                            `<a href="${contact.directoryUrl || contact.socialUrl}" target="_blank" style="color: #7c3aed; text-decoration: underline;">${contact.value}</a>` : 
+                                            contact.value}
                                     </div>
                                     <div style="font-size: 0.8rem; color: #7c3aed;">
                                         <strong>Source:</strong> ${contact.source}
                                     </div>
+                                    ${contact.note ? `<div style="font-size: 0.8rem; color: #7c3aed; font-style: italic; margin-top: 0.25rem;">${contact.note}</div>` : ''}
+                                    ${contact.websiteUrl ? `<div style="font-size: 0.8rem; color: #7c3aed; margin-top: 0.25rem;"><a href="${contact.websiteUrl}" target="_blank" style="color: #7c3aed; text-decoration: underline;">🌐 View Source Page</a></div>` : ''}
+                                    ${contact.googleSearchUrl ? `<div style="font-size: 0.8rem; color: #7c3aed; margin-top: 0.25rem;"><a href="${contact.googleSearchUrl}" target="_blank" style="color: #7c3aed; text-decoration: underline;">🔍 View Google Result</a></div>` : ''}
                                 </div>
                             `).join('')}
                         </div>
