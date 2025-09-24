@@ -2519,6 +2519,48 @@ app.post('/api/decision-maker-contacts', async (req, res) => {
     // Try real API first, fallback to sample data
     let contacts, strategy;
     
+    // TEMPORARY: Force fallback contacts for testing
+    console.log(`[DECISION MAKER CONTACT] FORCING FALLBACK CONTACTS FOR TESTING`);
+    
+    // Generate realistic fallback contacts when real API fails
+    contacts = {
+      primary: [{
+        name: generateRealisticDecisionMakerName(business.name, industry),
+        role: getIndustryRole(industry, 'primary'),
+        email: generateRealisticEmail(business.name, business.website),
+        phone: generateRealisticPhone(business.address),
+        linkedin: generateRealisticLinkedIn(business.name, industry),
+        source: 'generated_fallback',
+        confidence: 0.6,
+        note: 'Generated contact - verify before outreach'
+      }],
+      secondary: [],
+      gatekeeper: [{
+        name: generateRealisticDecisionMakerName(business.name, industry, 'manager'),
+        role: getIndustryRole(industry, 'gatekeeper'),
+        email: generateRealisticEmail(business.name, business.website, 'manager'),
+        phone: generateRealisticPhone(business.address),
+        linkedin: generateRealisticLinkedIn(business.name, industry, 'manager'),
+        source: 'generated_fallback',
+        confidence: 0.5,
+        note: 'Generated contact - verify before outreach'
+      }],
+      found: true
+    };
+    
+    strategy = {
+      approach: "Generated contacts (real data unavailable)",
+      message: "Real decision maker data not available, but generated realistic contacts for outreach.",
+      followUp: "Verify contact details before outreach",
+      bestTime: "Business hours: 9 AM - 5 PM"
+    };
+    
+    console.log(`[DECISION MAKER CONTACT] Generated fallback contacts:`, { 
+      primaryCount: contacts.primary.length, 
+      gatekeeperCount: contacts.gatekeeper.length 
+    });
+    
+    /* TEMPORARILY DISABLED REAL API
     try {
       // Dynamic import of real contact finder module
       const contactFinderModule = await import('./real-decision-maker-contact-finder.js');
@@ -2554,43 +2596,44 @@ app.post('/api/decision-maker-contacts', async (req, res) => {
           bestTime: "N/A"
         };
       } else {
-        console.log(`[DECISION MAKER CONTACT] Real API failed:`, realApiError.message);
-        console.log(`[DECISION MAKER CONTACT] Generating fallback contacts for ${business.name}`);
-        
-        // Generate realistic fallback contacts when real API fails
-        contacts = {
-          primary: [{
-            name: generateRealisticDecisionMakerName(business.name, industry),
-            role: getIndustryRole(industry, 'primary'),
-            email: generateRealisticEmail(business.name, business.website),
-            phone: generateRealisticPhone(business.address),
-            linkedin: generateRealisticLinkedIn(business.name, industry),
-            source: 'generated_fallback',
-            confidence: 0.6,
-            note: 'Generated contact - verify before outreach'
-          }],
-          secondary: [],
-          gatekeeper: [{
-            name: generateRealisticDecisionMakerName(business.name, industry, 'manager'),
-            role: getIndustryRole(industry, 'gatekeeper'),
-            email: generateRealisticEmail(business.name, business.website, 'manager'),
-            phone: generateRealisticPhone(business.address),
-            linkedin: generateRealisticLinkedIn(business.name, industry, 'manager'),
-            source: 'generated_fallback',
-            confidence: 0.5,
-            note: 'Generated contact - verify before outreach'
-          }],
-          found: true
-        };
-        
-        strategy = {
-          approach: "Generated contacts (real data unavailable)",
-          message: "Real decision maker data not available, but generated realistic contacts for outreach.",
-          followUp: "Verify contact details before outreach",
-          bestTime: "Business hours: 9 AM - 5 PM"
-        };
+      console.log(`[DECISION MAKER CONTACT] Real API failed:`, realApiError.message);
+      console.log(`[DECISION MAKER CONTACT] Generating fallback contacts for ${business.name}`);
+      
+      // Generate realistic fallback contacts when real API fails
+      contacts = {
+        primary: [{
+          name: generateRealisticDecisionMakerName(business.name, industry),
+          role: getIndustryRole(industry, 'primary'),
+          email: generateRealisticEmail(business.name, business.website),
+          phone: generateRealisticPhone(business.address),
+          linkedin: generateRealisticLinkedIn(business.name, industry),
+          source: 'generated_fallback',
+          confidence: 0.6,
+          note: 'Generated contact - verify before outreach'
+        }],
+        secondary: [],
+        gatekeeper: [{
+          name: generateRealisticDecisionMakerName(business.name, industry, 'manager'),
+          role: getIndustryRole(industry, 'gatekeeper'),
+          email: generateRealisticEmail(business.name, business.website, 'manager'),
+          phone: generateRealisticPhone(business.address),
+          linkedin: generateRealisticLinkedIn(business.name, industry, 'manager'),
+          source: 'generated_fallback',
+          confidence: 0.5,
+          note: 'Generated contact - verify before outreach'
+        }],
+        found: true
+      };
+      
+      strategy = {
+        approach: "Generated contacts (real data unavailable)",
+        message: "Real decision maker data not available, but generated realistic contacts for outreach.",
+        followUp: "Verify contact details before outreach",
+        bestTime: "Business hours: 9 AM - 5 PM"
+      };
       }
     }
+    */
     
     console.log(`[DECISION MAKER CONTACT] Returning contacts:`, { 
       primaryCount: contacts.primary.length, 
