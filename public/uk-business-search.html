@@ -1001,13 +1001,10 @@
                     },
                     body: JSON.stringify({
                         query: query,
-                        filters: {
-                            location: location,
-                            category: category,
-                            minRating: minRating,
-                            sortBy: sortBy,
-                            limit: limit
-                        }
+                        industry: category || 'dentist',
+                        location: location,
+                        contactInfo: contact,
+                        limit: limit
                     })
                 });
                 
