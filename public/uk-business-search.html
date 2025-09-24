@@ -991,11 +991,11 @@
             const minRating = document.getElementById('minRatingFilter') ? document.getElementById('minRatingFilter').value : '';
             const sortBy = document.getElementById('sortByFilter') ? document.getElementById('sortByFilter').value : 'leadScore';
             
-            performSearch(query, location, size, contact, limit, category, minRating, sortBy);
+            performSearch(query, location, contact, limit, category, minRating, sortBy);
         }
         
         // Perform search
-        async function performSearch(query, location, size, contact, limit, category, minRating, sortBy) {
+        async function performSearch(query, location, contact, limit, category, minRating, sortBy) {
             showLoading();
             searchCount++;
             
