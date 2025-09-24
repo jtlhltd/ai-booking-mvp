@@ -1128,6 +1128,12 @@
         // Find decision maker contacts via API
         async function findDecisionMakerContacts(business, industry) {
             try {
+                console.log('Starting decision maker contact research for:', business.name);
+                
+                // Add timeout to prevent hanging
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+                
                 const response = await fetch('/api/decision-maker-contacts', {
                     method: 'POST',
                     headers: {
@@ -1137,10 +1143,18 @@
                         business: business,
                         industry: industry,
                         targetRole: 'primary'
-                    })
+                    }),
+                    signal: controller.signal
                 });
 
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
                 const data = await response.json();
+                console.log('Received decision maker data:', data);
                 
                 if (data.success) {
                     if (data.contacts && (data.contacts.primary.length > 0 || data.contacts.secondary.length > 0)) {
@@ -1153,7 +1167,18 @@
                 }
             } catch (error) {
                 console.error('Decision maker contact research error:', error);
-                showContactResearchError('Failed to research decision maker contacts. Please try again.');
+                
+                let errorMessage = 'Failed to research decision maker contacts. Please try again.';
+                
+                if (error.name === 'AbortError') {
+                    errorMessage = 'Request timed out. The search is taking longer than expected. Please try again.';
+                } else if (error.message.includes('HTTP error')) {
+                    errorMessage = `Server error: ${error.message}. Please try again.`;
+                } else if (error.message.includes('Failed to fetch')) {
+                    errorMessage = 'Network error. Please check your connection and try again.';
+                }
+                
+                showContactResearchError(errorMessage);
             }
         }
 
