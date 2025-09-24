@@ -142,6 +142,11 @@ app.get('/uk-business-search', (req, res) => {
   res.sendFile(path.join(process.cwd(), 'public', 'uk-business-search.html'));
 });
 
+// Serve Cold Call Dashboard page
+app.get('/cold-call-dashboard', (req, res) => {
+  res.sendFile(path.join(process.cwd(), 'public', 'cold-call-dashboard.html'));
+});
+
 // Middleware for parsing JSON bodies (must be before routes that need it)
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -6367,6 +6372,324 @@ async function processVapiCallFromQueue(call) {
 // Start processors (disabled to prevent crashes)
 // setInterval(processRetryQueue, 5 * 60 * 1000); // Every 5 minutes
 // setInterval(processCallQueue, 2 * 60 * 1000); // Every 2 minutes
+
+// Cold Call Bot Management Endpoints
+
+// Create Cold Call Assistant for Dental Practices
+app.post('/admin/vapi/cold-call-assistant', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    console.log('[COLD CALL ASSISTANT CREATION REQUESTED]', { 
+      requestedBy: req.ip
+    });
+    
+    // Create specialized cold calling assistant for dental practices
+    const coldCallAssistant = {
+      name: "Dental Practice Cold Call Bot",
+      model: {
+        provider: "openai",
+        model: "gpt-4o-mini",
+        temperature: 0.7,
+        maxTokens: 150
+      },
+      voice: {
+        provider: "elevenlabs",
+        voiceId: "21m00Tcm4TlvDq8ikWAM", // Professional female voice
+        stability: 0.5,
+        clarity: 0.75,
+        style: 0.0
+      },
+      firstMessage: "Hi, this is Sarah from AI Booking Solutions. I'm calling to help dental practices like yours increase their appointment bookings by 300%. Do you have 2 minutes to hear how we can help you never miss another patient?",
+      systemMessage: `You are Sarah, a professional sales representative for AI Booking Solutions. Your goal is to book qualified appointments for dental practices.
+
+CONTEXT:
+- You're calling dental practice owners/managers
+- Your service increases appointment bookings by 300% using AI
+- You offer SMS automation and voice AI for booking management
+- Cost is typically £50-200/month depending on practice size
+- You need to qualify leads before booking appointments
+
+OBJECTIVES:
+1. Qualify the decision maker (owner/manager)
+2. Understand their current booking challenges
+3. Present the value proposition clearly
+4. Book a 15-minute demo call
+5. Handle objections professionally
+
+QUALIFICATION QUESTIONS:
+- "Are you the owner or manager of this dental practice?"
+- "How do you currently handle appointment bookings?"
+- "Do you ever miss calls or lose potential patients?"
+- "What's your biggest challenge with patient scheduling?"
+
+VALUE PROPOSITION:
+- "We help dental practices like yours increase bookings by 300%"
+- "Our AI handles calls 24/7, never misses a patient"
+- "Automatically books appointments in your calendar"
+- "Sends SMS reminders to reduce no-shows"
+- "Most practices see ROI within 30 days"
+
+OBJECTION HANDLING:
+- Too expensive: "What's the cost of losing just one patient? Our service pays for itself with 2-3 extra bookings per month"
+- Too busy: "That's exactly why you need this - it saves you time by handling bookings automatically"
+- Not interested: "I understand. Can I send you a quick case study showing how we helped [similar practice] increase bookings by 300%?"
+
+CLOSING:
+- "Would you be available for a 15-minute demo this week to see how this could work for your practice?"
+- "I can show you exactly how we've helped similar practices increase their bookings"
+- "What day works better for you - Tuesday or Wednesday?"
+
+RULES:
+- Keep calls under 3 minutes
+- Be professional but friendly
+- Listen more than you talk
+- Focus on their pain points
+- Always ask for the appointment
+- If they're not the decision maker, get their name and ask for the right person`,
+      maxDurationSeconds: 180, // 3 minutes max
+      endCallMessage: "Thank you for your time. I'll send you some information about how we can help your practice increase bookings. Have a great day!",
+      endCallPhrases: ["not interested", "not right now", "call back later", "send me information"],
+      recordingEnabled: true,
+      voicemailDetectionEnabled: true,
+      backgroundSound: "office",
+      interruptionThreshold: 500,
+      silenceTimeoutSeconds: 5,
+      responseDelaySeconds: 1,
+      llmRequestDelaySeconds: 0.1
+    };
+    
+    // Create assistant via VAPI API
+    const vapiResponse = await fetch('https://api.vapi.ai/assistant', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.VAPI_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(coldCallAssistant)
+    });
+    
+    if (!vapiResponse.ok) {
+      const errorData = await vapiResponse.json();
+      console.error('[VAPI ASSISTANT CREATION ERROR]', errorData);
+      return res.status(400).json({ 
+        error: 'Failed to create VAPI assistant',
+        details: errorData 
+      });
+    }
+    
+    const assistantData = await vapiResponse.json();
+    
+    console.log('[COLD CALL ASSISTANT CREATED]', { 
+      assistantId: assistantData.id,
+      name: assistantData.name
+    });
+    
+    res.json({
+      success: true,
+      message: 'Cold call assistant created successfully',
+      assistant: {
+        id: assistantData.id,
+        name: assistantData.name,
+        status: assistantData.status,
+        createdAt: assistantData.createdAt
+      }
+    });
+    
+  } catch (error) {
+    console.error('[COLD CALL ASSISTANT CREATION ERROR]', error);
+    res.status(500).json({ 
+      error: 'Failed to create cold call assistant',
+      message: error.message 
+    });
+  }
+});
+
+// Cold Call Campaign Management
+app.post('/admin/vapi/cold-call-campaign', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const { assistantId, businesses, campaignName, maxCallsPerDay, startTime, endTime } = req.body;
+    
+    if (!assistantId || !businesses || !Array.isArray(businesses)) {
+      return res.status(400).json({ error: 'Assistant ID and businesses array are required' });
+    }
+    
+    console.log('[COLD CALL CAMPAIGN CREATED]', { 
+      campaignName: campaignName || 'Dental Practice Campaign',
+      businessCount: businesses.length,
+      assistantId,
+      requestedBy: req.ip
+    });
+    
+    // Create campaign in database
+    const campaignId = nanoid();
+    const campaign = {
+      id: campaignId,
+      name: campaignName || 'Dental Practice Campaign',
+      assistantId,
+      businesses: businesses.map(business => ({
+        id: business.id || nanoid(),
+        name: business.name,
+        phone: business.phone,
+        email: business.email,
+        address: business.address,
+        website: business.website,
+        decisionMaker: business.decisionMaker,
+        status: 'pending',
+        attempts: 0,
+        lastAttempt: null,
+        notes: ''
+      })),
+      status: 'active',
+      maxCallsPerDay: maxCallsPerDay || 100,
+      startTime: startTime || '09:00',
+      endTime: endTime || '17:00',
+      createdAt: new Date().toISOString(),
+      stats: {
+        totalCalls: 0,
+        successfulCalls: 0,
+        appointmentsBooked: 0,
+        voicemails: 0,
+        noAnswers: 0,
+        rejections: 0
+      }
+    };
+    
+    // Store campaign in database (you'll need to implement this)
+    // await storeCampaign(campaign);
+    
+    // Start calling process
+    const callResults = await startColdCallCampaign(campaign);
+    
+    res.json({
+      success: true,
+      message: 'Cold call campaign created and started',
+      campaign: {
+        id: campaignId,
+        name: campaign.name,
+        businessCount: businesses.length,
+        status: 'active',
+        stats: campaign.stats
+      },
+      callResults
+    });
+    
+  } catch (error) {
+    console.error('[COLD CALL CAMPAIGN ERROR]', error);
+    res.status(500).json({ 
+      error: 'Failed to create cold call campaign',
+      message: error.message 
+    });
+  }
+});
+
+// Start cold call campaign
+async function startColdCallCampaign(campaign) {
+  const results = [];
+  
+  try {
+    console.log(`[COLD CALL CAMPAIGN] Starting campaign ${campaign.id} with ${campaign.businesses.length} businesses`);
+    
+    // Process businesses in batches to avoid overwhelming the system
+    const batchSize = 5;
+    for (let i = 0; i < campaign.businesses.length; i += batchSize) {
+      const batch = campaign.businesses.slice(i, i + batchSize);
+      
+      // Process batch concurrently
+      const batchPromises = batch.map(async (business) => {
+        try {
+          // Make the call via VAPI
+          const callResponse = await fetch('https://api.vapi.ai/call', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${process.env.VAPI_API_KEY}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              assistantId: campaign.assistantId,
+              customer: {
+                number: business.phone,
+                name: business.decisionMaker?.name || business.name
+              },
+              metadata: {
+                businessId: business.id,
+                businessName: business.name,
+                campaignId: campaign.id,
+                decisionMaker: business.decisionMaker
+              }
+            })
+          });
+          
+          if (callResponse.ok) {
+            const callData = await callResponse.json();
+            results.push({
+              businessId: business.id,
+              businessName: business.name,
+              phone: business.phone,
+              status: 'call_initiated',
+              callId: callData.id,
+              message: 'Call initiated successfully'
+            });
+            
+            console.log(`[COLD CALL] Call initiated for ${business.name} (${business.phone})`);
+          } else {
+            const errorData = await callResponse.json();
+            results.push({
+              businessId: business.id,
+              businessName: business.name,
+              phone: business.phone,
+              status: 'call_failed',
+              error: errorData.message || 'Unknown error',
+              message: 'Failed to initiate call'
+            });
+            
+            console.error(`[COLD CALL ERROR] Failed to call ${business.name}:`, errorData);
+          }
+          
+        } catch (error) {
+          results.push({
+            businessId: business.id,
+            businessName: business.name,
+            phone: business.phone,
+            status: 'call_failed',
+            error: error.message,
+            message: 'Call failed due to error'
+          });
+          
+          console.error(`[COLD CALL ERROR] Error calling ${business.name}:`, error.message);
+        }
+        
+        // Add delay between calls to avoid overwhelming the system
+        await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay
+      });
+      
+      // Wait for batch to complete
+      await Promise.all(batchPromises);
+      
+      // Add delay between batches
+      if (i + batchSize < campaign.businesses.length) {
+        await new Promise(resolve => setTimeout(resolve, 5000)); // 5 second delay between batches
+      }
+    }
+    
+    console.log(`[COLD CALL CAMPAIGN] Completed campaign ${campaign.id}. Results:`, results.length);
+    
+  } catch (error) {
+    console.error(`[COLD CALL CAMPAIGN ERROR]`, error.message);
+  }
+  
+  return results;
+}
 
 // VAPI Management Endpoints
 // Create VAPI Assistant
