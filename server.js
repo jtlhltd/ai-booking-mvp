@@ -2248,6 +2248,39 @@ app.get('/api/test', (req, res) => {
   });
 });
 
+// Test Companies House API directly
+app.get('/api/test-companies-house', async (req, res) => {
+  try {
+    if (!process.env.COMPANIES_HOUSE_API_KEY) {
+      return res.json({ error: 'Companies House API key not set' });
+    }
+
+    const axios = (await import('axios')).default;
+    const response = await axios.get('https://api.company-information.service.gov.uk/search/companies', {
+      params: {
+        q: 'Sherwood Dental Practice',
+        items_per_page: 5
+      },
+      auth: {
+        username: process.env.COMPANIES_HOUSE_API_KEY,
+        password: ''
+      }
+    });
+
+    res.json({
+      success: true,
+      companies: response.data.items?.slice(0, 3) || [],
+      message: 'Companies House API is working'
+    });
+  } catch (error) {
+    res.json({
+      success: false,
+      error: error.message,
+      message: 'Companies House API failed'
+    });
+  }
+});
+
 // UK Business Search endpoint (PUBLIC - no auth required) - WITH REAL API
 app.post('/api/uk-business-search', async (req, res) => {
   try {
