@@ -502,23 +502,32 @@ export class RealDecisionMakerContactFinder {
         return [...new Set(alternatives)].slice(0, 5); // Limit to 5 alternatives
     }
 
-    // Enhanced decision maker research using multiple strategies (simplified to prevent crashes)
+    // Enhanced decision maker research using multiple strategies (comprehensive approach)
     async enhancedDecisionMakerResearch(contacts, business, industry) {
         const enhancedContacts = { primary: [], secondary: [], gatekeeper: [] };
         
         try {
-            console.log(`[ENHANCED RESEARCH] Starting simplified research for ${business.name}`);
+            console.log(`[ENHANCED RESEARCH] Starting comprehensive research for ${business.name}`);
             
-            // Only run LinkedIn search to prevent server overload
+            // Strategy 1: Enhanced Companies House data
             try {
-                const linkedinContacts = await this.searchLinkedInForPersonalEmails(contacts, business);
-                this.mergeContacts(enhancedContacts, linkedinContacts);
-                console.log(`[LINKEDIN] Found ${linkedinContacts.primary.length} primary contacts`);
+                const enhancedCompaniesHouse = await this.enhanceCompaniesHouseData(contacts, business);
+                this.mergeContacts(enhancedContacts, enhancedCompaniesHouse);
+                console.log(`[COMPANIES HOUSE] Enhanced ${enhancedCompaniesHouse.primary.length} contacts`);
             } catch (err) {
-                console.log(`[LINKEDIN] Skipped due to error: ${err.message}`);
+                console.log(`[COMPANIES HOUSE] Skipped due to error: ${err.message}`);
             }
             
-            // Add professional directory search URLs (no API calls)
+            // Strategy 2: Website intelligence
+            try {
+                const websiteContacts = await this.extractWebsiteIntelligence(contacts, business);
+                this.mergeContacts(enhancedContacts, websiteContacts);
+                console.log(`[WEBSITE] Found ${websiteContacts.primary.length} website contacts`);
+            } catch (err) {
+                console.log(`[WEBSITE] Skipped due to error: ${err.message}`);
+            }
+            
+            // Strategy 3: Professional directories
             try {
                 const directories = this.getIndustryDirectories(industry);
                 directories.forEach(directory => {
@@ -536,6 +545,24 @@ export class RealDecisionMakerContactFinder {
                 console.log(`[DIRECTORY] Added ${directories.length} directory search links`);
             } catch (err) {
                 console.log(`[DIRECTORY] Skipped due to error: ${err.message}`);
+            }
+            
+            // Strategy 4: Social media research
+            try {
+                const socialContacts = await this.generateSocialMediaSearches(contacts, business);
+                this.mergeContacts(enhancedContacts, socialContacts);
+                console.log(`[SOCIAL] Generated ${socialContacts.primary.length} social media searches`);
+            } catch (err) {
+                console.log(`[SOCIAL] Skipped due to error: ${err.message}`);
+            }
+            
+            // Strategy 5: Email pattern generation
+            try {
+                const emailContacts = await this.generateEmailPatterns(contacts, business);
+                this.mergeContacts(enhancedContacts, emailContacts);
+                console.log(`[EMAIL] Generated ${emailContacts.primary.length} email patterns`);
+            } catch (err) {
+                console.log(`[EMAIL] Skipped due to error: ${err.message}`);
             }
             
             console.log(`[ENHANCED RESEARCH] Found ${enhancedContacts.primary.length} primary, ${enhancedContacts.secondary.length} secondary contacts`);
@@ -1139,6 +1166,204 @@ export class RealDecisionMakerContactFinder {
         }
         
         return null;
+    }
+
+    // Enhanced Companies House data extraction
+    async enhanceCompaniesHouseData(contacts, business) {
+        const enhancedContacts = { primary: [], secondary: [], gatekeeper: [] };
+        
+        try {
+            const allContacts = [...contacts.primary, ...contacts.secondary, ...contacts.gatekeeper];
+            
+            for (const contact of allContacts) {
+                if (contact.name && contact.source === 'companies_house') {
+                    // Add Companies House officer details
+                    const enhancedContact = {
+                        ...contact,
+                        type: 'companies_house_officer',
+                        value: `${contact.name} - ${contact.title || 'Director'}`,
+                        confidence: 0.9,
+                        source: 'companies_house_enhanced',
+                        note: `Official Companies House record - ${contact.appointedOn ? `Appointed: ${contact.appointedOn}` : 'Active director'}`,
+                        companiesHouseUrl: `https://find-and-update.company-information.service.gov.uk/officers/${contact.name.replace(/\s+/g, '-').toLowerCase()}/appointments`,
+                        googleSearchUrl: `https://www.google.com/search?q="${contact.name}" "${business.name}" contact email phone`
+                    };
+                    
+                    // Add to appropriate category
+                    if (contacts.primary.includes(contact)) {
+                        enhancedContacts.primary.push(enhancedContact);
+                    } else if (contacts.secondary.includes(contact)) {
+                        enhancedContacts.secondary.push(enhancedContact);
+                    } else {
+                        enhancedContacts.gatekeeper.push(enhancedContact);
+                    }
+                }
+            }
+            
+        } catch (error) {
+            console.error(`[ENHANCED COMPANIES HOUSE ERROR]`, error.message);
+        }
+        
+        return enhancedContacts;
+    }
+
+    // Extract website intelligence
+    async extractWebsiteIntelligence(contacts, business) {
+        const websiteContacts = { primary: [], secondary: [], gatekeeper: [] };
+        
+        if (!business.website) return websiteContacts;
+        
+        try {
+            // Generate website search URLs
+            const websiteSearches = [
+                {
+                    type: 'website_team',
+                    value: 'View Team Page',
+                    url: `${business.website}/team`,
+                    note: 'Check team/about page for decision makers'
+                },
+                {
+                    type: 'website_contact',
+                    value: 'View Contact Page',
+                    url: `${business.website}/contact`,
+                    note: 'Check contact page for key personnel'
+                },
+                {
+                    type: 'website_about',
+                    value: 'View About Page',
+                    url: `${business.website}/about`,
+                    note: 'Check about page for leadership team'
+                }
+            ];
+            
+            websiteSearches.forEach(search => {
+                const contact = {
+                    type: search.type,
+                    value: search.value,
+                    source: 'website_intelligence',
+                    confidence: 0.7,
+                    note: search.note,
+                    websiteUrl: search.url
+                };
+                websiteContacts.primary.push(contact);
+            });
+            
+        } catch (error) {
+            console.error(`[WEBSITE INTELLIGENCE ERROR]`, error.message);
+        }
+        
+        return websiteContacts;
+    }
+
+    // Generate social media searches
+    async generateSocialMediaSearches(contacts, business) {
+        const socialContacts = { primary: [], secondary: [], gatekeeper: [] };
+        
+        try {
+            const allContacts = [...contacts.primary, ...contacts.secondary, ...contacts.gatekeeper];
+            
+            for (const contact of allContacts) {
+                if (contact.name && contact.source === 'companies_house') {
+                    // Generate social media search URLs
+                    const socialSearches = [
+                        {
+                            platform: 'Facebook',
+                            url: `https://www.facebook.com/search/people/?q=${encodeURIComponent(contact.name + ' ' + business.name)}`,
+                            note: `Search Facebook for ${contact.name}`
+                        },
+                        {
+                            platform: 'Twitter',
+                            url: `https://twitter.com/search?q=${encodeURIComponent(contact.name + ' ' + business.name)}`,
+                            note: `Search Twitter for ${contact.name}`
+                        },
+                        {
+                            platform: 'Instagram',
+                            url: `https://www.instagram.com/explore/tags/${encodeURIComponent(business.name.replace(/\s+/g, ''))}/`,
+                            note: `Search Instagram for ${business.name}`
+                        }
+                    ];
+                    
+                    socialSearches.forEach(social => {
+                        const socialContact = {
+                            ...contact,
+                            type: 'social_search',
+                            value: `Search ${social.platform}`,
+                            source: 'social_media',
+                            confidence: 0.5,
+                            note: social.note,
+                            socialUrl: social.url
+                        };
+                        
+                        if (contacts.primary.includes(contact)) {
+                            socialContacts.primary.push(socialContact);
+                        } else if (contacts.secondary.includes(contact)) {
+                            socialContacts.secondary.push(socialContact);
+                        } else {
+                            socialContacts.gatekeeper.push(socialContact);
+                        }
+                    });
+                }
+            }
+            
+        } catch (error) {
+            console.error(`[SOCIAL MEDIA SEARCH ERROR]`, error.message);
+        }
+        
+        return socialContacts;
+    }
+
+    // Generate email patterns
+    async generateEmailPatterns(contacts, business) {
+        const emailContacts = { primary: [], secondary: [], gatekeeper: [] };
+        
+        if (!business.website) return emailContacts;
+        
+        try {
+            const domain = business.website.replace(/^https?:\/\//, '').replace(/^www\./, '');
+            const allContacts = [...contacts.primary, ...contacts.secondary, ...contacts.gatekeeper];
+            
+            for (const contact of allContacts) {
+                if (contact.name && contact.source === 'companies_house') {
+                    const nameParts = contact.name.toLowerCase().split(' ');
+                    const firstName = nameParts[0];
+                    const lastName = nameParts[nameParts.length - 1];
+                    
+                    // Generate common email patterns
+                    const emailPatterns = [
+                        `${firstName}.${lastName}@${domain}`,
+                        `${firstName}@${domain}`,
+                        `${firstName}${lastName}@${domain}`,
+                        `${firstName.charAt(0)}${lastName}@${domain}`,
+                        `${firstName}${lastName.charAt(0)}@${domain}`
+                    ];
+                    
+                    emailPatterns.forEach(email => {
+                        const emailContact = {
+                            ...contact,
+                            type: 'email_pattern',
+                            value: email,
+                            source: 'email_generation',
+                            confidence: 0.4,
+                            note: `Generated email pattern for ${contact.name}`,
+                            googleSearchUrl: `https://www.google.com/search?q="${email}" verify`
+                        };
+                        
+                        if (contacts.primary.includes(contact)) {
+                            emailContacts.primary.push(emailContact);
+                        } else if (contacts.secondary.includes(contact)) {
+                            emailContacts.secondary.push(emailContact);
+                        } else {
+                            emailContacts.gatekeeper.push(emailContact);
+                        }
+                    });
+                }
+            }
+            
+        } catch (error) {
+            console.error(`[EMAIL PATTERN GENERATION ERROR]`, error.message);
+        }
+        
+        return emailContacts;
     }
 
     // Helper methods
