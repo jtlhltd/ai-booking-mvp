@@ -127,9 +127,9 @@ app.post('/api/uk-business-search', async (req, res) => {
       });
     }
     
-    // Use REAL Google Places API with UK region bias
-    const searchQuery = encodeURIComponent(query + " UK");
-    const placesUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${searchQuery}&key=${apiKey}&region=gb`;
+    // Use REAL Google Places API with UK region bias and location
+    const searchQuery = encodeURIComponent(query + " United Kingdom");
+    const placesUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${searchQuery}&key=${apiKey}&region=gb&location=54.7024,-3.2766&radius=1000000`;
     
     console.log(`[UK BUSINESS SEARCH] Calling Google Places API with UK region bias...`);
     
@@ -167,8 +167,21 @@ app.post('/api/uk-business-search', async (req, res) => {
       });
     }
     
+    // Filter results to only include UK addresses
+    const ukResults = data.results.filter(place => 
+      place.formatted_address && 
+      (place.formatted_address.includes('United Kingdom') || 
+       place.formatted_address.includes('UK') ||
+       place.formatted_address.includes('England') ||
+       place.formatted_address.includes('Scotland') ||
+       place.formatted_address.includes('Wales') ||
+       place.formatted_address.includes('Northern Ireland'))
+    );
+    
+    console.log(`[UK BUSINESS SEARCH] Filtered ${ukResults.length} UK businesses from ${data.results.length} total results`);
+    
     // Process real Google Places results with phone/email enrichment
-    const results = await Promise.all(data.results.map(async (place) => {
+    const results = await Promise.all(ukResults.map(async (place) => {
       let phone = null;
       let website = null;
       
