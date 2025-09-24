@@ -502,7 +502,7 @@ export class RealDecisionMakerContactFinder {
         return [...new Set(alternatives)].slice(0, 5); // Limit to 5 alternatives
     }
 
-    // Practical decision maker contact research (what actually works)
+    // Practical decision maker contact research (optimized for stability)
     async enhancedDecisionMakerResearch(contacts, business, industry) {
         const enhancedContacts = { primary: [], secondary: [], gatekeeper: [] };
         
@@ -511,12 +511,17 @@ export class RealDecisionMakerContactFinder {
             
             const allContacts = [...contacts.primary, ...contacts.secondary, ...contacts.gatekeeper];
             
-            for (const contact of allContacts) {
-                if (contact.name && contact.source === 'companies_house') {
-                    // Generate practical contact research tools
-                    const contactTools = await this.generatePracticalContactTools(contact, business);
-                    enhancedContacts.primary.push(...contactTools);
-                }
+            // Only process the first decision maker to avoid overwhelming the server
+            const firstContact = allContacts.find(contact => contact.name && contact.source === 'companies_house');
+            
+            if (firstContact) {
+                // Generate practical contact research tools with timeout
+                const contactTools = await Promise.race([
+                    this.generatePracticalContactTools(firstContact, business),
+                    new Promise((resolve) => setTimeout(() => resolve([]), 8000)) // 8 second timeout
+                ]);
+                
+                enhancedContacts.primary.push(...contactTools);
             }
             
             console.log(`[PRACTICAL RESEARCH] Generated ${enhancedContacts.primary.length} contact tools`);
@@ -532,10 +537,14 @@ export class RealDecisionMakerContactFinder {
     async generatePracticalContactTools(contact, business) {
         const tools = [];
         
-        // 1. Actually search for contact info using Google Search API
+        // 1. Actually search for contact info using Google Search API (with timeout)
         if (this.googleApiKey) {
             try {
-                const contactInfo = await this.searchForActualContactInfo(contact, business);
+                const contactInfo = await Promise.race([
+                    this.searchForActualContactInfo(contact, business),
+                    new Promise((resolve) => setTimeout(() => resolve({ email: null, phone: null, linkedin: null, searchUrl: null }), 5000)) // 5 second timeout
+                ]);
+                
                 if (contactInfo.email) {
                     tools.push({
                         type: 'email',
@@ -571,10 +580,13 @@ export class RealDecisionMakerContactFinder {
             }
         }
         
-        // 2. Scrape business website for contact info
+        // 2. Scrape business website for contact info (with timeout)
         if (business.website) {
             try {
-                const websiteContacts = await this.scrapeWebsiteForContacts(contact, business);
+                const websiteContacts = await Promise.race([
+                    this.scrapeWebsiteForContacts(contact, business),
+                    new Promise((resolve) => setTimeout(() => resolve([]), 3000)) // 3 second timeout
+                ]);
                 tools.push(...websiteContacts);
             } catch (error) {
                 console.log(`[WEBSITE SCRAPING] Failed for ${business.website}: ${error.message}`);
@@ -679,21 +691,21 @@ export class RealDecisionMakerContactFinder {
         return tools;
     }
 
-    // Actually search for contact information using Google Search API
+    // Actually search for contact information using Google Search API (optimized)
     async searchForActualContactInfo(contact, business) {
         const contactInfo = { email: null, phone: null, linkedin: null, searchUrl: null };
         
         try {
-            // Search for contact information
+            // Search for contact information with reduced results
             const searchQuery = `"${contact.name}" "${business.name}" email phone contact`;
             const response = await axios.get('https://www.googleapis.com/customsearch/v1', {
                 params: {
                     key: this.googleApiKey,
                     cx: '017576662512468239146:omuauf_lfve',
                     q: searchQuery,
-                    num: 5
+                    num: 3 // Reduced from 5 to 3 for faster processing
                 },
-                timeout: 5000
+                timeout: 3000 // Reduced timeout
             });
             
             contactInfo.searchUrl = `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`;
@@ -732,16 +744,17 @@ export class RealDecisionMakerContactFinder {
         return contactInfo;
     }
 
-    // Scrape business website for contact information
+    // Scrape business website for contact information (optimized)
     async scrapeWebsiteForContacts(contact, business) {
         const contacts = [];
         
         try {
             const response = await axios.get(business.website, {
-                timeout: 5000,
+                timeout: 2000, // Reduced timeout
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                }
+                },
+                maxContentLength: 1000000 // Limit content size
             });
             
             const html = response.data;
@@ -750,10 +763,10 @@ export class RealDecisionMakerContactFinder {
             // Look for the contact's name in the website content
             const contactNameLower = contact.name.toLowerCase();
             if (text.includes(contactNameLower)) {
-                // Extract emails from the website
+                // Extract emails from the website (limit to first 5 matches)
                 const emailMatches = html.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g);
                 if (emailMatches) {
-                    emailMatches.forEach(email => {
+                    emailMatches.slice(0, 5).forEach(email => {
                         // Check if this email might belong to the contact
                         const emailLower = email.toLowerCase();
                         if (emailLower.includes(contactNameLower.split(' ')[0]) || 
@@ -770,10 +783,10 @@ export class RealDecisionMakerContactFinder {
                     });
                 }
                 
-                // Extract phone numbers from the website
+                // Extract phone numbers from the website (limit to first 3 matches)
                 const phoneMatches = html.match(/(\+?[0-9\s\-\(\)]{10,})/g);
                 if (phoneMatches) {
-                    phoneMatches.forEach(phone => {
+                    phoneMatches.slice(0, 3).forEach(phone => {
                         const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
                         if (cleanPhone.length >= 10) {
                             contacts.push({
