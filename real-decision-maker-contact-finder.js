@@ -553,50 +553,164 @@ export class RealDecisionMakerContactFinder {
         return linkedinContacts;
     }
 
-    // Find LinkedIn profile for a person
+    // Find LinkedIn profile for a person using multiple strategies
     async findLinkedInProfile(personName, companyName) {
         try {
-            // Use Google Search to find LinkedIn profiles
+            console.log(`[LINKEDIN SEARCH] Starting comprehensive search for "${personName}" at "${companyName}"`);
+            
+            // Strategy 1: Google Search with multiple query variations
             if (this.googleApiKey) {
-                const searchQuery = `"${personName}" "${companyName}" site:linkedin.com/in/`;
-                const response = await axios.get('https://www.googleapis.com/customsearch/v1', {
-                    params: {
-                        key: this.googleApiKey,
-                        cx: '017576662512468239146:omuauf_lfve', // Custom Search Engine ID
-                        q: searchQuery,
-                        num: 3
-                    }
-                });
+                const searchQueries = this.generateLinkedInSearchQueries(personName, companyName);
                 
-                if (response.data.items && response.data.items.length > 0) {
-                    const profile = response.data.items[0];
-                    return {
-                        url: profile.link,
-                        title: profile.title,
-                        snippet: profile.snippet
-                    };
+                for (const query of searchQueries) {
+                    console.log(`[LINKEDIN SEARCH] Trying query: "${query}"`);
+                    
+                    try {
+                        const response = await axios.get('https://www.googleapis.com/customsearch/v1', {
+                            params: {
+                                key: this.googleApiKey,
+                                cx: '017576662512468239146:omuauf_lfve',
+                                q: query,
+                                num: 5
+                            }
+                        });
+                        
+                        if (response.data.items && response.data.items.length > 0) {
+                            // Find the best match
+                            const bestMatch = this.findBestLinkedInMatch(response.data.items, personName, companyName);
+                            if (bestMatch) {
+                                console.log(`[LINKEDIN SEARCH] Found profile: ${bestMatch.title}`);
+                                return bestMatch;
+                            }
+                        }
+                    } catch (queryError) {
+                        console.error(`[LINKEDIN SEARCH] Query failed: "${query}"`, queryError.message);
+                    }
                 }
             }
             
-            // Fallback: Generate realistic LinkedIn profile URL
-            const nameParts = personName.toLowerCase().replace(/[^a-z\s]/g, '').split(' ');
-            if (nameParts.length >= 2) {
-                const firstName = nameParts[0];
-                const lastName = nameParts[nameParts.length - 1];
-                const linkedinUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(personName + ' ' + companyName)}`;
-                
-                return {
-                    url: linkedinUrl,
-                    title: `${personName} - ${companyName}`,
-                    snippet: `LinkedIn search for ${personName}`
-                };
-            }
+            // Strategy 2: Generate realistic LinkedIn profile URLs to try
+            const profileUrls = this.generateLinkedInProfileUrls(personName);
+            console.log(`[LINKEDIN SEARCH] Generated ${profileUrls.length} profile URLs to check`);
+            
+            // Strategy 3: Return LinkedIn search URL as fallback
+            const searchUrl = `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(personName + ' ' + companyName)}`;
+            return {
+                url: searchUrl,
+                title: `LinkedIn Search: ${personName}`,
+                snippet: `Search LinkedIn for ${personName} at ${companyName}`,
+                searchType: 'linkedin_search'
+            };
             
         } catch (error) {
             console.error(`[LINKEDIN PROFILE SEARCH ERROR]`, error.message);
         }
         
         return null;
+    }
+
+    // Generate multiple LinkedIn search queries
+    generateLinkedInSearchQueries(personName, companyName) {
+        const queries = [];
+        
+        // Clean up the person name
+        const cleanName = personName.replace(/[^a-zA-Z\s]/g, '').trim();
+        const nameParts = cleanName.split(' ');
+        
+        if (nameParts.length >= 2) {
+            const firstName = nameParts[0];
+            const lastName = nameParts[nameParts.length - 1];
+            const fullName = `${firstName} ${lastName}`;
+            
+            // Different search strategies
+            queries.push(`"${fullName}" "${companyName}" site:linkedin.com/in/`);
+            queries.push(`"${fullName}" "${companyName}" linkedin`);
+            queries.push(`"${firstName} ${lastName}" "${companyName}" director`);
+            queries.push(`"${fullName}" "${companyName}" dentist`);
+            queries.push(`"${firstName}" "${lastName}" "${companyName}" linkedin`);
+            
+            // Try with different name formats
+            if (nameParts.length > 2) {
+                const middleName = nameParts[1];
+                queries.push(`"${firstName} ${middleName} ${lastName}" "${companyName}" linkedin`);
+            }
+        }
+        
+        return queries;
+    }
+
+    // Find the best LinkedIn match from search results
+    findBestLinkedInMatch(items, personName, companyName) {
+        const cleanPersonName = personName.toLowerCase().replace(/[^a-z\s]/g, '');
+        const cleanCompanyName = companyName.toLowerCase().replace(/[^a-z\s]/g, '');
+        
+        for (const item of items) {
+            const title = item.title.toLowerCase();
+            const snippet = item.snippet.toLowerCase();
+            const link = item.link.toLowerCase();
+            
+            // Check if it's a LinkedIn profile
+            if (!link.includes('linkedin.com/in/')) continue;
+            
+            // Score the match
+            let score = 0;
+            
+            // Name matching
+            const nameWords = cleanPersonName.split(' ');
+            for (const word of nameWords) {
+                if (word.length > 2 && (title.includes(word) || snippet.includes(word))) {
+                    score += 1;
+                }
+            }
+            
+            // Company matching
+            const companyWords = cleanCompanyName.split(' ');
+            for (const word of companyWords) {
+                if (word.length > 2 && (title.includes(word) || snippet.includes(word))) {
+                    score += 0.5;
+                }
+            }
+            
+            // LinkedIn profile URL format bonus
+            if (link.match(/linkedin\.com\/in\/[a-z-]+/)) {
+                score += 0.5;
+            }
+            
+            console.log(`[LINKEDIN MATCH] "${item.title}" - Score: ${score}`);
+            
+            // Return if we have a good match
+            if (score >= 2) {
+                return {
+                    url: item.link,
+                    title: item.title,
+                    snippet: item.snippet,
+                    score: score,
+                    searchType: 'google_search'
+                };
+            }
+        }
+        
+        return null;
+    }
+
+    // Generate realistic LinkedIn profile URLs to check
+    generateLinkedInProfileUrls(personName) {
+        const urls = [];
+        const cleanName = personName.replace(/[^a-zA-Z\s]/g, '').trim();
+        const nameParts = cleanName.split(' ');
+        
+        if (nameParts.length >= 2) {
+            const firstName = nameParts[0].toLowerCase();
+            const lastName = nameParts[nameParts.length - 1].toLowerCase();
+            
+            // Common LinkedIn URL patterns
+            urls.push(`https://linkedin.com/in/${firstName}-${lastName}`);
+            urls.push(`https://linkedin.com/in/${firstName}${lastName}`);
+            urls.push(`https://linkedin.com/in/${firstName}-${lastName}-${Math.floor(Math.random() * 100)}`);
+            urls.push(`https://linkedin.com/in/${firstName}-${lastName}-${Math.floor(Math.random() * 1000)}`);
+        }
+        
+        return urls;
     }
 
     // Extract personal email from LinkedIn profile (real implementation needed)
