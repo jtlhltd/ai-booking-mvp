@@ -502,34 +502,21 @@ export class RealDecisionMakerContactFinder {
         return [...new Set(alternatives)].slice(0, 5); // Limit to 5 alternatives
     }
 
-    // Enhanced decision maker research (multiple strategies)
+    // Enhanced decision maker research (simplified to prevent timeouts)
     async enhancedDecisionMakerResearch(contacts, business, industry) {
         const enhancedContacts = { primary: [], secondary: [], gatekeeper: [] };
         
         try {
             console.log(`[ENHANCED RESEARCH] Finding real owner contacts for ${business.name}`);
             
-            const allContacts = [...contacts.primary, ...contacts.secondary, ...contacts.gatekeeper];
-            
-            // Strategy 1: Enhanced Companies House with current officers
-            const companiesHouseContacts = await this.getCurrentOfficers(business);
+            // Only do Companies House search (fastest and most reliable)
+            const companiesHouseContacts = await Promise.race([
+                this.getCurrentOfficers(business),
+                new Promise((resolve) => setTimeout(() => resolve([]), 2000)) // 2 second timeout
+            ]);
             enhancedContacts.primary.push(...companiesHouseContacts);
             
-            // Strategy 2: Website team/about pages
-            if (business.website) {
-                const websiteContacts = await this.findWebsiteTeamInfo(business);
-                enhancedContacts.primary.push(...websiteContacts);
-            }
-            
-            // Strategy 3: Professional directory searches
-            const directoryContacts = await this.searchProfessionalDirectories(business, industry);
-            enhancedContacts.primary.push(...directoryContacts);
-            
-            // Strategy 4: Social media intelligence
-            const socialContacts = await this.findSocialMediaOwners(business);
-            enhancedContacts.primary.push(...socialContacts);
-            
-            // Strategy 5: Generate realistic contact information for each decision maker
+            // Generate realistic contact information for each decision maker
             for (const contact of enhancedContacts.primary) {
                 if (contact.name && contact.name !== `Search ${contact.platform || contact.directoryName || 'Unknown'}` && !contact.name.includes('undefined')) {
                     // Generate realistic contact information immediately
@@ -541,7 +528,7 @@ export class RealDecisionMakerContactFinder {
                 }
             }
             
-            console.log(`[ENHANCED RESEARCH] Found ${enhancedContacts.primary.length} enhanced contacts with exhaustive details`);
+            console.log(`[ENHANCED RESEARCH] Found ${enhancedContacts.primary.length} enhanced contacts`);
             
         } catch (error) {
             console.error(`[ENHANCED RESEARCH ERROR]`, error.message);

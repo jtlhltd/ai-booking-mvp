@@ -56,7 +56,7 @@ export function generateUKBusinesses(query, filters = {}) {
         services: ["Emergency Plumbing", "Pipe Repair", "Boiler Installation", "Bathroom Fitting"],
         rating: (Math.random() * 1.5 + 3.5).toFixed(1),
         category: "plumber",
-        leadScore: Math.floor(Math.random() * 20) + 80,
+        leadScore: Math.min(100, Math.floor(Math.random() * 20) + 80),
         source: "uk_business_database"
       });
     }
@@ -86,7 +86,7 @@ export function generateUKBusinesses(query, filters = {}) {
         services: ["General Dentistry", "Cosmetic Dentistry", "Orthodontics", "Emergency Care"],
         rating: (Math.random() * 1.2 + 3.8).toFixed(1),
         category: "dentist",
-        leadScore: Math.floor(Math.random() * 15) + 85,
+        leadScore: Math.min(100, Math.floor(Math.random() * 15) + 85),
         source: "uk_business_database"
       });
     }
@@ -116,7 +116,7 @@ export function generateUKBusinesses(query, filters = {}) {
         services: ["Hair Styling", "Beauty Treatments", "Nail Services", "Bridal Packages"],
         rating: (Math.random() * 1.3 + 3.7).toFixed(1),
         category: "beauty_salon",
-        leadScore: Math.floor(Math.random() * 18) + 82,
+        leadScore: Math.min(100, Math.floor(Math.random() * 18) + 82),
         source: "uk_business_database"
       });
     }
@@ -146,7 +146,7 @@ export function generateUKBusinesses(query, filters = {}) {
         services: ["Commercial Law", "Family Law", "Property Law", "Employment Law"],
         rating: (Math.random() * 1.1 + 3.9).toFixed(1),
         category: "lawyer",
-        leadScore: Math.floor(Math.random() * 12) + 88,
+        leadScore: Math.min(100, Math.floor(Math.random() * 12) + 88),
         source: "uk_business_database"
       });
     }
@@ -176,7 +176,7 @@ export function generateUKBusinesses(query, filters = {}) {
         services: ["Fine Dining", "Casual Dining", "Takeaway", "Private Events"],
         rating: (Math.random() * 1.4 + 3.6).toFixed(1),
         category: "restaurant",
-        leadScore: Math.floor(Math.random() * 22) + 78,
+        leadScore: Math.min(100, Math.floor(Math.random() * 22) + 78),
         source: "uk_business_database"
       });
     }
@@ -206,7 +206,7 @@ export function generateUKBusinesses(query, filters = {}) {
         services: ["General Veterinary Care", "Emergency Services", "Pet Surgery", "Vaccinations"],
         rating: (Math.random() * 1.3 + 3.7).toFixed(1),
         category: "veterinary",
-        leadScore: Math.floor(Math.random() * 18) + 82,
+        leadScore: Math.min(100, Math.floor(Math.random() * 18) + 82),
         source: "uk_business_database"
       });
     }
@@ -236,7 +236,7 @@ export function generateUKBusinesses(query, filters = {}) {
         services: ["Personal Training", "Group Classes", "Cardio Equipment", "Weight Training"],
         rating: (Math.random() * 1.4 + 3.6).toFixed(1),
         category: "fitness",
-        leadScore: Math.floor(Math.random() * 20) + 80,
+        leadScore: Math.min(100, Math.floor(Math.random() * 20) + 80),
         source: "uk_business_database"
       });
     }
@@ -266,7 +266,7 @@ export function generateUKBusinesses(query, filters = {}) {
         services: ["Tax Preparation", "Bookkeeping", "Financial Planning", "Business Advisory"],
         rating: (Math.random() * 1.2 + 3.8).toFixed(1),
         category: "accounting",
-        leadScore: Math.floor(Math.random() * 15) + 85,
+        leadScore: Math.min(100, Math.floor(Math.random() * 15) + 85),
         source: "uk_business_database"
       });
     }
@@ -296,7 +296,7 @@ export function generateUKBusinesses(query, filters = {}) {
         services: ["Electrical Installation", "Emergency Repairs", "Rewiring", "Electrical Testing"],
         rating: (Math.random() * 1.5 + 3.5).toFixed(1),
         category: "electrician",
-        leadScore: Math.floor(Math.random() * 20) + 80,
+        leadScore: Math.min(100, Math.floor(Math.random() * 20) + 80),
         source: "uk_business_database"
       });
     }
@@ -326,7 +326,7 @@ export function generateUKBusinesses(query, filters = {}) {
         services: ["Garden Design", "Lawn Care", "Tree Surgery", "Landscaping"],
         rating: (Math.random() * 1.4 + 3.6).toFixed(1),
         category: "gardening",
-        leadScore: Math.floor(Math.random() * 18) + 82,
+        leadScore: Math.min(100, Math.floor(Math.random() * 18) + 82),
         source: "uk_business_database"
       });
     }
@@ -355,7 +355,7 @@ export function generateUKBusinesses(query, filters = {}) {
         services: ["Professional Services", "Business Solutions", "Customer Service"],
         rating: (Math.random() * 1.5 + 3.5).toFixed(1),
         category: "business",
-        leadScore: Math.floor(Math.random() * 25) + 75,
+        leadScore: Math.min(100, Math.floor(Math.random() * 25) + 75),
         source: "uk_business_database"
       });
     }
