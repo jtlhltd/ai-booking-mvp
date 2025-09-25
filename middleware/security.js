@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import bcrypt from 'bcrypt';
 
 // Enhanced security middleware for multi-tenant authentication and rate limiting
 
@@ -12,18 +13,15 @@ export function hashApiKey(apiKey) {
   return crypto.createHash('sha256').update(apiKey).digest('hex');
 }
 
-// Hash password using Node.js crypto (Render-compatible)
+// Hash password
 export async function hashPassword(password) {
-  const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
-  return `${salt}:${hash}`;
+  const saltRounds = 12;
+  return await bcrypt.hash(password, saltRounds);
 }
 
-// Verify password using Node.js crypto (Render-compatible)
+// Verify password
 export async function verifyPassword(password, hash) {
-  const [salt, originalHash] = hash.split(':');
-  const newHash = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
-  return newHash === originalHash;
+  return await bcrypt.compare(password, hash);
 }
 
 // Enhanced API key authentication middleware

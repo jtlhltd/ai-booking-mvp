@@ -1,7 +1,8 @@
 // db.js (ESM) — Postgres first, SQLite fallback, and helpers expected by server/libs
-// Dynamic imports to avoid missing dependencies on Render
+import { Pool } from 'pg';
 import path from 'path';
 import fs from 'fs';
+import Database from 'better-sqlite3';
 
 const dbType = (process.env.DB_TYPE || '').toLowerCase();
 let pool = null;
@@ -83,16 +84,10 @@ class JsonFileDatabase {
 
 // ---------------------- Postgres ----------------------
 async function initPostgres() {
-  try {
-    const { Pool } = await import('pg');
-    pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false },
-    });
-  } catch (error) {
-    console.error('❌ Failed to import pg module:', error.message);
-    throw new Error('PostgreSQL module not available');
-  }
+  pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+  });
 
   // Run migrations
   await pool.query(`
@@ -408,23 +403,12 @@ async function initPostgres() {
 }
 
 // ---------------------- SQLite fallback ----------------------
-async function initSqlite() {
+function initSqlite() {
   const dataDir = process.env.DATA_DIR || path.join(process.cwd(), 'data');
   if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
   const sqlitePath = process.env.DB_PATH || path.join(dataDir, 'app.db');
-  
-  try {
-    const Database = (await import('better-sqlite3')).default;
-    sqlite = new Database(sqlitePath);
-    DB_PATH = sqlitePath;
-  } catch (error) {
-    console.error('❌ Failed to import better-sqlite3 module:', error.message);
-    console.log('🔄 Falling back to JSON file database...');
-    
-    // Fallback to JSON file database for Render
-    sqlite = new JsonFileDatabase(dataDir);
-    DB_PATH = 'json-file';
-  }
+  sqlite = new Database(sqlitePath);
+  DB_PATH = sqlitePath;
 
   // Minimal migrations for sqlite (JSON as TEXT)
   sqlite.exec(`
@@ -500,15 +484,13 @@ async function initSqlite() {
 
 // ---------------------- Core API ----------------------
 export async function init() {
-  // Force SQLite on Render unless explicitly configured for PostgreSQL
-  const forceSqlite = process.env.RENDER === 'true' || !process.env.DATABASE_URL;
-  
-  if (!forceSqlite && dbType === 'postgres' && process.env.DATABASE_URL) {
-    console.log('🔄 Attempting PostgreSQL initialization...');
+  // Use PostgreSQL if explicitly configured, otherwise use SQLite
+  if (dbType === 'postgres' && process.env.DATABASE_URL) {
+    console.log('🔄 Initializing PostgreSQL...');
     return await initPostgres();
   } else {
-    console.log('🔄 Using SQLite (Render-compatible)...');
-    return await initSqlite();
+    console.log('🔄 Initializing SQLite...');
+    return initSqlite();
   }
 }
 
