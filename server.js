@@ -59,6 +59,7 @@ import axios from 'axios';
 import { generateUKBusinesses, getIndustryCategories, fuzzySearch } from './enhanced-business-search.js';
 import RealUKBusinessSearch from './real-uk-business-search.js';
 import BookingSystem from './booking-system.js';
+import SMSEmailPipeline from './sms-email-pipeline.js';
 import morgan from 'morgan';
 import fs from 'fs/promises';
 import path from 'path';
@@ -93,6 +94,9 @@ const app = express();
 
 // Initialize Booking System
 const bookingSystem = new BookingSystem();
+
+// Initialize SMS-Email Pipeline
+const smsEmailPipeline = new SMSEmailPipeline();
 
 // Trust proxy for rate limiting (required for Render)
 app.set('trust proxy', 1);
@@ -316,6 +320,163 @@ app.get('/test-booking', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Booking system test failed',
+      error: error.message
+    });
+  }
+});
+
+// SMS-Email Pipeline Endpoints
+// Initiate Lead Capture (SMS asking for email)
+app.post('/api/initiate-lead-capture', async (req, res) => {
+  try {
+    const { leadData } = req.body;
+    
+    if (!leadData || !leadData.phoneNumber || !leadData.decisionMaker) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required lead data (phoneNumber, decisionMaker)'
+      });
+    }
+
+    const result = await smsEmailPipeline.initiateLeadCapture(leadData);
+    res.json(result);
+    
+  } catch (error) {
+    console.error('[LEAD CAPTURE ERROR]', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lead capture failed',
+      error: error.message
+    });
+  }
+});
+
+// Process Email Response (Webhook from Twilio)
+app.post('/api/process-email-response', async (req, res) => {
+  try {
+    const { phoneNumber, emailAddress } = req.body;
+    
+    if (!phoneNumber || !emailAddress) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing phoneNumber or emailAddress'
+      });
+    }
+
+    const result = await smsEmailPipeline.processEmailResponse(phoneNumber, emailAddress);
+    res.json(result);
+    
+  } catch (error) {
+    console.error('[EMAIL PROCESSING ERROR]', error);
+    res.status(500).json({
+      success: false,
+      message: 'Email processing failed',
+      error: error.message
+    });
+  }
+});
+
+// Get Lead Status
+app.get('/api/lead-status/:leadId', async (req, res) => {
+  try {
+    const { leadId } = req.params;
+    const result = await smsEmailPipeline.getLeadStatus(leadId);
+    res.json(result);
+    
+  } catch (error) {
+    console.error('[LEAD STATUS ERROR]', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get lead status',
+      error: error.message
+    });
+  }
+});
+
+// Get Pipeline Statistics
+app.get('/api/pipeline-stats', async (req, res) => {
+  try {
+    const stats = smsEmailPipeline.getStats();
+    res.json({
+      success: true,
+      stats: stats
+    });
+    
+  } catch (error) {
+    console.error('[PIPELINE STATS ERROR]', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get pipeline stats',
+      error: error.message
+    });
+  }
+});
+
+// Test SMS-Email Pipeline
+app.get('/test-sms-pipeline', async (req, res) => {
+  try {
+    const testLead = {
+      businessName: "Test Business",
+      decisionMaker: "John Smith",
+      phoneNumber: "+447491683261",
+      industry: "retail",
+      location: "London"
+    };
+
+    const result = await smsEmailPipeline.initiateLeadCapture(testLead);
+    
+    res.json({
+      success: true,
+      message: 'SMS-Email Pipeline test completed',
+      result: result,
+      stats: smsEmailPipeline.getStats()
+    });
+    
+  } catch (error) {
+    console.error('[SMS PIPELINE TEST ERROR]', error);
+    res.status(500).json({
+      success: false,
+      message: 'SMS-Email Pipeline test failed',
+      error: error.message
+    });
+  }
+});
+
+// Twilio Webhook for SMS Replies
+app.post('/webhook/sms-reply', async (req, res) => {
+  try {
+    const { From, Body } = req.body;
+    
+    // Extract email from SMS body
+    const emailMatch = Body.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+    
+    if (emailMatch) {
+      const emailAddress = emailMatch[1];
+      const result = await smsEmailPipeline.processEmailResponse(From, emailAddress);
+      
+      res.json({
+        success: true,
+        message: 'Email processed successfully',
+        result: result
+      });
+    } else {
+      // Send helpful SMS if no email found
+      await smsEmailPipeline.sendSMS({
+        to: From,
+        body: "I didn't find an email address in your message. Please send just your email address (e.g., john@company.com)"
+      });
+      
+      res.json({
+        success: false,
+        message: 'No email address found in SMS'
+      });
+    }
+    
+  } catch (error) {
+    console.error('[SMS WEBHOOK ERROR]', error);
+    res.status(500).json({
+      success: false,
+      message: 'SMS webhook processing failed',
       error: error.message
     });
   }

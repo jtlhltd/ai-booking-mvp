@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMS-Email Pipeline Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .pipeline-flow {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .flow-step {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            border: 2px solid #e1e5e9;
+            transition: all 0.3s ease;
+        }
+
+        .flow-step:hover {
+            border-color: #667eea;
+            background: #f0f2ff;
+        }
+
+        .flow-step .icon {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        .flow-step h3 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .flow-step p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .test-section {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+            width: 100%;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .status {
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .stats-section {
+            background: #e8f4fd;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 30px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+            margin-top: 15px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .quick-action {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid #e1e5e9;
+        }
+
+        .quick-action:hover {
+            border-color: #667eea;
+            background: #f0f2ff;
+        }
+
+        .quick-action h4 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .quick-action p {
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📱➡️📧 SMS-Email Pipeline</h1>
+            <p>Convert cold call leads to booked demos</p>
+        </div>
+
+        <div class="content">
+            <div class="pipeline-flow">
+                <div class="flow-step">
+                    <div class="icon">📞</div>
+                    <h3>Cold Call</h3>
+                    <p>Bot calls lead and builds interest</p>
+                </div>
+                <div class="flow-step">
+                    <div class="icon">📱</div>
+                    <h3>SMS Sent</h3>
+                    <p>"I'll text you with next steps"</p>
+                </div>
+                <div class="flow-step">
+                    <div class="icon">✉️</div>
+                    <h3>Email Request</h3>
+                    <p>"Please reply with your email"</p>
+                </div>
+                <div class="flow-step">
+                    <div class="icon">📧</div>
+                    <h3>Email Sent</h3>
+                    <p>Confirmation + booking link</p>
+                </div>
+                <div class="flow-step">
+                    <div class="icon">📅</div>
+                    <h3>Demo Booked</h3>
+                    <p>Calendar event created</p>
+                </div>
+            </div>
+
+            <div class="test-section">
+                <h2>Test SMS-Email Pipeline</h2>
+                <form id="pipelineForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="businessName">Business Name</label>
+                            <input type="text" id="businessName" name="businessName" value="Test Business" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="decisionMaker">Decision Maker</label>
+                            <input type="text" id="decisionMaker" name="decisionMaker" value="John Smith" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="phoneNumber">Phone Number</label>
+                            <input type="tel" id="phoneNumber" name="phoneNumber" value="+447491683261" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="industry">Industry</label>
+                            <input type="text" id="industry" name="industry" value="retail" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="location">Location</label>
+                        <input type="text" id="location" name="location" value="London" required>
+                    </div>
+
+                    <button type="submit" class="btn" id="initiateBtn">Initiate Lead Capture</button>
+                </form>
+
+                <div id="status" class="status" style="display: none;"></div>
+            </div>
+
+            <div class="stats-section">
+                <h3>📊 Pipeline Statistics</h3>
+                <div class="stats-grid" id="statsGrid">
+                    <div class="stat-item">
+                        <div class="stat-number" id="totalLeads">-</div>
+                        <div class="stat-label">Total Leads</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number" id="waitingForEmail">-</div>
+                        <div class="stat-label">Waiting for Email</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number" id="emailReceived">-</div>
+                        <div class="stat-label">Email Received</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number" id="conversionRate">-</div>
+                        <div class="stat-label">Conversion Rate</div>
+                    </div>
+                </div>
+                <button class="btn" onclick="loadStats()" style="width: auto; margin-top: 15px;">Refresh Stats</button>
+            </div>
+
+            <div class="quick-actions">
+                <div class="quick-action" onclick="testPipeline()">
+                    <h4>🧪 Test Pipeline</h4>
+                    <p>Test the complete SMS-Email pipeline</p>
+                </div>
+                <div class="quick-action" onclick="simulateEmailResponse()">
+                    <h4>📧 Simulate Email Response</h4>
+                    <p>Test email processing with sample data</p>
+                </div>
+                <div class="quick-action" onclick="loadStats()">
+                    <h4>📊 View Statistics</h4>
+                    <p>See pipeline performance metrics</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Load stats on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadStats();
+        });
+
+        document.getElementById('pipelineForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const leadData = {
+                businessName: formData.get('businessName'),
+                decisionMaker: formData.get('decisionMaker'),
+                phoneNumber: formData.get('phoneNumber'),
+                industry: formData.get('industry'),
+                location: formData.get('location')
+            };
+
+            const initiateBtn = document.getElementById('initiateBtn');
+            initiateBtn.disabled = true;
+            initiateBtn.textContent = 'Initiating...';
+
+            try {
+                const response = await fetch('/api/initiate-lead-capture', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ leadData: leadData })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    showStatus('success', `Lead capture initiated! Lead ID: ${result.leadId}`);
+                    loadStats(); // Refresh stats
+                } else {
+                    showStatus('error', result.message || 'Lead capture failed');
+                }
+            } catch (error) {
+                showStatus('error', 'Error initiating lead capture: ' + error.message);
+            } finally {
+                initiateBtn.disabled = false;
+                initiateBtn.textContent = 'Initiate Lead Capture';
+            }
+        });
+
+        async function testPipeline() {
+            try {
+                const response = await fetch('/test-sms-pipeline');
+                const result = await response.json();
+                
+                if (result.success) {
+                    showStatus('success', 'SMS-Email Pipeline test completed successfully!');
+                    loadStats(); // Refresh stats
+                } else {
+                    showStatus('error', 'Pipeline test failed: ' + result.message);
+                }
+            } catch (error) {
+                showStatus('error', 'Error testing pipeline: ' + error.message);
+            }
+        }
+
+        async function simulateEmailResponse() {
+            const phoneNumber = document.getElementById('phoneNumber').value;
+            const emailAddress = prompt('Enter email address to simulate response:');
+            
+            if (!emailAddress) return;
+
+            try {
+                const response = await fetch('/api/process-email-response', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        phoneNumber: phoneNumber,
+                        emailAddress: emailAddress
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    showStatus('success', 'Email response processed successfully!');
+                    loadStats(); // Refresh stats
+                } else {
+                    showStatus('error', result.message || 'Email processing failed');
+                }
+            } catch (error) {
+                showStatus('error', 'Error processing email response: ' + error.message);
+            }
+        }
+
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/pipeline-stats');
+                const result = await response.json();
+                
+                if (result.success) {
+                    const stats = result.stats;
+                    document.getElementById('totalLeads').textContent = stats.totalLeads;
+                    document.getElementById('waitingForEmail').textContent = stats.waitingForEmail;
+                    document.getElementById('emailReceived').textContent = stats.emailReceived;
+                    document.getElementById('conversionRate').textContent = stats.conversionRate + '%';
+                } else {
+                    showStatus('error', 'Failed to load stats: ' + result.message);
+                }
+            } catch (error) {
+                showStatus('error', 'Error loading stats: ' + error.message);
+            }
+        }
+
+        function showStatus(type, message) {
+            const status = document.getElementById('status');
+            status.className = `status ${type}`;
+            status.textContent = message;
+            status.style.display = 'block';
+            
+            setTimeout(() => {
+                status.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
