@@ -7,4 +7,4 @@ Write-Host "🔄 Pulling latest changes from GitHub..." -ForegroundColor Cyan
 & "C:\Program Files\Git\bin\git.exe" pull
 
 Write-Host "✅ Successfully synced from GitHub!" -ForegroundColor Green
-Write-Host "`n📋 Repository: https://github.com/jtlhltd/ai-booking-mvp" -ForegroundColor Cyan
+Write-Host "`n📋 Repository: https://github.com/jtlhltd/ai-booking-mvp (main branch)" -ForegroundColor Cyan

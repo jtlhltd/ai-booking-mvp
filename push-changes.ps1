@@ -25,4 +25,4 @@ if ($status) {
     Write-Host "ℹ️  No changes to commit" -ForegroundColor Blue
 }
 
-Write-Host "`n📋 Repository: https://github.com/jtlhltd/ai-booking-mvp" -ForegroundColor Cyan
+Write-Host "`n📋 Repository: https://github.com/jtlhltd/ai-booking-mvp (main branch)" -ForegroundColor Cyan
