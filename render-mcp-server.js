@@ -103,15 +103,30 @@ class RenderMCPServer {
     }
 
     try {
-      // Simple health check by pinging the service
-      const response = await fetch(`${this.serviceUrl}/health`);
-      const status = response.ok ? '✅ Running' : '❌ Not responding';
+      // Check Render API for service status
+      const renderResponse = await fetch('https://api.render.com/v1/services', {
+        headers: {
+          'Authorization': `Bearer ${this.renderApiKey}`,
+          'Accept': 'application/json'
+        }
+      });
+
+      if (!renderResponse.ok) {
+        throw new Error(`Render API error: ${renderResponse.status} ${renderResponse.statusText}`);
+      }
+
+      const services = await renderResponse.json();
+      const ourService = services.find(service => service.serviceDetails?.url === this.serviceUrl || service.name?.includes('ai-booking'));
+
+      // Also check service health directly
+      const healthResponse = await fetch(`${this.serviceUrl}/health`);
+      const healthStatus = healthResponse.ok ? '✅ Running' : '❌ Not responding';
       
       return {
         content: [
           {
             type: 'text',
-            text: `**Render Service Status:**\n\n- URL: ${this.serviceUrl}\n- Status: ${status}\n- Response Code: ${response.status}`,
+            text: `**Render Service Status:**\n\n- URL: ${this.serviceUrl}\n- Health: ${healthStatus}\n- Response Code: ${healthResponse.status}\n- Render Status: ${ourService?.serviceDetails?.buildCommand || 'Unknown'}\n- Last Deploy: ${ourService?.updatedAt || 'Unknown'}`,
           },
         ],
       };
