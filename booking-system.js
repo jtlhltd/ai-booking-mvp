@@ -14,13 +14,17 @@ class BookingSystem {
   async initializeServices() {
     try {
       // Initialize Google Calendar
-      if (process.env.GOOGLE_CALENDAR_CREDENTIALS) {
-        const credentials = JSON.parse(process.env.GOOGLE_CALENDAR_CREDENTIALS);
+      if (process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY) {
         const auth = new google.auth.GoogleAuth({
-          credentials,
+          credentials: {
+            type: 'service_account',
+            client_email: process.env.GOOGLE_CLIENT_EMAIL,
+            private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n')
+          },
           scopes: ['https://www.googleapis.com/auth/calendar']
         });
         this.calendar = google.calendar({ version: 'v3', auth });
+        console.log('✅ Google Calendar initialized with existing credentials');
       }
 
       // Initialize Email Service
@@ -141,8 +145,8 @@ Notes: Cold call lead - interested in AI booking service
       }
     };
 
-    // Use your specific calendar ID
-    const calendarId = 'd5d33a0894fbea68842cef8513f06557fbe04883ce896f382b70568f0f7ea76b@group.calendar.google.com';
+    // Use your existing calendar ID from environment variable
+    const calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
     
     const response = await this.calendar.events.insert({
       calendarId: calendarId,
