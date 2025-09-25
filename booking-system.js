@@ -69,16 +69,17 @@ class BookingSystem {
         // Book the calendar event
         const calendarEvent = await this.createCalendarEvent(leadData, bookedTime);
         booking.confirmedTime = bookedTime;
-        booking.calendarEventId = calendarEvent.id;
+        booking.calendarEventId = calendarEvent?.id || null;
         booking.status = 'confirmed';
 
         // Send notifications
         await this.sendBookingNotifications(booking);
 
+        const calendarMessage = calendarEvent ? 'Calendar event created and ' : 'Calendar not configured, but ';
         return {
           success: true,
           booking: booking,
-          message: `Demo booked for ${bookedTime.startTime} on ${bookedTime.date}`
+          message: `${calendarMessage}demo booked for ${bookedTime.startTime} on ${bookedTime.date}`
         };
       } else {
         // No available slots, send follow-up email
@@ -102,7 +103,8 @@ class BookingSystem {
 
   async createCalendarEvent(leadData, timeSlot) {
     if (!this.calendar) {
-      throw new Error('Google Calendar not configured');
+      console.log('📅 Google Calendar not configured - skipping calendar event creation');
+      return null; // Return null instead of throwing error
     }
 
     const event = {
