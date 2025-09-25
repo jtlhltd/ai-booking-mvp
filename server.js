@@ -152,6 +152,57 @@ app.get('/vapi-test-dashboard', (req, res) => {
   res.sendFile(path.join(process.cwd(), 'public', 'vapi-test-dashboard.html'));
 });
 
+// Simple VAPI Test Route (No API Key Required)
+app.get('/test-vapi', async (req, res) => {
+  try {
+    const vapiKey = process.env.VAPI_PRIVATE_KEY || process.env.VAPI_PUBLIC_KEY || process.env.VAPI_API_KEY;
+    
+    if (!vapiKey) {
+      return res.json({
+        success: false,
+        message: 'VAPI API key not found',
+        availableKeys: {
+          VAPI_PRIVATE_KEY: !!process.env.VAPI_PRIVATE_KEY,
+          VAPI_PUBLIC_KEY: !!process.env.VAPI_PUBLIC_KEY,
+          VAPI_API_KEY: !!process.env.VAPI_API_KEY
+        }
+      });
+    }
+    
+    const vapiResponse = await fetch('https://api.vapi.ai/assistant', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${vapiKey}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (vapiResponse.ok) {
+      const assistants = await vapiResponse.json();
+      res.json({
+        success: true,
+        message: 'VAPI connection successful!',
+        assistantsCount: assistants.length,
+        assistantId: 'dd67a51c-7485-4b62-930a-4a84f328a1c9'
+      });
+    } else {
+      const errorData = await vapiResponse.json();
+      res.json({
+        success: false,
+        message: 'VAPI API call failed',
+        error: errorData
+      });
+    }
+    
+  } catch (error) {
+    res.json({
+      success: false,
+      message: 'VAPI test failed',
+      error: error.message
+    });
+  }
+});
+
 // Quick Assistant Creation Route (No API Key Required)
 app.get('/create-assistant', async (req, res) => {
   try {
