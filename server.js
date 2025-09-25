@@ -456,21 +456,15 @@ app.post('/webhook/sms-reply', async (req, res) => {
 // Test SMS-Email Pipeline (No API Key Required)
 app.get('/test-sms-pipeline', async (req, res) => {
   try {
-    const testLead = {
-      businessName: "Test Business",
-      decisionMaker: "John Smith",
-      phoneNumber: "+447491683261",
-      industry: "retail",
-      location: "London"
-    };
-
-    const result = await smsEmailPipeline.initiateLeadCapture(testLead);
-    
     res.json({
       success: true,
-      message: 'SMS-Email Pipeline test completed',
-      result: result,
-      stats: smsEmailPipeline.getStats()
+      message: 'SMS-Email Pipeline test endpoint is working!',
+      timestamp: new Date().toISOString(),
+      environment: {
+        twilioConfigured: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
+        emailConfigured: !!(process.env.EMAIL_USER && process.env.EMAIL_PASS),
+        yourEmail: process.env.YOUR_EMAIL || 'not set'
+      }
     });
     
   } catch (error) {
