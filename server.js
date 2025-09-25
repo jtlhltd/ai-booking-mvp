@@ -158,10 +158,11 @@ app.get('/create-assistant', async (req, res) => {
     console.log('[QUICK ASSISTANT CREATION] Creating cold call assistant');
     
     // Check if VAPI API key is configured
-    if (!process.env.VAPI_API_KEY) {
+    const vapiKey = process.env.VAPI_PRIVATE_KEY || process.env.VAPI_PUBLIC_KEY || process.env.VAPI_API_KEY;
+    if (!vapiKey) {
       return res.status(500).json({
         error: 'VAPI API key not configured',
-        message: 'Please add VAPI_API_KEY to your environment variables'
+        message: 'Please add VAPI_PRIVATE_KEY, VAPI_PUBLIC_KEY, or VAPI_API_KEY to your environment variables'
       });
     }
     
@@ -264,7 +265,7 @@ RULES:
     const vapiResponse = await fetch('https://api.vapi.ai/assistant', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.VAPI_API_KEY}`,
+        'Authorization': `Bearer ${vapiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(coldCallAssistant)
@@ -6975,7 +6976,7 @@ RULES:
     const vapiResponse = await fetch('https://api.vapi.ai/assistant', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.VAPI_API_KEY}`,
+        'Authorization': `Bearer ${vapiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(coldCallAssistant)
@@ -7171,7 +7172,7 @@ async function startColdCallCampaign(campaign) {
           const callResponse = await fetch('https://api.vapi.ai/call', {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${process.env.VAPI_API_KEY}`,
+              'Authorization': `Bearer ${vapiKey}`,
               'Content-Type': 'application/json'
             },
             body: JSON.stringify(callData)
@@ -7294,7 +7295,7 @@ app.post('/admin/vapi/ab-test-assistant', async (req, res) => {
       const vapiResponse = await fetch('https://api.vapi.ai/assistant', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${process.env.VAPI_API_KEY}`,
+          'Authorization': `Bearer ${vapiKey}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(assistant)
@@ -7771,7 +7772,7 @@ app.post('/admin/vapi/personalized-assistant', async (req, res) => {
     const vapiResponse = await fetch('https://api.vapi.ai/assistant', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.VAPI_API_KEY}`,
+        'Authorization': `Bearer ${vapiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(assistant)
@@ -7949,7 +7950,7 @@ app.get('/admin/vapi/test-connection', async (req, res) => {
     const vapiResponse = await fetch('https://api.vapi.ai/assistant', {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${process.env.VAPI_API_KEY}`,
+        'Authorization': `Bearer ${vapiKey}`,
         'Content-Type': 'application/json'
       }
     });
@@ -8029,7 +8030,7 @@ app.post('/admin/vapi/test-call', async (req, res) => {
       const assistantResponse = await fetch('https://api.vapi.ai/assistant', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${process.env.VAPI_API_KEY}`,
+          'Authorization': `Bearer ${vapiKey}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(testAssistant)
@@ -8053,7 +8054,7 @@ app.post('/admin/vapi/test-call', async (req, res) => {
     const callResponse = await fetch('https://api.vapi.ai/call', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.VAPI_API_KEY}`,
+        'Authorization': `Bearer ${vapiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -8123,7 +8124,7 @@ app.post('/admin/vapi/assistants', async (req, res) => {
     const vapiResponse = await fetch('https://api.vapi.ai/assistant', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.VAPI_API_KEY}`,
+        'Authorization': `Bearer ${vapiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -8190,7 +8191,7 @@ app.post('/admin/vapi/phone-numbers', async (req, res) => {
     const vapiResponse = await fetch('https://api.vapi.ai/phone-number', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.VAPI_API_KEY}`,
+        'Authorization': `Bearer ${vapiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -8251,7 +8252,7 @@ app.post('/admin/vapi/calls', async (req, res) => {
     const vapiResponse = await fetch('https://api.vapi.ai/call', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.VAPI_API_KEY}`,
+        'Authorization': `Bearer ${vapiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
