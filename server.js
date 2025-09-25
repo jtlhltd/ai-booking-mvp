@@ -3120,7 +3120,7 @@ function requireApiKey(req, res, next) {
 app.get('/api/test', (req, res) => {
   res.json({ 
     success: true, 
-    message: 'Test endpoint working', 
+    message: 'Test endpoint working - SMS pipeline ready', 
     timestamp: new Date().toISOString(),
     env: {
       googlePlaces: process.env.GOOGLE_PLACES_API_KEY ? 'SET' : 'NOT SET',
