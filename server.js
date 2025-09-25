@@ -3101,7 +3101,7 @@ function deriveIdemKey(req) {
 function requireApiKey(req, res, next) {
   if (req.method === 'GET' && (req.path === '/health' || req.path === '/gcal/ping' || req.path === '/healthz')) return next();
   if (req.path.startsWith('/webhooks/twilio-status') || req.path.startsWith('/webhooks/twilio-inbound') || req.path.startsWith('/webhooks/twilio/sms-inbound') || req.path.startsWith('/webhooks/vapi')) return next();
-  if (req.path === '/api/test' || req.path === '/api/test-linkedin' || req.path === '/api/uk-business-search' || req.path === '/api/decision-maker-contacts' || req.path === '/api/industry-categories') return next();
+  if (req.path === '/api/test' || req.path === '/api/test-linkedin' || req.path === '/api/uk-business-search' || req.path === '/api/decision-maker-contacts' || req.path === '/api/industry-categories' || req.path === '/test-sms-pipeline') return next();
   if (req.path === '/uk-business-search') return next();
   if (!API_KEY) return res.status(500).json({ error: 'Server missing API_KEY' });
   const key = req.get('X-API-Key');
