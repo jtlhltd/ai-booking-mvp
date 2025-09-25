@@ -141,11 +141,15 @@ Notes: Cold call lead - interested in AI booking service
       }
     };
 
+    // Use your specific calendar ID
+    const calendarId = 'd5d33a0894fbea68842cef8513f06557fbe04883ce896f382b70568f0f7ea76b@group.calendar.google.com';
+    
     const response = await this.calendar.events.insert({
-      calendarId: 'primary',
+      calendarId: calendarId,
       resource: event
     });
 
+    console.log('📅 Calendar event created:', response.data.id);
     return response.data;
   }
 
