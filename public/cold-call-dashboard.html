@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cold Call Campaign Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .dashboard {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            padding: 30px;
+            background: #f8f9fa;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-number {
+            font-size: 3em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .stat-label {
+            font-size: 1.1em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .stat-change {
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+
+        .positive { color: #27ae60; }
+        .negative { color: #e74c3c; }
+
+        .content {
+            padding: 30px;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+
+        .campaign-list {
+            display: grid;
+            gap: 20px;
+        }
+
+        .campaign-card {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 15px;
+            border-left: 5px solid #3498db;
+        }
+
+        .campaign-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .campaign-name {
+            font-size: 1.4em;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .campaign-status {
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+
+        .status-active { background: #d4edda; color: #155724; }
+        .status-paused { background: #fff3cd; color: #856404; }
+        .status-completed { background: #f8d7da; color: #721c24; }
+
+        .campaign-metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .metric {
+            text-align: center;
+            padding: 10px;
+            background: white;
+            border-radius: 10px;
+        }
+
+        .metric-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #3498db;
+        }
+
+        .metric-label {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-bottom: 30px;
+        }
+
+        .btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #27ae60, #229954);
+            color: white;
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: white;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .lead-queue {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+        }
+
+        .queue-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .queue-item {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .lead-info h4 {
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .lead-details {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .priority-badge {
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+
+        .priority-high { background: #e74c3c; color: white; }
+        .priority-medium { background: #f39c12; color: white; }
+        .priority-low { background: #27ae60; color: white; }
+
+        .chart-container {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #ecf0f1;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3498db, #2980b9);
+            transition: width 0.3s ease;
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            }
+            
+            .campaign-metrics {
+                grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            }
+            
+            .controls {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="header">
+            <h1>🎯 Cold Call Campaign Dashboard</h1>
+            <p>AI-Powered Appointment Booking for Dental Practices</p>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number" id="totalCalls">0</div>
+                <div class="stat-label">Total Calls Made</div>
+                <div class="stat-change positive" id="callsChange">+0%</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="appointmentsBooked">0</div>
+                <div class="stat-label">Appointments Booked</div>
+                <div class="stat-change positive" id="appointmentsChange">+0%</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="conversionRate">0%</div>
+                <div class="stat-label">Conversion Rate</div>
+                <div class="stat-change positive" id="conversionChange">+0%</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="estimatedRevenue">£0</div>
+                <div class="stat-label">Estimated Revenue</div>
+                <div class="stat-change positive" id="revenueChange">+£0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="activeCampaigns">0</div>
+                <div class="stat-label">Active Campaigns</div>
+                <div class="stat-change" id="campaignsChange">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="leadsInQueue">0</div>
+                <div class="stat-label">Leads in Queue</div>
+                <div class="stat-change" id="queueChange">0</div>
+            </div>
+        </div>
+
+        <div class="content">
+            <div class="section">
+                <h2>🚀 Campaign Management</h2>
+                <div class="controls">
+                    <button class="btn btn-primary" onclick="createNewCampaign()">+ New Campaign</button>
+                    <button class="btn btn-success" onclick="startCampaign()">▶️ Start Campaign</button>
+                    <button class="btn btn-warning" onclick="pauseCampaign()">⏸️ Pause Campaign</button>
+                    <button class="btn btn-danger" onclick="stopCampaign()">⏹️ Stop Campaign</button>
+                    <button class="btn btn-primary" onclick="refreshData()">🔄 Refresh Data</button>
+                </div>
+
+                <div class="campaign-list" id="campaignList">
+                    <!-- Campaigns will be populated here -->
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>📊 Performance Analytics</h2>
+                <div class="chart-container">
+                    <h3>Conversion Rate Over Time</h3>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="conversionProgress" style="width: 0%"></div>
+                    </div>
+                    <p>Current conversion rate: <span id="currentConversion">0%</span></p>
+                </div>
+
+                <div class="chart-container">
+                    <h3>Top Pain Points</h3>
+                    <div id="painPointsChart">
+                        <!-- Pain points will be populated here -->
+                    </div>
+                </div>
+
+                <div class="chart-container">
+                    <h3>Best Performing Times</h3>
+                    <div id="bestTimesChart">
+                        <!-- Best times will be populated here -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>📋 Lead Queue</h2>
+                <div class="lead-queue">
+                    <div class="queue-header">
+                        <h3>Next Calls</h3>
+                        <button class="btn btn-primary" onclick="processQueue()">Process Queue</button>
+                    </div>
+                    <div id="leadQueue">
+                        <!-- Lead queue will be populated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let campaigns = [];
+        let leads = [];
+        let analytics = {};
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDashboardData();
+            setInterval(refreshData, 30000); // Refresh every 30 seconds
+        });
+
+        // Load dashboard data
+        async function loadDashboardData() {
+            try {
+                // Load campaigns
+                const campaignsResponse = await fetch('/api/cold-call/campaigns', {
+                    headers: { 'X-API-Key': 'ad34b1de00c5b7380d6a447abcd78874' }
+                });
+                campaigns = await campaignsResponse.json();
+
+                // Load analytics
+                const analyticsResponse = await fetch('/api/cold-call/analytics', {
+                    headers: { 'X-API-Key': 'ad34b1de00c5b7380d6a447abcd78874' }
+                });
+                analytics = await analyticsResponse.json();
+
+                // Load lead queue
+                const queueResponse = await fetch('/api/cold-call/queue', {
+                    headers: { 'X-API-Key': 'ad34b1de00c5b7380d6a447abcd78874' }
+                });
+                leads = await queueResponse.json();
+
+                updateDashboard();
+            } catch (error) {
+                console.error('Error loading dashboard data:', error);
+                // Use mock data for demo
+                loadMockData();
+            }
+        }
+
+        // Load mock data for demo
+        function loadMockData() {
+            campaigns = [
+                {
+                    id: 'campaign_1',
+                    name: 'Dental Practice Outreach - London',
+                    status: 'active',
+                    results: {
+                        totalCalls: 245,
+                        appointmentsBooked: 37,
+                        conversionRate: 15.1,
+                        revenue: 222000
+                    },
+                    createdAt: '2025-09-20T10:00:00Z'
+                },
+                {
+                    id: 'campaign_2',
+                    name: 'Premium Practice Campaign',
+                    status: 'active',
+                    results: {
+                        totalCalls: 89,
+                        appointmentsBooked: 18,
+                        conversionRate: 20.2,
+                        revenue: 108000
+                    },
+                    createdAt: '2025-09-22T14:30:00Z'
+                }
+            ];
+
+            analytics = {
+                totalCalls: 334,
+                appointmentsBooked: 55,
+                conversionRate: 16.5,
+                estimatedRevenue: 330000,
+                topPainPoints: [
+                    { pain: 'missed_calls', count: 45 },
+                    { pain: 'no_shows', count: 32 },
+                    { pain: 'scheduling_conflicts', count: 28 }
+                ],
+                bestPerformingTimes: [
+                    { hour: 14, calls: 67 },
+                    { hour: 10, calls: 54 },
+                    { hour: 16, calls: 43 }
+                ]
+            };
+
+            leads = [
+                {
+                    id: 'lead_1',
+                    business: { name: 'Bright Smile Dental', phone: '+441234567890' },
+                    decisionMaker: { name: 'Dr. Sarah Johnson', role: 'owner' },
+                    priority: 85,
+                    status: 'queued'
+                },
+                {
+                    id: 'lead_2',
+                    business: { name: 'Perfect Teeth Clinic', phone: '+441234567891' },
+                    decisionMaker: { name: 'Mike Thompson', role: 'manager' },
+                    priority: 72,
+                    status: 'queued'
+                }
+            ];
+
+            updateDashboard();
+        }
+
+        // Update dashboard with current data
+        function updateDashboard() {
+            updateStats();
+            updateCampaignList();
+            updateLeadQueue();
+            updateCharts();
+        }
+
+        // Update statistics
+        function updateStats() {
+            document.getElementById('totalCalls').textContent = analytics.totalCalls || 0;
+            document.getElementById('appointmentsBooked').textContent = analytics.appointmentsBooked || 0;
+            document.getElementById('conversionRate').textContent = `${analytics.conversionRate || 0}%`;
+            document.getElementById('estimatedRevenue').textContent = `£${(analytics.estimatedRevenue || 0).toLocaleString()}`;
+            document.getElementById('activeCampaigns').textContent = campaigns.filter(c => c.status === 'active').length;
+            document.getElementById('leadsInQueue').textContent = leads.filter(l => l.status === 'queued').length;
+
+            // Update progress bar
+            const conversionProgress = document.getElementById('conversionProgress');
+            const currentConversion = document.getElementById('currentConversion');
+            const conversionRate = analytics.conversionRate || 0;
+            conversionProgress.style.width = `${Math.min(conversionRate * 5, 100)}%`;
+            currentConversion.textContent = `${conversionRate}%`;
+        }
+
+        // Update campaign list
+        function updateCampaignList() {
+            const campaignList = document.getElementById('campaignList');
+            campaignList.innerHTML = campaigns.map(campaign => `
+                <div class="campaign-card">
+                    <div class="campaign-header">
+                        <div class="campaign-name">${campaign.name}</div>
+                        <div class="campaign-status status-${campaign.status}">${campaign.status}</div>
+                    </div>
+                    <div class="campaign-metrics">
+                        <div class="metric">
+                            <div class="metric-value">${campaign.results.totalCalls}</div>
+                            <div class="metric-label">Calls</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value">${campaign.results.appointmentsBooked}</div>
+                            <div class="metric-label">Booked</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value">${campaign.results.conversionRate}%</div>
+                            <div class="metric-label">Rate</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value">£${campaign.results.revenue.toLocaleString()}</div>
+                            <div class="metric-label">Revenue</div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Update lead queue
+        function updateLeadQueue() {
+            const leadQueue = document.getElementById('leadQueue');
+            const queuedLeads = leads.filter(l => l.status === 'queued').slice(0, 10);
+            
+            leadQueue.innerHTML = queuedLeads.map(lead => {
+                const priorityClass = lead.priority > 80 ? 'priority-high' : 
+                                    lead.priority > 60 ? 'priority-medium' : 'priority-low';
+                
+                return `
+                    <div class="queue-item">
+                        <div class="lead-info">
+                            <h4>${lead.business.name}</h4>
+                            <div class="lead-details">
+                                ${lead.decisionMaker.name} (${lead.decisionMaker.role}) • ${lead.business.phone}
+                            </div>
+                        </div>
+                        <div class="priority-badge ${priorityClass}">
+                            Priority: ${lead.priority}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Update charts
+        function updateCharts() {
+            // Update pain points chart
+            const painPointsChart = document.getElementById('painPointsChart');
+            painPointsChart.innerHTML = analytics.topPainPoints?.map(pain => `
+                <div style="margin-bottom: 10px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                        <span>${pain.pain.replace('_', ' ')}</span>
+                        <span>${pain.count}</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${(pain.count / analytics.topPainPoints[0].count) * 100}%"></div>
+                    </div>
+                </div>
+            `).join('') || '<p>No data available</p>';
+
+            // Update best times chart
+            const bestTimesChart = document.getElementById('bestTimesChart');
+            bestTimesChart.innerHTML = analytics.bestPerformingTimes?.map(time => `
+                <div style="margin-bottom: 10px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                        <span>${time.hour}:00</span>
+                        <span>${time.calls} calls</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${(time.calls / analytics.bestPerformingTimes[0].calls) * 100}%"></div>
+                    </div>
+                </div>
+            `).join('') || '<p>No data available</p>';
+        }
+
+        // Campaign management functions
+        async function createNewCampaign() {
+            const name = prompt('Enter campaign name:');
+            if (!name) return;
+
+            try {
+                const response = await fetch('/api/cold-call/campaigns', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-Key': 'ad34b1de00c5b7380d6a447abcd78874'
+                    },
+                    body: JSON.stringify({ name })
+                });
+
+                if (response.ok) {
+                    alert('Campaign created successfully!');
+                    refreshData();
+                } else {
+                    alert('Failed to create campaign');
+                }
+            } catch (error) {
+                console.error('Error creating campaign:', error);
+                alert('Error creating campaign');
+            }
+        }
+
+        async function startCampaign() {
+            if (confirm('Start the campaign?')) {
+                try {
+                    const response = await fetch('/api/cold-call/start', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-API-Key': 'ad34b1de00c5b7380d6a447abcd78874'
+                        }
+                    });
+
+                    if (response.ok) {
+                        alert('Campaign started!');
+                        refreshData();
+                    } else {
+                        alert('Failed to start campaign');
+                    }
+                } catch (error) {
+                    console.error('Error starting campaign:', error);
+                    alert('Error starting campaign');
+                }
+            }
+        }
+
+        async function pauseCampaign() {
+            if (confirm('Pause the campaign?')) {
+                try {
+                    const response = await fetch('/api/cold-call/pause', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-API-Key': 'ad34b1de00c5b7380d6a447abcd78874'
+                        }
+                    });
+
+                    if (response.ok) {
+                        alert('Campaign paused!');
+                        refreshData();
+                    } else {
+                        alert('Failed to pause campaign');
+                    }
+                } catch (error) {
+                    console.error('Error pausing campaign:', error);
+                    alert('Error pausing campaign');
+                }
+            }
+        }
+
+        async function stopCampaign() {
+            if (confirm('Stop the campaign? This cannot be undone.')) {
+                try {
+                    const response = await fetch('/api/cold-call/stop', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-API-Key': 'ad34b1de00c5b7380d6a447abcd78874'
+                        }
+                    });
+
+                    if (response.ok) {
+                        alert('Campaign stopped!');
+                        refreshData();
+                    } else {
+                        alert('Failed to stop campaign');
+                    }
+                } catch (error) {
+                    console.error('Error stopping campaign:', error);
+                    alert('Error stopping campaign');
+                }
+            }
+        }
+
+        async function processQueue() {
+            if (confirm('Process the lead queue?')) {
+                try {
+                    const response = await fetch('/api/cold-call/process-queue', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-API-Key': 'ad34b1de00c5b7380d6a447abcd78874'
+                        }
+                    });
+
+                    if (response.ok) {
+                        alert('Queue processing started!');
+                        refreshData();
+                    } else {
+                        alert('Failed to process queue');
+                    }
+                } catch (error) {
+                    console.error('Error processing queue:', error);
+                    alert('Error processing queue');
+                }
+            }
+        }
+
+        async function refreshData() {
+            await loadDashboardData();
+        }
+    </script>
+</body>
+</html>

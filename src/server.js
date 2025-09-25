@@ -68,6 +68,7 @@ import twilio from 'twilio';
 import { createHash } from 'crypto';
 
 import { makeJwtAuth, insertEvent, freeBusy } from './gcal.js';
+import setupColdCallAPI from './cold-call-api.js';
 import { init as initDb,  upsertFullClient, getFullClient, listFullClients, deleteClient, DB_PATH } from './db.js'; // SQLite-backed tenants
 import { 
   authenticateApiKey, 
@@ -7637,6 +7638,9 @@ app.post('/admin/vapi/calls', async (req, res) => {
     res.status(500).json({ ok: false, error: String(e?.message || e) });
   }
 });
+
+// Setup Cold Call API
+setupColdCallAPI(app);
 
 // Error handling middleware (must be last)
 app.use(errorHandler);
