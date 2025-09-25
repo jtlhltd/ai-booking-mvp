@@ -7645,7 +7645,7 @@ app.post('/admin/vapi/calls', async (req, res) => {
 // Error handling middleware (must be last)
 app.use(errorHandler);
 
-app.listen(process.env.PORT ? Number(process.env.PORT) : 10000, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`AI Booking MVP listening on http://localhost:${PORT} (DB: ${DB_PATH})`);
   console.log(`Security middleware: Enhanced authentication and rate limiting enabled`);
 });
