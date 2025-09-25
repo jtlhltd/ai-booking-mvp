@@ -55,3 +55,29 @@ export const compressionMiddleware = compression();
 
 // Morgan logging middleware
 export const morganMiddleware = morgan('combined');
+
+// API Key authentication middleware
+export function authenticateApiKey(req, res, next) {
+  const apiKey = req.headers['x-api-key'] || req.query.apiKey;
+  
+  if (!apiKey) {
+    return res.status(401).json({ error: 'API key required' });
+  }
+  
+  // TODO: Implement proper API key validation
+  // For now, just pass through
+  req.authenticatedClient = { apiKey };
+  next();
+}
+
+// Client key middleware
+export function requireClientKey(req, res, next) {
+  const clientKey = req.params.clientKey || req.headers['x-client-key'];
+  
+  if (!clientKey) {
+    return res.status(400).json({ error: 'Client key required' });
+  }
+  
+  req.clientKey = clientKey;
+  next();
+}
