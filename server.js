@@ -168,21 +168,20 @@ app.get('/create-assistant', async (req, res) => {
     
     // Create specialized cold calling assistant for dental practices
     const coldCallAssistant = {
-      name: "Dental Practice Cold Call Bot - £500/month",
+      name: "Dental Cold Call Bot - £500/mo",
       model: {
         provider: "openai",
-        model: "gpt-4o", // Use the most advanced model
-        temperature: 0.3, // Lower for more consistent responses
-        maxTokens: 200, // Allow more detailed responses
-        systemMessage: "You are an expert sales professional with 10+ years experience in B2B sales. Focus on building rapport, identifying pain points, and creating urgency."
+        model: "gpt-4o",
+        temperature: 0.3,
+        maxTokens: 200
       },
       voice: {
-        provider: "elevenlabs",
-        voiceId: "21m00Tcm4TlvDq8ikWAM", // Professional female voice
-        stability: 0.7, // Higher stability for consistency
-        clarity: 0.85, // Higher clarity for better understanding
-        style: 0.2, // Slight style for warmth
-        similarityBoost: 0.8 // Boost similarity to original voice
+        provider: "11labs",
+        voiceId: "21m00Tcm4TlvDq8ikWAM",
+        stability: 0.7,
+        clarity: 0.85,
+        style: 0.2,
+        similarityBoost: 0.8
       },
       firstMessage: "Hi, this is Sarah from AI Booking Solutions. I'm calling to help dental practices like yours increase their appointment bookings by 300% with our premium £500/month service. Do you have 2 minutes to hear how we can help you never miss another patient?",
       systemMessage: `You are Sarah, a top-performing sales professional with 10+ years experience in B2B healthcare sales. You're calling dental practice owners/managers to book qualified appointments.
@@ -249,14 +248,13 @@ RULES:
 - If they're not the decision maker, get their name and ask for the right person
 - Use their practice name in conversation
 - End with a clear next step`,
-      maxDurationSeconds: 180, // 3 minutes max
+      maxDurationSeconds: 180,
       endCallMessage: "Thank you for your time. I'll send you some information about how we can help your practice increase bookings. Have a great day!",
       endCallPhrases: ["not interested", "not right now", "call back later", "send me information"],
       recordingEnabled: true,
       voicemailDetectionEnabled: true,
       backgroundSound: "office",
-      interruptionThreshold: 500,
-      silenceTimeoutSeconds: 5,
+      silenceTimeoutSeconds: 10,
       responseDelaySeconds: 1,
       llmRequestDelaySeconds: 0.1
     };
