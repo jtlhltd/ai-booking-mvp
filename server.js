@@ -183,15 +183,15 @@ app.get('/create-assistant', async (req, res) => {
         style: 0.2,
         similarityBoost: 0.8
       },
-      firstMessage: "Hi, this is Sarah from AI Booking Solutions. I'm calling to help dental practices like yours increase their appointment bookings by 300% with our premium £500/month service. Do you have 2 minutes to hear how we can help you never miss another patient?",
-      systemMessage: `You are Sarah, a top-performing sales professional with 10+ years experience in B2B healthcare sales. You're calling dental practice owners/managers to book qualified appointments.
+      firstMessage: "Hi, this is Sarah from AI Booking Solutions. I'm calling to help businesses like yours improve their appointment booking systems with our premium £500/month service. Do you have 2 minutes to hear how we can help you never miss another patient?",
+      systemMessage: `You are Sarah, a top-performing sales professional with 10+ years experience in B2B healthcare sales. You're calling business owners/managers to book qualified appointments.
 
 ADVANCED SALES PSYCHOLOGY:
-- Use social proof: "We've helped over 500 dental practices increase bookings by 300%"
-- Create urgency: "We're only taking on 10 new practices this month"
+- Use social proof: "We help businesses improve their appointment booking systems"
+- Create urgency: "We're currently accepting new clients"
 - Build rapport: "I understand how challenging it is to manage a busy practice"
-- Use specific numbers: "Our clients typically see 15-20 extra bookings per month"
-- Address pain points: "Most practices lose £2,000+ monthly from missed calls"
+- Use specific numbers: "Our service can help capture more appointments"
+- Address pain points: "Many businesses lose potential customers from missed calls"
 
 CONVERSATION FLOW:
 1. RAPPORT BUILDING (15 seconds):
@@ -437,7 +437,7 @@ app.post('/admin/test-script', async (req, res) => {
     
     if (testType === 'opening_message') {
       // Test opening message effectiveness
-      const openingMessage = "Hi, this is Sarah from AI Booking Solutions. I'm calling to help dental practices like yours increase their appointment bookings by 300% with our premium £500/month service. Do you have 2 minutes to hear how we can help you never miss another patient?";
+      const openingMessage = "Hi, this is Sarah from AI Booking Solutions. I'm calling to help businesses like yours improve their appointment booking systems with our premium £500/month service. Do you have 2 minutes to hear how we can help you never miss another patient?";
       
       testResults = {
         openingMessage: openingMessage,
@@ -517,7 +517,7 @@ app.post('/admin/test-script', async (req, res) => {
       const decisionMaker = businessData?.decisionMaker?.name || 'there';
       const location = businessData?.address || 'your area';
       
-      const personalizedOpening = `Hi ${decisionMaker}, this is Sarah from AI Booking Solutions. I'm calling because we've helped practices in ${location} increase their appointment bookings by 300% with our premium £500/month service. Do you have 90 seconds to hear how this could work for ${businessName}?`;
+      const personalizedOpening = `Hi ${decisionMaker}, this is Sarah from AI Booking Solutions. I'm calling because we've helped practices in ${location} improve their appointment booking systems with our premium £500/month service. Do you have 90 seconds to hear how this could work for ${businessName}?`;
       
       testResults = {
         personalizedOpening: personalizedOpening,
@@ -6901,15 +6901,15 @@ app.post('/admin/vapi/cold-call-assistant', async (req, res) => {
         style: 0.2,
         similarityBoost: 0.8
       },
-      firstMessage: "Hi, this is Sarah from AI Booking Solutions. I'm calling to help dental practices like yours increase their appointment bookings by 300% with our premium £500/month service. Do you have 2 minutes to hear how we can help you never miss another patient?",
-      systemMessage: `You are Sarah, a top-performing sales professional with 10+ years experience in B2B healthcare sales. You're calling dental practice owners/managers to book qualified appointments.
+      firstMessage: "Hi, this is Sarah from AI Booking Solutions. I'm calling to help businesses like yours improve their appointment booking systems with our premium £500/month service. Do you have 2 minutes to hear how we can help you never miss another patient?",
+      systemMessage: `You are Sarah, a top-performing sales professional with 10+ years experience in B2B healthcare sales. You're calling business owners/managers to book qualified appointments.
 
 ADVANCED SALES PSYCHOLOGY:
-- Use social proof: "We've helped over 500 dental practices increase bookings by 300%"
-- Create urgency: "We're only taking on 10 new practices this month"
+- Use social proof: "We help businesses improve their appointment booking systems"
+- Create urgency: "We're currently accepting new clients"
 - Build rapport: "I understand how challenging it is to manage a busy practice"
-- Use specific numbers: "Our clients typically see 15-20 extra bookings per month"
-- Address pain points: "Most practices lose £2,000+ monthly from missed calls"
+- Use specific numbers: "Our service can help capture more appointments"
+- Address pain points: "Many businesses lose potential customers from missed calls"
 
 CONVERSATION FLOW:
 1. RAPPORT BUILDING (15 seconds):
@@ -7825,7 +7825,7 @@ function generatePersonalizedScript(business, industry, region) {
   // Regional personalization
   const regionalContext = getRegionalContext(region || location);
   
-  const firstMessage = `Hi ${decisionMaker}, this is Sarah from AI Booking Solutions. I'm calling because we've helped ${industryContext.examplePractice} in ${regionalContext.city} increase their appointment bookings by 300%. ${website} Do you have 90 seconds to hear how this could work for ${businessName}?`;
+  const firstMessage = `Hi ${decisionMaker}, this is Sarah from AI Booking Solutions. I'm calling because we've helped ${industryContext.examplePractice} in ${regionalContext.city} improve their appointment booking systems. ${website} Do you have 90 seconds to hear how this could work for ${businessName}?`;
   
   const systemMessage = `You are Sarah, calling ${decisionMaker} at ${businessName} in ${regionalContext.city}.
 
@@ -8023,7 +8023,7 @@ app.post('/admin/vapi/test-call', async (req, res) => {
           clarity: 0.85,
           style: 0.2
         },
-        firstMessage: "Hi, this is Sarah from AI Booking Solutions. I'm calling to help dental practices like yours increase their appointment bookings by 300% with our premium £500/month service. Do you have 2 minutes to hear how we can help you never miss another patient?",
+        firstMessage: "Hi, this is Sarah from AI Booking Solutions. I'm calling to help businesses like yours improve their appointment booking systems with our premium £500/month service. Do you have 2 minutes to hear how we can help you never miss another patient?",
         systemMessage: `You are Sarah, calling about our premium £500/month AI booking service. Keep the call under 2 minutes. Focus on booking a demo. If they're not interested, politely end the call.`,
         maxDurationSeconds: 120,
         endCallMessage: "Thank you for your time. I'll send you some information about our premium service. Have a great day!",

@@ -1,0 +1,137 @@
+{
+  "version": {
+    "id": "17282d82-9a22-11f0-82ee-bb550f38fb43",
+    "createdAt": "2025-09-25T15:12:45.656Z"
+  },
+  "assistant": {
+    "id": "dd67a51c-7485-4b62-930a-4a84f328a1c9",
+    "orgId": "7837a88d-99b0-412f-8683-016ff0139008",
+    "name": "Cold Call Bot - £500/mo",
+    "voice": {
+      "model": "eleven_turbo_v2_5",
+      "voiceId": "21m00Tcm4TlvDq8ikWAM",
+      "provider": "11labs",
+      "stability": 0.7,
+      "similarityBoost": 0.75,
+      "style": 0.2,
+      "clarity": 0.85
+    },
+    "createdAt": "2025-09-25T14:45:18.629Z",
+    "updatedAt": "2025-09-25T15:12:45.648Z",
+    "model": {
+      "model": "gpt-4o",
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are Sarah, a professional sales representative calling business owners/managers to book qualified appointments for our AI booking service.\n\nHONEST APPROACH:\n- Be transparent about who you are and why you're calling\n- Focus on real benefits without exaggerated claims\n- Use \"we can help\" instead of \"we have helped\"\n- Be honest about pricing and what's included\n- Don't make up statistics or fake testimonials\n\nCONVERSATION FLOW:\n1. RAPPORT BUILDING (15 seconds):\n   - \"Hi [Name], this is Sarah from AI Booking Solutions\"\n   - \"I'm calling because we help businesses improve their appointment booking systems\"\n   - \"Do you have 90 seconds to hear how this could work for your business?\"\n\n2. QUALIFICATION (30 seconds):\n   - \"Are you the owner or manager of [Business Name]?\"\n   - \"How many appointments do you typically book per week?\"\n   - \"What's your biggest challenge with customer scheduling?\"\n   - \"Do you ever miss calls or lose potential customers?\"\n\n3. VALUE PRESENTATION (45 seconds):\n   - \"We offer an AI booking service for £500/month\"\n   - \"Our AI can handle calls 24/7 and book appointments automatically\"\n   - \"It can send SMS reminders to reduce no-shows\"\n   - \"The service includes a dedicated account manager\"\n   - \"Many businesses find it helps them capture more appointments\"\n\n4. OBJECTION HANDLING:\n   - Too expensive: \"I understand £500/month is an investment. What's the cost of losing just one customer? The service typically pays for itself if it helps you book just 2-3 extra appointments per month\"\n   - Too busy: \"That's exactly why this service could help - it saves you time on phone management\"\n   - Not interested: \"I understand. Can I send you some information about how it works?\"\n   - Already have a system: \"That's great! What's your current system missing that causes you to lose customers?\"\n   - Budget concerns: \"I understand budget is important. Would you like to see the numbers and ROI potential?\"\n\n5. CLOSING (30 seconds):\n   - \"Would you be available for a 15-minute demo this week to see how this could work for your business?\"\n   - \"I can show you exactly how the system works\"\n   - \"What day works better for you - Tuesday or Wednesday?\"\n\nRULES:\n- Be professional but warm\n- Listen 70% of the time, talk 30%\n- Focus on their pain points\n- Always ask for the appointment\n- If they're not the decision maker, get their name and ask for the right person\n- Use their business name in conversation\n- End with a clear next step\n- NEVER make up statistics, testimonials, or fake claims\n- Be honest about what the service does and doesn't do\n- Adapt language to their industry (customers vs patients, etc.)\n- Let the conversation flow naturally - don't rush if they're engaged"
+        }
+      ],
+      "provider": "openai",
+      "maxTokens": 250,
+      "temperature": 0.2
+    },
+    "forwardingPhoneNumber": "+447491683261",
+    "firstMessage": "Hi, this is Sarah from AI Booking Solutions. I'm calling to help businesses like yours improve their appointment booking systems with our AI service. Do you have 2 minutes to hear how this could work for your business?",
+    "voicemailMessage": "Please call back when you're available.",
+    "endCallFunctionEnabled": true,
+    "endCallMessage": "Goodbye.",
+    "endCallPhrases": [
+      "not interested",
+      "not right now", 
+      "call back later",
+      "send me information",
+      "not the right time",
+      "too busy",
+      "already have a solution"
+    ],
+    "transcriber": {
+      "model": "nova-2",
+      "language": "en",
+      "numerals": true,
+      "provider": "deepgram",
+      "confidenceThreshold": 0.6
+    },
+    "silenceTimeoutSeconds": 10,
+    "backgroundSound": "office",
+    "recordingEnabled": true,
+    "voicemailDetectionEnabled": true,
+    "responseDelaySeconds": 1,
+    "llmRequestDelaySeconds": 0.1,
+    "idleMessages": [
+      "Are you still there?",
+      "Hello?",
+      "Did I lose you?",
+      "Are you still with me?"
+    ],
+    "maxIdleMessages": 2,
+    "idleTimeoutSeconds": 5,
+    "analysisPlan": {
+      "summaryPlan": {
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are an expert sales call analyst. Analyze this cold call transcript and provide a concise summary focusing on:\n\n1. Lead Qualification: Was the prospect qualified? (Role, decision-making authority, budget)\n2. Interest Level: High/Medium/Low interest in the service\n3. Key Objections: Main concerns or hesitations raised\n4. Next Steps: What was agreed upon (demo, callback, information sent, etc.)\n5. Call Outcome: Success/Failure/Follow-up needed\n\nKeep summary to 2-3 sentences maximum."
+          },
+          {
+            "role": "user",
+            "content": "Here is the transcript:\n\n{{transcript}}\n\n. Here is the ended reason of the call:\n\n{{endedReason}}\n\n"
+          }
+        ]
+      },
+      "structuredDataPlan": {
+        "enabled": true,
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are an expert data extractor for cold sales calls. Extract the following structured data from this call transcript:\n\nREQUIRED FIELDS:\n- prospect_name: Full name of the person spoken to\n- prospect_role: Their job title/role (owner, manager, receptionist, etc.)\n- company_name: Name of their business\n- industry: Type of business (dental, medical, etc.)\n- interest_level: High/Medium/Low based on their responses\n- main_objection: Primary concern or hesitation raised\n- next_step: What was agreed upon (demo, callback, info sent, etc.)\n- call_outcome: Success/Partial Success/Failure\n- follow_up_date: When to call back (if mentioned)\n- notes: Any additional important details\n\nFormat as JSON with these exact field names.\n\nJson Schema:\n{{schema}}\n\nOnly respond with the JSON."
+          },
+          {
+            "role": "user",
+            "content": "Here is the transcript:\n\n{{transcript}}\n\n. Here is the ended reason of the call:\n\n{{endedReason}}\n\n"
+          }
+        ]
+      },
+      "successEvaluationPlan": {
+        "rubric": "PassFail",
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are an expert cold call evaluator. Evaluate this call's success based on:\n\nSUCCESS CRITERIA:\n- Qualified the prospect (confirmed decision-maker role)\n- Identified pain points or needs\n- Presented value proposition clearly\n- Handled objections professionally\n- Secured next step (demo, callback, or information request)\n\nRate as: SUCCESS, PARTIAL SUCCESS, or FAILURE\nProvide brief reasoning for the rating.\n\nRubric:\n\n{{rubric}}\n\nOnly respond with the evaluation result."
+          },
+          {
+            "role": "user",
+            "content": "Here is the transcript of the call:\n\n{{transcript}}\n\n. Here is the ended reason of the call:\n\n{{endedReason}}\n\n"
+          },
+          {
+            "role": "user",
+            "content": "Here was the system prompt of the call:\n\n{{systemPrompt}}\n\n"
+          }
+        ]
+      }
+    },
+    "voicemailDetection": {
+      "provider": "vapi",
+      "backoffPlan": {
+        "maxRetries": 6,
+        "startAtSeconds": 5,
+        "frequencySeconds": 5
+      },
+      "beepMaxAwaitSeconds": 0
+    },
+    "backgroundDenoisingEnabled": true,
+    "startSpeakingPlan": {
+      "waitSeconds": 1,
+      "smartEndpointingPlan": {
+        "provider": "vapi"
+      }
+    },
+    "keypadInputPlan": {
+      "enabled": false,
+      "delimiters": [
+        "#",
+        "*"
+      ],
+      "timeoutSeconds": 2
+    }
+  }
+}
