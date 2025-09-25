@@ -58,6 +58,7 @@ import cors from 'cors';
 import axios from 'axios';
 import { generateUKBusinesses, getIndustryCategories, fuzzySearch } from './enhanced-business-search.js';
 import RealUKBusinessSearch from './real-uk-business-search.js';
+import BookingSystem from './booking-system.js';
 import morgan from 'morgan';
 import fs from 'fs/promises';
 import path from 'path';
@@ -89,6 +90,9 @@ import vapiWebhooks from './routes/vapi-webhooks.js';
 
 
 const app = express();
+
+// Initialize Booking System
+const bookingSystem = new BookingSystem();
 
 // Trust proxy for rate limiting (required for Render)
 app.set('trust proxy', 1);
@@ -228,6 +232,90 @@ app.get('/mock-call', async (req, res) => {
     res.json({
       success: false,
       message: 'Mock call failed',
+      error: error.message
+    });
+  }
+});
+
+// Booking System Endpoints
+// Book Demo Call
+app.post('/api/book-demo', async (req, res) => {
+  try {
+    const { leadData, preferredTimes } = req.body;
+    
+    if (!leadData || !leadData.businessName || !leadData.decisionMaker || !leadData.email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required lead data'
+      });
+    }
+
+    // Generate time slots if not provided
+    const timeSlots = preferredTimes || bookingSystem.generateTimeSlots(7);
+    
+    const result = await bookingSystem.bookDemo(leadData, timeSlots);
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('[BOOKING ERROR]', error);
+    res.status(500).json({
+      success: false,
+      message: 'Booking failed',
+      error: error.message
+    });
+  }
+});
+
+// Get Available Time Slots
+app.get('/api/available-slots', async (req, res) => {
+  try {
+    const { days = 7 } = req.query;
+    const slots = bookingSystem.generateTimeSlots(parseInt(days));
+    
+    res.json({
+      success: true,
+      slots: slots,
+      totalSlots: slots.length
+    });
+    
+  } catch (error) {
+    console.error('[SLOTS ERROR]', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get available slots',
+      error: error.message
+    });
+  }
+});
+
+// Test Booking System
+app.get('/test-booking', async (req, res) => {
+  try {
+    const testLead = {
+      businessName: "Test Business",
+      decisionMaker: "John Smith",
+      email: "john@testbusiness.co.uk",
+      phoneNumber: "+447491683261",
+      industry: "retail",
+      location: "London"
+    };
+
+    const timeSlots = bookingSystem.generateTimeSlots(3);
+    const result = await bookingSystem.bookDemo(testLead, timeSlots.slice(0, 3));
+    
+    res.json({
+      success: true,
+      message: 'Booking system test completed',
+      result: result,
+      availableSlots: timeSlots.length
+    });
+    
+  } catch (error) {
+    console.error('[BOOKING TEST ERROR]', error);
+    res.status(500).json({
+      success: false,
+      message: 'Booking system test failed',
       error: error.message
     });
   }

@@ -33,13 +33,13 @@ async function testVAPICall() {
 
     // Mock lead data
     const mockLead = {
-      businessName: "Test Dental Practice",
-      decisionMaker: "Dr. Sarah Johnson",
-      industry: "dental",
-      location: "London",
+      businessName: "Peter's Pear Drop Shop",
+      decisionMaker: "Peter",
+      industry: "retail",
+      location: "Manchester",
       phoneNumber: "+447491683261", // Your number
-      email: "sarah@testdental.co.uk",
-      website: "www.testdental.co.uk"
+      email: "peter@peardropshop.co.uk",
+      website: "www.peardropshop.co.uk"
     };
 
     console.log('\n📞 Call Details:');

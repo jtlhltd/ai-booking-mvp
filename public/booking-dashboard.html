@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Booking Dashboard - AI Booking Solutions</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .booking-form {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .time-slots {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .time-slot {
+            padding: 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+        .time-slot:hover {
+            border-color: #667eea;
+            background: #f0f2ff;
+        }
+
+        .time-slot.selected {
+            border-color: #667eea;
+            background: #667eea;
+            color: white;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+            width: 100%;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .status {
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .test-section {
+            background: #fff3cd;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 30px;
+            border: 1px solid #ffeaa7;
+        }
+
+        .test-section h3 {
+            color: #856404;
+            margin-bottom: 15px;
+        }
+
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .quick-action {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid #e1e5e9;
+        }
+
+        .quick-action:hover {
+            border-color: #667eea;
+            background: #f0f2ff;
+        }
+
+        .quick-action h4 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .quick-action p {
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📅 Booking Dashboard</h1>
+            <p>Schedule demo calls with cold call leads</p>
+        </div>
+
+        <div class="content">
+            <div class="booking-form">
+                <h2>Book Demo Call</h2>
+                <form id="bookingForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="businessName">Business Name</label>
+                            <input type="text" id="businessName" name="businessName" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="decisionMaker">Decision Maker</label>
+                            <input type="text" id="decisionMaker" name="decisionMaker" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="email">Email</label>
+                            <input type="email" id="email" name="email" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="phoneNumber">Phone Number</label>
+                            <input type="tel" id="phoneNumber" name="phoneNumber" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="industry">Industry</label>
+                            <select id="industry" name="industry" required>
+                                <option value="">Select Industry</option>
+                                <option value="dental">Dental</option>
+                                <option value="medical">Medical</option>
+                                <option value="beauty">Beauty</option>
+                                <option value="legal">Legal</option>
+                                <option value="retail">Retail</option>
+                                <option value="restaurant">Restaurant</option>
+                                <option value="construction">Construction</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="location">Location</label>
+                            <input type="text" id="location" name="location" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Available Time Slots</label>
+                        <div class="time-slots" id="timeSlots">
+                            <div class="time-slot" data-slot="loading">Loading available slots...</div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn" id="bookBtn">Book Demo Call</button>
+                </form>
+
+                <div id="status" class="status" style="display: none;"></div>
+            </div>
+
+            <div class="test-section">
+                <h3>🧪 Test Booking System</h3>
+                <p>Test the booking system with sample data to verify everything is working correctly.</p>
+                <button class="btn" onclick="testBookingSystem()" style="width: auto; margin-top: 15px;">Test Booking System</button>
+            </div>
+
+            <div class="quick-actions">
+                <div class="quick-action" onclick="loadAvailableSlots()">
+                    <h4>📅 View Available Slots</h4>
+                    <p>See all available time slots for the next 7 days</p>
+                </div>
+                <div class="quick-action" onclick="testEmailNotifications()">
+                    <h4>📧 Test Email Notifications</h4>
+                    <p>Test email notifications for bookings</p>
+                </div>
+                <div class="quick-action" onclick="testSMSNotifications()">
+                    <h4>📱 Test SMS Notifications</h4>
+                    <p>Test SMS notifications for bookings</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedSlot = null;
+        let availableSlots = [];
+
+        // Load available slots on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadAvailableSlots();
+        });
+
+        async function loadAvailableSlots() {
+            try {
+                const response = await fetch('/api/available-slots?days=7');
+                const data = await response.json();
+                
+                if (data.success) {
+                    availableSlots = data.slots;
+                    displayTimeSlots(data.slots);
+                } else {
+                    showStatus('error', 'Failed to load available slots: ' + data.message);
+                }
+            } catch (error) {
+                showStatus('error', 'Error loading available slots: ' + error.message);
+            }
+        }
+
+        function displayTimeSlots(slots) {
+            const container = document.getElementById('timeSlots');
+            container.innerHTML = '';
+
+            slots.forEach(slot => {
+                const slotElement = document.createElement('div');
+                slotElement.className = 'time-slot';
+                slotElement.innerHTML = `
+                    <div><strong>${slot.date}</strong></div>
+                    <div>${slot.startTime} - ${slot.endTime}</div>
+                `;
+                slotElement.onclick = () => selectTimeSlot(slot, slotElement);
+                container.appendChild(slotElement);
+            });
+        }
+
+        function selectTimeSlot(slot, element) {
+            // Remove previous selection
+            document.querySelectorAll('.time-slot').forEach(el => el.classList.remove('selected'));
+            
+            // Add selection to clicked element
+            element.classList.add('selected');
+            selectedSlot = slot;
+        }
+
+        document.getElementById('bookingForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            if (!selectedSlot) {
+                showStatus('error', 'Please select a time slot');
+                return;
+            }
+
+            const formData = new FormData(this);
+            const leadData = {
+                businessName: formData.get('businessName'),
+                decisionMaker: formData.get('decisionMaker'),
+                email: formData.get('email'),
+                phoneNumber: formData.get('phoneNumber'),
+                industry: formData.get('industry'),
+                location: formData.get('location')
+            };
+
+            const bookBtn = document.getElementById('bookBtn');
+            bookBtn.disabled = true;
+            bookBtn.textContent = 'Booking...';
+
+            try {
+                const response = await fetch('/api/book-demo', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        leadData: leadData,
+                        preferredTimes: [selectedSlot]
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    showStatus('success', result.message);
+                    this.reset();
+                    selectedSlot = null;
+                    document.querySelectorAll('.time-slot').forEach(el => el.classList.remove('selected'));
+                } else {
+                    showStatus('error', result.message || 'Booking failed');
+                }
+            } catch (error) {
+                showStatus('error', 'Error booking demo: ' + error.message);
+            } finally {
+                bookBtn.disabled = false;
+                bookBtn.textContent = 'Book Demo Call';
+            }
+        });
+
+        async function testBookingSystem() {
+            try {
+                const response = await fetch('/test-booking');
+                const result = await response.json();
+                
+                if (result.success) {
+                    showStatus('success', 'Booking system test completed successfully!');
+                    console.log('Test result:', result);
+                } else {
+                    showStatus('error', 'Booking system test failed: ' + result.message);
+                }
+            } catch (error) {
+                showStatus('error', 'Error testing booking system: ' + error.message);
+            }
+        }
+
+        function testEmailNotifications() {
+            showStatus('info', 'Email notification testing requires email service configuration. Check server logs for details.');
+        }
+
+        function testSMSNotifications() {
+            showStatus('info', 'SMS notification testing requires Twilio configuration. Check server logs for details.');
+        }
+
+        function showStatus(type, message) {
+            const status = document.getElementById('status');
+            status.className = `status ${type}`;
+            status.textContent = message;
+            status.style.display = 'block';
+            
+            setTimeout(() => {
+                status.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
