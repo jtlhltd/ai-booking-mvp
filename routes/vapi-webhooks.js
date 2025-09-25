@@ -64,6 +64,15 @@ router.post('/webhooks/vapi', async (req, res) => {
         reason: outcome,
         metadata
       });
+    } else if (status === 'completed' && (outcome === 'interested' || outcome === 'positive' || body.summary?.includes('interest') || body.summary?.includes('interested'))) {
+      // Trigger SMS pipeline for interested prospects
+      await handleInterestedProspect({
+        tenantKey,
+        leadPhone,
+        callId,
+        metadata,
+        summary: body.summary || body.call?.summary || ''
+      });
     }
 
     res.status(200).json({ ok: true });
@@ -172,6 +181,69 @@ async function handleBookingOutcome({ tenantKey, leadPhone, callId, bookingStart
     // }
   } catch (error) {
     console.error('[BOOKING OUTCOME ERROR]', error);
+  }
+}
+
+// Handle interested prospects - trigger SMS pipeline
+async function handleInterestedProspect({ tenantKey, leadPhone, callId, metadata, summary }) {
+  try {
+    console.log('[INTERESTED PROSPECT]', {
+      tenantKey,
+      leadPhone,
+      callId,
+      summary: summary.substring(0, 100) + '...'
+    });
+
+    // Extract lead information from metadata
+    const leadData = {
+      businessName: metadata.businessName || 'Unknown Business',
+      decisionMaker: metadata.decisionMaker || 'Unknown Contact',
+      phoneNumber: leadPhone,
+      industry: metadata.industry || 'unknown',
+      location: metadata.location || 'unknown',
+      callId: callId,
+      summary: summary
+    };
+
+    // Trigger SMS pipeline
+    await triggerSMSPipeline(leadData);
+
+    console.log('[SMS PIPELINE TRIGGERED]', {
+      tenantKey,
+      leadPhone,
+      callId,
+      leadData: {
+        businessName: leadData.businessName,
+        decisionMaker: leadData.decisionMaker,
+        industry: leadData.industry
+      }
+    });
+
+  } catch (error) {
+    console.error('[INTERESTED PROSPECT ERROR]', error);
+  }
+}
+
+// Trigger SMS pipeline for interested prospects
+async function triggerSMSPipeline(leadData) {
+  try {
+    // Import SMS pipeline
+    const SMSEmailPipeline = await import('../sms-email-pipeline.js');
+    const smsEmailPipeline = new SMSEmailPipeline.default();
+
+    // Initiate lead capture via SMS
+    const result = await smsEmailPipeline.initiateLeadCapture(leadData);
+    
+    console.log('[SMS PIPELINE RESULT]', {
+      success: result.success,
+      message: result.message,
+      leadId: result.leadId
+    });
+
+    return result;
+  } catch (error) {
+    console.error('[SMS PIPELINE TRIGGER ERROR]', error);
+    throw error;
   }
 }
 
