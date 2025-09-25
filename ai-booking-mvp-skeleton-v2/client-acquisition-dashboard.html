@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Client Acquisition Dashboard - AI Booking MVP</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .dashboard-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .dashboard-header {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        
+        .dashboard-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 0.5rem;
+        }
+        
+        .dashboard-subtitle {
+            color: #64748b;
+            font-size: 1.1rem;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+        }
+        
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #6366f1;
+            margin-bottom: 0.5rem;
+        }
+        
+        .stat-label {
+            color: #64748b;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        
+        .action-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .action-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+        }
+        
+        .action-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 1rem;
+        }
+        
+        .action-description {
+            color: #64748b;
+            margin-bottom: 1.5rem;
+            line-height: 1.6;
+        }
+        
+        .btn {
+            background: #6366f1;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+        
+        .btn:hover {
+            background: #5b21b6;
+            transform: translateY(-2px);
+        }
+        
+        .btn-secondary {
+            background: #f8fafc;
+            color: #374151;
+            border: 1px solid #d1d5db;
+        }
+        
+        .btn-secondary:hover {
+            background: #f1f5f9;
+        }
+        
+        .leads-section {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+        }
+        
+        .leads-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .leads-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        
+        .leads-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .leads-table th,
+        .leads-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .leads-table th {
+            background: #f8fafc;
+            font-weight: 600;
+            color: #374151;
+        }
+        
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        
+        .status-new {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        
+        .status-contacted {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        
+        .status-qualified {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .status-demo {
+            background: #e0e7ff;
+            color: #3730a3;
+        }
+        
+        .status-closed {
+            background: #dcfce7;
+            color: #166534;
+        }
+        
+        .quick-actions {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 2rem;
+        }
+        
+        .quick-action {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            min-width: 120px;
+        }
+        
+        .quick-action:hover {
+            border-color: #6366f1;
+            transform: translateY(-2px);
+        }
+        
+        .quick-action-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .quick-action-text {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: #374151;
+        }
+        
+        @media (max-width: 768px) {
+            .dashboard-container {
+                padding: 1rem;
+            }
+            
+            .dashboard-title {
+                font-size: 2rem;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .action-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .quick-actions {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="dashboard-header">
+            <h1 class="dashboard-title">Client Acquisition Dashboard</h1>
+            <p class="dashboard-subtitle">Generate leads, track prospects, and close deals with AI Booking MVP</p>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number" id="totalLeads">0</div>
+                <div class="stat-label">Total Leads</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="qualifiedLeads">0</div>
+                <div class="stat-label">Qualified Leads</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="demosScheduled">0</div>
+                <div class="stat-label">Demos Scheduled</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="dealsClosed">0</div>
+                <div class="stat-label">Deals Closed</div>
+            </div>
+        </div>
+        
+        <div class="quick-actions">
+            <div class="quick-action" onclick="openLeadGenerator()">
+                <div class="quick-action-icon">🎯</div>
+                <div class="quick-action-text">Generate Leads</div>
+            </div>
+            <div class="quick-action" onclick="openEmailCampaign()">
+                <div class="quick-action-icon">📧</div>
+                <div class="quick-action-text">Email Campaign</div>
+            </div>
+            <div class="quick-action" onclick="openLinkedInOutreach()">
+                <div class="quick-action-icon">💼</div>
+                <div class="quick-action-text">LinkedIn Outreach</div>
+            </div>
+            <div class="quick-action" onclick="openPartnershipProposal()">
+                <div class="quick-action-icon">🤝</div>
+                <div class="quick-action-text">Partnership</div>
+            </div>
+            <div class="quick-action" onclick="openSalesTracker()">
+                <div class="quick-action-icon">📊</div>
+                <div class="quick-action-text">Sales Tracker</div>
+            </div>
+            <div class="quick-action" onclick="openFollowUpSequence()">
+                <div class="quick-action-icon">🔄</div>
+                <div class="quick-action-text">Follow-up</div>
+            </div>
+        </div>
+        
+        <div class="action-grid">
+            <div class="action-card">
+                <h3 class="action-title">🎯 Lead Generation</h3>
+                <p class="action-description">Find and qualify potential clients in your target industries. Use our automated tools to identify decision makers and generate warm leads.</p>
+                <button class="btn" onclick="openLeadGenerator()">Start Lead Generation</button>
+            </div>
+            
+            <div class="action-card">
+                <h3 class="action-title">📧 Email Outreach</h3>
+                <p class="action-description">Send personalized cold emails to prospects. Our templates are optimized for each industry and include proven subject lines and messaging.</p>
+                <button class="btn" onclick="openEmailCampaign()">Launch Email Campaign</button>
+            </div>
+            
+            <div class="action-card">
+                <h3 class="action-title">💼 LinkedIn Sales</h3>
+                <p class="action-description">Connect with prospects on LinkedIn and send personalized messages. Build relationships and generate warm leads through social selling.</p>
+                <button class="btn" onclick="openLinkedInOutreach()">Start LinkedIn Outreach</button>
+            </div>
+            
+            <div class="action-card">
+                <h3 class="action-title">🤝 Partnership Development</h3>
+                <p class="action-description">Build partnerships with software companies and industry associations. Leverage their existing customer base for faster growth.</p>
+                <button class="btn" onclick="openPartnershipProposal()">Create Partnership Proposal</button>
+            </div>
+            
+            <div class="action-card">
+                <h3 class="action-title">📊 Sales Tracking</h3>
+                <p class="action-description">Track your sales pipeline, conversion rates, and revenue. Monitor performance and optimize your sales process for better results.</p>
+                <button class="btn" onclick="openSalesTracker()">View Sales Analytics</button>
+            </div>
+            
+            <div class="action-card">
+                <h3 class="action-title">🔄 Follow-up Automation</h3>
+                <p class="action-description">Automate follow-up sequences to nurture leads. Never lose a prospect due to lack of follow-up with our intelligent automation.</p>
+                <button class="btn" onclick="openFollowUpSequence()">Set Up Follow-up</button>
+            </div>
+        </div>
+        
+        <div class="leads-section">
+            <div class="leads-header">
+                <h3 class="leads-title">Recent Leads</h3>
+                <button class="btn btn-secondary" onclick="refreshLeads()">Refresh</button>
+            </div>
+            <table class="leads-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Company</th>
+                        <th>Industry</th>
+                        <th>Status</th>
+                        <th>Source</th>
+                        <th>Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="leadsTableBody">
+                    <!-- Leads will be populated by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <script>
+        // Sample leads data
+        const sampleLeads = [
+            {
+                name: "Dr. Sarah Johnson",
+                company: "Bright Smile Dental",
+                industry: "Dental",
+                status: "new",
+                source: "LinkedIn",
+                date: "2024-01-15",
+                email: "sarah@brightsmile.com",
+                phone: "+44 20 7123 4567"
+            },
+            {
+                name: "James Thompson",
+                company: "Thompson & Associates",
+                industry: "Legal",
+                status: "contacted",
+                source: "Email",
+                date: "2024-01-14",
+                email: "james@thompsonlaw.com",
+                phone: "+44 20 7123 4570"
+            },
+            {
+                name: "Lisa Martinez",
+                company: "Glamour Studio",
+                industry: "Beauty",
+                status: "qualified",
+                source: "Referral",
+                date: "2024-01-13",
+                email: "lisa@glamourstudio.com",
+                phone: "+44 20 7123 4573"
+            },
+            {
+                name: "Dr. Michael Chen",
+                company: "Family Dental Care",
+                industry: "Dental",
+                status: "demo",
+                source: "Website",
+                date: "2024-01-12",
+                email: "michael@familydental.com",
+                phone: "+44 20 7123 4568"
+            },
+            {
+                name: "Anna Taylor",
+                company: "Beauty Haven",
+                industry: "Beauty",
+                status: "closed",
+                source: "Email",
+                date: "2024-01-11",
+                email: "anna@beautyhaven.com",
+                phone: "+44 20 7123 4574"
+            }
+        ];
+        
+        // Initialize dashboard
+        function initDashboard() {
+            updateStats();
+            populateLeadsTable();
+        }
+        
+        // Update statistics
+        function updateStats() {
+            const totalLeads = sampleLeads.length;
+            const qualifiedLeads = sampleLeads.filter(lead => lead.status === 'qualified' || lead.status === 'demo' || lead.status === 'closed').length;
+            const demosScheduled = sampleLeads.filter(lead => lead.status === 'demo').length;
+            const dealsClosed = sampleLeads.filter(lead => lead.status === 'closed').length;
+            
+            document.getElementById('totalLeads').textContent = totalLeads;
+            document.getElementById('qualifiedLeads').textContent = qualifiedLeads;
+            document.getElementById('demosScheduled').textContent = demosScheduled;
+            document.getElementById('dealsClosed').textContent = dealsClosed;
+        }
+        
+        // Populate leads table
+        function populateLeadsTable() {
+            const tbody = document.getElementById('leadsTableBody');
+            tbody.innerHTML = '';
+            
+            sampleLeads.forEach(lead => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${lead.name}</td>
+                    <td>${lead.company}</td>
+                    <td>${lead.industry}</td>
+                    <td><span class="status-badge status-${lead.status}">${lead.status.charAt(0).toUpperCase() + lead.status.slice(1)}</span></td>
+                    <td>${lead.source}</td>
+                    <td>${lead.date}</td>
+                    <td>
+                        <button class="btn btn-secondary" onclick="viewLead('${lead.email}')" style="padding: 4px 8px; font-size: 0.8rem;">View</button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+        
+        // Action functions
+        function openLeadGenerator() {
+            window.open('lead-generator.html', '_blank');
+        }
+        
+        function openEmailCampaign() {
+            window.open('email-campaign.html', '_blank');
+        }
+        
+        function openLinkedInOutreach() {
+            window.open('linkedin-outreach.html', '_blank');
+        }
+        
+        function openPartnershipProposal() {
+            window.open('partnership-proposal.html', '_blank');
+        }
+        
+        function openSalesTracker() {
+            window.open('sales-tracker.html', '_blank');
+        }
+        
+        function openFollowUpSequence() {
+            window.open('follow-up-sequence.html', '_blank');
+        }
+        
+        function refreshLeads() {
+            populateLeadsTable();
+            updateStats();
+        }
+        
+        function viewLead(email) {
+            alert(`Lead details for ${email}:\n\nThis would open a detailed lead view with contact information, interaction history, and next steps.`);
+        }
+        
+        // Initialize dashboard on load
+        document.addEventListener('DOMContentLoaded', initDashboard);
+    </script>
+</body>
+</html>
