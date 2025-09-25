@@ -183,23 +183,9 @@ app.get('/mock-call', async (req, res) => {
     // Create a call with mock lead data
     const callData = {
       assistantId: "dd67a51c-7485-4b62-930a-4a84f328a1c9",
-      phoneNumber: mockLead.phoneNumber,
       customer: {
         number: mockLead.phoneNumber,
         name: mockLead.decisionMaker
-      },
-      assistantOverrides: {
-        firstMessage: `Hi ${mockLead.decisionMaker}, this is Sarah from AI Booking Solutions. I'm calling because we help businesses like ${mockLead.businessName} improve their appointment booking systems. Do you have 2 minutes to hear how this could work for your practice?`,
-        systemMessage: `You are Sarah, calling ${mockLead.decisionMaker} at ${mockLead.businessName} in ${mockLead.location}.
-
-BUSINESS CONTEXT:
-- Practice: ${mockLead.businessName}
-- Location: ${mockLead.location}
-- Decision Maker: ${mockLead.decisionMaker}
-- Industry: ${mockLead.industry}
-- Website: ${mockLead.website}
-
-This is a TEST CALL to ${mockLead.decisionMaker} at ${mockLead.businessName}. Treat them like a real prospect and try to book a demo.`
       }
     };
     
