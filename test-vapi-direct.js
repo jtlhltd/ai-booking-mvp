@@ -48,13 +48,20 @@ async function testVAPICall() {
     console.log('- Business:', mockLead.businessName);
     console.log('- Assistant ID:', 'dd67a51c-7485-4b62-930a-4a84f328a1c9');
 
-    // Create a call with correct VAPI format
+    // Create a call with British-optimized assistant
     const callData = {
       assistantId: "dd67a51c-7485-4b62-930a-4a84f328a1c9",
       phoneNumberId: "934ecfdb-fe7b-4d53-81c0-7908b97036b5",
       customer: {
         number: mockLead.phoneNumber,
         name: mockLead.decisionMaker
+      },
+      assistantOverrides: {
+        firstMessage: "Hello, this is Sarah from AI Booking Solutions. I hope I'm not catching you at a bad time? I'm calling to help businesses like yours with appointment booking. Do you have a couple of minutes to chat about this?",
+        silenceTimeoutSeconds: 15,
+        startSpeakingPlan: {
+          waitSeconds: 2
+        }
       }
     };
 
