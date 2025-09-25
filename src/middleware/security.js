@@ -108,3 +108,10 @@ export function requireTenantAccess(req, res, next) {
   req.tenantAccess = { clientKey };
   next();
 }
+
+// Input validation and sanitization middleware
+export function validateAndSanitizeInput(req, res, next) {
+  // TODO: Implement proper input validation and sanitization
+  // For now, just pass through
+  next();
+}
