@@ -1,7 +1,7 @@
 // Enhanced Cold Call Bot for Dental Practice Appointment Booking
 // Optimized for maximum conversion and appointment booking
 
-export class EnhancedColdCallBot {
+class EnhancedColdCallBot {
   constructor(config) {
     this.config = {
       servicePrice: '£500/month',
@@ -217,7 +217,7 @@ AI Booking Solutions`
 }
 
 // Campaign management functions
-export class ColdCallCampaignManager {
+class ColdCallCampaignManager {
   constructor() {
     this.campaigns = new Map();
     this.leadQueue = [];
@@ -427,4 +427,4 @@ export class ColdCallCampaignManager {
   }
 }
 
-export default { EnhancedColdCallBot, ColdCallCampaignManager };
+export { EnhancedColdCallBot, ColdCallCampaignManager };

@@ -52,7 +52,7 @@ function authenticateApiKey(req, res, next) {
 }
 
 // Campaign Management Endpoints
-export function setupColdCallAPI(app) {
+function setupColdCallAPI(app) {
   
   // Get all campaigns
   app.get('/api/cold-call/campaigns', authenticateApiKey, async (req, res) => {
@@ -505,4 +505,4 @@ export function setupColdCallAPI(app) {
   loadCampaignData().catch(console.error);
 }
 
-export default setupColdCallAPI;
+export { setupColdCallAPI };

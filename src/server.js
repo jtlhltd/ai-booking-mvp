@@ -68,7 +68,7 @@ import twilio from 'twilio';
 import { createHash } from 'crypto';
 
 import { makeJwtAuth, insertEvent, freeBusy } from './gcal.js';
-import setupColdCallAPI from './cold-call-api.js';
+import { setupColdCallAPI } from './cold-call-api.js';
 import { init as initDb,  upsertFullClient, getFullClient, listFullClients, deleteClient, DB_PATH } from './db.js'; // SQLite-backed tenants
 import { 
   authenticateApiKey, 
