@@ -103,7 +103,14 @@ try {
 }
 
 // Initialize SMS-Email Pipeline
-const smsEmailPipeline = new SMSEmailPipeline();
+let smsEmailPipeline = null;
+try {
+  smsEmailPipeline = new SMSEmailPipeline();
+  console.log('✅ SMS-Email pipeline initialized');
+} catch (error) {
+  console.error('❌ Failed to initialize SMS-Email pipeline:', error.message);
+  console.log('⚠️ SMS-Email functionality will be disabled');
+}
 
 // Trust proxy for rate limiting (required for Render)
 app.set('trust proxy', 1);
@@ -296,6 +303,13 @@ app.post('/api/initiate-lead-capture', async (req, res) => {
       });
     }
 
+    if (!smsEmailPipeline) {
+      return res.status(503).json({ 
+        success: false, 
+        message: 'SMS-Email pipeline not available' 
+      });
+    }
+
     const result = await smsEmailPipeline.initiateLeadCapture(leadData);
     res.json(result);
     
@@ -321,6 +335,13 @@ app.post('/api/process-email-response', async (req, res) => {
       });
     }
 
+    if (!smsEmailPipeline) {
+      return res.status(503).json({ 
+        success: false, 
+        message: 'SMS-Email pipeline not available' 
+      });
+    }
+
     const result = await smsEmailPipeline.processEmailResponse(phoneNumber, emailAddress);
     res.json(result);
     
@@ -338,6 +359,13 @@ app.post('/api/process-email-response', async (req, res) => {
 app.get('/api/lead-status/:leadId', async (req, res) => {
   try {
     const { leadId } = req.params;
+    if (!smsEmailPipeline) {
+      return res.status(503).json({ 
+        success: false, 
+        message: 'SMS-Email pipeline not available' 
+      });
+    }
+
     const result = await smsEmailPipeline.getLeadStatus(leadId);
     res.json(result);
     
@@ -354,6 +382,13 @@ app.get('/api/lead-status/:leadId', async (req, res) => {
 // Get Pipeline Statistics
 app.get('/api/pipeline-stats', async (req, res) => {
   try {
+    if (!smsEmailPipeline) {
+      return res.status(503).json({ 
+        success: false, 
+        message: 'SMS-Email pipeline not available' 
+      });
+    }
+
     const stats = smsEmailPipeline.getStats();
     res.json({
       success: true,
@@ -381,6 +416,14 @@ app.post('/webhook/sms-reply', async (req, res) => {
     
     if (emailMatch) {
       const emailAddress = emailMatch[1];
+      
+      if (!smsEmailPipeline) {
+        return res.status(503).json({ 
+          success: false, 
+          message: 'SMS-Email pipeline not available' 
+        });
+      }
+      
       const result = await smsEmailPipeline.processEmailResponse(From, emailAddress);
       
       res.json({
@@ -390,10 +433,12 @@ app.post('/webhook/sms-reply', async (req, res) => {
       });
     } else {
       // Send helpful SMS if no email found
-      await smsEmailPipeline.sendSMS({
-        to: From,
-        body: "I didn't find an email address in your message. Please send just your email address (e.g., john@company.com)"
-      });
+      if (smsEmailPipeline) {
+        await smsEmailPipeline.sendSMS({
+          to: From,
+          body: "I didn't find an email address in your message. Please send just your email address (e.g., john@company.com)"
+        });
+      }
       
       res.json({
         success: false,
