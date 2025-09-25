@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "render": {
+      "command": "node",
+      "args": ["render-mcp-server.js"],
+      "env": {
+        "RENDER_API_KEY": "YOUR_RENDER_API_KEY_HERE",
+        "RENDER_SERVICE_URL": "https://ai-booking-mvp.onrender.com"
+      }
+    }
+  }
+}
