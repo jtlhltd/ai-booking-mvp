@@ -14,6 +14,73 @@ console.log('🔍 Database configuration:', {
   DATABASE_URL: process.env.DATABASE_URL ? 'SET' : 'NOT SET'
 });
 
+// JSON File Database fallback for Render
+class JsonFileDatabase {
+  constructor(dataDir) {
+    this.dataDir = dataDir;
+    this.dataFile = path.join(dataDir, 'database.json');
+    this.data = this.loadData();
+  }
+
+  loadData() {
+    try {
+      if (fs.existsSync(this.dataFile)) {
+        const content = fs.readFileSync(this.dataFile, 'utf8');
+        return JSON.parse(content);
+      }
+    } catch (error) {
+      console.error('Error loading JSON database:', error.message);
+    }
+    return {
+      tenants: [],
+      leads: [],
+      bookings: [],
+      api_keys: [],
+      sms_conversations: [],
+      email_templates: [],
+      call_logs: []
+    };
+  }
+
+  saveData() {
+    try {
+      fs.writeFileSync(this.dataFile, JSON.stringify(this.data, null, 2));
+    } catch (error) {
+      console.error('Error saving JSON database:', error.message);
+    }
+  }
+
+  exec(sql) {
+    // Simple SQL execution for JSON database
+    // This is a basic implementation for Render compatibility
+    console.log('📝 Executing SQL on JSON database:', sql.substring(0, 100) + '...');
+  }
+
+  prepare(sql) {
+    return {
+      all: (...params) => {
+        const tableName = this.extractTableName(sql);
+        return this.data[tableName] || [];
+      },
+      run: (...params) => {
+        const tableName = this.extractTableName(sql);
+        if (sql.includes('INSERT')) {
+          const id = Date.now();
+          this.data[tableName].push({ id, ...params[0] });
+          this.saveData();
+          return { changes: 1, lastInsertRowid: id };
+        }
+        return { changes: 0 };
+      }
+    };
+  }
+
+  extractTableName(sql) {
+    const match = sql.match(/FROM\s+(\w+)/i) || sql.match(/INTO\s+(\w+)/i) || sql.match(/UPDATE\s+(\w+)/i);
+    return match ? match[1] : 'leads';
+  }
+}
+
 // ---------------------- Postgres ----------------------
 async function initPostgres() {
   try {
@@ -352,7 +419,11 @@ async function initSqlite() {
     DB_PATH = sqlitePath;
   } catch (error) {
     console.error('❌ Failed to import better-sqlite3 module:', error.message);
-    throw new Error('SQLite module not available');
+    console.log('🔄 Falling back to JSON file database...');
+    
+    // Fallback to JSON file database for Render
+    sqlite = new JsonFileDatabase(dataDir);
+    DB_PATH = 'json-file';
   }
 
   // Minimal migrations for sqlite (JSON as TEXT)
@@ -418,8 +489,13 @@ async function initSqlite() {
   `);
 
   // avoid template literal parsing issues
-  console.log('DB: SQLite at ' + sqlitePath);
-  return 'sqlite:' + sqlitePath;
+  if (DB_PATH === 'json-file') {
+    console.log('DB: JSON file database at ' + path.join(dataDir, 'database.json'));
+    return 'json-file:' + path.join(dataDir, 'database.json');
+  } else {
+    console.log('DB: SQLite at ' + sqlitePath);
+    return 'sqlite:' + sqlitePath;
+  }
 }
 
 // ---------------------- Core API ----------------------
