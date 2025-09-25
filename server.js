@@ -242,56 +242,7 @@ app.get('/mock-call', async (req, res) => {
 });
 
 // Booking System Endpoints
-// Book Demo Call
-app.post('/api/book-demo', async (req, res) => {
-  try {
-    const { leadData, preferredTimes } = req.body;
-    
-    if (!leadData || !leadData.businessName || !leadData.decisionMaker || !leadData.email) {
-      return res.status(400).json({
-        success: false,
-        message: 'Missing required lead data'
-      });
-    }
-
-    // Generate time slots if not provided
-    const timeSlots = preferredTimes || bookingSystem.generateTimeSlots(7);
-    
-    const result = await bookingSystem.bookDemo(leadData, timeSlots);
-    
-    res.json(result);
-    
-  } catch (error) {
-    console.error('[BOOKING ERROR]', error);
-    res.status(500).json({
-      success: false,
-      message: 'Booking failed',
-      error: error.message
-    });
-  }
-});
-
-// Get Available Time Slots
-app.get('/api/available-slots', async (req, res) => {
-  try {
-    const { days = 7 } = req.query;
-    const slots = bookingSystem.generateTimeSlots(parseInt(days));
-    
-    res.json({
-      success: true,
-      slots: slots,
-      totalSlots: slots.length
-    });
-    
-  } catch (error) {
-    console.error('[SLOTS ERROR]', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to get available slots',
-      error: error.message
-    });
-  }
-});
+// Booking System Endpoints - MOVED AFTER JSON MIDDLEWARE
 
 // Test Booking System
 app.get('/test-booking', async (req, res) => {
@@ -1023,6 +974,58 @@ app.get('/admin/validate-call-duration', async (req, res) => {
 // Middleware for parsing JSON bodies (must be before routes that need it)
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Booking System Endpoints (after JSON middleware)
+// Book Demo Call
+app.post('/api/book-demo', async (req, res) => {
+  try {
+    const { leadData, preferredTimes } = req.body;
+    
+    if (!leadData || !leadData.businessName || !leadData.decisionMaker || !leadData.email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required lead data'
+      });
+    }
+
+    // Generate time slots if not provided
+    const timeSlots = preferredTimes || bookingSystem.generateTimeSlots(7);
+    
+    const result = await bookingSystem.bookDemo(leadData, timeSlots);
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('[BOOKING ERROR]', error);
+    res.status(500).json({
+      success: false,
+      message: 'Booking failed',
+      error: error.message
+    });
+  }
+});
+
+// Get Available Time Slots
+app.get('/api/available-slots', async (req, res) => {
+  try {
+    const { days = 7 } = req.query;
+    const slots = bookingSystem.generateTimeSlots(parseInt(days));
+    
+    res.json({
+      success: true,
+      slots: slots,
+      totalSlots: slots.length
+    });
+    
+  } catch (error) {
+    console.error('[SLOTS ERROR]', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get available slots',
+      error: error.message
+    });
+  }
+});
 
 // API endpoint to create new client
 app.post('/api/create-client', async (req, res) => {
