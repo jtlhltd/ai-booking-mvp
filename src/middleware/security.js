@@ -84,3 +84,13 @@ export function requireClientKey(req, res, next) {
 
 // Rate limiting middleware (alias for apiLimiter)
 export const rateLimitMiddleware = apiLimiter;
+
+// Permission checking middleware
+export function requirePermission(permission) {
+  return (req, res, next) => {
+    // TODO: Implement proper permission checking
+    // For now, just pass through
+    req.requiredPermission = permission;
+    next();
+  };
+}
