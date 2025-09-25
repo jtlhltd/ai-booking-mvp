@@ -7952,6 +7952,16 @@ app.get('/admin/vapi/test-connection', async (req, res) => {
     console.log('[VAPI CONNECTION TEST] Testing VAPI API connection');
     
     // Test VAPI connection by fetching assistants
+    const vapiKey = process.env.VAPI_PRIVATE_KEY || process.env.VAPI_PUBLIC_KEY || process.env.VAPI_API_KEY;
+    if (!vapiKey) {
+      return res.status(500).json({
+        success: false,
+        message: 'VAPI connection test failed',
+        error: 'VAPI API key not configured',
+        apiKeyConfigured: false
+      });
+    }
+    
     const vapiResponse = await fetch('https://api.vapi.ai/assistant', {
       method: 'GET',
       headers: {
@@ -7966,7 +7976,7 @@ app.get('/admin/vapi/test-connection', async (req, res) => {
         success: true,
         message: 'VAPI connection successful',
         assistantsCount: assistants.length,
-        apiKeyConfigured: !!process.env.VAPI_API_KEY
+        apiKeyConfigured: !!vapiKey
       });
     } else {
       const errorData = await vapiResponse.json();
