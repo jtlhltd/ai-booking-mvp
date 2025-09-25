@@ -58,9 +58,8 @@ import cors from 'cors';
 import axios from 'axios';
 import { generateUKBusinesses, getIndustryCategories, fuzzySearch } from './enhanced-business-search.js';
 import RealUKBusinessSearch from './real-uk-business-search.js';
-// Dynamic imports to avoid constructor issues on Render
-// import BookingSystem from './booking-system.js';
-// import SMSEmailPipeline from './sms-email-pipeline.js';
+import BookingSystem from './booking-system.js';
+import SMSEmailPipeline from './sms-email-pipeline.js';
 import morgan from 'morgan';
 import fs from 'fs/promises';
 import path from 'path';
@@ -93,53 +92,24 @@ import vapiWebhooks from './routes/vapi-webhooks.js';
 
 const app = express();
 
-// Initialize services with dynamic imports
+// Initialize Booking System
 let bookingSystem = null;
+try {
+  bookingSystem = new BookingSystem();
+  console.log('✅ Booking system initialized');
+} catch (error) {
+  console.error('❌ Failed to initialize booking system:', error.message);
+  console.log('⚠️ Booking functionality will be disabled');
+}
+
+// Initialize SMS-Email Pipeline
 let smsEmailPipeline = null;
-
-async function initializeServices() {
-  try {
-    console.log('🔄 Starting service initialization...');
-    
-    // Initialize Booking System
-    try {
-      console.log('🔄 Importing BookingSystem...');
-      const bookingModule = await import('./booking-system.js');
-      console.log('🔄 BookingSystem module loaded:', typeof bookingModule.default);
-      
-      if (typeof bookingModule.default !== 'function') {
-        throw new Error(`BookingSystem is not a constructor (type: ${typeof bookingModule.default})`);
-      }
-      
-      bookingSystem = new bookingModule.default();
-      console.log('✅ Booking system initialized');
-    } catch (error) {
-      console.error('❌ Failed to initialize booking system:', error.message);
-      console.error('❌ Error details:', error);
-      console.log('⚠️ Booking functionality will be disabled');
-    }
-
-    // Initialize SMS-Email Pipeline
-    try {
-      console.log('🔄 Importing SMSEmailPipeline...');
-      const smsModule = await import('./sms-email-pipeline.js');
-      console.log('🔄 SMSEmailPipeline module loaded:', typeof smsModule.default);
-      
-      if (typeof smsModule.default !== 'function') {
-        throw new Error(`SMSEmailPipeline is not a constructor (type: ${typeof smsModule.default})`);
-      }
-      
-      smsEmailPipeline = new smsModule.default(bookingSystem);
-      console.log('✅ SMS-Email pipeline initialized');
-    } catch (error) {
-      console.error('❌ Failed to initialize SMS-Email pipeline:', error.message);
-      console.error('❌ Error details:', error);
-      console.log('⚠️ SMS-Email functionality will be disabled');
-    }
-  } catch (error) {
-    console.error('❌ Failed to initialize services:', error.message);
-    console.error('❌ Error details:', error);
-  }
+try {
+  smsEmailPipeline = new SMSEmailPipeline();
+  console.log('✅ SMS-Email pipeline initialized');
+} catch (error) {
+  console.error('❌ Failed to initialize SMS-Email pipeline:', error.message);
+  console.log('⚠️ SMS-Email functionality will be disabled');
 }
 
 // Trust proxy for rate limiting (required for Render)
@@ -8800,14 +8770,9 @@ async function startServer() {
     await initDb();
     console.log('✅ Database initialized');
     
-    // Initialize services with dynamic imports
-    await initializeServices();
-    
     app.listen(process.env.PORT ? Number(process.env.PORT) : 10000, '0.0.0.0', () => {
-      console.log(`AI Booking MVP listening on http://localhost:${process.env.PORT || 10000} (DB: ${DB_PATH})`);
+      console.log(`AI Booking MVP listening on http://localhost:${PORT} (DB: ${DB_PATH})`);
       console.log(`Security middleware: Enhanced authentication and rate limiting enabled`);
-      console.log(`Booking system: ${bookingSystem ? 'Available' : 'Not Available'}`);
-      console.log(`SMS-Email pipeline: ${smsEmailPipeline ? 'Available' : 'Not Available'}`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);

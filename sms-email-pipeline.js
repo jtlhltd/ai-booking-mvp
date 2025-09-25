@@ -1,13 +1,12 @@
 // SMS-to-Email Pipeline for Lead Conversion
 import twilio from 'twilio';
 import nodemailer from 'nodemailer';
-import BookingSystem from './booking-system.js';
 
 class SMSEmailPipeline {
-  constructor() {
+  constructor(bookingSystem = null) {
     this.twilioClient = null;
     this.emailTransporter = null;
-    this.bookingSystem = new BookingSystem();
+    this.bookingSystem = bookingSystem; // Passed from outside to avoid circular dependency
     this.pendingLeads = new Map(); // Store leads waiting for email
     this.initializeServices();
   }
