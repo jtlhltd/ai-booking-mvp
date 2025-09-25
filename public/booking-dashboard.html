@@ -229,40 +229,8 @@
                             <input type="text" id="businessName" name="businessName" required>
                         </div>
                         <div class="form-group">
-                            <label for="decisionMaker">Decision Maker</label>
+                            <label for="decisionMaker">Your Name</label>
                             <input type="text" id="decisionMaker" name="decisionMaker" required>
-                        </div>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="email">Email</label>
-                            <input type="email" id="email" name="email" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="phoneNumber">Phone Number</label>
-                            <input type="tel" id="phoneNumber" name="phoneNumber" required>
-                        </div>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="industry">Industry</label>
-                            <select id="industry" name="industry" required>
-                                <option value="">Select Industry</option>
-                                <option value="dental">Dental</option>
-                                <option value="medical">Medical</option>
-                                <option value="beauty">Beauty</option>
-                                <option value="legal">Legal</option>
-                                <option value="retail">Retail</option>
-                                <option value="restaurant">Restaurant</option>
-                                <option value="construction">Construction</option>
-                                <option value="other">Other</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="location">Location</label>
-                            <input type="text" id="location" name="location" required>
                         </div>
                     </div>
 
@@ -306,10 +274,32 @@
         let selectedSlot = null;
         let availableSlots = [];
 
-        // Load available slots on page load
+        // Load available slots on page load and populate form from URL
         document.addEventListener('DOMContentLoaded', function() {
             loadAvailableSlots();
+            populateFormFromURL();
         });
+
+        function populateFormFromURL() {
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            // Pre-fill form with URL parameters
+            if (urlParams.get('email')) {
+                document.getElementById('email').value = urlParams.get('email');
+            }
+            if (urlParams.get('phone')) {
+                document.getElementById('phoneNumber').value = urlParams.get('phone');
+            }
+            if (urlParams.get('location')) {
+                document.getElementById('location').value = urlParams.get('location');
+            }
+            if (urlParams.get('business')) {
+                document.getElementById('businessName').value = urlParams.get('business');
+            }
+            if (urlParams.get('decisionMaker')) {
+                document.getElementById('decisionMaker').value = urlParams.get('decisionMaker');
+            }
+        }
 
         async function loadAvailableSlots() {
             try {
@@ -361,13 +351,15 @@
             }
 
             const formData = new FormData(this);
+            const urlParams = new URLSearchParams(window.location.search);
+            
             const leadData = {
                 businessName: formData.get('businessName'),
                 decisionMaker: formData.get('decisionMaker'),
-                email: formData.get('email'),
-                phoneNumber: formData.get('phoneNumber'),
-                industry: formData.get('industry'),
-                location: formData.get('location')
+                email: urlParams.get('email') || formData.get('email'),
+                phoneNumber: urlParams.get('phone') || formData.get('phoneNumber'),
+                industry: urlParams.get('industry') || 'business',
+                location: urlParams.get('location') || 'UK'
             };
 
             const bookBtn = document.getElementById('bookBtn');
