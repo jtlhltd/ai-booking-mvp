@@ -97,7 +97,7 @@ app.set('trust proxy', 1);
 // Enhanced security middleware
 app.use(securityHeaders);
 app.use(requestLogging);
-app.use(validateAndSanitizeInput());
+app.use(validateAndSanitizeInput);
 
 // Serve static files from public directory
 app.use(express.static('public'));
