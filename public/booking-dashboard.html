@@ -284,15 +284,6 @@
             const urlParams = new URLSearchParams(window.location.search);
             
             // Pre-fill form with URL parameters
-            if (urlParams.get('email')) {
-                document.getElementById('email').value = urlParams.get('email');
-            }
-            if (urlParams.get('phone')) {
-                document.getElementById('phoneNumber').value = urlParams.get('phone');
-            }
-            if (urlParams.get('location')) {
-                document.getElementById('location').value = urlParams.get('location');
-            }
             if (urlParams.get('business')) {
                 document.getElementById('businessName').value = urlParams.get('business');
             }
@@ -356,8 +347,8 @@
             const leadData = {
                 businessName: formData.get('businessName'),
                 decisionMaker: formData.get('decisionMaker'),
-                email: urlParams.get('email') || formData.get('email'),
-                phoneNumber: urlParams.get('phone') || formData.get('phoneNumber'),
+                email: urlParams.get('email') || 'lead@example.com',
+                phoneNumber: urlParams.get('phone') || '+447000000000',
                 industry: urlParams.get('industry') || 'business',
                 location: urlParams.get('location') || 'UK'
             };
