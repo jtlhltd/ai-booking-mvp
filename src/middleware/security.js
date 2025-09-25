@@ -81,3 +81,6 @@ export function requireClientKey(req, res, next) {
   req.clientKey = clientKey;
   next();
 }
+
+// Rate limiting middleware (alias for apiLimiter)
+export const rateLimitMiddleware = apiLimiter;
