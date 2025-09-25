@@ -7281,7 +7281,7 @@ app.post('/admin/vapi/ab-test-assistant', async (req, res) => {
           maxTokens: 200
         },
         voice: {
-          provider: "elevenlabs",
+          provider: "11labs",
           voiceId: variant.voiceId || "21m00Tcm4TlvDq8ikWAM",
           stability: 0.7,
           clarity: 0.85,
@@ -7757,7 +7757,7 @@ app.post('/admin/vapi/personalized-assistant', async (req, res) => {
         maxTokens: 200
       },
       voice: {
-        provider: "elevenlabs",
+        provider: "11labs",
         voiceId: "21m00Tcm4TlvDq8ikWAM",
         stability: 0.7,
         clarity: 0.85,
@@ -8017,7 +8017,7 @@ app.post('/admin/vapi/test-call', async (req, res) => {
           maxTokens: 150
         },
         voice: {
-          provider: "elevenlabs",
+          provider: "11labs",
           voiceId: "21m00Tcm4TlvDq8ikWAM",
           stability: 0.7,
           clarity: 0.85,
