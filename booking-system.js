@@ -16,11 +16,17 @@ class BookingSystem {
       // Initialize Google Calendar
       if (process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY) {
         try {
+          // Validate private key format
+          const privateKey = process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n');
+          if (!privateKey.includes('BEGIN PRIVATE KEY')) {
+            throw new Error('Invalid private key format');
+          }
+          
           const auth = new google.auth.GoogleAuth({
             credentials: {
               type: 'service_account',
               client_email: process.env.GOOGLE_CLIENT_EMAIL,
-              private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n')
+              private_key: privateKey
             },
             scopes: ['https://www.googleapis.com/auth/calendar']
           });

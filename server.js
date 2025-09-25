@@ -93,7 +93,14 @@ import vapiWebhooks from './routes/vapi-webhooks.js';
 const app = express();
 
 // Initialize Booking System
-const bookingSystem = new BookingSystem();
+let bookingSystem = null;
+try {
+  bookingSystem = new BookingSystem();
+  console.log('✅ Booking system initialized');
+} catch (error) {
+  console.error('❌ Failed to initialize booking system:', error.message);
+  console.log('⚠️ Booking functionality will be disabled');
+}
 
 // Initialize SMS-Email Pipeline
 const smsEmailPipeline = new SMSEmailPipeline();
@@ -979,6 +986,13 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Book Demo Call
 app.post('/api/book-demo', async (req, res) => {
   try {
+    if (!bookingSystem) {
+      return res.status(503).json({ 
+        success: false, 
+        message: 'Booking system not available' 
+      });
+    }
+
     const { leadData, preferredTimes } = req.body;
     
     if (!leadData || !leadData.businessName || !leadData.decisionMaker || !leadData.email) {
@@ -1008,6 +1022,13 @@ app.post('/api/book-demo', async (req, res) => {
 // Get Available Time Slots
 app.get('/api/available-slots', async (req, res) => {
   try {
+    if (!bookingSystem) {
+      return res.status(503).json({ 
+        success: false, 
+        message: 'Booking system not available' 
+      });
+    }
+
     const { days = 7 } = req.query;
     const slots = bookingSystem.generateTimeSlots(parseInt(days));
     
