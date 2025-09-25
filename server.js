@@ -412,35 +412,6 @@ app.get('/api/pipeline-stats', async (req, res) => {
   }
 });
 
-// Test SMS-Email Pipeline
-app.get('/test-sms-pipeline', async (req, res) => {
-  try {
-    const testLead = {
-      businessName: "Test Business",
-      decisionMaker: "John Smith",
-      phoneNumber: "+447491683261",
-      industry: "retail",
-      location: "London"
-    };
-
-    const result = await smsEmailPipeline.initiateLeadCapture(testLead);
-    
-    res.json({
-      success: true,
-      message: 'SMS-Email Pipeline test completed',
-      result: result,
-      stats: smsEmailPipeline.getStats()
-    });
-    
-  } catch (error) {
-    console.error('[SMS PIPELINE TEST ERROR]', error);
-    res.status(500).json({
-      success: false,
-      message: 'SMS-Email Pipeline test failed',
-      error: error.message
-    });
-  }
-});
 
 // Twilio Webhook for SMS Replies
 app.post('/webhook/sms-reply', async (req, res) => {
@@ -477,6 +448,36 @@ app.post('/webhook/sms-reply', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'SMS webhook processing failed',
+      error: error.message
+    });
+  }
+});
+
+// Test SMS-Email Pipeline (No API Key Required)
+app.get('/test-sms-pipeline', async (req, res) => {
+  try {
+    const testLead = {
+      businessName: "Test Business",
+      decisionMaker: "John Smith",
+      phoneNumber: "+447491683261",
+      industry: "retail",
+      location: "London"
+    };
+
+    const result = await smsEmailPipeline.initiateLeadCapture(testLead);
+    
+    res.json({
+      success: true,
+      message: 'SMS-Email Pipeline test completed',
+      result: result,
+      stats: smsEmailPipeline.getStats()
+    });
+    
+  } catch (error) {
+    console.error('[SMS PIPELINE TEST ERROR]', error);
+    res.status(500).json({
+      success: false,
+      message: 'SMS-Email Pipeline test failed',
       error: error.message
     });
   }
