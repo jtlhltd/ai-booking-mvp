@@ -157,6 +157,14 @@ app.get('/create-assistant', async (req, res) => {
   try {
     console.log('[QUICK ASSISTANT CREATION] Creating cold call assistant');
     
+    // Check if VAPI API key is configured
+    if (!process.env.VAPI_API_KEY) {
+      return res.status(500).json({
+        error: 'VAPI API key not configured',
+        message: 'Please add VAPI_API_KEY to your environment variables'
+      });
+    }
+    
     // Create specialized cold calling assistant for dental practices
     const coldCallAssistant = {
       name: "Dental Practice Cold Call Bot - £500/month",
@@ -296,6 +304,7 @@ RULES:
     });
   }
 });
+
 
 // Lead Data Quality Test Endpoint
 app.get('/admin/test-lead-data', async (req, res) => {
