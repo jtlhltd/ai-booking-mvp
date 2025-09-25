@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VAPI Test Dashboard</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        
+        .test-section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #007bff;
+        }
+        
+        .test-section h3 {
+            color: #007bff;
+            margin-top: 0;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #555;
+        }
+        
+        input[type="text"], input[type="tel"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        
+        input[type="text"]:focus, input[type="tel"]:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+        
+        button {
+            background: linear-gradient(45deg, #007bff, #0056b3);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,123,255,0.3);
+        }
+        
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+        }
+        
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        
+        .error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        
+        .info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-success { background: #28a745; }
+        .status-error { background: #dc3545; }
+        .status-warning { background: #ffc107; }
+        .status-info { background: #17a2b8; }
+        
+        .api-key-input {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .api-key-input input {
+            background: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 VAPI Test Dashboard</h1>
+        
+        <div class="api-key-input">
+            <h3>🔑 API Configuration</h3>
+            <div class="form-group">
+                <label for="apiKey">API Key:</label>
+                <input type="text" id="apiKey" placeholder="Enter your API key">
+            </div>
+            <button onclick="testApiKey()">Test API Key</button>
+            <div id="apiKeyResult" class="result" style="display: none;"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>🔌 VAPI Connection Test</h3>
+            <p>Test if VAPI API is properly configured and accessible.</p>
+            <button onclick="testVapiConnection()">Test VAPI Connection</button>
+            <div id="connectionResult" class="result" style="display: none;"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>📞 Test Call</h3>
+            <p>Make a test call to verify the system works end-to-end.</p>
+            <div class="form-group">
+                <label for="phoneNumber">Phone Number:</label>
+                <input type="tel" id="phoneNumber" placeholder="+447403934440" value="+447403934440">
+            </div>
+            <button onclick="makeTestCall()">Make Test Call</button>
+            <div id="callResult" class="result" style="display: none;"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>🤖 Create Cold Call Assistant</h3>
+            <p>Create the optimized cold call assistant for £500/month service.</p>
+            <button onclick="createColdCallAssistant()">Create Assistant</button>
+            <div id="assistantResult" class="result" style="display: none;"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>📊 System Status</h3>
+            <div id="systemStatus">
+                <p><span class="status-indicator status-info"></span>Ready to test</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        
+        function getApiKey() {
+            return document.getElementById('apiKey').value || localStorage.getItem('apiKey');
+        }
+        
+        function setApiKey(key) {
+            localStorage.setItem('apiKey', key);
+            document.getElementById('apiKey').value = key;
+        }
+        
+        function showResult(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            element.style.display = 'block';
+            element.className = `result ${type}`;
+            element.textContent = message;
+        }
+        
+        async function testApiKey() {
+            const apiKey = document.getElementById('apiKey').value;
+            if (!apiKey) {
+                showResult('apiKeyResult', 'Please enter an API key', 'error');
+                return;
+            }
+            
+            setApiKey(apiKey);
+            showResult('apiKeyResult', 'API key saved successfully!', 'success');
+        }
+        
+        async function testVapiConnection() {
+            const apiKey = getApiKey();
+            if (!apiKey) {
+                showResult('connectionResult', 'Please enter an API key first', 'error');
+                return;
+            }
+            
+            try {
+                showResult('connectionResult', 'Testing VAPI connection...', 'info');
+                
+                const response = await fetch(`${API_BASE}/admin/vapi/test-connection`, {
+                    method: 'GET',
+                    headers: {
+                        'X-API-Key': apiKey,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showResult('connectionResult', `✅ VAPI Connection Successful!\n\nAssistants Count: ${data.assistantsCount}\nAPI Key Configured: ${data.apiKeyConfigured}`, 'success');
+                } else {
+                    showResult('connectionResult', `❌ VAPI Connection Failed:\n\n${JSON.stringify(data, null, 2)}`, 'error');
+                }
+            } catch (error) {
+                showResult('connectionResult', `❌ Error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function makeTestCall() {
+            const apiKey = getApiKey();
+            const phoneNumber = document.getElementById('phoneNumber').value;
+            
+            if (!apiKey) {
+                showResult('callResult', 'Please enter an API key first', 'error');
+                return;
+            }
+            
+            if (!phoneNumber) {
+                showResult('callResult', 'Please enter a phone number', 'error');
+                return;
+            }
+            
+            try {
+                showResult('callResult', 'Initiating test call...', 'info');
+                
+                const response = await fetch(`${API_BASE}/admin/vapi/test-call`, {
+                    method: 'POST',
+                    headers: {
+                        'X-API-Key': apiKey,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        phoneNumber: phoneNumber
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showResult('callResult', `✅ Test Call Initiated!\n\nCall ID: ${data.callId}\nAssistant ID: ${data.assistantId}\nPhone: ${data.phoneNumber}\nStatus: ${data.status}`, 'success');
+                } else {
+                    showResult('callResult', `❌ Test Call Failed:\n\n${JSON.stringify(data, null, 2)}`, 'error');
+                }
+            } catch (error) {
+                showResult('callResult', `❌ Error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function createColdCallAssistant() {
+            const apiKey = getApiKey();
+            
+            if (!apiKey) {
+                showResult('assistantResult', 'Please enter an API key first', 'error');
+                return;
+            }
+            
+            try {
+                showResult('assistantResult', 'Creating cold call assistant...', 'info');
+                
+                const response = await fetch(`${API_BASE}/admin/vapi/cold-call-assistant`, {
+                    method: 'POST',
+                    headers: {
+                        'X-API-Key': apiKey,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showResult('assistantResult', `✅ Cold Call Assistant Created!\n\nAssistant ID: ${data.assistant.id}\nName: ${data.assistant.name}\nStatus: ${data.assistant.status}\nCreated: ${data.assistant.createdAt}`, 'success');
+                } else {
+                    showResult('assistantResult', `❌ Assistant Creation Failed:\n\n${JSON.stringify(data, null, 2)}`, 'error');
+                }
+            } catch (error) {
+                showResult('assistantResult', `❌ Error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Load saved API key on page load
+        window.onload = function() {
+            const savedApiKey = localStorage.getItem('apiKey');
+            if (savedApiKey) {
+                document.getElementById('apiKey').value = savedApiKey;
+            }
+        };
+    </script>
+</body>
+</html>

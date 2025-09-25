@@ -147,6 +147,11 @@ app.get('/cold-call-dashboard', (req, res) => {
   res.sendFile(path.join(process.cwd(), 'public', 'cold-call-dashboard.html'));
 });
 
+// VAPI Test Dashboard Route
+app.get('/vapi-test-dashboard', (req, res) => {
+  res.sendFile(path.join(process.cwd(), 'public', 'vapi-test-dashboard.html'));
+});
+
 // Middleware for parsing JSON bodies (must be before routes that need it)
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -7446,6 +7451,169 @@ function getRegionalContext(location) {
     };
   }
 }
+
+// VAPI Test Endpoint
+app.get('/admin/vapi/test-connection', async (req, res) => {
+  try {
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    console.log('[VAPI CONNECTION TEST] Testing VAPI API connection');
+    
+    // Test VAPI connection by fetching assistants
+    const vapiResponse = await fetch('https://api.vapi.ai/assistant', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${process.env.VAPI_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (vapiResponse.ok) {
+      const assistants = await vapiResponse.json();
+      res.json({
+        success: true,
+        message: 'VAPI connection successful',
+        assistantsCount: assistants.length,
+        apiKeyConfigured: !!process.env.VAPI_API_KEY
+      });
+    } else {
+      const errorData = await vapiResponse.json();
+      res.status(400).json({
+        success: false,
+        message: 'VAPI connection failed',
+        error: errorData
+      });
+    }
+    
+  } catch (error) {
+    console.error('[VAPI CONNECTION TEST ERROR]', error);
+    res.status(500).json({
+      success: false,
+      message: 'VAPI connection test failed',
+      error: error.message,
+      apiKeyConfigured: !!process.env.VAPI_API_KEY
+    });
+  }
+});
+
+// Test Call Endpoint
+app.post('/admin/vapi/test-call', async (req, res) => {
+  try {
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const { phoneNumber, assistantId } = req.body;
+    
+    if (!phoneNumber) {
+      return res.status(400).json({ error: 'Phone number is required' });
+    }
+    
+    console.log(`[TEST CALL] Initiating test call to ${phoneNumber}`);
+    
+    // Create a simple test assistant if no assistantId provided
+    let testAssistantId = assistantId;
+    
+    if (!testAssistantId) {
+      const testAssistant = {
+        name: "Test Cold Call Assistant",
+        model: {
+          provider: "openai",
+          model: "gpt-4o-mini",
+          temperature: 0.3,
+          maxTokens: 150
+        },
+        voice: {
+          provider: "elevenlabs",
+          voiceId: "21m00Tcm4TlvDq8ikWAM",
+          stability: 0.7,
+          clarity: 0.85,
+          style: 0.2
+        },
+        firstMessage: "Hi, this is Sarah from AI Booking Solutions. I'm calling to help dental practices like yours increase their appointment bookings by 300% with our premium £500/month service. Do you have 2 minutes to hear how we can help you never miss another patient?",
+        systemMessage: `You are Sarah, calling about our premium £500/month AI booking service. Keep the call under 2 minutes. Focus on booking a demo. If they're not interested, politely end the call.`,
+        maxDurationSeconds: 120,
+        endCallMessage: "Thank you for your time. I'll send you some information about our premium service. Have a great day!",
+        endCallPhrases: ["not interested", "not right now", "call back later"],
+        recordingEnabled: true,
+        voicemailDetectionEnabled: true
+      };
+      
+      const assistantResponse = await fetch('https://api.vapi.ai/assistant', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.VAPI_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(testAssistant)
+      });
+      
+      if (assistantResponse.ok) {
+        const assistantData = await assistantResponse.json();
+        testAssistantId = assistantData.id;
+        console.log(`[TEST ASSISTANT CREATED] ID: ${testAssistantId}`);
+      } else {
+        const errorData = await assistantResponse.json();
+        return res.status(400).json({
+          success: false,
+          message: 'Failed to create test assistant',
+          error: errorData
+        });
+      }
+    }
+    
+    // Make the test call
+    const callResponse = await fetch('https://api.vapi.ai/call', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.VAPI_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        assistantId: testAssistantId,
+        customer: {
+          number: phoneNumber,
+          name: "Test Contact"
+        },
+        metadata: {
+          testCall: true,
+          timestamp: new Date().toISOString()
+        }
+      })
+    });
+    
+    if (callResponse.ok) {
+      const callData = await callResponse.json();
+      res.json({
+        success: true,
+        message: 'Test call initiated successfully',
+        callId: callData.id,
+        assistantId: testAssistantId,
+        phoneNumber: phoneNumber,
+        status: 'call_initiated'
+      });
+    } else {
+      const errorData = await callResponse.json();
+      res.status(400).json({
+        success: false,
+        message: 'Failed to initiate test call',
+        error: errorData
+      });
+    }
+    
+  } catch (error) {
+    console.error('[TEST CALL ERROR]', error);
+    res.status(500).json({
+      success: false,
+      message: 'Test call failed',
+      error: error.message
+    });
+  }
+});
 
 // VAPI Management Endpoints
 // Create VAPI Assistant
