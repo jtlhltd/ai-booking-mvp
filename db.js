@@ -1,8 +1,7 @@
 // db.js (ESM) — Postgres first, SQLite fallback, and helpers expected by server/libs
-import { Pool } from 'pg';
+// Dynamic imports to avoid missing dependencies on Render
 import path from 'path';
 import fs from 'fs';
-import Database from 'better-sqlite3';
 
 const dbType = (process.env.DB_TYPE || '').toLowerCase();
 let pool = null;
@@ -11,10 +10,16 @@ let DB_PATH = 'postgres';
 
 // ---------------------- Postgres ----------------------
 async function initPostgres() {
-  pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
-  });
+  try {
+    const { Pool } = await import('pg');
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false },
+    });
+  } catch (error) {
+    console.error('❌ Failed to import pg module:', error.message);
+    throw new Error('PostgreSQL module not available');
+  }
 
   // Run migrations
   await pool.query(`
@@ -330,12 +335,19 @@ async function initPostgres() {
 }
 
 // ---------------------- SQLite fallback ----------------------
-function initSqlite() {
+async function initSqlite() {
   const dataDir = process.env.DATA_DIR || path.join(process.cwd(), 'data');
   if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
   const sqlitePath = process.env.DB_PATH || path.join(dataDir, 'app.db');
-  sqlite = new Database(sqlitePath);
-  DB_PATH = sqlitePath;
+  
+  try {
+    const Database = (await import('better-sqlite3')).default;
+    sqlite = new Database(sqlitePath);
+    DB_PATH = sqlitePath;
+  } catch (error) {
+    console.error('❌ Failed to import better-sqlite3 module:', error.message);
+    throw new Error('SQLite module not available');
+  }
 
   // Minimal migrations for sqlite (JSON as TEXT)
   sqlite.exec(`
@@ -409,7 +421,7 @@ export async function init() {
   if (dbType === 'postgres' && process.env.DATABASE_URL) {
     return await initPostgres();
   } else {
-    return initSqlite();
+    return await initSqlite();
   }
 }
 
