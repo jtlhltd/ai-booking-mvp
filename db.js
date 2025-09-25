@@ -8,6 +8,12 @@ let pool = null;
 let sqlite = null;
 let DB_PATH = 'postgres';
 
+console.log('🔍 Database configuration:', {
+  DB_TYPE: process.env.DB_TYPE,
+  dbType: dbType,
+  DATABASE_URL: process.env.DATABASE_URL ? 'SET' : 'NOT SET'
+});
+
 // ---------------------- Postgres ----------------------
 async function initPostgres() {
   try {
@@ -418,9 +424,14 @@ async function initSqlite() {
 
 // ---------------------- Core API ----------------------
 export async function init() {
-  if (dbType === 'postgres' && process.env.DATABASE_URL) {
+  // Force SQLite on Render unless explicitly configured for PostgreSQL
+  const forceSqlite = process.env.RENDER === 'true' || !process.env.DATABASE_URL;
+  
+  if (!forceSqlite && dbType === 'postgres' && process.env.DATABASE_URL) {
+    console.log('🔄 Attempting PostgreSQL initialization...');
     return await initPostgres();
   } else {
+    console.log('🔄 Using SQLite (Render-compatible)...');
     return await initSqlite();
   }
 }
