@@ -190,6 +190,21 @@
         </div>
         
         <div class="test-section">
+            <h3>📝 Script Testing</h3>
+            <p>Test opening message, objection handling, and personalization effectiveness.</p>
+            <div class="form-group">
+                <label for="scriptTestType">Test Type:</label>
+                <select id="scriptTestType" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px;">
+                    <option value="opening_message">Opening Message</option>
+                    <option value="objection_handling">Objection Handling</option>
+                    <option value="personalization">Personalization</option>
+                </select>
+            </div>
+            <button onclick="testScript()">Test Script</button>
+            <div id="scriptResult" class="result" style="display: none;"></div>
+        </div>
+        
+        <div class="test-section">
             <h3>📊 System Status</h3>
             <div id="systemStatus">
                 <p><span class="status-indicator status-info"></span>Ready to test</p>
@@ -379,6 +394,92 @@
                 }
             } catch (error) {
                 showResult('leadDataResult', `❌ Error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testScript() {
+            const apiKey = getApiKey();
+            const testType = document.getElementById('scriptTestType').value;
+            
+            if (!apiKey) {
+                showResult('scriptResult', 'Please enter an API key first', 'error');
+                return;
+            }
+            
+            try {
+                showResult('scriptResult', `Testing ${testType}...`, 'info');
+                
+                const requestBody = {
+                    testType: testType
+                };
+                
+                // Add sample business data for personalization test
+                if (testType === 'personalization') {
+                    requestBody.businessData = {
+                        name: 'London Dental Care',
+                        decisionMaker: { name: 'Dr. Sarah Johnson' },
+                        address: 'London, UK'
+                    };
+                }
+                
+                const response = await fetch(`${API_BASE}/admin/test-script`, {
+                    method: 'POST',
+                    headers: {
+                        'X-API-Key': apiKey,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    let message = `✅ Script Test Completed!\n\n`;
+                    message += `Test Type: ${data.testType}\n\n`;
+                    
+                    if (testType === 'opening_message') {
+                        message += `📝 Opening Message:\n"${data.results.openingMessage}"\n\n`;
+                        message += `📊 Analysis:\n`;
+                        message += `  • Length: ${data.results.analysis.length} characters\n`;
+                        message += `  • Word Count: ${data.results.analysis.wordCount} words\n`;
+                        message += `  • Includes Value Prop: ${data.results.analysis.includesValueProposition ? '✅' : '❌'}\n`;
+                        message += `  • Includes Price: ${data.results.analysis.includesPrice ? '✅' : '❌'}\n`;
+                        message += `  • Includes Benefit: ${data.results.analysis.includesBenefit ? '✅' : '❌'}\n`;
+                        message += `  • Includes Time: ${data.results.analysis.includesTimeCommitment ? '✅' : '❌'}\n\n`;
+                        message += `💡 Recommendations:\n`;
+                        data.results.recommendations.forEach(rec => {
+                            message += `  • ${rec}\n`;
+                        });
+                        
+                    } else if (testType === 'objection_handling') {
+                        message += `🎯 Objection Handling Summary:\n`;
+                        message += `  • Total Objections: ${data.results.summary.totalObjections}\n`;
+                        message += `  • Avg Response Length: ${Math.round(data.results.summary.averageResponseLength)} characters\n`;
+                        message += `  • All Acknowledge Concerns: ${data.results.summary.allAcknowledgeConcerns ? '✅' : '❌'}\n`;
+                        message += `  • All Provide Solutions: ${data.results.summary.allProvideSolutions ? '✅' : '❌'}\n\n`;
+                        message += `📝 Sample Responses:\n`;
+                        Object.entries(data.results.objections).forEach(([key, obj]) => {
+                            message += `  • ${key.replace('_', ' ').toUpperCase()}:\n`;
+                            message += `    "${obj.response}"\n\n`;
+                        });
+                        
+                    } else if (testType === 'personalization') {
+                        message += `🎭 Personalized Opening:\n"${data.results.personalizedOpening}"\n\n`;
+                        message += `📊 Personalization Analysis:\n`;
+                        message += `  • Uses Decision Maker Name: ${data.results.personalization.usesDecisionMakerName ? '✅' : '❌'}\n`;
+                        message += `  • Uses Business Name: ${data.results.personalization.usesBusinessName ? '✅' : '❌'}\n`;
+                        message += `  • Uses Location: ${data.results.personalization.usesLocation ? '✅' : '❌'}\n`;
+                        message += `  • Maintains Value Prop: ${data.results.personalization.maintainsValueProposition ? '✅' : '❌'}\n`;
+                        message += `  • Maintains Price: ${data.results.personalization.maintainsPrice ? '✅' : '❌'}\n`;
+                        message += `  • Personalization Score: ${data.results.analysis.personalizationScore}/3\n`;
+                    }
+                    
+                    showResult('scriptResult', message, 'success');
+                } else {
+                    showResult('scriptResult', `❌ Script Test Failed:\n\n${JSON.stringify(data, null, 2)}`, 'error');
+                }
+            } catch (error) {
+                showResult('scriptResult', `❌ Error: ${error.message}`, 'error');
             }
         }
         
