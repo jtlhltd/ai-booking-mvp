@@ -205,6 +205,13 @@
         </div>
         
         <div class="test-section">
+            <h3>⏱️ Call Duration Validation</h3>
+            <p>Validate that calls stay within optimal 2-3 minute duration.</p>
+            <button onclick="validateCallDuration()">Validate Call Duration</button>
+            <div id="durationResult" class="result" style="display: none;"></div>
+        </div>
+        
+        <div class="test-section">
             <h3>📊 System Status</h3>
             <div id="systemStatus">
                 <p><span class="status-indicator status-info"></span>Ready to test</p>
@@ -480,6 +487,59 @@
                 }
             } catch (error) {
                 showResult('scriptResult', `❌ Error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function validateCallDuration() {
+            const apiKey = getApiKey();
+            
+            if (!apiKey) {
+                showResult('durationResult', 'Please enter an API key first', 'error');
+                return;
+            }
+            
+            try {
+                showResult('durationResult', 'Validating call duration settings...', 'info');
+                
+                const response = await fetch(`${API_BASE}/admin/validate-call-duration`, {
+                    method: 'GET',
+                    headers: {
+                        'X-API-Key': apiKey,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    const validation = data.validation;
+                    let message = `✅ Call Duration Validation Completed!\n\n`;
+                    
+                    message += `⏱️ Duration Analysis:\n`;
+                    message += `  • Max Duration: ${validation.analysis.maxDurationMinutes} minutes\n`;
+                    message += `  • Total Flow Duration: ${validation.analysis.totalFlowMinutes} minutes\n`;
+                    message += `  • Within Optimal Range: ${validation.analysis.withinOptimalRange ? '✅' : '❌'}\n`;
+                    message += `  • Has End Call Phrases: ${validation.analysis.hasEndCallPhrases ? '✅' : '❌'}\n`;
+                    message += `  • Has End Call Message: ${validation.analysis.hasEndCallMessage ? '✅' : '❌'}\n`;
+                    message += `  • Includes Time Guidance: ${validation.analysis.includesTimeGuidance ? '✅' : '❌'}\n\n`;
+                    
+                    message += `📋 Conversation Flow Timing:\n`;
+                    validation.optimalTiming.conversationSteps.forEach(step => {
+                        message += `  • ${step.step.replace(/([A-Z])/g, ' $1').trim()}: ${step.duration}\n`;
+                    });
+                    message += `  • Total: ${validation.analysis.totalFlowMinutes} minutes\n\n`;
+                    
+                    message += `💡 Recommendations:\n`;
+                    validation.recommendations.forEach(rec => {
+                        message += `  • ${rec}\n`;
+                    });
+                    
+                    showResult('durationResult', message, 'success');
+                } else {
+                    showResult('durationResult', `❌ Call Duration Validation Failed:\n\n${JSON.stringify(data, null, 2)}`, 'error');
+                }
+            } catch (error) {
+                showResult('durationResult', `❌ Error: ${error.message}`, 'error');
             }
         }
         
