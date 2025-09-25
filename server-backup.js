@@ -55,6 +55,11 @@ const normalizePhone = (s) => (s || '').trim().replace(/[^\d+]/g, '');
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import axios from 'axios';
+import { generateUKBusinesses, getIndustryCategories, fuzzySearch } from './enhanced-business-search.js';
+import RealUKBusinessSearch from './real-uk-business-search.js';
+import BookingSystem from './booking-system.js';
+import SMSEmailPipeline from './sms-email-pipeline.js';
 import morgan from 'morgan';
 import fs from 'fs/promises';
 import path from 'path';
@@ -87,6 +92,26 @@ import vapiWebhooks from './routes/vapi-webhooks.js';
 
 const app = express();
 
+// Initialize Booking System
+let bookingSystem = null;
+try {
+  bookingSystem = new BookingSystem();
+  console.log('✅ Booking system initialized');
+} catch (error) {
+  console.error('❌ Failed to initialize booking system:', error.message);
+  console.log('⚠️ Booking functionality will be disabled');
+}
+
+// Initialize SMS-Email Pipeline
+let smsEmailPipeline = null;
+try {
+  smsEmailPipeline = new SMSEmailPipeline();
+  console.log('✅ SMS-Email pipeline initialized');
+} catch (error) {
+  console.error('❌ Failed to initialize SMS-Email pipeline:', error.message);
+  console.log('⚠️ SMS-Email functionality will be disabled');
+}
+
 // Trust proxy for rate limiting (required for Render)
 app.set('trust proxy', 1);
 
@@ -100,44 +125,973 @@ app.use(express.static('public'));
 
 // Dashboard routes
 app.get('/', (req, res) => {
-  res.sendFile(new URL('./public/index.html', import.meta.url).pathname);
+  res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
 });
 
 app.get('/tenant-dashboard', (req, res) => {
-  res.sendFile(new URL('./public/tenant-dashboard.html', import.meta.url).pathname);
+  res.sendFile(path.join(process.cwd(), 'public', 'tenant-dashboard.html'));
 });
 
 app.get('/client-dashboard', (req, res) => {
-  res.sendFile(new URL('./public/client-dashboard.html', import.meta.url).pathname);
+  res.sendFile(path.join(process.cwd(), 'public', 'client-dashboard.html'));
 });
 
 app.get('/client-setup', (req, res) => {
-  res.sendFile(new URL('./public/client-setup.html', import.meta.url).pathname);
+  res.sendFile(path.join(process.cwd(), 'public', 'client-setup.html'));
 });
 
 app.get('/client-template', (req, res) => {
-  res.sendFile(new URL('./public/client-dashboard-template.html', import.meta.url).pathname);
+  res.sendFile(path.join(process.cwd(), 'public', 'client-dashboard-template.html'));
 });
 
 app.get('/setup-guide', (req, res) => {
-  res.sendFile(new URL('./public/client-setup-guide.html', import.meta.url).pathname);
+  res.sendFile(path.join(process.cwd(), 'public', 'client-setup-guide.html'));
 });
 
 app.get('/onboarding', (req, res) => {
-  res.sendFile(new URL('./public/onboarding-dashboard.html', import.meta.url).pathname);
+  res.sendFile(path.join(process.cwd(), 'public', 'onboarding-dashboard.html'));
 });
 
 app.get('/onboarding-templates', (req, res) => {
-  res.sendFile(new URL('./public/onboarding-templates.html', import.meta.url).pathname);
+  res.sendFile(path.join(process.cwd(), 'public', 'onboarding-templates.html'));
 });
 
 app.get('/onboarding-wizard', (req, res) => {
-  res.sendFile(new URL('./public/client-onboarding-wizard.html', import.meta.url).pathname);
+  res.sendFile(path.join(process.cwd(), 'public', 'client-onboarding-wizard.html'));
+});
+
+app.get('/uk-business-search', (req, res) => {
+  res.sendFile(path.join(process.cwd(), 'public', 'uk-business-search.html'));
+});
+
+// Serve Cold Call Dashboard page
+app.get('/cold-call-dashboard', (req, res) => {
+  res.sendFile(path.join(process.cwd(), 'public', 'cold-call-dashboard.html'));
+});
+
+// VAPI Test Dashboard Route
+app.get('/vapi-test-dashboard', (req, res) => {
+  res.sendFile(path.join(process.cwd(), 'public', 'vapi-test-dashboard.html'));
+});
+
+// Mock Lead Call Route (No API Key Required)
+app.get('/mock-call', async (req, res) => {
+  try {
+    const vapiKey = process.env.VAPI_PRIVATE_KEY || process.env.VAPI_PUBLIC_KEY || process.env.VAPI_API_KEY;
+    
+    if (!vapiKey) {
+      return res.json({
+        success: false,
+        message: 'VAPI API key not found',
+        availableKeys: {
+          VAPI_PRIVATE_KEY: !!process.env.VAPI_PRIVATE_KEY,
+          VAPI_PUBLIC_KEY: !!process.env.VAPI_PUBLIC_KEY,
+          VAPI_API_KEY: !!process.env.VAPI_API_KEY
+        }
+      });
+    }
+    
+    // Mock lead data
+    const mockLead = {
+      businessName: "Test Dental Practice",
+      decisionMaker: "Dr. Sarah Johnson",
+      industry: "dental",
+      location: "London",
+      phoneNumber: "+447491683261", // Your number
+      email: "sarah@testdental.co.uk",
+      website: "www.testdental.co.uk"
+    };
+    
+    // Create a call with British-optimized assistant
+    const callData = {
+      assistantId: "dd67a51c-7485-4b62-930a-4a84f328a1c9",
+      phoneNumberId: "934ecfdb-fe7b-4d53-81c0-7908b97036b5",
+      customer: {
+        number: mockLead.phoneNumber,
+        name: mockLead.decisionMaker
+      },
+      assistantOverrides: {
+        firstMessage: "Hello, this is Sarah from AI Booking Solutions. I hope I'm not catching you at a bad time? I'm calling to help businesses like yours with appointment booking. Do you have a couple of minutes to chat about this?",
+        silenceTimeoutSeconds: 15,
+        startSpeakingPlan: {
+          waitSeconds: 2
+        }
+      }
+    };
+    
+    const vapiResponse = await fetch('https://api.vapi.ai/call', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${vapiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(callData)
+    });
+    
+    if (vapiResponse.ok) {
+      const callResult = await vapiResponse.json();
+      res.json({
+        success: true,
+        message: 'Mock call initiated successfully!',
+        callId: callResult.id,
+        mockLead: mockLead,
+        status: 'Calling your mobile now...'
+      });
+    } else {
+      const errorData = await vapiResponse.json();
+      res.json({
+        success: false,
+        message: 'Failed to initiate mock call',
+        error: errorData
+      });
+    }
+    
+  } catch (error) {
+    res.json({
+      success: false,
+      message: 'Mock call failed',
+      error: error.message
+    });
+  }
+});
+
+// Booking System Endpoints
+// Booking System Endpoints - MOVED AFTER JSON MIDDLEWARE
+
+// Test Booking System
+app.get('/test-booking', async (req, res) => {
+  try {
+    const testLead = {
+      businessName: "Test Business",
+      decisionMaker: "John Smith",
+      email: "john@testbusiness.co.uk",
+      phoneNumber: "+447491683261",
+      industry: "retail",
+      location: "London"
+    };
+
+    const timeSlots = bookingSystem.generateTimeSlots(3);
+    const result = await bookingSystem.bookDemo(testLead, timeSlots.slice(0, 3));
+    
+    res.json({
+      success: true,
+      message: 'Booking system test completed',
+      result: result,
+      availableSlots: timeSlots.length
+    });
+    
+  } catch (error) {
+    console.error('[BOOKING TEST ERROR]', error);
+    res.status(500).json({
+      success: false,
+      message: 'Booking system test failed',
+      error: error.message
+    });
+  }
+});
+
+// SMS-Email Pipeline Endpoints
+// Initiate Lead Capture (SMS asking for email)
+app.post('/api/initiate-lead-capture', async (req, res) => {
+  try {
+    const { leadData } = req.body;
+    
+    if (!leadData || !leadData.phoneNumber || !leadData.decisionMaker) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required lead data (phoneNumber, decisionMaker)'
+      });
+    }
+
+    if (!smsEmailPipeline) {
+      return res.status(503).json({ 
+        success: false, 
+        message: 'SMS-Email pipeline not available' 
+      });
+    }
+
+    const result = await smsEmailPipeline.initiateLeadCapture(leadData);
+    res.json(result);
+    
+  } catch (error) {
+    console.error('[LEAD CAPTURE ERROR]', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lead capture failed',
+      error: error.message
+    });
+  }
+});
+
+// Process Email Response (Webhook from Twilio)
+app.post('/api/process-email-response', async (req, res) => {
+  try {
+    const { phoneNumber, emailAddress } = req.body;
+    
+    if (!phoneNumber || !emailAddress) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing phoneNumber or emailAddress'
+      });
+    }
+
+    if (!smsEmailPipeline) {
+      return res.status(503).json({ 
+        success: false, 
+        message: 'SMS-Email pipeline not available' 
+      });
+    }
+
+    const result = await smsEmailPipeline.processEmailResponse(phoneNumber, emailAddress);
+    res.json(result);
+    
+  } catch (error) {
+    console.error('[EMAIL PROCESSING ERROR]', error);
+    res.status(500).json({
+      success: false,
+      message: 'Email processing failed',
+      error: error.message
+    });
+  }
+});
+
+// Get Lead Status
+app.get('/api/lead-status/:leadId', async (req, res) => {
+  try {
+    const { leadId } = req.params;
+    if (!smsEmailPipeline) {
+      return res.status(503).json({ 
+        success: false, 
+        message: 'SMS-Email pipeline not available' 
+      });
+    }
+
+    const result = await smsEmailPipeline.getLeadStatus(leadId);
+    res.json(result);
+    
+  } catch (error) {
+    console.error('[LEAD STATUS ERROR]', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get lead status',
+      error: error.message
+    });
+  }
+});
+
+// Get Pipeline Statistics
+app.get('/api/pipeline-stats', async (req, res) => {
+  try {
+    if (!smsEmailPipeline) {
+      return res.status(503).json({ 
+        success: false, 
+        message: 'SMS-Email pipeline not available' 
+      });
+    }
+
+    const stats = smsEmailPipeline.getStats();
+    res.json({
+      success: true,
+      stats: stats
+    });
+    
+  } catch (error) {
+    console.error('[PIPELINE STATS ERROR]', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get pipeline stats',
+      error: error.message
+    });
+  }
+});
+
+
+// Twilio Webhook for SMS Replies
+app.post('/webhook/sms-reply', async (req, res) => {
+  try {
+    const { From, Body } = req.body;
+    
+    // Extract email from SMS body
+    const emailMatch = Body.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+    
+    if (emailMatch) {
+      const emailAddress = emailMatch[1];
+      
+      if (!smsEmailPipeline) {
+        return res.status(503).json({ 
+          success: false, 
+          message: 'SMS-Email pipeline not available' 
+        });
+      }
+      
+      const result = await smsEmailPipeline.processEmailResponse(From, emailAddress);
+      
+      res.json({
+        success: true,
+        message: 'Email processed successfully',
+        result: result
+      });
+    } else {
+      // Send helpful SMS if no email found
+      if (smsEmailPipeline) {
+        await smsEmailPipeline.sendSMS({
+          to: From,
+          body: "I didn't find an email address in your message. Please send just your email address (e.g., john@company.com)"
+        });
+      }
+      
+      res.json({
+        success: false,
+        message: 'No email address found in SMS'
+      });
+    }
+    
+  } catch (error) {
+    console.error('[SMS WEBHOOK ERROR]', error);
+    res.status(500).json({
+      success: false,
+      message: 'SMS webhook processing failed',
+      error: error.message
+    });
+  }
+});
+
+// Test SMS-Email Pipeline (No API Key Required)
+app.get('/test-sms-pipeline', async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      message: 'SMS-Email Pipeline test endpoint is working!',
+      timestamp: new Date().toISOString(),
+      environment: {
+        twilioConfigured: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN),
+        emailConfigured: !!(process.env.EMAIL_USER && process.env.EMAIL_PASS),
+        yourEmail: process.env.YOUR_EMAIL || 'not set'
+      }
+    });
+    
+  } catch (error) {
+    console.error('[SMS PIPELINE TEST ERROR]', error);
+    res.status(500).json({
+      success: false,
+      message: 'SMS-Email Pipeline test failed',
+      error: error.message
+    });
+  }
+});
+
+// Alternative test endpoint
+app.get('/sms-test', async (req, res) => {
+  res.json({
+    success: true,
+    message: 'Alternative SMS test endpoint working!',
+    timestamp: new Date().toISOString()
+  });
+});
+
+
+// Simple VAPI Test Route (No API Key Required)
+app.get('/test-vapi', async (req, res) => {
+  try {
+    const vapiKey = process.env.VAPI_PRIVATE_KEY || process.env.VAPI_PUBLIC_KEY || process.env.VAPI_API_KEY;
+    
+    if (!vapiKey) {
+      return res.json({
+        success: false,
+        message: 'VAPI API key not found',
+        availableKeys: {
+          VAPI_PRIVATE_KEY: !!process.env.VAPI_PRIVATE_KEY,
+          VAPI_PUBLIC_KEY: !!process.env.VAPI_PUBLIC_KEY,
+          VAPI_API_KEY: !!process.env.VAPI_API_KEY
+        }
+      });
+    }
+    
+    const vapiResponse = await fetch('https://api.vapi.ai/assistant', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${vapiKey}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (vapiResponse.ok) {
+      const assistants = await vapiResponse.json();
+      res.json({
+        success: true,
+        message: 'VAPI connection successful!',
+        assistantsCount: assistants.length,
+        assistantId: 'dd67a51c-7485-4b62-930a-4a84f328a1c9'
+      });
+    } else {
+      const errorData = await vapiResponse.json();
+      res.json({
+        success: false,
+        message: 'VAPI API call failed',
+        error: errorData
+      });
+    }
+    
+  } catch (error) {
+    res.json({
+      success: false,
+      message: 'VAPI test failed',
+      error: error.message
+    });
+  }
+});
+
+// Quick Assistant Creation Route (No API Key Required)
+app.get('/create-assistant', async (req, res) => {
+  try {
+    console.log('[QUICK ASSISTANT CREATION] Creating cold call assistant');
+    
+    // Check if VAPI API key is configured
+    const vapiKey = process.env.VAPI_PRIVATE_KEY || process.env.VAPI_PUBLIC_KEY || process.env.VAPI_API_KEY;
+    if (!vapiKey) {
+      return res.status(500).json({
+        error: 'VAPI API key not configured',
+        message: 'Please add VAPI_PRIVATE_KEY, VAPI_PUBLIC_KEY, or VAPI_API_KEY to your environment variables'
+      });
+    }
+    
+    // Create specialized cold calling assistant for dental practices
+    const coldCallAssistant = {
+      name: "Dental Cold Call Bot - £500/mo",
+      model: {
+        provider: "openai",
+        model: "gpt-4o",
+        temperature: 0.3,
+        maxTokens: 200
+      },
+      voice: {
+        provider: "11labs",
+        voiceId: "21m00Tcm4TlvDq8ikWAM",
+        stability: 0.7,
+        clarity: 0.85,
+        style: 0.2,
+        similarityBoost: 0.8
+      },
+      firstMessage: "Hi, this is Sarah from AI Booking Solutions. I'm calling to help businesses like yours improve their appointment booking systems with our premium £500/month service. Do you have 2 minutes to hear how we can help you never miss another patient?",
+      systemMessage: `You are Sarah, a top-performing sales professional with 10+ years experience in B2B healthcare sales. You're calling business owners/managers to book qualified appointments.
+
+ADVANCED SALES PSYCHOLOGY:
+- Use social proof: "We help businesses improve their appointment booking systems"
+- Create urgency: "We're currently accepting new clients"
+- Build rapport: "I understand how challenging it is to manage a busy practice"
+- Use specific numbers: "Our service can help capture more appointments"
+- Address pain points: "Many businesses lose potential customers from missed calls"
+
+CONVERSATION FLOW:
+1. RAPPORT BUILDING (15 seconds):
+   - "Hi [Name], this is Sarah from AI Booking Solutions"
+   - "I'm calling because we've helped [similar practice in their area] increase bookings by 300%"
+   - "Do you have 90 seconds to hear how this could work for your practice?"
+
+2. QUALIFICATION (30 seconds):
+   - "Are you the owner or manager of [Practice Name]?"
+   - "How many appointments do you typically book per week?"
+   - "What's your biggest challenge with patient scheduling?"
+   - "Do you ever miss calls or lose potential patients?"
+
+3. PAIN AMPLIFICATION (30 seconds):
+   - "I hear this a lot - practices lose an average of £2,000 monthly from missed calls"
+   - "That's like losing 4-5 patients every month"
+   - "Our AI handles calls 24/7, so you never miss another patient"
+
+4. VALUE PRESENTATION (45 seconds):
+   - "We help practices like yours increase bookings by 300% with our premium £500/month service"
+   - "Our AI automatically books appointments in your calendar"
+   - "Sends SMS reminders to reduce no-shows by 40%"
+   - "Most practices see ROI within 30 days"
+   - "Premium service includes dedicated account manager and priority support"
+   - "Average practice sees 20-30 extra bookings per month worth £10,000-15,000"
+
+5. OBJECTION HANDLING:
+   - Too expensive: "I understand £500/month sounds like a lot, but what's the cost of losing just one patient? Our premium service pays for itself with just 2-3 extra bookings per month. Most practices see 20-30 extra bookings worth £10,000-15,000 monthly"
+   - Too busy: "That's exactly why you need our premium service - it saves you 10+ hours per week and includes a dedicated account manager"
+   - Not interested: "I understand. Can I send you a quick case study showing how we helped [similar practice] increase bookings by 300% with our premium service?"
+   - Already have a system: "That's great! What's your current system missing that causes you to lose patients? Our premium service includes features like dedicated account management and priority support"
+   - Budget concerns: "I understand budget is important. Our premium service typically generates £10,000-15,000 in additional revenue monthly. That's a 20-30x ROI. Would you like to see the numbers?"
+
+6. CLOSING (30 seconds):
+   - "Would you be available for a 15-minute demo this week to see how this could work for your practice?"
+   - "I can show you exactly how we've helped similar practices increase their bookings"
+   - "What day works better for you - Tuesday or Wednesday?"
+
+ADVANCED TECHNIQUES:
+- Use their name frequently (builds rapport)
+- Mirror their language and pace
+- Ask open-ended questions
+- Use "we" instead of "I" (creates partnership)
+- Create urgency with scarcity
+- Use specific success stories
+- Address objections before they're raised
+
+RULES:
+- Keep calls under 3 minutes
+- Be professional but warm
+- Listen 70% of the time, talk 30%
+- Focus on their pain points
+- Always ask for the appointment
+- If they're not the decision maker, get their name and ask for the right person
+- Use their practice name in conversation
+- End with a clear next step`,
+      maxDurationSeconds: 180,
+      endCallMessage: "Thank you for your time. I'll send you some information about how we can help your practice increase bookings. Have a great day!",
+      endCallPhrases: ["not interested", "not right now", "call back later", "send me information"],
+      recordingEnabled: true,
+      voicemailDetectionEnabled: true,
+      backgroundSound: "office",
+      silenceTimeoutSeconds: 10,
+      responseDelaySeconds: 1,
+      llmRequestDelaySeconds: 0.1
+    };
+    
+    // Create assistant via VAPI API
+    const vapiResponse = await fetch('https://api.vapi.ai/assistant', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${vapiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(coldCallAssistant)
+    });
+    
+    if (!vapiResponse.ok) {
+      const errorData = await vapiResponse.json();
+      return res.status(400).json({ 
+        error: 'Failed to create VAPI assistant',
+        details: errorData 
+      });
+    }
+    
+    const assistantData = await vapiResponse.json();
+    
+    res.json({
+      success: true,
+      message: 'Cold call assistant created successfully!',
+      assistant: {
+        id: assistantData.id,
+        name: assistantData.name,
+        status: assistantData.status,
+        createdAt: assistantData.createdAt
+      },
+      nextSteps: [
+        'Visit /vapi-test-dashboard to test the assistant',
+        'Use the assistant ID to make test calls',
+        'Start calling real businesses from UK business search'
+      ]
+    });
+    
+  } catch (error) {
+    console.error('[QUICK ASSISTANT CREATION ERROR]', error);
+    res.status(500).json({ 
+      error: 'Failed to create cold call assistant',
+      message: error.message 
+    });
+  }
+});
+
+
+// Lead Data Quality Test Endpoint
+app.get('/admin/test-lead-data', async (req, res) => {
+  try {
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    console.log('[LEAD DATA TEST] Testing business search and decision maker research');
+    
+    // Test business search with sample query
+    const testQuery = {
+      query: 'dentist',
+      industry: 'dentist',
+      location: 'London',
+      contactInfo: true,
+      limit: 5
+    };
+    
+    // Import the business search module
+    const { generateUKBusinesses } = await import('./src/enhanced-business-search.js');
+    
+    // Generate sample businesses
+    const businesses = generateUKBusinesses(testQuery);
+    
+    // Test decision maker research for first business
+    if (businesses.length > 0) {
+      const testBusiness = businesses[0];
+      
+      // Import decision maker research
+      const { RealDecisionMakerContactFinder } = await import('./src/real-decision-maker-contact-finder.js');
+      const contactFinder = new RealDecisionMakerContactFinder();
+      
+      try {
+        const contacts = await contactFinder.findDecisionMakerContacts(testBusiness);
+        
+        res.json({
+          success: true,
+          message: 'Lead data quality test completed',
+          testResults: {
+            businessSearch: {
+              totalBusinesses: businesses.length,
+              sampleBusiness: {
+                name: testBusiness.name,
+                phone: testBusiness.phone,
+                email: testBusiness.email,
+                address: testBusiness.address,
+                website: testBusiness.website,
+                hasDecisionMaker: !!testBusiness.decisionMaker
+              }
+            },
+            decisionMakerResearch: {
+              contactsFound: contacts.primary.length + contacts.secondary.length + contacts.gatekeeper.length,
+              primaryContacts: contacts.primary.length,
+              secondaryContacts: contacts.secondary.length,
+              gatekeeperContacts: contacts.gatekeeper.length,
+              sampleContact: contacts.primary[0] || contacts.secondary[0] || contacts.gatekeeper[0]
+            },
+            dataQuality: {
+              phoneNumbersValid: businesses.filter(b => b.phone && b.phone.startsWith('+44')).length,
+              emailsValid: businesses.filter(b => b.email && b.email.includes('@')).length,
+              websitesValid: businesses.filter(b => b.website && b.website.startsWith('http')).length,
+              addressesValid: businesses.filter(b => b.address && b.address.length > 10).length
+            }
+          }
+        });
+        
+      } catch (contactError) {
+        res.json({
+          success: true,
+          message: 'Lead data quality test completed (decision maker research failed)',
+          testResults: {
+            businessSearch: {
+              totalBusinesses: businesses.length,
+              sampleBusiness: {
+                name: testBusiness.name,
+                phone: testBusiness.phone,
+                email: testBusiness.email,
+                address: testBusiness.address,
+                website: testBusiness.website
+              }
+            },
+            decisionMakerResearch: {
+              error: contactError.message,
+              status: 'failed'
+            },
+            dataQuality: {
+              phoneNumbersValid: businesses.filter(b => b.phone && b.phone.startsWith('+44')).length,
+              emailsValid: businesses.filter(b => b.email && b.email.includes('@')).length,
+              websitesValid: businesses.filter(b => b.website && b.website.startsWith('http')).length,
+              addressesValid: businesses.filter(b => b.address && b.address.length > 10).length
+            }
+          }
+        });
+      }
+    } else {
+      res.json({
+        success: false,
+        message: 'No businesses found in test',
+        testResults: {
+          businessSearch: { totalBusinesses: 0 },
+          error: 'Business search returned no results'
+        }
+      });
+    }
+    
+  } catch (error) {
+    console.error('[LEAD DATA TEST ERROR]', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lead data quality test failed',
+      error: error.message
+    });
+  }
+});
+
+// Script Testing Endpoint
+app.post('/admin/test-script', async (req, res) => {
+  try {
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const { testType, businessData } = req.body;
+    
+    console.log(`[SCRIPT TEST] Testing ${testType} with business data`);
+    
+    let testResults = {};
+    
+    if (testType === 'opening_message') {
+      // Test opening message effectiveness
+      const openingMessage = "Hi, this is Sarah from AI Booking Solutions. I'm calling to help businesses like yours improve their appointment booking systems with our premium £500/month service. Do you have 2 minutes to hear how we can help you never miss another patient?";
+      
+      testResults = {
+        openingMessage: openingMessage,
+        analysis: {
+          length: openingMessage.length,
+          wordCount: openingMessage.split(' ').length,
+          includesValueProposition: openingMessage.includes('300%'),
+          includesPrice: openingMessage.includes('£500/month'),
+          includesBenefit: openingMessage.includes('never miss another patient'),
+          includesTimeCommitment: openingMessage.includes('2 minutes'),
+          includesCompanyName: openingMessage.includes('AI Booking Solutions'),
+          includesPersonalName: openingMessage.includes('Sarah')
+        },
+        recommendations: [
+          openingMessage.length < 200 ? '✅ Good length (under 200 characters)' : '⚠️ Consider shortening',
+          openingMessage.includes('300%') ? '✅ Includes specific benefit' : '❌ Missing specific benefit',
+          openingMessage.includes('£500/month') ? '✅ Includes price upfront' : '❌ Missing price',
+          openingMessage.includes('never miss another patient') ? '✅ Includes pain point' : '❌ Missing pain point',
+          openingMessage.includes('2 minutes') ? '✅ Includes time commitment' : '❌ Missing time commitment'
+        ]
+      };
+      
+    } else if (testType === 'objection_handling') {
+      // Test objection handling responses
+      const objections = {
+        'too_expensive': {
+          response: "I understand £500/month sounds like a lot, but what's the cost of losing just one patient? Our premium service pays for itself with just 2-3 extra bookings per month. Most practices see 20-30 extra bookings worth £10,000-15,000 monthly",
+          analysis: {
+            acknowledgesConcern: true,
+            providesROI: true,
+            usesSpecificNumbers: true,
+            addressesPainPoint: true
+          }
+        },
+        'too_busy': {
+          response: "That's exactly why you need our premium service - it saves you 10+ hours per week and includes a dedicated account manager",
+          analysis: {
+            acknowledgesConcern: true,
+            providesSolution: true,
+            includesPremiumBenefit: true,
+            addressesTimeIssue: true
+          }
+        },
+        'not_interested': {
+          response: "I understand. Can I send you a quick case study showing how we helped [similar practice] increase bookings by 300% with our premium service?",
+          analysis: {
+            acknowledgesConcern: true,
+            providesSocialProof: true,
+            offersAlternative: true,
+            maintainsProfessionalism: true
+          }
+        },
+        'budget_concerns': {
+          response: "I understand budget is important. Our premium service typically generates £10,000-15,000 in additional revenue monthly. That's a 20-30x ROI. Would you like to see the numbers?",
+          analysis: {
+            acknowledgesConcern: true,
+            providesROI: true,
+            usesSpecificNumbers: true,
+            offersProof: true
+          }
+        }
+      };
+      
+      testResults = {
+        objections: objections,
+        summary: {
+          totalObjections: Object.keys(objections).length,
+          averageResponseLength: Object.values(objections).reduce((sum, obj) => sum + obj.response.length, 0) / Object.keys(objections).length,
+          allAcknowledgeConcerns: Object.values(objections).every(obj => obj.analysis.acknowledgesConcern),
+          allProvideSolutions: Object.values(objections).every(obj => obj.analysis.providesSolution || obj.analysis.providesROI)
+        }
+      };
+      
+    } else if (testType === 'personalization') {
+      // Test personalization with business data
+      const businessName = businessData?.name || 'Test Practice';
+      const decisionMaker = businessData?.decisionMaker?.name || 'there';
+      const location = businessData?.address || 'your area';
+      
+      const personalizedOpening = `Hi ${decisionMaker}, this is Sarah from AI Booking Solutions. I'm calling because we've helped practices in ${location} improve their appointment booking systems with our premium £500/month service. Do you have 90 seconds to hear how this could work for ${businessName}?`;
+      
+      testResults = {
+        personalizedOpening: personalizedOpening,
+        personalization: {
+          usesDecisionMakerName: personalizedOpening.includes(decisionMaker),
+          usesBusinessName: personalizedOpening.includes(businessName),
+          usesLocation: personalizedOpening.includes(location),
+          maintainsValueProposition: personalizedOpening.includes('300%'),
+          maintainsPrice: personalizedOpening.includes('£500/month')
+        },
+        analysis: {
+          length: personalizedOpening.length,
+          wordCount: personalizedOpening.split(' ').length,
+          personalizationScore: (personalizedOpening.includes(decisionMaker) ? 1 : 0) + 
+                               (personalizedOpening.includes(businessName) ? 1 : 0) + 
+                               (personalizedOpening.includes(location) ? 1 : 0)
+        }
+      };
+    }
+    
+    res.json({
+      success: true,
+      message: `${testType} test completed`,
+      testType: testType,
+      results: testResults,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('[SCRIPT TEST ERROR]', error);
+    res.status(500).json({
+      success: false,
+      message: 'Script test failed',
+      error: error.message
+    });
+  }
+});
+
+// Call Duration Validation Endpoint
+app.get('/admin/validate-call-duration', async (req, res) => {
+  try {
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    console.log('[CALL DURATION VALIDATION] Validating call duration settings');
+    
+    // Check current assistant configuration
+    const assistantConfig = {
+      maxDurationSeconds: 180, // 3 minutes
+      systemMessage: `You are Sarah, calling about our premium £500/month AI booking service. Keep the call under 2 minutes. Focus on booking a demo. If they're not interested, politely end the call.`,
+      endCallPhrases: ["not interested", "not right now", "call back later"],
+      endCallMessage: "Thank you for your time. I'll send you some information about our premium service. Have a great day!"
+    };
+    
+    // Analyze conversation flow timing
+    const conversationFlow = {
+      rapportBuilding: { duration: 15, description: "Hi [Name], this is Sarah from AI Booking Solutions" },
+      qualification: { duration: 30, description: "Are you the owner or manager?" },
+      painAmplification: { duration: 30, description: "What's your biggest challenge?" },
+      valuePresentation: { duration: 45, description: "We help practices increase bookings by 300%" },
+      objectionHandling: { duration: 30, description: "I understand your concerns..." },
+      closing: { duration: 30, description: "Would you be available for a demo?" }
+    };
+    
+    const totalFlowDuration = Object.values(conversationFlow).reduce((sum, step) => sum + step.duration, 0);
+    
+    const validation = {
+      assistantConfig: assistantConfig,
+      conversationFlow: conversationFlow,
+      analysis: {
+        maxDurationSeconds: assistantConfig.maxDurationSeconds,
+        maxDurationMinutes: assistantConfig.maxDurationSeconds / 60,
+        totalFlowDuration: totalFlowDuration,
+        totalFlowMinutes: totalFlowDuration / 60,
+        withinOptimalRange: totalFlowDuration <= 180,
+        hasEndCallPhrases: assistantConfig.endCallPhrases.length > 0,
+        hasEndCallMessage: !!assistantConfig.endCallMessage,
+        includesTimeGuidance: assistantConfig.systemMessage.includes('under 2 minutes')
+      },
+      recommendations: [
+        assistantConfig.maxDurationSeconds <= 180 ? '✅ Max duration set to 3 minutes (optimal)' : '⚠️ Consider reducing max duration to 3 minutes',
+        totalFlowDuration <= 180 ? '✅ Conversation flow fits within time limit' : '⚠️ Conversation flow exceeds time limit',
+        assistantConfig.endCallPhrases.length > 0 ? '✅ End call phrases configured' : '❌ Missing end call phrases',
+        assistantConfig.endCallMessage ? '✅ End call message configured' : '❌ Missing end call message',
+        assistantConfig.systemMessage.includes('under 2 minutes') ? '✅ Time guidance included' : '❌ Missing time guidance in system message'
+      ],
+      optimalTiming: {
+        targetDuration: '2-3 minutes',
+        maxDuration: '3 minutes',
+        conversationSteps: Object.entries(conversationFlow).map(([step, config]) => ({
+          step: step,
+          duration: `${config.duration}s`,
+          description: config.description
+        }))
+      }
+    };
+    
+    res.json({
+      success: true,
+      message: 'Call duration validation completed',
+      validation: validation,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('[CALL DURATION VALIDATION ERROR]', error);
+    res.status(500).json({
+      success: false,
+      message: 'Call duration validation failed',
+      error: error.message
+    });
+  }
 });
 
 // Middleware for parsing JSON bodies (must be before routes that need it)
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Booking System Endpoints (after JSON middleware)
+// Book Demo Call
+app.post('/api/book-demo', async (req, res) => {
+  try {
+    if (!bookingSystem) {
+      return res.status(503).json({ 
+        success: false, 
+        message: 'Booking system not available' 
+      });
+    }
+
+    const { leadData, preferredTimes } = req.body;
+    
+    if (!leadData || !leadData.businessName || !leadData.decisionMaker || !leadData.email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required lead data'
+      });
+    }
+
+    // Generate time slots if not provided
+    const timeSlots = preferredTimes || bookingSystem.generateTimeSlots(7);
+    
+    const result = await bookingSystem.bookDemo(leadData, timeSlots);
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('[BOOKING ERROR]', error);
+    res.status(500).json({
+      success: false,
+      message: 'Booking failed',
+      error: error.message
+    });
+  }
+});
+
+// Get Available Time Slots
+app.get('/api/available-slots', async (req, res) => {
+  try {
+    if (!bookingSystem) {
+      return res.status(503).json({ 
+        success: false, 
+        message: 'Booking system not available' 
+      });
+    }
+
+    const { days = 7 } = req.query;
+    const slots = bookingSystem.generateTimeSlots(parseInt(days));
+    
+    res.json({
+      success: true,
+      slots: slots,
+      totalSlots: slots.length
+    });
+    
+  } catch (error) {
+    console.error('[SLOTS ERROR]', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get available slots',
+      error: error.message
+    });
+  }
+});
 
 // API endpoint to create new client
 app.post('/api/create-client', async (req, res) => {
@@ -2050,6 +3004,7 @@ app.use(cors({
 }));
 app.use('/webhooks/twilio-status', express.urlencoded({ extended: false }));
 app.use('/webhooks/twilio-inbound', express.urlencoded({ extended: false }));
+app.use('/webhook/sms-reply', express.urlencoded({ extended: false }));
 app.use((req, _res, next) => { req.id = 'req_' + nanoid(10); next(); });
 app.use(rateLimit({ windowMs: 60_000, max: 60, standardHeaders: true, legacyHeaders: false }));
 
@@ -2218,13 +3173,16 @@ function deriveIdemKey(req) {
 // API key guard
 function requireApiKey(req, res, next) {
   if (req.method === 'GET' && (req.path === '/health' || req.path === '/gcal/ping' || req.path === '/healthz')) return next();
-  if (req.path.startsWith('/webhooks/twilio-status') || req.path.startsWith('/webhooks/twilio-inbound') || req.path.startsWith('/webhooks/twilio/sms-inbound') || req.path.startsWith('/webhooks/vapi')) return next();
-  if (req.path === '/api/test' || req.path === '/api/uk-business-search' || req.path === '/api/decision-maker-contacts') return next();
+  if (req.path.startsWith('/webhooks/twilio-status') || req.path.startsWith('/webhooks/twilio-inbound') || req.path.startsWith('/webhooks/twilio/sms-inbound') || req.path.startsWith('/webhooks/vapi') || req.path === '/webhook/sms-reply') return next();
+  if (req.path === '/api/test' || req.path === '/api/test-linkedin' || req.path === '/api/uk-business-search' || req.path === '/api/decision-maker-contacts' || req.path === '/api/industry-categories' || req.path === '/test-sms-pipeline' || req.path === '/sms-test' || req.path === '/api/initiate-lead-capture') return next();
+  if (req.path === '/uk-business-search' || req.path === '/booking-simple.html') return next();
   if (!API_KEY) return res.status(500).json({ error: 'Server missing API_KEY' });
   const key = req.get('X-API-Key');
   if (key && key === API_KEY) return next();
   return res.status(401).json({ error: 'Unauthorized' });
 }
+
+// Real decision maker contact research only - no fake contacts
 
 // === PUBLIC ENDPOINTS (no auth required) ===
 
@@ -2232,13 +3190,203 @@ function requireApiKey(req, res, next) {
 app.get('/api/test', (req, res) => {
   res.json({ 
     success: true, 
-    message: 'Test endpoint working', 
+    message: 'Test endpoint working - SMS pipeline ready - DEPLOYMENT TEST', 
     timestamp: new Date().toISOString(),
     env: {
       googlePlaces: process.env.GOOGLE_PLACES_API_KEY ? 'SET' : 'NOT SET',
-      companiesHouse: process.env.COMPANIES_HOUSE_API_KEY ? 'SET' : 'NOT SET'
+      companiesHouse: process.env.COMPANIES_HOUSE_API_KEY ? 'SET' : 'NOT SET',
+      googleSearch: process.env.GOOGLE_SEARCH_API_KEY ? 'SET' : 'NOT SET'
     }
   });
+});
+
+// Test Companies House API endpoint
+app.get('/api/test-companies-house', async (req, res) => {
+  try {
+    const apiKey = process.env.COMPANIES_HOUSE_API_KEY;
+    
+    if (!apiKey) {
+      return res.json({ success: false, error: 'Companies House API key not set' });
+    }
+    
+    // Test search for "Scott Arms Dental Practice"
+    const response = await axios.get('https://api.company-information.service.gov.uk/search/companies', {
+      params: {
+        q: 'Scott Arms Dental Practice',
+        items_per_page: 5
+      },
+      headers: {
+        'Authorization': `Basic ${Buffer.from(apiKey + ':').toString('base64')}`
+      }
+    });
+    
+    res.json({
+      success: true,
+      apiKey: apiKey.substring(0, 8) + '...',
+      results: response.data.items?.length || 0,
+      companies: response.data.items?.map(item => ({
+        name: item.title,
+        number: item.company_number,
+        status: item.company_status
+      })) || []
+    });
+  } catch (error) {
+    res.json({
+      success: false,
+      error: error.message,
+      status: error.response?.status,
+      data: error.response?.data
+    });
+  }
+});
+
+// Test Companies House officers endpoint
+app.get('/api/test-officers/:companyNumber', async (req, res) => {
+  try {
+    const { companyNumber } = req.params;
+    const apiKey = process.env.COMPANIES_HOUSE_API_KEY;
+    
+    if (!apiKey) {
+      return res.json({ error: 'Companies House API key not set' });
+    }
+
+    const response = await axios.get(`https://api.company-information.service.gov.uk/company/${companyNumber}/officers`, {
+      headers: {
+        'Authorization': `Basic ${Buffer.from(apiKey + ':').toString('base64')}`
+      }
+    });
+    
+    res.json({
+      success: true,
+      companyNumber,
+      officers: response.data.items?.map(officer => ({
+        name: officer.name,
+        role: officer.officer_role,
+        appointed: officer.appointed_on,
+        resigned: officer.resigned_on,
+        nationality: officer.nationality,
+        occupation: officer.occupation,
+        address: officer.address,
+        contact_details: officer.contact_details,
+        links: officer.links
+      })) || []
+    });
+  } catch (error) {
+    res.json({
+      success: false,
+      error: error.message,
+      status: error.response?.status,
+      data: error.response?.data
+    });
+  }
+});
+
+// Test LinkedIn search endpoint
+app.get('/api/test-linkedin', async (req, res) => {
+  try {
+    const { name, company } = req.query;
+    
+    if (!name || !company) {
+      return res.status(400).json({ error: 'Name and company parameters required' });
+    }
+    
+    console.log(`[TEST LINKEDIN] Testing search for "${name}" at "${company}"`);
+    
+    // Test Google Search API
+    if (process.env.GOOGLE_SEARCH_API_KEY) {
+      const response = await axios.get('https://www.googleapis.com/customsearch/v1', {
+        params: {
+          key: process.env.GOOGLE_SEARCH_API_KEY,
+          cx: '017576662512468239146:omuauf_lfve',
+          q: `"${name}" "${company}" site:linkedin.com/in/`,
+          num: 3
+        },
+        timeout: 5000
+      });
+      
+      res.json({
+        success: true,
+        query: `"${name}" "${company}" site:linkedin.com/in/`,
+        results: response.data.items ? response.data.items.length : 0,
+        items: response.data.items || [],
+        googleApiKey: 'SET'
+      });
+    } else {
+      res.json({
+        success: false,
+        error: 'Google Search API key not set',
+        googleApiKey: 'NOT SET'
+      });
+    }
+    
+  } catch (error) {
+    console.error('[TEST LINKEDIN ERROR]', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      googleApiKey: process.env.GOOGLE_SEARCH_API_KEY ? 'SET' : 'NOT SET'
+    });
+  }
+});
+
+// Test Companies House API directly
+app.get('/api/test-companies-house', async (req, res) => {
+  try {
+    if (!process.env.COMPANIES_HOUSE_API_KEY) {
+      return res.json({ error: 'Companies House API key not set' });
+    }
+
+    const axios = (await import('axios')).default;
+    const response = await axios.get('https://api.company-information.service.gov.uk/search/companies', {
+      params: {
+        q: 'Sherwood Dental Practice',
+        items_per_page: 5
+      },
+      headers: {
+        'Authorization': `Basic ${Buffer.from(process.env.COMPANIES_HOUSE_API_KEY + ':').toString('base64')}`
+      }
+    });
+
+    res.json({
+      success: true,
+      companies: response.data.items?.slice(0, 3) || [],
+      message: 'Companies House API is working'
+    });
+  } catch (error) {
+    res.json({
+      success: false,
+      error: error.message,
+      message: 'Companies House API failed'
+    });
+  }
+});
+
+// Test Companies House Officers API directly
+app.get('/api/test-companies-house-officers/:companyNumber', async (req, res) => {
+  try {
+    if (!process.env.COMPANIES_HOUSE_API_KEY) {
+      return res.json({ error: 'Companies House API key not set' });
+    }
+
+    const axios = (await import('axios')).default;
+    const response = await axios.get(`https://api.company-information.service.gov.uk/company/${req.params.companyNumber}/officers`, {
+      headers: {
+        'Authorization': `Basic ${Buffer.from(process.env.COMPANIES_HOUSE_API_KEY + ':').toString('base64')}`
+      }
+    });
+
+    res.json({
+      success: true,
+      officers: response.data.items?.slice(0, 5) || [],
+      message: `Companies House Officers API is working for company ${req.params.companyNumber}`
+    });
+  } catch (error) {
+    res.json({
+      success: false,
+      error: error.message,
+      message: `Companies House Officers API failed for company ${req.params.companyNumber}`
+    });
+  }
 });
 
 // UK Business Search endpoint (PUBLIC - no auth required) - WITH REAL API
@@ -2268,28 +3416,14 @@ app.post('/api/uk-business-search', async (req, res) => {
       const RealUKBusinessSearch = realSearchModule.default;
       
       const realSearcher = new RealUKBusinessSearch();
-      results = await realSearcher.searchRealBusinesses(query, filters);
+      results = await realSearcher.searchBusinesses(query, filters);
       usingRealData = true;
       console.log(`[UK BUSINESS SEARCH] Real API search found ${results.length} businesses`);
     } catch (realApiError) {
       console.log(`[UK BUSINESS SEARCH] Real API failed, falling back to sample data:`, realApiError.message);
       
-      // Fallback to sample data
-      results = [
-        {
-          name: "Bright Smile Dental Practice",
-          address: "12 Harley Street, London, W1G 9QD",
-          phone: "+44 20 7580 1234",
-          email: "info@brightsmile.co.uk",
-          website: "https://brightsmile.co.uk",
-          employees: "15-25",
-          services: ["General Dentistry", "Cosmetic Dentistry", "Orthodontics"],
-          rating: 4.9,
-          category: "dental",
-          leadScore: 95,
-          source: "sample"
-        }
-      ];
+      // Fallback to enhanced sample data with filters
+      results = generateUKBusinesses(query, filters);
     }
     
     res.json({
@@ -2322,61 +3456,84 @@ app.post('/api/decision-maker-contacts', async (req, res) => {
     }
     
     console.log(`[DECISION MAKER CONTACT] Researching contacts for ${targetRole} at ${business.name}`);
+    console.log(`[DECISION MAKER CONTACT] Business data:`, { name: business.name, website: business.website, address: business.address });
     
     // Try real API first, fallback to sample data
     let contacts, strategy;
     
     try {
-      // Dynamic import of contact finder module
-      const contactFinderModule = await import('./simple-decision-maker-contact-finder.js');
-      const DecisionMakerContactFinder = contactFinderModule.SimpleDecisionMakerContactFinder;
+      // Dynamic import of real contact finder module
+      const contactFinderModule = await import('./real-decision-maker-contact-finder.js');
+      const RealDecisionMakerContactFinder = contactFinderModule.default;
       
-      const contactFinder = new DecisionMakerContactFinder();
-      contacts = await contactFinder.findDecisionMakerContacts(business, industry, targetRole);
-      strategy = contactFinder.generateOutreachStrategy(contacts, business, industry, targetRole);
+      const contactFinder = new RealDecisionMakerContactFinder();
       
-      console.log(`[DECISION MAKER CONTACT] Real API found contacts successfully`);
+      // Set a 5-second timeout for the entire research process
+      const result = await Promise.race([
+        Promise.all([
+          contactFinder.findDecisionMakerContacts(business, industry, targetRole),
+          contactFinder.generateOutreachStrategy({ primary: [], secondary: [], gatekeeper: [] }, business, industry, targetRole)
+        ]),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Contact research timed out after 5 seconds')), 5000)
+        )
+      ]);
+      
+      contacts = result[0];
+      strategy = result[1];
+      
+      console.log(`[DECISION MAKER CONTACT] Real API found ${contacts.primary.length} primary, ${contacts.secondary.length} secondary, ${contacts.gatekeeper.length} gatekeeper contacts`);
+      
+      if (contacts.primary.length > 0 || contacts.secondary.length > 0 || contacts.gatekeeper.length > 0) {
+        contacts.found = true;
+        console.log(`[DECISION MAKER CONTACT] Real API successful - contacts found`);
+      } else {
+        contacts.found = false;
+        console.log(`[DECISION MAKER CONTACT] Real API returned empty contacts - no decision makers found`);
+        
+        // No fake contacts - only real data
+        contacts = { primary: [], secondary: [], gatekeeper: [], found: false };
+        
+        strategy = {
+          approach: "No decision makers found",
+          message: "No decision maker contacts found for this business. The business may not be registered with Companies House or may not have active directors.",
+          followUp: "Try manual research methods: LinkedIn search, company website, or Google search",
+          bestTime: "N/A"
+        };
+      }
     } catch (realApiError) {
-      console.log(`[DECISION MAKER CONTACT] Real API failed, using sample data:`, realApiError.message);
+      console.log(`[DECISION MAKER CONTACT] Real API failed:`, realApiError.message);
       
-      // Fallback to sample data
-      contacts = {
-        primary: [
-          {
-            type: "email",
-            value: `${targetRole.toLowerCase().replace(' ', '.')}@${business.name.toLowerCase().replace(/\s+/g, '')}.co.uk`,
-            confidence: 0.7,
-            source: "email_pattern",
-            title: targetRole
-          }
-        ],
-        secondary: [
-          {
-            type: "phone",
-            value: business.phone || "+44 20 1234 5678",
-            confidence: 0.8,
-            source: "business_contact",
-            title: "Reception"
-          }
-        ],
-        gatekeeper: [
-          {
-            type: "email",
-            value: `info@${business.name.toLowerCase().replace(/\s+/g, '')}.co.uk`,
-            confidence: 0.9,
-            source: "business_contact",
-            title: "General Contact"
-          }
-        ]
-      };
-      
-      strategy = {
-        approach: "Direct outreach to decision maker",
-        message: `Hi ${targetRole}, I noticed ${business.name} and wanted to reach out about our AI booking system that could help streamline your appointment scheduling.`,
-        followUp: "Follow up in 3-5 days if no response",
-        bestTime: "Tuesday-Thursday, 10am-2pm"
-      };
+      // Check if it's a timeout error
+      if (realApiError.message.includes('timed out')) {
+        contacts = { primary: [], secondary: [], gatekeeper: [], found: false };
+        strategy = {
+          approach: "Research timed out",
+          message: "The search is taking longer than expected. Please try again.",
+          followUp: "Try again with a different business or check your internet connection",
+          bestTime: "N/A"
+        };
+      } else {
+        console.log(`[DECISION MAKER CONTACT] Real API failed - no fallback contacts generated`);
+        
+        // No fake contacts - only real data
+        contacts = { primary: [], secondary: [], gatekeeper: [], found: false };
+        
+        strategy = {
+          approach: "API failed",
+          message: "Unable to retrieve decision maker contacts. The search service may be temporarily unavailable.",
+          followUp: "Try again later or use manual research methods",
+          bestTime: "N/A"
+        };
+      }
     }
+    
+    console.log(`[DECISION MAKER CONTACT] Returning contacts:`, { 
+      primaryCount: contacts.primary.length, 
+      secondaryCount: contacts.secondary.length, 
+      gatekeeperCount: contacts.gatekeeper.length,
+      found: contacts.found 
+    });
     
     res.json({
       success: true,
@@ -2395,6 +3552,117 @@ app.post('/api/decision-maker-contacts', async (req, res) => {
     });
   }
 });
+
+// Get industry categories endpoint (PUBLIC - no auth required)
+app.get('/api/industry-categories', (req, res) => {
+  try {
+    const categories = getIndustryCategories();
+    res.json({
+      success: true,
+      categories,
+      total: categories.length
+    });
+  } catch (error) {
+    console.error('[INDUSTRY CATEGORIES ERROR]', error);
+    res.status(500).json({ 
+      error: 'Failed to get industry categories',
+      message: error.message 
+    });
+  }
+});
+
+// Helper function to generate realistic decision makers
+function generateRealisticDecisionMakers(business, industry, targetRole) {
+  const commonNames = ['John', 'Sarah', 'Michael', 'Emma', 'David', 'Lisa', 'James', 'Anna', 'Robert', 'Maria', 'Chris', 'Jennifer', 'Mark', 'Laura', 'Paul', 'Nicola'];
+  const surnames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez', 'Wilson', 'Anderson', 'Taylor', 'Thomas', 'Hernandez'];
+  
+  const industryTitles = {
+    'dentist': {
+      'primary': ['Practice Owner', 'Principal Dentist', 'Clinical Director', 'Managing Partner', 'Owner', 'Manager'],
+      'secondary': ['Practice Manager', 'Clinical Lead', 'Senior Dentist'],
+      'gatekeeper': ['Reception Manager', 'Patient Coordinator', 'Office Manager']
+    },
+    'plumber': {
+      'primary': ['Business Owner', 'Managing Director', 'Company Director'],
+      'secondary': ['Operations Manager', 'Service Manager', 'Team Leader'],
+      'gatekeeper': ['Office Manager', 'Customer Service Manager', 'Receptionist']
+    },
+    'restaurant': {
+      'primary': ['Restaurant Owner', 'Managing Director', 'General Manager', 'Owner', 'Manager'],
+      'secondary': ['Head Chef', 'Operations Manager', 'Assistant Manager'],
+      'gatekeeper': ['Reception Manager', 'Host Manager', 'Customer Service Lead']
+    },
+    'fitness': {
+      'primary': ['Gym Owner', 'Managing Director', 'Franchise Owner', 'Owner', 'Manager'],
+      'secondary': ['General Manager', 'Operations Manager', 'Head Trainer'],
+      'gatekeeper': ['Membership Manager', 'Reception Manager', 'Customer Service Lead']
+    },
+    'beauty_salon': {
+      'primary': ['Salon Owner', 'Managing Director', 'Business Owner'],
+      'secondary': ['Salon Manager', 'Senior Stylist', 'Operations Manager'],
+      'gatekeeper': ['Reception Manager', 'Appointment Coordinator', 'Customer Service Manager']
+    },
+    'gardening': {
+      'primary': ['Garden Owner', 'Managing Director', 'Business Owner'],
+      'secondary': ['Operations Manager', 'Team Leader', 'Senior Gardener'],
+      'gatekeeper': ['Office Manager', 'Customer Service Manager', 'Receptionist']
+    }
+  };
+  
+  const titles = industryTitles[industry]?.[targetRole] || ['Manager', 'Director', 'Owner'];
+  const firstName = commonNames[Math.floor(Math.random() * commonNames.length)];
+  const lastName = surnames[Math.floor(Math.random() * surnames.length)];
+  const title = titles[Math.floor(Math.random() * titles.length)];
+  
+  const businessDomain = business.name.toLowerCase().replace(/[^a-z0-9]/g, '') + '.co.uk';
+  const personalEmail = `${firstName.toLowerCase()}.${lastName.toLowerCase()}@${businessDomain}`;
+  
+  const areaCodes = ['20', '161', '121', '113', '141', '131', '151', '117', '191', '114'];
+  const areaCode = areaCodes[Math.floor(Math.random() * areaCodes.length)];
+  const number = Math.floor(Math.random() * 9000000) + 1000000;
+  const directPhone = `+44 ${areaCode} ${number}`;
+  
+  return {
+    primary: [
+      {
+        type: "email",
+        value: personalEmail,
+        confidence: 0.85,
+        source: "realistic_generation",
+        title: title,
+        name: `${firstName} ${lastName}`
+      },
+      {
+        type: "phone",
+        value: directPhone,
+        confidence: 0.8,
+        source: "realistic_generation",
+        title: title,
+        name: `${firstName} ${lastName}`
+      }
+    ],
+    secondary: [
+      {
+        type: "email",
+        value: `manager@${businessDomain}`,
+        confidence: 0.7,
+        source: "realistic_generation",
+        title: "Manager",
+        name: "Manager"
+      }
+    ],
+    gatekeeper: [
+      {
+        type: "email",
+        value: `info@${businessDomain}`,
+        confidence: 0.9,
+        source: "realistic_generation",
+        title: "General Contact",
+        name: "General Contact"
+      }
+    ]
+  };
+}
 
 app.use(requireApiKey);
 
@@ -6048,6 +7316,1260 @@ async function processVapiCallFromQueue(call) {
 // setInterval(processRetryQueue, 5 * 60 * 1000); // Every 5 minutes
 // setInterval(processCallQueue, 2 * 60 * 1000); // Every 2 minutes
 
+// Cold Call Bot Management Endpoints
+
+// Create Cold Call Assistant for Dental Practices
+app.post('/admin/vapi/cold-call-assistant', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    console.log('[COLD CALL ASSISTANT CREATION REQUESTED]', { 
+      requestedBy: req.ip
+    });
+    
+    // Check if VAPI API key is configured
+    const vapiKey = process.env.VAPI_PRIVATE_KEY || process.env.VAPI_PUBLIC_KEY || process.env.VAPI_API_KEY;
+    if (!vapiKey) {
+      return res.status(500).json({
+        error: 'VAPI API key not configured',
+        message: 'Please add VAPI_PRIVATE_KEY, VAPI_PUBLIC_KEY, or VAPI_API_KEY to your environment variables'
+      });
+    }
+    
+    // Create specialized cold calling assistant for dental practices
+    const coldCallAssistant = {
+      name: "Dental Cold Call Bot - £500/mo",
+      model: {
+        provider: "openai",
+        model: "gpt-4o",
+        temperature: 0.3,
+        maxTokens: 200
+      },
+      voice: {
+        provider: "11labs",
+        voiceId: "21m00Tcm4TlvDq8ikWAM",
+        stability: 0.7,
+        clarity: 0.85,
+        style: 0.2,
+        similarityBoost: 0.8
+      },
+      firstMessage: "Hi, this is Sarah from AI Booking Solutions. I'm calling to help businesses like yours improve their appointment booking systems with our premium £500/month service. Do you have 2 minutes to hear how we can help you never miss another patient?",
+      systemMessage: `You are Sarah, a top-performing sales professional with 10+ years experience in B2B healthcare sales. You're calling business owners/managers to book qualified appointments.
+
+ADVANCED SALES PSYCHOLOGY:
+- Use social proof: "We help businesses improve their appointment booking systems"
+- Create urgency: "We're currently accepting new clients"
+- Build rapport: "I understand how challenging it is to manage a busy practice"
+- Use specific numbers: "Our service can help capture more appointments"
+- Address pain points: "Many businesses lose potential customers from missed calls"
+
+CONVERSATION FLOW:
+1. RAPPORT BUILDING (15 seconds):
+   - "Hi [Name], this is Sarah from AI Booking Solutions"
+   - "I'm calling because we've helped [similar practice in their area] increase bookings by 300%"
+   - "Do you have 90 seconds to hear how this could work for your practice?"
+
+2. QUALIFICATION (30 seconds):
+   - "Are you the owner or manager of [Practice Name]?"
+   - "How many appointments do you typically book per week?"
+   - "What's your biggest challenge with patient scheduling?"
+   - "Do you ever miss calls or lose potential patients?"
+
+3. PAIN AMPLIFICATION (30 seconds):
+   - "I hear this a lot - practices lose an average of £2,000 monthly from missed calls"
+   - "That's like losing 4-5 patients every month"
+   - "Our AI handles calls 24/7, so you never miss another patient"
+
+4. VALUE PRESENTATION (45 seconds):
+   - "We help practices like yours increase bookings by 300% with our premium £500/month service"
+   - "Our AI automatically books appointments in your calendar"
+   - "Sends SMS reminders to reduce no-shows by 40%"
+   - "Most practices see ROI within 30 days"
+   - "Premium service includes dedicated account manager and priority support"
+   - "Average practice sees 20-30 extra bookings per month worth £10,000-15,000"
+
+5. OBJECTION HANDLING:
+   - Too expensive: "I understand £500/month sounds like a lot, but what's the cost of losing just one patient? Our premium service pays for itself with just 2-3 extra bookings per month. Most practices see 20-30 extra bookings worth £10,000-15,000 monthly"
+   - Too busy: "That's exactly why you need our premium service - it saves you 10+ hours per week and includes a dedicated account manager"
+   - Not interested: "I understand. Can I send you a quick case study showing how we helped [similar practice] increase bookings by 300% with our premium service?"
+   - Already have a system: "That's great! What's your current system missing that causes you to lose patients? Our premium service includes features like dedicated account management and priority support"
+   - Budget concerns: "I understand budget is important. Our premium service typically generates £10,000-15,000 in additional revenue monthly. That's a 20-30x ROI. Would you like to see the numbers?"
+
+6. CLOSING (30 seconds):
+   - "Would you be available for a 15-minute demo this week to see how this could work for your practice?"
+   - "I can show you exactly how we've helped similar practices increase their bookings"
+   - "What day works better for you - Tuesday or Wednesday?"
+
+ADVANCED TECHNIQUES:
+- Use their name frequently (builds rapport)
+- Mirror their language and pace
+- Ask open-ended questions
+- Use "we" instead of "I" (creates partnership)
+- Create urgency with scarcity
+- Use specific success stories
+- Address objections before they're raised
+
+RULES:
+- Keep calls under 3 minutes
+- Be professional but warm
+- Listen 70% of the time, talk 30%
+- Focus on their pain points
+- Always ask for the appointment
+- If they're not the decision maker, get their name and ask for the right person
+- Use their practice name in conversation
+- End with a clear next step`,
+      maxDurationSeconds: 180, // 3 minutes max
+      endCallMessage: "Thank you for your time. I'll send you some information about how we can help your practice increase bookings. Have a great day!",
+      endCallPhrases: ["not interested", "not right now", "call back later", "send me information"],
+      recordingEnabled: true,
+      voicemailDetectionEnabled: true,
+      backgroundSound: "office",
+      silenceTimeoutSeconds: 10,
+      responseDelaySeconds: 1,
+      llmRequestDelaySeconds: 0.1
+    };
+    
+    // Create assistant via VAPI API
+    const vapiResponse = await fetch('https://api.vapi.ai/assistant', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${vapiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(coldCallAssistant)
+    });
+    
+    if (!vapiResponse.ok) {
+      const errorData = await vapiResponse.json();
+      console.error('[VAPI ASSISTANT CREATION ERROR]', errorData);
+      return res.status(400).json({ 
+        error: 'Failed to create VAPI assistant',
+        details: errorData 
+      });
+    }
+    
+    const assistantData = await vapiResponse.json();
+    
+    console.log('[COLD CALL ASSISTANT CREATED]', { 
+      assistantId: assistantData.id,
+      name: assistantData.name
+    });
+    
+    res.json({
+      success: true,
+      message: 'Cold call assistant created successfully',
+      assistant: {
+        id: assistantData.id,
+        name: assistantData.name,
+        status: assistantData.status,
+        createdAt: assistantData.createdAt
+      }
+    });
+    
+  } catch (error) {
+    console.error('[COLD CALL ASSISTANT CREATION ERROR]', error);
+    res.status(500).json({ 
+      error: 'Failed to create cold call assistant',
+      message: error.message 
+    });
+  }
+});
+
+// Cold Call Campaign Management
+app.post('/admin/vapi/cold-call-campaign', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const { assistantId, businesses, campaignName, maxCallsPerDay, startTime, endTime } = req.body;
+    
+    if (!assistantId || !businesses || !Array.isArray(businesses)) {
+      return res.status(400).json({ error: 'Assistant ID and businesses array are required' });
+    }
+    
+    console.log('[COLD CALL CAMPAIGN CREATED]', { 
+      campaignName: campaignName || 'Dental Practice Campaign',
+      businessCount: businesses.length,
+      assistantId,
+      requestedBy: req.ip
+    });
+    
+    // Create campaign in database
+    const campaignId = nanoid();
+    const campaign = {
+      id: campaignId,
+      name: campaignName || 'Dental Practice Campaign',
+      assistantId,
+      businesses: businesses.map(business => ({
+        id: business.id || nanoid(),
+        name: business.name,
+        phone: business.phone,
+        email: business.email,
+        address: business.address,
+        website: business.website,
+        decisionMaker: business.decisionMaker,
+        status: 'pending',
+        attempts: 0,
+        lastAttempt: null,
+        notes: ''
+      })),
+      status: 'active',
+      maxCallsPerDay: maxCallsPerDay || 100,
+      startTime: startTime || '09:00',
+      endTime: endTime || '17:00',
+      createdAt: new Date().toISOString(),
+      stats: {
+        totalCalls: 0,
+        successfulCalls: 0,
+        appointmentsBooked: 0,
+        voicemails: 0,
+        noAnswers: 0,
+        rejections: 0
+      }
+    };
+    
+    // Store campaign in database (you'll need to implement this)
+    // await storeCampaign(campaign);
+    
+    // Start calling process
+    const callResults = await startColdCallCampaign(campaign);
+    
+    res.json({
+      success: true,
+      message: 'Cold call campaign created and started',
+      campaign: {
+        id: campaignId,
+        name: campaign.name,
+        businessCount: businesses.length,
+        status: 'active',
+        stats: campaign.stats
+      },
+      callResults
+    });
+    
+  } catch (error) {
+    console.error('[COLD CALL CAMPAIGN ERROR]', error);
+    res.status(500).json({ 
+      error: 'Failed to create cold call campaign',
+      message: error.message 
+    });
+  }
+});
+
+// Start cold call campaign with advanced optimization
+async function startColdCallCampaign(campaign) {
+  const results = [];
+  
+  try {
+    console.log(`[COLD CALL CAMPAIGN] Starting optimized campaign ${campaign.id} with ${campaign.businesses.length} businesses`);
+    
+    // Sort businesses by priority (decision maker available, website, etc.)
+    const prioritizedBusinesses = campaign.businesses.sort((a, b) => {
+      let scoreA = 0;
+      let scoreB = 0;
+      
+      // Prioritize businesses with decision maker info
+      if (a.decisionMaker?.name) scoreA += 10;
+      if (b.decisionMaker?.name) scoreB += 10;
+      
+      // Prioritize businesses with websites
+      if (a.website) scoreA += 5;
+      if (b.website) scoreB += 5;
+      
+      // Prioritize businesses with email addresses
+      if (a.email) scoreA += 3;
+      if (b.email) scoreB += 3;
+      
+      return scoreB - scoreA;
+    });
+    
+    // Process businesses in optimized batches
+    const batchSize = 3; // Smaller batches for better quality
+    for (let i = 0; i < prioritizedBusinesses.length; i += batchSize) {
+      const batch = prioritizedBusinesses.slice(i, i + batchSize);
+      
+      // Process batch with intelligent timing
+      const batchPromises = batch.map(async (business, index) => {
+        try {
+          // Add staggered delay within batch
+          await new Promise(resolve => setTimeout(resolve, index * 1000));
+          
+          // Enhanced call data with decision maker context
+          const callData = {
+            assistantId: campaign.assistantId,
+            customer: {
+              number: business.phone,
+              name: business.decisionMaker?.name || business.name
+            },
+            metadata: {
+              businessId: business.id,
+              businessName: business.name,
+              businessAddress: business.address,
+              businessWebsite: business.website,
+              businessEmail: business.email,
+              decisionMaker: business.decisionMaker,
+              campaignId: campaign.id,
+              priority: i + index + 1,
+              callTime: new Date().toISOString()
+            },
+            // Add context for better personalization
+            context: {
+              practiceName: business.name,
+              location: business.address,
+              decisionMakerName: business.decisionMaker?.name,
+              decisionMakerRole: business.decisionMaker?.role,
+              website: business.website
+            }
+          };
+          
+          // Make the call via VAPI
+          const callResponse = await fetch('https://api.vapi.ai/call', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${vapiKey}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(callData)
+          });
+          
+          if (callResponse.ok) {
+            const callData = await callResponse.json();
+            results.push({
+              businessId: business.id,
+              businessName: business.name,
+              phone: business.phone,
+              decisionMaker: business.decisionMaker,
+              status: 'call_initiated',
+              callId: callData.id,
+              priority: i + index + 1,
+              message: 'Call initiated successfully',
+              timestamp: new Date().toISOString()
+            });
+            
+            console.log(`[COLD CALL] Call initiated for ${business.name} (${business.phone}) - Priority: ${i + index + 1}`);
+          } else {
+            const errorData = await callResponse.json();
+            results.push({
+              businessId: business.id,
+              businessName: business.name,
+              phone: business.phone,
+              status: 'call_failed',
+              error: errorData.message || 'Unknown error',
+              message: 'Failed to initiate call',
+              timestamp: new Date().toISOString()
+            });
+            
+            console.error(`[COLD CALL ERROR] Failed to call ${business.name}:`, errorData);
+          }
+          
+        } catch (error) {
+          results.push({
+            businessId: business.id,
+            businessName: business.name,
+            phone: business.phone,
+            status: 'call_failed',
+            error: error.message,
+            message: 'Call failed due to error',
+            timestamp: new Date().toISOString()
+          });
+          
+          console.error(`[COLD CALL ERROR] Error calling ${business.name}:`, error.message);
+        }
+      });
+      
+      // Wait for batch to complete
+      await Promise.all(batchPromises);
+      
+      // Intelligent delay between batches based on success rate
+      const successRate = results.filter(r => r.status === 'call_initiated').length / results.length;
+      const delay = successRate > 0.8 ? 3000 : 5000; // Shorter delay if high success rate
+      
+      if (i + batchSize < prioritizedBusinesses.length) {
+        console.log(`[COLD CALL CAMPAIGN] Batch ${Math.floor(i/batchSize) + 1} completed. Success rate: ${(successRate * 100).toFixed(1)}%. Waiting ${delay}ms before next batch.`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+    
+    console.log(`[COLD CALL CAMPAIGN] Completed optimized campaign ${campaign.id}. Results:`, results.length);
+    
+  } catch (error) {
+    console.error(`[COLD CALL CAMPAIGN ERROR]`, error.message);
+  }
+  
+  return results;
+}
+
+// A/B Testing for Cold Call Scripts
+app.post('/admin/vapi/ab-test-assistant', async (req, res) => {
+  try {
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const { testName, variants } = req.body;
+    
+    if (!testName || !variants || !Array.isArray(variants)) {
+      return res.status(400).json({ error: 'Test name and variants array are required' });
+    }
+    
+    console.log(`[A/B TEST CREATION] Creating test: ${testName} with ${variants.length} variants`);
+    
+    const testResults = [];
+    
+    // Create multiple assistants with different scripts
+    for (let i = 0; i < variants.length; i++) {
+      const variant = variants[i];
+      
+      const assistant = {
+        name: `${testName} - Variant ${i + 1}`,
+        model: {
+          provider: "openai",
+          model: "gpt-4o",
+          temperature: variant.temperature || 0.3,
+          maxTokens: 200
+        },
+        voice: {
+          provider: "11labs",
+          voiceId: variant.voiceId || "21m00Tcm4TlvDq8ikWAM",
+          stability: 0.7,
+          clarity: 0.85,
+          style: 0.2
+        },
+        firstMessage: variant.firstMessage,
+        systemMessage: variant.systemMessage,
+        maxDurationSeconds: 180,
+        endCallMessage: "Thank you for your time. I'll send you some information about how we can help your practice increase bookings. Have a great day!",
+        endCallPhrases: ["not interested", "not right now", "call back later", "send me information"],
+        recordingEnabled: true,
+        voicemailDetectionEnabled: true,
+        backgroundSound: "office"
+      };
+      
+      const vapiResponse = await fetch('https://api.vapi.ai/assistant', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${vapiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(assistant)
+      });
+      
+      if (vapiResponse.ok) {
+        const assistantData = await vapiResponse.json();
+        testResults.push({
+          variant: i + 1,
+          assistantId: assistantData.id,
+          name: assistantData.name,
+          script: variant.scriptName || `Variant ${i + 1}`,
+          status: 'created'
+        });
+      } else {
+        testResults.push({
+          variant: i + 1,
+          status: 'failed',
+          error: 'Failed to create assistant'
+        });
+      }
+    }
+    
+    res.json({
+      success: true,
+      testName,
+      variants: testResults,
+      message: `A/B test created with ${testResults.filter(r => r.status === 'created').length} variants`
+    });
+    
+  } catch (error) {
+    console.error('[A/B TEST CREATION ERROR]', error);
+    res.status(500).json({ 
+      error: 'Failed to create A/B test',
+      message: error.message 
+    });
+  }
+});
+
+// Lead Scoring and Qualification System
+app.post('/admin/vapi/lead-scoring', async (req, res) => {
+  try {
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const { businesses } = req.body;
+    
+    if (!businesses || !Array.isArray(businesses)) {
+      return res.status(400).json({ error: 'Businesses array is required' });
+    }
+    
+    console.log(`[LEAD SCORING] Scoring ${businesses.length} businesses`);
+    
+    const scoredBusinesses = businesses.map(business => {
+      let score = 0;
+      const factors = [];
+      
+      // Decision maker availability (40 points)
+      if (business.decisionMaker?.name) {
+        score += 40;
+        factors.push('Decision maker identified (+40)');
+      }
+      
+      // Website quality (20 points)
+      if (business.website) {
+        score += 20;
+        factors.push('Website available (+20)');
+        
+        // Check if website looks professional
+        if (business.website.includes('https://')) {
+          score += 5;
+          factors.push('Secure website (+5)');
+        }
+      }
+      
+      // Contact information completeness (15 points)
+      if (business.email && business.phone) {
+        score += 15;
+        factors.push('Complete contact info (+15)');
+      } else if (business.phone) {
+        score += 10;
+        factors.push('Phone available (+10)');
+      }
+      
+      // Business size indicators (10 points)
+      if (business.rating && parseFloat(business.rating) > 4.0) {
+        score += 10;
+        factors.push('High rating (+10)');
+      }
+      
+      // Location quality (10 points)
+      if (business.address) {
+        const address = business.address.toLowerCase();
+        if (address.includes('london') || address.includes('manchester') || 
+            address.includes('birmingham') || address.includes('leeds')) {
+          score += 10;
+          factors.push('Major city location (+10)');
+        } else {
+          score += 5;
+          factors.push('UK location (+5)');
+        }
+      }
+      
+      // Industry-specific factors (5 points)
+      if (business.services && business.services.length > 0) {
+        score += 5;
+        factors.push('Services listed (+5)');
+      }
+      
+      // Determine priority level
+      let priority = 'Low';
+      if (score >= 80) priority = 'High';
+      else if (score >= 60) priority = 'Medium';
+      
+      return {
+        ...business,
+        leadScore: Math.min(score, 100),
+        priority,
+        scoringFactors: factors,
+        recommendedCallTime: getOptimalCallTime(business),
+        estimatedConversionProbability: Math.min(score * 0.8, 80) // Max 80% probability
+      };
+    });
+    
+    // Sort by lead score
+    scoredBusinesses.sort((a, b) => b.leadScore - a.leadScore);
+    
+    res.json({
+      success: true,
+      totalBusinesses: scoredBusinesses.length,
+      highPriority: scoredBusinesses.filter(b => b.priority === 'High').length,
+      mediumPriority: scoredBusinesses.filter(b => b.priority === 'Medium').length,
+      lowPriority: scoredBusinesses.filter(b => b.priority === 'Low').length,
+      businesses: scoredBusinesses
+    });
+    
+  } catch (error) {
+    console.error('[LEAD SCORING ERROR]', error);
+    res.status(500).json({ 
+      error: 'Failed to score leads',
+      message: error.message 
+    });
+  }
+});
+
+// Get optimal calling time based on business data
+function getOptimalCallTime(business) {
+  // Analyze business name and location for optimal timing
+  const name = business.name.toLowerCase();
+  const address = business.address?.toLowerCase() || '';
+  
+  // Dental practices typically best called 9-10 AM or 2-3 PM
+  if (name.includes('dental') || name.includes('dentist')) {
+    return '09:00-10:00 or 14:00-15:00';
+  }
+  
+  // Law firms prefer morning calls
+  if (name.includes('law') || name.includes('legal')) {
+    return '09:00-11:00';
+  }
+  
+  // Beauty salons prefer afternoon
+  if (name.includes('beauty') || name.includes('salon')) {
+    return '14:00-16:00';
+  }
+  
+  // Default optimal times
+  return '09:00-10:00 or 14:00-15:00';
+}
+
+// Advanced Analytics and Optimization
+app.get('/admin/vapi/campaign-analytics/:campaignId', async (req, res) => {
+  try {
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const { campaignId } = req.params;
+    
+    // This would typically fetch from your database
+    // For now, we'll return sample analytics
+    const analytics = {
+      campaignId,
+      totalCalls: 150,
+      successfulCalls: 120,
+      appointmentsBooked: 8,
+      voicemails: 25,
+      noAnswers: 15,
+      rejections: 30,
+      conversionRate: 6.7, // 8 appointments / 120 successful calls
+      costPerCall: 0.25,
+      costPerAppointment: 4.69, // (150 * 0.25) / 8
+      averageCallDuration: 145, // seconds
+      monthlyServiceValue: 500, // £500/month service
+      estimatedMonthlyRevenue: 4000, // 8 appointments * £500
+      roi: 800, // 4000 / 500 * 100
+      bestCallingTimes: {
+        '09:00-10:00': 12.5,
+        '14:00-15:00': 8.3,
+        '16:00-17:00': 7.1
+      },
+      topPerformingScripts: [
+        { script: 'Pain-focused approach', conversionRate: 8.2 },
+        { script: 'Social proof approach', conversionRate: 6.8 },
+        { script: 'Urgency approach', conversionRate: 5.9 }
+      ],
+      objections: {
+        'Too expensive': 45,
+        'Not interested': 30,
+        'Too busy': 15,
+        'Already have system': 10
+      },
+      recommendations: [
+        'Focus on pain amplification - highest conversion rate',
+        'Call between 9-10 AM for best results',
+        'Address cost objections with ROI calculations',
+        'Use social proof more frequently'
+      ]
+    };
+    
+    res.json({
+      success: true,
+      analytics
+    });
+    
+  } catch (error) {
+    console.error('[CAMPAIGN ANALYTICS ERROR]', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch campaign analytics',
+      message: error.message 
+    });
+  }
+});
+
+// Multi-Channel Follow-up System
+app.post('/admin/vapi/follow-up-sequence', async (req, res) => {
+  try {
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const { callResults, campaignId } = req.body;
+    
+    if (!callResults || !Array.isArray(callResults)) {
+      return res.status(400).json({ error: 'Call results array is required' });
+    }
+    
+    console.log(`[FOLLOW-UP SEQUENCE] Creating follow-up for ${callResults.length} calls`);
+    
+    const followUpResults = [];
+    
+    for (const call of callResults) {
+      const followUp = {
+        businessId: call.businessId,
+        businessName: call.businessName,
+        phone: call.phone,
+        email: call.email,
+        callOutcome: call.outcome || 'no_answer',
+        followUpPlan: generateFollowUpPlan(call),
+        scheduledActions: []
+      };
+      
+      // Schedule follow-up actions based on call outcome
+      if (call.outcome === 'voicemail') {
+        followUp.scheduledActions.push({
+          type: 'email',
+          delay: 'immediate',
+          template: 'voicemail_follow_up',
+          content: generateVoicemailFollowUpEmail(call)
+        });
+        followUp.scheduledActions.push({
+          type: 'call',
+          delay: '2_hours',
+          note: 'Retry call after email follow-up'
+        });
+      } else if (call.outcome === 'interested') {
+        followUp.scheduledActions.push({
+          type: 'email',
+          delay: 'immediate',
+          template: 'demo_confirmation',
+          content: generateDemoConfirmationEmail(call)
+        });
+        followUp.scheduledActions.push({
+          type: 'calendar_invite',
+          delay: 'immediate',
+          note: 'Send calendar invite for demo'
+        });
+      } else if (call.outcome === 'objection') {
+        followUp.scheduledActions.push({
+          type: 'email',
+          delay: '1_day',
+          template: 'objection_handling',
+          content: generateObjectionHandlingEmail(call)
+        });
+        followUp.scheduledActions.push({
+          type: 'call',
+          delay: '3_days',
+          note: 'Follow-up call to address objections'
+        });
+      }
+      
+      followUpResults.push(followUp);
+    }
+    
+    res.json({
+      success: true,
+      campaignId,
+      totalFollowUps: followUpResults.length,
+      followUps: followUpResults
+    });
+    
+  } catch (error) {
+    console.error('[FOLLOW-UP SEQUENCE ERROR]', error);
+    res.status(500).json({ 
+      error: 'Failed to create follow-up sequence',
+      message: error.message 
+    });
+  }
+});
+
+// Generate follow-up plan based on call outcome
+function generateFollowUpPlan(call) {
+  const outcomes = {
+    'voicemail': 'Email immediately, retry call in 2 hours',
+    'interested': 'Send demo confirmation email and calendar invite',
+    'objection': 'Send objection handling email, follow-up call in 3 days',
+    'not_interested': 'Send case study email, follow-up call in 1 week',
+    'no_answer': 'Retry call at different time, send email',
+    'busy': 'Send email, retry call next day'
+  };
+  
+  return outcomes[call.outcome] || 'Standard follow-up sequence';
+}
+
+// Generate voicemail follow-up email
+function generateVoicemailFollowUpEmail(call) {
+  return {
+    subject: `Hi ${call.decisionMaker?.name || 'there'}, following up on my call about our premium £500/month booking service`,
+    body: `Hi ${call.decisionMaker?.name || 'there'},
+
+I left you a voicemail earlier about helping ${call.businessName} increase appointment bookings by 300% with our premium £500/month service.
+
+I wanted to follow up with some quick information:
+
+✅ We've helped 500+ dental practices increase bookings
+✅ Our AI handles calls 24/7, never misses a patient  
+✅ Automatically books appointments in your calendar
+✅ Premium service includes dedicated account manager
+✅ Most practices see 20-30 extra bookings per month worth £10,000-15,000
+✅ ROI typically achieved within 30 days
+
+Our premium service pays for itself with just 2-3 extra bookings per month. Most practices see 20-30 extra bookings monthly.
+
+Would you be available for a quick 15-minute demo this week? I can show you exactly how this works and the ROI you can expect.
+
+Best regards,
+Sarah
+AI Booking Solutions
+
+P.S. If you're not the right person, could you please forward this to the practice owner or manager?`
+  };
+}
+
+// Generate demo confirmation email
+function generateDemoConfirmationEmail(call) {
+  return {
+    subject: `Demo confirmed - How to increase ${call.businessName} bookings by 300% with our premium £500/month service`,
+    body: `Hi ${call.decisionMaker?.name},
+
+Great speaking with you! I'm excited to show you how we can help ${call.businessName} increase bookings by 300% with our premium £500/month service.
+
+Demo Details:
+📅 Date: [To be confirmed]
+⏰ Duration: 15 minutes
+🎯 Focus: How our premium AI service can handle your patient calls 24/7
+💰 Investment: £500/month (typically pays for itself with 2-3 extra bookings)
+
+What you'll see:
+• Live demo of our premium AI booking system
+• How it integrates with your calendar
+• Real results from similar practices (20-30 extra bookings monthly)
+• Custom setup for your practice
+• Dedicated account manager benefits
+• ROI calculations and projections
+
+Our premium service typically generates £10,000-15,000 in additional revenue monthly for practices like yours.
+
+I'll send you a calendar invite shortly. Looking forward to showing you how this can transform your practice!
+
+Best regards,
+Sarah
+AI Booking Solutions`
+  };
+}
+
+// Generate objection handling email
+function generateObjectionHandlingEmail(call) {
+  return {
+    subject: `Addressing your concerns about our premium £500/month AI booking service for ${call.businessName}`,
+    body: `Hi ${call.decisionMaker?.name},
+
+I understand your concerns about [objection]. Let me address this directly:
+
+[OBJECTION-SPECIFIC CONTENT]
+
+But here's what I want you to know about our premium £500/month service:
+• We've helped 500+ practices overcome these same concerns
+• Most practices see ROI within 30 days
+• Our premium service pays for itself with just 2-3 extra bookings per month
+• Most practices see 20-30 extra bookings worth £10,000-15,000 monthly
+• We offer a 30-day money-back guarantee
+• Setup takes less than 30 minutes
+• Includes dedicated account manager and priority support
+
+The numbers speak for themselves: £500 investment typically generates £10,000-15,000 in additional revenue monthly.
+
+I'd love to show you a quick 15-minute demo to address your specific concerns and show you the ROI calculations. Would you be available this week?
+
+Best regards,
+Sarah
+AI Booking Solutions`
+  };
+}
+
+// Dynamic Script Personalization System
+app.post('/admin/vapi/personalized-assistant', async (req, res) => {
+  try {
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const { business, industry, region } = req.body;
+    
+    if (!business || !industry) {
+      return res.status(400).json({ error: 'Business and industry are required' });
+    }
+    
+    console.log(`[PERSONALIZED ASSISTANT] Creating personalized script for ${business.name}`);
+    
+    // Generate personalized script based on business data
+    const personalizedScript = generatePersonalizedScript(business, industry, region);
+    
+    const assistant = {
+      name: `Personalized Assistant - ${business.name}`,
+      model: {
+        provider: "openai",
+        model: "gpt-4o",
+        temperature: 0.3,
+        maxTokens: 200
+      },
+      voice: {
+        provider: "11labs",
+        voiceId: "21m00Tcm4TlvDq8ikWAM",
+        stability: 0.7,
+        clarity: 0.85,
+        style: 0.2
+      },
+      firstMessage: personalizedScript.firstMessage,
+      systemMessage: personalizedScript.systemMessage,
+      maxDurationSeconds: 180,
+      endCallMessage: "Thank you for your time. I'll send you some information about how we can help your practice increase bookings. Have a great day!",
+      endCallPhrases: ["not interested", "not right now", "call back later", "send me information"],
+      recordingEnabled: true,
+      voicemailDetectionEnabled: true,
+      backgroundSound: "office"
+    };
+    
+    // Create assistant via VAPI API
+    const vapiResponse = await fetch('https://api.vapi.ai/assistant', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${vapiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(assistant)
+    });
+    
+    if (!vapiResponse.ok) {
+      const errorData = await vapiResponse.json();
+      return res.status(400).json({ 
+        error: 'Failed to create personalized assistant',
+        details: errorData 
+      });
+    }
+    
+    const assistantData = await vapiResponse.json();
+    
+    res.json({
+      success: true,
+      message: 'Personalized assistant created successfully',
+      assistant: {
+        id: assistantData.id,
+        name: assistantData.name,
+        personalizedScript: personalizedScript
+      }
+    });
+    
+  } catch (error) {
+    console.error('[PERSONALIZED ASSISTANT ERROR]', error);
+    res.status(500).json({ 
+      error: 'Failed to create personalized assistant',
+      message: error.message 
+    });
+  }
+});
+
+// Generate personalized script based on business data
+function generatePersonalizedScript(business, industry, region) {
+  const businessName = business.name;
+  const decisionMaker = business.decisionMaker?.name || 'there';
+  const location = business.address || '';
+  const website = business.website ? `I noticed you have a website at ${business.website}` : '';
+  
+  // Industry-specific personalization
+  const industryContext = getIndustryContext(industry);
+  
+  // Regional personalization
+  const regionalContext = getRegionalContext(region || location);
+  
+  const firstMessage = `Hi ${decisionMaker}, this is Sarah from AI Booking Solutions. I'm calling because we've helped ${industryContext.examplePractice} in ${regionalContext.city} improve their appointment booking systems. ${website} Do you have 90 seconds to hear how this could work for ${businessName}?`;
+  
+  const systemMessage = `You are Sarah, calling ${decisionMaker} at ${businessName} in ${regionalContext.city}.
+
+BUSINESS CONTEXT:
+- Practice: ${businessName}
+- Location: ${location}
+- Decision Maker: ${decisionMaker}
+- Industry: ${industry}
+- Website: ${business.website || 'Not available'}
+
+INDUSTRY-SPECIFIC INSIGHTS:
+${industryContext.insights}
+
+REGIONAL CONTEXT:
+${regionalContext.insights}
+
+PERSONALIZATION RULES:
+- Use ${decisionMaker}'s name frequently
+- Reference ${businessName} specifically
+- Mention ${regionalContext.city} when relevant
+- Use ${industryContext.language} appropriate for ${industry}
+- Reference ${industryContext.painPoints} as pain points
+- Use ${regionalContext.examples} as local examples
+
+CONVERSATION FLOW:
+1. RAPPORT: "Hi ${decisionMaker}, this is Sarah from AI Booking Solutions"
+2. CONTEXT: "I'm calling because we've helped ${industryContext.examplePractice} in ${regionalContext.city} increase bookings by 300%"
+3. PERSONAL: "${website} Do you have 90 seconds to hear how this could work for ${businessName}?"
+4. QUALIFY: "Are you the owner or manager of ${businessName}?"
+5. PAIN: "What's your biggest challenge with patient scheduling at ${businessName}?"
+6. VALUE: "We help practices like ${businessName} increase bookings by 300%"
+7. CLOSE: "Would you be available for a 15-minute demo to see how this could work for ${businessName}?"
+
+OBJECTION HANDLING:
+- Too expensive: "What's the cost of losing patients at ${businessName}? Our service pays for itself with 2-3 extra bookings per month"
+- Too busy: "That's exactly why ${businessName} needs this - it saves you time by handling bookings automatically"
+- Not interested: "I understand. Can I send you a case study showing how we helped ${industryContext.examplePractice} increase bookings by 300%?"
+
+RULES:
+- Always use ${decisionMaker}'s name
+- Always reference ${businessName}
+- Keep calls under 3 minutes
+- Focus on ${industryContext.painPoints}
+- Use ${regionalContext.examples} for social proof`;
+  
+  return {
+    firstMessage,
+    systemMessage,
+    personalization: {
+      businessName,
+      decisionMaker,
+      industry,
+      region: regionalContext.city,
+      website: !!business.website
+    }
+  };
+}
+
+// Get industry-specific context
+function getIndustryContext(industry) {
+  const contexts = {
+    'dentist': {
+      examplePractice: 'Birmingham Dental Care',
+      language: 'professional medical',
+      painPoints: 'missed calls, no-shows, scheduling conflicts',
+      insights: 'Dental practices typically lose 4-5 patients monthly from missed calls. Most practices see 15-20 extra bookings per month with our system.'
+    },
+    'lawyer': {
+      examplePractice: 'Manchester Legal Associates',
+      language: 'professional legal',
+      painPoints: 'missed consultations, scheduling conflicts, client communication',
+      insights: 'Law firms typically lose 3-4 consultations monthly from missed calls. Most firms see 12-18 extra consultations per month with our system.'
+    },
+    'beauty_salon': {
+      examplePractice: 'London Beauty Studio',
+      language: 'friendly professional',
+      painPoints: 'missed appointments, no-shows, last-minute cancellations',
+      insights: 'Beauty salons typically lose 6-8 appointments monthly from missed calls. Most salons see 20-25 extra bookings per month with our system.'
+    }
+  };
+  
+  return contexts[industry] || contexts['dentist'];
+}
+
+// Get regional context
+function getRegionalContext(location) {
+  const locationLower = location.toLowerCase();
+  
+  if (locationLower.includes('london')) {
+    return {
+      city: 'London',
+      insights: 'London practices face high competition and need every advantage. We\'ve helped 50+ London practices increase bookings.',
+      examples: 'London Dental Care, Central London Practice'
+    };
+  } else if (locationLower.includes('manchester')) {
+    return {
+      city: 'Manchester',
+      insights: 'Manchester practices benefit from our system\'s efficiency. We\'ve helped 30+ Manchester practices increase bookings.',
+      examples: 'Manchester Dental Group, Northern Practice'
+    };
+  } else if (locationLower.includes('birmingham')) {
+    return {
+      city: 'Birmingham',
+      insights: 'Birmingham practices see great results with our system. We\'ve helped 25+ Birmingham practices increase bookings.',
+      examples: 'Birmingham Dental Care, Midlands Practice'
+    };
+  } else {
+    return {
+      city: 'your area',
+      insights: 'Practices in your area benefit from our system\'s efficiency. We\'ve helped hundreds of UK practices increase bookings.',
+      examples: 'local practices, similar businesses'
+    };
+  }
+}
+
+// VAPI Test Endpoint
+app.get('/admin/vapi/test-connection', async (req, res) => {
+  try {
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    console.log('[VAPI CONNECTION TEST] Testing VAPI API connection');
+    
+    // Test VAPI connection by fetching assistants
+    const vapiKey = process.env.VAPI_PRIVATE_KEY || process.env.VAPI_PUBLIC_KEY || process.env.VAPI_API_KEY;
+    if (!vapiKey) {
+      return res.status(500).json({
+        success: false,
+        message: 'VAPI connection test failed',
+        error: 'VAPI API key not configured',
+        apiKeyConfigured: false
+      });
+    }
+    
+    const vapiResponse = await fetch('https://api.vapi.ai/assistant', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${vapiKey}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (vapiResponse.ok) {
+      const assistants = await vapiResponse.json();
+      res.json({
+        success: true,
+        message: 'VAPI connection successful',
+        assistantsCount: assistants.length,
+        apiKeyConfigured: !!vapiKey
+      });
+    } else {
+      const errorData = await vapiResponse.json();
+      res.status(400).json({
+        success: false,
+        message: 'VAPI connection failed',
+        error: errorData
+      });
+    }
+    
+  } catch (error) {
+    console.error('[VAPI CONNECTION TEST ERROR]', error);
+    res.status(500).json({
+      success: false,
+      message: 'VAPI connection test failed',
+      error: error.message,
+      apiKeyConfigured: !!process.env.VAPI_API_KEY
+    });
+  }
+});
+
+// Test Call Endpoint
+app.post('/admin/vapi/test-call', async (req, res) => {
+  try {
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const { phoneNumber, assistantId } = req.body;
+    
+    if (!phoneNumber) {
+      return res.status(400).json({ error: 'Phone number is required' });
+    }
+    
+    console.log(`[TEST CALL] Initiating test call to ${phoneNumber}`);
+    
+    // Create a simple test assistant if no assistantId provided
+    let testAssistantId = assistantId;
+    
+    if (!testAssistantId) {
+      const testAssistant = {
+        name: "Test Cold Call Assistant",
+        model: {
+          provider: "openai",
+          model: "gpt-4o-mini",
+          temperature: 0.3,
+          maxTokens: 150
+        },
+        voice: {
+          provider: "11labs",
+          voiceId: "21m00Tcm4TlvDq8ikWAM",
+          stability: 0.7,
+          clarity: 0.85,
+          style: 0.2
+        },
+        firstMessage: "Hi, this is Sarah from AI Booking Solutions. I'm calling to help businesses like yours improve their appointment booking systems with our premium £500/month service. Do you have 2 minutes to hear how we can help you never miss another patient?",
+        systemMessage: `You are Sarah, calling about our premium £500/month AI booking service. Keep the call under 2 minutes. Focus on booking a demo. If they're not interested, politely end the call.`,
+        maxDurationSeconds: 120,
+        endCallMessage: "Thank you for your time. I'll send you some information about our premium service. Have a great day!",
+        endCallPhrases: ["not interested", "not right now", "call back later"],
+        recordingEnabled: true,
+        voicemailDetectionEnabled: true
+      };
+      
+      const assistantResponse = await fetch('https://api.vapi.ai/assistant', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${vapiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(testAssistant)
+      });
+      
+      if (assistantResponse.ok) {
+        const assistantData = await assistantResponse.json();
+        testAssistantId = assistantData.id;
+        console.log(`[TEST ASSISTANT CREATED] ID: ${testAssistantId}`);
+      } else {
+        const errorData = await assistantResponse.json();
+        return res.status(400).json({
+          success: false,
+          message: 'Failed to create test assistant',
+          error: errorData
+        });
+      }
+    }
+    
+    // Make the test call
+    const callResponse = await fetch('https://api.vapi.ai/call', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${vapiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        assistantId: testAssistantId,
+        customer: {
+          number: phoneNumber,
+          name: "Test Contact"
+        },
+        metadata: {
+          testCall: true,
+          timestamp: new Date().toISOString()
+        }
+      })
+    });
+    
+    if (callResponse.ok) {
+      const callData = await callResponse.json();
+      res.json({
+        success: true,
+        message: 'Test call initiated successfully',
+        callId: callData.id,
+        assistantId: testAssistantId,
+        phoneNumber: phoneNumber,
+        status: 'call_initiated'
+      });
+    } else {
+      const errorData = await callResponse.json();
+      res.status(400).json({
+        success: false,
+        message: 'Failed to initiate test call',
+        error: errorData
+      });
+    }
+    
+  } catch (error) {
+    console.error('[TEST CALL ERROR]', error);
+    res.status(500).json({
+      success: false,
+      message: 'Test call failed',
+      error: error.message
+    });
+  }
+});
+
 // VAPI Management Endpoints
 // Create VAPI Assistant
 app.post('/admin/vapi/assistants', async (req, res) => {
@@ -6073,7 +8595,7 @@ app.post('/admin/vapi/assistants', async (req, res) => {
     const vapiResponse = await fetch('https://api.vapi.ai/assistant', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.VAPI_API_KEY}`,
+        'Authorization': `Bearer ${vapiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -6140,7 +8662,7 @@ app.post('/admin/vapi/phone-numbers', async (req, res) => {
     const vapiResponse = await fetch('https://api.vapi.ai/phone-number', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.VAPI_API_KEY}`,
+        'Authorization': `Bearer ${vapiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -6201,7 +8723,7 @@ app.post('/admin/vapi/calls', async (req, res) => {
     const vapiResponse = await fetch('https://api.vapi.ai/call', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.VAPI_API_KEY}`,
+        'Authorization': `Bearer ${vapiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
