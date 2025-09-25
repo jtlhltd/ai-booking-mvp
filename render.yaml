@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: ai-booking-mvp
+    env: node
+    buildCommand: npm ci
+    startCommand: node server.js
+    plan: starter
+    envVars:
+      - key: NODE_VERSION
+        value: 20

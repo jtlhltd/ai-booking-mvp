@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sales Tracker - AI Booking MVP</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .header {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 0.5rem;
+        }
+        
+        .subtitle {
+            color: #64748b;
+            font-size: 1.1rem;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #6366f1;
+            margin-bottom: 0.5rem;
+        }
+        
+        .stat-label {
+            color: #64748b;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        
+        .stat-change {
+            font-size: 0.8rem;
+            margin-top: 0.5rem;
+        }
+        
+        .stat-change.positive {
+            color: #10b981;
+        }
+        
+        .stat-change.negative {
+            color: #ef4444;
+        }
+        
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        .chart-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+        }
+        
+        .chart-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 1rem;
+        }
+        
+        .chart-placeholder {
+            height: 300px;
+            background: #f8fafc;
+            border: 2px dashed #d1d5db;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #64748b;
+            font-size: 0.9rem;
+        }
+        
+        .pipeline-section {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+            margin-bottom: 2rem;
+        }
+        
+        .pipeline-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .pipeline-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        
+        .pipeline-stages {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .pipeline-stage {
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+        }
+        
+        .stage-name {
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 0.5rem;
+        }
+        
+        .stage-count {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #6366f1;
+            margin-bottom: 0.25rem;
+        }
+        
+        .stage-value {
+            font-size: 0.8rem;
+            color: #64748b;
+        }
+        
+        .deals-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .deals-table th,
+        .deals-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .deals-table th {
+            background: #f8fafc;
+            font-weight: 600;
+            color: #374151;
+        }
+        
+        .deals-table tr:hover {
+            background: #f8fafc;
+        }
+        
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        
+        .status-lead {
+            background: #f3f4f6;
+            color: #374151;
+        }
+        
+        .status-qualified {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        
+        .status-proposal {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        
+        .status-negotiation {
+            background: #e0e7ff;
+            color: #3730a3;
+        }
+        
+        .status-closed-won {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .status-closed-lost {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        
+        .btn {
+            background: #6366f1;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+        
+        .btn:hover {
+            background: #5b21b6;
+            transform: translateY(-1px);
+        }
+        
+        .btn-secondary {
+            background: #f8fafc;
+            color: #374151;
+            border: 1px solid #d1d5db;
+        }
+        
+        .btn-secondary:hover {
+            background: #f1f5f9;
+        }
+        
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 0.8rem;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .filters-section {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+            margin-bottom: 2rem;
+        }
+        
+        .filters-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 1rem;
+        }
+        
+        .filters-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+        
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        
+        .form-label {
+            display: block;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+        
+        .form-select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            transition: border-color 0.3s;
+        }
+        
+        .form-select:focus {
+            outline: none;
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+        
+        @media (max-width: 768px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .container {
+                padding: 1rem;
+            }
+            
+            .title {
+                font-size: 2rem;
+            }
+            
+            .pipeline-stages {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">📊 Sales Tracker & Analytics</h1>
+            <p class="subtitle">Track your sales pipeline, conversion rates, and revenue performance</p>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number" id="totalRevenue">£0</div>
+                <div class="stat-label">Total Revenue</div>
+                <div class="stat-change positive">+15% vs last month</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="dealsClosed">0</div>
+                <div class="stat-label">Deals Closed</div>
+                <div class="stat-change positive">+8% vs last month</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="conversionRate">0%</div>
+                <div class="stat-label">Conversion Rate</div>
+                <div class="stat-change positive">+3% vs last month</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="avgDealSize">£0</div>
+                <div class="stat-label">Avg Deal Size</div>
+                <div class="stat-change negative">-2% vs last month</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="salesCycle">0</div>
+                <div class="stat-label">Avg Sales Cycle (days)</div>
+                <div class="stat-change positive">-5 days vs last month</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="pipelineValue">£0</div>
+                <div class="stat-label">Pipeline Value</div>
+                <div class="stat-change positive">+12% vs last month</div>
+            </div>
+        </div>
+        
+        <div class="charts-grid">
+            <div class="chart-card">
+                <h3 class="chart-title">Revenue Trend</h3>
+                <div class="chart-placeholder">
+                    📈 Revenue trend chart would be displayed here
+                    <br><small>Integration with Chart.js or similar library</small>
+                </div>
+            </div>
+            <div class="chart-card">
+                <h3 class="chart-title">Deals by Industry</h3>
+                <div class="chart-placeholder">
+                    🥧 Industry distribution pie chart would be displayed here
+                    <br><small>Dental: 45%, Legal: 25%, Beauty: 20%, Medical: 10%</small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="filters-section">
+            <h3 class="filters-title">Filters & Views</h3>
+            <div class="filters-grid">
+                <div class="form-group">
+                    <label class="form-label">Time Period</label>
+                    <select class="form-select" id="timePeriod">
+                        <option value="this-month">This Month</option>
+                        <option value="last-month">Last Month</option>
+                        <option value="this-quarter">This Quarter</option>
+                        <option value="last-quarter">Last Quarter</option>
+                        <option value="this-year">This Year</option>
+                        <option value="last-year">Last Year</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Industry</label>
+                    <select class="form-select" id="industryFilter">
+                        <option value="all">All Industries</option>
+                        <option value="dental">Dental</option>
+                        <option value="legal">Legal</option>
+                        <option value="beauty">Beauty</option>
+                        <option value="medical">Medical</option>
+                        <option value="fitness">Fitness</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Deal Stage</label>
+                    <select class="form-select" id="stageFilter">
+                        <option value="all">All Stages</option>
+                        <option value="lead">Lead</option>
+                        <option value="qualified">Qualified</option>
+                        <option value="proposal">Proposal</option>
+                        <option value="negotiation">Negotiation</option>
+                        <option value="closed-won">Closed Won</option>
+                        <option value="closed-lost">Closed Lost</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Sales Rep</label>
+                    <select class="form-select" id="repFilter">
+                        <option value="all">All Reps</option>
+                        <option value="you">You</option>
+                        <option value="team">Team</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <div class="pipeline-section">
+            <div class="pipeline-header">
+                <h3 class="pipeline-title">Sales Pipeline</h3>
+                <button class="btn btn-secondary" onclick="refreshPipeline()">Refresh</button>
+            </div>
+            
+            <div class="pipeline-stages">
+                <div class="pipeline-stage">
+                    <div class="stage-name">Leads</div>
+                    <div class="stage-count" id="leadsCount">0</div>
+                    <div class="stage-value">£0</div>
+                </div>
+                <div class="pipeline-stage">
+                    <div class="stage-name">Qualified</div>
+                    <div class="stage-count" id="qualifiedCount">0</div>
+                    <div class="stage-value">£0</div>
+                </div>
+                <div class="pipeline-stage">
+                    <div class="stage-name">Proposal</div>
+                    <div class="stage-count" id="proposalCount">0</div>
+                    <div class="stage-value">£0</div>
+                </div>
+                <div class="pipeline-stage">
+                    <div class="stage-name">Negotiation</div>
+                    <div class="stage-count" id="negotiationCount">0</div>
+                    <div class="stage-value">£0</div>
+                </div>
+                <div class="pipeline-stage">
+                    <div class="stage-name">Closed Won</div>
+                    <div class="stage-count" id="closedWonCount">0</div>
+                    <div class="stage-value">£0</div>
+                </div>
+            </div>
+            
+            <table class="deals-table">
+                <thead>
+                    <tr>
+                        <th>Company</th>
+                        <th>Contact</th>
+                        <th>Industry</th>
+                        <th>Stage</th>
+                        <th>Deal Value</th>
+                        <th>Probability</th>
+                        <th>Close Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="dealsTableBody">
+                    <!-- Deals will be populated by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <script>
+        // Sample deals data
+        const sampleDeals = [
+            {
+                id: 1,
+                company: "Bright Smile Dental",
+                contact: "Dr. Sarah Johnson",
+                industry: "Dental",
+                stage: "qualified",
+                dealValue: 1500,
+                probability: 75,
+                closeDate: "2024-02-15",
+                created: "2024-01-15"
+            },
+            {
+                id: 2,
+                company: "Thompson & Associates",
+                contact: "James Thompson",
+                industry: "Legal",
+                stage: "proposal",
+                dealValue: 2000,
+                probability: 60,
+                closeDate: "2024-02-20",
+                created: "2024-01-14"
+            },
+            {
+                id: 3,
+                company: "Glamour Studio",
+                contact: "Lisa Martinez",
+                industry: "Beauty",
+                stage: "negotiation",
+                dealValue: 1200,
+                probability: 85,
+                closeDate: "2024-02-10",
+                created: "2024-01-13"
+            },
+            {
+                id: 4,
+                company: "Family Dental Care",
+                contact: "Dr. Michael Chen",
+                industry: "Dental",
+                stage: "closed-won",
+                dealValue: 1800,
+                probability: 100,
+                closeDate: "2024-01-30",
+                created: "2024-01-12"
+            },
+            {
+                id: 5,
+                company: "Beauty Haven",
+                contact: "Anna Taylor",
+                industry: "Beauty",
+                stage: "closed-won",
+                dealValue: 1400,
+                probability: 100,
+                closeDate: "2024-01-28",
+                created: "2024-01-11"
+            },
+            {
+                id: 6,
+                company: "Modern Dentistry",
+                contact: "Dr. Emma Williams",
+                industry: "Dental",
+                stage: "lead",
+                dealValue: 1600,
+                probability: 25,
+                closeDate: "2024-03-15",
+                created: "2024-01-20"
+            },
+            {
+                id: 7,
+                company: "Davis Legal Group",
+                contact: "Sarah Davis",
+                industry: "Legal",
+                stage: "qualified",
+                dealValue: 2200,
+                probability: 70,
+                closeDate: "2024-02-25",
+                created: "2024-01-18"
+            },
+            {
+                id: 8,
+                company: "FitLife Studio",
+                contact: "Alex Johnson",
+                industry: "Fitness",
+                stage: "proposal",
+                dealValue: 1300,
+                probability: 55,
+                closeDate: "2024-02-18",
+                created: "2024-01-16"
+            }
+        ];
+        
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            updateStats();
+            updatePipeline();
+            populateDealsTable();
+            
+            // Add event listeners for filters
+            document.getElementById('timePeriod').addEventListener('change', applyFilters);
+            document.getElementById('industryFilter').addEventListener('change', applyFilters);
+            document.getElementById('stageFilter').addEventListener('change', applyFilters);
+            document.getElementById('repFilter').addEventListener('change', applyFilters);
+        });
+        
+        // Update statistics
+        function updateStats() {
+            const closedWonDeals = sampleDeals.filter(deal => deal.stage === 'closed-won');
+            const totalRevenue = closedWonDeals.reduce((sum, deal) => sum + deal.dealValue, 0);
+            const dealsClosed = closedWonDeals.length;
+            const totalLeads = sampleDeals.length;
+            const conversionRate = totalLeads > 0 ? (dealsClosed / totalLeads * 100).toFixed(1) : 0;
+            const avgDealSize = dealsClosed > 0 ? (totalRevenue / dealsClosed).toFixed(0) : 0;
+            const pipelineValue = sampleDeals.reduce((sum, deal) => sum + (deal.dealValue * deal.probability / 100), 0);
+            
+            document.getElementById('totalRevenue').textContent = '£' + totalRevenue.toLocaleString();
+            document.getElementById('dealsClosed').textContent = dealsClosed;
+            document.getElementById('conversionRate').textContent = conversionRate + '%';
+            document.getElementById('avgDealSize').textContent = '£' + avgDealSize;
+            document.getElementById('pipelineValue').textContent = '£' + pipelineValue.toLocaleString();
+        }
+        
+        // Update pipeline
+        function updatePipeline() {
+            const stages = ['lead', 'qualified', 'proposal', 'negotiation', 'closed-won'];
+            const stageCounts = {};
+            const stageValues = {};
+            
+            stages.forEach(stage => {
+                stageCounts[stage] = sampleDeals.filter(deal => deal.stage === stage).length;
+                stageValues[stage] = sampleDeals
+                    .filter(deal => deal.stage === stage)
+                    .reduce((sum, deal) => sum + deal.dealValue, 0);
+            });
+            
+            document.getElementById('leadsCount').textContent = stageCounts.lead;
+            document.getElementById('qualifiedCount').textContent = stageCounts.qualified;
+            document.getElementById('proposalCount').textContent = stageCounts.proposal;
+            document.getElementById('negotiationCount').textContent = stageCounts.negotiation;
+            document.getElementById('closedWonCount').textContent = stageCounts['closed-won'];
+            
+            document.querySelectorAll('.stage-value').forEach((el, index) => {
+                const stage = stages[index];
+                el.textContent = '£' + stageValues[stage].toLocaleString();
+            });
+        }
+        
+        // Populate deals table
+        function populateDealsTable() {
+            const tbody = document.getElementById('dealsTableBody');
+            tbody.innerHTML = '';
+            
+            sampleDeals.forEach(deal => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${deal.company}</td>
+                    <td>${deal.contact}</td>
+                    <td>${deal.industry}</td>
+                    <td><span class="status-badge status-${deal.stage}">${deal.stage.charAt(0).toUpperCase() + deal.stage.slice(1).replace('-', ' ')}</span></td>
+                    <td>£${deal.dealValue.toLocaleString()}</td>
+                    <td>${deal.probability}%</td>
+                    <td>${deal.closeDate}</td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn btn-small btn-secondary" onclick="viewDeal(${deal.id})">View</button>
+                            <button class="btn btn-small" onclick="editDeal(${deal.id})">Edit</button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+        
+        // Apply filters
+        function applyFilters() {
+            const timePeriod = document.getElementById('timePeriod').value;
+            const industry = document.getElementById('industryFilter').value;
+            const stage = document.getElementById('stageFilter').value;
+            const rep = document.getElementById('repFilter').value;
+            
+            // Filter deals based on criteria
+            let filteredDeals = sampleDeals;
+            
+            if (industry !== 'all') {
+                filteredDeals = filteredDeals.filter(deal => deal.industry.toLowerCase() === industry);
+            }
+            
+            if (stage !== 'all') {
+                filteredDeals = filteredDeals.filter(deal => deal.stage === stage);
+            }
+            
+            // Update display
+            updateFilteredStats(filteredDeals);
+            updateFilteredPipeline(filteredDeals);
+            populateFilteredDealsTable(filteredDeals);
+        }
+        
+        // Update filtered statistics
+        function updateFilteredStats(deals) {
+            const closedWonDeals = deals.filter(deal => deal.stage === 'closed-won');
+            const totalRevenue = closedWonDeals.reduce((sum, deal) => sum + deal.dealValue, 0);
+            const dealsClosed = closedWonDeals.length;
+            const totalLeads = deals.length;
+            const conversionRate = totalLeads > 0 ? (dealsClosed / totalLeads * 100).toFixed(1) : 0;
+            const avgDealSize = dealsClosed > 0 ? (totalRevenue / dealsClosed).toFixed(0) : 0;
+            const pipelineValue = deals.reduce((sum, deal) => sum + (deal.dealValue * deal.probability / 100), 0);
+            
+            document.getElementById('totalRevenue').textContent = '£' + totalRevenue.toLocaleString();
+            document.getElementById('dealsClosed').textContent = dealsClosed;
+            document.getElementById('conversionRate').textContent = conversionRate + '%';
+            document.getElementById('avgDealSize').textContent = '£' + avgDealSize;
+            document.getElementById('pipelineValue').textContent = '£' + pipelineValue.toLocaleString();
+        }
+        
+        // Update filtered pipeline
+        function updateFilteredPipeline(deals) {
+            const stages = ['lead', 'qualified', 'proposal', 'negotiation', 'closed-won'];
+            const stageCounts = {};
+            const stageValues = {};
+            
+            stages.forEach(stage => {
+                stageCounts[stage] = deals.filter(deal => deal.stage === stage).length;
+                stageValues[stage] = deals
+                    .filter(deal => deal.stage === stage)
+                    .reduce((sum, deal) => sum + deal.dealValue, 0);
+            });
+            
+            document.getElementById('leadsCount').textContent = stageCounts.lead;
+            document.getElementById('qualifiedCount').textContent = stageCounts.qualified;
+            document.getElementById('proposalCount').textContent = stageCounts.proposal;
+            document.getElementById('negotiationCount').textContent = stageCounts.negotiation;
+            document.getElementById('closedWonCount').textContent = stageCounts['closed-won'];
+            
+            document.querySelectorAll('.stage-value').forEach((el, index) => {
+                const stage = stages[index];
+                el.textContent = '£' + stageValues[stage].toLocaleString();
+            });
+        }
+        
+        // Populate filtered deals table
+        function populateFilteredDealsTable(deals) {
+            const tbody = document.getElementById('dealsTableBody');
+            tbody.innerHTML = '';
+            
+            deals.forEach(deal => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${deal.company}</td>
+                    <td>${deal.contact}</td>
+                    <td>${deal.industry}</td>
+                    <td><span class="status-badge status-${deal.stage}">${deal.stage.charAt(0).toUpperCase() + deal.stage.slice(1).replace('-', ' ')}</span></td>
+                    <td>£${deal.dealValue.toLocaleString()}</td>
+                    <td>${deal.probability}%</td>
+                    <td>${deal.closeDate}</td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn btn-small btn-secondary" onclick="viewDeal(${deal.id})">View</button>
+                            <button class="btn btn-small" onclick="editDeal(${deal.id})">Edit</button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+        
+        // Action functions
+        function viewDeal(dealId) {
+            const deal = sampleDeals.find(d => d.id === dealId);
+            if (deal) {
+                alert(`Deal Details:\n\nCompany: ${deal.company}\nContact: ${deal.contact}\nIndustry: ${deal.industry}\nStage: ${deal.stage}\nDeal Value: £${deal.dealValue}\nProbability: ${deal.probability}%\nClose Date: ${deal.closeDate}`);
+            }
+        }
+        
+        function editDeal(dealId) {
+            alert(`Edit deal ${dealId} - This would open a deal editing form`);
+        }
+        
+        function refreshPipeline() {
+            updateStats();
+            updatePipeline();
+            populateDealsTable();
+        }
+    </script>
+</body>
+</html>
