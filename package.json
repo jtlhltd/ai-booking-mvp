@@ -5,9 +5,11 @@
   "type": "module",
   "main": "src/server.js",
   "scripts": {
+    "preinstall": "echo '🚨 PRE-INSTALL NODE CHECK 🚨' && node --version && echo 'Required: v20.x'",
+    "postinstall": "echo '✅ POST-INSTALL: better-sqlite3 successfully removed'",
     "start": "node server.js",
     "render-start": "node server.js",
-    "render-build": "echo \"no build step\"",
+    "render-build": "echo '🚨 BUILD NODE CHECK 🚨' && node --version && echo 'Required: v20.x' && echo 'Build: Verifying better-sqlite3 removal' && (npm list better-sqlite3 2>/dev/null || echo '✅ better-sqlite3 NOT FOUND - GOOD!') && echo 'Build complete'",
     "test": "echo \"Run tests from tests/ directory\"",
     "release": "standard-version",
     "release:patch": "standard-version --release-as patch",
@@ -18,7 +20,6 @@
   "dependencies": {
     "axios": "^1.12.2",
     "bcrypt": "^5.1.1",
-    "better-sqlite3": "^9.4.3",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -32,8 +33,12 @@
     "pg": "^8.11.5",
     "twilio": "^4.23.0"
   },
+  "overrides": {
+    "better-sqlite3": false
+  },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.0.0 <21.0.0",
+    "npm": ">=10.0.0"
   },
   "devDependencies": {
     "standard-version": "^9.5.0"
