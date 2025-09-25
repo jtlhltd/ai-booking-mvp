@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Book Demo - AI Booking Solutions</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .booking-form {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .time-slots {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .time-slot {
+            padding: 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+        .time-slot:hover {
+            border-color: #667eea;
+            background: #f0f2ff;
+        }
+
+        .time-slot.selected {
+            border-color: #667eea;
+            background: #667eea;
+            color: white;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+            width: 100%;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .status {
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📅 Book Your Demo</h1>
+            <p>Schedule a personalized demo call</p>
+        </div>
+
+        <div class="content">
+            <div class="booking-form">
+                <h2>Book Demo Call</h2>
+                <form id="bookingForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="businessName">Business Name</label>
+                            <input type="text" id="businessName" name="businessName" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="decisionMaker">Your Name</label>
+                            <input type="text" id="decisionMaker" name="decisionMaker" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Available Time Slots</label>
+                        <div class="time-slots" id="timeSlots">
+                            <div class="time-slot" data-slot="loading">Loading available slots...</div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn" id="bookBtn">Book Demo Call</button>
+                </form>
+
+                <div id="status" class="status" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedSlot = null;
+        let availableSlots = [];
+
+        // Load available slots on page load and populate form from URL
+        document.addEventListener('DOMContentLoaded', function() {
+            loadAvailableSlots();
+            populateFormFromURL();
+        });
+
+        function populateFormFromURL() {
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            // Pre-fill form with URL parameters
+            if (urlParams.get('business')) {
+                document.getElementById('businessName').value = urlParams.get('business');
+            }
+            if (urlParams.get('decisionMaker')) {
+                document.getElementById('decisionMaker').value = urlParams.get('decisionMaker');
+            }
+        }
+
+        async function loadAvailableSlots() {
+            try {
+                const response = await fetch('/api/available-slots?days=7');
+                const data = await response.json();
+                
+                if (data.success) {
+                    availableSlots = data.slots;
+                    displayTimeSlots(data.slots);
+                } else {
+                    showStatus('error', 'Failed to load available slots: ' + data.message);
+                }
+            } catch (error) {
+                showStatus('error', 'Error loading available slots: ' + error.message);
+            }
+        }
+
+        function displayTimeSlots(slots) {
+            const container = document.getElementById('timeSlots');
+            container.innerHTML = '';
+
+            slots.forEach(slot => {
+                const slotElement = document.createElement('div');
+                slotElement.className = 'time-slot';
+                slotElement.innerHTML = `
+                    <div><strong>${slot.date}</strong></div>
+                    <div>${slot.startTime} - ${slot.endTime}</div>
+                `;
+                slotElement.onclick = () => selectTimeSlot(slot, slotElement);
+                container.appendChild(slotElement);
+            });
+        }
+
+        function selectTimeSlot(slot, element) {
+            // Remove previous selection
+            document.querySelectorAll('.time-slot').forEach(el => el.classList.remove('selected'));
+            
+            // Add selection to clicked element
+            element.classList.add('selected');
+            selectedSlot = slot;
+        }
+
+        document.getElementById('bookingForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            if (!selectedSlot) {
+                showStatus('error', 'Please select a time slot');
+                return;
+            }
+
+            const formData = new FormData(this);
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            const leadData = {
+                businessName: formData.get('businessName'),
+                decisionMaker: formData.get('decisionMaker'),
+                email: urlParams.get('email') || 'lead@example.com',
+                phoneNumber: urlParams.get('phone') || '+447000000000',
+                industry: urlParams.get('industry') || 'business',
+                location: urlParams.get('location') || 'UK'
+            };
+
+            const bookBtn = document.getElementById('bookBtn');
+            bookBtn.disabled = true;
+            bookBtn.textContent = 'Booking...';
+
+            try {
+                const response = await fetch('/api/book-demo', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        leadData: leadData,
+                        preferredTimes: [selectedSlot]
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    showStatus('success', result.message);
+                    this.reset();
+                    selectedSlot = null;
+                    document.querySelectorAll('.time-slot').forEach(el => el.classList.remove('selected'));
+                } else {
+                    showStatus('error', result.message || 'Booking failed');
+                }
+            } catch (error) {
+                showStatus('error', 'Error booking demo: ' + error.message);
+            } finally {
+                bookBtn.disabled = false;
+                bookBtn.textContent = 'Book Demo Call';
+            }
+        });
+
+        function showStatus(type, message) {
+            const status = document.getElementById('status');
+            status.className = `status ${type}`;
+            status.textContent = message;
+            status.style.display = 'block';
+            
+            setTimeout(() => {
+                status.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
