@@ -15,32 +15,58 @@ class BookingSystem {
     try {
       // Initialize Google Calendar
       if (process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY) {
-        const auth = new google.auth.GoogleAuth({
-          credentials: {
-            type: 'service_account',
-            client_email: process.env.GOOGLE_CLIENT_EMAIL,
-            private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n')
-          },
-          scopes: ['https://www.googleapis.com/auth/calendar']
-        });
-        this.calendar = google.calendar({ version: 'v3', auth });
-        console.log('✅ Google Calendar initialized with existing credentials');
+        try {
+          const auth = new google.auth.GoogleAuth({
+            credentials: {
+              type: 'service_account',
+              client_email: process.env.GOOGLE_CLIENT_EMAIL,
+              private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n')
+            },
+            scopes: ['https://www.googleapis.com/auth/calendar']
+          });
+          this.calendar = google.calendar({ version: 'v3', auth });
+          console.log('✅ Google Calendar initialized with existing credentials');
+        } catch (error) {
+          console.log('⚠️ Google Calendar initialization failed:', error.message);
+          this.calendar = null;
+        }
+      } else {
+        console.log('⚠️ Google Calendar credentials not found - calendar integration disabled');
+        this.calendar = null;
       }
 
       // Initialize Email Service
       if (process.env.EMAIL_SERVICE && process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-        this.emailTransporter = nodemailer.createTransport({
-          service: process.env.EMAIL_SERVICE, // 'gmail', 'outlook', etc.
-          auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS
-          }
-        });
+        try {
+          this.emailTransporter = nodemailer.createTransport({
+            service: process.env.EMAIL_SERVICE, // 'gmail', 'outlook', etc.
+            auth: {
+              user: process.env.EMAIL_USER,
+              pass: process.env.EMAIL_PASS
+            }
+          });
+          console.log('✅ Email service initialized');
+        } catch (error) {
+          console.log('⚠️ Email service initialization failed:', error.message);
+          this.emailTransporter = null;
+        }
+      } else {
+        console.log('⚠️ Email credentials not found - email service disabled');
+        this.emailTransporter = null;
       }
 
       // Initialize SMS Service
       if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
-        this.smsClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+        try {
+          this.smsClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+          console.log('✅ SMS service initialized');
+        } catch (error) {
+          console.log('⚠️ SMS service initialization failed:', error.message);
+          this.smsClient = null;
+        }
+      } else {
+        console.log('⚠️ Twilio credentials not found - SMS service disabled');
+        this.smsClient = null;
       }
 
       console.log('✅ Booking system services initialized');
