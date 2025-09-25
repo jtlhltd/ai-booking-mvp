@@ -183,6 +183,13 @@
         </div>
         
         <div class="test-section">
+            <h3>📋 Lead Data Quality Test</h3>
+            <p>Test business search and decision maker contact research accuracy.</p>
+            <button onclick="testLeadData()">Test Lead Data Quality</button>
+            <div id="leadDataResult" class="result" style="display: none;"></div>
+        </div>
+        
+        <div class="test-section">
             <h3>📊 System Status</h3>
             <div id="systemStatus">
                 <p><span class="status-indicator status-info"></span>Ready to test</p>
@@ -318,6 +325,60 @@
                 }
             } catch (error) {
                 showResult('assistantResult', `❌ Error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testLeadData() {
+            const apiKey = getApiKey();
+            
+            if (!apiKey) {
+                showResult('leadDataResult', 'Please enter an API key first', 'error');
+                return;
+            }
+            
+            try {
+                showResult('leadDataResult', 'Testing lead data quality...', 'info');
+                
+                const response = await fetch(`${API_BASE}/admin/test-lead-data`, {
+                    method: 'GET',
+                    headers: {
+                        'X-API-Key': apiKey,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    const results = data.testResults;
+                    let message = `✅ Lead Data Quality Test Completed!\n\n`;
+                    message += `📊 Business Search:\n`;
+                    message += `  • Total Businesses: ${results.businessSearch.totalBusinesses}\n`;
+                    message += `  • Sample Business: ${results.businessSearch.sampleBusiness.name}\n`;
+                    message += `  • Phone: ${results.businessSearch.sampleBusiness.phone}\n`;
+                    message += `  • Email: ${results.businessSearch.sampleBusiness.email}\n`;
+                    message += `  • Website: ${results.businessSearch.sampleBusiness.website}\n\n`;
+                    
+                    if (results.decisionMakerResearch) {
+                        message += `👥 Decision Maker Research:\n`;
+                        message += `  • Total Contacts: ${results.decisionMakerResearch.contactsFound}\n`;
+                        message += `  • Primary: ${results.decisionMakerResearch.primaryContacts}\n`;
+                        message += `  • Secondary: ${results.decisionMakerResearch.secondaryContacts}\n`;
+                        message += `  • Gatekeeper: ${results.decisionMakerResearch.gatekeeperContacts}\n\n`;
+                    }
+                    
+                    message += `📋 Data Quality:\n`;
+                    message += `  • Valid Phone Numbers: ${results.dataQuality.phoneNumbersValid}/${results.businessSearch.totalBusinesses}\n`;
+                    message += `  • Valid Emails: ${results.dataQuality.emailsValid}/${results.businessSearch.totalBusinesses}\n`;
+                    message += `  • Valid Websites: ${results.dataQuality.websitesValid}/${results.businessSearch.totalBusinesses}\n`;
+                    message += `  • Valid Addresses: ${results.dataQuality.addressesValid}/${results.businessSearch.totalBusinesses}`;
+                    
+                    showResult('leadDataResult', message, 'success');
+                } else {
+                    showResult('leadDataResult', `❌ Lead Data Test Failed:\n\n${JSON.stringify(data, null, 2)}`, 'error');
+                }
+            } catch (error) {
+                showResult('leadDataResult', `❌ Error: ${error.message}`, 'error');
             }
         }
         
