@@ -2935,6 +2935,7 @@ app.use(cors({
 }));
 app.use('/webhooks/twilio-status', express.urlencoded({ extended: false }));
 app.use('/webhooks/twilio-inbound', express.urlencoded({ extended: false }));
+app.use('/webhook/sms-reply', express.urlencoded({ extended: false }));
 app.use((req, _res, next) => { req.id = 'req_' + nanoid(10); next(); });
 app.use(rateLimit({ windowMs: 60_000, max: 60, standardHeaders: true, legacyHeaders: false }));
 
