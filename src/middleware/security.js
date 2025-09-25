@@ -94,3 +94,17 @@ export function requirePermission(permission) {
     next();
   };
 }
+
+// Tenant access middleware
+export function requireTenantAccess(req, res, next) {
+  const clientKey = req.params.clientKey || req.headers['x-client-key'];
+  
+  if (!clientKey) {
+    return res.status(400).json({ error: 'Client key required for tenant access' });
+  }
+  
+  // TODO: Implement proper tenant access validation
+  req.clientKey = clientKey;
+  req.tenantAccess = { clientKey };
+  next();
+}
