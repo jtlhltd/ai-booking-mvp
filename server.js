@@ -152,6 +152,93 @@ app.get('/vapi-test-dashboard', (req, res) => {
   res.sendFile(path.join(process.cwd(), 'public', 'vapi-test-dashboard.html'));
 });
 
+// Mock Lead Call Route (No API Key Required)
+app.get('/mock-call', async (req, res) => {
+  try {
+    const vapiKey = process.env.VAPI_PRIVATE_KEY || process.env.VAPI_PUBLIC_KEY || process.env.VAPI_API_KEY;
+    
+    if (!vapiKey) {
+      return res.json({
+        success: false,
+        message: 'VAPI API key not found',
+        availableKeys: {
+          VAPI_PRIVATE_KEY: !!process.env.VAPI_PRIVATE_KEY,
+          VAPI_PUBLIC_KEY: !!process.env.VAPI_PUBLIC_KEY,
+          VAPI_API_KEY: !!process.env.VAPI_API_KEY
+        }
+      });
+    }
+    
+    // Mock lead data
+    const mockLead = {
+      businessName: "Test Dental Practice",
+      decisionMaker: "Dr. Sarah Johnson",
+      industry: "dental",
+      location: "London",
+      phoneNumber: "+447491683261", // Your number
+      email: "sarah@testdental.co.uk",
+      website: "www.testdental.co.uk"
+    };
+    
+    // Create a call with mock lead data
+    const callData = {
+      assistantId: "dd67a51c-7485-4b62-930a-4a84f328a1c9",
+      phoneNumber: mockLead.phoneNumber,
+      customer: {
+        number: mockLead.phoneNumber,
+        name: mockLead.decisionMaker
+      },
+      assistantOverrides: {
+        firstMessage: `Hi ${mockLead.decisionMaker}, this is Sarah from AI Booking Solutions. I'm calling because we help businesses like ${mockLead.businessName} improve their appointment booking systems. Do you have 2 minutes to hear how this could work for your practice?`,
+        systemMessage: `You are Sarah, calling ${mockLead.decisionMaker} at ${mockLead.businessName} in ${mockLead.location}.
+
+BUSINESS CONTEXT:
+- Practice: ${mockLead.businessName}
+- Location: ${mockLead.location}
+- Decision Maker: ${mockLead.decisionMaker}
+- Industry: ${mockLead.industry}
+- Website: ${mockLead.website}
+
+This is a TEST CALL to ${mockLead.decisionMaker} at ${mockLead.businessName}. Treat them like a real prospect and try to book a demo.`
+      }
+    };
+    
+    const vapiResponse = await fetch('https://api.vapi.ai/call', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${vapiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(callData)
+    });
+    
+    if (vapiResponse.ok) {
+      const callResult = await vapiResponse.json();
+      res.json({
+        success: true,
+        message: 'Mock call initiated successfully!',
+        callId: callResult.id,
+        mockLead: mockLead,
+        status: 'Calling your mobile now...'
+      });
+    } else {
+      const errorData = await vapiResponse.json();
+      res.json({
+        success: false,
+        message: 'Failed to initiate mock call',
+        error: errorData
+      });
+    }
+    
+  } catch (error) {
+    res.json({
+      success: false,
+      message: 'Mock call failed',
+      error: error.message
+    });
+  }
+});
+
 // Simple VAPI Test Route (No API Key Required)
 app.get('/test-vapi', async (req, res) => {
   try {
