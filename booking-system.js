@@ -85,7 +85,7 @@ class BookingSystem {
     }
   }
 
-  async bookDemo(leadData, preferredTimes = []) {
+  async bookDemo(leadData, preferredTimes = [], smsPipeline = null) {
     try {
       const booking = {
         id: `demo_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -114,6 +114,24 @@ class BookingSystem {
 
         // Send notifications
         await this.sendBookingNotifications(booking);
+
+        // Update SMS pipeline if provided
+        if (smsPipeline && leadData.phoneNumber) {
+          try {
+            // Find and update the lead in SMS pipeline
+            for (const [leadId, lead] of smsPipeline.pendingLeads.entries()) {
+              if (lead.phoneNumber === leadData.phoneNumber && lead.status === 'email_received') {
+                lead.status = 'demo_booked';
+                lead.bookingId = booking.id;
+                lead.bookedAt = new Date();
+                console.log(`✅ Updated lead ${leadId} status to demo_booked`);
+                break;
+              }
+            }
+          } catch (error) {
+            console.error('❌ Error updating SMS pipeline:', error.message);
+          }
+        }
 
         const calendarMessage = calendarEvent ? 'Calendar event created and ' : 'Calendar not configured, but ';
         return {

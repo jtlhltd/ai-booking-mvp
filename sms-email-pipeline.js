@@ -248,12 +248,14 @@ class SMSEmailPipeline {
     const total = this.pendingLeads.size;
     const waitingForEmail = Array.from(this.pendingLeads.values()).filter(lead => lead.status === 'waiting_for_email').length;
     const emailReceived = Array.from(this.pendingLeads.values()).filter(lead => lead.status === 'email_received').length;
+    const demoBooked = Array.from(this.pendingLeads.values()).filter(lead => lead.status === 'demo_booked').length;
 
     return {
       totalLeads: total,
       waitingForEmail: waitingForEmail,
       emailReceived: emailReceived,
-      conversionRate: total > 0 ? (emailReceived / total * 100).toFixed(1) : 0
+      booked: demoBooked,
+      conversionRate: total > 0 ? (demoBooked / total * 100).toFixed(1) : 0
     };
   }
 }
