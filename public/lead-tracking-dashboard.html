@@ -820,7 +820,17 @@
                 // Get pipeline stats
                 logActivity('Fetching pipeline statistics', 'info');
                 const statsStartTime = Date.now();
-                const statsResponse = await fetch(`${API_BASE}/api/pipeline-stats`);
+                const statsResponse = await fetch(`${API_BASE}/api/pipeline-stats`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                logActivity('Pipeline stats response received', 'info', { 
+                    status: statsResponse.status, 
+                    ok: statsResponse.ok 
+                });
                 
                 if (statsResponse.ok) {
                     const stats = await statsResponse.json();
@@ -848,7 +858,17 @@
                 // Get recent leads
                 logActivity('Fetching recent leads', 'info');
                 const leadsStartTime = Date.now();
-                const leadsResponse = await fetch(`${API_BASE}/api/recent-leads`);
+                const leadsResponse = await fetch(`${API_BASE}/api/recent-leads`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                logActivity('Recent leads response received', 'info', { 
+                    status: leadsResponse.status, 
+                    ok: leadsResponse.ok 
+                });
                 
                 if (leadsResponse.ok) {
                     const leads = await leadsResponse.json();
