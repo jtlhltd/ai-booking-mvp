@@ -407,11 +407,11 @@ app.get('/api/pipeline-stats', async (req, res) => {
 
 
 // Twilio Webhook for SMS Replies
-app.post('/webhook/sms-reply', async (req, res) => {
+app.post('/webhook/sms-reply', express.urlencoded({ extended: false }), async (req, res) => {
   try {
     const { From, Body } = req.body;
     
-    console.log('[SMS WEBHOOK]', { From, Body, smsEmailPipelineAvailable: !!smsEmailPipeline });
+    console.log('[SMS WEBHOOK]', { From, Body, smsEmailPipelineAvailable: !!smsEmailPipeline, bodyKeys: Object.keys(req.body || {}) });
     
     // Extract email from SMS body
     const emailMatch = Body.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
