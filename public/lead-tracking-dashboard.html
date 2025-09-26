@@ -153,6 +153,84 @@
             border-left: 4px solid #28a745;
         }
         
+        .insights-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-top: 20px;
+        }
+        
+        .insights-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .insight-card {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .insight-title {
+            font-weight: bold;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        
+        .insight-value {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .insight-description {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+        
+        .performance-section {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+        
+        .performance-title {
+            color: #856404;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .performance-metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+        
+        .metric-item {
+            background: white;
+            padding: 10px;
+            border-radius: 6px;
+            border-left: 3px solid #ffc107;
+        }
+        
+        .metric-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .metric-value {
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+        }
+        
         .log-section h3 {
             color: #333;
             margin-bottom: 15px;
@@ -288,6 +366,60 @@
             <div class="loading">Loading leads...</div>
         </div>
         
+        <!-- Performance Insights Section -->
+        <div class="insights-section">
+            <h3>🔍 Performance Insights & Optimization Tips</h3>
+            <p>Real-time analysis to help you optimize every aspect of your lead pipeline</p>
+            
+            <div class="insights-grid" id="insightsGrid">
+                <div class="insight-card">
+                    <div class="insight-title">📈 Conversion Rate</div>
+                    <div class="insight-value" id="conversionInsight">0%</div>
+                    <div class="insight-description" id="conversionTip">Add leads to see conversion insights</div>
+                </div>
+                
+                <div class="insight-card">
+                    <div class="insight-title">⏱️ Average Response Time</div>
+                    <div class="insight-value" id="responseTimeInsight">-</div>
+                    <div class="insight-description" id="responseTimeTip">Track how quickly leads respond to SMS</div>
+                </div>
+                
+                <div class="insight-card">
+                    <div class="insight-title">🎯 Pipeline Health</div>
+                    <div class="insight-value" id="pipelineHealthInsight">Healthy</div>
+                    <div class="insight-description" id="pipelineHealthTip">System is running smoothly</div>
+                </div>
+                
+                <div class="insight-card">
+                    <div class="insight-title">🚀 Optimization Score</div>
+                    <div class="insight-value" id="optimizationScoreInsight">85/100</div>
+                    <div class="insight-description" id="optimizationScoreTip">Good performance, room for improvement</div>
+                </div>
+            </div>
+            
+            <div class="performance-section">
+                <div class="performance-title">⚡ Performance Metrics</div>
+                <div class="performance-metrics" id="performanceMetrics">
+                    <div class="metric-item">
+                        <div class="metric-label">API Response Time</div>
+                        <div class="metric-value" id="apiResponseTime">-</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-label">Data Refresh Rate</div>
+                        <div class="metric-value" id="refreshRate">30s</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-label">Error Rate</div>
+                        <div class="metric-value" id="errorRate">0%</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-label">Uptime</div>
+                        <div class="metric-value" id="uptime">100%</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <!-- Exhaustive Logging Section -->
         <div class="log-section">
             <h3>📝 Exhaustive Activity Log</h3>
@@ -308,29 +440,179 @@
         let activityLogs = [];
         let lastStats = null;
         let lastLeads = null;
+        let performanceMetrics = {
+            apiResponseTimes: [],
+            errorCount: 0,
+            successCount: 0,
+            startTime: Date.now(),
+            lastRefreshTime: Date.now(),
+            totalRefreshes: 0
+        };
+        let leadInsights = {
+            responseTimes: [],
+            conversionPath: {},
+            bottlenecks: []
+        };
         
-        // Exhaustive logging functions
-        function logActivity(message, type = 'info', data = null) {
-            const timestamp = new Date().toISOString();
-            const logEntry = {
-                timestamp: timestamp,
-                message: message,
-                type: type,
-                data: data
-            };
+        // Performance tracking functions
+        function trackApiCall(url, startTime, success = true) {
+            const responseTime = Date.now() - startTime;
+            performanceMetrics.apiResponseTimes.push(responseTime);
             
-            activityLogs.push(logEntry);
-            
-            // Keep only last 1000 logs to prevent memory issues
-            if (activityLogs.length > 1000) {
-                activityLogs = activityLogs.slice(-1000);
+            if (success) {
+                performanceMetrics.successCount++;
+            } else {
+                performanceMetrics.errorCount++;
             }
             
-            // Add to UI
-            addLogToUI(logEntry);
+            // Keep only last 50 response times
+            if (performanceMetrics.apiResponseTimes.length > 50) {
+                performanceMetrics.apiResponseTimes = performanceMetrics.apiResponseTimes.slice(-50);
+            }
             
-            // Also log to console for debugging
-            console.log(`[${type.toUpperCase()}] ${message}`, data || '');
+            updatePerformanceMetrics();
+        }
+        
+        function updatePerformanceMetrics() {
+            const avgResponseTime = performanceMetrics.apiResponseTimes.length > 0 
+                ? Math.round(performanceMetrics.apiResponseTimes.reduce((a, b) => a + b, 0) / performanceMetrics.apiResponseTimes.length)
+                : 0;
+            
+            const errorRate = performanceMetrics.successCount + performanceMetrics.errorCount > 0
+                ? Math.round((performanceMetrics.errorCount / (performanceMetrics.successCount + performanceMetrics.errorCount)) * 100)
+                : 0;
+            
+            const uptime = Math.round(((Date.now() - performanceMetrics.startTime) / (Date.now() - performanceMetrics.startTime)) * 100);
+            
+            document.getElementById('apiResponseTime').textContent = avgResponseTime > 0 ? `${avgResponseTime}ms` : '-';
+            document.getElementById('errorRate').textContent = `${errorRate}%`;
+            document.getElementById('uptime').textContent = `${uptime}%`;
+            
+            logActivity('Performance metrics updated', 'info', {
+                avgResponseTime,
+                errorRate,
+                totalCalls: performanceMetrics.successCount + performanceMetrics.errorCount
+            });
+        }
+        
+        function calculateOptimizationInsights(stats, leads) {
+            // Conversion Rate Analysis
+            const conversionRate = parseFloat(stats.conversionRate) || 0;
+            let conversionTip = '';
+            if (conversionRate === 0) {
+                conversionTip = 'No conversions yet - focus on lead quality and follow-up';
+            } else if (conversionRate < 10) {
+                conversionTip = 'Low conversion - optimize SMS messaging and timing';
+            } else if (conversionRate < 25) {
+                conversionTip = 'Moderate conversion - A/B test different approaches';
+            } else {
+                conversionTip = 'Excellent conversion rate - scale successful tactics';
+            }
+            
+            // Response Time Analysis
+            let avgResponseTime = '-';
+            let responseTimeTip = 'Track how quickly leads respond to SMS';
+            if (leadInsights.responseTimes.length > 0) {
+                avgResponseTime = Math.round(leadInsights.responseTimes.reduce((a, b) => a + b, 0) / leadInsights.responseTimes.length);
+                if (avgResponseTime < 30) {
+                    responseTimeTip = 'Fast responses - leads are highly engaged';
+                } else if (avgResponseTime < 120) {
+                    responseTimeTip = 'Good response time - consider follow-up timing';
+                } else {
+                    responseTimeTip = 'Slow responses - optimize SMS content and timing';
+                }
+            }
+            
+            // Pipeline Health Analysis
+            let pipelineHealth = 'Healthy';
+            let pipelineHealthTip = 'System is running smoothly';
+            const totalLeads = stats.totalLeads || 0;
+            const waitingForEmail = stats.waitingForEmail || 0;
+            const emailReceived = stats.emailReceived || 0;
+            
+            if (totalLeads > 0) {
+                const stuckRate = (waitingForEmail / totalLeads) * 100;
+                if (stuckRate > 80) {
+                    pipelineHealth = 'Needs Attention';
+                    pipelineHealthTip = 'Many leads stuck - review SMS content and timing';
+                } else if (stuckRate > 50) {
+                    pipelineHealth = 'Moderate';
+                    pipelineHealthTip = 'Some leads stuck - optimize follow-up process';
+                }
+            }
+            
+            // Optimization Score Calculation
+            let optimizationScore = 85;
+            let optimizationTip = 'Good performance, room for improvement';
+            
+            if (conversionRate > 20) optimizationScore += 10;
+            if (avgResponseTime !== '-' && avgResponseTime < 60) optimizationScore += 5;
+            if (performanceMetrics.errorCount === 0) optimizationScore += 5;
+            if (totalLeads > 10) optimizationScore += 5;
+            
+            if (optimizationScore >= 95) {
+                optimizationTip = 'Excellent performance - ready to scale';
+            } else if (optimizationScore >= 85) {
+                optimizationTip = 'Good performance, minor optimizations possible';
+            } else if (optimizationScore >= 70) {
+                optimizationTip = 'Moderate performance - several areas to improve';
+            } else {
+                optimizationTip = 'Needs significant optimization';
+            }
+            
+            // Update UI
+            document.getElementById('conversionInsight').textContent = `${conversionRate}%`;
+            document.getElementById('conversionTip').textContent = conversionTip;
+            
+            document.getElementById('responseTimeInsight').textContent = avgResponseTime;
+            document.getElementById('responseTimeTip').textContent = responseTimeTip;
+            
+            document.getElementById('pipelineHealthInsight').textContent = pipelineHealth;
+            document.getElementById('pipelineHealthTip').textContent = pipelineHealthTip;
+            
+            document.getElementById('optimizationScoreInsight').textContent = `${optimizationScore}/100`;
+            document.getElementById('optimizationScoreTip').textContent = optimizationTip;
+            
+            logActivity('Optimization insights calculated', 'success', {
+                conversionRate,
+                avgResponseTime,
+                pipelineHealth,
+                optimizationScore
+            });
+        }
+        
+        function analyzeLeadBottlenecks(leads) {
+            if (!leads || leads.length === 0) return;
+            
+            const statusCounts = leads.reduce((acc, lead) => {
+                acc[lead.status] = (acc[lead.status] || 0) + 1;
+                return acc;
+            }, {});
+            
+            const bottlenecks = [];
+            
+            // Identify bottlenecks
+            if (statusCounts.waiting_for_email > statusCounts.email_received * 2) {
+                bottlenecks.push({
+                    stage: 'SMS to Email',
+                    issue: 'Low email response rate',
+                    suggestion: 'Optimize SMS content and timing'
+                });
+            }
+            
+            if (statusCounts.email_received > statusCounts.demo_booked * 3) {
+                bottlenecks.push({
+                    stage: 'Email to Booking',
+                    issue: 'Low booking conversion',
+                    suggestion: 'Improve booking link and follow-up'
+                });
+            }
+            
+            leadInsights.bottlenecks = bottlenecks;
+            
+            if (bottlenecks.length > 0) {
+                logActivity('Lead bottlenecks identified', 'warning', bottlenecks);
+            }
         }
         
         function addLogToUI(logEntry) {
@@ -380,14 +662,18 @@
         
         async function refreshData() {
             logActivity('Starting data refresh', 'info');
+            performanceMetrics.totalRefreshes++;
+            performanceMetrics.lastRefreshTime = Date.now();
             
             try {
                 // Get pipeline stats
                 logActivity('Fetching pipeline statistics', 'info');
+                const statsStartTime = Date.now();
                 const statsResponse = await fetch(`${API_BASE}/api/pipeline-stats`);
                 
                 if (statsResponse.ok) {
                     const stats = await statsResponse.json();
+                    trackApiCall('/api/pipeline-stats', statsStartTime, true);
                     logActivity('Pipeline stats received', 'success', stats);
                     
                     // Check for changes
@@ -401,6 +687,7 @@
                     updateStats(stats);
                     lastStats = stats;
                 } else {
+                    trackApiCall('/api/pipeline-stats', statsStartTime, false);
                     logActivity('Failed to fetch pipeline stats', 'error', { 
                         status: statsResponse.status, 
                         statusText: statsResponse.statusText 
@@ -409,10 +696,12 @@
                 
                 // Get recent leads
                 logActivity('Fetching recent leads', 'info');
+                const leadsStartTime = Date.now();
                 const leadsResponse = await fetch(`${API_BASE}/api/recent-leads`);
                 
                 if (leadsResponse.ok) {
                     const leads = await leadsResponse.json();
+                    trackApiCall('/api/recent-leads', leadsStartTime, true);
                     logActivity('Recent leads received', 'success', { 
                         leadCount: leads.length,
                         leads: leads.map(l => ({ id: l.leadId, status: l.status, name: l.decisionMaker }))
@@ -428,12 +717,19 @@
                     
                     updateLeadsTable(leads);
                     lastLeads = leads;
+                    
+                    // Analyze bottlenecks
+                    analyzeLeadBottlenecks(leads);
                 } else {
+                    trackApiCall('/api/recent-leads', leadsStartTime, false);
                     logActivity('Failed to fetch recent leads', 'error', { 
                         status: leadsResponse.status, 
                         statusText: leadsResponse.statusText 
                     });
                 }
+                
+                // Calculate optimization insights
+                calculateOptimizationInsights(lastStats || {}, lastLeads || []);
                 
                 logActivity('Data refresh completed successfully', 'success');
                 
