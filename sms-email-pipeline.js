@@ -202,7 +202,7 @@ class SMSEmailPipeline {
     try {
       await this.twilioClient.messages.create({
         body: body,
-        messagingServiceSid: process.env.TWILIO_MESSAGING_SERVICE_SID,
+        messagingServiceSid: process.env.TWILIO_LEAD_GENERATION_SERVICE_SID,
         to: to
       });
       console.log(`✅ SMS sent to ${to}`);
