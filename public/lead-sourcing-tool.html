@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lead Sourcing & Import Tool</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+        }
+        
+        .section-title {
+            font-size: 1.3em;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #333;
+        }
+        
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        textarea {
+            height: 100px;
+            resize: vertical;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+        }
+        
+        .btn-success {
+            background: #28a745;
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+        }
+        
+        .validation-result {
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        
+        .validation-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .validation-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .validation-warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        .leads-preview {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 15px;
+            background: #f8f9fa;
+        }
+        
+        .lead-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .lead-item:last-child {
+            border-bottom: none;
+        }
+        
+        .lead-info {
+            flex: 1;
+        }
+        
+        .lead-name {
+            font-weight: 500;
+            color: #333;
+        }
+        
+        .lead-details {
+            font-size: 12px;
+            color: #666;
+            margin-top: 2px;
+        }
+        
+        .lead-status {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        
+        .status-valid {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-invalid {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .status-warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 1.8em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+        
+        .loading {
+            text-align: center;
+            color: #666;
+            padding: 20px;
+            font-style: italic;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        
+        .template-section {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+        }
+        
+        .template-title {
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .template-example {
+            font-family: monospace;
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 Lead Sourcing & Import Tool</h1>
+        
+        <div id="status"></div>
+        
+        <!-- Lead Import Section -->
+        <div class="section">
+            <h2 class="section-title">📥 Import Leads</h2>
+            
+            <div class="form-group">
+                <label for="importMethod">Import Method:</label>
+                <select id="importMethod" onchange="toggleImportMethod()">
+                    <option value="manual">Manual Entry</option>
+                    <option value="csv">CSV Upload</option>
+                    <option value="json">JSON Format</option>
+                    <option value="bulk">Bulk Import (100 leads)</option>
+                </select>
+            </div>
+            
+            <!-- Manual Entry -->
+            <div id="manualEntry" class="import-method">
+                <div class="form-group">
+                    <label for="leadName">Decision Maker Name:</label>
+                    <input type="text" id="leadName" placeholder="e.g., John Smith">
+                </div>
+                
+                <div class="form-group">
+                    <label for="leadPhone">Mobile Number:</label>
+                    <input type="text" id="leadPhone" placeholder="e.g., +447491683261">
+                </div>
+                
+                <div class="form-group">
+                    <label for="leadCompany">Business Name:</label>
+                    <input type="text" id="leadCompany" placeholder="e.g., Smith Dental Practice">
+                </div>
+                
+                <div class="form-group">
+                    <label for="leadIndustry">Industry:</label>
+                    <select id="leadIndustry">
+                        <option value="healthcare">Healthcare</option>
+                        <option value="financial">Financial Services</option>
+                        <option value="property">Property/Real Estate</option>
+                        <option value="education">Education/Training</option>
+                        <option value="legal">Legal Services</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="leadLocation">Location:</label>
+                    <input type="text" id="leadLocation" placeholder="e.g., London, UK">
+                </div>
+                
+                <button class="btn" onclick="addSingleLead()">➕ Add Lead</button>
+            </div>
+            
+            <!-- CSV Upload -->
+            <div id="csvUpload" class="import-method" style="display: none;">
+                <div class="template-section">
+                    <div class="template-title">CSV Format:</div>
+                    <div class="template-example">
+                        decisionMaker,phoneNumber,businessName,industry,location
+                        John Smith,+447491683261,Smith Dental Practice,healthcare,London
+                        Jane Doe,+447123456789,Doe Financial Services,financial,Manchester
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="csvFile">Select CSV File:</label>
+                    <input type="file" id="csvFile" accept=".csv" onchange="handleCSVUpload()">
+                </div>
+                
+                <button class="btn" onclick="downloadTemplate()">📄 Download Template</button>
+            </div>
+            
+            <!-- JSON Format -->
+            <div id="jsonFormat" class="import-method" style="display: none;">
+                <div class="template-section">
+                    <div class="template-title">JSON Format:</div>
+                    <div class="template-example">
+[
+  {
+    "decisionMaker": "John Smith",
+    "phoneNumber": "+447491683261",
+    "businessName": "Smith Dental Practice",
+    "industry": "healthcare",
+    "location": "London"
+  }
+]
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="jsonData">JSON Data:</label>
+                    <textarea id="jsonData" placeholder="Paste your JSON data here..."></textarea>
+                </div>
+                
+                <button class="btn" onclick="importJSONLeads()">📥 Import JSON</button>
+            </div>
+            
+            <!-- Bulk Import -->
+            <div id="bulkImport" class="import-method" style="display: none;">
+                <div class="form-group">
+                    <label for="bulkCount">Number of Leads:</label>
+                    <input type="number" id="bulkCount" value="100" min="1" max="1000">
+                </div>
+                
+                <div class="form-group">
+                    <label for="bulkIndustry">Industry:</label>
+                    <select id="bulkIndustry">
+                        <option value="healthcare">Healthcare</option>
+                        <option value="financial">Financial Services</option>
+                        <option value="property">Property/Real Estate</option>
+                        <option value="education">Education/Training</option>
+                        <option value="legal">Legal Services</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="bulkLocation">Location:</label>
+                    <input type="text" id="bulkLocation" placeholder="e.g., London, UK">
+                </div>
+                
+                <button class="btn btn-success" onclick="generateBulkLeads()">🚀 Generate Bulk Leads</button>
+            </div>
+        </div>
+        
+        <!-- Lead Preview -->
+        <div class="section">
+            <h2 class="section-title">👀 Lead Preview</h2>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number" id="totalLeads">0</div>
+                    <div class="stat-label">Total Leads</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="validLeads">0</div>
+                    <div class="stat-label">Valid Leads</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="invalidLeads">0</div>
+                    <div class="stat-label">Invalid Leads</div>
+                </div>
+            </div>
+            
+            <div id="leadsPreview" class="leads-preview">
+                <div class="loading">No leads added yet</div>
+            </div>
+            
+            <div style="margin-top: 15px;">
+                <button class="btn btn-success" onclick="importAllLeads()" id="importBtn" disabled>📥 Import All Leads</button>
+                <button class="btn btn-secondary" onclick="clearAllLeads()">🗑️ Clear All</button>
+                <button class="btn" onclick="exportLeads()">📤 Export Leads</button>
+            </div>
+        </div>
+        
+        <!-- Lead Tracking -->
+        <div class="section">
+            <h2 class="section-title">📊 Lead Tracking</h2>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number" id="trackingTotal">0</div>
+                    <div class="stat-label">Total in Pipeline</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="trackingWaiting">0</div>
+                    <div class="stat-label">Waiting for Email</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="trackingReceived">0</div>
+                    <div class="stat-label">Email Received</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="trackingBooked">0</div>
+                    <div class="stat-label">Demo Booked</div>
+                </div>
+            </div>
+            
+            <button class="btn" onclick="refreshTracking()">🔄 Refresh Tracking</button>
+            <button class="btn" onclick="openLeadTracker()">📊 Open Lead Tracker</button>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        let pendingLeads = [];
+        
+        function showStatus(message, type = 'info') {
+            const status = document.getElementById('status');
+            if (status) {
+                status.innerHTML = `<div class="${type}">${message}</div>`;
+            }
+        }
+        
+        function toggleImportMethod() {
+            const method = document.getElementById('importMethod').value;
+            
+            // Hide all methods
+            document.querySelectorAll('.import-method').forEach(el => el.style.display = 'none');
+            
+            // Show selected method
+            document.getElementById(method + (method === 'csv' ? 'Upload' : method === 'json' ? 'Format' : method === 'bulk' ? 'Import' : 'Entry')).style.display = 'block';
+        }
+        
+        function validateMobileNumber(phone) {
+            // UK mobile number validation
+            const ukMobileRegex = /^(\+44|0)?7[0-9]{9}$/;
+            const cleanPhone = phone.replace(/\s+/g, '');
+            
+            if (!ukMobileRegex.test(cleanPhone)) {
+                return { valid: false, error: 'Invalid UK mobile number format' };
+            }
+            
+            // Normalize to +44 format
+            let normalized = cleanPhone;
+            if (normalized.startsWith('0')) {
+                normalized = '+44' + normalized.substring(1);
+            } else if (!normalized.startsWith('+44')) {
+                normalized = '+44' + normalized;
+            }
+            
+            return { valid: true, normalized: normalized };
+        }
+        
+        function addSingleLead() {
+            const lead = {
+                decisionMaker: document.getElementById('leadName').value.trim(),
+                phoneNumber: document.getElementById('leadPhone').value.trim(),
+                businessName: document.getElementById('leadCompany').value.trim(),
+                industry: document.getElementById('leadIndustry').value,
+                location: document.getElementById('leadLocation').value.trim()
+            };
+            
+            if (!lead.decisionMaker || !lead.phoneNumber || !lead.businessName) {
+                showStatus('Please fill in all required fields', 'error');
+                return;
+            }
+            
+            const validation = validateMobileNumber(lead.phoneNumber);
+            if (!validation.valid) {
+                showStatus(validation.error, 'error');
+                return;
+            }
+            
+            lead.phoneNumber = validation.normalized;
+            lead.status = 'valid';
+            lead.id = 'lead_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            
+            pendingLeads.push(lead);
+            updatePreview();
+            
+            // Clear form
+            document.getElementById('leadName').value = '';
+            document.getElementById('leadPhone').value = '';
+            document.getElementById('leadCompany').value = '';
+            document.getElementById('leadLocation').value = '';
+            
+            showStatus('Lead added successfully', 'success');
+        }
+        
+        function handleCSVUpload() {
+            const file = document.getElementById('csvFile').files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const csv = e.target.result;
+                const lines = csv.split('\n');
+                const headers = lines[0].split(',').map(h => h.trim());
+                
+                const leads = [];
+                for (let i = 1; i < lines.length; i++) {
+                    if (lines[i].trim()) {
+                        const values = lines[i].split(',').map(v => v.trim());
+                        const lead = {};
+                        
+                        headers.forEach((header, index) => {
+                            lead[header] = values[index] || '';
+                        });
+                        
+                        const validation = validateMobileNumber(lead.phoneNumber);
+                        if (validation.valid) {
+                            lead.phoneNumber = validation.normalized;
+                            lead.status = 'valid';
+                        } else {
+                            lead.status = 'invalid';
+                            lead.error = validation.error;
+                        }
+                        
+                        lead.id = 'lead_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                        leads.push(lead);
+                    }
+                }
+                
+                pendingLeads = pendingLeads.concat(leads);
+                updatePreview();
+                showStatus(`Imported ${leads.length} leads from CSV`, 'success');
+            };
+            
+            reader.readAsText(file);
+        }
+        
+        function importJSONLeads() {
+            const jsonData = document.getElementById('jsonData').value.trim();
+            if (!jsonData) {
+                showStatus('Please enter JSON data', 'error');
+                return;
+            }
+            
+            try {
+                const leads = JSON.parse(jsonData);
+                if (!Array.isArray(leads)) {
+                    showStatus('JSON must be an array of leads', 'error');
+                    return;
+                }
+                
+                const processedLeads = leads.map(lead => {
+                    const validation = validateMobileNumber(lead.phoneNumber);
+                    if (validation.valid) {
+                        lead.phoneNumber = validation.normalized;
+                        lead.status = 'valid';
+                    } else {
+                        lead.status = 'invalid';
+                        lead.error = validation.error;
+                    }
+                    
+                    lead.id = 'lead_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                    return lead;
+                });
+                
+                pendingLeads = pendingLeads.concat(processedLeads);
+                updatePreview();
+                showStatus(`Imported ${processedLeads.length} leads from JSON`, 'success');
+                
+                // Clear JSON input
+                document.getElementById('jsonData').value = '';
+                
+            } catch (error) {
+                showStatus('Invalid JSON format: ' + error.message, 'error');
+            }
+        }
+        
+        function generateBulkLeads() {
+            const count = parseInt(document.getElementById('bulkCount').value);
+            const industry = document.getElementById('bulkIndustry').value;
+            const location = document.getElementById('bulkLocation').value.trim() || 'London, UK';
+            
+            if (count < 1 || count > 1000) {
+                showStatus('Please enter a number between 1 and 1000', 'error');
+                return;
+            }
+            
+            const leads = [];
+            const industries = {
+                healthcare: ['Dental Practice', 'GP Surgery', 'Physiotherapy Clinic', 'Mental Health Practice', 'Private Medical Clinic'],
+                financial: ['Financial Advisory', 'Wealth Management', 'Mortgage Broker', 'Insurance Broker', 'Accounting Firm'],
+                property: ['Estate Agency', 'Property Investment', 'Commercial Property', 'Property Management', 'Real Estate'],
+                education: ['Private Tutoring', 'Language School', 'Driving School', 'Business Coaching', 'Life Coaching'],
+                legal: ['Law Firm', 'Solicitor Practice', 'Legal Advisory', 'Barrister Chambers', 'Legal Services']
+            };
+            
+            const names = ['John Smith', 'Jane Doe', 'Michael Johnson', 'Sarah Wilson', 'David Brown', 'Emma Davis', 'James Miller', 'Lisa Garcia', 'Robert Martinez', 'Jennifer Anderson'];
+            
+            for (let i = 0; i < count; i++) {
+                const name = names[Math.floor(Math.random() * names.length)];
+                const businessType = industries[industry][Math.floor(Math.random() * industries[industry].length)];
+                const businessName = `${name.split(' ')[0]} ${businessType}`;
+                
+                // Generate UK mobile number
+                const mobile = '+447' + Math.floor(Math.random() * 900000000 + 100000000);
+                
+                const lead = {
+                    decisionMaker: name,
+                    phoneNumber: mobile,
+                    businessName: businessName,
+                    industry: industry,
+                    location: location,
+                    status: 'valid',
+                    id: 'lead_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
+                };
+                
+                leads.push(lead);
+            }
+            
+            pendingLeads = pendingLeads.concat(leads);
+            updatePreview();
+            showStatus(`Generated ${count} bulk leads for ${industry} industry`, 'success');
+        }
+        
+        function updatePreview() {
+            const totalLeads = pendingLeads.length;
+            const validLeads = pendingLeads.filter(lead => lead.status === 'valid').length;
+            const invalidLeads = pendingLeads.filter(lead => lead.status === 'invalid').length;
+            
+            document.getElementById('totalLeads').textContent = totalLeads;
+            document.getElementById('validLeads').textContent = validLeads;
+            document.getElementById('invalidLeads').textContent = invalidLeads;
+            
+            const preview = document.getElementById('leadsPreview');
+            if (totalLeads === 0) {
+                preview.innerHTML = '<div class="loading">No leads added yet</div>';
+                document.getElementById('importBtn').disabled = true;
+                return;
+            }
+            
+            const validLeadsOnly = pendingLeads.filter(lead => lead.status === 'valid');
+            document.getElementById('importBtn').disabled = validLeadsOnly.length === 0;
+            
+            preview.innerHTML = validLeadsOnly.slice(0, 20).map(lead => `
+                <div class="lead-item">
+                    <div class="lead-info">
+                        <div class="lead-name">${lead.decisionMaker}</div>
+                        <div class="lead-details">${lead.businessName} • ${lead.phoneNumber} • ${lead.industry}</div>
+                    </div>
+                    <div class="lead-status status-valid">Valid</div>
+                </div>
+            `).join('') + (validLeadsOnly.length > 20 ? `<div style="text-align: center; color: #666; margin-top: 10px;">... and ${validLeadsOnly.length - 20} more leads</div>` : '');
+        }
+        
+        async function importAllLeads() {
+            const validLeads = pendingLeads.filter(lead => lead.status === 'valid');
+            
+            if (validLeads.length === 0) {
+                showStatus('No valid leads to import', 'error');
+                return;
+            }
+            
+            showStatus(`Importing ${validLeads.length} leads...`, 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/import-leads-csv`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-Key': 'your-api-key-here' // You'll need to set this
+                    },
+                    body: JSON.stringify({ leads: validLeads })
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    showStatus(`Successfully imported ${result.imported} leads!`, 'success');
+                    
+                    // Clear imported leads
+                    pendingLeads = pendingLeads.filter(lead => lead.status === 'invalid');
+                    updatePreview();
+                    
+                    // Refresh tracking
+                    setTimeout(refreshTracking, 1000);
+                } else {
+                    const error = await response.json();
+                    showStatus(`Import failed: ${error.error}`, 'error');
+                }
+            } catch (error) {
+                showStatus(`Import error: ${error.message}`, 'error');
+            }
+        }
+        
+        function clearAllLeads() {
+            pendingLeads = [];
+            updatePreview();
+            showStatus('All leads cleared', 'success');
+        }
+        
+        function exportLeads() {
+            const validLeads = pendingLeads.filter(lead => lead.status === 'valid');
+            
+            if (validLeads.length === 0) {
+                showStatus('No valid leads to export', 'error');
+                return;
+            }
+            
+            const csv = 'decisionMaker,phoneNumber,businessName,industry,location\n' +
+                validLeads.map(lead => 
+                    `${lead.decisionMaker},${lead.phoneNumber},${lead.businessName},${lead.industry},${lead.location}`
+                ).join('\n');
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `leads_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showStatus(`Exported ${validLeads.length} leads to CSV`, 'success');
+        }
+        
+        function downloadTemplate() {
+            const csv = 'decisionMaker,phoneNumber,businessName,industry,location\n' +
+                'John Smith,+447491683261,Smith Dental Practice,healthcare,London\n' +
+                'Jane Doe,+447123456789,Doe Financial Services,financial,Manchester';
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'leads_template.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showStatus('Template downloaded', 'success');
+        }
+        
+        async function refreshTracking() {
+            try {
+                const response = await fetch(`${API_BASE}/api/pipeline-stats`);
+                if (response.ok) {
+                    const stats = await response.json();
+                    
+                    document.getElementById('trackingTotal').textContent = stats.totalLeads || 0;
+                    document.getElementById('trackingWaiting').textContent = stats.waitingForEmail || 0;
+                    document.getElementById('trackingReceived').textContent = stats.emailReceived || 0;
+                    document.getElementById('trackingBooked').textContent = stats.booked || 0;
+                    
+                    showStatus('Tracking data refreshed', 'success');
+                } else {
+                    showStatus('Failed to refresh tracking data', 'error');
+                }
+            } catch (error) {
+                showStatus('Error refreshing tracking data', 'error');
+            }
+        }
+        
+        function openLeadTracker() {
+            window.open('/lead-tracking-dashboard.html', '_blank');
+        }
+        
+        // Initialize
+        window.onload = function() {
+            refreshTracking();
+        };
+    </script>
+</body>
+</html>
