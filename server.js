@@ -1037,7 +1037,49 @@ app.get('/admin/validate-call-duration', async (req, res) => {
 // Middleware for parsing JSON bodies (must be before routes that need it)
 // Moved to top of file to ensure all routes have access to JSON parsing
 
-// Bulk CSV Lead Import
+// Lead tracking endpoints
+app.get('/api/pipeline-stats', async (req, res) => {
+  try {
+    if (!smsEmailPipeline) {
+      return res.json({
+        totalLeads: 0,
+        waitingForEmail: 0,
+        emailReceived: 0,
+        booked: 0,
+        conversionRate: 0
+      });
+    }
+    
+    const stats = smsEmailPipeline.getStats();
+    res.json(stats);
+  } catch (error) {
+    console.error('[PIPELINE STATS ERROR]', error);
+    res.status(500).json({ error: 'Failed to get pipeline stats' });
+  }
+});
+
+app.get('/api/recent-leads', async (req, res) => {
+  try {
+    if (!smsEmailPipeline) {
+      return res.json([]);
+    }
+    
+    // Get all leads from the pipeline
+    const allLeads = Array.from(smsEmailPipeline.pendingLeads.values());
+    
+    // Sort by creation date (newest first)
+    allLeads.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    
+    // Limit to 50 most recent
+    const recentLeads = allLeads.slice(0, 50);
+    
+    res.json(recentLeads);
+  } catch (error) {
+    console.error('[RECENT LEADS ERROR]', error);
+    res.status(500).json({ error: 'Failed to get recent leads' });
+  }
+});
+
 app.post('/api/import-leads-csv', requireApiKey, async (req, res) => {
   try {
     const { leads } = req.body;
