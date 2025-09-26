@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Lead Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background: #667eea;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #5a6fd8;
+        }
+        .leads-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .leads-table th,
+        .leads-table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        .leads-table th {
+            background: #f8f9fa;
+            font-weight: bold;
+        }
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .status-waiting_for_email {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .status-email_received {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        .status-demo_booked {
+            background: #d4edda;
+            color: #155724;
+        }
+        .loading {
+            text-align: center;
+            color: #666;
+            padding: 20px;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Simple Lead Dashboard</h1>
+        
+        <button onclick="loadData()">🔄 Load Data</button>
+        <button onclick="testAPI()">🧪 Test API</button>
+        
+        <div id="status"></div>
+        
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number" id="totalLeads">-</div>
+                <div class="stat-label">Total Leads</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="waitingForEmail">-</div>
+                <div class="stat-label">Waiting for Email</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="emailReceived">-</div>
+                <div class="stat-label">Email Received</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="conversionRate">-%</div>
+                <div class="stat-label">Conversion Rate</div>
+            </div>
+        </div>
+        
+        <h2>Recent Leads</h2>
+        <div id="leadsContainer">
+            <div class="loading">Loading leads...</div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        
+        function showStatus(message, type = 'info') {
+            const status = document.getElementById('status');
+            status.innerHTML = `<div class="${type}">${message}</div>`;
+        }
+        
+        async function testAPI() {
+            showStatus('Testing API connectivity...', 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/pipeline-stats`);
+                if (response.ok) {
+                    const data = await response.json();
+                    showStatus(`✅ API Test Successful! Data: ${JSON.stringify(data)}`, 'success');
+                } else {
+                    showStatus(`❌ API Test Failed: ${response.status} ${response.statusText}`, 'error');
+                }
+            } catch (error) {
+                showStatus(`❌ API Test Error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function loadData() {
+            showStatus('Loading data...', 'info');
+            
+            try {
+                // Load pipeline stats
+                const statsResponse = await fetch(`${API_BASE}/api/pipeline-stats`);
+                if (statsResponse.ok) {
+                    const stats = await statsResponse.json();
+                    
+                    // Update stats display
+                    document.getElementById('totalLeads').textContent = stats.totalLeads || 0;
+                    document.getElementById('waitingForEmail').textContent = stats.waitingForEmail || 0;
+                    document.getElementById('emailReceived').textContent = stats.emailReceived || 0;
+                    document.getElementById('conversionRate').textContent = (stats.conversionRate || '0') + '%';
+                    
+                    showStatus(`✅ Stats loaded: ${stats.totalLeads} total leads`, 'success');
+                } else {
+                    showStatus(`❌ Failed to load stats: ${statsResponse.status}`, 'error');
+                }
+                
+                // Load recent leads
+                const leadsResponse = await fetch(`${API_BASE}/api/recent-leads`);
+                if (leadsResponse.ok) {
+                    const leads = await leadsResponse.json();
+                    
+                    if (leads.length === 0) {
+                        document.getElementById('leadsContainer').innerHTML = 
+                            '<div class="loading">No leads found</div>';
+                    } else {
+                        const table = `
+                            <table class="leads-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Phone</th>
+                                        <th>Company</th>
+                                        <th>Status</th>
+                                        <th>Created</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${leads.map(lead => `
+                                        <tr>
+                                            <td>${lead.decisionMaker || 'N/A'}</td>
+                                            <td>${lead.phoneNumber || 'N/A'}</td>
+                                            <td>${lead.businessName || 'N/A'}</td>
+                                            <td>
+                                                <span class="status-badge status-${lead.status}">
+                                                    ${lead.status.replace('_', ' ')}
+                                                </span>
+                                            </td>
+                                            <td>${new Date(lead.createdAt).toLocaleString()}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        `;
+                        document.getElementById('leadsContainer').innerHTML = table;
+                    }
+                    
+                    showStatus(`✅ Leads loaded: ${leads.length} leads found`, 'success');
+                } else {
+                    showStatus(`❌ Failed to load leads: ${leadsResponse.status}`, 'error');
+                }
+                
+            } catch (error) {
+                showStatus(`❌ Error loading data: ${error.message}`, 'error');
+            }
+        }
+        
+        // Auto-load data on page load
+        window.onload = function() {
+            showStatus('Page loaded, testing API...', 'info');
+            testAPI();
+            loadData();
+        };
+    </script>
+</body>
+</html>
