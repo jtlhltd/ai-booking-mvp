@@ -8,7 +8,9 @@ class SMSEmailPipeline {
     this.emailTransporter = null;
     this.bookingSystem = bookingSystem; // Passed from outside to avoid circular dependency
     this.pendingLeads = new Map(); // Store leads waiting for email
+    this.retrySchedules = new Map(); // Store retry schedules
     this.initializeServices();
+    this.startRetryScheduler(); // Start the retry scheduler
   }
 
   async initializeServices() {
@@ -45,7 +47,10 @@ class SMSEmailPipeline {
         leadId: leadId,
         status: 'waiting_for_email',
         createdAt: new Date(),
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+        retryCount: 0,
+        lastSmsSent: new Date(),
+        nextRetryAt: new Date(Date.now() + 2 * 60 * 60 * 1000) // First retry in 2 hours
       });
 
       // Send SMS asking for email
@@ -256,6 +261,107 @@ class SMSEmailPipeline {
       emailReceived: emailReceived,
       booked: demoBooked,
       conversionRate: total > 0 ? (demoBooked / total * 100).toFixed(1) : 0
+    };
+  }
+
+  // Retry scheduler methods
+  startRetryScheduler() {
+    // Check for leads that need retry every 30 minutes
+    setInterval(() => {
+      this.processRetries();
+    }, 30 * 60 * 1000); // 30 minutes
+
+    console.log('🔄 SMS Retry Scheduler started - checking every 30 minutes');
+  }
+
+  async processRetries() {
+    const now = new Date();
+    const leadsToRetry = [];
+
+    // Find leads that need retry
+    for (const [leadId, lead] of this.pendingLeads.entries()) {
+      if (lead.status === 'waiting_for_email' && 
+          lead.nextRetryAt <= now && 
+          lead.retryCount < 3 && 
+          lead.expiresAt > now) {
+        leadsToRetry.push({ leadId, lead });
+      }
+    }
+
+    console.log(`🔄 Processing ${leadsToRetry.length} leads for SMS retry`);
+
+    for (const { leadId, lead } of leadsToRetry) {
+      await this.sendRetrySMS(leadId, lead);
+    }
+  }
+
+  async sendRetrySMS(leadId, lead) {
+    try {
+      const retryCount = lead.retryCount + 1;
+      const retryMessages = [
+        `Hi ${lead.decisionMaker}, just following up on our AI booking service. Please reply with your email address for the demo link.`,
+        `Hi ${lead.decisionMaker}, don't want you to miss out! Reply with your email to get your personalized demo booking link.`,
+        `Hi ${lead.decisionMaker}, last chance! Reply with your email address to access our AI booking demo.`
+      ];
+
+      const message = retryMessages[Math.min(retryCount - 1, retryMessages.length - 1)];
+      
+      await this.sendSMS({
+        to: lead.phoneNumber,
+        message: message
+      });
+
+      // Update lead with retry info
+      const updatedLead = {
+        ...lead,
+        retryCount: retryCount,
+        lastSmsSent: new Date(),
+        nextRetryAt: new Date(Date.now() + this.getRetryDelay(retryCount))
+      };
+
+      this.pendingLeads.set(leadId, updatedLead);
+
+      console.log(`📱 Retry SMS sent to ${lead.phoneNumber} (attempt ${retryCount})`);
+
+      // If this was the last retry, mark as expired
+      if (retryCount >= 3) {
+        updatedLead.status = 'expired';
+        updatedLead.expiredAt = new Date();
+        this.pendingLeads.set(leadId, updatedLead);
+        console.log(`⏰ Lead ${leadId} expired after ${retryCount} retry attempts`);
+      }
+
+    } catch (error) {
+      console.error(`❌ Error sending retry SMS to ${lead.phoneNumber}:`, error.message);
+    }
+  }
+
+  getRetryDelay(retryCount) {
+    // Exponential backoff: 2h, 4h, 8h
+    const delays = [2 * 60 * 60 * 1000, 4 * 60 * 60 * 1000, 8 * 60 * 60 * 1000];
+    return delays[Math.min(retryCount - 1, delays.length - 1)];
+  }
+
+  // Get leads that need attention (stuck or expired)
+  getLeadsNeedingAttention() {
+    const now = new Date();
+    const leads = Array.from(this.pendingLeads.values());
+    
+    return {
+      stuckLeads: leads.filter(lead => 
+        lead.status === 'waiting_for_email' && 
+        lead.retryCount >= 3 && 
+        lead.expiresAt > now
+      ),
+      expiredLeads: leads.filter(lead => 
+        lead.status === 'expired' || 
+        lead.expiresAt <= now
+      ),
+      retryScheduled: leads.filter(lead => 
+        lead.status === 'waiting_for_email' && 
+        lead.nextRetryAt > now && 
+        lead.retryCount < 3
+      )
     };
   }
 }

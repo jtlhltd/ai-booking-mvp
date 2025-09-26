@@ -1096,6 +1096,71 @@ app.get('/api/recent-leads', async (req, res) => {
   }
 });
 
+// Get leads needing attention (retry info)
+app.get('/api/leads-needing-attention', async (req, res) => {
+  try {
+    if (!smsEmailPipeline) {
+      return res.json({
+        stuckLeads: [],
+        expiredLeads: [],
+        retryScheduled: []
+      });
+    }
+
+    const attentionData = smsEmailPipeline.getLeadsNeedingAttention();
+    
+    console.log('[LEADS NEEDING ATTENTION]', {
+      stuckLeads: attentionData.stuckLeads.length,
+      expiredLeads: attentionData.expiredLeads.length,
+      retryScheduled: attentionData.retryScheduled.length
+    });
+
+    res.json(attentionData);
+  } catch (error) {
+    console.error('[LEADS NEEDING ATTENTION ERROR]', error);
+    res.status(500).json({ error: 'Failed to get leads needing attention' });
+  }
+});
+
+// Manually trigger retry for a specific lead
+app.post('/api/trigger-retry/:leadId', async (req, res) => {
+  try {
+    const { leadId } = req.params;
+    
+    if (!smsEmailPipeline) {
+      return res.status(500).json({ error: 'SMS pipeline not available' });
+    }
+
+    const lead = smsEmailPipeline.pendingLeads.get(leadId);
+    if (!lead) {
+      return res.status(404).json({ error: 'Lead not found' });
+    }
+
+    if (lead.status !== 'waiting_for_email') {
+      return res.status(400).json({ error: 'Lead is not in waiting_for_email status' });
+    }
+
+    // Force retry by setting nextRetryAt to now
+    lead.nextRetryAt = new Date();
+    smsEmailPipeline.pendingLeads.set(leadId, lead);
+
+    // Process retries immediately
+    await smsEmailPipeline.processRetries();
+
+    console.log(`[MANUAL RETRY TRIGGERED] Lead ${leadId} - ${lead.phoneNumber}`);
+
+    res.json({
+      success: true,
+      message: `Retry triggered for lead ${leadId}`,
+      leadId: leadId,
+      phoneNumber: lead.phoneNumber
+    });
+  } catch (error) {
+    console.error('[MANUAL RETRY ERROR]', error);
+    res.status(500).json({ error: 'Failed to trigger retry' });
+  }
+});
+
 app.post('/api/import-leads-csv', requireApiKey, async (req, res) => {
   try {
     const { leads } = req.body;
