@@ -166,50 +166,8 @@
             border: 1px solid #bee5eb;
         }
 
-        .test-section {
-            background: #fff3cd;
-            padding: 20px;
-            border-radius: 8px;
-            margin-top: 30px;
-            border: 1px solid #ffeaa7;
-        }
 
-        .test-section h3 {
-            color: #856404;
-            margin-bottom: 15px;
-        }
 
-        .quick-actions {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-top: 30px;
-        }
-
-        .quick-action {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 8px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            border: 2px solid #e1e5e9;
-        }
-
-        .quick-action:hover {
-            border-color: #667eea;
-            background: #f0f2ff;
-        }
-
-        .quick-action h4 {
-            color: #333;
-            margin-bottom: 10px;
-        }
-
-        .quick-action p {
-            color: #666;
-            font-size: 14px;
-        }
     </style>
 </head>
 <body>
@@ -247,26 +205,6 @@
                 <div id="status" class="status" style="display: none;"></div>
             </div>
 
-            <div class="test-section">
-                <h3>🧪 Test Booking System</h3>
-                <p>Test the booking system with sample data to verify everything is working correctly.</p>
-                <button class="btn" onclick="testBookingSystem()" style="width: auto; margin-top: 15px;">Test Booking System</button>
-            </div>
-
-            <div class="quick-actions">
-                <div class="quick-action" onclick="loadAvailableSlots()">
-                    <h4>📅 View Available Slots</h4>
-                    <p>See all available time slots for the next 7 days</p>
-                </div>
-                <div class="quick-action" onclick="testEmailNotifications()">
-                    <h4>📧 Test Email Notifications</h4>
-                    <p>Test email notifications for bookings</p>
-                </div>
-                <div class="quick-action" onclick="testSMSNotifications()">
-                    <h4>📱 Test SMS Notifications</h4>
-                    <p>Test SMS notifications for bookings</p>
-                </div>
-            </div>
         </div>
     </div>
 

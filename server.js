@@ -1092,7 +1092,7 @@ app.post('/api/book-demo', async (req, res) => {
     }
 
     // Generate time slots if not provided
-    const timeSlots = preferredTimes || bookingSystem.generateTimeSlots(7);
+    const timeSlots = (preferredTimes && Array.isArray(preferredTimes)) ? preferredTimes : bookingSystem.generateTimeSlots(7);
     
     const result = await bookingSystem.bookDemo(leadData, timeSlots);
     
