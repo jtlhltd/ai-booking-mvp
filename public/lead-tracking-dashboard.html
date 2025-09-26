@@ -49,51 +49,85 @@
         }
         
         .stat-label {
-            font-size: 1.1em;
+            font-size: 0.9em;
             opacity: 0.9;
         }
         
-        .pipeline-flow {
+        .pipeline-section {
+            margin-bottom: 30px;
+        }
+        
+        .pipeline-title {
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            color: #333;
+        }
+        
+        .pipeline-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
             gap: 20px;
             margin-bottom: 30px;
         }
         
-        .pipeline-stage {
-            background: #f8f9fa;
-            padding: 20px;
+        .pipeline-card {
+            background: white;
+            border: 1px solid #e0e0e0;
             border-radius: 12px;
-            border-left: 4px solid #667eea;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
         }
         
-        .pipeline-stage h3 {
+        .pipeline-icon {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+        
+        .pipeline-count {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        
+        .pipeline-title-card {
+            font-size: 1.1em;
+            font-weight: 600;
+            margin-bottom: 10px;
             color: #333;
-            margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
         }
         
-        .pipeline-stage .count {
-            background: #667eea;
-            color: white;
-            padding: 5px 10px;
-            border-radius: 20px;
+        .pipeline-description {
             font-size: 0.9em;
+            color: #666;
+            line-height: 1.4;
+        }
+        
+        .leads-section {
+            margin-bottom: 30px;
+        }
+        
+        .leads-title {
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            color: #333;
         }
         
         .leads-table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 20px;
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
         }
         
         .leads-table th,
         .leads-table td {
-            padding: 12px;
+            padding: 15px;
             text-align: left;
-            border-bottom: 1px solid #e1e5e9;
+            border-bottom: 1px solid #f0f0f0;
         }
         
         .leads-table th {
@@ -102,215 +136,31 @@
             color: #333;
         }
         
-        .status-badge {
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.9em;
-            font-weight: 500;
+        .leads-table tr:hover {
+            background: #f8f9fa;
         }
         
-        .status-waiting {
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: capitalize;
+        }
+        
+        .status-waiting_for_email {
             background: #fff3cd;
             color: #856404;
         }
         
-        .status-received {
-            background: #d4edda;
-            color: #155724;
-        }
-        
-        .status-booked {
+        .status-email_received {
             background: #d1ecf1;
             color: #0c5460;
         }
         
-        .status-expired {
-            background: #f8d7da;
-            color: #721c24;
-        }
-        
-        .refresh-btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            margin-bottom: 20px;
-        }
-        
-        .refresh-btn:hover {
-            transform: translateY(-2px);
-        }
-        
-        .log-section {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 12px;
-            margin-top: 30px;
-            border-left: 4px solid #28a745;
-        }
-        
-        .insights-section {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 12px;
-            margin-top: 20px;
-        }
-        
-        .insights-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 15px;
-            margin-top: 15px;
-        }
-        
-        .insight-card {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 15px;
-            border-radius: 8px;
-            backdrop-filter: blur(10px);
-        }
-        
-        .insight-title {
-            font-weight: bold;
-            margin-bottom: 8px;
-            font-size: 14px;
-        }
-        
-        .insight-value {
-            font-size: 18px;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        
-        .insight-description {
-            font-size: 12px;
-            opacity: 0.9;
-        }
-        
-        .performance-section {
-            background: #fff3cd;
-            border: 1px solid #ffeaa7;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 15px;
-        }
-        
-        .performance-title {
-            color: #856404;
-            font-weight: bold;
-            margin-bottom: 10px;
-        }
-        
-        .performance-metrics {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 10px;
-        }
-        
-        .metric-item {
-            background: white;
-            padding: 10px;
-            border-radius: 6px;
-            border-left: 3px solid #ffc107;
-        }
-        
-        .metric-label {
-            font-size: 12px;
-            color: #666;
-            margin-bottom: 5px;
-        }
-        
-        .metric-value {
-            font-size: 16px;
-            font-weight: bold;
-            color: #333;
-        }
-        
-        .log-section h3 {
-            color: #333;
-            margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .log-container {
-            background: #1e1e1e;
-            color: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-            max-height: 300px;
-            overflow-y: auto;
-            margin-top: 15px;
-        }
-        
-        .log-entry {
-            margin-bottom: 8px;
-            padding: 5px;
-            border-radius: 4px;
-        }
-        
-        .log-info {
-            background: rgba(23, 162, 184, 0.1);
-            border-left: 3px solid #17a2b8;
-        }
-        
-        .log-success {
-            background: rgba(40, 167, 69, 0.1);
-            border-left: 3px solid #28a745;
-        }
-        
-        .log-warning {
-            background: rgba(255, 193, 7, 0.1);
-            border-left: 3px solid #ffc107;
-        }
-        
-        .log-error {
-            background: rgba(220, 53, 69, 0.1);
-            border-left: 3px solid #dc3545;
-        }
-        
-        .log-timestamp {
-            color: #6c757d;
-            font-size: 10px;
-        }
-        
-        .clear-logs-btn {
-            background: #6c757d;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 6px;
-            font-size: 12px;
-            cursor: pointer;
-            margin-top: 10px;
-        }
-        
-        .clear-logs-btn:hover {
-            background: #5a6268;
-        }
-        
-        .export-logs-btn {
-            background: #28a745;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 6px;
-            font-size: 12px;
-            cursor: pointer;
-            margin-top: 10px;
-            margin-left: 10px;
-        }
-        
-        .export-logs-btn:hover {
-            background: #218838;
+        .status-demo_booked {
+            background: #d4edda;
+            color: #155724;
         }
         
         .lead-detail-btn {
@@ -319,8 +169,8 @@
             border: none;
             padding: 6px 12px;
             border-radius: 6px;
-            font-size: 12px;
             cursor: pointer;
+            font-size: 12px;
             margin-right: 5px;
         }
         
@@ -328,7 +178,31 @@
             background: #5a6fd8;
         }
         
-        .lead-detail-modal {
+        .no-data {
+            text-align: center;
+            color: #666;
+            padding: 40px;
+            font-style: italic;
+        }
+        
+        .refresh-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 20px;
+        }
+        
+        .refresh-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        .modal {
             display: none;
             position: fixed;
             z-index: 1000;
@@ -339,10 +213,10 @@
             background-color: rgba(0,0,0,0.5);
         }
         
-        .lead-detail-content {
+        .modal-content {
             background-color: white;
             margin: 5% auto;
-            padding: 20px;
+            padding: 30px;
             border-radius: 12px;
             width: 80%;
             max-width: 800px;
@@ -350,58 +224,61 @@
             overflow-y: auto;
         }
         
-        .lead-detail-header {
+        .modal-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 20px;
             padding-bottom: 15px;
-            border-bottom: 2px solid #f0f0f0;
+            border-bottom: 1px solid #e0e0e0;
         }
         
-        .lead-detail-close {
-            background: #dc3545;
-            color: white;
+        .modal-title {
+            font-size: 1.5em;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .close-btn {
+            background: none;
             border: none;
-            padding: 8px 16px;
-            border-radius: 6px;
+            font-size: 24px;
             cursor: pointer;
-            font-size: 14px;
+            color: #666;
         }
         
-        .lead-detail-close:hover {
-            background: #c82333;
+        .close-btn:hover {
+            color: #333;
         }
         
         .lead-info-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
+            gap: 20px;
+            margin-bottom: 30px;
         }
         
         .lead-info-item {
             background: #f8f9fa;
             padding: 15px;
             border-radius: 8px;
-            border-left: 4px solid #667eea;
         }
         
         .lead-info-label {
             font-size: 12px;
             color: #666;
-            margin-bottom: 5px;
             text-transform: uppercase;
-            font-weight: 600;
+            font-weight: 500;
+            margin-bottom: 5px;
         }
         
         .lead-info-value {
-            font-size: 16px;
+            font-size: 14px;
             color: #333;
             font-weight: 500;
         }
         
-        .lead-timeline {
+        .timeline {
             margin-top: 20px;
         }
         
@@ -415,20 +292,9 @@
         }
         
         .timeline-icon {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            font-size: 20px;
             margin-right: 15px;
-            font-size: 18px;
         }
-        
-        .timeline-icon.sms { background: #17a2b8; color: white; }
-        .timeline-icon.email { background: #28a745; color: white; }
-        .timeline-icon.booking { background: #ffc107; color: #333; }
-        .timeline-icon.demo { background: #dc3545; color: white; }
         
         .timeline-content {
             flex: 1;
@@ -436,6 +302,7 @@
         
         .timeline-title {
             font-weight: 600;
+            color: #333;
             margin-bottom: 5px;
         }
         
@@ -443,15 +310,40 @@
             font-size: 12px;
             color: #666;
         }
+        
+        .loading {
+            text-align: center;
+            color: #666;
+            padding: 20px;
+            font-style: italic;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>📊 Lead Tracking Dashboard</h1>
         
-        <button class="refresh-btn" onclick="refreshDataWithLogging()">🔄 Refresh Data</button>
+        <button class="refresh-btn" onclick="loadData()">🔄 Refresh Data</button>
         
-        <!-- Statistics -->
+        <div id="status"></div>
+        
+        <!-- Key Metrics -->
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-number" id="totalLeads">-</div>
@@ -471,116 +363,59 @@
             </div>
         </div>
         
-        <!-- Pipeline Flow -->
-        <div class="pipeline-flow">
-            <div class="pipeline-stage">
-                <h3>📱 SMS Sent <span class="count" id="smsSentCount">-</span></h3>
-                <p>Leads receive SMS asking for email address</p>
-            </div>
-            <div class="pipeline-stage">
-                <h3>📧 Email Reply <span class="count" id="emailReplyCount">-</span></h3>
-                <p>Leads reply with their email address</p>
-            </div>
-            <div class="pipeline-stage">
-                <h3>🔗 Booking Link <span class="count" id="bookingLinkCount">-</span></h3>
-                <p>System sends booking link to email</p>
-            </div>
-            <div class="pipeline-stage">
-                <h3>📅 Demo Booked <span class="count" id="demoBookedCount">-</span></h3>
-                <p>Lead books a demo call</p>
-            </div>
-        </div>
-        
-        <!-- Leads Table -->
-        <h2>📋 Recent Leads</h2>
-        <div id="leadsTableContainer">
-            <div class="loading">Loading leads...</div>
-        </div>
-        
-        <!-- Performance Insights Section -->
-        <div class="insights-section">
-            <h3>🔍 Performance Insights & Optimization Tips</h3>
-            <p>Real-time analysis to help you optimize every aspect of your lead pipeline</p>
-            
-            <div class="insights-grid" id="insightsGrid">
-                <div class="insight-card">
-                    <div class="insight-title">📈 Conversion Rate</div>
-                    <div class="insight-value" id="conversionInsight">0%</div>
-                    <div class="insight-description" id="conversionTip">Add leads to see conversion insights</div>
+        <!-- Pipeline Overview -->
+        <div class="pipeline-section">
+            <h2 class="pipeline-title">📈 Pipeline Overview</h2>
+            <div class="pipeline-grid">
+                <div class="pipeline-card">
+                    <div class="pipeline-icon">📱</div>
+                    <div class="pipeline-count" id="smsSentCount">-</div>
+                    <div class="pipeline-title-card">SMS Sent</div>
+                    <div class="pipeline-description">Leads receive SMS asking for email address</div>
                 </div>
-                
-                <div class="insight-card">
-                    <div class="insight-title">⏱️ Average Response Time</div>
-                    <div class="insight-value" id="responseTimeInsight">-</div>
-                    <div class="insight-description" id="responseTimeTip">Track how quickly leads respond to SMS</div>
+                <div class="pipeline-card">
+                    <div class="pipeline-icon">📧</div>
+                    <div class="pipeline-count" id="emailReplyCount">-</div>
+                    <div class="pipeline-title-card">Email Reply</div>
+                    <div class="pipeline-description">Leads reply with their email address</div>
                 </div>
-                
-                <div class="insight-card">
-                    <div class="insight-title">🎯 Pipeline Health</div>
-                    <div class="insight-value" id="pipelineHealthInsight">Healthy</div>
-                    <div class="insight-description" id="pipelineHealthTip">System is running smoothly</div>
+                <div class="pipeline-card">
+                    <div class="pipeline-icon">🔗</div>
+                    <div class="pipeline-count" id="bookingLinkCount">-</div>
+                    <div class="pipeline-title-card">Booking Link</div>
+                    <div class="pipeline-description">System sends booking link to email</div>
                 </div>
-                
-                <div class="insight-card">
-                    <div class="insight-title">🚀 Optimization Score</div>
-                    <div class="insight-value" id="optimizationScoreInsight">85/100</div>
-                    <div class="insight-description" id="optimizationScoreTip">Good performance, room for improvement</div>
-                </div>
-            </div>
-            
-            <div class="performance-section">
-                <div class="performance-title">⚡ Performance Metrics</div>
-                <div class="performance-metrics" id="performanceMetrics">
-                    <div class="metric-item">
-                        <div class="metric-label">API Response Time</div>
-                        <div class="metric-value" id="apiResponseTime">-</div>
-                    </div>
-                    <div class="metric-item">
-                        <div class="metric-label">Data Refresh Rate</div>
-                        <div class="metric-value" id="refreshRate">30s</div>
-                    </div>
-                    <div class="metric-item">
-                        <div class="metric-label">Error Rate</div>
-                        <div class="metric-value" id="errorRate">0%</div>
-                    </div>
-                    <div class="metric-item">
-                        <div class="metric-label">Uptime</div>
-                        <div class="metric-value" id="uptime">100%</div>
-                    </div>
+                <div class="pipeline-card">
+                    <div class="pipeline-icon">📅</div>
+                    <div class="pipeline-count" id="demoBookedCount">-</div>
+                    <div class="pipeline-title-card">Demo Booked</div>
+                    <div class="pipeline-description">Lead books a demo call</div>
                 </div>
             </div>
         </div>
         
-        <!-- Exhaustive Logging Section -->
-        <div class="log-section">
-            <h3>📝 Exhaustive Activity Log</h3>
-            <p>Complete log of all system activities, API calls, and lead status changes</p>
-            
-            <div class="log-container" id="logContainer">
-                <div class="log-entry log-info">
-                    <span class="log-timestamp">[System]</span> Dashboard initialized - Starting exhaustive logging
-                </div>
+        <!-- Recent Leads -->
+        <div class="leads-section">
+            <h2 class="leads-title">📋 Recent Leads</h2>
+            <div id="leadsTableContainer">
+                <div class="loading">Loading leads...</div>
             </div>
-            
-            <button class="clear-logs-btn" onclick="clearLogs()">🗑️ Clear Logs</button>
-            <button class="export-logs-btn" onclick="exportLogs()">📥 Export Logs</button>
         </div>
     </div>
     
     <!-- Lead Detail Modal -->
-    <div id="leadDetailModal" class="lead-detail-modal">
-        <div class="lead-detail-content">
-            <div class="lead-detail-header">
-                <h2 id="leadDetailTitle">Lead Details</h2>
-                <button class="lead-detail-close" onclick="closeLeadDetail()">✕ Close</button>
+    <div id="leadDetailModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title" id="leadDetailTitle">Lead Details</h2>
+                <button class="close-btn" onclick="closeLeadDetail()">&times;</button>
             </div>
             
             <div class="lead-info-grid" id="leadInfoGrid">
                 <!-- Lead info will be populated here -->
             </div>
             
-            <div class="lead-timeline" id="leadTimeline">
-                <h3>📅 Lead Timeline</h3>
+            <div class="timeline" id="leadTimeline">
                 <!-- Timeline will be populated here -->
             </div>
         </div>
@@ -588,504 +423,108 @@
 
     <script>
         const API_BASE = window.location.origin;
-        let activityLogs = [];
-        let lastStats = null;
         let lastLeads = null;
-        let performanceMetrics = {
-            apiResponseTimes: [],
-            errorCount: 0,
-            successCount: 0,
-            startTime: Date.now(),
-            lastRefreshTime: Date.now(),
-            totalRefreshes: 0
-        };
-        let leadInsights = {
-            responseTimes: [],
-            conversionPath: {},
-            bottlenecks: []
-        };
         
-        // Performance tracking functions
-        function trackApiCall(url, startTime, success = true) {
-            const responseTime = Date.now() - startTime;
-            performanceMetrics.apiResponseTimes.push(responseTime);
-            
-            if (success) {
-                performanceMetrics.successCount++;
-            } else {
-                performanceMetrics.errorCount++;
-            }
-            
-            // Keep only last 50 response times
-            if (performanceMetrics.apiResponseTimes.length > 50) {
-                performanceMetrics.apiResponseTimes = performanceMetrics.apiResponseTimes.slice(-50);
-            }
-            
-            updatePerformanceMetrics();
-        }
-        
-        function updatePerformanceMetrics() {
-            const avgResponseTime = performanceMetrics.apiResponseTimes.length > 0 
-                ? Math.round(performanceMetrics.apiResponseTimes.reduce((a, b) => a + b, 0) / performanceMetrics.apiResponseTimes.length)
-                : 0;
-            
-            const errorRate = performanceMetrics.successCount + performanceMetrics.errorCount > 0
-                ? Math.round((performanceMetrics.errorCount / (performanceMetrics.successCount + performanceMetrics.errorCount)) * 100)
-                : 0;
-            
-            const uptime = Math.round(((Date.now() - performanceMetrics.startTime) / (Date.now() - performanceMetrics.startTime)) * 100);
-            
-            document.getElementById('apiResponseTime').textContent = avgResponseTime > 0 ? `${avgResponseTime}ms` : '-';
-            document.getElementById('errorRate').textContent = `${errorRate}%`;
-            document.getElementById('uptime').textContent = `${uptime}%`;
-            
-            logActivity('Performance metrics updated', 'info', {
-                avgResponseTime,
-                errorRate,
-                totalCalls: performanceMetrics.successCount + performanceMetrics.errorCount
-            });
-        }
-        
-        function calculateOptimizationInsights(stats, leads) {
-            // Conversion Rate Analysis
-            const conversionRate = parseFloat(stats.conversionRate) || 0;
-            let conversionTip = '';
-            if (conversionRate === 0) {
-                conversionTip = 'No conversions yet - focus on lead quality and follow-up';
-            } else if (conversionRate < 10) {
-                conversionTip = 'Low conversion - optimize SMS messaging and timing';
-            } else if (conversionRate < 25) {
-                conversionTip = 'Moderate conversion - A/B test different approaches';
-            } else {
-                conversionTip = 'Excellent conversion rate - scale successful tactics';
-            }
-            
-            // Response Time Analysis
-            let avgResponseTime = '-';
-            let responseTimeTip = 'Track how quickly leads respond to SMS';
-            if (leadInsights.responseTimes.length > 0) {
-                avgResponseTime = Math.round(leadInsights.responseTimes.reduce((a, b) => a + b, 0) / leadInsights.responseTimes.length);
-                if (avgResponseTime < 30) {
-                    responseTimeTip = 'Fast responses - leads are highly engaged';
-                } else if (avgResponseTime < 120) {
-                    responseTimeTip = 'Good response time - consider follow-up timing';
-                } else {
-                    responseTimeTip = 'Slow responses - optimize SMS content and timing';
-                }
-            }
-            
-            // Pipeline Health Analysis
-            let pipelineHealth = 'Healthy';
-            let pipelineHealthTip = 'System is running smoothly';
-            const totalLeads = stats.totalLeads || 0;
-            const waitingForEmail = stats.waitingForEmail || 0;
-            const emailReceived = stats.emailReceived || 0;
-            
-            if (totalLeads > 0) {
-                const stuckRate = (waitingForEmail / totalLeads) * 100;
-                if (stuckRate > 80) {
-                    pipelineHealth = 'Needs Attention';
-                    pipelineHealthTip = 'Many leads stuck - review SMS content and timing';
-                } else if (stuckRate > 50) {
-                    pipelineHealth = 'Moderate';
-                    pipelineHealthTip = 'Some leads stuck - optimize follow-up process';
-                }
-            }
-            
-            // Optimization Score Calculation
-            let optimizationScore = 85;
-            let optimizationTip = 'Good performance, room for improvement';
-            
-            if (conversionRate > 20) optimizationScore += 10;
-            if (avgResponseTime !== '-' && avgResponseTime < 60) optimizationScore += 5;
-            if (performanceMetrics.errorCount === 0) optimizationScore += 5;
-            if (totalLeads > 10) optimizationScore += 5;
-            
-            if (optimizationScore >= 95) {
-                optimizationTip = 'Excellent performance - ready to scale';
-            } else if (optimizationScore >= 85) {
-                optimizationTip = 'Good performance, minor optimizations possible';
-            } else if (optimizationScore >= 70) {
-                optimizationTip = 'Moderate performance - several areas to improve';
-            } else {
-                optimizationTip = 'Needs significant optimization';
-            }
-            
-            // Update UI
-            document.getElementById('conversionInsight').textContent = `${conversionRate}%`;
-            document.getElementById('conversionTip').textContent = conversionTip;
-            
-            document.getElementById('responseTimeInsight').textContent = avgResponseTime;
-            document.getElementById('responseTimeTip').textContent = responseTimeTip;
-            
-            document.getElementById('pipelineHealthInsight').textContent = pipelineHealth;
-            document.getElementById('pipelineHealthTip').textContent = pipelineHealthTip;
-            
-            document.getElementById('optimizationScoreInsight').textContent = `${optimizationScore}/100`;
-            document.getElementById('optimizationScoreTip').textContent = optimizationTip;
-            
-            logActivity('Optimization insights calculated', 'success', {
-                conversionRate,
-                avgResponseTime,
-                pipelineHealth,
-                optimizationScore
-            });
-        }
-        
-        function analyzeLeadBottlenecks(leads) {
-            if (!leads || leads.length === 0) return;
-            
-            const statusCounts = leads.reduce((acc, lead) => {
-                acc[lead.status] = (acc[lead.status] || 0) + 1;
-                return acc;
-            }, {});
-            
-            const bottlenecks = [];
-            
-            // Identify bottlenecks
-            if (statusCounts.waiting_for_email > statusCounts.email_received * 2) {
-                bottlenecks.push({
-                    stage: 'SMS to Email',
-                    issue: 'Low email response rate',
-                    suggestion: 'Optimize SMS content and timing'
-                });
-            }
-            
-            if (statusCounts.email_received > statusCounts.demo_booked * 3) {
-                bottlenecks.push({
-                    stage: 'Email to Booking',
-                    issue: 'Low booking conversion',
-                    suggestion: 'Improve booking link and follow-up'
-                });
-            }
-            
-            leadInsights.bottlenecks = bottlenecks;
-            
-            if (bottlenecks.length > 0) {
-                logActivity('Lead bottlenecks identified', 'warning', bottlenecks);
+        function showStatus(message, type = 'info') {
+            const status = document.getElementById('status');
+            if (status) {
+                status.innerHTML = `<div class="${type}">${message}</div>`;
             }
         }
         
-        function addLogToUI(logEntry) {
-            const logContainer = document.getElementById('logContainer');
-            const logDiv = document.createElement('div');
-            logDiv.className = `log-entry log-${logEntry.type}`;
-            
-            const timeStr = new Date(logEntry.timestamp).toLocaleTimeString();
-            logDiv.innerHTML = `
-                <span class="log-timestamp">[${timeStr}]</span> ${logEntry.message}
-                ${logEntry.data ? `<br><small style="color: #6c757d;">Data: ${JSON.stringify(logEntry.data, null, 2)}</small>` : ''}
-            `;
-            
-            logContainer.appendChild(logDiv);
-            logContainer.scrollTop = logContainer.scrollHeight;
-        }
-        
-        function clearLogs() {
-            activityLogs = [];
-            document.getElementById('logContainer').innerHTML = `
-                <div class="log-entry log-info">
-                    <span class="log-timestamp">[System]</span> Logs cleared - Starting fresh
-                </div>
-            `;
-            logActivity('Logs cleared by user', 'info');
-        }
-        
-        function exportLogs() {
-            const logData = {
-                exportedAt: new Date().toISOString(),
-                totalLogs: activityLogs.length,
-                logs: activityLogs
-            };
-            
-            const blob = new Blob([JSON.stringify(logData, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `lead-tracking-logs-${new Date().toISOString().split('T')[0]}.json`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            
-            logActivity('Logs exported to file', 'success', { logCount: activityLogs.length });
-        }
-        
-        async function refreshData() {
-            logActivity('Starting data refresh', 'info');
-            performanceMetrics.totalRefreshes++;
-            performanceMetrics.lastRefreshTime = Date.now();
+        async function loadData() {
+            showStatus('Loading data...', 'info');
             
             try {
-                // Get pipeline stats
-                logActivity('Fetching pipeline statistics', 'info');
-                const statsStartTime = Date.now();
-                const statsResponse = await fetch(`${API_BASE}/api/pipeline-stats`, {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                logActivity('Pipeline stats response received', 'info', { 
-                    status: statsResponse.status, 
-                    ok: statsResponse.ok 
-                });
-                
+                // Load pipeline stats
+                const statsResponse = await fetch(`${API_BASE}/api/pipeline-stats`);
                 if (statsResponse.ok) {
                     const stats = await statsResponse.json();
-                    trackApiCall('/api/pipeline-stats', statsStartTime, true);
-                    logActivity('Pipeline stats received', 'success', stats);
                     
-                    // Check for changes
-                    if (lastStats) {
-                        const changes = detectStatsChanges(lastStats, stats);
-                        if (changes.length > 0) {
-                            logActivity('Statistics changed', 'warning', changes);
-                        }
-                    }
+                    // Update stats display
+                    document.getElementById('totalLeads').textContent = stats.totalLeads || 0;
+                    document.getElementById('waitingForEmail').textContent = stats.waitingForEmail || 0;
+                    document.getElementById('emailReceived').textContent = stats.emailReceived || 0;
+                    document.getElementById('conversionRate').textContent = (stats.conversionRate || '0') + '%';
                     
-                    updateStats(stats);
-                    lastStats = stats;
+                    // Update pipeline counts
+                    document.getElementById('smsSentCount').textContent = stats.totalLeads || 0;
+                    document.getElementById('emailReplyCount').textContent = stats.emailReceived || 0;
+                    document.getElementById('bookingLinkCount').textContent = stats.emailReceived || 0;
+                    document.getElementById('demoBookedCount').textContent = stats.booked || 0;
+                    
+                    showStatus(`✅ Stats loaded: ${stats.totalLeads} total leads`, 'success');
                 } else {
-                    trackApiCall('/api/pipeline-stats', statsStartTime, false);
-                    logActivity('Failed to fetch pipeline stats', 'error', { 
-                        status: statsResponse.status, 
-                        statusText: statsResponse.statusText 
-                    });
+                    showStatus(`❌ Failed to load stats: ${statsResponse.status}`, 'error');
                 }
                 
-                // Get recent leads
-                logActivity('Fetching recent leads', 'info');
-                const leadsStartTime = Date.now();
-                const leadsResponse = await fetch(`${API_BASE}/api/recent-leads`, {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                logActivity('Recent leads response received', 'info', { 
-                    status: leadsResponse.status, 
-                    ok: leadsResponse.ok 
-                });
-                
+                // Load recent leads
+                const leadsResponse = await fetch(`${API_BASE}/api/recent-leads`);
                 if (leadsResponse.ok) {
                     const leads = await leadsResponse.json();
-                    trackApiCall('/api/recent-leads', leadsStartTime, true);
-                    logActivity('Recent leads received', 'success', { 
-                        leadCount: leads.length,
-                        leads: leads.map(l => ({ id: l.leadId, status: l.status, name: l.decisionMaker }))
-                    });
-                    
-                    // Check for changes
-                    if (lastLeads) {
-                        const changes = detectLeadsChanges(lastLeads, leads);
-                        if (changes.length > 0) {
-                            logActivity('Leads data changed', 'warning', changes);
-                        }
-                    }
-                    
-                    updateLeadsTable(leads);
                     lastLeads = leads;
                     
-                    // Analyze bottlenecks
-                    analyzeLeadBottlenecks(leads);
+                    if (leads.length === 0) {
+                        document.getElementById('leadsTableContainer').innerHTML = 
+                            '<div class="no-data">No leads found. Add some leads to get started!</div>';
+                    } else {
+                        const table = `
+                            <table class="leads-table">
+                                <thead>
+                                    <tr>
+                                        <th>Lead ID</th>
+                                        <th>Name</th>
+                                        <th>Phone</th>
+                                        <th>Company</th>
+                                        <th>Status</th>
+                                        <th>Created</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${leads.map(lead => `
+                                        <tr>
+                                            <td><code>${lead.leadId}</code></td>
+                                            <td>${lead.decisionMaker || 'N/A'}</td>
+                                            <td>${lead.phoneNumber || 'N/A'}</td>
+                                            <td>${lead.businessName || 'N/A'}</td>
+                                            <td>
+                                                <span class="status-badge status-${lead.status}">
+                                                    ${lead.status.replace('_', ' ')}
+                                                </span>
+                                            </td>
+                                            <td>${new Date(lead.createdAt).toLocaleString()}</td>
+                                            <td>
+                                                <button class="lead-detail-btn" onclick="showLeadDetail('${lead.leadId}')">👁️ Details</button>
+                                                ${lead.status === 'email_received' ? 
+                                                    `<a href="/booking-dashboard.html?leadId=${lead.leadId}&email=${encodeURIComponent(lead.email)}&phone=${encodeURIComponent(lead.phoneNumber)}" target="_blank" style="background: #28a745; color: white; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 12px;">📅 Book</a>` : 
+                                                    '<span style="color: #666; font-size: 12px;">Waiting...</span>'
+                                                }
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        `;
+                        document.getElementById('leadsTableContainer').innerHTML = table;
+                    }
+                    
+                    showStatus(`✅ Leads loaded: ${leads.length} leads found`, 'success');
                 } else {
-                    trackApiCall('/api/recent-leads', leadsStartTime, false);
-                    logActivity('Failed to fetch recent leads', 'error', { 
-                        status: leadsResponse.status, 
-                        statusText: leadsResponse.statusText 
-                    });
+                    showStatus(`❌ Failed to load leads: ${leadsResponse.status}`, 'error');
                 }
-                
-                // Calculate optimization insights
-                calculateOptimizationInsights(lastStats || {}, lastLeads || []);
-                
-                logActivity('Data refresh completed successfully', 'success');
                 
             } catch (error) {
-                logActivity('Error during data refresh', 'error', { 
-                    error: error.message, 
-                    stack: error.stack 
-                });
-                console.error('Error refreshing data:', error);
-                document.getElementById('leadsTableContainer').innerHTML = 
-                    '<div class="no-data">Error loading data. Please try again.</div>';
+                showStatus(`❌ Error loading data: ${error.message}`, 'error');
+                console.error('Error loading data:', error);
             }
         }
-        
-        function detectStatsChanges(oldStats, newStats) {
-            const changes = [];
-            const fields = ['totalLeads', 'waitingForEmail', 'emailReceived', 'booked', 'conversionRate'];
-            
-            fields.forEach(field => {
-                if (oldStats[field] !== newStats[field]) {
-                    changes.push({
-                        field: field,
-                        oldValue: oldStats[field],
-                        newValue: newStats[field],
-                        change: newStats[field] - oldStats[field]
-                    });
-                }
-            });
-            
-            return changes;
-        }
-        
-        function detectLeadsChanges(oldLeads, newLeads) {
-            const changes = [];
-            
-            // Check for new leads
-            const oldIds = new Set(oldLeads.map(l => l.leadId));
-            const newIds = new Set(newLeads.map(l => l.leadId));
-            
-            newLeads.forEach(lead => {
-                if (!oldIds.has(lead.leadId)) {
-                    changes.push({
-                        type: 'new_lead',
-                        leadId: lead.leadId,
-                        name: lead.decisionMaker,
-                        status: lead.status
-                    });
-                }
-            });
-            
-            // Check for status changes
-            const oldLeadMap = new Map(oldLeads.map(l => [l.leadId, l]));
-            newLeads.forEach(lead => {
-                const oldLead = oldLeadMap.get(lead.leadId);
-                if (oldLead && oldLead.status !== lead.status) {
-                    changes.push({
-                        type: 'status_change',
-                        leadId: lead.leadId,
-                        name: lead.decisionMaker,
-                        oldStatus: oldLead.status,
-                        newStatus: lead.status
-                    });
-                }
-            });
-            
-            return changes;
-        }
-        
-        function updateStats(stats) {
-            logActivity('Updating statistics display', 'info', stats);
-            
-            try {
-                document.getElementById('totalLeads').textContent = stats.totalLeads || 0;
-                document.getElementById('waitingForEmail').textContent = stats.waitingForEmail || 0;
-                document.getElementById('emailReceived').textContent = stats.emailReceived || 0;
-                document.getElementById('conversionRate').textContent = stats.conversionRate || '0';
-                
-                // Update pipeline counts
-                document.getElementById('smsSentCount').textContent = stats.totalLeads || 0;
-                document.getElementById('emailReplyCount').textContent = stats.emailReceived || 0;
-                document.getElementById('bookingLinkCount').textContent = stats.emailReceived || 0;
-                document.getElementById('demoBookedCount').textContent = stats.booked || 0;
-                
-                logActivity('Statistics display updated successfully', 'success', {
-                    totalLeads: stats.totalLeads,
-                    waitingForEmail: stats.waitingForEmail,
-                    emailReceived: stats.emailReceived,
-                    booked: stats.booked
-                });
-            } catch (error) {
-                logActivity('Error updating statistics display', 'error', { 
-                    error: error.message, 
-                    stack: error.stack 
-                });
-            }
-        }
-        
-        function updateLeadsTable(leads) {
-            logActivity('Updating leads table', 'info', { leadCount: leads.length });
-            
-            try {
-                if (!leads || leads.length === 0) {
-                    document.getElementById('leadsTableContainer').innerHTML = 
-                        '<div class="no-data">No leads found. Add some leads to get started!</div>';
-                    logActivity('No leads found - showing empty state', 'warning');
-                    return;
-                }
-                
-                const table = `
-                    <table class="leads-table">
-                        <thead>
-                            <tr>
-                                <th>Lead ID</th>
-                                <th>Name</th>
-                                <th>Phone</th>
-                                <th>Company</th>
-                                <th>Status</th>
-                                <th>Created</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${leads.map(lead => `
-                                <tr>
-                                    <td><code>${lead.leadId}</code></td>
-                                    <td>${lead.decisionMaker || 'N/A'}</td>
-                                    <td>${lead.phoneNumber || 'N/A'}</td>
-                                    <td>${lead.businessName || 'N/A'}</td>
-                                    <td>
-                                        <span class="status-badge status-${lead.status}">
-                                            ${lead.status.replace('_', ' ')}
-                                        </span>
-                                    </td>
-                                    <td>${new Date(lead.createdAt).toLocaleString()}</td>
-                                    <td>
-                                        <button class="lead-detail-btn" onclick="showLeadDetail('${lead.leadId}')">👁️ Details</button>
-                                        ${lead.status === 'email_received' ? 
-                                            `<a href="/booking-dashboard.html?leadId=${lead.leadId}&email=${encodeURIComponent(lead.email)}&phone=${encodeURIComponent(lead.phoneNumber)}" target="_blank" style="background: #28a745; color: white; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 12px;">📅 Book</a>` : 
-                                            '<span style="color: #666; font-size: 12px;">Waiting...</span>'
-                                        }
-                                    </td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                `;
-                
-                document.getElementById('leadsTableContainer').innerHTML = table;
-                logActivity('Leads table updated successfully', 'success', { 
-                    displayedLeads: leads.length,
-                    leadStatuses: leads.reduce((acc, lead) => {
-                        acc[lead.status] = (acc[lead.status] || 0) + 1;
-                        return acc;
-                    }, {})
-                });
-            } catch (error) {
-                logActivity('Error updating leads table', 'error', { 
-                    error: error.message, 
-                    stack: error.stack 
-                });
-                document.getElementById('leadsTableContainer').innerHTML = 
-                    '<div class="no-data">Error loading leads table. Please try again.</div>';
-            }
-        }
-        
-        // Enhanced refresh button with logging
-        function refreshDataWithLogging() {
-            logActivity('Manual refresh triggered by user', 'info');
-            refreshData();
-        }
-        
-        // Auto-refresh every 30 seconds with logging
-        setInterval(() => {
-            logActivity('Auto-refresh triggered', 'info');
-            refreshData();
-        }, 30000);
         
         // Lead detail modal functions
         function showLeadDetail(leadId) {
-            logActivity('Opening lead detail modal', 'info', { leadId });
-            
             // Find the lead data
             const lead = lastLeads ? lastLeads.find(l => l.leadId === leadId) : null;
             if (!lead) {
-                logActivity('Lead not found for detail view', 'error', { leadId });
                 alert('Lead not found');
                 return;
             }
@@ -1136,22 +575,6 @@
                     <div class="lead-info-label">Created</div>
                     <div class="lead-info-value">${new Date(lead.createdAt).toLocaleString()}</div>
                 </div>
-                <div class="lead-info-item">
-                    <div class="lead-info-label">Last Updated</div>
-                    <div class="lead-info-value">${lead.updatedAt ? new Date(lead.updatedAt).toLocaleString() : 'N/A'}</div>
-                </div>
-                ${lead.bookingId ? `
-                <div class="lead-info-item">
-                    <div class="lead-info-label">Booking ID</div>
-                    <div class="lead-info-value">${lead.bookingId}</div>
-                </div>
-                ` : ''}
-                ${lead.bookedAt ? `
-                <div class="lead-info-item">
-                    <div class="lead-info-label">Booked At</div>
-                    <div class="lead-info-value">${new Date(lead.bookedAt).toLocaleString()}</div>
-                </div>
-                ` : ''}
             `;
             
             // Generate timeline
@@ -1176,16 +599,6 @@
                 });
             }
             
-            // Booking Link Sent (if applicable)
-            if (lead.status === 'email_received' || lead.status === 'demo_booked') {
-                timelineItems.push({
-                    icon: 'booking',
-                    title: 'Booking Link Sent',
-                    time: lead.bookingLinkSentAt ? new Date(lead.bookingLinkSentAt).toLocaleString() : 'Unknown',
-                    description: 'Booking link sent to lead email'
-                });
-            }
-            
             // Demo Booked (if applicable)
             if (lead.status === 'demo_booked') {
                 timelineItems.push({
@@ -1201,7 +614,7 @@
                 ${timelineItems.map(item => `
                     <div class="timeline-item">
                         <div class="timeline-icon ${item.icon}">
-                            ${item.icon === 'sms' ? '📱' : item.icon === 'email' ? '📧' : item.icon === 'booking' ? '🔗' : '📅'}
+                            ${item.icon === 'sms' ? '📱' : item.icon === 'email' ? '📧' : '📅'}
                         </div>
                         <div class="timeline-content">
                             <div class="timeline-title">${item.title}</div>
@@ -1214,17 +627,10 @@
             
             // Show modal
             document.getElementById('leadDetailModal').style.display = 'block';
-            
-            logActivity('Lead detail modal opened', 'success', { 
-                leadId, 
-                leadName: lead.decisionMaker,
-                status: lead.status 
-            });
         }
         
         function closeLeadDetail() {
             document.getElementById('leadDetailModal').style.display = 'none';
-            logActivity('Lead detail modal closed', 'info');
         }
         
         // Close modal when clicking outside
@@ -1235,28 +641,13 @@
             }
         }
         
-        // Initial load with logging
-        logActivity('Dashboard initialization started', 'info');
+        // Auto-refresh every 30 seconds
+        setInterval(loadData, 30000);
         
-        // Add debugging info
-        logActivity('API Base URL: ' + API_BASE, 'info');
-        logActivity('Window location: ' + window.location.href, 'info');
-        
-        // Test API connectivity
-        fetch(`${API_BASE}/api/pipeline-stats`)
-            .then(response => {
-                logActivity('Initial API test - Status: ' + response.status, response.ok ? 'success' : 'error');
-                return response.json();
-            })
-            .then(data => {
-                logActivity('Initial API test - Data received', 'success', data);
-            })
-            .catch(error => {
-                logActivity('Initial API test - Error', 'error', { error: error.message });
-            });
-        
-        refreshData();
-        logActivity('Dashboard initialization completed', 'success');
+        // Initial load
+        window.onload = function() {
+            loadData();
+        };
     </script>
 </body>
 </html>
