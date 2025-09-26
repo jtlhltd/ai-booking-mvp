@@ -145,17 +145,94 @@
             transform: translateY(-2px);
         }
         
-        .no-data {
-            text-align: center;
-            color: #666;
-            padding: 40px;
-            font-style: italic;
+        .log-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+            margin-top: 30px;
+            border-left: 4px solid #28a745;
         }
         
-        .loading {
-            text-align: center;
-            color: #667eea;
-            padding: 20px;
+        .log-section h3 {
+            color: #333;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .log-container {
+            background: #1e1e1e;
+            color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 15px;
+        }
+        
+        .log-entry {
+            margin-bottom: 8px;
+            padding: 5px;
+            border-radius: 4px;
+        }
+        
+        .log-info {
+            background: rgba(23, 162, 184, 0.1);
+            border-left: 3px solid #17a2b8;
+        }
+        
+        .log-success {
+            background: rgba(40, 167, 69, 0.1);
+            border-left: 3px solid #28a745;
+        }
+        
+        .log-warning {
+            background: rgba(255, 193, 7, 0.1);
+            border-left: 3px solid #ffc107;
+        }
+        
+        .log-error {
+            background: rgba(220, 53, 69, 0.1);
+            border-left: 3px solid #dc3545;
+        }
+        
+        .log-timestamp {
+            color: #6c757d;
+            font-size: 10px;
+        }
+        
+        .clear-logs-btn {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        
+        .clear-logs-btn:hover {
+            background: #5a6268;
+        }
+        
+        .export-logs-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            margin-top: 10px;
+            margin-left: 10px;
+        }
+        
+        .export-logs-btn:hover {
+            background: #218838;
         }
     </style>
 </head>
@@ -163,7 +240,7 @@
     <div class="container">
         <h1>📊 Lead Tracking Dashboard</h1>
         
-        <button class="refresh-btn" onclick="refreshData()">🔄 Refresh Data</button>
+        <button class="refresh-btn" onclick="refreshDataWithLogging()">🔄 Refresh Data</button>
         
         <!-- Statistics -->
         <div class="stats-grid">
@@ -210,35 +287,224 @@
         <div id="leadsTableContainer">
             <div class="loading">Loading leads...</div>
         </div>
-    </div>
+        
+        <!-- Exhaustive Logging Section -->
+        <div class="log-section">
+            <h3>📝 Exhaustive Activity Log</h3>
+            <p>Complete log of all system activities, API calls, and lead status changes</p>
+            
+            <div class="log-container" id="logContainer">
+                <div class="log-entry log-info">
+                    <span class="log-timestamp">[System]</span> Dashboard initialized - Starting exhaustive logging
+                </div>
+            </div>
+            
+            <button class="clear-logs-btn" onclick="clearLogs()">🗑️ Clear Logs</button>
+            <button class="export-logs-btn" onclick="exportLogs()">📥 Export Logs</button>
+        </div>
 
     <script>
         const API_BASE = window.location.origin;
+        let activityLogs = [];
+        let lastStats = null;
+        let lastLeads = null;
+        
+        // Exhaustive logging functions
+        function logActivity(message, type = 'info', data = null) {
+            const timestamp = new Date().toISOString();
+            const logEntry = {
+                timestamp: timestamp,
+                message: message,
+                type: type,
+                data: data
+            };
+            
+            activityLogs.push(logEntry);
+            
+            // Keep only last 1000 logs to prevent memory issues
+            if (activityLogs.length > 1000) {
+                activityLogs = activityLogs.slice(-1000);
+            }
+            
+            // Add to UI
+            addLogToUI(logEntry);
+            
+            // Also log to console for debugging
+            console.log(`[${type.toUpperCase()}] ${message}`, data || '');
+        }
+        
+        function addLogToUI(logEntry) {
+            const logContainer = document.getElementById('logContainer');
+            const logDiv = document.createElement('div');
+            logDiv.className = `log-entry log-${logEntry.type}`;
+            
+            const timeStr = new Date(logEntry.timestamp).toLocaleTimeString();
+            logDiv.innerHTML = `
+                <span class="log-timestamp">[${timeStr}]</span> ${logEntry.message}
+                ${logEntry.data ? `<br><small style="color: #6c757d;">Data: ${JSON.stringify(logEntry.data, null, 2)}</small>` : ''}
+            `;
+            
+            logContainer.appendChild(logDiv);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+        
+        function clearLogs() {
+            activityLogs = [];
+            document.getElementById('logContainer').innerHTML = `
+                <div class="log-entry log-info">
+                    <span class="log-timestamp">[System]</span> Logs cleared - Starting fresh
+                </div>
+            `;
+            logActivity('Logs cleared by user', 'info');
+        }
+        
+        function exportLogs() {
+            const logData = {
+                exportedAt: new Date().toISOString(),
+                totalLogs: activityLogs.length,
+                logs: activityLogs
+            };
+            
+            const blob = new Blob([JSON.stringify(logData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `lead-tracking-logs-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            logActivity('Logs exported to file', 'success', { logCount: activityLogs.length });
+        }
         
         async function refreshData() {
+            logActivity('Starting data refresh', 'info');
+            
             try {
                 // Get pipeline stats
+                logActivity('Fetching pipeline statistics', 'info');
                 const statsResponse = await fetch(`${API_BASE}/api/pipeline-stats`);
+                
                 if (statsResponse.ok) {
                     const stats = await statsResponse.json();
+                    logActivity('Pipeline stats received', 'success', stats);
+                    
+                    // Check for changes
+                    if (lastStats) {
+                        const changes = detectStatsChanges(lastStats, stats);
+                        if (changes.length > 0) {
+                            logActivity('Statistics changed', 'warning', changes);
+                        }
+                    }
+                    
                     updateStats(stats);
+                    lastStats = stats;
+                } else {
+                    logActivity('Failed to fetch pipeline stats', 'error', { 
+                        status: statsResponse.status, 
+                        statusText: statsResponse.statusText 
+                    });
                 }
                 
                 // Get recent leads
+                logActivity('Fetching recent leads', 'info');
                 const leadsResponse = await fetch(`${API_BASE}/api/recent-leads`);
+                
                 if (leadsResponse.ok) {
                     const leads = await leadsResponse.json();
+                    logActivity('Recent leads received', 'success', { 
+                        leadCount: leads.length,
+                        leads: leads.map(l => ({ id: l.leadId, status: l.status, name: l.decisionMaker }))
+                    });
+                    
+                    // Check for changes
+                    if (lastLeads) {
+                        const changes = detectLeadsChanges(lastLeads, leads);
+                        if (changes.length > 0) {
+                            logActivity('Leads data changed', 'warning', changes);
+                        }
+                    }
+                    
                     updateLeadsTable(leads);
+                    lastLeads = leads;
+                } else {
+                    logActivity('Failed to fetch recent leads', 'error', { 
+                        status: leadsResponse.status, 
+                        statusText: leadsResponse.statusText 
+                    });
                 }
                 
+                logActivity('Data refresh completed successfully', 'success');
+                
             } catch (error) {
+                logActivity('Error during data refresh', 'error', { 
+                    error: error.message, 
+                    stack: error.stack 
+                });
                 console.error('Error refreshing data:', error);
                 document.getElementById('leadsTableContainer').innerHTML = 
                     '<div class="no-data">Error loading data. Please try again.</div>';
             }
         }
         
+        function detectStatsChanges(oldStats, newStats) {
+            const changes = [];
+            const fields = ['totalLeads', 'waitingForEmail', 'emailReceived', 'booked', 'conversionRate'];
+            
+            fields.forEach(field => {
+                if (oldStats[field] !== newStats[field]) {
+                    changes.push({
+                        field: field,
+                        oldValue: oldStats[field],
+                        newValue: newStats[field],
+                        change: newStats[field] - oldStats[field]
+                    });
+                }
+            });
+            
+            return changes;
+        }
+        
+        function detectLeadsChanges(oldLeads, newLeads) {
+            const changes = [];
+            
+            // Check for new leads
+            const oldIds = new Set(oldLeads.map(l => l.leadId));
+            const newIds = new Set(newLeads.map(l => l.leadId));
+            
+            newLeads.forEach(lead => {
+                if (!oldIds.has(lead.leadId)) {
+                    changes.push({
+                        type: 'new_lead',
+                        leadId: lead.leadId,
+                        name: lead.decisionMaker,
+                        status: lead.status
+                    });
+                }
+            });
+            
+            // Check for status changes
+            const oldLeadMap = new Map(oldLeads.map(l => [l.leadId, l]));
+            newLeads.forEach(lead => {
+                const oldLead = oldLeadMap.get(lead.leadId);
+                if (oldLead && oldLead.status !== lead.status) {
+                    changes.push({
+                        type: 'status_change',
+                        leadId: lead.leadId,
+                        name: lead.decisionMaker,
+                        oldStatus: oldLead.status,
+                        newStatus: lead.status
+                    });
+                }
+            });
+            
+            return changes;
+        }
+        
         function updateStats(stats) {
+            logActivity('Updating statistics display', 'info', stats);
+            
             document.getElementById('totalLeads').textContent = stats.totalLeads || 0;
             document.getElementById('waitingForEmail').textContent = stats.waitingForEmail || 0;
             document.getElementById('emailReceived').textContent = stats.emailReceived || 0;
@@ -249,12 +515,17 @@
             document.getElementById('emailReplyCount').textContent = stats.emailReceived || 0;
             document.getElementById('bookingLinkCount').textContent = stats.emailReceived || 0;
             document.getElementById('demoBookedCount').textContent = stats.booked || 0;
+            
+            logActivity('Statistics display updated', 'success');
         }
         
         function updateLeadsTable(leads) {
+            logActivity('Updating leads table', 'info', { leadCount: leads.length });
+            
             if (!leads || leads.length === 0) {
                 document.getElementById('leadsTableContainer').innerHTML = 
                     '<div class="no-data">No leads found. Add some leads to get started!</div>';
+                logActivity('No leads found - showing empty state', 'warning');
                 return;
             }
             
@@ -297,13 +568,31 @@
             `;
             
             document.getElementById('leadsTableContainer').innerHTML = table;
+            logActivity('Leads table updated successfully', 'success', { 
+                displayedLeads: leads.length,
+                leadStatuses: leads.reduce((acc, lead) => {
+                    acc[lead.status] = (acc[lead.status] || 0) + 1;
+                    return acc;
+                }, {})
+            });
         }
         
-        // Auto-refresh every 30 seconds
-        setInterval(refreshData, 30000);
+        // Enhanced refresh button with logging
+        function refreshDataWithLogging() {
+            logActivity('Manual refresh triggered by user', 'info');
+            refreshData();
+        }
         
-        // Initial load
+        // Auto-refresh every 30 seconds with logging
+        setInterval(() => {
+            logActivity('Auto-refresh triggered', 'info');
+            refreshData();
+        }, 30000);
+        
+        // Initial load with logging
+        logActivity('Dashboard initialization started', 'info');
         refreshData();
+        logActivity('Dashboard initialization completed', 'success');
     </script>
 </body>
 </html>

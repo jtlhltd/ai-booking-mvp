@@ -1015,7 +1015,14 @@ app.get('/admin/validate-call-duration', async (req, res) => {
 // Lead tracking endpoints
 app.get('/api/pipeline-stats', async (req, res) => {
   try {
+    console.log('[PIPELINE STATS REQUEST]', { 
+      ip: req.ip, 
+      userAgent: req.get('User-Agent'),
+      timestamp: new Date().toISOString()
+    });
+    
     if (!smsEmailPipeline) {
+      console.log('[PIPELINE STATS] SMS pipeline not available');
       return res.json({
         totalLeads: 0,
         waitingForEmail: 0,
@@ -1030,6 +1037,7 @@ app.get('/api/pipeline-stats', async (req, res) => {
     // Add timestamp for cache busting
     stats.lastUpdated = new Date().toISOString();
     
+    console.log('[PIPELINE STATS RESPONSE]', stats);
     res.json(stats);
   } catch (error) {
     console.error('[PIPELINE STATS ERROR]', error);
@@ -1039,7 +1047,14 @@ app.get('/api/pipeline-stats', async (req, res) => {
 
 app.get('/api/recent-leads', async (req, res) => {
   try {
+    console.log('[RECENT LEADS REQUEST]', { 
+      ip: req.ip, 
+      userAgent: req.get('User-Agent'),
+      timestamp: new Date().toISOString()
+    });
+    
     if (!smsEmailPipeline) {
+      console.log('[RECENT LEADS] SMS pipeline not available');
       return res.json([]);
     }
     
@@ -1051,6 +1066,15 @@ app.get('/api/recent-leads', async (req, res) => {
     
     // Limit to 50 most recent
     const recentLeads = allLeads.slice(0, 50);
+    
+    console.log('[RECENT LEADS RESPONSE]', { 
+      totalLeads: allLeads.length,
+      returnedLeads: recentLeads.length,
+      leadStatuses: recentLeads.reduce((acc, lead) => {
+        acc[lead.status] = (acc[lead.status] || 0) + 1;
+        return acc;
+      }, {})
+    });
     
     res.json(recentLeads);
   } catch (error) {
