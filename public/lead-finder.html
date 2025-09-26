@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lead Finder & Scraper</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+        }
+        
+        .section-title {
+            font-size: 1.3em;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #333;
+        }
+        
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        textarea {
+            height: 100px;
+            resize: vertical;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        .btn-success {
+            background: #28a745;
+        }
+        
+        .btn-warning {
+            background: #ffc107;
+            color: #333;
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+        }
+        
+        .search-results {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 15px;
+            background: #f8f9fa;
+        }
+        
+        .search-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #e0e0e0;
+            margin-bottom: 10px;
+            background: white;
+            border-radius: 6px;
+        }
+        
+        .search-item:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+        
+        .search-info {
+            flex: 1;
+        }
+        
+        .search-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .search-details {
+            font-size: 12px;
+            color: #666;
+            line-height: 1.4;
+        }
+        
+        .search-actions {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
+            margin: 0;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 1.8em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+        
+        .loading {
+            text-align: center;
+            color: #666;
+            padding: 20px;
+            font-style: italic;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        
+        .search-templates {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .template-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .template-card:hover {
+            background: #e9ecef;
+            transform: translateY(-2px);
+        }
+        
+        .template-title {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        
+        .template-description {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        
+        .template-search {
+            font-family: monospace;
+            font-size: 11px;
+            background: white;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            color: #333;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s ease;
+        }
+        
+        .found-leads {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 15px;
+            background: #f8f9fa;
+        }
+        
+        .lead-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .lead-item:last-child {
+            border-bottom: none;
+        }
+        
+        .lead-info {
+            flex: 1;
+        }
+        
+        .lead-name {
+            font-weight: 500;
+            color: #333;
+        }
+        
+        .lead-details {
+            font-size: 12px;
+            color: #666;
+            margin-top: 2px;
+        }
+        
+        .lead-status {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        
+        .status-found {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-mobile {
+            background: #cce5ff;
+            color: #004085;
+        }
+        
+        .status-landline {
+            background: #fff3cd;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Lead Finder & Scraper</h1>
+        
+        <div id="status"></div>
+        
+        <!-- Search Configuration -->
+        <div class="section">
+            <h2 class="section-title">🎯 Search Configuration</h2>
+            
+            <div class="form-group">
+                <label for="searchQuery">Search Query:</label>
+                <input type="text" id="searchQuery" placeholder="e.g., 'private healthcare practice London mobile'">
+            </div>
+            
+            <div class="form-group">
+                <label for="searchLocation">Location:</label>
+                <input type="text" id="searchLocation" placeholder="e.g., London, Manchester, Birmingham">
+            </div>
+            
+            <div class="form-group">
+                <label for="searchIndustry">Industry:</label>
+                <select id="searchIndustry">
+                    <option value="healthcare">Healthcare</option>
+                    <option value="financial">Financial Services</option>
+                    <option value="property">Property/Real Estate</option>
+                    <option value="education">Education/Training</option>
+                    <option value="legal">Legal Services</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="maxResults">Max Results:</label>
+                <input type="number" id="maxResults" value="50" min="10" max="200">
+            </div>
+            
+            <button class="btn" onclick="startSearch()">🔍 Start Search</button>
+            <button class="btn btn-secondary" onclick="stopSearch()">⏹️ Stop Search</button>
+        </div>
+        
+        <!-- Search Templates -->
+        <div class="section">
+            <h2 class="section-title">📋 Search Templates</h2>
+            
+            <div class="search-templates">
+                <div class="template-card" onclick="useTemplate('private-gp')">
+                    <div class="template-title">🏥 Private GP Practices</div>
+                    <div class="template-description">Find private GP practices with mobile numbers</div>
+                    <div class="template-search">"private GP practice" "mobile" "owner"</div>
+                </div>
+                
+                <div class="template-card" onclick="useTemplate('financial-advisor')">
+                    <div class="template-title">💰 Financial Advisors</div>
+                    <div class="template-description">Find independent financial advisors</div>
+                    <div class="template-search">"financial advisor" "mobile" "independent"</div>
+                </div>
+                
+                <div class="template-card" onclick="useTemplate('physiotherapy')">
+                    <div class="template-title">🏥 Physiotherapy Clinics</div>
+                    <div class="template-description">Find physiotherapy practices</div>
+                    <div class="template-search">"physiotherapy clinic" "mobile" "director"</div>
+                </div>
+                
+                <div class="template-card" onclick="useTemplate('estate-agent')">
+                    <div class="template-title">🏠 Estate Agents</div>
+                    <div class="template-description">Find high-end estate agents</div>
+                    <div class="template-search">"estate agent" "mobile" "branch manager"</div>
+                </div>
+                
+                <div class="template-card" onclick="useTemplate('business-coach')">
+                    <div class="template-title">🎓 Business Coaches</div>
+                    <div class="template-description">Find business coaches and consultants</div>
+                    <div class="template-search">"business coach" "mobile" "owner"</div>
+                </div>
+                
+                <div class="template-card" onclick="useTemplate('dental-practice')">
+                    <div class="template-title">🦷 Dental Practices</div>
+                    <div class="template-description">Find dental practices with mobile numbers</div>
+                    <div class="template-search">"dental practice" "mobile" "dentist"</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Search Progress -->
+        <div class="section" id="searchProgress" style="display: none;">
+            <h2 class="section-title">⏳ Search Progress</h2>
+            
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+            </div>
+            
+            <div id="progressText">Starting search...</div>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number" id="progressSearched">0</div>
+                    <div class="stat-label">Searched</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="progressFound">0</div>
+                    <div class="stat-label">Found</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="progressMobile">0</div>
+                    <div class="stat-label">Mobile Numbers</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="progressAdded">0</div>
+                    <div class="stat-label">Added to Pipeline</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Search Results -->
+        <div class="section">
+            <h2 class="section-title">📊 Search Results</h2>
+            
+            <div id="searchResults" class="search-results">
+                <div class="loading">No search results yet. Use a template or enter your own search query.</div>
+            </div>
+            
+            <div style="margin-top: 15px;">
+                <button class="btn btn-success" onclick="addAllFoundLeads()" id="addAllBtn" disabled>📥 Add All Found Leads</button>
+                <button class="btn btn-secondary" onclick="clearResults()">🗑️ Clear Results</button>
+                <button class="btn" onclick="exportResults()">📤 Export Results</button>
+            </div>
+        </div>
+        
+        <!-- Found Leads Preview -->
+        <div class="section">
+            <h2 class="section-title">👀 Found Leads Preview</h2>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number" id="foundTotal">0</div>
+                    <div class="stat-label">Total Found</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="foundMobile">0</div>
+                    <div class="stat-label">Mobile Numbers</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="foundLandline">0</div>
+                    <div class="stat-label">Landlines Only</div>
+                </div>
+            </div>
+            
+            <div id="foundLeadsPreview" class="found-leads">
+                <div class="loading">No leads found yet</div>
+            </div>
+        </div>
+        
+        <!-- Quick Actions -->
+        <div class="section">
+            <h2 class="section-title">⚡ Quick Actions</h2>
+            
+            <button class="btn" onclick="openLeadSourcing()">📥 Open Lead Sourcing Tool</button>
+            <button class="btn" onclick="openLeadTracker()">📊 Open Lead Tracker</button>
+            <button class="btn" onclick="refreshStats()">🔄 Refresh Stats</button>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        let searchResults = [];
+        let isSearching = false;
+        let searchInterval = null;
+        
+        function showStatus(message, type = 'info') {
+            const status = document.getElementById('status');
+            if (status) {
+                status.innerHTML = `<div class="${type}">${message}</div>`;
+            }
+        }
+        
+        function useTemplate(templateType) {
+            const templates = {
+                'private-gp': {
+                    query: '"private GP practice" "mobile" "owner"',
+                    industry: 'healthcare',
+                    location: 'London'
+                },
+                'financial-advisor': {
+                    query: '"financial advisor" "mobile" "independent"',
+                    industry: 'financial',
+                    location: 'London'
+                },
+                'physiotherapy': {
+                    query: '"physiotherapy clinic" "mobile" "director"',
+                    industry: 'healthcare',
+                    location: 'London'
+                },
+                'estate-agent': {
+                    query: '"estate agent" "mobile" "branch manager"',
+                    industry: 'property',
+                    location: 'London'
+                },
+                'business-coach': {
+                    query: '"business coach" "mobile" "owner"',
+                    industry: 'education',
+                    location: 'London'
+                },
+                'dental-practice': {
+                    query: '"dental practice" "mobile" "dentist"',
+                    industry: 'healthcare',
+                    location: 'London'
+                }
+            };
+            
+            const template = templates[templateType];
+            if (template) {
+                document.getElementById('searchQuery').value = template.query;
+                document.getElementById('searchIndustry').value = template.industry;
+                document.getElementById('searchLocation').value = template.location;
+                showStatus(`Template "${templateType}" loaded`, 'success');
+            }
+        }
+        
+        function startSearch() {
+            const query = document.getElementById('searchQuery').value.trim();
+            const location = document.getElementById('searchLocation').value.trim();
+            const industry = document.getElementById('searchIndustry').value;
+            const maxResults = parseInt(document.getElementById('maxResults').value);
+            
+            if (!query) {
+                showStatus('Please enter a search query', 'error');
+                return;
+            }
+            
+            if (isSearching) {
+                showStatus('Search already in progress', 'warning');
+                return;
+            }
+            
+            isSearching = true;
+            searchResults = [];
+            
+            // Show progress section
+            document.getElementById('searchProgress').style.display = 'block';
+            
+            // Reset progress
+            document.getElementById('progressFill').style.width = '0%';
+            document.getElementById('progressText').textContent = 'Starting search...';
+            document.getElementById('progressSearched').textContent = '0';
+            document.getElementById('progressFound').textContent = '0';
+            document.getElementById('progressMobile').textContent = '0';
+            document.getElementById('progressAdded').textContent = '0';
+            
+            showStatus(`Starting search for "${query}" in ${location}...`, 'info');
+            
+            // Simulate search progress (in real implementation, this would be actual web scraping)
+            simulateSearch(query, location, industry, maxResults);
+        }
+        
+        function simulateSearch(query, location, industry, maxResults) {
+            let searched = 0;
+            let found = 0;
+            let mobile = 0;
+            let added = 0;
+            
+            const searchInterval = setInterval(() => {
+                if (!isSearching || searched >= maxResults) {
+                    clearInterval(searchInterval);
+                    isSearching = false;
+                    showStatus(`Search completed! Found ${found} leads with ${mobile} mobile numbers`, 'success');
+                    updateFoundLeadsPreview();
+                    return;
+                }
+                
+                // Simulate finding a lead
+                if (Math.random() > 0.3) { // 70% chance of finding something
+                    const lead = generateMockLead(query, location, industry);
+                    searchResults.push(lead);
+                    found++;
+                    
+                    if (lead.hasMobile) {
+                        mobile++;
+                    }
+                    
+                    updateSearchResults();
+                }
+                
+                searched++;
+                
+                // Update progress
+                const progress = (searched / maxResults) * 100;
+                document.getElementById('progressFill').style.width = progress + '%';
+                document.getElementById('progressText').textContent = `Searching... ${searched}/${maxResults}`;
+                document.getElementById('progressSearched').textContent = searched;
+                document.getElementById('progressFound').textContent = found;
+                document.getElementById('progressMobile').textContent = mobile;
+                document.getElementById('progressAdded').textContent = added;
+                
+            }, 200); // Search every 200ms
+        }
+        
+        function generateMockLead(query, location, industry) {
+            const names = ['John Smith', 'Jane Doe', 'Michael Johnson', 'Sarah Wilson', 'David Brown', 'Emma Davis', 'James Miller', 'Lisa Garcia', 'Robert Martinez', 'Jennifer Anderson'];
+            const businesses = {
+                healthcare: ['Dental Practice', 'GP Surgery', 'Physiotherapy Clinic', 'Mental Health Practice', 'Private Medical Clinic'],
+                financial: ['Financial Advisory', 'Wealth Management', 'Mortgage Broker', 'Insurance Broker', 'Accounting Firm'],
+                property: ['Estate Agency', 'Property Investment', 'Commercial Property', 'Property Management', 'Real Estate'],
+                education: ['Private Tutoring', 'Language School', 'Driving School', 'Business Coaching', 'Life Coaching'],
+                legal: ['Law Firm', 'Solicitor Practice', 'Legal Advisory', 'Barrister Chambers', 'Legal Services']
+            };
+            
+            const name = names[Math.floor(Math.random() * names.length)];
+            const businessType = businesses[industry][Math.floor(Math.random() * businesses[industry].length)];
+            const businessName = `${name.split(' ')[0]} ${businessType}`;
+            
+            // Generate phone numbers
+            const hasMobile = Math.random() > 0.3; // 70% chance of having mobile
+            const mobile = hasMobile ? '+447' + Math.floor(Math.random() * 900000000 + 100000000) : null;
+            const landline = '01' + Math.floor(Math.random() * 900000000 + 100000000);
+            
+            return {
+                id: 'found_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                decisionMaker: name,
+                businessName: businessName,
+                industry: industry,
+                location: location,
+                phone: mobile || landline,
+                hasMobile: hasMobile,
+                email: `${name.toLowerCase().replace(' ', '.')}@${businessName.toLowerCase().replace(' ', '')}.com`,
+                website: `https://www.${businessName.toLowerCase().replace(' ', '')}.co.uk`,
+                source: 'Google Search',
+                foundAt: new Date().toISOString()
+            };
+        }
+        
+        function updateSearchResults() {
+            const container = document.getElementById('searchResults');
+            
+            if (searchResults.length === 0) {
+                container.innerHTML = '<div class="loading">No results found yet...</div>';
+                return;
+            }
+            
+            const results = searchResults.slice(-10); // Show last 10 results
+            
+            container.innerHTML = results.map(lead => `
+                <div class="search-item">
+                    <div class="search-info">
+                        <div class="search-name">${lead.decisionMaker} - ${lead.businessName}</div>
+                        <div class="search-details">
+                            📞 ${lead.phone} | 📧 ${lead.email} | 🌐 ${lead.website}<br>
+                            📍 ${lead.location} | 🏷️ ${lead.industry} | 🔍 ${lead.source}
+                        </div>
+                    </div>
+                    <div class="search-actions">
+                        <button class="btn btn-small ${lead.hasMobile ? 'btn-success' : 'btn-warning'}" onclick="addSingleLead('${lead.id}')">
+                            ${lead.hasMobile ? '📱 Add' : '☎️ Add'}
+                        </button>
+                    </div>
+                </div>
+            `).join('') + (searchResults.length > 10 ? `<div style="text-align: center; color: #666; margin-top: 10px;">... and ${searchResults.length - 10} more results</div>` : '');
+        }
+        
+        function updateFoundLeadsPreview() {
+            const total = searchResults.length;
+            const mobile = searchResults.filter(lead => lead.hasMobile).length;
+            const landline = total - mobile;
+            
+            document.getElementById('foundTotal').textContent = total;
+            document.getElementById('foundMobile').textContent = mobile;
+            document.getElementById('foundLandline').textContent = landline;
+            
+            const container = document.getElementById('foundLeadsPreview');
+            
+            if (total === 0) {
+                container.innerHTML = '<div class="loading">No leads found yet</div>';
+                document.getElementById('addAllBtn').disabled = true;
+                return;
+            }
+            
+            const mobileLeads = searchResults.filter(lead => lead.hasMobile);
+            document.getElementById('addAllBtn').disabled = mobileLeads.length === 0;
+            
+            container.innerHTML = mobileLeads.slice(0, 20).map(lead => `
+                <div class="lead-item">
+                    <div class="lead-info">
+                        <div class="lead-name">${lead.decisionMaker}</div>
+                        <div class="lead-details">${lead.businessName} • ${lead.phone} • ${lead.industry}</div>
+                    </div>
+                    <div class="lead-status status-mobile">Mobile</div>
+                </div>
+            `).join('') + (mobileLeads.length > 20 ? `<div style="text-align: center; color: #666; margin-top: 10px;">... and ${mobileLeads.length - 20} more mobile leads</div>` : '');
+        }
+        
+        function stopSearch() {
+            isSearching = false;
+            if (searchInterval) {
+                clearInterval(searchInterval);
+            }
+            showStatus('Search stopped by user', 'warning');
+        }
+        
+        function addSingleLead(leadId) {
+            const lead = searchResults.find(l => l.id === leadId);
+            if (!lead) return;
+            
+            // Add to pipeline
+            addLeadToPipeline(lead);
+        }
+        
+        async function addAllFoundLeads() {
+            const mobileLeads = searchResults.filter(lead => lead.hasMobile);
+            
+            if (mobileLeads.length === 0) {
+                showStatus('No mobile leads to add', 'error');
+                return;
+            }
+            
+            showStatus(`Adding ${mobileLeads.length} mobile leads to pipeline...`, 'info');
+            
+            let addedCount = 0;
+            let errorCount = 0;
+            
+            for (const lead of mobileLeads) {
+                try {
+                    await addLeadToPipeline(lead);
+                    addedCount++;
+                    
+                    // Small delay to avoid overwhelming the server
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
+                } catch (error) {
+                    errorCount++;
+                    console.error('Error adding lead:', error);
+                }
+            }
+            
+            showStatus(`Successfully added ${addedCount} leads! ${errorCount} errors occurred.`, 'success');
+            
+            // Refresh stats
+            setTimeout(refreshStats, 2000);
+        }
+        
+        async function addLeadToPipeline(lead) {
+            const response = await fetch(`${API_BASE}/api/initiate-lead-capture`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    leadData: {
+                        decisionMaker: lead.decisionMaker,
+                        phoneNumber: lead.phone,
+                        businessName: lead.businessName,
+                        industry: lead.industry,
+                        location: lead.location
+                    }
+                })
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                if (result.success) {
+                    console.log(`Added lead: ${lead.decisionMaker} (${lead.phone})`);
+                    return true;
+                } else {
+                    throw new Error(result.error);
+                }
+            } else {
+                throw new Error(`HTTP ${response.status}`);
+            }
+        }
+        
+        function clearResults() {
+            searchResults = [];
+            updateSearchResults();
+            updateFoundLeadsPreview();
+            showStatus('Search results cleared', 'success');
+        }
+        
+        function exportResults() {
+            const mobileLeads = searchResults.filter(lead => lead.hasMobile);
+            
+            if (mobileLeads.length === 0) {
+                showStatus('No mobile leads to export', 'error');
+                return;
+            }
+            
+            const csv = 'decisionMaker,phoneNumber,businessName,industry,location,email,website\n' +
+                mobileLeads.map(lead => 
+                    `${lead.decisionMaker},${lead.phone},${lead.businessName},${lead.industry},${lead.location},${lead.email},${lead.website}`
+                ).join('\n');
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `found_leads_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showStatus(`Exported ${mobileLeads.length} mobile leads to CSV`, 'success');
+        }
+        
+        function openLeadSourcing() {
+            window.open('/lead-sourcing-tool.html', '_blank');
+        }
+        
+        function openLeadTracker() {
+            window.open('/lead-tracking-dashboard.html', '_blank');
+        }
+        
+        async function refreshStats() {
+            try {
+                const response = await fetch(`${API_BASE}/api/pipeline-stats`);
+                if (response.ok) {
+                    const stats = await response.json();
+                    showStatus(`Pipeline: ${stats.totalLeads} total leads, ${stats.waitingForEmail} waiting for email`, 'success');
+                }
+            } catch (error) {
+                console.error('Error refreshing stats:', error);
+            }
+        }
+        
+        // Initialize
+        window.onload = function() {
+            refreshStats();
+        };
+    </script>
+</body>
+</html>
