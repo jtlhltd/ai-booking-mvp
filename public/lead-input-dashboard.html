@@ -117,6 +117,54 @@
             font-family: monospace;
             font-size: 14px;
         }
+        
+        .import-section {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .manual-lead-entry {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border: 2px solid #e1e5e9;
+        }
+        
+        .manual-lead-entry:last-child {
+            margin-bottom: 0;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            margin-right: 10px;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        
+        .mobile-validation {
+            background: #d1ecf1;
+            color: #0c5460;
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        
+        .mobile-validation.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .mobile-validation.success {
+            background: #d4edda;
+            color: #155724;
+        }
     </style>
 </head>
 <body>
@@ -165,12 +213,48 @@
             </form>
         </div>
         
-        <!-- Bulk Lead Input -->
+        <!-- Mobile-Focused Import Section -->
         <div class="bulk-section">
-            <h2>Bulk Lead Import</h2>
-            <p>Paste your leads in JSON format (one per line):</p>
+            <h2>📱 Mobile Number Import (100 Test Leads)</h2>
+            <p><strong>Perfect for testing your pipeline with decision makers!</strong></p>
             
-            <div class="example">
+            <div class="form-group">
+                <label for="importMethod">Import Method</label>
+                <select id="importMethod" onchange="toggleImportMethod()">
+                    <option value="csv">CSV Upload (Recommended)</option>
+                    <option value="json">JSON Format</option>
+                    <option value="manual">Manual Entry</option>
+                </select>
+            </div>
+            
+            <!-- CSV Upload Section -->
+            <div id="csvSection" class="import-section">
+                <h3>📄 CSV Upload</h3>
+                <p>Upload a CSV file with your 100 mobile numbers. Download the template below:</p>
+                
+                <div class="example">
+                    <strong>CSV Template Format:</strong><br>
+                    phoneNumber,decisionMaker,businessName,industry,location<br>
+                    +447123456789,John Smith,Tech Solutions Ltd,Technology,UK<br>
+                    +447987654321,Sarah Jones,Marketing Pro,Marketing,UK<br>
+                    +447555123456,Mike Wilson,Consulting Co,Consulting,UK
+                </div>
+                
+                <div class="form-group">
+                    <label for="csvFile">Choose CSV File</label>
+                    <input type="file" id="csvFile" accept=".csv" onchange="handleCSVUpload()">
+                </div>
+                
+                <button type="button" class="btn" id="downloadTemplate" onclick="downloadTemplate()">📥 Download CSV Template</button>
+                <button type="button" class="btn" id="csvImportBtn" onclick="importCSVLeads()" disabled>📤 Import CSV Leads</button>
+            </div>
+            
+            <!-- JSON Section -->
+            <div id="jsonSection" class="import-section" style="display: none;">
+                <h3>📋 JSON Format</h3>
+                <p>Paste your leads in JSON format (one per line):</p>
+                
+                <div class="example">
 {
   "phoneNumber": "+447123456789",
   "decisionMaker": "John Smith", 
@@ -178,11 +262,55 @@
   "industry": "Technology",
   "location": "UK"
 }
+                </div>
+                
+                <textarea id="bulkLeads" class="bulk-textarea" placeholder="Paste your leads here..."></textarea>
+                
+                <button type="button" class="btn" id="jsonImportBtn" onclick="importBulkLeads()">📤 Import JSON Leads</button>
             </div>
             
-            <textarea id="bulkLeads" class="bulk-textarea" placeholder="Paste your leads here..."></textarea>
-            
-            <button type="button" class="btn" id="bulkBtn" onclick="importBulkLeads()">Import All Leads</button>
+            <!-- Manual Entry Section -->
+            <div id="manualSection" class="import-section" style="display: none;">
+                <h3>✍️ Manual Entry</h3>
+                <p>Enter leads one by one (useful for small batches):</p>
+                
+                <div id="manualLeadsContainer">
+                    <div class="manual-lead-entry">
+                        <div class="form-group">
+                            <label>Phone Number</label>
+                            <input type="tel" class="manual-phone" placeholder="+447123456789">
+                        </div>
+                        <div class="form-group">
+                            <label>Decision Maker</label>
+                            <input type="text" class="manual-name" placeholder="John Smith">
+                        </div>
+                        <div class="form-group">
+                            <label>Business Name</label>
+                            <input type="text" class="manual-business" placeholder="Tech Solutions Ltd">
+                        </div>
+                        <div class="form-group">
+                            <label>Industry</label>
+                            <select class="manual-industry">
+                                <option value="Technology">Technology</option>
+                                <option value="Marketing">Marketing</option>
+                                <option value="Consulting">Consulting</option>
+                                <option value="Healthcare">Healthcare</option>
+                                <option value="Finance">Finance</option>
+                                <option value="Retail">Retail</option>
+                                <option value="Manufacturing">Manufacturing</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Location</label>
+                            <input type="text" class="manual-location" placeholder="UK" value="UK">
+                        </div>
+                    </div>
+                </div>
+                
+                <button type="button" class="btn" onclick="addManualLeadEntry()">➕ Add Another Lead</button>
+                <button type="button" class="btn" id="manualImportBtn" onclick="importManualLeads()">📤 Import Manual Leads</button>
+            </div>
         </div>
         
         <div id="status" class="status"></div>
@@ -190,6 +318,267 @@
 
     <script>
         const API_BASE = window.location.origin;
+        let csvData = null;
+        
+        // Mobile number validation
+        function validateMobileNumber(phone) {
+            // UK mobile number regex (starts with +44 7)
+            const ukMobileRegex = /^\+44[0-9]{10}$/;
+            const cleanPhone = phone.replace(/\s/g, '');
+            
+            if (!ukMobileRegex.test(cleanPhone)) {
+                return {
+                    valid: false,
+                    message: 'Please enter a valid UK mobile number (e.g., +447123456789)'
+                };
+            }
+            
+            return {
+                valid: true,
+                message: 'Valid UK mobile number',
+                formatted: cleanPhone
+            };
+        }
+        
+        // Toggle import method
+        function toggleImportMethod() {
+            const method = document.getElementById('importMethod').value;
+            
+            // Hide all sections
+            document.getElementById('csvSection').style.display = 'none';
+            document.getElementById('jsonSection').style.display = 'none';
+            document.getElementById('manualSection').style.display = 'none';
+            
+            // Show selected section
+            if (method === 'csv') {
+                document.getElementById('csvSection').style.display = 'block';
+            } else if (method === 'json') {
+                document.getElementById('jsonSection').style.display = 'block';
+            } else if (method === 'manual') {
+                document.getElementById('manualSection').style.display = 'block';
+            }
+        }
+        
+        // Download CSV template
+        function downloadTemplate() {
+            const csvContent = `phoneNumber,decisionMaker,businessName,industry,location
++447123456789,John Smith,Tech Solutions Ltd,Technology,UK
++447987654321,Sarah Jones,Marketing Pro,Marketing,UK
++447555123456,Mike Wilson,Consulting Co,Consulting,UK
++447777888999,Jane Brown,Health Care Ltd,Healthcare,UK
++447111222333,Tom Davis,Finance Corp,Finance,UK
++447444555666,Lisa Green,Retail Store,Retail,UK
++447999888777,Mark White,Manufacturing Inc,Manufacturing,UK
++447333444555,Emma Black,Consulting Firm,Consulting,UK
++447666777888,David Red,Tech Startup,Technology,UK
++447222333444,Sophie Blue,Marketing Agency,Marketing,UK`;
+            
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'mobile_leads_template.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            
+            showStatus('📥 CSV template downloaded! Add your 100 mobile numbers and upload.', 'success');
+        }
+        
+        // Handle CSV upload
+        function handleCSVUpload() {
+            const fileInput = document.getElementById('csvFile');
+            const file = fileInput.files[0];
+            
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const csvText = e.target.result;
+                    const lines = csvText.split('\n').filter(line => line.trim());
+                    const headers = lines[0].split(',').map(h => h.trim());
+                    
+                    // Validate headers
+                    const requiredHeaders = ['phoneNumber', 'decisionMaker', 'businessName', 'industry', 'location'];
+                    const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
+                    
+                    if (missingHeaders.length > 0) {
+                        showStatus(`❌ Missing required columns: ${missingHeaders.join(', ')}`, 'error');
+                        return;
+                    }
+                    
+                    // Parse CSV data
+                    csvData = [];
+                    for (let i = 1; i < lines.length; i++) {
+                        const values = lines[i].split(',').map(v => v.trim());
+                        if (values.length === headers.length) {
+                            const lead = {};
+                            headers.forEach((header, index) => {
+                                lead[header] = values[index];
+                            });
+                            
+                            // Validate mobile number
+                            const validation = validateMobileNumber(lead.phoneNumber);
+                            if (validation.valid) {
+                                lead.phoneNumber = validation.formatted;
+                                csvData.push(lead);
+                            }
+                        }
+                    }
+                    
+                    document.getElementById('csvImportBtn').disabled = false;
+                    showStatus(`✅ CSV loaded successfully! ${csvData.length} valid mobile numbers found.`, 'success');
+                    
+                } catch (error) {
+                    showStatus(`❌ Error parsing CSV: ${error.message}`, 'error');
+                }
+            };
+            
+            reader.readAsText(file);
+        }
+        
+        // Import CSV leads
+        async function importCSVLeads() {
+            if (!csvData || csvData.length === 0) {
+                showStatus('❌ No CSV data to import', 'error');
+                return;
+            }
+            
+            const btn = document.getElementById('csvImportBtn');
+            btn.disabled = true;
+            btn.textContent = 'Importing...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/import-leads-csv`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ leads: csvData })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showStatus(`✅ CSV import completed! ${result.results.successful} SMS sent, ${result.results.failed} failed. Check the Lead Tracking Dashboard to monitor progress.`, 'success');
+                } else {
+                    showStatus(`❌ CSV import failed: ${result.message}`, 'error');
+                }
+                
+            } catch (error) {
+                showStatus(`❌ Error: ${error.message}`, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '📤 Import CSV Leads';
+            }
+        }
+        
+        // Add manual lead entry
+        function addManualLeadEntry() {
+            const container = document.getElementById('manualLeadsContainer');
+            const newEntry = document.createElement('div');
+            newEntry.className = 'manual-lead-entry';
+            newEntry.innerHTML = `
+                <div class="form-group">
+                    <label>Phone Number</label>
+                    <input type="tel" class="manual-phone" placeholder="+447123456789">
+                </div>
+                <div class="form-group">
+                    <label>Decision Maker</label>
+                    <input type="text" class="manual-name" placeholder="John Smith">
+                </div>
+                <div class="form-group">
+                    <label>Business Name</label>
+                    <input type="text" class="manual-business" placeholder="Tech Solutions Ltd">
+                </div>
+                <div class="form-group">
+                    <label>Industry</label>
+                    <select class="manual-industry">
+                        <option value="Technology">Technology</option>
+                        <option value="Marketing">Marketing</option>
+                        <option value="Consulting">Consulting</option>
+                        <option value="Healthcare">Healthcare</option>
+                        <option value="Finance">Finance</option>
+                        <option value="Retail">Retail</option>
+                        <option value="Manufacturing">Manufacturing</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Location</label>
+                    <input type="text" class="manual-location" placeholder="UK" value="UK">
+                </div>
+                <button type="button" class="btn btn-secondary" onclick="removeManualLeadEntry(this)">🗑️ Remove</button>
+            `;
+            container.appendChild(newEntry);
+        }
+        
+        // Remove manual lead entry
+        function removeManualLeadEntry(button) {
+            button.parentElement.remove();
+        }
+        
+        // Import manual leads
+        async function importManualLeads() {
+            const entries = document.querySelectorAll('.manual-lead-entry');
+            const leads = [];
+            
+            entries.forEach(entry => {
+                const phone = entry.querySelector('.manual-phone').value.trim();
+                const name = entry.querySelector('.manual-name').value.trim();
+                const business = entry.querySelector('.manual-business').value.trim();
+                const industry = entry.querySelector('.manual-industry').value;
+                const location = entry.querySelector('.manual-location').value.trim();
+                
+                if (phone && name) {
+                    const validation = validateMobileNumber(phone);
+                    if (validation.valid) {
+                        leads.push({
+                            phoneNumber: validation.formatted,
+                            decisionMaker: name,
+                            businessName: business,
+                            industry: industry,
+                            location: location
+                        });
+                    }
+                }
+            });
+            
+            if (leads.length === 0) {
+                showStatus('❌ No valid leads to import', 'error');
+                return;
+            }
+            
+            const btn = document.getElementById('manualImportBtn');
+            btn.disabled = true;
+            btn.textContent = 'Importing...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/import-leads-csv`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ leads })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showStatus(`✅ Manual import completed! ${result.results.successful} SMS sent, ${result.results.failed} failed.`, 'success');
+                } else {
+                    showStatus(`❌ Manual import failed: ${result.message}`, 'error');
+                }
+                
+            } catch (error) {
+                showStatus(`❌ Error: ${error.message}`, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '📤 Import Manual Leads';
+            }
+        }
         
         // Single lead form submission
         document.getElementById('singleLeadForm').addEventListener('submit', async (e) => {
@@ -197,6 +586,15 @@
             
             const formData = new FormData(e.target);
             const leadData = Object.fromEntries(formData.entries());
+            
+            // Validate mobile number
+            const validation = validateMobileNumber(leadData.phoneNumber);
+            if (!validation.valid) {
+                showStatus(`❌ ${validation.message}`, 'error');
+                return;
+            }
+            
+            leadData.phoneNumber = validation.formatted;
             
             const btn = document.getElementById('singleBtn');
             btn.disabled = true;
@@ -227,7 +625,7 @@
             }
         });
         
-        // Bulk import function
+        // Bulk import function (JSON)
         async function importBulkLeads() {
             const textarea = document.getElementById('bulkLeads');
             const leadsText = textarea.value.trim();
@@ -237,16 +635,23 @@
                 return;
             }
             
-            const btn = document.getElementById('bulkBtn');
+            const btn = document.getElementById('jsonImportBtn');
             btn.disabled = true;
             btn.textContent = 'Importing...';
             
             try {
                 // Parse JSON lines
                 const lines = leadsText.split('\n').filter(line => line.trim());
-                const leads = lines.map(line => {
+                const leads = [];
+                
+                lines.forEach(line => {
                     try {
-                        return JSON.parse(line.trim());
+                        const lead = JSON.parse(line.trim());
+                        const validation = validateMobileNumber(lead.phoneNumber);
+                        if (validation.valid) {
+                            lead.phoneNumber = validation.formatted;
+                            leads.push(lead);
+                        }
                     } catch (e) {
                         throw new Error(`Invalid JSON: ${line}`);
                     }
@@ -263,16 +668,16 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    showStatus(`✅ Bulk import completed: ${result.results.successful} successful, ${result.results.failed} failed`, 'success');
+                    showStatus(`✅ JSON import completed! ${result.results.successful} SMS sent, ${result.results.failed} failed.`, 'success');
                 } else {
-                    showStatus(`❌ Bulk import failed: ${result.message}`, 'error');
+                    showStatus(`❌ JSON import failed: ${result.message}`, 'error');
                 }
                 
             } catch (error) {
                 showStatus(`❌ Error: ${error.message}`, 'error');
             } finally {
                 btn.disabled = false;
-                btn.textContent = 'Import All Leads';
+                btn.textContent = '📤 Import JSON Leads';
             }
         }
         
@@ -284,7 +689,7 @@
             
             setTimeout(() => {
                 status.style.display = 'none';
-            }, 5000);
+            }, 8000);
         }
     </script>
 </body>
