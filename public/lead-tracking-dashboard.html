@@ -312,6 +312,137 @@
         .export-logs-btn:hover {
             background: #218838;
         }
+        
+        .lead-detail-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            margin-right: 5px;
+        }
+        
+        .lead-detail-btn:hover {
+            background: #5a6fd8;
+        }
+        
+        .lead-detail-modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        
+        .lead-detail-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 20px;
+            border-radius: 12px;
+            width: 80%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .lead-detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        
+        .lead-detail-close {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .lead-detail-close:hover {
+            background: #c82333;
+        }
+        
+        .lead-info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .lead-info-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .lead-info-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+        
+        .lead-info-value {
+            font-size: 16px;
+            color: #333;
+            font-weight: 500;
+        }
+        
+        .lead-timeline {
+            margin-top: 20px;
+        }
+        
+        .timeline-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .timeline-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            font-size: 18px;
+        }
+        
+        .timeline-icon.sms { background: #17a2b8; color: white; }
+        .timeline-icon.email { background: #28a745; color: white; }
+        .timeline-icon.booking { background: #ffc107; color: #333; }
+        .timeline-icon.demo { background: #dc3545; color: white; }
+        
+        .timeline-content {
+            flex: 1;
+        }
+        
+        .timeline-title {
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .timeline-time {
+            font-size: 12px;
+            color: #666;
+        }
     </style>
 </head>
 <body>
@@ -434,6 +565,26 @@
             <button class="clear-logs-btn" onclick="clearLogs()">🗑️ Clear Logs</button>
             <button class="export-logs-btn" onclick="exportLogs()">📥 Export Logs</button>
         </div>
+    </div>
+    
+    <!-- Lead Detail Modal -->
+    <div id="leadDetailModal" class="lead-detail-modal">
+        <div class="lead-detail-content">
+            <div class="lead-detail-header">
+                <h2 id="leadDetailTitle">Lead Details</h2>
+                <button class="lead-detail-close" onclick="closeLeadDetail()">✕ Close</button>
+            </div>
+            
+            <div class="lead-info-grid" id="leadInfoGrid">
+                <!-- Lead info will be populated here -->
+            </div>
+            
+            <div class="lead-timeline" id="leadTimeline">
+                <h3>📅 Lead Timeline</h3>
+                <!-- Timeline will be populated here -->
+            </div>
+        </div>
+    </div>
 
     <script>
         const API_BASE = window.location.origin;
@@ -852,9 +1003,10 @@
                                 </td>
                                 <td>${new Date(lead.createdAt).toLocaleString()}</td>
                                 <td>
+                                    <button class="lead-detail-btn" onclick="showLeadDetail('${lead.leadId}')">👁️ Details</button>
                                     ${lead.status === 'email_received' ? 
-                                        `<a href="/booking-dashboard.html?leadId=${lead.leadId}&email=${encodeURIComponent(lead.email)}&phone=${encodeURIComponent(lead.phoneNumber)}" target="_blank">View Booking</a>` : 
-                                        'Waiting...'
+                                        `<a href="/booking-dashboard.html?leadId=${lead.leadId}&email=${encodeURIComponent(lead.email)}&phone=${encodeURIComponent(lead.phoneNumber)}" target="_blank" style="background: #28a745; color: white; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 12px;">📅 Book</a>` : 
+                                        '<span style="color: #666; font-size: 12px;">Waiting...</span>'
                                     }
                                 </td>
                             </tr>
@@ -884,6 +1036,163 @@
             logActivity('Auto-refresh triggered', 'info');
             refreshData();
         }, 30000);
+        
+        // Lead detail modal functions
+        function showLeadDetail(leadId) {
+            logActivity('Opening lead detail modal', 'info', { leadId });
+            
+            // Find the lead data
+            const lead = lastLeads ? lastLeads.find(l => l.leadId === leadId) : null;
+            if (!lead) {
+                logActivity('Lead not found for detail view', 'error', { leadId });
+                alert('Lead not found');
+                return;
+            }
+            
+            // Update modal title
+            document.getElementById('leadDetailTitle').textContent = `Lead: ${lead.decisionMaker || 'Unknown'}`;
+            
+            // Populate lead info
+            const leadInfoGrid = document.getElementById('leadInfoGrid');
+            leadInfoGrid.innerHTML = `
+                <div class="lead-info-item">
+                    <div class="lead-info-label">Lead ID</div>
+                    <div class="lead-info-value">${lead.leadId}</div>
+                </div>
+                <div class="lead-info-item">
+                    <div class="lead-info-label">Decision Maker</div>
+                    <div class="lead-info-value">${lead.decisionMaker || 'N/A'}</div>
+                </div>
+                <div class="lead-info-item">
+                    <div class="lead-info-label">Phone Number</div>
+                    <div class="lead-info-value">${lead.phoneNumber || 'N/A'}</div>
+                </div>
+                <div class="lead-info-item">
+                    <div class="lead-info-label">Email</div>
+                    <div class="lead-info-value">${lead.email || 'N/A'}</div>
+                </div>
+                <div class="lead-info-item">
+                    <div class="lead-info-label">Business Name</div>
+                    <div class="lead-info-value">${lead.businessName || 'N/A'}</div>
+                </div>
+                <div class="lead-info-item">
+                    <div class="lead-info-label">Industry</div>
+                    <div class="lead-info-value">${lead.industry || 'N/A'}</div>
+                </div>
+                <div class="lead-info-item">
+                    <div class="lead-info-label">Location</div>
+                    <div class="lead-info-value">${lead.location || 'N/A'}</div>
+                </div>
+                <div class="lead-info-item">
+                    <div class="lead-info-label">Current Status</div>
+                    <div class="lead-info-value">
+                        <span class="status-badge status-${lead.status}">
+                            ${lead.status.replace('_', ' ')}
+                        </span>
+                    </div>
+                </div>
+                <div class="lead-info-item">
+                    <div class="lead-info-label">Created</div>
+                    <div class="lead-info-value">${new Date(lead.createdAt).toLocaleString()}</div>
+                </div>
+                <div class="lead-info-item">
+                    <div class="lead-info-label">Last Updated</div>
+                    <div class="lead-info-value">${lead.updatedAt ? new Date(lead.updatedAt).toLocaleString() : 'N/A'}</div>
+                </div>
+                ${lead.bookingId ? `
+                <div class="lead-info-item">
+                    <div class="lead-info-label">Booking ID</div>
+                    <div class="lead-info-value">${lead.bookingId}</div>
+                </div>
+                ` : ''}
+                ${lead.bookedAt ? `
+                <div class="lead-info-item">
+                    <div class="lead-info-label">Booked At</div>
+                    <div class="lead-info-value">${new Date(lead.bookedAt).toLocaleString()}</div>
+                </div>
+                ` : ''}
+            `;
+            
+            // Generate timeline
+            const timeline = document.getElementById('leadTimeline');
+            const timelineItems = [];
+            
+            // SMS Sent
+            timelineItems.push({
+                icon: 'sms',
+                title: 'SMS Sent',
+                time: new Date(lead.createdAt).toLocaleString(),
+                description: 'Initial SMS sent to lead'
+            });
+            
+            // Email Received (if applicable)
+            if (lead.status === 'email_received' || lead.status === 'demo_booked') {
+                timelineItems.push({
+                    icon: 'email',
+                    title: 'Email Received',
+                    time: lead.emailReceivedAt ? new Date(lead.emailReceivedAt).toLocaleString() : 'Unknown',
+                    description: 'Lead replied with email address'
+                });
+            }
+            
+            // Booking Link Sent (if applicable)
+            if (lead.status === 'email_received' || lead.status === 'demo_booked') {
+                timelineItems.push({
+                    icon: 'booking',
+                    title: 'Booking Link Sent',
+                    time: lead.bookingLinkSentAt ? new Date(lead.bookingLinkSentAt).toLocaleString() : 'Unknown',
+                    description: 'Booking link sent to lead email'
+                });
+            }
+            
+            // Demo Booked (if applicable)
+            if (lead.status === 'demo_booked') {
+                timelineItems.push({
+                    icon: 'demo',
+                    title: 'Demo Booked',
+                    time: lead.bookedAt ? new Date(lead.bookedAt).toLocaleString() : 'Unknown',
+                    description: 'Lead successfully booked a demo'
+                });
+            }
+            
+            timeline.innerHTML = `
+                <h3>📅 Lead Timeline</h3>
+                ${timelineItems.map(item => `
+                    <div class="timeline-item">
+                        <div class="timeline-icon ${item.icon}">
+                            ${item.icon === 'sms' ? '📱' : item.icon === 'email' ? '📧' : item.icon === 'booking' ? '🔗' : '📅'}
+                        </div>
+                        <div class="timeline-content">
+                            <div class="timeline-title">${item.title}</div>
+                            <div class="timeline-time">${item.time}</div>
+                            <div style="font-size: 12px; color: #666; margin-top: 5px;">${item.description}</div>
+                        </div>
+                    </div>
+                `).join('')}
+            `;
+            
+            // Show modal
+            document.getElementById('leadDetailModal').style.display = 'block';
+            
+            logActivity('Lead detail modal opened', 'success', { 
+                leadId, 
+                leadName: lead.decisionMaker,
+                status: lead.status 
+            });
+        }
+        
+        function closeLeadDetail() {
+            document.getElementById('leadDetailModal').style.display = 'none';
+            logActivity('Lead detail modal closed', 'info');
+        }
+        
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('leadDetailModal');
+            if (event.target === modal) {
+                closeLeadDetail();
+            }
+        }
         
         // Initial load with logging
         logActivity('Dashboard initialization started', 'info');
