@@ -92,6 +92,10 @@ import vapiWebhooks from './routes/vapi-webhooks.js';
 
 const app = express();
 
+// Middleware for parsing JSON bodies (must be before routes that need it)
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
 // Initialize Booking System
 let bookingSystem = null;
 try {
@@ -1031,8 +1035,7 @@ app.get('/admin/validate-call-duration', async (req, res) => {
 });
 
 // Middleware for parsing JSON bodies (must be before routes that need it)
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Moved to top of file to ensure all routes have access to JSON parsing
 
 // Booking System Endpoints (after JSON middleware)
 // Book Demo Call
