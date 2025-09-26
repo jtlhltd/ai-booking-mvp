@@ -256,8 +256,8 @@ Notes: Cold call lead - interested in AI booking service
         <p><strong>Location:</strong> ${lead.location}</p>
         <hr>
         <p><strong>Demo Scheduled:</strong></p>
-        <p>📅 Date: ${confirmedTime.date}</p>
-        <p>⏰ Time: ${confirmedTime.startTime} - ${confirmedTime.endTime}</p>
+        <p>📅 Date: ${confirmedTime.date || new Date(confirmedTime.startDateTime).toLocaleDateString('en-GB')}</p>
+        <p>⏰ Time: ${confirmedTime.startTime || new Date(confirmedTime.startDateTime).toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit'})} - ${confirmedTime.endTime || new Date(confirmedTime.endDateTime).toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit'})}</p>
         <p>🌍 Timezone: Europe/London</p>
         <hr>
         <p><em>This demo was booked from a cold call lead.</em></p>
@@ -274,8 +274,8 @@ Notes: Cold call lead - interested in AI booking service
         <p>Thank you for your interest in our AI booking service. Your demo call has been confirmed:</p>
         <hr>
         <p><strong>Demo Details:</strong></p>
-        <p>📅 Date: ${confirmedTime.date}</p>
-        <p>⏰ Time: ${confirmedTime.startTime} - ${confirmedTime.endTime}</p>
+        <p>📅 Date: ${confirmedTime.date || new Date(confirmedTime.startDateTime).toLocaleDateString('en-GB')}</p>
+        <p>⏰ Time: ${confirmedTime.startTime || new Date(confirmedTime.startDateTime).toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit'})} - ${confirmedTime.endTime || new Date(confirmedTime.endDateTime).toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit'})}</p>
         <p>🌍 Timezone: Europe/London</p>
         <p>📞 Call will be made to: ${lead.phoneNumber}</p>
         <hr>
@@ -294,14 +294,14 @@ Notes: Cold call lead - interested in AI booking service
     // Send SMS to you
     await this.sendSMS({
       to: process.env.YOUR_PHONE,
-      body: `🎉 New demo booked! ${lead.businessName} - ${lead.decisionMaker} on ${confirmedTime.date} at ${confirmedTime.startTime}`
+      body: `🎉 New demo booked! ${lead.businessName} - ${lead.decisionMaker} on ${confirmedTime.date || new Date(confirmedTime.startDateTime).toLocaleDateString('en-GB')} at ${confirmedTime.startTime || new Date(confirmedTime.startDateTime).toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit'})}`
     });
 
     // Send SMS to lead (if they have a mobile number)
     if (lead.phoneNumber && lead.phoneNumber.startsWith('+44')) {
       await this.sendSMS({
         to: lead.phoneNumber,
-        body: `Hi ${lead.decisionMaker}, your demo call with AI Booking Solutions is confirmed for ${confirmedTime.date} at ${confirmedTime.startTime}. We'll call you then!`
+        body: `Hi ${lead.decisionMaker}, your demo call with AI Booking Solutions is confirmed for ${confirmedTime.date || new Date(confirmedTime.startDateTime).toLocaleDateString('en-GB')} at ${confirmedTime.startTime || new Date(confirmedTime.startDateTime).toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit'})}. We'll call you then!`
       });
     }
   }
