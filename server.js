@@ -383,31 +383,6 @@ app.get('/api/lead-status/:leadId', async (req, res) => {
   }
 });
 
-// Get Pipeline Statistics
-app.get('/api/pipeline-stats', async (req, res) => {
-  try {
-    if (!smsEmailPipeline) {
-      return res.status(503).json({ 
-        success: false, 
-        message: 'SMS-Email pipeline not available' 
-      });
-    }
-
-    const stats = smsEmailPipeline.getStats();
-    res.json({
-      success: true,
-      stats: stats
-    });
-    
-  } catch (error) {
-    console.error('[PIPELINE STATS ERROR]', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to get pipeline stats',
-      error: error.message
-    });
-  }
-});
 
 
 // Twilio Webhook for SMS Replies
