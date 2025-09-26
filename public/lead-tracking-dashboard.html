@@ -401,6 +401,50 @@
                 <div class="loading">Loading leads...</div>
             </div>
         </div>
+        
+        <!-- Retry Monitoring -->
+        <div class="leads-section">
+            <h2 class="leads-title">🔄 SMS Retry Monitor</h2>
+            
+            <!-- Retry Summary -->
+            <div class="stats-grid" style="margin-bottom: 20px;">
+                <div class="stat-card" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);">
+                    <div class="stat-number" id="stuckCount">-</div>
+                    <div class="stat-label">Stuck Leads</div>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);">
+                    <div class="stat-number" id="expiredCount">-</div>
+                    <div class="stat-label">Expired Leads</div>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);">
+                    <div class="stat-number" id="scheduledCount">-</div>
+                    <div class="stat-label">Retry Scheduled</div>
+                </div>
+            </div>
+            
+            <!-- Retry Details -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                <div>
+                    <h3 style="color: #ff6b6b; margin-bottom: 10px;">🚫 Stuck Leads</h3>
+                    <div id="stuckLeadsContainer" style="max-height: 300px; overflow-y: auto;">
+                        <div class="loading">Loading stuck leads...</div>
+                    </div>
+                </div>
+                <div>
+                    <h3 style="color: #f39c12; margin-bottom: 10px;">⏳ Retry Scheduled</h3>
+                    <div id="retryScheduledContainer" style="max-height: 300px; overflow-y: auto;">
+                        <div class="loading">Loading scheduled retries...</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div>
+                <h3 style="color: #95a5a6; margin-bottom: 10px;">⏰ Expired Leads</h3>
+                <div id="expiredLeadsContainer">
+                    <div class="loading">Loading expired leads...</div>
+                </div>
+            </div>
+        </div>
     </div>
     
     <!-- Lead Detail Modal -->
@@ -514,9 +558,126 @@
                     showStatus(`❌ Failed to load leads: ${leadsResponse.status}`, 'error');
                 }
                 
+                // Load retry data
+                await loadRetryData();
+                
             } catch (error) {
                 showStatus(`❌ Error loading data: ${error.message}`, 'error');
                 console.error('Error loading data:', error);
+            }
+        }
+        
+        async function loadRetryData() {
+            try {
+                const response = await fetch(`${API_BASE}/api/leads-needing-attention`);
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Update retry summary stats
+                    document.getElementById('stuckCount').textContent = data.summary.stuckCount;
+                    document.getElementById('expiredCount').textContent = data.summary.expiredCount;
+                    document.getElementById('scheduledCount').textContent = data.summary.retryScheduledCount;
+                    
+                    // Create retry tables
+                    createRetryTable(data.stuckLeads, 'stuckLeadsContainer', true);
+                    createRetryTable(data.expiredLeads, 'expiredLeadsContainer', false);
+                    createRetryTable(data.retryScheduled, 'retryScheduledContainer', true);
+                    
+                } else {
+                    console.error('Failed to load retry data:', response.status);
+                }
+            } catch (error) {
+                console.error('Error loading retry data:', error);
+            }
+        }
+        
+        function createRetryTable(leads, containerId, showRetryButton = false) {
+            const container = document.getElementById(containerId);
+            
+            if (!leads || leads.length === 0) {
+                container.innerHTML = '<div class="no-data">No leads found</div>';
+                return;
+            }
+            
+            const table = `
+                <table class="leads-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Phone</th>
+                            <th>Retry Count</th>
+                            <th>Last SMS</th>
+                            <th>Next Retry</th>
+                            ${showRetryButton ? '<th>Actions</th>' : ''}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${leads.map(lead => `
+                            <tr>
+                                <td>${lead.decisionMaker || 'N/A'}</td>
+                                <td>${lead.phoneNumber || 'N/A'}</td>
+                                <td>${lead.retryCount || 0}</td>
+                                <td style="font-size: 12px; color: #666;">${formatTime(lead.lastSmsSent)}</td>
+                                <td style="font-size: 12px; color: #666;">
+                                    ${lead.timeUntilRetry ? formatTimeUntil(lead.timeUntilRetry) : formatTime(lead.nextRetryAt)}
+                                </td>
+                                ${showRetryButton ? `
+                                    <td>
+                                        <button class="lead-detail-btn" onclick="triggerRetry('${lead.leadId}')" 
+                                                ${lead.status !== 'waiting_for_email' ? 'disabled' : ''}>
+                                            🔄 Retry
+                                        </button>
+                                    </td>
+                                ` : ''}
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+            
+            container.innerHTML = table;
+        }
+        
+        function formatTime(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleString();
+        }
+        
+        function formatTimeUntil(minutes) {
+            if (minutes < 60) {
+                return `${minutes}m`;
+            } else if (minutes < 1440) {
+                const hours = Math.floor(minutes / 60);
+                const mins = minutes % 60;
+                return `${hours}h ${mins}m`;
+            } else {
+                const days = Math.floor(minutes / 1440);
+                const hours = Math.floor((minutes % 1440) / 60);
+                return `${days}d ${hours}h`;
+            }
+        }
+        
+        async function triggerRetry(leadId) {
+            try {
+                const response = await fetch(`${API_BASE}/api/trigger-retry/${leadId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    showStatus(`✅ Retry triggered for ${result.phoneNumber}`, 'success');
+                    // Reload retry data to show updated status
+                    setTimeout(loadRetryData, 1000);
+                } else {
+                    const error = await response.json();
+                    showStatus(`❌ Failed to trigger retry: ${error.error}`, 'error');
+                }
+            } catch (error) {
+                showStatus(`❌ Error triggering retry: ${error.message}`, 'error');
+                console.error('Error triggering retry:', error);
             }
         }
         
