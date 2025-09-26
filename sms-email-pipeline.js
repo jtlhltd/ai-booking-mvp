@@ -347,21 +347,55 @@ class SMSEmailPipeline {
     const now = new Date();
     const leads = Array.from(this.pendingLeads.values());
     
+    const stuckLeads = leads.filter(lead => 
+      lead.status === 'waiting_for_email' && 
+      lead.retryCount >= 3 && 
+      lead.expiresAt > now
+    ).map(lead => ({
+      ...lead,
+      nextRetryAt: lead.nextRetryAt,
+      retryCount: lead.retryCount,
+      lastSmsSent: lead.lastSmsSent,
+      expiresAt: lead.expiresAt,
+      reason: 'Max retries reached but still within expiration'
+    }));
+
+    const expiredLeads = leads.filter(lead => 
+      lead.status === 'expired' || 
+      lead.expiresAt <= now
+    ).map(lead => ({
+      ...lead,
+      nextRetryAt: lead.nextRetryAt,
+      retryCount: lead.retryCount,
+      lastSmsSent: lead.lastSmsSent,
+      expiresAt: lead.expiresAt,
+      expiredAt: lead.expiredAt || lead.expiresAt,
+      reason: lead.status === 'expired' ? 'Max retries reached' : 'Expiration time passed'
+    }));
+
+    const retryScheduled = leads.filter(lead => 
+      lead.status === 'waiting_for_email' && 
+      lead.nextRetryAt > now && 
+      lead.retryCount < 3
+    ).map(lead => ({
+      ...lead,
+      nextRetryAt: lead.nextRetryAt,
+      retryCount: lead.retryCount,
+      lastSmsSent: lead.lastSmsSent,
+      expiresAt: lead.expiresAt,
+      timeUntilRetry: Math.round((lead.nextRetryAt - now) / (1000 * 60)), // minutes
+      reason: `Retry ${lead.retryCount + 1} scheduled`
+    }));
+    
     return {
-      stuckLeads: leads.filter(lead => 
-        lead.status === 'waiting_for_email' && 
-        lead.retryCount >= 3 && 
-        lead.expiresAt > now
-      ),
-      expiredLeads: leads.filter(lead => 
-        lead.status === 'expired' || 
-        lead.expiresAt <= now
-      ),
-      retryScheduled: leads.filter(lead => 
-        lead.status === 'waiting_for_email' && 
-        lead.nextRetryAt > now && 
-        lead.retryCount < 3
-      )
+      stuckLeads,
+      expiredLeads,
+      retryScheduled,
+      summary: {
+        stuckCount: stuckLeads.length,
+        expiredCount: expiredLeads.length,
+        retryScheduledCount: retryScheduled.length
+      }
     };
   }
 }
