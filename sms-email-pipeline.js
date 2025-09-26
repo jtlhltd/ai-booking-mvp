@@ -98,7 +98,7 @@ class SMSEmailPipeline {
       leadData.emailReceivedAt = new Date();
 
       // Generate booking link
-      const bookingLink = `${process.env.BASE_URL || 'https://ai-booking-mvp.onrender.com'}/booking-dashboard.html?leadId=${leadId}`;
+      const bookingLink = `${process.env.BASE_URL || 'https://ai-booking-mvp.onrender.com'}/booking-dashboard.html?leadId=${leadId}&email=${encodeURIComponent(emailAddress)}&phone=${encodeURIComponent(phoneNumber)}`;
 
       // Send confirmation email with booking link
       await this.sendConfirmationEmail(leadData, bookingLink);
