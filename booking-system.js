@@ -13,10 +13,11 @@ class BookingSystem {
 
   async initializeServices() {
     try {
-      // Initialize Google Calendar
+      // Initialize Google Calendar with OAuth2 (personal account)
       if (process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY) {
         try {
-          // Validate private key format
+          // For personal accounts, we'll use a simpler approach
+          // Create calendar events without sending invitations
           const privateKey = process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n');
           if (!privateKey.includes('BEGIN PRIVATE KEY')) {
             throw new Error('Invalid private key format');
@@ -146,9 +147,10 @@ class BookingSystem {
       return null; // Return null instead of throwing error
     }
 
-    const event = {
-      summary: `Demo Call - ${leadData.businessName}`,
-      description: `
+    try {
+      const event = {
+        summary: `Demo Call - ${leadData.businessName}`,
+        description: `
 Demo Call Details:
 - Business: ${leadData.businessName}
 - Contact: ${leadData.decisionMaker}
@@ -158,38 +160,83 @@ Demo Call Details:
 - Location: ${leadData.location}
 
 Notes: Cold call lead - interested in AI booking service
-      `,
-      start: {
-        dateTime: timeSlot.startDateTime,
-        timeZone: 'Europe/London'
-      },
-      end: {
-        dateTime: timeSlot.endDateTime,
-        timeZone: 'Europe/London'
-      },
-      attendees: [
-        { email: leadData.email, displayName: leadData.decisionMaker },
-        { email: process.env.YOUR_EMAIL, displayName: 'You' }
-      ],
-      reminders: {
-        useDefault: false,
-        overrides: [
-          { method: 'email', minutes: 60 },
-          { method: 'popup', minutes: 15 }
-        ]
+        `,
+        start: {
+          dateTime: timeSlot.startDateTime,
+          timeZone: 'Europe/London'
+        },
+        end: {
+          dateTime: timeSlot.endDateTime,
+          timeZone: 'Europe/London'
+        },
+        // Removed attendees to avoid Domain-Wide Delegation requirement
+        // We'll send email invitations separately
+        reminders: {
+          useDefault: false,
+          overrides: [
+            { method: 'email', minutes: 60 },
+            { method: 'popup', minutes: 15 }
+          ]
+        }
+      };
+
+      // Use your existing calendar ID from environment variable
+      const calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
+      
+      const response = await this.calendar.events.insert({
+        calendarId: calendarId,
+        resource: event
+      });
+
+      console.log('✅ Calendar event created successfully:', response.data.id);
+      return response.data;
+
+    } catch (error) {
+      console.error('❌ Error creating calendar event:', error.message);
+      
+      // If it's a delegation error, try without attendees
+      if (error.message.includes('Domain-Wide Delegation') || error.message.includes('attendees')) {
+        console.log('🔄 Retrying calendar event creation without attendees...');
+        try {
+          const eventWithoutAttendees = {
+            summary: `Demo Call - ${leadData.businessName}`,
+            description: `
+Demo Call Details:
+- Business: ${leadData.businessName}
+- Contact: ${leadData.decisionMaker}
+- Phone: ${leadData.phoneNumber}
+- Email: ${leadData.email}
+- Industry: ${leadData.industry}
+- Location: ${leadData.location}
+
+Notes: Cold call lead - interested in AI booking service
+            `,
+            start: {
+              dateTime: timeSlot.startDateTime,
+              timeZone: 'Europe/London'
+            },
+            end: {
+              dateTime: timeSlot.endDateTime,
+              timeZone: 'Europe/London'
+            }
+          };
+
+          const calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
+          const response = await this.calendar.events.insert({
+            calendarId: calendarId,
+            resource: eventWithoutAttendees
+          });
+
+          console.log('✅ Calendar event created without attendees:', response.data.id);
+          return response.data;
+        } catch (retryError) {
+          console.error('❌ Error creating calendar event (retry):', retryError.message);
+          return null;
+        }
       }
-    };
-
-    // Use your existing calendar ID from environment variable
-    const calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
-    
-    const response = await this.calendar.events.insert({
-      calendarId: calendarId,
-      resource: event
-    });
-
-    console.log('📅 Calendar event created:', response.data.id);
-    return response.data;
+      
+      return null;
+    }
   }
 
   async sendBookingNotifications(booking) {
