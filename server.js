@@ -1037,8 +1037,97 @@ app.get('/admin/validate-call-duration', async (req, res) => {
 // Middleware for parsing JSON bodies (must be before routes that need it)
 // Moved to top of file to ensure all routes have access to JSON parsing
 
-// Booking System Endpoints (after JSON middleware)
-// Book Demo Call
+// Bulk CSV Lead Import
+app.post('/api/import-leads-csv', requireApiKey, async (req, res) => {
+  try {
+    const { leads } = req.body;
+    
+    if (!Array.isArray(leads) || leads.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Leads array is required and must not be empty'
+      });
+    }
+    
+    const results = [];
+    const errors = [];
+    
+    for (const lead of leads) {
+      try {
+        if (!lead.phoneNumber || !lead.decisionMaker) {
+          errors.push({
+            lead: lead,
+            error: 'Missing required fields: phoneNumber and decisionMaker'
+          });
+          continue;
+        }
+        
+        const response = await fetch(`${req.protocol}://${req.get('host')}/api/initiate-lead-capture`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': req.get('X-API-Key')
+          },
+          body: JSON.stringify({
+            leadData: {
+              phoneNumber: lead.phoneNumber,
+              businessName: lead.businessName || 'Unknown Company',
+              decisionMaker: lead.decisionMaker,
+              industry: lead.industry || 'Business',
+              location: lead.location || 'UK'
+            }
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          results.push({
+            lead: lead,
+            leadId: result.leadId,
+            status: 'success'
+          });
+        } else {
+          errors.push({
+            lead: lead,
+            error: result.message
+          });
+        }
+        
+        // Small delay to avoid overwhelming the system
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+      } catch (error) {
+        errors.push({
+          lead: lead,
+          error: error.message
+        });
+      }
+    }
+    
+    console.log(`[BULK IMPORT] Processed ${leads.length} leads: ${results.length} success, ${errors.length} errors`);
+    
+    res.json({
+      success: true,
+      message: `Processed ${leads.length} leads`,
+      results: {
+        successful: results.length,
+        failed: errors.length,
+        details: results,
+        errors: errors
+      }
+    });
+    
+  } catch (error) {
+    console.error('[BULK IMPORT ERROR]', error);
+    res.status(500).json({
+      success: false,
+      message: 'Bulk import failed',
+      error: error.message
+    });
+  }
+});
+
 app.post('/api/book-demo', async (req, res) => {
   try {
     if (!bookingSystem) {

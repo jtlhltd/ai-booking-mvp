@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lead Input Dashboard</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .input-section {
+            margin-bottom: 30px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #555;
+        }
+        
+        input, select, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+        
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            width: 100%;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .bulk-section {
+            margin-top: 40px;
+            padding-top: 30px;
+            border-top: 2px solid #e1e5e9;
+        }
+        
+        .bulk-textarea {
+            height: 200px;
+            font-family: monospace;
+        }
+        
+        .example {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📞 Lead Input Dashboard</h1>
+        
+        <!-- Single Lead Input -->
+        <div class="input-section">
+            <h2>Single Lead Input</h2>
+            <form id="singleLeadForm">
+                <div class="form-group">
+                    <label for="phoneNumber">Phone Number *</label>
+                    <input type="tel" id="phoneNumber" name="phoneNumber" placeholder="+447123456789" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="decisionMaker">Decision Maker Name *</label>
+                    <input type="text" id="decisionMaker" name="decisionMaker" placeholder="John Smith" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="businessName">Business Name</label>
+                    <input type="text" id="businessName" name="businessName" placeholder="Tech Solutions Ltd">
+                </div>
+                
+                <div class="form-group">
+                    <label for="industry">Industry</label>
+                    <select id="industry" name="industry">
+                        <option value="Technology">Technology</option>
+                        <option value="Marketing">Marketing</option>
+                        <option value="Consulting">Consulting</option>
+                        <option value="Healthcare">Healthcare</option>
+                        <option value="Finance">Finance</option>
+                        <option value="Retail">Retail</option>
+                        <option value="Manufacturing">Manufacturing</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="location">Location</label>
+                    <input type="text" id="location" name="location" placeholder="UK" value="UK">
+                </div>
+                
+                <button type="submit" class="btn" id="singleBtn">Send SMS to Lead</button>
+            </form>
+        </div>
+        
+        <!-- Bulk Lead Input -->
+        <div class="bulk-section">
+            <h2>Bulk Lead Import</h2>
+            <p>Paste your leads in JSON format (one per line):</p>
+            
+            <div class="example">
+{
+  "phoneNumber": "+447123456789",
+  "decisionMaker": "John Smith", 
+  "businessName": "Tech Solutions Ltd",
+  "industry": "Technology",
+  "location": "UK"
+}
+            </div>
+            
+            <textarea id="bulkLeads" class="bulk-textarea" placeholder="Paste your leads here..."></textarea>
+            
+            <button type="button" class="btn" id="bulkBtn" onclick="importBulkLeads()">Import All Leads</button>
+        </div>
+        
+        <div id="status" class="status"></div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        
+        // Single lead form submission
+        document.getElementById('singleLeadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const leadData = Object.fromEntries(formData.entries());
+            
+            const btn = document.getElementById('singleBtn');
+            btn.disabled = true;
+            btn.textContent = 'Sending SMS...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/initiate-lead-capture`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ leadData })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showStatus(`✅ SMS sent to ${leadData.decisionMaker} (${leadData.phoneNumber}) - Lead ID: ${result.leadId}`, 'success');
+                } else {
+                    showStatus(`❌ Failed to send SMS: ${result.message}`, 'error');
+                }
+                
+            } catch (error) {
+                showStatus(`❌ Error: ${error.message}`, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Send SMS to Lead';
+            }
+        });
+        
+        // Bulk import function
+        async function importBulkLeads() {
+            const textarea = document.getElementById('bulkLeads');
+            const leadsText = textarea.value.trim();
+            
+            if (!leadsText) {
+                showStatus('❌ Please enter leads data', 'error');
+                return;
+            }
+            
+            const btn = document.getElementById('bulkBtn');
+            btn.disabled = true;
+            btn.textContent = 'Importing...';
+            
+            try {
+                // Parse JSON lines
+                const lines = leadsText.split('\n').filter(line => line.trim());
+                const leads = lines.map(line => {
+                    try {
+                        return JSON.parse(line.trim());
+                    } catch (e) {
+                        throw new Error(`Invalid JSON: ${line}`);
+                    }
+                });
+                
+                const response = await fetch(`${API_BASE}/api/import-leads-csv`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ leads })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showStatus(`✅ Bulk import completed: ${result.results.successful} successful, ${result.results.failed} failed`, 'success');
+                } else {
+                    showStatus(`❌ Bulk import failed: ${result.message}`, 'error');
+                }
+                
+            } catch (error) {
+                showStatus(`❌ Error: ${error.message}`, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Import All Leads';
+            }
+        }
+        
+        function showStatus(message, type) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${type}`;
+            status.style.display = 'block';
+            
+            setTimeout(() => {
+                status.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
