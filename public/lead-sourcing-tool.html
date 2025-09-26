@@ -687,29 +687,60 @@
             showStatus(`Importing ${validLeads.length} leads...`, 'info');
             
             try {
-                const response = await fetch(`${API_BASE}/api/import-leads-csv`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-API-Key': 'your-api-key-here' // You'll need to set this
-                    },
-                    body: JSON.stringify({ leads: validLeads })
-                });
+                // Import leads one by one using the initiate-lead-capture endpoint
+                let importedCount = 0;
+                let errorCount = 0;
                 
-                if (response.ok) {
-                    const result = await response.json();
-                    showStatus(`Successfully imported ${result.imported} leads!`, 'success');
-                    
-                    // Clear imported leads
-                    pendingLeads = pendingLeads.filter(lead => lead.status === 'invalid');
-                    updatePreview();
-                    
-                    // Refresh tracking
-                    setTimeout(refreshTracking, 1000);
-                } else {
-                    const error = await response.json();
-                    showStatus(`Import failed: ${error.error}`, 'error');
+                for (const lead of validLeads) {
+                    try {
+                        const response = await fetch(`${API_BASE}/api/initiate-lead-capture`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                leadData: {
+                                    decisionMaker: lead.decisionMaker,
+                                    phoneNumber: lead.phoneNumber,
+                                    businessName: lead.businessName,
+                                    industry: lead.industry,
+                                    location: lead.location
+                                }
+                            })
+                        });
+                        
+                        if (response.ok) {
+                            const result = await response.json();
+                            if (result.success) {
+                                importedCount++;
+                                console.log(`Imported lead: ${lead.decisionMaker} (${lead.phoneNumber})`);
+                            } else {
+                                errorCount++;
+                                console.error(`Failed to import ${lead.decisionMaker}:`, result.error);
+                            }
+                        } else {
+                            errorCount++;
+                            console.error(`HTTP error importing ${lead.decisionMaker}:`, response.status);
+                        }
+                        
+                        // Small delay to avoid overwhelming the server
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        
+                    } catch (error) {
+                        errorCount++;
+                        console.error(`Error importing ${lead.decisionMaker}:`, error);
+                    }
                 }
+                
+                showStatus(`Successfully imported ${importedCount} leads! ${errorCount} errors occurred.`, 'success');
+                
+                // Clear imported leads
+                pendingLeads = pendingLeads.filter(lead => lead.status === 'invalid');
+                updatePreview();
+                
+                // Refresh tracking
+                setTimeout(refreshTracking, 2000);
+                
             } catch (error) {
                 showStatus(`Import error: ${error.message}`, 'error');
             }
