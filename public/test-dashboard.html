@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            background: #f0f0f0;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        .result {
+            background: #e8f5e8;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .error {
+            background: #ffe8e8;
+            color: #d00;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        pre {
+            background: #f8f8f8;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Dashboard API Test</h1>
+    
+    <div class="test-section">
+        <h2>API Connectivity Test</h2>
+        <button onclick="testPipelineStats()">Test Pipeline Stats</button>
+        <button onclick="testRecentLeads()">Test Recent Leads</button>
+        <button onclick="testBoth()">Test Both APIs</button>
+        <div id="results"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Manual Data Display Test</h2>
+        <button onclick="displayTestData()">Display Test Data</button>
+        <div id="testDisplay"></div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        
+        function addResult(message, isError = false) {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `result ${isError ? 'error' : ''}`;
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong>: ${message}`;
+            results.appendChild(div);
+        }
+        
+        async function testPipelineStats() {
+            addResult('Testing pipeline stats API...');
+            try {
+                const response = await fetch(`${API_BASE}/api/pipeline-stats`);
+                addResult(`Response status: ${response.status}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    addResult(`✅ Pipeline stats received: ${JSON.stringify(data)}`);
+                } else {
+                    addResult(`❌ Pipeline stats failed: ${response.status} ${response.statusText}`, true);
+                }
+            } catch (error) {
+                addResult(`❌ Pipeline stats error: ${error.message}`, true);
+            }
+        }
+        
+        async function testRecentLeads() {
+            addResult('Testing recent leads API...');
+            try {
+                const response = await fetch(`${API_BASE}/api/recent-leads`);
+                addResult(`Response status: ${response.status}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    addResult(`✅ Recent leads received: ${data.length} leads`);
+                    addResult(`Leads data: ${JSON.stringify(data, null, 2)}`);
+                } else {
+                    addResult(`❌ Recent leads failed: ${response.status} ${response.statusText}`, true);
+                }
+            } catch (error) {
+                addResult(`❌ Recent leads error: ${error.message}`, true);
+            }
+        }
+        
+        async function testBoth() {
+            addResult('Testing both APIs...');
+            await testPipelineStats();
+            await testRecentLeads();
+        }
+        
+        function displayTestData() {
+            const testDisplay = document.getElementById('testDisplay');
+            const testData = {
+                totalLeads: 1,
+                waitingForEmail: 1,
+                emailReceived: 0,
+                booked: 0,
+                conversionRate: "0.0"
+            };
+            
+            testDisplay.innerHTML = `
+                <h3>Test Data Display</h3>
+                <div class="result">
+                    <strong>Total Leads:</strong> ${testData.totalLeads}<br>
+                    <strong>Waiting for Email:</strong> ${testData.waitingForEmail}<br>
+                    <strong>Email Received:</strong> ${testData.emailReceived}<br>
+                    <strong>Booked:</strong> ${testData.booked}<br>
+                    <strong>Conversion Rate:</strong> ${testData.conversionRate}%
+                </div>
+                <pre>${JSON.stringify(testData, null, 2)}</pre>
+            `;
+            
+            addResult('✅ Test data displayed successfully');
+        }
+        
+        // Auto-run tests on page load
+        window.onload = function() {
+            addResult('Page loaded, running initial tests...');
+            testBoth();
+        };
+    </script>
+</body>
+</html>
