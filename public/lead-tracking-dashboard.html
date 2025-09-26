@@ -972,77 +972,98 @@
         function updateStats(stats) {
             logActivity('Updating statistics display', 'info', stats);
             
-            document.getElementById('totalLeads').textContent = stats.totalLeads || 0;
-            document.getElementById('waitingForEmail').textContent = stats.waitingForEmail || 0;
-            document.getElementById('emailReceived').textContent = stats.emailReceived || 0;
-            document.getElementById('conversionRate').textContent = stats.conversionRate || '0';
-            
-            // Update pipeline counts
-            document.getElementById('smsSentCount').textContent = stats.totalLeads || 0;
-            document.getElementById('emailReplyCount').textContent = stats.emailReceived || 0;
-            document.getElementById('bookingLinkCount').textContent = stats.emailReceived || 0;
-            document.getElementById('demoBookedCount').textContent = stats.booked || 0;
-            
-            logActivity('Statistics display updated', 'success');
+            try {
+                document.getElementById('totalLeads').textContent = stats.totalLeads || 0;
+                document.getElementById('waitingForEmail').textContent = stats.waitingForEmail || 0;
+                document.getElementById('emailReceived').textContent = stats.emailReceived || 0;
+                document.getElementById('conversionRate').textContent = stats.conversionRate || '0';
+                
+                // Update pipeline counts
+                document.getElementById('smsSentCount').textContent = stats.totalLeads || 0;
+                document.getElementById('emailReplyCount').textContent = stats.emailReceived || 0;
+                document.getElementById('bookingLinkCount').textContent = stats.emailReceived || 0;
+                document.getElementById('demoBookedCount').textContent = stats.booked || 0;
+                
+                logActivity('Statistics display updated successfully', 'success', {
+                    totalLeads: stats.totalLeads,
+                    waitingForEmail: stats.waitingForEmail,
+                    emailReceived: stats.emailReceived,
+                    booked: stats.booked
+                });
+            } catch (error) {
+                logActivity('Error updating statistics display', 'error', { 
+                    error: error.message, 
+                    stack: error.stack 
+                });
+            }
         }
         
         function updateLeadsTable(leads) {
             logActivity('Updating leads table', 'info', { leadCount: leads.length });
             
-            if (!leads || leads.length === 0) {
-                document.getElementById('leadsTableContainer').innerHTML = 
-                    '<div class="no-data">No leads found. Add some leads to get started!</div>';
-                logActivity('No leads found - showing empty state', 'warning');
-                return;
-            }
-            
-            const table = `
-                <table class="leads-table">
-                    <thead>
-                        <tr>
-                            <th>Lead ID</th>
-                            <th>Name</th>
-                            <th>Phone</th>
-                            <th>Company</th>
-                            <th>Status</th>
-                            <th>Created</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${leads.map(lead => `
+            try {
+                if (!leads || leads.length === 0) {
+                    document.getElementById('leadsTableContainer').innerHTML = 
+                        '<div class="no-data">No leads found. Add some leads to get started!</div>';
+                    logActivity('No leads found - showing empty state', 'warning');
+                    return;
+                }
+                
+                const table = `
+                    <table class="leads-table">
+                        <thead>
                             <tr>
-                                <td><code>${lead.leadId}</code></td>
-                                <td>${lead.decisionMaker || 'N/A'}</td>
-                                <td>${lead.phoneNumber || 'N/A'}</td>
-                                <td>${lead.businessName || 'N/A'}</td>
-                                <td>
-                                    <span class="status-badge status-${lead.status}">
-                                        ${lead.status.replace('_', ' ')}
-                                    </span>
-                                </td>
-                                <td>${new Date(lead.createdAt).toLocaleString()}</td>
-                                <td>
-                                    <button class="lead-detail-btn" onclick="showLeadDetail('${lead.leadId}')">👁️ Details</button>
-                                    ${lead.status === 'email_received' ? 
-                                        `<a href="/booking-dashboard.html?leadId=${lead.leadId}&email=${encodeURIComponent(lead.email)}&phone=${encodeURIComponent(lead.phoneNumber)}" target="_blank" style="background: #28a745; color: white; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 12px;">📅 Book</a>` : 
-                                        '<span style="color: #666; font-size: 12px;">Waiting...</span>'
-                                    }
-                                </td>
+                                <th>Lead ID</th>
+                                <th>Name</th>
+                                <th>Phone</th>
+                                <th>Company</th>
+                                <th>Status</th>
+                                <th>Created</th>
+                                <th>Actions</th>
                             </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            `;
-            
-            document.getElementById('leadsTableContainer').innerHTML = table;
-            logActivity('Leads table updated successfully', 'success', { 
-                displayedLeads: leads.length,
-                leadStatuses: leads.reduce((acc, lead) => {
-                    acc[lead.status] = (acc[lead.status] || 0) + 1;
-                    return acc;
-                }, {})
-            });
+                        </thead>
+                        <tbody>
+                            ${leads.map(lead => `
+                                <tr>
+                                    <td><code>${lead.leadId}</code></td>
+                                    <td>${lead.decisionMaker || 'N/A'}</td>
+                                    <td>${lead.phoneNumber || 'N/A'}</td>
+                                    <td>${lead.businessName || 'N/A'}</td>
+                                    <td>
+                                        <span class="status-badge status-${lead.status}">
+                                            ${lead.status.replace('_', ' ')}
+                                        </span>
+                                    </td>
+                                    <td>${new Date(lead.createdAt).toLocaleString()}</td>
+                                    <td>
+                                        <button class="lead-detail-btn" onclick="showLeadDetail('${lead.leadId}')">👁️ Details</button>
+                                        ${lead.status === 'email_received' ? 
+                                            `<a href="/booking-dashboard.html?leadId=${lead.leadId}&email=${encodeURIComponent(lead.email)}&phone=${encodeURIComponent(lead.phoneNumber)}" target="_blank" style="background: #28a745; color: white; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 12px;">📅 Book</a>` : 
+                                            '<span style="color: #666; font-size: 12px;">Waiting...</span>'
+                                        }
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+                
+                document.getElementById('leadsTableContainer').innerHTML = table;
+                logActivity('Leads table updated successfully', 'success', { 
+                    displayedLeads: leads.length,
+                    leadStatuses: leads.reduce((acc, lead) => {
+                        acc[lead.status] = (acc[lead.status] || 0) + 1;
+                        return acc;
+                    }, {})
+                });
+            } catch (error) {
+                logActivity('Error updating leads table', 'error', { 
+                    error: error.message, 
+                    stack: error.stack 
+                });
+                document.getElementById('leadsTableContainer').innerHTML = 
+                    '<div class="no-data">Error loading leads table. Please try again.</div>';
+            }
         }
         
         // Enhanced refresh button with logging
@@ -1216,6 +1237,24 @@
         
         // Initial load with logging
         logActivity('Dashboard initialization started', 'info');
+        
+        // Add debugging info
+        logActivity('API Base URL: ' + API_BASE, 'info');
+        logActivity('Window location: ' + window.location.href, 'info');
+        
+        // Test API connectivity
+        fetch(`${API_BASE}/api/pipeline-stats`)
+            .then(response => {
+                logActivity('Initial API test - Status: ' + response.status, response.ok ? 'success' : 'error');
+                return response.json();
+            })
+            .then(data => {
+                logActivity('Initial API test - Data received', 'success', data);
+            })
+            .catch(error => {
+                logActivity('Initial API test - Error', 'error', { error: error.message });
+            });
+        
         refreshData();
         logActivity('Dashboard initialization completed', 'success');
     </script>
