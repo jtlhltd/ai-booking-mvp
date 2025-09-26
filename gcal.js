@@ -20,7 +20,10 @@ export function makeJwtAuth({ clientEmail, privateKey, privateKeyB64 }) {
     clientEmail,
     null,
     key,
-    ['https://www.googleapis.com/auth/calendar']
+    [
+      'https://www.googleapis.com/auth/calendar',
+      'https://www.googleapis.com/auth/calendar.events'
+    ]
   );
 }
 

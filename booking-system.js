@@ -28,7 +28,10 @@ class BookingSystem {
               client_email: process.env.GOOGLE_CLIENT_EMAIL,
               private_key: privateKey
             },
-            scopes: ['https://www.googleapis.com/auth/calendar']
+            scopes: [
+              'https://www.googleapis.com/auth/calendar',
+              'https://www.googleapis.com/auth/calendar.events'
+            ]
           });
           this.calendar = google.calendar({ version: 'v3', auth });
           console.log('✅ Google Calendar initialized with existing credentials');
