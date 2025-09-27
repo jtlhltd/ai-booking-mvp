@@ -828,85 +828,107 @@
             showStatus(`Searching for "${businessType}" in ${location}... (Target: ${maxResults} mobile numbers)`, 'info');
             showProgress(maxResults);
             
+            let allResults = [];
+            let totalMobileFound = 0;
+            let searchAttempt = 1;
+            const maxAttempts = 10; // Safety limit to prevent infinite searching
+            
             try {
-                // Call our backend API which will use the Google Places API key from environment
-                const response = await fetch(`${API_BASE}/api/search-google-places`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        query: businessType,
-                        location: location,
-                        maxResults: maxResults,
-                        businessSize: businessSize,
-                        mobileOnly: mobileOnly,
-                        decisionMakerTitles: decisionMakerTitles
-                    })
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
+                while (totalMobileFound < maxResults && searchAttempt <= maxAttempts) {
+                    showStatus(`Search attempt ${searchAttempt}/${maxAttempts} for "${businessType}"... (Found ${totalMobileFound}/${maxResults} mobile numbers)`, 'info');
                     
-                    if (data.success) {
-                        searchResults = data.results || [];
+                    // Call our backend API which will use the Google Places API key from environment
+                    const response = await fetch(`${API_BASE}/api/search-google-places`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            query: businessType,
+                            location: location,
+                            maxResults: Math.max(20, maxResults - totalMobileFound), // Search for more results each time
+                            businessSize: businessSize,
+                            mobileOnly: false, // Always get all results, filter client-side
+                            decisionMakerTitles: decisionMakerTitles
+                        })
+                    });
+                
+                    if (response.ok) {
+                        const data = await response.json();
                         
-                        // Enhanced decision maker detection
-                        if (decisionMakerTitles) {
-                            searchResults = searchResults.map(business => ({
-                                ...business,
-                                decisionMaker: extractDecisionMaker(business.name, business.industry),
-                                decisionMakerTitle: getDecisionMakerTitle(business.name, business.industry)
-                            }));
-                        }
-                        
-                        // Apply client-side filtering based on mobileOnly setting
-                        if (mobileOnly) {
-                            mobileResults = searchResults.filter(business => business.hasMobile === true);
+                        if (data.success) {
+                            const newResults = data.results || [];
+                            
+                            // Add decision maker detection if enabled
+                            if (decisionMakerTitles) {
+                                newResults.forEach(business => {
+                                    business.decisionMaker = extractDecisionMaker(business.name, business.industry);
+                                    business.decisionMakerTitle = getDecisionMakerTitle(business.name, business.industry);
+                                });
+                            }
+                            
+                            // Add new results to our collection, avoiding duplicates
+                            const existingPhones = new Set(allResults.map(r => r.phone));
+                            const uniqueNewResults = newResults.filter(r => !existingPhones.has(r.phone));
+                            allResults = allResults.concat(uniqueNewResults);
+                            
+                            // Count mobile numbers
+                            const mobileBusinesses = allResults.filter(b => b.hasMobile === true);
+                            totalMobileFound = mobileBusinesses.length;
+                            
+                            console.log(`[SEARCH ATTEMPT ${searchAttempt}] Found ${newResults.length} new businesses, ${uniqueNewResults.length} unique. Total: ${allResults.length}, Mobile: ${totalMobileFound}/${maxResults}`);
+                            
+                            // Update progress
+                            updateProgress(totalMobileFound, maxResults, allResults.length, `Attempt ${searchAttempt}`);
+                            
+                            if (totalMobileFound >= maxResults) {
+                                console.log(`[SUCCESS] Target reached! Found ${totalMobileFound} mobile numbers in ${searchAttempt} attempts`);
+                                break;
+                            }
+                            
+                            // Small delay between searches to avoid rate limiting
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+                            searchAttempt++;
                         } else {
-                            mobileResults = searchResults; // Show all results
-                        }
-                        
-                        console.log(`[FRONTEND DEBUG] Total results: ${searchResults.length}, Mobile results: ${mobileResults.length}, Mobile only: ${mobileOnly}`);
-                        console.log(`[FRONTEND DEBUG] Mobile businesses:`, searchResults.filter(b => b.hasMobile));
-                        console.log(`[FRONTEND DEBUG] All results with hasMobile:`, searchResults.map(r => ({ name: r.name, phone: r.phone, hasMobile: r.hasMobile })));
-                        
-                        // Show debug info in status message
-                        const mobileBusinesses = searchResults.filter(b => b.hasMobile);
-                        if (mobileBusinesses.length > 0) {
-                            showStatus(`DEBUG: Found ${searchResults.length} total, ${mobileBusinesses.length} mobile. Mobile phones: ${mobileBusinesses.map(b => b.phone).join(', ')}`, 'info');
-                        }
-                        
-                        updateStats();
-                        updateResults();
-                        hideProgress();
-                        
-                        const totalCount = searchResults.length;
-                        const mobileCount = searchResults.filter(b => b.hasMobile).length;
-                        const decisionMakerCount = searchResults.filter(b => b.decisionMakerTitle).length;
-                        
-                        if (mobileOnly && mobileCount === 0 && totalCount > 0) {
-                            showStatus(`Found ${totalCount} businesses but none with mobile numbers. Try these mobile-friendly search terms:<br><br>
-                    • "private [business type]"<br>
-                    • "[business type] consultant"<br>
-                    • "[business type] advisor"<br>
-                    • "independent [business type]"<br>
-                    • "[business type] specialist"`, 'warning');
-                        } else if (mobileCount < maxResults && mobileCount > 0) {
-                            showStatus(`Found ${totalCount} businesses total, ${mobileCount} mobile numbers (Target: ${maxResults}). Search may need more time or try different search terms.`, 'info');
-                        } else {
-                            showStatus(`Found ${totalCount} businesses total, ${mobileCount} with mobile numbers${decisionMakerCount > 0 ? `, ${decisionMakerCount} with decision maker titles` : ''}${mobileCount >= maxResults ? ' - TARGET REACHED!' : ''}`, 'success');
+                            throw new Error(data.error || 'Search failed');
                         }
                     } else {
-                        showStatus(`Search failed: ${data.error}`, 'error');
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Unknown error');
                     }
+                }
+                
+                // Set final results
+                searchResults = allResults;
+                
+                // Apply client-side filtering based on mobileOnly setting
+                if (mobileOnly) {
+                    mobileResults = searchResults.filter(business => business.hasMobile === true);
                 } else {
-                    const errorData = await response.json();
-                    showStatus(`API Error: ${errorData.error || 'Unknown error'}`, 'error');
+                    mobileResults = searchResults; // Show all results
+                }
+                
+                console.log(`[FINAL RESULTS] Total results: ${searchResults.length}, Mobile results: ${mobileResults.length}, Mobile only: ${mobileOnly}`);
+                console.log(`[FINAL RESULTS] Mobile businesses:`, searchResults.filter(b => b.hasMobile));
+                
+                updateStats();
+                updateResults();
+                hideProgress();
+                
+                const totalCount = searchResults.length;
+                const mobileCount = mobileResults.length;
+                const decisionMakerCount = searchResults.filter(b => b.decisionMakerTitle).length;
+                
+                if (totalMobileFound >= maxResults) {
+                    showStatus(`✅ SUCCESS: Found ${mobileCount} mobile numbers in ${searchAttempt} searches! (${totalCount} total businesses)`, 'success');
+                } else {
+                    showStatus(`⚠️ Found ${mobileCount}/${maxResults} mobile numbers after ${searchAttempt} searches. (${totalCount} total businesses)`, 'warning');
                 }
                 
             } catch (error) {
-                showStatus(`Search error: ${error.message}`, 'error');
+                console.error('Search error:', error);
+                showStatus(`Search failed: ${error.message}`, 'error');
+                hideProgress();
             }
         }
         
