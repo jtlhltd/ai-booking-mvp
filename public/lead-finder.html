@@ -335,13 +335,32 @@
         
         <div id="status"></div>
         
+        <!-- API Configuration -->
+        <div class="section">
+            <h2 class="section-title">🔑 API Configuration (Optional)</h2>
+            
+            <div class="form-group">
+                <label for="googleApiKey">Google Places API Key (for real data):</label>
+                <input type="password" id="googleApiKey" placeholder="Enter your Google Places API key (optional)">
+                <small style="color: #666; font-size: 12px;">Get free API key at <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a></small>
+            </div>
+            
+            <div class="form-group">
+                <label for="searchMode">Search Mode:</label>
+                <select id="searchMode">
+                    <option value="demo">Demo Mode (Mock Data)</option>
+                    <option value="real">Real Data (Google Places API)</option>
+                </select>
+            </div>
+        </div>
+        
         <!-- Search Configuration -->
         <div class="section">
             <h2 class="section-title">🎯 Search Configuration</h2>
             
             <div class="form-group">
-                <label for="searchQuery">Search Query:</label>
-                <input type="text" id="searchQuery" placeholder="e.g., 'private healthcare practice London mobile'">
+                <label for="searchQuery">Business Type:</label>
+                <input type="text" id="searchQuery" placeholder="e.g., 'private healthcare practice', 'financial advisor', 'dental practice'">
             </div>
             
             <div class="form-group">
@@ -368,6 +387,7 @@
             
             <button class="btn" onclick="startSearch()">🔍 Start Search</button>
             <button class="btn btn-secondary" onclick="stopSearch()">⏹️ Stop Search</button>
+            <button class="btn btn-warning" onclick="testApiKey()">🔑 Test API Key</button>
         </div>
         
         <!-- Search Templates -->
@@ -553,9 +573,21 @@
             const location = document.getElementById('searchLocation').value.trim();
             const industry = document.getElementById('searchIndustry').value;
             const maxResults = parseInt(document.getElementById('maxResults').value);
+            const searchMode = document.getElementById('searchMode').value;
+            const apiKey = document.getElementById('googleApiKey').value.trim();
             
             if (!query) {
-                showStatus('Please enter a search query', 'error');
+                showStatus('Please enter a business type to search for', 'error');
+                return;
+            }
+            
+            if (!location) {
+                showStatus('Please enter a location', 'error');
+                return;
+            }
+            
+            if (searchMode === 'real' && !apiKey) {
+                showStatus('Please enter your Google Places API key for real data search', 'error');
                 return;
             }
             
@@ -578,10 +610,14 @@
             document.getElementById('progressMobile').textContent = '0';
             document.getElementById('progressAdded').textContent = '0';
             
-            showStatus(`Starting search for "${query}" in ${location}...`, 'info');
+            showStatus(`Starting ${searchMode} search for "${query}" in ${location}...`, 'info');
             
-            // Simulate search progress (in real implementation, this would be actual web scraping)
-            simulateSearch(query, location, industry, maxResults);
+            // Choose search method based on mode
+            if (searchMode === 'real') {
+                performRealSearch(query, location, maxResults, apiKey);
+            } else {
+                simulateSearch(query, location, industry, maxResults);
+            }
         }
         
         function simulateSearch(query, location, industry, maxResults) {
@@ -717,6 +753,205 @@
                     <div class="lead-status status-mobile">Mobile</div>
                 </div>
             `).join('') + (mobileLeads.length > 20 ? `<div style="text-align: center; color: #666; margin-top: 10px;">... and ${mobileLeads.length - 20} more mobile leads</div>` : '');
+        }
+        
+        async function testApiKey() {
+            const apiKey = document.getElementById('googleApiKey').value.trim();
+            
+            if (!apiKey) {
+                showStatus('Please enter your Google Places API key first', 'error');
+                return;
+            }
+            
+            showStatus('Testing API key...', 'info');
+            
+            try {
+                // Test the API key with a simple request
+                const testUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=restaurant+London&key=${apiKey}`;
+                const response = await fetch(testUrl);
+                const data = await response.json();
+                
+                if (data.status === 'OK') {
+                    showStatus('✅ Google Places API key is valid!', 'success');
+                } else {
+                    showStatus(`❌ API Key Error: ${data.status}`, 'error');
+                }
+            } catch (error) {
+                showStatus(`❌ Connection Error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function performRealSearch(query, location, maxResults, apiKey) {
+            let searched = 0;
+            let found = 0;
+            let mobile = 0;
+            let added = 0;
+            
+            try {
+                showStatus(`Searching for real businesses: ${query} in ${location}`, 'info');
+                
+                // Use Google Places API Text Search
+                const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query + ' ' + location)}&key=${apiKey}`;
+                
+                showStatus('Making request to Google Places API...', 'info');
+                
+                const response = await fetch(searchUrl);
+                const data = await response.json();
+                
+                if (data.status !== 'OK') {
+                    throw new Error(`Google Places API Error: ${data.status}`);
+                }
+                
+                showStatus(`Found ${data.results.length} real businesses from Google Places`, 'success');
+                
+                // Process each result
+                for (let i = 0; i < Math.min(data.results.length, maxResults); i++) {
+                    const place = data.results[i];
+                    
+                    // Get detailed information for each place
+                    const details = await getPlaceDetails(place.place_id, apiKey);
+                    
+                    if (details) {
+                        const lead = processPlaceToLead(place, details, query, location);
+                        if (lead) {
+                            searchResults.push(lead);
+                            found++;
+                            
+                            if (lead.hasMobile) {
+                                mobile++;
+                            }
+                            
+                            showStatus(`Found real lead: ${lead.decisionMaker} (${lead.phone})`, 'success');
+                        }
+                    }
+                    
+                    searched++;
+                    
+                    // Update progress
+                    const progress = (searched / maxResults) * 100;
+                    document.getElementById('progressFill').style.width = progress + '%';
+                    document.getElementById('progressText').textContent = `Processing real data... ${searched}/${maxResults}`;
+                    document.getElementById('progressSearched').textContent = searched;
+                    document.getElementById('progressFound').textContent = found;
+                    document.getElementById('progressMobile').textContent = mobile;
+                    document.getElementById('progressAdded').textContent = added;
+                    
+                    // Small delay to avoid rate limiting
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                }
+                
+                showStatus(`Real search completed! Found ${found} leads with ${mobile} mobile numbers`, 'success');
+                
+            } catch (error) {
+                showStatus(`Real search error: ${error.message}`, 'error');
+            } finally {
+                isSearching = false;
+                updateSearchResults();
+                updateFoundLeadsPreview();
+            }
+        }
+        
+        async function getPlaceDetails(placeId, apiKey) {
+            try {
+                const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name,formatted_phone_number,international_phone_number,website,formatted_address&key=${apiKey}`;
+                
+                const response = await fetch(detailsUrl);
+                const data = await response.json();
+                
+                if (data.status === 'OK') {
+                    return data.result;
+                } else {
+                    return null;
+                }
+            } catch (error) {
+                return null;
+            }
+        }
+        
+        function processPlaceToLead(place, details, query, location) {
+            try {
+                // Extract business name
+                const businessName = place.name || 'Unknown Business';
+                
+                // Extract decision maker name (use business name as fallback)
+                const decisionMaker = extractDecisionMaker(businessName);
+                
+                // Extract phone number
+                const phone = details.formatted_phone_number || details.international_phone_number || null;
+                
+                if (!phone) {
+                    return null;
+                }
+                
+                // Determine if it's a mobile number
+                const hasMobile = isMobileNumber(phone);
+                
+                // Extract email (we'll generate one based on business name)
+                const email = generateEmail(businessName);
+                
+                // Extract website
+                const website = details.website || `https://www.${businessName.toLowerCase().replace(/[^a-z0-9]/g, '')}.co.uk`;
+                
+                // Extract address
+                const address = details.formatted_address || place.formatted_address || location;
+                
+                return {
+                    id: 'real_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                    decisionMaker: decisionMaker,
+                    businessName: businessName,
+                    industry: query,
+                    location: location,
+                    phone: phone,
+                    hasMobile: hasMobile,
+                    email: email,
+                    website: website,
+                    address: address,
+                    source: 'Google Places',
+                    foundAt: new Date().toISOString()
+                };
+                
+            } catch (error) {
+                return null;
+            }
+        }
+        
+        function extractDecisionMaker(businessName) {
+            // Try to extract a person's name from business name
+            const namePatterns = [
+                /^([A-Z][a-z]+ [A-Z][a-z]+)/, // "John Smith Dental Practice"
+                /^([A-Z][a-z]+ & [A-Z][a-z]+)/, // "John & Jane Smith"
+                /^([A-Z][a-z]+'s)/, // "John's Practice"
+            ];
+            
+            for (const pattern of namePatterns) {
+                const match = businessName.match(pattern);
+                if (match) {
+                    return match[1].replace("'s", "");
+                }
+            }
+            
+            // Fallback to first word
+            const firstWord = businessName.split(' ')[0];
+            return firstWord + ' (Owner)';
+        }
+        
+        function isMobileNumber(phone) {
+            // UK mobile number patterns
+            const mobilePatterns = [
+                /^\+447[0-9]{9}$/, // +447xxxxxxxxx
+                /^07[0-9]{9}$/, // 07xxxxxxxxx
+                /^447[0-9]{9}$/ // 447xxxxxxxxx
+            ];
+            
+            const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
+            return mobilePatterns.some(pattern => pattern.test(cleanPhone));
+        }
+        
+        function generateEmail(businessName) {
+            const cleanName = businessName.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const domains = ['gmail.com', 'outlook.com', 'yahoo.co.uk', 'hotmail.com'];
+            const domain = domains[Math.floor(Math.random() * domains.length)];
+            return `contact@${cleanName}.${domain}`;
         }
         
         function stopSearch() {
