@@ -311,6 +311,57 @@
             font-weight: 500;
             margin-left: 8px;
         }
+        
+        /* Progress Indicator Styles */
+        .progress-indicator {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .progress-header h4 {
+            margin: 0;
+            font-size: 1.2em;
+        }
+        
+        .progress-stats {
+            font-size: 1.1em;
+            font-weight: bold;
+            background: rgba(255,255,255,0.2);
+            padding: 8px 15px;
+            border-radius: 20px;
+        }
+        
+        .progress-bar {
+            background: rgba(255,255,255,0.3);
+            height: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+        
+        .progress-bar-fill {
+            background: linear-gradient(90deg, #4CAF50, #8BC34A);
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s ease;
+            border-radius: 4px;
+        }
+        
+        .progress-details {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
     </style>
 </head>
 <body>
@@ -364,7 +415,35 @@
                     <div class="template-icon">🎓</div>
                     <div class="template-title">Business Coaching</div>
                     <div class="template-description">Business coaches, consultants, trainers</div>
-                    <div class="template-search">"business coach" "consulting firm"</div>
+                    <div class="template-search">"business coach" "executive coach"</div>
+                </div>
+                
+                <div class="template-card" onclick="useTemplate('accounting-services')">
+                    <div class="template-icon">📊</div>
+                    <div class="template-title">Accounting Services</div>
+                    <div class="template-description">Chartered accountants, tax advisors</div>
+                    <div class="template-search">"chartered accountant" "tax advisor"</div>
+                </div>
+                
+                <div class="template-card" onclick="useTemplate('marketing-agencies')">
+                    <div class="template-icon">📈</div>
+                    <div class="template-title">Marketing Agencies</div>
+                    <div class="template-description">Digital marketing, advertising agencies</div>
+                    <div class="template-search">"marketing agency" "digital marketing"</div>
+                </div>
+                
+                <div class="template-card" onclick="useTemplate('it-services')">
+                    <div class="template-icon">💻</div>
+                    <div class="template-title">IT Services</div>
+                    <div class="template-description">IT consultants, software developers</div>
+                    <div class="template-search">"IT consultant" "software developer"</div>
+                </div>
+                
+                <div class="template-card" onclick="useTemplate('consulting-firms')">
+                    <div class="template-icon">🏢</div>
+                    <div class="template-title">Consulting Firms</div>
+                    <div class="template-description">Management and strategy consultants</div>
+                    <div class="template-search">"management consultant" "strategy consultant"</div>
                 </div>
             </div>
         </div>
@@ -439,6 +518,15 @@
                 </label>
             </div>
             
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="batchSearch"> 🔄 Batch Search (Multiple Industries)
+                </label>
+                <small style="color: #666; display: block; margin-top: 5px;">
+                    ✅ Searches multiple high-value industries simultaneously for maximum mobile numbers
+                </small>
+            </div>
+            
             <button class="btn" onclick="startSearch()">🔍 Search Google Places</button>
             <button class="btn btn-secondary" onclick="clearResults()">🗑️ Clear Results</button>
         </div>
@@ -463,6 +551,22 @@
         <div class="search-section">
             <h3>📊 Search Results <span id="resultsFilterText">(All Results)</span></h3>
             
+            <!-- Progress Indicator -->
+            <div id="progressIndicator" class="progress-indicator" style="display: none;">
+                <div class="progress-header">
+                    <h4>🔍 Searching for Mobile Numbers...</h4>
+                    <div class="progress-stats">
+                        <span id="currentMobileCount">0</span> / <span id="targetMobileCount">0</span> mobile numbers found
+                    </div>
+                </div>
+                <div class="progress-bar">
+                    <div id="progressBarFill" class="progress-bar-fill"></div>
+                </div>
+                <div class="progress-details">
+                    <div id="progressDetails">Processing businesses...</div>
+                </div>
+            </div>
+
             <div id="searchResults" class="search-results">
                 <div class="loading">No search results yet. Enter your search criteria and click "Search Google Places".</div>
             </div>
@@ -496,31 +600,88 @@
             }
         }
         
+        function showProgress(targetMobile) {
+            const progressIndicator = document.getElementById('progressIndicator');
+            const currentMobileCount = document.getElementById('currentMobileCount');
+            const targetMobileCount = document.getElementById('targetMobileCount');
+            const progressBarFill = document.getElementById('progressBarFill');
+            const progressDetails = document.getElementById('progressDetails');
+            
+            progressIndicator.style.display = 'block';
+            targetMobileCount.textContent = targetMobile;
+            currentMobileCount.textContent = '0';
+            progressBarFill.style.width = '0%';
+            progressDetails.textContent = 'Starting search...';
+        }
+        
+        function updateProgress(currentMobile, targetMobile, totalProcessed, currentQuery) {
+            const currentMobileCount = document.getElementById('currentMobileCount');
+            const progressBarFill = document.getElementById('progressBarFill');
+            const progressDetails = document.getElementById('progressDetails');
+            
+            currentMobileCount.textContent = currentMobile;
+            const percentage = Math.min((currentMobile / targetMobile) * 100, 100);
+            progressBarFill.style.width = percentage + '%';
+            
+            progressDetails.textContent = `Found ${currentMobile}/${targetMobile} mobile numbers • Processed ${totalProcessed} businesses • Current: ${currentQuery}`;
+        }
+        
+        function hideProgress() {
+            const progressIndicator = document.getElementById('progressIndicator');
+            progressIndicator.style.display = 'none';
+        }
+        
         function useTemplate(templateType) {
             const templates = {
                 'private-healthcare': {
-                    query: '"private GP" "private doctor" "private medical practice" "consultant"',
-                    location: 'United Kingdom'
+                    query: '"private GP" "private doctor" "private medical practice" "consultant" "private clinic"',
+                    location: 'United Kingdom',
+                    description: 'Private healthcare practices with mobile numbers'
                 },
                 'financial-advisors': {
-                    query: '"independent financial advisor" "IFA" "wealth manager" "financial planner"',
-                    location: 'United Kingdom'
+                    query: '"independent financial advisor" "IFA" "wealth manager" "financial planner" "private wealth"',
+                    location: 'United Kingdom',
+                    description: 'Independent financial advisors and wealth managers'
                 },
                 'dental-practices': {
-                    query: '"private dentist" "dental surgeon" "orthodontist" "dental specialist"',
-                    location: 'United Kingdom'
+                    query: '"private dentist" "dental surgeon" "orthodontist" "dental specialist" "private dental"',
+                    location: 'United Kingdom',
+                    description: 'Private dental practices and specialists'
                 },
                 'legal-services': {
-                    query: '"solicitor" "barrister" "lawyer" "legal advisor"',
-                    location: 'United Kingdom'
+                    query: '"solicitor" "barrister" "lawyer" "legal advisor" "private practice"',
+                    location: 'United Kingdom',
+                    description: 'Legal professionals and law firms'
                 },
                 'property-agents': {
-                    query: '"property consultant" "property advisor" "real estate consultant" "property specialist"',
-                    location: 'United Kingdom'
+                    query: '"property consultant" "property advisor" "real estate consultant" "property specialist" "estate agent"',
+                    location: 'United Kingdom',
+                    description: 'Property consultants and real estate professionals'
                 },
                 'business-coaching': {
-                    query: '"business coach" "executive coach" "business consultant" "management consultant"',
-                    location: 'United Kingdom'
+                    query: '"business coach" "executive coach" "business consultant" "management consultant" "private coach"',
+                    location: 'United Kingdom',
+                    description: 'Business coaches and consultants'
+                },
+                'accounting-services': {
+                    query: '"chartered accountant" "accounting firm" "tax advisor" "bookkeeper" "private accountant"',
+                    location: 'United Kingdom',
+                    description: 'Accounting and tax professionals'
+                },
+                'marketing-agencies': {
+                    query: '"marketing agency" "digital marketing" "marketing consultant" "advertising agency" "private marketing"',
+                    location: 'United Kingdom',
+                    description: 'Marketing agencies and consultants'
+                },
+                'it-services': {
+                    query: '"IT consultant" "software developer" "tech consultant" "IT support" "private IT"',
+                    location: 'United Kingdom',
+                    description: 'IT consultants and tech professionals'
+                },
+                'consulting-firms': {
+                    query: '"management consultant" "strategy consultant" "business advisor" "private consultant"',
+                    location: 'United Kingdom',
+                    description: 'Management and strategy consultants'
                 }
             };
             
@@ -549,9 +710,10 @@
             const businessSize = document.getElementById('businessSize').value;
             const mobileOnly = document.getElementById('mobileOnly').checked;
             const decisionMakerTitles = document.getElementById('decisionMakerTitles').checked;
+            const batchSearch = document.getElementById('batchSearch').checked;
             
-            if (!businessType) {
-                showStatus('Please enter a business type to search for', 'error');
+            if (!businessType && !batchSearch) {
+                showStatus('Please enter a business type to search for or enable batch search', 'error');
                 return;
             }
             
@@ -566,7 +728,99 @@
                 location = locationSelect;
             }
             
+            if (batchSearch) {
+                await startBatchSearch(location, maxResults, businessSize, mobileOnly, decisionMakerTitles);
+            } else {
+                await startSingleSearch(businessType, location, maxResults, businessSize, mobileOnly, decisionMakerTitles);
+            }
+        }
+        
+        async function startBatchSearch(location, maxResults, businessSize, mobileOnly, decisionMakerTitles) {
+            const batchIndustries = [
+                { name: 'Private Healthcare', query: '"private GP" "private doctor" "private medical practice"' },
+                { name: 'Financial Advisors', query: '"independent financial advisor" "IFA" "wealth manager"' },
+                { name: 'Dental Practices', query: '"private dentist" "dental surgeon" "orthodontist"' },
+                { name: 'Legal Services', query: '"solicitor" "barrister" "lawyer" "legal advisor"' },
+                { name: 'Property Agents', query: '"property consultant" "estate agent" "real estate"' },
+                { name: 'Business Coaching', query: '"business coach" "executive coach" "management consultant"' },
+                { name: 'Accounting Services', query: '"chartered accountant" "tax advisor" "accounting firm"' },
+                { name: 'Marketing Agencies', query: '"marketing agency" "digital marketing" "advertising"' }
+            ];
+            
+            showStatus(`Batch searching ${batchIndustries.length} industries in ${location}... (Target: ${maxResults} mobile numbers)`, 'info');
+            showProgress(maxResults);
+            
+            let allResults = [];
+            let totalMobileFound = 0;
+            let currentIndustryIndex = 0;
+            
+            for (const industry of batchIndustries) {
+                if (totalMobileFound >= maxResults) break;
+                
+                const remainingTarget = maxResults - totalMobileFound;
+                const industryTarget = Math.min(remainingTarget, Math.ceil(maxResults / batchIndustries.length));
+                
+                updateProgress(totalMobileFound, maxResults, allResults.length, industry.name);
+                
+                try {
+                    const response = await fetch(`${API_BASE}/api/search-google-places`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            query: industry.query,
+                            location: location,
+                            maxResults: industryTarget,
+                            businessSize: businessSize,
+                            mobileOnly: mobileOnly,
+                            decisionMakerTitles: decisionMakerTitles
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.success && data.results) {
+                            // Add industry info to results
+                            const industryResults = data.results.map(business => ({
+                                ...business,
+                                industry: industry.name,
+                                searchQuery: industry.query
+                            }));
+                            
+                            allResults = allResults.concat(industryResults);
+                            totalMobileFound = allResults.filter(r => r.hasMobile).length;
+                            
+                            console.log(`[BATCH SEARCH] ${industry.name}: Found ${data.results.length} businesses, ${data.results.filter(r => r.hasMobile).length} mobile numbers`);
+                        }
+                    }
+                } catch (error) {
+                    console.error(`[BATCH SEARCH ERROR] ${industry.name}:`, error);
+                }
+                
+                // Small delay between industries
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                currentIndustryIndex++;
+            }
+            
+            // Process results
+            searchResults = allResults;
+            mobileResults = allResults.filter(business => business.hasMobile);
+            
+            updateStats();
+            updateResults();
+            hideProgress();
+            
+            const totalCount = searchResults.length;
+            const mobileCount = mobileResults.length;
+            const decisionMakerCount = searchResults.filter(b => b.decisionMakerTitle).length;
+            
+            showStatus(`Batch search complete! Found ${totalCount} businesses total, ${mobileCount} mobile numbers across ${currentIndustryIndex} industries${decisionMakerCount > 0 ? `, ${decisionMakerCount} with decision maker titles` : ''}${mobileCount >= maxResults ? ' - TARGET REACHED!' : ''}`, 'success');
+        }
+        
+        async function startSingleSearch(businessType, location, maxResults, businessSize, mobileOnly, decisionMakerTitles) {
             showStatus(`Searching for "${businessType}" in ${location}... (Target: ${maxResults} mobile numbers)`, 'info');
+            showProgress(maxResults);
             
             try {
                 // Call our backend API which will use the Google Places API key from environment
@@ -609,6 +863,7 @@
                         
                         updateStats();
                         updateResults();
+                        hideProgress();
                         
                         const totalCount = searchResults.length;
                         const mobileCount = searchResults.filter(b => b.hasMobile).length;
