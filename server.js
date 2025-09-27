@@ -1274,13 +1274,24 @@ app.post('/api/search-google-places', async (req, res) => {
     
     console.log(`[GOOGLE PLACES SEARCH] Searching for "${query}" in "${location}"`);
     
-    // Search Google Places - request more results to account for filtering
+    // Search Google Places - use mobile-focused search strategy
     let searchQuery;
     if (location === 'United Kingdom') {
       // For UK-wide searches, don't include location in query to get broader results
       searchQuery = query;
     } else {
       searchQuery = query + ' ' + location;
+    }
+    
+    // Add mobile-friendly terms to increase chances of finding mobile numbers
+    const mobileFriendlyTerms = ['owner', 'director', 'consultant', 'advisor', 'specialist', 'private'];
+    const hasMobileTerms = mobileFriendlyTerms.some(term => 
+      searchQuery.toLowerCase().includes(term.toLowerCase())
+    );
+    
+    if (!hasMobileTerms && !searchQuery.includes('"')) {
+      // If no mobile-friendly terms and not using quotes, add some
+      searchQuery += ' "private" OR "consultant" OR "advisor"';
     }
     
     const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(searchQuery)}&key=${apiKey}`;
@@ -1299,8 +1310,8 @@ app.post('/api/search-google-places', async (req, res) => {
     console.log(`[GOOGLE PLACES] Found ${data.results.length} total results from Google Places`);
     
     const results = [];
-    // Process more results to account for filtering (request 2x more than needed)
-    const maxProcess = Math.min(data.results.length, maxResults * 2);
+    // Process more results to account for filtering (request 4x more than needed for mobile-only searches)
+    const maxProcess = Math.min(data.results.length, maxResults * 4);
     
     // Process each result to get detailed information
     for (let i = 0; i < maxProcess; i++) {

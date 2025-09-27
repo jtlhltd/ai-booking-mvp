@@ -425,8 +425,11 @@
             
             <div class="form-group">
                 <label>
-                    <input type="checkbox" id="mobileOnly" checked> Only show businesses with mobile numbers
+                    <input type="checkbox" id="mobileOnly" checked> 📱 Mobile Numbers Only (Decision Makers)
                 </label>
+                <small style="color: #666; display: block; margin-top: 5px;">
+                    ✅ This ensures you're reaching business owners and decision makers directly
+                </small>
             </div>
             
             <div class="form-group">
@@ -466,7 +469,6 @@
             <div style="margin-top: 15px;">
                 <button class="btn btn-success" onclick="exportToCSV()" id="exportBtn" disabled>📤 Export to CSV</button>
                 <button class="btn btn-warning" onclick="addToPipeline()" id="pipelineBtn" disabled>📥 Add to Pipeline</button>
-                <button class="btn btn-secondary" onclick="toggleMobileFilter()" id="toggleFilterBtn" style="display: none;">👁️ Show All Results</button>
             </div>
         </div>
         
@@ -496,27 +498,27 @@
         function useTemplate(templateType) {
             const templates = {
                 'private-healthcare': {
-                    query: '"private healthcare practice" "GP surgery" "private medical clinic"',
+                    query: '"private GP" "private doctor" "private medical practice" "consultant"',
                     location: 'United Kingdom'
                 },
                 'financial-advisors': {
-                    query: '"financial advisor" "wealth management" "independent financial adviser"',
+                    query: '"independent financial advisor" "IFA" "wealth manager" "financial planner"',
                     location: 'United Kingdom'
                 },
                 'dental-practices': {
-                    query: '"dental practice" "private dentist" "orthodontist"',
+                    query: '"private dentist" "dental surgeon" "orthodontist" "dental specialist"',
                     location: 'United Kingdom'
                 },
                 'legal-services': {
-                    query: '"law firm" "solicitor practice" "legal services"',
+                    query: '"solicitor" "barrister" "lawyer" "legal advisor"',
                     location: 'United Kingdom'
                 },
                 'property-agents': {
-                    query: '"estate agent" "property investment" "letting agent"',
+                    query: '"property consultant" "property advisor" "real estate consultant" "property specialist"',
                     location: 'United Kingdom'
                 },
                 'business-coaching': {
-                    query: '"business coach" "consulting firm" "business consultant"',
+                    query: '"business coach" "executive coach" "business consultant" "management consultant"',
                     location: 'United Kingdom'
                 }
             };
@@ -683,26 +685,23 @@
             }
             
             if (mobileResults.length === 0) {
-                const message = mobileOnly ? 
-                    'No businesses with mobile numbers found. Try unchecking "Only show businesses with mobile numbers" or try a different search.' :
-                    'No businesses found. Try a different search.';
+                let message;
+                if (mobileOnly && searchResults.length > 0) {
+                    message = `Found ${searchResults.length} businesses but none with mobile numbers. Try these mobile-friendly search terms:<br><br>
+                    • "private [business type]"<br>
+                    • "[business type] consultant"<br>
+                    • "[business type] advisor"<br>
+                    • "independent [business type]"<br>
+                    • "[business type] specialist"`;
+                } else {
+                    message = 'No businesses found. Try a different search term or location.';
+                }
                 container.innerHTML = `<div class="loading">${message}</div>`;
                 document.getElementById('exportBtn').disabled = true;
                 document.getElementById('exportBtn2').disabled = true;
                 document.getElementById('pipelineBtn').disabled = true;
-                
-                // Show toggle button if we have results but no mobile numbers
-                if (searchResults.length > 0 && mobileOnly) {
-                    document.getElementById('toggleFilterBtn').style.display = 'inline-block';
-                    document.getElementById('toggleFilterBtn').textContent = '👁️ Show All Results';
-                } else {
-                    document.getElementById('toggleFilterBtn').style.display = 'none';
-                }
                 return;
             }
-            
-            // Hide toggle button when we have mobile results
-            document.getElementById('toggleFilterBtn').style.display = 'none';
             
             container.innerHTML = mobileResults.map(business => `
                 <div class="result-item">
@@ -738,24 +737,6 @@
             showStatus('Search results cleared', 'success');
         }
         
-        function toggleMobileFilter() {
-            const mobileOnlyCheckbox = document.getElementById('mobileOnly');
-            const toggleBtn = document.getElementById('toggleFilterBtn');
-            
-            if (mobileOnlyCheckbox.checked) {
-                // Switch to show all results
-                mobileOnlyCheckbox.checked = false;
-                toggleBtn.textContent = '📱 Show Mobile Only';
-                updateResults();
-                showStatus('Now showing all results (including landlines)', 'info');
-            } else {
-                // Switch to mobile only
-                mobileOnlyCheckbox.checked = true;
-                toggleBtn.textContent = '👁️ Show All Results';
-                updateResults();
-                showStatus('Now showing only mobile numbers', 'info');
-            }
-        }
         
         function exportToCSV() {
             if (mobileResults.length === 0) {
