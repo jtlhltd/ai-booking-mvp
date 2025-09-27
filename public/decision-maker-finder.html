@@ -440,7 +440,7 @@
         
         <!-- Search Results -->
         <div class="search-section">
-            <h3>📊 Search Results (Mobile Numbers Only)</h3>
+            <h3>📊 Search Results <span id="resultsFilterText">(All Results)</span></h3>
             
             <div id="searchResults" class="search-results">
                 <div class="loading">No search results yet. Enter your search criteria and click "Search Google Places".</div>
@@ -563,11 +563,6 @@
                     if (data.success) {
                         searchResults = data.results || [];
                         
-                        // Apply client-side filtering if needed
-                        if (mobileOnly) {
-                            searchResults = searchResults.filter(business => business.hasMobile);
-                        }
-                        
                         // Enhanced decision maker detection
                         if (decisionMakerTitles) {
                             searchResults = searchResults.map(business => ({
@@ -577,15 +572,21 @@
                             }));
                         }
                         
-                        mobileResults = searchResults.filter(business => business.hasMobile);
+                        // Apply client-side filtering based on mobileOnly setting
+                        if (mobileOnly) {
+                            mobileResults = searchResults.filter(business => business.hasMobile);
+                        } else {
+                            mobileResults = searchResults; // Show all results
+                        }
                         
                         updateStats();
                         updateResults();
                         
-                        const mobileCount = mobileResults.length;
+                        const totalCount = searchResults.length;
+                        const mobileCount = searchResults.filter(b => b.hasMobile).length;
                         const decisionMakerCount = searchResults.filter(b => b.decisionMakerTitle).length;
                         
-                        showStatus(`Found ${searchResults.length} businesses, ${mobileCount} with mobile numbers${decisionMakerCount > 0 ? `, ${decisionMakerCount} with decision maker titles` : ''}`, 'success');
+                        showStatus(`Found ${totalCount} businesses total, ${mobileCount} with mobile numbers${decisionMakerCount > 0 ? `, ${decisionMakerCount} with decision maker titles` : ''}`, 'success');
                     } else {
                         showStatus(`Search failed: ${data.error}`, 'error');
                     }
@@ -642,9 +643,21 @@
         
         function updateResults() {
             const container = document.getElementById('searchResults');
+            const filterText = document.getElementById('resultsFilterText');
+            const mobileOnly = document.getElementById('mobileOnly').checked;
+            
+            // Update filter text
+            if (mobileOnly) {
+                filterText.textContent = '(Mobile Numbers Only)';
+            } else {
+                filterText.textContent = '(All Results)';
+            }
             
             if (mobileResults.length === 0) {
-                container.innerHTML = '<div class="loading">No businesses with mobile numbers found. Try a different search.</div>';
+                const message = mobileOnly ? 
+                    'No businesses with mobile numbers found. Try unchecking "Only show businesses with mobile numbers" or try a different search.' :
+                    'No businesses found. Try a different search.';
+                container.innerHTML = `<div class="loading">${message}</div>`;
                 document.getElementById('exportBtn').disabled = true;
                 document.getElementById('exportBtn2').disabled = true;
                 document.getElementById('pipelineBtn').disabled = true;
@@ -667,7 +680,7 @@
                         </div>
                     </div>
                     <div class="result-actions">
-                        <span class="mobile-badge">📱 Mobile</span>
+                        ${business.hasMobile ? '<span class="mobile-badge">📱 Mobile</span>' : '<span class="business-size-badge">☎️ Landline</span>'}
                     </div>
                 </div>
             `).join('');
@@ -687,7 +700,7 @@
         
         function exportToCSV() {
             if (mobileResults.length === 0) {
-                showStatus('No mobile leads to export', 'error');
+                showStatus('No results to export', 'error');
                 return;
             }
             
@@ -706,21 +719,24 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
             
-            showStatus(`Exported ${mobileResults.length} mobile leads to CSV`, 'success');
+            showStatus(`Exported ${mobileResults.length} results to CSV`, 'success');
         }
         
         async function addToPipeline() {
-            if (mobileResults.length === 0) {
+            // Only add businesses with mobile numbers to pipeline
+            const mobileLeads = mobileResults.filter(business => business.hasMobile);
+            
+            if (mobileLeads.length === 0) {
                 showStatus('No mobile leads to add to pipeline', 'error');
                 return;
             }
             
-            showStatus(`Adding ${mobileResults.length} mobile leads to pipeline...`, 'info');
+            showStatus(`Adding ${mobileLeads.length} mobile leads to pipeline...`, 'info');
             
             let addedCount = 0;
             let errorCount = 0;
             
-            for (const business of mobileResults) {
+            for (const business of mobileLeads) {
                 try {
                     const response = await fetch(`${API_BASE}/api/initiate-lead-capture`, {
                         method: 'POST',

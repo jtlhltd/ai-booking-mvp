@@ -1274,7 +1274,7 @@ app.post('/api/search-google-places', async (req, res) => {
     
     console.log(`[GOOGLE PLACES SEARCH] Searching for "${query}" in "${location}"`);
     
-    // Search Google Places
+    // Search Google Places - request more results to account for filtering
     const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query + ' ' + location)}&key=${apiKey}`;
     
     const response = await fetch(searchUrl);
@@ -1288,8 +1288,11 @@ app.post('/api/search-google-places', async (req, res) => {
       });
     }
     
+    console.log(`[GOOGLE PLACES] Found ${data.results.length} total results from Google Places`);
+    
     const results = [];
-    const maxProcess = Math.min(data.results.length, maxResults);
+    // Process more results to account for filtering (request 2x more than needed)
+    const maxProcess = Math.min(data.results.length, maxResults * 2);
     
     // Process each result to get detailed information
     for (let i = 0; i < maxProcess; i++) {
@@ -1306,39 +1309,43 @@ app.post('/api/search-google-places', async (req, res) => {
           const details = detailsData.result;
           const phone = details.formatted_phone_number || details.international_phone_number;
           
-          // Only include businesses with phone numbers
-          if (phone) {
-            const isMobile = isMobileNumber(phone);
-            
-            // Determine business size based on name patterns
-            let estimatedSize = 'Unknown';
-            if (businessSize) {
-              estimatedSize = businessSize;
-            } else {
-              const name = (details.name || place.name).toLowerCase();
-              if (name.includes('associates') || name.includes('group') || name.includes('partnership')) {
-                estimatedSize = 'Medium';
-              } else if (name.includes('solo') || name.includes('individual') || name.includes('private')) {
-                estimatedSize = 'Solo';
-              } else if (name.includes('clinic') || name.includes('practice') || name.includes('surgery')) {
-                estimatedSize = 'Small';
-              }
+          // Include all businesses, not just those with phone numbers
+          // Let the frontend filter based on mobileOnly setting
+          const isMobile = phone ? isMobileNumber(phone) : false;
+          
+          // Determine business size based on name patterns
+          let estimatedSize = 'Unknown';
+          if (businessSize) {
+            estimatedSize = businessSize;
+          } else {
+            const name = (details.name || place.name).toLowerCase();
+            if (name.includes('associates') || name.includes('group') || name.includes('partnership')) {
+              estimatedSize = 'Medium';
+            } else if (name.includes('solo') || name.includes('individual') || name.includes('private')) {
+              estimatedSize = 'Solo';
+            } else if (name.includes('clinic') || name.includes('practice') || name.includes('surgery')) {
+              estimatedSize = 'Small';
             }
-            
-            const business = {
-              name: details.name || place.name,
-              phone: phone,
-              hasMobile: isMobile,
-              email: generateEmail(details.name || place.name),
-              website: details.website || `https://www.${(details.name || place.name).toLowerCase().replace(/[^a-z0-9]/g, '')}.co.uk`,
-              address: details.formatted_address || place.formatted_address,
-              industry: query,
-              source: 'Google Places',
-              businessSize: estimatedSize,
-              verified: Math.random() > 0.3 // 70% chance of being "verified"
-            };
-            
-            results.push(business);
+          }
+          
+          const business = {
+            name: details.name || place.name,
+            phone: phone || 'No phone listed',
+            hasMobile: isMobile,
+            email: generateEmail(details.name || place.name),
+            website: details.website || `https://www.${(details.name || place.name).toLowerCase().replace(/[^a-z0-9]/g, '')}.co.uk`,
+            address: details.formatted_address || place.formatted_address,
+            industry: query,
+            source: 'Google Places',
+            businessSize: estimatedSize,
+            verified: Math.random() > 0.3 // 70% chance of being "verified"
+          };
+          
+          results.push(business);
+          
+          // Stop when we have enough results
+          if (results.length >= maxResults) {
+            break;
           }
         }
         
@@ -1350,13 +1357,16 @@ app.post('/api/search-google-places', async (req, res) => {
       }
     }
     
-    console.log(`[GOOGLE PLACES SEARCH COMPLETE] Found ${results.length} businesses with phone numbers`);
+    const mobileCount = results.filter(r => r.hasMobile).length;
+    console.log(`[GOOGLE PLACES SEARCH COMPLETE] Found ${results.length} businesses total, ${mobileCount} with mobile numbers`);
     
     res.json({
       success: true,
       results: results,
       total: results.length,
-      mobileCount: results.filter(r => r.hasMobile).length
+      mobileCount: mobileCount,
+      processed: maxProcess,
+      requested: maxResults
     });
     
   } catch (error) {
