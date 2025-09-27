@@ -869,6 +869,7 @@
                         
                         console.log(`[FRONTEND DEBUG] Total results: ${searchResults.length}, Mobile results: ${mobileResults.length}, Mobile only: ${mobileOnly}`);
                         console.log(`[FRONTEND DEBUG] Mobile businesses:`, searchResults.filter(b => b.hasMobile));
+                        console.log(`[FRONTEND DEBUG] All results with hasMobile:`, searchResults.map(r => ({ name: r.name, phone: r.phone, hasMobile: r.hasMobile })));
                         
                         // Show debug info in status message
                         const mobileBusinesses = searchResults.filter(b => b.hasMobile);
