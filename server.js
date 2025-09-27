@@ -1310,8 +1310,8 @@ app.post('/api/search-google-places', async (req, res) => {
     console.log(`[GOOGLE PLACES] Found ${data.results.length} total results from Google Places`);
     
     const results = [];
-    // Process more results to account for filtering (request 8x more than needed for UK + mobile filtering)
-    const maxProcess = Math.min(data.results.length, maxResults * 8);
+    // Process more results to account for filtering (request 20x more than needed for UK + mobile filtering)
+    const maxProcess = Math.min(data.results.length, maxResults * 20);
     
     // Process each result to get detailed information
     for (let i = 0; i < maxProcess; i++) {
@@ -1374,7 +1374,16 @@ app.post('/api/search-google-places', async (req, res) => {
                 if (isUKBusiness) {
                   results.push(business);
                   
-                  // Stop when we have enough results
+                  // Count mobile numbers found so far
+                  const mobileCount = results.filter(r => r.hasMobile).length;
+                  
+                  // Stop when we have enough mobile numbers (target: 100)
+                  if (mobileCount >= 100) {
+                    console.log(`[MOBILE TARGET REACHED] Found ${mobileCount} mobile numbers, stopping search`);
+                    break;
+                  }
+                  
+                  // Also stop if we have enough total results as fallback
                   if (results.length >= maxResults) {
                     break;
                   }

@@ -404,10 +404,10 @@
                 <div class="form-group">
                     <label for="maxResults">Max Results:</label>
                     <select id="maxResults">
-                        <option value="20">20 results</option>
-                        <option value="50" selected>50 results</option>
-                        <option value="100">100 results</option>
+                        <option value="50">50 results</option>
+                        <option value="100" selected>100 results</option>
                         <option value="200">200 results</option>
+                        <option value="500">500 results (for 100+ mobile)</option>
                     </select>
                 </div>
                 
@@ -565,7 +565,7 @@
                 location = locationSelect;
             }
             
-            showStatus(`Searching for "${businessType}" in ${location}...`, 'info');
+            showStatus(`Searching for "${businessType}" in ${location}... (Target: 100 mobile numbers)`, 'info');
             
             try {
                 // Call our backend API which will use the Google Places API key from environment
@@ -614,9 +614,16 @@
                         const decisionMakerCount = searchResults.filter(b => b.decisionMakerTitle).length;
                         
                         if (mobileOnly && mobileCount === 0 && totalCount > 0) {
-                            showStatus(`Found ${totalCount} businesses but none with mobile numbers. Try unchecking "Only show businesses with mobile numbers" to see all results.`, 'warning');
+                            showStatus(`Found ${totalCount} businesses but none with mobile numbers. Try these mobile-friendly search terms:<br><br>
+                    • "private [business type]"<br>
+                    • "[business type] consultant"<br>
+                    • "[business type] advisor"<br>
+                    • "independent [business type]"<br>
+                    • "[business type] specialist"`, 'warning');
+                        } else if (mobileCount < 100 && mobileCount > 0) {
+                            showStatus(`Found ${totalCount} businesses total, ${mobileCount} mobile numbers (Target: 100). Try increasing "Max Results" to 500 for more mobile numbers.`, 'info');
                         } else {
-                            showStatus(`Found ${totalCount} businesses total, ${mobileCount} with mobile numbers${decisionMakerCount > 0 ? `, ${decisionMakerCount} with decision maker titles` : ''}`, 'success');
+                            showStatus(`Found ${totalCount} businesses total, ${mobileCount} with mobile numbers${decisionMakerCount > 0 ? `, ${decisionMakerCount} with decision maker titles` : ''}${mobileCount >= 100 ? ' - TARGET REACHED!' : ''}`, 'success');
                         }
                     } else {
                         showStatus(`Search failed: ${data.error}`, 'error');
