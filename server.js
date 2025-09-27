@@ -1274,48 +1274,77 @@ app.post('/api/search-google-places', async (req, res) => {
     
     console.log(`[GOOGLE PLACES SEARCH] Searching for "${query}" in "${location}"`);
     
-    // Search Google Places - use mobile-focused search strategy
-    let searchQuery;
+    // Search Google Places - use multiple search strategies to get more results
+    const searchQueries = [];
+    
     if (location === 'United Kingdom') {
-      // For UK-wide searches, include UK location to get UK businesses
-      searchQuery = query + ' UK';
+      // Create multiple search variations for UK
+      searchQueries.push(query + ' UK');
+      searchQueries.push(query + ' United Kingdom');
+      searchQueries.push(query + ' England');
+      searchQueries.push(query + ' Scotland');
+      searchQueries.push(query + ' Wales');
     } else {
-      searchQuery = query + ' ' + location;
+      searchQueries.push(query + ' ' + location);
     }
     
     // Add mobile-friendly terms to increase chances of finding mobile numbers
     const mobileFriendlyTerms = ['owner', 'director', 'consultant', 'advisor', 'specialist', 'private'];
     const hasMobileTerms = mobileFriendlyTerms.some(term => 
-      searchQuery.toLowerCase().includes(term.toLowerCase())
+      query.toLowerCase().includes(term.toLowerCase())
     );
     
-    if (!hasMobileTerms && !searchQuery.includes('"')) {
-      // If no mobile-friendly terms and not using quotes, add some
-      searchQuery += ' "private" OR "consultant" OR "advisor"';
+    if (!hasMobileTerms && !query.includes('"')) {
+      // Add mobile-friendly variations
+      searchQueries.push(query + ' "private" UK');
+      searchQueries.push(query + ' "consultant" UK');
+      searchQueries.push(query + ' "advisor" UK');
     }
     
-    const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(searchQuery)}&key=${apiKey}`;
+    const allResults = [];
     
-    const response = await fetch(searchUrl);
-    const data = await response.json();
+    // Search with multiple queries
+    for (const searchQuery of searchQueries) {
+      const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(searchQuery)}&key=${apiKey}`;
+      
+      console.log(`[GOOGLE PLACES SEARCH] Searching: "${searchQuery}"`);
+      
+      const response = await fetch(searchUrl);
+      const data = await response.json();
+      
+      if (data.status === 'OK') {
+        // Add results to our collection, avoiding duplicates
+        for (const result of data.results) {
+          if (!allResults.find(existing => existing.place_id === result.place_id)) {
+            allResults.push(result);
+          }
+        }
+        console.log(`[GOOGLE PLACES] Query "${searchQuery}" found ${data.results.length} results, total unique: ${allResults.length}`);
+      } else {
+        console.error(`[GOOGLE PLACES ERROR] Query "${searchQuery}": ${data.status}: ${data.error_message || 'Unknown error'}`);
+      }
+      
+      // Small delay between queries
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
     
-    if (data.status !== 'OK') {
-      console.error(`[GOOGLE PLACES ERROR] ${data.status}: ${data.error_message || 'Unknown error'}`);
+    console.log(`[GOOGLE PLACES] Total unique results from all queries: ${allResults.length}`);
+    
+    if (allResults.length === 0) {
+      console.error(`[GOOGLE PLACES ERROR] No results found from any query`);
       return res.status(400).json({
         success: false,
-        error: `Google Places API Error: ${data.status}`
+        error: 'No businesses found for the given search criteria'
       });
     }
     
-    console.log(`[GOOGLE PLACES] Found ${data.results.length} total results from Google Places`);
-    
     const results = [];
-    // Process more results to account for filtering (request 20x more than needed for UK + mobile filtering)
-    const maxProcess = Math.min(data.results.length, maxResults * 20);
+    // Process ALL available results to find 100 mobile numbers (ignore maxResults limit)
+    const maxProcess = allResults.length;
     
     // Process each result to get detailed information
     for (let i = 0; i < maxProcess; i++) {
-      const place = data.results[i];
+      const place = allResults[i];
       
       try {
         // Get place details
@@ -1380,11 +1409,6 @@ app.post('/api/search-google-places', async (req, res) => {
                   // Stop when we have enough mobile numbers (target: 100)
                   if (mobileCount >= 100) {
                     console.log(`[MOBILE TARGET REACHED] Found ${mobileCount} mobile numbers, stopping search`);
-                    break;
-                  }
-                  
-                  // Also stop if we have enough total results as fallback
-                  if (results.length >= maxResults) {
                     break;
                   }
                 }
