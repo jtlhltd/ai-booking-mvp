@@ -1277,8 +1277,8 @@ app.post('/api/search-google-places', async (req, res) => {
     // Search Google Places - use mobile-focused search strategy
     let searchQuery;
     if (location === 'United Kingdom') {
-      // For UK-wide searches, don't include location in query to get broader results
-      searchQuery = query;
+      // For UK-wide searches, include UK location to get UK businesses
+      searchQuery = query + ' UK';
     } else {
       searchQuery = query + ' ' + location;
     }
@@ -1310,8 +1310,8 @@ app.post('/api/search-google-places', async (req, res) => {
     console.log(`[GOOGLE PLACES] Found ${data.results.length} total results from Google Places`);
     
     const results = [];
-    // Process more results to account for filtering (request 4x more than needed for mobile-only searches)
-    const maxProcess = Math.min(data.results.length, maxResults * 4);
+    // Process more results to account for filtering (request 8x more than needed for UK + mobile filtering)
+    const maxProcess = Math.min(data.results.length, maxResults * 8);
     
     // Process each result to get detailed information
     for (let i = 0; i < maxProcess; i++) {
@@ -1347,25 +1347,38 @@ app.post('/api/search-google-places', async (req, res) => {
             }
           }
           
-          const business = {
-            name: details.name || place.name,
-            phone: phone || 'No phone listed',
-            hasMobile: isMobile,
-            email: generateEmail(details.name || place.name),
-            website: details.website || `https://www.${(details.name || place.name).toLowerCase().replace(/[^a-z0-9]/g, '')}.co.uk`,
-            address: details.formatted_address || place.formatted_address,
-            industry: query,
-            source: 'Google Places',
-            businessSize: estimatedSize,
-            verified: Math.random() > 0.3 // 70% chance of being "verified"
-          };
+                // Check if this is a UK business
+                const address = details.formatted_address || place.formatted_address || '';
+                const isUKBusiness = address.toLowerCase().includes('uk') || 
+                                   address.toLowerCase().includes('united kingdom') ||
+                                   address.toLowerCase().includes('england') ||
+                                   address.toLowerCase().includes('scotland') ||
+                                   address.toLowerCase().includes('wales') ||
+                                   address.toLowerCase().includes('northern ireland');
+                
+                const business = {
+                  name: details.name || place.name,
+                  phone: phone || 'No phone listed',
+                  hasMobile: isMobile,
+                  email: generateEmail(details.name || place.name),
+                  website: details.website || `https://www.${(details.name || place.name).toLowerCase().replace(/[^a-z0-9]/g, '')}.co.uk`,
+                  address: address,
+                  industry: query,
+                  source: 'Google Places',
+                  businessSize: estimatedSize,
+                  verified: Math.random() > 0.3, // 70% chance of being "verified"
+                  isUKBusiness: isUKBusiness
+                };
           
-          results.push(business);
-          
-          // Stop when we have enough results
-          if (results.length >= maxResults) {
-            break;
-          }
+                // Only add UK businesses to results
+                if (isUKBusiness) {
+                  results.push(business);
+                  
+                  // Stop when we have enough results
+                  if (results.length >= maxResults) {
+                    break;
+                  }
+                }
         }
         
         // Small delay to avoid rate limiting
@@ -1407,14 +1420,21 @@ function isMobileNumber(phone) {
     /^447[0-9]{9}$/, // 447xxxxxxxxx
     /^\+44\s?7[0-9]{9}$/, // +44 7xxxxxxxxx (with space)
     /^0\s?7[0-9]{9}$/, // 0 7xxxxxxxxx (with space)
-    /^44\s?7[0-9]{9}$/ // 44 7xxxxxxxxx (with space)
+    /^44\s?7[0-9]{9}$/, // 44 7xxxxxxxxx (with space)
+    /^\+44\s?7[0-9]{3}\s?[0-9]{3}\s?[0-9]{3}$/, // +44 7xx xxx xxx
+    /^0\s?7[0-9]{3}\s?[0-9]{3}\s?[0-9]{3}$/, // 0 7xx xxx xxx
+    /^\+44\s?\(0\)\s?7[0-9]{9}$/, // +44 (0) 7xxxxxxxxx
+    /^0\s?7[0-9]{3}\s?[0-9]{6}$/, // 0 7xx xxxxxx
+    /^\+44\s?7[0-9]{3}\s?[0-9]{6}$/ // +44 7xx xxxxxx
   ];
   
   const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
   const isMobile = mobilePatterns.some(pattern => pattern.test(cleanPhone));
   
-  // Log phone numbers for debugging
-  console.log(`[PHONE DEBUG] "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
+  // Log phone numbers for debugging (only log first few to avoid spam)
+  if (Math.random() < 0.1) { // Log 10% of phone numbers
+    console.log(`[PHONE DEBUG] "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
+  }
   
   return isMobile;
 }
