@@ -402,12 +402,13 @@
             
             <div class="form-row">
                 <div class="form-group">
-                    <label for="maxResults">Max Results:</label>
+                    <label for="maxResults">Target Mobile Numbers:</label>
                     <select id="maxResults">
-                        <option value="50">50 results</option>
-                        <option value="100" selected>100 results</option>
-                        <option value="200">200 results</option>
-                        <option value="500">500 results (for 100+ mobile)</option>
+                        <option value="10">10 mobile numbers</option>
+                        <option value="25">25 mobile numbers</option>
+                        <option value="50">50 mobile numbers</option>
+                        <option value="100" selected>100 mobile numbers</option>
+                        <option value="200">200 mobile numbers</option>
                     </select>
                 </div>
                 
@@ -478,7 +479,7 @@
             <p>Export your found businesses with mobile numbers to CSV format for further processing.</p>
             
             <div style="margin-top: 15px;">
-                <button class="btn btn-success" onclick="exportToCSV()" id="exportBtn2" disabled>📤 Export All Mobile Leads to CSV</button>
+                <button class="btn btn-success" onclick="exportToCSV()" id="exportBtn2" disabled>📤 Export Mobile Leads to CSV</button>
             </div>
         </div>
     </div>
@@ -565,7 +566,7 @@
                 location = locationSelect;
             }
             
-            showStatus(`Searching for "${businessType}" in ${location}... (Max: ${maxResults * 10} businesses, Target: 100 mobile numbers)`, 'info');
+            showStatus(`Searching for "${businessType}" in ${location}... (Target: ${maxResults} mobile numbers)`, 'info');
             
             try {
                 // Call our backend API which will use the Google Places API key from environment
@@ -620,10 +621,10 @@
                     • "[business type] advisor"<br>
                     • "independent [business type]"<br>
                     • "[business type] specialist"`, 'warning');
-                        } else if (mobileCount < 100 && mobileCount > 0) {
-                            showStatus(`Found ${totalCount} businesses total, ${mobileCount} mobile numbers (Target: 100). Try increasing "Max Results" to process more businesses.`, 'info');
+                        } else if (mobileCount < maxResults && mobileCount > 0) {
+                            showStatus(`Found ${totalCount} businesses total, ${mobileCount} mobile numbers (Target: ${maxResults}). Search may need more time or try different search terms.`, 'info');
                         } else {
-                            showStatus(`Found ${totalCount} businesses total, ${mobileCount} with mobile numbers${decisionMakerCount > 0 ? `, ${decisionMakerCount} with decision maker titles` : ''}${mobileCount >= 100 ? ' - TARGET REACHED!' : ''}`, 'success');
+                            showStatus(`Found ${totalCount} businesses total, ${mobileCount} with mobile numbers${decisionMakerCount > 0 ? `, ${decisionMakerCount} with decision maker titles` : ''}${mobileCount >= maxResults ? ' - TARGET REACHED!' : ''}`, 'success');
                         }
                     } else {
                         showStatus(`Search failed: ${data.error}`, 'error');
