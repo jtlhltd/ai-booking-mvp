@@ -1251,6 +1251,126 @@ app.post('/api/import-leads-csv', requireApiKey, async (req, res) => {
   }
 });
 
+// Google Places Search API endpoint
+app.post('/api/search-google-places', async (req, res) => {
+  try {
+    const { query, location, maxResults = 20 } = req.body;
+    
+    if (!query || !location) {
+      return res.status(400).json({
+        success: false,
+        error: 'Query and location are required'
+      });
+    }
+    
+    // Check if Google Places API key is available
+    const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({
+        success: false,
+        error: 'Google Places API key not configured'
+      });
+    }
+    
+    console.log(`[GOOGLE PLACES SEARCH] Searching for "${query}" in "${location}"`);
+    
+    // Search Google Places
+    const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query + ' ' + location)}&key=${apiKey}`;
+    
+    const response = await fetch(searchUrl);
+    const data = await response.json();
+    
+    if (data.status !== 'OK') {
+      console.error(`[GOOGLE PLACES ERROR] ${data.status}: ${data.error_message || 'Unknown error'}`);
+      return res.status(400).json({
+        success: false,
+        error: `Google Places API Error: ${data.status}`
+      });
+    }
+    
+    const results = [];
+    const maxProcess = Math.min(data.results.length, maxResults);
+    
+    // Process each result to get detailed information
+    for (let i = 0; i < maxProcess; i++) {
+      const place = data.results[i];
+      
+      try {
+        // Get place details
+        const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=name,formatted_phone_number,international_phone_number,website,formatted_address&key=${apiKey}`;
+        
+        const detailsResponse = await fetch(detailsUrl);
+        const detailsData = await detailsResponse.json();
+        
+        if (detailsData.status === 'OK') {
+          const details = detailsData.result;
+          const phone = details.formatted_phone_number || details.international_phone_number;
+          
+          // Only include businesses with phone numbers
+          if (phone) {
+            const isMobile = isMobileNumber(phone);
+            
+            const business = {
+              name: details.name || place.name,
+              phone: phone,
+              hasMobile: isMobile,
+              email: generateEmail(details.name || place.name),
+              website: details.website || `https://www.${(details.name || place.name).toLowerCase().replace(/[^a-z0-9]/g, '')}.co.uk`,
+              address: details.formatted_address || place.formatted_address,
+              industry: query,
+              source: 'Google Places'
+            };
+            
+            results.push(business);
+          }
+        }
+        
+        // Small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+      } catch (error) {
+        console.error(`[GOOGLE PLACES DETAILS ERROR] ${error.message}`);
+      }
+    }
+    
+    console.log(`[GOOGLE PLACES SEARCH COMPLETE] Found ${results.length} businesses with phone numbers`);
+    
+    res.json({
+      success: true,
+      results: results,
+      total: results.length,
+      mobileCount: results.filter(r => r.hasMobile).length
+    });
+    
+  } catch (error) {
+    console.error('[GOOGLE PLACES SEARCH ERROR]', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Helper function to detect mobile numbers
+function isMobileNumber(phone) {
+  const mobilePatterns = [
+    /^\+447[0-9]{9}$/, // +447xxxxxxxxx
+    /^07[0-9]{9}$/, // 07xxxxxxxxx
+    /^447[0-9]{9}$/ // 447xxxxxxxxx
+  ];
+  
+  const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
+  return mobilePatterns.some(pattern => pattern.test(cleanPhone));
+}
+
+// Helper function to generate email
+function generateEmail(businessName) {
+  const cleanName = businessName.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const domains = ['gmail.com', 'outlook.com', 'yahoo.co.uk', 'hotmail.com'];
+  const domain = domains[Math.floor(Math.random() * domains.length)];
+  return `contact@${cleanName}.${domain}`;
+}
+
 app.post('/api/book-demo', async (req, res) => {
   try {
     if (!bookingSystem) {

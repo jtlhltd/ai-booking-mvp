@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Decision Maker Finder - Google Places Search</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .search-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #333;
+        }
+        
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        .btn-success {
+            background: #28a745;
+        }
+        
+        .btn-warning {
+            background: #ffc107;
+            color: #333;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+        }
+        
+        .search-results {
+            max-height: 500px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 15px;
+            background: #f8f9fa;
+        }
+        
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            border-bottom: 1px solid #e0e0e0;
+            margin-bottom: 10px;
+            background: white;
+            border-radius: 6px;
+        }
+        
+        .result-item:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+        
+        .result-info {
+            flex: 1;
+        }
+        
+        .result-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .result-details {
+            font-size: 12px;
+            color: #666;
+            line-height: 1.4;
+        }
+        
+        .result-actions {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
+            margin: 0;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 1.8em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+        
+        .loading {
+            text-align: center;
+            color: #666;
+            padding: 20px;
+            font-style: italic;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        
+        .mobile-badge {
+            background: #28a745;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        
+        .export-section {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 Decision Maker Finder</h1>
+        
+        <div id="status"></div>
+        
+        <!-- Search Configuration -->
+        <div class="search-section">
+            <h3>🔍 Search Configuration</h3>
+            
+            <div class="form-group">
+                <label for="businessType">Business Type:</label>
+                <input type="text" id="businessType" placeholder="e.g., 'private healthcare practice', 'financial advisor', 'dental practice'">
+            </div>
+            
+            <div class="form-group">
+                <label for="location">Location:</label>
+                <input type="text" id="location" placeholder="e.g., London, Manchester, Birmingham">
+            </div>
+            
+            <div class="form-group">
+                <label for="maxResults">Max Results:</label>
+                <select id="maxResults">
+                    <option value="10">10 results</option>
+                    <option value="20" selected>20 results</option>
+                    <option value="30">30 results</option>
+                    <option value="50">50 results</option>
+                </select>
+            </div>
+            
+            <button class="btn" onclick="startSearch()">🔍 Search Google Places</button>
+            <button class="btn btn-secondary" onclick="clearResults()">🗑️ Clear Results</button>
+        </div>
+        
+        <!-- Statistics -->
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number" id="totalFound">0</div>
+                <div class="stat-label">Total Found</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="mobileFound">0</div>
+                <div class="stat-label">Mobile Numbers</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="exportedCount">0</div>
+                <div class="stat-label">Ready to Export</div>
+            </div>
+        </div>
+        
+        <!-- Search Results -->
+        <div class="search-section">
+            <h3>📊 Search Results (Mobile Numbers Only)</h3>
+            
+            <div id="searchResults" class="search-results">
+                <div class="loading">No search results yet. Enter your search criteria and click "Search Google Places".</div>
+            </div>
+            
+            <div style="margin-top: 15px;">
+                <button class="btn btn-success" onclick="exportToCSV()" id="exportBtn" disabled>📤 Export to CSV</button>
+                <button class="btn btn-warning" onclick="addToPipeline()" id="pipelineBtn" disabled>📥 Add to Pipeline</button>
+            </div>
+        </div>
+        
+        <!-- Export Section -->
+        <div class="export-section">
+            <h3>📤 Export Options</h3>
+            <p>Export your found businesses with mobile numbers to CSV format for further processing.</p>
+            
+            <div style="margin-top: 15px;">
+                <button class="btn btn-success" onclick="exportToCSV()" id="exportBtn2" disabled>📤 Export All Mobile Leads to CSV</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        let searchResults = [];
+        let mobileResults = [];
+        
+        function showStatus(message, type = 'info') {
+            const status = document.getElementById('status');
+            if (status) {
+                status.innerHTML = `<div class="${type}">${message}</div>`;
+            }
+        }
+        
+        async function startSearch() {
+            const businessType = document.getElementById('businessType').value.trim();
+            const location = document.getElementById('location').value.trim();
+            const maxResults = parseInt(document.getElementById('maxResults').value);
+            
+            if (!businessType) {
+                showStatus('Please enter a business type to search for', 'error');
+                return;
+            }
+            
+            if (!location) {
+                showStatus('Please enter a location', 'error');
+                return;
+            }
+            
+            showStatus(`Searching for "${businessType}" in ${location}...`, 'info');
+            
+            try {
+                // Call our backend API which will use the Google Places API key from environment
+                const response = await fetch(`${API_BASE}/api/search-google-places`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        query: businessType,
+                        location: location,
+                        maxResults: maxResults
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        searchResults = data.results || [];
+                        mobileResults = searchResults.filter(business => business.hasMobile);
+                        
+                        updateStats();
+                        updateResults();
+                        
+                        showStatus(`Found ${searchResults.length} businesses, ${mobileResults.length} with mobile numbers`, 'success');
+                    } else {
+                        showStatus(`Search failed: ${data.error}`, 'error');
+                    }
+                } else {
+                    const errorData = await response.json();
+                    showStatus(`API Error: ${errorData.error || 'Unknown error'}`, 'error');
+                }
+                
+            } catch (error) {
+                showStatus(`Search error: ${error.message}`, 'error');
+            }
+        }
+        
+        function updateStats() {
+            document.getElementById('totalFound').textContent = searchResults.length;
+            document.getElementById('mobileFound').textContent = mobileResults.length;
+            document.getElementById('exportedCount').textContent = mobileResults.length;
+        }
+        
+        function updateResults() {
+            const container = document.getElementById('searchResults');
+            
+            if (mobileResults.length === 0) {
+                container.innerHTML = '<div class="loading">No businesses with mobile numbers found. Try a different search.</div>';
+                document.getElementById('exportBtn').disabled = true;
+                document.getElementById('exportBtn2').disabled = true;
+                document.getElementById('pipelineBtn').disabled = true;
+                return;
+            }
+            
+            container.innerHTML = mobileResults.map(business => `
+                <div class="result-item">
+                    <div class="result-info">
+                        <div class="result-name">${business.name}</div>
+                        <div class="result-details">
+                            📞 ${business.phone} | 📧 ${business.email || 'No email'} | 🌐 ${business.website || 'No website'}<br>
+                            📍 ${business.address} | 🏷️ ${business.industry || 'Business'} | 🔍 ${business.source}
+                        </div>
+                    </div>
+                    <div class="result-actions">
+                        <span class="mobile-badge">📱 Mobile</span>
+                    </div>
+                </div>
+            `).join('');
+            
+            document.getElementById('exportBtn').disabled = false;
+            document.getElementById('exportBtn2').disabled = false;
+            document.getElementById('pipelineBtn').disabled = false;
+        }
+        
+        function clearResults() {
+            searchResults = [];
+            mobileResults = [];
+            updateStats();
+            updateResults();
+            showStatus('Search results cleared', 'success');
+        }
+        
+        function exportToCSV() {
+            if (mobileResults.length === 0) {
+                showStatus('No mobile leads to export', 'error');
+                return;
+            }
+            
+            const csv = 'business_name,phone,email,website,address,industry,source\n' +
+                mobileResults.map(business => 
+                    `"${business.name}","${business.phone}","${business.email || ''}","${business.website || ''}","${business.address}","${business.industry || ''}","${business.source}"`
+                ).join('\n');
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `decision_makers_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showStatus(`Exported ${mobileResults.length} mobile leads to CSV`, 'success');
+        }
+        
+        async function addToPipeline() {
+            if (mobileResults.length === 0) {
+                showStatus('No mobile leads to add to pipeline', 'error');
+                return;
+            }
+            
+            showStatus(`Adding ${mobileResults.length} mobile leads to pipeline...`, 'info');
+            
+            let addedCount = 0;
+            let errorCount = 0;
+            
+            for (const business of mobileResults) {
+                try {
+                    const response = await fetch(`${API_BASE}/api/initiate-lead-capture`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            leadData: {
+                                decisionMaker: business.name.split(' ')[0] + ' (Owner)', // Extract first name as decision maker
+                                phoneNumber: business.phone,
+                                businessName: business.name,
+                                industry: business.industry || 'Business',
+                                location: business.address
+                            }
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        const result = await response.json();
+                        if (result.success) {
+                            addedCount++;
+                        } else {
+                            errorCount++;
+                        }
+                    } else {
+                        errorCount++;
+                    }
+                    
+                    // Small delay to avoid overwhelming the server
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
+                } catch (error) {
+                    errorCount++;
+                }
+            }
+            
+            showStatus(`Successfully added ${addedCount} leads to pipeline! ${errorCount} errors occurred.`, 'success');
+        }
+        
+        // Initialize
+        window.onload = function() {
+            showStatus('Ready to search Google Places for businesses with mobile numbers', 'info');
+        };
+    </script>
+</body>
+</html>
