@@ -1339,8 +1339,8 @@ app.post('/api/search-google-places', async (req, res) => {
     }
     
     const results = [];
-    // Process ALL available results to find 100 mobile numbers (ignore maxResults limit)
-    const maxProcess = allResults.length;
+    // Process up to maxResults * 10 businesses, but continue until 100 mobile numbers found
+    const maxProcess = Math.min(allResults.length, maxResults * 10);
     
     // Process each result to get detailed information
     for (let i = 0; i < maxProcess; i++) {
@@ -1409,6 +1409,12 @@ app.post('/api/search-google-places', async (req, res) => {
                   // Stop when we have enough mobile numbers (target: 100)
                   if (mobileCount >= 100) {
                     console.log(`[MOBILE TARGET REACHED] Found ${mobileCount} mobile numbers, stopping search`);
+                    break;
+                  }
+                  
+                  // Also stop if we've processed enough businesses (fallback limit)
+                  if (results.length >= maxResults * 5) {
+                    console.log(`[FALLBACK LIMIT] Processed ${results.length} businesses, stopping search`);
                     break;
                   }
                 }

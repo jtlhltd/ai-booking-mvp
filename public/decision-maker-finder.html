@@ -565,7 +565,7 @@
                 location = locationSelect;
             }
             
-            showStatus(`Searching for "${businessType}" in ${location}... (Target: 100 mobile numbers)`, 'info');
+            showStatus(`Searching for "${businessType}" in ${location}... (Max: ${maxResults * 10} businesses, Target: 100 mobile numbers)`, 'info');
             
             try {
                 // Call our backend API which will use the Google Places API key from environment
@@ -621,7 +621,7 @@
                     • "independent [business type]"<br>
                     • "[business type] specialist"`, 'warning');
                         } else if (mobileCount < 100 && mobileCount > 0) {
-                            showStatus(`Found ${totalCount} businesses total, ${mobileCount} mobile numbers (Target: 100). Try increasing "Max Results" to 500 for more mobile numbers.`, 'info');
+                            showStatus(`Found ${totalCount} businesses total, ${mobileCount} mobile numbers (Target: 100). Try increasing "Max Results" to process more businesses.`, 'info');
                         } else {
                             showStatus(`Found ${totalCount} businesses total, ${mobileCount} with mobile numbers${decisionMakerCount > 0 ? `, ${decisionMakerCount} with decision maker titles` : ''}${mobileCount >= 100 ? ' - TARGET REACHED!' : ''}`, 'success');
                         }
