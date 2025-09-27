@@ -805,7 +805,10 @@
             
             // Process results
             searchResults = allResults;
-            mobileResults = allResults.filter(business => business.hasMobile);
+            mobileResults = allResults.filter(business => business.hasMobile === true);
+            
+            console.log(`[BATCH SEARCH DEBUG] Total results: ${searchResults.length}, Mobile results: ${mobileResults.length}`);
+            console.log(`[BATCH SEARCH DEBUG] Mobile businesses:`, searchResults.filter(b => b.hasMobile));
             
             updateStats();
             updateResults();
@@ -856,10 +859,13 @@
                         
                         // Apply client-side filtering based on mobileOnly setting
                         if (mobileOnly) {
-                            mobileResults = searchResults.filter(business => business.hasMobile);
+                            mobileResults = searchResults.filter(business => business.hasMobile === true);
                         } else {
                             mobileResults = searchResults; // Show all results
                         }
+                        
+                        console.log(`[FRONTEND DEBUG] Total results: ${searchResults.length}, Mobile results: ${mobileResults.length}, Mobile only: ${mobileOnly}`);
+                        console.log(`[FRONTEND DEBUG] Mobile businesses:`, searchResults.filter(b => b.hasMobile));
                         
                         updateStats();
                         updateResults();
