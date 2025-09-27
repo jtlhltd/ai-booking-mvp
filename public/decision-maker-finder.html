@@ -810,6 +810,12 @@
             console.log(`[BATCH SEARCH DEBUG] Total results: ${searchResults.length}, Mobile results: ${mobileResults.length}`);
             console.log(`[BATCH SEARCH DEBUG] Mobile businesses:`, searchResults.filter(b => b.hasMobile));
             
+            // Show debug info in status message
+            const mobileBusinesses = searchResults.filter(b => b.hasMobile);
+            if (mobileBusinesses.length > 0) {
+                showStatus(`BATCH DEBUG: Found ${searchResults.length} total, ${mobileBusinesses.length} mobile. Mobile phones: ${mobileBusinesses.slice(0, 3).map(b => b.phone).join(', ')}${mobileBusinesses.length > 3 ? '...' : ''}`, 'info');
+            }
+            
             updateStats();
             updateResults();
             hideProgress();
@@ -866,6 +872,12 @@
                         
                         console.log(`[FRONTEND DEBUG] Total results: ${searchResults.length}, Mobile results: ${mobileResults.length}, Mobile only: ${mobileOnly}`);
                         console.log(`[FRONTEND DEBUG] Mobile businesses:`, searchResults.filter(b => b.hasMobile));
+                        
+                        // Show debug info in status message
+                        const mobileBusinesses = searchResults.filter(b => b.hasMobile);
+                        if (mobileBusinesses.length > 0) {
+                            showStatus(`DEBUG: Found ${searchResults.length} total, ${mobileBusinesses.length} mobile. Mobile phones: ${mobileBusinesses.map(b => b.phone).join(', ')}`, 'info');
+                        }
                         
                         updateStats();
                         updateResults();
