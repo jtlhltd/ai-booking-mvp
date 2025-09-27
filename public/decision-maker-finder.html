@@ -467,8 +467,8 @@
             </div>
             
             <div style="margin-top: 15px;">
-                <button class="btn btn-success" onclick="exportToCSV()" id="exportBtn" disabled>📤 Export to CSV</button>
-                <button class="btn btn-warning" onclick="addToPipeline()" id="pipelineBtn" disabled>📥 Add to Pipeline</button>
+                <button class="btn btn-success" onclick="exportToCSV()" id="exportBtn" disabled>📤 Export Mobile Leads</button>
+                <button class="btn btn-warning" onclick="addToPipeline()" id="pipelineBtn" disabled>📥 Add Mobile Leads to Pipeline</button>
             </div>
         </div>
         
@@ -744,8 +744,16 @@
                 return;
             }
             
+            // Only export businesses with mobile numbers
+            const mobileOnlyResults = mobileResults.filter(business => business.hasMobile);
+            
+            if (mobileOnlyResults.length === 0) {
+                showStatus('No mobile numbers found to export', 'error');
+                return;
+            }
+            
             const csv = 'business_name,phone,email,website,address,industry,source,decision_maker,decision_maker_title,business_size,verified\n' +
-                mobileResults.map(business => 
+                mobileOnlyResults.map(business => 
                     `"${business.name}","${business.phone}","${business.email || ''}","${business.website || ''}","${business.address}","${business.industry || ''}","${business.source}","${business.decisionMaker || ''}","${business.decisionMakerTitle || ''}","${business.businessSize || ''}","${business.verified ? 'Yes' : 'No'}"`
                 ).join('\n');
             
@@ -753,13 +761,13 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `decision_makers_${new Date().toISOString().split('T')[0]}.csv`;
+            a.download = `mobile_leads_${new Date().toISOString().split('T')[0]}.csv`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
             
-            showStatus(`Exported ${mobileResults.length} results to CSV`, 'success');
+            showStatus(`Exported ${mobileOnlyResults.length} mobile leads to CSV`, 'success');
         }
         
         async function addToPipeline() {
