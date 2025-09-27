@@ -1,0 +1,10 @@
+[33m6297b62[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m HEAD@{0}: reset: moving to 6297b62
+[33md91bfb3[m HEAD@{1}: commit: Add cache-busting and detailed API response logging to debug mobile number detection issue
+[33m88468d9[m HEAD@{2}: commit: Fix response size issue: Reduce processing to 1.5x target, add response limit to prevent large responses
+[33m6297b62[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m HEAD@{3}: commit: Fix frontend mobile count display: Show actual mobile numbers found instead of filtered results
+[33m6867df8[m HEAD@{4}: commit: Add debug logging for mobile detection
+[33m87eb783[m HEAD@{5}: commit: Fix 502 timeout errors: Reduce processing load, add 30s timeout, faster API calls
+[33m1cebe47[m HEAD@{6}: commit: Fix backend mobile number search: Remove early stopping logic that prevented finding enough mobile numbers, increase processing limit to 3x target, let backend process more results to find mobile numbers
+[33mb1ea37e[m HEAD@{7}: commit: Add detailed filtering debug logs to find mobile detection issue
+[33m69fe458[m HEAD@{8}: commit: Fix broken search: Revert to simple single search, remove complex multi-attempt system causing 502 errors, search for 3x target to get more mobile numbers, limit results to exact target
+[33m04c942d[m HEAD@{9}: commit: Fix to show exactly requested number: Limit results to exactly maxResults mobile numbers, not more or less, update success message to show exact count

@@ -1339,8 +1339,8 @@ app.post('/api/search-google-places', async (req, res) => {
     }
     
     const results = [];
-    // Process ALL available results until we find the target number of mobile numbers
-    const maxProcess = allResults.length;
+    // Process results to find mobile numbers - limit to 2x target to prevent large responses
+    const maxProcess = Math.min(allResults.length, maxResults * 2);
     const targetMobileNumbers = maxResults; // maxResults now represents target mobile numbers
     
     // Process each result to get detailed information
