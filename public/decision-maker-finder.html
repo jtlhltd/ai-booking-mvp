@@ -466,6 +466,7 @@
             <div style="margin-top: 15px;">
                 <button class="btn btn-success" onclick="exportToCSV()" id="exportBtn" disabled>📤 Export to CSV</button>
                 <button class="btn btn-warning" onclick="addToPipeline()" id="pipelineBtn" disabled>📥 Add to Pipeline</button>
+                <button class="btn btn-secondary" onclick="toggleMobileFilter()" id="toggleFilterBtn" style="display: none;">👁️ Show All Results</button>
             </div>
         </div>
         
@@ -610,7 +611,11 @@
                         const mobileCount = searchResults.filter(b => b.hasMobile).length;
                         const decisionMakerCount = searchResults.filter(b => b.decisionMakerTitle).length;
                         
-                        showStatus(`Found ${totalCount} businesses total, ${mobileCount} with mobile numbers${decisionMakerCount > 0 ? `, ${decisionMakerCount} with decision maker titles` : ''}`, 'success');
+                        if (mobileOnly && mobileCount === 0 && totalCount > 0) {
+                            showStatus(`Found ${totalCount} businesses but none with mobile numbers. Try unchecking "Only show businesses with mobile numbers" to see all results.`, 'warning');
+                        } else {
+                            showStatus(`Found ${totalCount} businesses total, ${mobileCount} with mobile numbers${decisionMakerCount > 0 ? `, ${decisionMakerCount} with decision maker titles` : ''}`, 'success');
+                        }
                     } else {
                         showStatus(`Search failed: ${data.error}`, 'error');
                     }
@@ -685,8 +690,19 @@
                 document.getElementById('exportBtn').disabled = true;
                 document.getElementById('exportBtn2').disabled = true;
                 document.getElementById('pipelineBtn').disabled = true;
+                
+                // Show toggle button if we have results but no mobile numbers
+                if (searchResults.length > 0 && mobileOnly) {
+                    document.getElementById('toggleFilterBtn').style.display = 'inline-block';
+                    document.getElementById('toggleFilterBtn').textContent = '👁️ Show All Results';
+                } else {
+                    document.getElementById('toggleFilterBtn').style.display = 'none';
+                }
                 return;
             }
+            
+            // Hide toggle button when we have mobile results
+            document.getElementById('toggleFilterBtn').style.display = 'none';
             
             container.innerHTML = mobileResults.map(business => `
                 <div class="result-item">
@@ -720,6 +736,25 @@
             updateStats();
             updateResults();
             showStatus('Search results cleared', 'success');
+        }
+        
+        function toggleMobileFilter() {
+            const mobileOnlyCheckbox = document.getElementById('mobileOnly');
+            const toggleBtn = document.getElementById('toggleFilterBtn');
+            
+            if (mobileOnlyCheckbox.checked) {
+                // Switch to show all results
+                mobileOnlyCheckbox.checked = false;
+                toggleBtn.textContent = '📱 Show Mobile Only';
+                updateResults();
+                showStatus('Now showing all results (including landlines)', 'info');
+            } else {
+                // Switch to mobile only
+                mobileOnlyCheckbox.checked = true;
+                toggleBtn.textContent = '👁️ Show All Results';
+                updateResults();
+                showStatus('Now showing only mobile numbers', 'info');
+            }
         }
         
         function exportToCSV() {

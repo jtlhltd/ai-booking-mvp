@@ -1388,14 +1388,24 @@ app.post('/api/search-google-places', async (req, res) => {
 
 // Helper function to detect mobile numbers
 function isMobileNumber(phone) {
+  if (!phone || phone === 'No phone listed') return false;
+  
   const mobilePatterns = [
     /^\+447[0-9]{9}$/, // +447xxxxxxxxx
     /^07[0-9]{9}$/, // 07xxxxxxxxx
-    /^447[0-9]{9}$/ // 447xxxxxxxxx
+    /^447[0-9]{9}$/, // 447xxxxxxxxx
+    /^\+44\s?7[0-9]{9}$/, // +44 7xxxxxxxxx (with space)
+    /^0\s?7[0-9]{9}$/, // 0 7xxxxxxxxx (with space)
+    /^44\s?7[0-9]{9}$/ // 44 7xxxxxxxxx (with space)
   ];
   
   const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
-  return mobilePatterns.some(pattern => pattern.test(cleanPhone));
+  const isMobile = mobilePatterns.some(pattern => pattern.test(cleanPhone));
+  
+  // Log phone numbers for debugging
+  console.log(`[PHONE DEBUG] "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
+  
+  return isMobile;
 }
 
 // Helper function to generate email
