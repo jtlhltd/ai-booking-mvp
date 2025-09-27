@@ -1275,7 +1275,15 @@ app.post('/api/search-google-places', async (req, res) => {
     console.log(`[GOOGLE PLACES SEARCH] Searching for "${query}" in "${location}"`);
     
     // Search Google Places - request more results to account for filtering
-    const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query + ' ' + location)}&key=${apiKey}`;
+    let searchQuery;
+    if (location === 'United Kingdom') {
+      // For UK-wide searches, don't include location in query to get broader results
+      searchQuery = query;
+    } else {
+      searchQuery = query + ' ' + location;
+    }
+    
+    const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(searchQuery)}&key=${apiKey}`;
     
     const response = await fetch(searchUrl);
     const data = await response.json();

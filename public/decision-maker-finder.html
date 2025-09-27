@@ -380,17 +380,34 @@
             
             <div class="form-group">
                 <label for="location">Location:</label>
-                <input type="text" id="location" placeholder="e.g., London, Manchester, Birmingham">
+                <select id="location">
+                    <option value="United Kingdom">🇬🇧 Whole UK (Recommended - More Results)</option>
+                    <option value="London">🏙️ London</option>
+                    <option value="Manchester">🏙️ Manchester</option>
+                    <option value="Birmingham">🏙️ Birmingham</option>
+                    <option value="Leeds">🏙️ Leeds</option>
+                    <option value="Glasgow">🏙️ Glasgow</option>
+                    <option value="Edinburgh">🏙️ Edinburgh</option>
+                    <option value="Liverpool">🏙️ Liverpool</option>
+                    <option value="Bristol">🏙️ Bristol</option>
+                    <option value="Newcastle">🏙️ Newcastle</option>
+                    <option value="custom">📍 Custom Location</option>
+                </select>
+            </div>
+            
+            <div class="form-group" id="customLocationGroup" style="display: none;">
+                <label for="customLocation">Custom Location:</label>
+                <input type="text" id="customLocation" placeholder="e.g., Brighton, Cardiff, Belfast">
             </div>
             
             <div class="form-row">
                 <div class="form-group">
                     <label for="maxResults">Max Results:</label>
                     <select id="maxResults">
-                        <option value="10">10 results</option>
-                        <option value="20" selected>20 results</option>
-                        <option value="30">30 results</option>
-                        <option value="50">50 results</option>
+                        <option value="20">20 results</option>
+                        <option value="50" selected>50 results</option>
+                        <option value="100">100 results</option>
+                        <option value="200">200 results</option>
                     </select>
                 </div>
                 
@@ -479,27 +496,27 @@
             const templates = {
                 'private-healthcare': {
                     query: '"private healthcare practice" "GP surgery" "private medical clinic"',
-                    location: 'London'
+                    location: 'United Kingdom'
                 },
                 'financial-advisors': {
                     query: '"financial advisor" "wealth management" "independent financial adviser"',
-                    location: 'London'
+                    location: 'United Kingdom'
                 },
                 'dental-practices': {
                     query: '"dental practice" "private dentist" "orthodontist"',
-                    location: 'London'
+                    location: 'United Kingdom'
                 },
                 'legal-services': {
                     query: '"law firm" "solicitor practice" "legal services"',
-                    location: 'London'
+                    location: 'United Kingdom'
                 },
                 'property-agents': {
                     query: '"estate agent" "property investment" "letting agent"',
-                    location: 'London'
+                    location: 'United Kingdom'
                 },
                 'business-coaching': {
                     query: '"business coach" "consulting firm" "business consultant"',
-                    location: 'London'
+                    location: 'United Kingdom'
                 }
             };
             
@@ -522,7 +539,8 @@
         
         async function startSearch() {
             const businessType = document.getElementById('businessType').value.trim();
-            const location = document.getElementById('location').value.trim();
+            const locationSelect = document.getElementById('location').value;
+            const customLocation = document.getElementById('customLocation').value.trim();
             const maxResults = parseInt(document.getElementById('maxResults').value);
             const businessSize = document.getElementById('businessSize').value;
             const mobileOnly = document.getElementById('mobileOnly').checked;
@@ -533,9 +551,15 @@
                 return;
             }
             
-            if (!location) {
-                showStatus('Please enter a location', 'error');
-                return;
+            let location;
+            if (locationSelect === 'custom') {
+                if (!customLocation) {
+                    showStatus('Please enter a custom location', 'error');
+                    return;
+                }
+                location = customLocation;
+            } else {
+                location = locationSelect;
             }
             
             showStatus(`Searching for "${businessType}" in ${location}...`, 'info');
@@ -776,9 +800,23 @@
             showStatus(`Successfully added ${addedCount} leads to pipeline! ${errorCount} errors occurred.`, 'success');
         }
         
+        // Handle location dropdown change
+        document.addEventListener('DOMContentLoaded', function() {
+            const locationSelect = document.getElementById('location');
+            const customLocationGroup = document.getElementById('customLocationGroup');
+            
+            locationSelect.addEventListener('change', function() {
+                if (this.value === 'custom') {
+                    customLocationGroup.style.display = 'block';
+                } else {
+                    customLocationGroup.style.display = 'none';
+                }
+            });
+        });
+
         // Initialize
         window.onload = function() {
-            showStatus('Ready to search Google Places for businesses with mobile numbers', 'info');
+            showStatus('Ready to search Google Places across the UK for businesses with mobile numbers', 'info');
         };
     </script>
 </body>
