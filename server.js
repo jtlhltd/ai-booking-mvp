@@ -1339,8 +1339,8 @@ app.post('/api/search-google-places', async (req, res) => {
     }
     
     const results = [];
-    // Process results to find mobile numbers - limit to 2x target to prevent large responses
-    const maxProcess = Math.min(allResults.length, maxResults * 2);
+    // Process results to find mobile numbers - limit to 1.5x target to prevent large responses
+    const maxProcess = Math.min(allResults.length, maxResults * 1.5);
     const targetMobileNumbers = maxResults; // maxResults now represents target mobile numbers
     
     // Process each result to get detailed information
@@ -1404,12 +1404,9 @@ app.post('/api/search-google-places', async (req, res) => {
                 if (isUKBusiness) {
                   results.push(business);
                   
-                  // Count mobile numbers found so far
-                  const mobileCount = results.filter(r => r.hasMobile).length;
-                  
-                  // Stop when we have enough mobile numbers (target from user)
-                  if (mobileCount >= targetMobileNumbers) {
-                    console.log(`[MOBILE TARGET REACHED] Found ${mobileCount} mobile numbers (target: ${targetMobileNumbers}), stopping search`);
+                  // Stop when we have enough results to avoid large responses
+                  if (results.length >= maxResults * 2) {
+                    console.log(`[RESPONSE LIMIT] Processed ${results.length} businesses, stopping search`);
                     break;
                   }
                   
