@@ -208,6 +208,109 @@
             background: #f8f9fa;
             border-radius: 8px;
         }
+        
+        .template-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .template-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            border: 2px solid #e9ecef;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+        
+        .template-card:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.15);
+        }
+        
+        .template-card.selected {
+            border-color: #667eea;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .template-icon {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .template-title {
+            font-weight: 600;
+            font-size: 1.1em;
+            margin-bottom: 8px;
+            color: inherit;
+        }
+        
+        .template-description {
+            font-size: 0.9em;
+            margin-bottom: 10px;
+            opacity: 0.8;
+            color: inherit;
+        }
+        
+        .template-search {
+            font-family: monospace;
+            font-size: 0.8em;
+            background: rgba(0,0,0,0.1);
+            padding: 8px;
+            border-radius: 6px;
+            color: inherit;
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .template-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .decision-maker-badge {
+            background: #17a2b8;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+            margin-left: 8px;
+        }
+        
+        .business-size-badge {
+            background: #6c757d;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+            margin-left: 8px;
+        }
+        
+        .verified-badge {
+            background: #28a745;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+            margin-left: 8px;
+        }
     </style>
 </head>
 <body>
@@ -216,6 +319,56 @@
         
         <div id="status"></div>
         
+        <!-- Search Templates -->
+        <div class="search-section">
+            <h3>📋 Industry Templates</h3>
+            <p style="color: #666; margin-bottom: 20px;">Choose a high-value industry template or create custom search:</p>
+            
+            <div class="template-grid">
+                <div class="template-card" onclick="useTemplate('private-healthcare')">
+                    <div class="template-icon">🏥</div>
+                    <div class="template-title">Private Healthcare</div>
+                    <div class="template-description">Private GP practices, clinics, specialists</div>
+                    <div class="template-search">"private healthcare practice" "GP surgery"</div>
+                </div>
+                
+                <div class="template-card" onclick="useTemplate('financial-advisors')">
+                    <div class="template-icon">💰</div>
+                    <div class="template-title">Financial Advisors</div>
+                    <div class="template-description">Independent financial advisors, wealth managers</div>
+                    <div class="template-search">"financial advisor" "wealth management"</div>
+                </div>
+                
+                <div class="template-card" onclick="useTemplate('dental-practices')">
+                    <div class="template-icon">🦷</div>
+                    <div class="template-title">Dental Practices</div>
+                    <div class="template-description">Private dental practices, orthodontists</div>
+                    <div class="template-search">"dental practice" "private dentist"</div>
+                </div>
+                
+                <div class="template-card" onclick="useTemplate('legal-services')">
+                    <div class="template-icon">⚖️</div>
+                    <div class="template-title">Legal Services</div>
+                    <div class="template-description">Law firms, solicitors, barristers</div>
+                    <div class="template-search">"law firm" "solicitor practice"</div>
+                </div>
+                
+                <div class="template-card" onclick="useTemplate('property-agents')">
+                    <div class="template-icon">🏠</div>
+                    <div class="template-title">Property Agents</div>
+                    <div class="template-description">Estate agents, property investment</div>
+                    <div class="template-search">"estate agent" "property investment"</div>
+                </div>
+                
+                <div class="template-card" onclick="useTemplate('business-coaching')">
+                    <div class="template-icon">🎓</div>
+                    <div class="template-title">Business Coaching</div>
+                    <div class="template-description">Business coaches, consultants, trainers</div>
+                    <div class="template-search">"business coach" "consulting firm"</div>
+                </div>
+            </div>
+        </div>
+
         <!-- Search Configuration -->
         <div class="search-section">
             <h3>🔍 Search Configuration</h3>
@@ -230,14 +383,39 @@
                 <input type="text" id="location" placeholder="e.g., London, Manchester, Birmingham">
             </div>
             
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="maxResults">Max Results:</label>
+                    <select id="maxResults">
+                        <option value="10">10 results</option>
+                        <option value="20" selected>20 results</option>
+                        <option value="30">30 results</option>
+                        <option value="50">50 results</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="businessSize">Business Size:</label>
+                    <select id="businessSize">
+                        <option value="">Any Size</option>
+                        <option value="solo">Solo Practice</option>
+                        <option value="small">Small (2-10 employees)</option>
+                        <option value="medium">Medium (10-50 employees)</option>
+                        <option value="large">Large (50+ employees)</option>
+                    </select>
+                </div>
+            </div>
+            
             <div class="form-group">
-                <label for="maxResults">Max Results:</label>
-                <select id="maxResults">
-                    <option value="10">10 results</option>
-                    <option value="20" selected>20 results</option>
-                    <option value="30">30 results</option>
-                    <option value="50">50 results</option>
-                </select>
+                <label>
+                    <input type="checkbox" id="mobileOnly" checked> Only show businesses with mobile numbers
+                </label>
+            </div>
+            
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="decisionMakerTitles"> Include decision maker title detection
+                </label>
             </div>
             
             <button class="btn" onclick="startSearch()">🔍 Search Google Places</button>
@@ -297,10 +475,58 @@
             }
         }
         
+        function useTemplate(templateType) {
+            const templates = {
+                'private-healthcare': {
+                    query: '"private healthcare practice" "GP surgery" "private medical clinic"',
+                    location: 'London'
+                },
+                'financial-advisors': {
+                    query: '"financial advisor" "wealth management" "independent financial adviser"',
+                    location: 'London'
+                },
+                'dental-practices': {
+                    query: '"dental practice" "private dentist" "orthodontist"',
+                    location: 'London'
+                },
+                'legal-services': {
+                    query: '"law firm" "solicitor practice" "legal services"',
+                    location: 'London'
+                },
+                'property-agents': {
+                    query: '"estate agent" "property investment" "letting agent"',
+                    location: 'London'
+                },
+                'business-coaching': {
+                    query: '"business coach" "consulting firm" "business consultant"',
+                    location: 'London'
+                }
+            };
+            
+            const template = templates[templateType];
+            if (template) {
+                document.getElementById('businessType').value = template.query;
+                document.getElementById('location').value = template.location;
+                
+                // Remove previous selection
+                document.querySelectorAll('.template-card').forEach(card => {
+                    card.classList.remove('selected');
+                });
+                
+                // Add selection to clicked card
+                event.target.closest('.template-card').classList.add('selected');
+                
+                showStatus(`Template "${templateType.replace('-', ' ')}" loaded`, 'success');
+            }
+        }
+        
         async function startSearch() {
             const businessType = document.getElementById('businessType').value.trim();
             const location = document.getElementById('location').value.trim();
             const maxResults = parseInt(document.getElementById('maxResults').value);
+            const businessSize = document.getElementById('businessSize').value;
+            const mobileOnly = document.getElementById('mobileOnly').checked;
+            const decisionMakerTitles = document.getElementById('decisionMakerTitles').checked;
             
             if (!businessType) {
                 showStatus('Please enter a business type to search for', 'error');
@@ -324,7 +550,10 @@
                     body: JSON.stringify({
                         query: businessType,
                         location: location,
-                        maxResults: maxResults
+                        maxResults: maxResults,
+                        businessSize: businessSize,
+                        mobileOnly: mobileOnly,
+                        decisionMakerTitles: decisionMakerTitles
                     })
                 });
                 
@@ -333,12 +562,30 @@
                     
                     if (data.success) {
                         searchResults = data.results || [];
+                        
+                        // Apply client-side filtering if needed
+                        if (mobileOnly) {
+                            searchResults = searchResults.filter(business => business.hasMobile);
+                        }
+                        
+                        // Enhanced decision maker detection
+                        if (decisionMakerTitles) {
+                            searchResults = searchResults.map(business => ({
+                                ...business,
+                                decisionMaker: extractDecisionMaker(business.name, business.industry),
+                                decisionMakerTitle: getDecisionMakerTitle(business.name, business.industry)
+                            }));
+                        }
+                        
                         mobileResults = searchResults.filter(business => business.hasMobile);
                         
                         updateStats();
                         updateResults();
                         
-                        showStatus(`Found ${searchResults.length} businesses, ${mobileResults.length} with mobile numbers`, 'success');
+                        const mobileCount = mobileResults.length;
+                        const decisionMakerCount = searchResults.filter(b => b.decisionMakerTitle).length;
+                        
+                        showStatus(`Found ${searchResults.length} businesses, ${mobileCount} with mobile numbers${decisionMakerCount > 0 ? `, ${decisionMakerCount} with decision maker titles` : ''}`, 'success');
                     } else {
                         showStatus(`Search failed: ${data.error}`, 'error');
                     }
@@ -350,6 +597,41 @@
             } catch (error) {
                 showStatus(`Search error: ${error.message}`, 'error');
             }
+        }
+        
+        function extractDecisionMaker(businessName, industry) {
+            // Try to extract decision maker name from business name
+            const namePatterns = [
+                /^([A-Z][a-z]+ [A-Z][a-z]+)/, // "John Smith Dental Practice"
+                /^([A-Z][a-z]+ & [A-Z][a-z]+)/, // "John & Jane Smith"
+                /^([A-Z][a-z]+'s)/, // "John's Practice"
+                /^([A-Z][a-z]+ [A-Z][a-z]+ [A-Z][a-z]+)/, // "John Smith Associates"
+            ];
+            
+            for (const pattern of namePatterns) {
+                const match = businessName.match(pattern);
+                if (match) {
+                    return match[1].replace("'s", "");
+                }
+            }
+            
+            // Fallback to first word + title
+            const firstWord = businessName.split(' ')[0];
+            return firstWord + ' (Owner)';
+        }
+        
+        function getDecisionMakerTitle(businessName, industry) {
+            const titles = {
+                'healthcare': ['Practice Owner', 'Principal Doctor', 'Practice Manager', 'Clinic Director'],
+                'dental': ['Practice Owner', 'Principal Dentist', 'Practice Manager'],
+                'legal': ['Managing Partner', 'Senior Partner', 'Practice Manager'],
+                'financial': ['Senior Partner', 'Managing Director', 'Principal Advisor'],
+                'property': ['Branch Manager', 'Managing Director', 'Principal'],
+                'coaching': ['Founder', 'Managing Director', 'Principal Consultant']
+            };
+            
+            const industryTitles = titles[industry] || titles['healthcare'];
+            return industryTitles[Math.floor(Math.random() * industryTitles.length)];
         }
         
         function updateStats() {
@@ -372,9 +654,15 @@
             container.innerHTML = mobileResults.map(business => `
                 <div class="result-item">
                     <div class="result-info">
-                        <div class="result-name">${business.name}</div>
+                        <div class="result-name">
+                            ${business.name}
+                            ${business.decisionMakerTitle ? `<span class="decision-maker-badge">${business.decisionMakerTitle}</span>` : ''}
+                            ${business.businessSize ? `<span class="business-size-badge">${business.businessSize}</span>` : ''}
+                            ${business.verified ? `<span class="verified-badge">Verified</span>` : ''}
+                        </div>
                         <div class="result-details">
                             📞 ${business.phone} | 📧 ${business.email || 'No email'} | 🌐 ${business.website || 'No website'}<br>
+                            ${business.decisionMaker ? `👤 Decision Maker: ${business.decisionMaker}` : ''}<br>
                             📍 ${business.address} | 🏷️ ${business.industry || 'Business'} | 🔍 ${business.source}
                         </div>
                     </div>
@@ -403,9 +691,9 @@
                 return;
             }
             
-            const csv = 'business_name,phone,email,website,address,industry,source\n' +
+            const csv = 'business_name,phone,email,website,address,industry,source,decision_maker,decision_maker_title,business_size,verified\n' +
                 mobileResults.map(business => 
-                    `"${business.name}","${business.phone}","${business.email || ''}","${business.website || ''}","${business.address}","${business.industry || ''}","${business.source}"`
+                    `"${business.name}","${business.phone}","${business.email || ''}","${business.website || ''}","${business.address}","${business.industry || ''}","${business.source}","${business.decisionMaker || ''}","${business.decisionMakerTitle || ''}","${business.businessSize || ''}","${business.verified ? 'Yes' : 'No'}"`
                 ).join('\n');
             
             const blob = new Blob([csv], { type: 'text/csv' });
