@@ -454,7 +454,7 @@
             
             <div class="form-group">
                 <label for="businessType">Business Type:</label>
-                <input type="text" id="businessType" placeholder="e.g., 'private healthcare practice', 'financial advisor', 'dental practice'">
+                <input type="text" id="businessType" placeholder="e.g., 'private healthcare practice', 'financial advisor', 'dental practice'" value="private GP">
             </div>
             
             <div class="form-group">
@@ -520,10 +520,10 @@
             
             <div class="form-group">
                 <label>
-                    <input type="checkbox" id="batchSearch"> 🔄 Batch Search (Multiple Industries)
+                    <input type="checkbox" id="batchSearch" disabled> 🔄 Batch Search (Multiple Industries) - DISABLED
                 </label>
                 <small style="color: #666; display: block; margin-top: 5px;">
-                    ✅ Searches multiple high-value industries simultaneously for maximum mobile numbers
+                    ❌ Disabled - Use single industry search for better results
                 </small>
             </div>
             
@@ -712,8 +712,8 @@
             const decisionMakerTitles = document.getElementById('decisionMakerTitles').checked;
             const batchSearch = document.getElementById('batchSearch').checked;
             
-            if (!businessType && !batchSearch) {
-                showStatus('Please enter a business type to search for or enable batch search', 'error');
+            if (!businessType) {
+                showStatus('Please enter a business type to search for', 'error');
                 return;
             }
             
@@ -728,11 +728,8 @@
                 location = locationSelect;
             }
             
-            if (batchSearch) {
-                await startBatchSearch(location, maxResults, businessSize, mobileOnly, decisionMakerTitles);
-            } else {
-                await startSingleSearch(businessType, location, maxResults, businessSize, mobileOnly, decisionMakerTitles);
-            }
+            // Force single search only - batch search disabled
+            await startSingleSearch(businessType, location, maxResults, businessSize, mobileOnly, decisionMakerTitles);
         }
         
         async function startBatchSearch(location, maxResults, businessSize, mobileOnly, decisionMakerTitles) {
