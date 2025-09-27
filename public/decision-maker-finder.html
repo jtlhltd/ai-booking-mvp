@@ -898,14 +898,15 @@
                     }
                 }
                 
-                // Set final results
+                // Set final results - limit to exactly what was requested
                 searchResults = allResults;
                 
                 // Apply client-side filtering based on mobileOnly setting
                 if (mobileOnly) {
-                    mobileResults = searchResults.filter(business => business.hasMobile === true);
+                    const allMobileResults = searchResults.filter(business => business.hasMobile === true);
+                    mobileResults = allMobileResults.slice(0, maxResults); // Show exactly maxResults mobile numbers
                 } else {
-                    mobileResults = searchResults; // Show all results
+                    mobileResults = searchResults.slice(0, maxResults); // Show exactly maxResults total
                 }
                 
                 console.log(`[FINAL RESULTS] Total results: ${searchResults.length}, Mobile results: ${mobileResults.length}, Mobile only: ${mobileOnly}`);
@@ -920,9 +921,9 @@
                 const decisionMakerCount = searchResults.filter(b => b.decisionMakerTitle).length;
                 
                 if (totalMobileFound >= maxResults) {
-                    showStatus(`✅ SUCCESS: Found ${mobileCount} mobile numbers in ${searchAttempt} searches! (${totalCount} total businesses)`, 'success');
+                    showStatus(`✅ SUCCESS: Found ${maxResults} mobile numbers in ${searchAttempt} searches! (${totalCount} total businesses searched)`, 'success');
                 } else {
-                    showStatus(`⚠️ Found ${mobileCount}/${maxResults} mobile numbers after ${searchAttempt} searches. (${totalCount} total businesses)`, 'warning');
+                    showStatus(`⚠️ Found ${mobileCount}/${maxResults} mobile numbers after ${searchAttempt} searches. (${totalCount} total businesses searched)`, 'warning');
                 }
                 
             } catch (error) {
