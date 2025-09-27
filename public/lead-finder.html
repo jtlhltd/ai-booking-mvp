@@ -337,20 +337,16 @@
         
         <!-- API Configuration -->
         <div class="section">
-            <h2 class="section-title">🔑 API Configuration (Optional)</h2>
+            <h2 class="section-title">🔑 Google Places API Configuration</h2>
             
             <div class="form-group">
-                <label for="googleApiKey">Google Places API Key (for real data):</label>
-                <input type="password" id="googleApiKey" placeholder="Enter your Google Places API key (optional)">
+                <label for="googleApiKey">Google Places API Key (Required):</label>
+                <input type="password" id="googleApiKey" placeholder="Enter your Google Places API key" required>
                 <small style="color: #666; font-size: 12px;">Get free API key at <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a></small>
             </div>
             
-            <div class="form-group">
-                <label for="searchMode">Search Mode:</label>
-                <select id="searchMode">
-                    <option value="demo">Demo Mode (Mock Data)</option>
-                    <option value="real">Real Data (Google Places API)</option>
-                </select>
+            <div class="info">
+                <strong>Real Data Only:</strong> This tool only works with real business data from Google Places API. No demo/mock data.
             </div>
         </div>
         
@@ -468,7 +464,7 @@
             <h2 class="section-title">📊 Search Results</h2>
             
             <div id="searchResults" class="search-results">
-                <div class="loading">No search results yet. Use a template or enter your own search query.</div>
+                <div class="loading">No search results yet. Enter your Google Places API key and start a real search.</div>
             </div>
             
             <div style="margin-top: 15px;">
@@ -571,9 +567,7 @@
         function startSearch() {
             const query = document.getElementById('searchQuery').value.trim();
             const location = document.getElementById('searchLocation').value.trim();
-            const industry = document.getElementById('searchIndustry').value;
             const maxResults = parseInt(document.getElementById('maxResults').value);
-            const searchMode = document.getElementById('searchMode').value;
             const apiKey = document.getElementById('googleApiKey').value.trim();
             
             if (!query) {
@@ -586,8 +580,8 @@
                 return;
             }
             
-            if (searchMode === 'real' && !apiKey) {
-                showStatus('Please enter your Google Places API key for real data search', 'error');
+            if (!apiKey) {
+                showStatus('Please enter your Google Places API key', 'error');
                 return;
             }
             
@@ -610,91 +604,12 @@
             document.getElementById('progressMobile').textContent = '0';
             document.getElementById('progressAdded').textContent = '0';
             
-            showStatus(`Starting ${searchMode} search for "${query}" in ${location}...`, 'info');
+            showStatus(`Starting real search for "${query}" in ${location}...`, 'info');
             
-            // Choose search method based on mode
-            if (searchMode === 'real') {
-                performRealSearch(query, location, maxResults, apiKey);
-            } else {
-                simulateSearch(query, location, industry, maxResults);
-            }
+            // Always use real search
+            performRealSearch(query, location, maxResults, apiKey);
         }
         
-        function simulateSearch(query, location, industry, maxResults) {
-            let searched = 0;
-            let found = 0;
-            let mobile = 0;
-            let added = 0;
-            
-            const searchInterval = setInterval(() => {
-                if (!isSearching || searched >= maxResults) {
-                    clearInterval(searchInterval);
-                    isSearching = false;
-                    showStatus(`Search completed! Found ${found} leads with ${mobile} mobile numbers`, 'success');
-                    updateFoundLeadsPreview();
-                    return;
-                }
-                
-                // Simulate finding a lead
-                if (Math.random() > 0.3) { // 70% chance of finding something
-                    const lead = generateMockLead(query, location, industry);
-                    searchResults.push(lead);
-                    found++;
-                    
-                    if (lead.hasMobile) {
-                        mobile++;
-                    }
-                    
-                    updateSearchResults();
-                }
-                
-                searched++;
-                
-                // Update progress
-                const progress = (searched / maxResults) * 100;
-                document.getElementById('progressFill').style.width = progress + '%';
-                document.getElementById('progressText').textContent = `Searching... ${searched}/${maxResults}`;
-                document.getElementById('progressSearched').textContent = searched;
-                document.getElementById('progressFound').textContent = found;
-                document.getElementById('progressMobile').textContent = mobile;
-                document.getElementById('progressAdded').textContent = added;
-                
-            }, 200); // Search every 200ms
-        }
-        
-        function generateMockLead(query, location, industry) {
-            const names = ['John Smith', 'Jane Doe', 'Michael Johnson', 'Sarah Wilson', 'David Brown', 'Emma Davis', 'James Miller', 'Lisa Garcia', 'Robert Martinez', 'Jennifer Anderson'];
-            const businesses = {
-                healthcare: ['Dental Practice', 'GP Surgery', 'Physiotherapy Clinic', 'Mental Health Practice', 'Private Medical Clinic'],
-                financial: ['Financial Advisory', 'Wealth Management', 'Mortgage Broker', 'Insurance Broker', 'Accounting Firm'],
-                property: ['Estate Agency', 'Property Investment', 'Commercial Property', 'Property Management', 'Real Estate'],
-                education: ['Private Tutoring', 'Language School', 'Driving School', 'Business Coaching', 'Life Coaching'],
-                legal: ['Law Firm', 'Solicitor Practice', 'Legal Advisory', 'Barrister Chambers', 'Legal Services']
-            };
-            
-            const name = names[Math.floor(Math.random() * names.length)];
-            const businessType = businesses[industry][Math.floor(Math.random() * businesses[industry].length)];
-            const businessName = `${name.split(' ')[0]} ${businessType}`;
-            
-            // Generate phone numbers
-            const hasMobile = Math.random() > 0.3; // 70% chance of having mobile
-            const mobile = hasMobile ? '+447' + Math.floor(Math.random() * 900000000 + 100000000) : null;
-            const landline = '01' + Math.floor(Math.random() * 900000000 + 100000000);
-            
-            return {
-                id: 'found_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-                decisionMaker: name,
-                businessName: businessName,
-                industry: industry,
-                location: location,
-                phone: mobile || landline,
-                hasMobile: hasMobile,
-                email: `${name.toLowerCase().replace(' ', '.')}@${businessName.toLowerCase().replace(' ', '')}.com`,
-                website: `https://www.${businessName.toLowerCase().replace(' ', '')}.co.uk`,
-                source: 'Google Search',
-                foundAt: new Date().toISOString()
-            };
-        }
         
         function updateSearchResults() {
             const container = document.getElementById('searchResults');
@@ -1087,12 +1002,10 @@
                     const stats = await response.json();
                     showStatus(`Pipeline: ${stats.totalLeads} total leads, ${stats.waitingForEmail} waiting for email`, 'success');
                 } else {
-                    // If API fails, show demo stats
-                    showStatus(`Demo Mode: ${searchResults.length} leads found, ${searchResults.filter(l => l.hasMobile).length} with mobile numbers`, 'info');
+                    showStatus(`Pipeline API not available. Found ${searchResults.length} leads with ${searchResults.filter(l => l.hasMobile).length} mobile numbers`, 'info');
                 }
             } catch (error) {
-                // If API fails, show demo stats
-                showStatus(`Demo Mode: ${searchResults.length} leads found, ${searchResults.filter(l => l.hasMobile).length} with mobile numbers`, 'info');
+                showStatus(`Pipeline API not available. Found ${searchResults.length} leads with ${searchResults.filter(l => l.hasMobile).length} mobile numbers`, 'info');
             }
         }
         
