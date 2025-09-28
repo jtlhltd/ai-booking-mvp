@@ -21,6 +21,41 @@
 
 ---
 
+## [2024-12-19] - CRITICAL FIX: Conservative Limits to Stop 502 Errors
+**Status**: 🔄 TESTING
+
+**What Was Wrong**:
+- 502 errors still happening even with balanced limits
+- Server still crashing with 750 businesses and 4 pages per query
+- Need to go back to conservative limits that work
+
+**The Fix**:
+- Reduced main processing limit from 750 to 400 businesses
+- Reduced pagination from 4 to 2 pages per query (40 results per query vs 80)
+- Reduced safety limit from `maxResults * 75` to `maxResults * 50`
+- Reduced fallback limit from 3000 to 1500 businesses
+
+**How It Was Done**:
+- Changed `maxProcess` from 750 to 400
+- Changed `maxPages` from 4 to 2
+- Changed safety limit from `maxResults * 75` to `maxResults * 50`
+- Changed fallback limit from 3000 to 1500
+
+**Result**:
+- Should process up to 400 businesses (conservative)
+- Should get 2 pages per query (40 results vs 80)
+- With 14 queries × 2 pages = up to 560 results (vs 1120)
+- Conservative approach to prevent 502 errors
+- Should work reliably without server crashes
+
+**Files Modified**:
+- `server.js` - Conservative processing and safety limits
+
+**Git Commit**:
+- TBD (will commit after testing)
+
+---
+
 ## [2024-12-19] - CRITICAL FIX: Balance Limits to Prevent 502 Errors
 **Status**: 🔄 TESTING
 
