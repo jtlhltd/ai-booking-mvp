@@ -1253,6 +1253,16 @@ app.post('/api/import-leads-csv', requireApiKey, async (req, res) => {
 
 // Google Places Search API endpoint
 app.post('/api/search-google-places', async (req, res) => {
+  // Set a 60-second timeout to prevent 502 errors (longer than decision-maker endpoint)
+  const timeout = setTimeout(() => {
+    if (!res.headersSent) {
+      res.status(504).json({ 
+        error: 'Request timeout', 
+        message: 'The search request took too long to process. Please try again with a smaller search scope.' 
+      });
+    }
+  }, 60000);
+
   try {
     const { query, location, maxResults = 20, businessSize, mobileOnly, decisionMakerTitles } = req.body;
     
@@ -1537,8 +1547,15 @@ app.post('/api/search-google-places', async (req, res) => {
       targetReached: finalMobileCount >= targetMobileNumbers
     });
     
+    // Clear the timeout since request completed successfully
+    clearTimeout(timeout);
+    
   } catch (error) {
     console.error('[GOOGLE PLACES SEARCH ERROR]', error);
+    
+    // Clear the timeout since request completed (with error)
+    clearTimeout(timeout);
+    
     res.status(500).json({
       success: false,
       error: error.message

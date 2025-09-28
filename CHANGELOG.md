@@ -21,6 +21,41 @@
 
 ---
 
+## [2024-12-19] - CRITICAL FIX: Add Timeout Protection to Main Search Endpoint
+**Status**: 🔄 TESTING
+
+**What Was Wrong**:
+- 502 errors on `/api/search-google-places` endpoint (main search API)
+- This is different from the decision-maker-contacts endpoint we fixed earlier
+- Main search was failing before mobile detection could even run
+- No timeout protection on the primary search endpoint
+
+**The Fix**:
+- Added 60-second timeout to `/api/search-google-places` endpoint
+- Added proper timeout cleanup in both success and error cases
+- Longer timeout than decision-maker endpoint (60s vs 30s) since search is more complex
+- Returns 504 timeout instead of 502 crash
+
+**How It Was Done**:
+- Added `setTimeout(60000)` to search-google-places endpoint
+- Added `clearTimeout(timeout)` in both success and error handlers
+- Returns proper 504 timeout response instead of crashing
+- 60-second timeout allows for complex search operations
+
+**Result**:
+- Main search endpoint won't crash with 502 errors
+- Requests timeout gracefully after 60 seconds if needed
+- Search can now complete and proceed to mobile detection
+- Better error handling for the primary search functionality
+
+**Files Modified**:
+- `server.js` - Added timeout protection to search-google-places endpoint
+
+**Git Commit**:
+- TBD (will commit after testing)
+
+---
+
 ## [2024-12-19] - CRITICAL FIX: Improve Mobile Number Detection and Search Strategy
 **Status**: 🔄 TESTING
 
