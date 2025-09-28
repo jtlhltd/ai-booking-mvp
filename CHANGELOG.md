@@ -21,6 +21,42 @@
 
 ---
 
+## [2024-12-19] - CRITICAL FIX: Increase Limits for Pagination Results
+**Status**: 🔄 TESTING
+
+**What Was Wrong**:
+- Pagination implemented but only getting 21 mobile numbers (vs expected 100+)
+- Processing limits too restrictive for pagination results
+- Safety limits stopping search too early
+- Not taking full advantage of pagination
+
+**The Fix**:
+- Increased main processing limit from 500 to 1000 businesses
+- Increased safety limit from `maxResults * 50` to `maxResults * 100`
+- Increased fallback limit from 2000 to 5000 businesses
+- Increased pagination from 3 to 5 pages per query (100 results per query vs 60)
+
+**How It Was Done**:
+- Changed `maxProcess` from 500 to 1000
+- Changed safety limit from `maxResults * 50` to `maxResults * 100`
+- Changed fallback limit from 2000 to 5000
+- Changed `maxPages` from 3 to 5
+
+**Result**:
+- Should process up to 1000 businesses (vs 500)
+- Should get 5 pages per query (100 results vs 60)
+- With 14 queries × 5 pages = up to 1400 results (vs 840)
+- Much better chance of finding 100+ mobile numbers
+- Safety limits won't stop search prematurely
+
+**Files Modified**:
+- `server.js` - Increased all processing and safety limits
+
+**Git Commit**:
+- TBD (will commit after testing)
+
+---
+
 ## [2024-12-19] - CRITICAL FIX: Implement Google Places Pagination
 **Status**: 🔄 TESTING
 
