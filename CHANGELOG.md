@@ -21,6 +21,42 @@
 
 ---
 
+## [2024-12-19] - BALANCED FIX: Find Middle Ground Between Stability and Results
+**Status**: 🔄 TESTING
+
+**What Was Wrong**:
+- Conservative limits prevented 502 crashes but only found 2 mobile numbers from 42 businesses
+- Need to find 10 mobile numbers but processing limit of 50 was too restrictive
+- Need balance between server stability and finding enough results
+
+**The Fix**:
+- Increased processing limit from 50 to 150 businesses (3x increase)
+- Added back 2 more UK cities (Liverpool, Bristol) for better coverage
+- Added back 2 more mobile-friendly terms ("solo", "owner")
+- Kept safety limits conservative to prevent crashes
+- Balanced approach: more results without overwhelming server
+
+**How It Was Done**:
+- Changed `maxProcess = Math.min(allResults.length, 150)`
+- Added Liverpool and Bristol to UK search queries
+- Added "solo" and "owner" to mobile-friendly terms
+- Kept safety limits at `maxResults * 20` and `1000` businesses
+
+**Result**:
+- Should process 3x more businesses (150 vs 50)
+- Better geographic coverage with 8 UK cities
+- More mobile-friendly search terms
+- Still conservative enough to prevent 502 crashes
+- Should find closer to 10 mobile numbers
+
+**Files Modified**:
+- `server.js` - Balanced processing limits and search scope
+
+**Git Commit**:
+- TBD (will commit after testing)
+
+---
+
 ## [2024-12-19] - CRITICAL FIX: Reduce Processing Load to Prevent Server Crashes
 **Status**: 🔄 TESTING
 

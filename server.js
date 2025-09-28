@@ -1288,13 +1288,15 @@ app.post('/api/search-google-places', async (req, res) => {
     const searchQueries = [];
     
     if (location === 'United Kingdom') {
-      // Create limited search variations for UK - reduced to prevent crashes
+      // Create balanced search variations for UK - enough coverage without overwhelming
       searchQueries.push(query + ' UK');
       searchQueries.push(query + ' London');
       searchQueries.push(query + ' Manchester');
       searchQueries.push(query + ' Birmingham');
       searchQueries.push(query + ' Glasgow');
       searchQueries.push(query + ' Edinburgh');
+      searchQueries.push(query + ' Liverpool');
+      searchQueries.push(query + ' Bristol');
     } else {
       searchQueries.push(query + ' ' + location);
     }
@@ -1311,6 +1313,8 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push(query + ' "private" UK');
         searchQueries.push(query + ' "consultant" UK');
         searchQueries.push(query + ' "independent" UK');
+        searchQueries.push(query + ' "solo" UK');
+        searchQueries.push(query + ' "owner" UK');
       } else {
         searchQueries.push(query + ' "private" ' + location);
         searchQueries.push(query + ' "consultant" ' + location);
@@ -1386,9 +1390,9 @@ app.post('/api/search-google-places', async (req, res) => {
     
     console.log(`[GOOGLE PLACES] Sorted results by mobile likelihood - processing most promising businesses first`);
     
-    // Process results dynamically until target is reached - with conservative limits
+    // Process results dynamically until target is reached - balanced limits
     let processedCount = 0;
-    const maxProcess = Math.min(allResults.length, 50); // Very conservative limit to prevent crashes
+    const maxProcess = Math.min(allResults.length, 150); // Balanced limit to find targets without crashes
     
     console.log(`[GOOGLE PLACES] Processing up to ${maxProcess} results until target ${targetMobileNumbers} mobile numbers is reached`);
     
