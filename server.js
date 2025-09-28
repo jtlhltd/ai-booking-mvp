@@ -1288,7 +1288,7 @@ app.post('/api/search-google-places', async (req, res) => {
     const searchQueries = [];
     
     if (location === 'United Kingdom') {
-      // Create comprehensive search variations for UK - more coverage for better results
+      // Create comprehensive search variations for UK - maximum coverage for higher targets
       searchQueries.push(query + ' UK');
       searchQueries.push(query + ' London');
       searchQueries.push(query + ' Manchester');
@@ -1299,6 +1299,10 @@ app.post('/api/search-google-places', async (req, res) => {
       searchQueries.push(query + ' Bristol');
       searchQueries.push(query + ' Leeds');
       searchQueries.push(query + ' Newcastle');
+      searchQueries.push(query + ' Sheffield');
+      searchQueries.push(query + ' Nottingham');
+      searchQueries.push(query + ' Cardiff');
+      searchQueries.push(query + ' Belfast');
     } else {
       searchQueries.push(query + ' ' + location);
     }
@@ -1319,6 +1323,8 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push(query + ' "owner" UK');
         searchQueries.push(query + ' "director" UK');
         searchQueries.push(query + ' "specialist" UK');
+        searchQueries.push(query + ' "advisor" UK');
+        searchQueries.push(query + ' "freelance" UK');
       } else {
         searchQueries.push(query + ' "private" ' + location);
         searchQueries.push(query + ' "consultant" ' + location);
@@ -1394,9 +1400,9 @@ app.post('/api/search-google-places', async (req, res) => {
     
     console.log(`[GOOGLE PLACES] Sorted results by mobile likelihood - processing most promising businesses first`);
     
-    // Process results dynamically until target is reached - increased limits for better results
+    // Process results dynamically until target is reached - increased limits for higher targets
     let processedCount = 0;
-    const maxProcess = Math.min(allResults.length, 250); // Increased limit to find more mobile numbers
+    const maxProcess = Math.min(allResults.length, 500); // Increased limit to handle higher targets (100+ mobile numbers)
     
     console.log(`[GOOGLE PLACES] Processing up to ${maxProcess} results until target ${targetMobileNumbers} mobile numbers is reached`);
     
@@ -1493,13 +1499,13 @@ app.post('/api/search-google-places', async (req, res) => {
                   }
                   
                   // Only stop if we've processed way too many (safety limit)
-                  if (results.length >= maxResults * 20) { // Reduced safety limit to prevent crashes
+                  if (results.length >= maxResults * 50) { // Increased safety limit for higher targets
                     console.log(`[SAFETY LIMIT] Processed ${results.length} businesses, stopping search`);
                     break;
                   }
                   
-                  // Fallback limit: stop if we've processed 1,000 businesses (safety limit)
-                  if (results.length >= 1000) {
+                  // Fallback limit: stop if we've processed 2,000 businesses (safety limit)
+                  if (results.length >= 2000) {
                     console.log(`[SAFETY LIMIT] Processed ${results.length} businesses, stopping search`);
                     break;
                   }

@@ -21,6 +21,44 @@
 
 ---
 
+## [2024-12-19] - CRITICAL FIX: Support Higher Targets (100+ Mobile Numbers)
+**Status**: 🔄 TESTING
+
+**What Was Wrong**:
+- System only found 13 mobile numbers when target was 100
+- Processing limit of 250 businesses insufficient for higher targets
+- Safety limits too low for large-scale searches
+- Not enough search queries to find sufficient businesses
+
+**The Fix**:
+- Increased processing limit from 250 to 500 businesses (2x increase)
+- Increased safety limits from 20x to 50x (`maxResults * 50`)
+- Increased fallback limit from 1,000 to 2,000 businesses
+- Added 4 more UK cities (Sheffield, Nottingham, Cardiff, Belfast) - 14 total cities
+- Added 2 more mobile-friendly terms ("advisor", "freelance") - 9 total terms
+
+**How It Was Done**:
+- Changed `maxProcess = Math.min(allResults.length, 500)`
+- Changed safety limit to `maxResults * 50`
+- Changed fallback limit to `2000` businesses
+- Added Sheffield, Nottingham, Cardiff, Belfast to UK search queries
+- Added "advisor" and "freelance" to mobile-friendly terms
+
+**Result**:
+- Should process 2x more businesses (500 vs 250)
+- Much higher safety limits for large-scale searches
+- Better geographic coverage with 14 UK cities
+- More mobile-friendly search terms (9 total)
+- Should handle targets of 100+ mobile numbers
+
+**Files Modified**:
+- `server.js` - Increased processing capacity for higher targets
+
+**Git Commit**:
+- TBD (will commit after testing)
+
+---
+
 ## [2024-12-19] - AGGRESSIVE FIX: Increase Processing and Improve Mobile Detection
 **Status**: 🔄 TESTING
 
