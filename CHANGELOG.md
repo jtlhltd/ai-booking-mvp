@@ -21,6 +21,42 @@
 
 ---
 
+## [2024-12-19] - CRITICAL FIX: Improve Mobile Number Detection and Search Strategy
+**Status**: 🔄 TESTING
+
+**What Was Wrong**:
+- Only finding 6 mobile numbers from 127 businesses (need 10)
+- Mobile number detection might be too strict
+- Not processing enough businesses to reach target
+- Search queries might not be targeting mobile-friendly businesses
+
+**The Fix**:
+- Increased processing limit from 200 to 300 businesses
+- Added more mobile-friendly search terms ("direct contact", "mobile number", "cell phone")
+- Improved mobile number detection with fallback pattern
+- Increased phone number debugging from 10% to 20%
+- Added fallback detection for 07xxxxxxxxx pattern
+
+**How It Was Done**:
+- Changed `maxProcess = Math.min(allResults.length, 300)`
+- Added search terms: "direct contact", "mobile number", "cell phone"
+- Added fallback: `cleanPhone.length === 11 && cleanPhone.startsWith('07')`
+- Increased debug logging to 20% of phone numbers
+
+**Result**:
+- Should process more businesses (up to 300 instead of 200)
+- Better mobile number detection with fallback patterns
+- More targeted search queries for mobile-friendly businesses
+- Better debugging to see what phone numbers are being processed
+
+**Files Modified**:
+- `server.js` - Improved mobile detection and search strategy
+
+**Git Commit**:
+- TBD (will commit after testing)
+
+---
+
 ## [2024-12-19] - CRITICAL FIX: Prevent 502 Errors with Timeout and Safety Limits
 **Status**: 🔄 TESTING
 

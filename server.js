@@ -1317,6 +1317,9 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push(query + ' "specialist" UK');
         searchQueries.push(query + ' "mobile" UK');
         searchQueries.push(query + ' "personal" UK');
+        searchQueries.push(query + ' "direct contact" UK');
+        searchQueries.push(query + ' "mobile number" UK');
+        searchQueries.push(query + ' "cell phone" UK');
         searchQueries.push(query + ' "individual" UK');
         searchQueries.push(query + ' "freelance" UK');
       } else {
@@ -1396,7 +1399,7 @@ app.post('/api/search-google-places', async (req, res) => {
     
     // Process results dynamically until target is reached - with safety limits
     let processedCount = 0;
-    const maxProcess = Math.min(allResults.length, 200); // Safety limit to prevent 502 errors
+    const maxProcess = Math.min(allResults.length, 300); // Increased limit to find more mobile numbers
     
     console.log(`[GOOGLE PLACES] Processing up to ${maxProcess} results until target ${targetMobileNumbers} mobile numbers is reached`);
     
@@ -1595,10 +1598,16 @@ function isMobileNumber(phone) {
   ];
   
   const cleanPhone = phone.replace(/[\s\-\(\)\.]/g, '');
-  const isMobile = mobilePatterns.some(pattern => pattern.test(cleanPhone));
+  let isMobile = mobilePatterns.some(pattern => pattern.test(cleanPhone));
+  
+  // Fallback: Check if it starts with 07 and has 11 digits total (UK mobile pattern)
+  if (!isMobile && cleanPhone.length === 11 && cleanPhone.startsWith('07')) {
+    isMobile = true;
+    console.log(`[PHONE DEBUG] Fallback match: "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
+  }
   
   // Log phone numbers for debugging (only log first few to avoid spam)
-  if (Math.random() < 0.1) { // Log 10% of phone numbers
+  if (Math.random() < 0.2) { // Log 20% of phone numbers for better debugging
     console.log(`[PHONE DEBUG] "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
   }
   
