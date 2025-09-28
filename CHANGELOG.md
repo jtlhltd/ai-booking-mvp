@@ -21,6 +21,43 @@
 
 ---
 
+## [2024-12-19] - CRITICAL FIX: Reduce Processing Load to Prevent Server Crashes
+**Status**: 🔄 TESTING
+
+**What Was Wrong**:
+- Server still crashing with 502 errors despite timeout protection
+- Processing too many businesses (300) was overwhelming the server
+- Too many search queries (20+) were causing memory issues
+- Safety limits were too high (100x, 10,000 businesses)
+
+**The Fix**:
+- Reduced processing limit from 300 to 50 businesses (very conservative)
+- Reduced search queries from 20+ to 6 core queries
+- Reduced mobile-friendly terms from 15+ to 3 essential terms
+- Reduced safety limits from 100x to 20x (maxResults * 20)
+- Reduced fallback limit from 10,000 to 1,000 businesses
+
+**How It Was Done**:
+- Changed `maxProcess = Math.min(allResults.length, 50)`
+- Reduced UK search queries to: UK, London, Manchester, Birmingham, Glasgow, Edinburgh
+- Reduced mobile terms to: "private", "consultant", "independent"
+- Changed safety limit to `maxResults * 20`
+- Changed fallback limit to `1000` businesses
+
+**Result**:
+- Much lighter processing load to prevent server crashes
+- Should still find mobile numbers from smaller, focused search
+- Server should be stable and not crash with 502 errors
+- Conservative approach prioritizes stability over volume
+
+**Files Modified**:
+- `server.js` - Reduced processing load and search scope
+
+**Git Commit**:
+- TBD (will commit after testing)
+
+---
+
 ## [2024-12-19] - CRITICAL FIX: Add Timeout Protection to Main Search Endpoint
 **Status**: 🔄 TESTING
 

@@ -1288,22 +1288,13 @@ app.post('/api/search-google-places', async (req, res) => {
     const searchQueries = [];
     
     if (location === 'United Kingdom') {
-      // Create multiple search variations for UK - more cities for better coverage
+      // Create limited search variations for UK - reduced to prevent crashes
       searchQueries.push(query + ' UK');
-      searchQueries.push(query + ' United Kingdom');
-      searchQueries.push(query + ' England');
-      searchQueries.push(query + ' Scotland');
-      searchQueries.push(query + ' Wales');
-      searchQueries.push(query + ' Northern Ireland');
       searchQueries.push(query + ' London');
       searchQueries.push(query + ' Manchester');
       searchQueries.push(query + ' Birmingham');
-      searchQueries.push(query + ' Leeds');
       searchQueries.push(query + ' Glasgow');
       searchQueries.push(query + ' Edinburgh');
-      searchQueries.push(query + ' Liverpool');
-      searchQueries.push(query + ' Bristol');
-      searchQueries.push(query + ' Newcastle');
     } else {
       searchQueries.push(query + ' ' + location);
     }
@@ -1319,19 +1310,7 @@ app.post('/api/search-google-places', async (req, res) => {
       if (location === 'United Kingdom') {
         searchQueries.push(query + ' "private" UK');
         searchQueries.push(query + ' "consultant" UK');
-        searchQueries.push(query + ' "advisor" UK');
         searchQueries.push(query + ' "independent" UK');
-        searchQueries.push(query + ' "solo" UK');
-        searchQueries.push(query + ' "owner" UK');
-        searchQueries.push(query + ' "director" UK');
-        searchQueries.push(query + ' "specialist" UK');
-        searchQueries.push(query + ' "mobile" UK');
-        searchQueries.push(query + ' "personal" UK');
-        searchQueries.push(query + ' "direct contact" UK');
-        searchQueries.push(query + ' "mobile number" UK');
-        searchQueries.push(query + ' "cell phone" UK');
-        searchQueries.push(query + ' "individual" UK');
-        searchQueries.push(query + ' "freelance" UK');
       } else {
         searchQueries.push(query + ' "private" ' + location);
         searchQueries.push(query + ' "consultant" ' + location);
@@ -1407,9 +1386,9 @@ app.post('/api/search-google-places', async (req, res) => {
     
     console.log(`[GOOGLE PLACES] Sorted results by mobile likelihood - processing most promising businesses first`);
     
-    // Process results dynamically until target is reached - with safety limits
+    // Process results dynamically until target is reached - with conservative limits
     let processedCount = 0;
-    const maxProcess = Math.min(allResults.length, 300); // Increased limit to find more mobile numbers
+    const maxProcess = Math.min(allResults.length, 50); // Very conservative limit to prevent crashes
     
     console.log(`[GOOGLE PLACES] Processing up to ${maxProcess} results until target ${targetMobileNumbers} mobile numbers is reached`);
     
@@ -1506,13 +1485,13 @@ app.post('/api/search-google-places', async (req, res) => {
                   }
                   
                   // Only stop if we've processed way too many (safety limit)
-                  if (results.length >= maxResults * 100) { // Increased safety limit to allow target achievement
+                  if (results.length >= maxResults * 20) { // Reduced safety limit to prevent crashes
                     console.log(`[SAFETY LIMIT] Processed ${results.length} businesses, stopping search`);
                     break;
                   }
                   
-                  // Fallback limit: stop if we've processed 10,000 businesses (safety limit)
-                  if (results.length >= 10000) {
+                  // Fallback limit: stop if we've processed 1,000 businesses (safety limit)
+                  if (results.length >= 1000) {
                     console.log(`[SAFETY LIMIT] Processed ${results.length} businesses, stopping search`);
                     break;
                   }
