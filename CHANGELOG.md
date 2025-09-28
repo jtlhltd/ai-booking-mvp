@@ -21,8 +21,66 @@
 
 ---
 
-## [2024-12-19] - CRITICAL FIX: Parameter Mismatch Between Frontend and Backend
+## [2024-12-19] - Alternative Approach: More Search Queries Instead of Pagination
 **Status**: 🔄 TESTING
+
+**What Changed**:
+- Increased search queries from 6-10 to 20+ queries
+- Added more UK cities (London, Manchester, Birmingham, Leeds, Glasgow, Edinburgh, Liverpool, Bristol, Newcastle)
+- Added more mobile-friendly terms (director, specialist, mobile, personal, individual, freelance)
+- No pagination - just more diverse search terms
+
+**How It Was Done**:
+- Added 8 more UK cities to search queries
+- Added 6 more mobile-friendly terms
+- Each query still returns 20 results (Google limit)
+- Total potential results: 20+ queries × 20 results = 400+ businesses
+- No server overload from pagination
+
+**Result**:
+- Should get 200+ businesses instead of 49
+- More diverse results from different cities
+- Better mobile number coverage
+- No 502 errors (no pagination)
+
+**Files Modified**:
+- `server.js` - Enhanced search query diversity
+
+**Git Commit**:
+- TBD (will commit after testing)
+
+---
+
+## [2024-12-19] - CRITICAL FIX: Parameter Mismatch Between Frontend and Backend
+**Status**: ✅ WORKING (Reverted from pagination 502 error)
+
+**What Was Wrong**:
+- User selects "10 mobile numbers" target
+- Frontend sends `maxResults * 2` = 20 to backend
+- Backend tries to find 20 mobile numbers (not 10!)
+- User sees only 3 found, thinks system is broken
+
+**The Fix**:
+- Frontend now sends actual target number (`maxResults`) to backend
+- Backend uses actual target as `targetMobileNumbers`
+- No more 2x multiplier confusion
+
+**How It Was Done**:
+- Changed frontend: `maxResults * 2` → `maxResults`
+- Backend already correctly uses `maxResults` as `targetMobileNumbers`
+- This fixes the core parameter mismatch issue
+
+**Result**:
+- When user asks for 10 mobile numbers, backend will try to find exactly 10
+- No more confusion about why targets aren't being met
+- System should now reliably reach the requested target
+- **REVERTED**: Pagination caused 502 errors, back to working version
+
+**Files Modified**:
+- `public/decision-maker-finder.html` - Fixed parameter sending
+
+**Git Commit**:
+- Reverted to working version after pagination 502 error
 
 **What Was Wrong**:
 - User selects "10 mobile numbers" target

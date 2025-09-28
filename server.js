@@ -1278,12 +1278,22 @@ app.post('/api/search-google-places', async (req, res) => {
     const searchQueries = [];
     
     if (location === 'United Kingdom') {
-      // Create multiple search variations for UK
+      // Create multiple search variations for UK - more cities for better coverage
       searchQueries.push(query + ' UK');
       searchQueries.push(query + ' United Kingdom');
       searchQueries.push(query + ' England');
       searchQueries.push(query + ' Scotland');
       searchQueries.push(query + ' Wales');
+      searchQueries.push(query + ' Northern Ireland');
+      searchQueries.push(query + ' London');
+      searchQueries.push(query + ' Manchester');
+      searchQueries.push(query + ' Birmingham');
+      searchQueries.push(query + ' Leeds');
+      searchQueries.push(query + ' Glasgow');
+      searchQueries.push(query + ' Edinburgh');
+      searchQueries.push(query + ' Liverpool');
+      searchQueries.push(query + ' Bristol');
+      searchQueries.push(query + ' Newcastle');
     } else {
       searchQueries.push(query + ' ' + location);
     }
@@ -1303,11 +1313,21 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push(query + ' "independent" UK');
         searchQueries.push(query + ' "solo" UK');
         searchQueries.push(query + ' "owner" UK');
+        searchQueries.push(query + ' "director" UK');
+        searchQueries.push(query + ' "specialist" UK');
+        searchQueries.push(query + ' "mobile" UK');
+        searchQueries.push(query + ' "personal" UK');
+        searchQueries.push(query + ' "individual" UK');
+        searchQueries.push(query + ' "freelance" UK');
       } else {
         searchQueries.push(query + ' "private" ' + location);
         searchQueries.push(query + ' "consultant" ' + location);
         searchQueries.push(query + ' "advisor" ' + location);
         searchQueries.push(query + ' "independent" ' + location);
+        searchQueries.push(query + ' "solo" ' + location);
+        searchQueries.push(query + ' "owner" ' + location);
+        searchQueries.push(query + ' "director" ' + location);
+        searchQueries.push(query + ' "specialist" ' + location);
       }
     }
     
