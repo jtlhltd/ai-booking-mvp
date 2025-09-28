@@ -1289,16 +1289,26 @@ app.post('/api/search-google-places', async (req, res) => {
     }
     
     // Add mobile-friendly terms to increase chances of finding mobile numbers
-    const mobileFriendlyTerms = ['owner', 'director', 'consultant', 'advisor', 'specialist', 'private'];
+    const mobileFriendlyTerms = ['owner', 'director', 'consultant', 'advisor', 'specialist', 'private', 'independent', 'solo'];
     const hasMobileTerms = mobileFriendlyTerms.some(term => 
       query.toLowerCase().includes(term.toLowerCase())
     );
     
     if (!hasMobileTerms && !query.includes('"')) {
-      // Add mobile-friendly variations
-      searchQueries.push(query + ' "private" UK');
-      searchQueries.push(query + ' "consultant" UK');
-      searchQueries.push(query + ' "advisor" UK');
+      // Add mobile-friendly variations - these business types more likely to have mobile numbers
+      if (location === 'United Kingdom') {
+        searchQueries.push(query + ' "private" UK');
+        searchQueries.push(query + ' "consultant" UK');
+        searchQueries.push(query + ' "advisor" UK');
+        searchQueries.push(query + ' "independent" UK');
+        searchQueries.push(query + ' "solo" UK');
+        searchQueries.push(query + ' "owner" UK');
+      } else {
+        searchQueries.push(query + ' "private" ' + location);
+        searchQueries.push(query + ' "consultant" ' + location);
+        searchQueries.push(query + ' "advisor" ' + location);
+        searchQueries.push(query + ' "independent" ' + location);
+      }
     }
     
     const allResults = [];
@@ -1346,6 +1356,25 @@ app.post('/api/search-google-places', async (req, res) => {
     
     console.log(`[GOOGLE PLACES] Starting processing: ${allResults.length} total results, processing up to ${maxProcess}, target: ${targetMobileNumbers} mobile numbers`);
     
+    // Sort results by mobile likelihood to prioritize businesses more likely to have mobile numbers
+    allResults.sort((a, b) => {
+      const aName = (a.name || '').toLowerCase();
+      const bName = (b.name || '').toLowerCase();
+      
+      // Calculate mobile likelihood scores
+      const getMobileScore = (name) => {
+        if (name.includes('consultant') || name.includes('advisor') || name.includes('specialist')) return 9;
+        if (name.includes('solo') || name.includes('individual') || name.includes('private')) return 8;
+        if (name.includes('clinic') || name.includes('practice') || name.includes('surgery')) return 6;
+        if (name.includes('associates') || name.includes('group') || name.includes('partnership')) return 3;
+        return 4;
+      };
+      
+      return getMobileScore(bName) - getMobileScore(aName); // Sort high to low
+    });
+    
+    console.log(`[GOOGLE PLACES] Sorted results by mobile likelihood - processing most promising businesses first`);
+    
     // Process each result to get detailed information
     for (let i = 0; i < maxProcess; i++) {
       const place = allResults[i];
@@ -1367,16 +1396,26 @@ app.post('/api/search-google-places', async (req, res) => {
           
           // Determine business size based on name patterns
           let estimatedSize = 'Unknown';
+          let mobileLikelihood = 0; // Score for likelihood of having mobile number
+          
           if (businessSize) {
             estimatedSize = businessSize;
           } else {
             const name = (details.name || place.name).toLowerCase();
             if (name.includes('associates') || name.includes('group') || name.includes('partnership')) {
               estimatedSize = 'Medium';
+              mobileLikelihood = 3; // Lower likelihood for larger businesses
             } else if (name.includes('solo') || name.includes('individual') || name.includes('private')) {
               estimatedSize = 'Solo';
+              mobileLikelihood = 8; // High likelihood for solo/private practices
             } else if (name.includes('clinic') || name.includes('practice') || name.includes('surgery')) {
               estimatedSize = 'Small';
+              mobileLikelihood = 6; // Good likelihood for clinics
+            } else if (name.includes('consultant') || name.includes('advisor') || name.includes('specialist')) {
+              estimatedSize = 'Solo';
+              mobileLikelihood = 9; // Very high likelihood for consultants
+            } else {
+              mobileLikelihood = 4; // Default moderate likelihood
             }
           }
           
@@ -1399,6 +1438,7 @@ app.post('/api/search-google-places', async (req, res) => {
                   industry: query,
                   source: 'Google Places',
                   businessSize: estimatedSize,
+                  mobileLikelihood: mobileLikelihood, // Add mobile likelihood score
                   verified: Math.random() > 0.3, // 70% chance of being "verified"
                   isUKBusiness: isUKBusiness
                 };
