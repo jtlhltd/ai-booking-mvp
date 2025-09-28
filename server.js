@@ -1350,11 +1350,10 @@ app.post('/api/search-google-places', async (req, res) => {
     
     const results = [];
     let mobileCount = 0; // Track mobile numbers found
-    // Process results to find mobile numbers - increase multiplier to reach mobile targets
-    const maxProcess = Math.min(allResults.length, maxResults * 10); // Increased from 5x to 10x
+    // Dynamic processing - keep going until target is reached
     const targetMobileNumbers = maxResults; // maxResults now represents target mobile numbers
     
-    console.log(`[GOOGLE PLACES] Starting processing: ${allResults.length} total results, processing up to ${maxProcess}, target: ${targetMobileNumbers} mobile numbers`);
+    console.log(`[GOOGLE PLACES] Starting dynamic processing: ${allResults.length} total results, target: ${targetMobileNumbers} mobile numbers`);
     
     // Sort results by mobile likelihood to prioritize businesses more likely to have mobile numbers
     allResults.sort((a, b) => {
@@ -1375,8 +1374,11 @@ app.post('/api/search-google-places', async (req, res) => {
     
     console.log(`[GOOGLE PLACES] Sorted results by mobile likelihood - processing most promising businesses first`);
     
-    // Process each result to get detailed information
-    for (let i = 0; i < maxProcess; i++) {
+    // Process results dynamically until target is reached
+    let processedCount = 0;
+    const maxProcess = Math.min(allResults.length, maxResults * 20); // Increased limit for target achievement
+    
+    for (let i = 0; i < maxProcess && mobileCount < targetMobileNumbers; i++) {
       const place = allResults[i];
       
       try {
@@ -1455,15 +1457,22 @@ app.post('/api/search-google-places', async (req, res) => {
                     console.log(`[LANDLINE FOUND] ${business.name} - ${phone}`);
                   }
                   
+                  processedCount++;
+                  
+                  // Log progress every 10 businesses
+                  if (processedCount % 10 === 0) {
+                    console.log(`[PROGRESS] Processed ${processedCount} businesses, found ${mobileCount}/${targetMobileNumbers} mobile numbers`);
+                  }
+                  
                   // Early stop if we've reached the mobile target
                   if (mobileCount >= targetMobileNumbers) {
                     console.log(`[TARGET REACHED] Found ${mobileCount} mobile numbers, stopping search`);
                     break;
                   }
                   
-                  // Stop when we have enough results to avoid large responses
-                  if (results.length >= maxResults * 10) { // Increased from 5x to 10x to reach mobile targets
-                    console.log(`[RESPONSE LIMIT] Processed ${results.length} businesses, stopping search`);
+                  // Only stop if we've processed way too many (safety limit)
+                  if (results.length >= maxResults * 50) { // Increased safety limit to allow target achievement
+                    console.log(`[SAFETY LIMIT] Processed ${results.length} businesses, stopping search`);
                     break;
                   }
                   
@@ -1484,7 +1493,13 @@ app.post('/api/search-google-places', async (req, res) => {
     }
     
     const finalMobileCount = results.filter(r => r.hasMobile).length;
-    console.log(`[GOOGLE PLACES SEARCH COMPLETE] Found ${results.length} businesses total, ${finalMobileCount} with mobile numbers (Target: ${targetMobileNumbers})`);
+    console.log(`[GOOGLE PLACES SEARCH COMPLETE] Processed ${processedCount} businesses, found ${results.length} total, ${finalMobileCount} with mobile numbers (Target: ${targetMobileNumbers})`);
+    
+    if (finalMobileCount >= targetMobileNumbers) {
+      console.log(`[SUCCESS] Target achieved! Found ${finalMobileCount}/${targetMobileNumbers} mobile numbers`);
+    } else {
+      console.log(`[PARTIAL] Found ${finalMobileCount}/${targetMobileNumbers} mobile numbers - target not fully reached`);
+    }
     
     res.json({
       success: true,
