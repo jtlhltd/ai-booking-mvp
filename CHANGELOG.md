@@ -21,6 +21,41 @@
 
 ---
 
+## [2024-12-19] - CRITICAL FIX: Balance Limits to Prevent 502 Errors
+**Status**: 🔄 TESTING
+
+**What Was Wrong**:
+- 502 errors returned after increasing limits too aggressively
+- Server crashing with 1000 businesses and 5 pages per query
+- Need to find balance between more results and server stability
+
+**The Fix**:
+- Reduced main processing limit from 1000 to 750 businesses
+- Reduced pagination from 5 to 4 pages per query (80 results per query vs 100)
+- Reduced safety limit from `maxResults * 100` to `maxResults * 75`
+- Reduced fallback limit from 5000 to 3000 businesses
+
+**How It Was Done**:
+- Changed `maxProcess` from 1000 to 750
+- Changed `maxPages` from 5 to 4
+- Changed safety limit from `maxResults * 100` to `maxResults * 75`
+- Changed fallback limit from 5000 to 3000
+
+**Result**:
+- Should process up to 750 businesses (balanced)
+- Should get 4 pages per query (80 results vs 100)
+- With 14 queries × 4 pages = up to 1120 results (vs 1400)
+- Better balance between results and server stability
+- Should prevent 502 errors while still getting more results
+
+**Files Modified**:
+- `server.js` - Balanced all processing and safety limits
+
+**Git Commit**:
+- TBD (will commit after testing)
+
+---
+
 ## [2024-12-19] - CRITICAL FIX: Increase Limits for Pagination Results
 **Status**: 🔄 TESTING
 

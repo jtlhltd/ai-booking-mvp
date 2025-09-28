@@ -1343,7 +1343,7 @@ app.post('/api/search-google-places', async (req, res) => {
     for (const searchQuery of searchQueries) {
       let nextPageToken = null;
       let pageCount = 0;
-      const maxPages = 5; // Get up to 5 pages per query for maximum results (was 3)
+      const maxPages = 4; // Balanced pagination for stability (was 5, too high)
       
       do {
         let searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(searchQuery)}&key=${apiKey}`;
@@ -1425,7 +1425,7 @@ app.post('/api/search-google-places', async (req, res) => {
     
     // Process results dynamically until target is reached - increased limits for higher targets
     let processedCount = 0;
-    const maxProcess = Math.min(allResults.length, 1000); // Increased limit for pagination (was 500)
+    const maxProcess = Math.min(allResults.length, 750); // Balanced limit for pagination (was 1000, too high)
     
     console.log(`[GOOGLE PLACES] Processing up to ${maxProcess} results until target ${targetMobileNumbers} mobile numbers is reached`);
     
@@ -1521,14 +1521,14 @@ app.post('/api/search-google-places', async (req, res) => {
                     break;
                   }
                   
-                  // Only stop if we've processed way too many (safety limit) - increased for pagination
-                  if (results.length >= maxResults * 100) { // Increased safety limit for pagination (was 50)
+                  // Only stop if we've processed way too many (safety limit) - balanced for stability
+                  if (results.length >= maxResults * 75) { // Balanced safety limit (was 100, too high)
                     console.log(`[SAFETY LIMIT] Processed ${results.length} businesses, stopping search`);
                     break;
                   }
                   
-                  // Fallback limit: stop if we've processed 5,000 businesses (safety limit) - increased for pagination
-                  if (results.length >= 5000) { // Increased fallback limit for pagination (was 2000)
+                  // Fallback limit: stop if we've processed 3,000 businesses (safety limit) - balanced for stability
+                  if (results.length >= 3000) { // Balanced fallback limit (was 5000, too high)
                     console.log(`[SAFETY LIMIT] Processed ${results.length} businesses, stopping search`);
                     break;
                   }
