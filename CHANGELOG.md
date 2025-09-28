@@ -21,6 +21,38 @@
 
 ---
 
+## [2024-12-19] - CRITICAL FIX: Parameter Mismatch Between Frontend and Backend
+**Status**: 🔄 TESTING
+
+**What Was Wrong**:
+- User selects "10 mobile numbers" target
+- Frontend sends `maxResults * 2` = 20 to backend
+- Backend tries to find 20 mobile numbers (not 10!)
+- User sees only 3 found, thinks system is broken
+
+**The Fix**:
+- Frontend now sends actual target number (`maxResults`) to backend
+- Backend uses actual target as `targetMobileNumbers`
+- No more 2x multiplier confusion
+
+**How It Was Done**:
+- Changed frontend: `maxResults * 2` → `maxResults`
+- Backend already correctly uses `maxResults` as `targetMobileNumbers`
+- This fixes the core parameter mismatch issue
+
+**Result**:
+- When user asks for 10 mobile numbers, backend will try to find exactly 10
+- No more confusion about why targets aren't being met
+- System should now reliably reach the requested target
+
+**Files Modified**:
+- `public/decision-maker-finder.html` - Fixed parameter sending
+
+**Git Commit**:
+- TBD (will commit after testing)
+
+---
+
 ## [2024-12-19] - Aggressive Target Achievement Implementation
 **Status**: 🔄 TESTING
 
