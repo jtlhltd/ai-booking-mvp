@@ -1394,9 +1394,11 @@ app.post('/api/search-google-places', async (req, res) => {
     
     console.log(`[GOOGLE PLACES] Sorted results by mobile likelihood - processing most promising businesses first`);
     
-    // Process results dynamically until target is reached
+    // Process results dynamically until target is reached - no artificial limits
     let processedCount = 0;
-    const maxProcess = Math.min(allResults.length, maxResults * 20); // Increased limit for target achievement
+    const maxProcess = allResults.length; // Process ALL available results
+    
+    console.log(`[GOOGLE PLACES] Processing ALL ${allResults.length} results until target ${targetMobileNumbers} mobile numbers is reached`);
     
     for (let i = 0; i < maxProcess && mobileCount < targetMobileNumbers; i++) {
       const place = allResults[i];
@@ -1491,7 +1493,7 @@ app.post('/api/search-google-places', async (req, res) => {
                   }
                   
                   // Only stop if we've processed way too many (safety limit)
-                  if (results.length >= maxResults * 50) { // Increased safety limit to allow target achievement
+                  if (results.length >= maxResults * 100) { // Increased safety limit to allow target achievement
                     console.log(`[SAFETY LIMIT] Processed ${results.length} businesses, stopping search`);
                     break;
                   }
