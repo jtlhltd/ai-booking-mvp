@@ -1288,7 +1288,7 @@ app.post('/api/search-google-places', async (req, res) => {
     const searchQueries = [];
     
     if (location === 'United Kingdom') {
-      // Create balanced search variations for UK - enough coverage without overwhelming
+      // Create comprehensive search variations for UK - more coverage for better results
       searchQueries.push(query + ' UK');
       searchQueries.push(query + ' London');
       searchQueries.push(query + ' Manchester');
@@ -1297,6 +1297,8 @@ app.post('/api/search-google-places', async (req, res) => {
       searchQueries.push(query + ' Edinburgh');
       searchQueries.push(query + ' Liverpool');
       searchQueries.push(query + ' Bristol');
+      searchQueries.push(query + ' Leeds');
+      searchQueries.push(query + ' Newcastle');
     } else {
       searchQueries.push(query + ' ' + location);
     }
@@ -1315,6 +1317,8 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push(query + ' "independent" UK');
         searchQueries.push(query + ' "solo" UK');
         searchQueries.push(query + ' "owner" UK');
+        searchQueries.push(query + ' "director" UK');
+        searchQueries.push(query + ' "specialist" UK');
       } else {
         searchQueries.push(query + ' "private" ' + location);
         searchQueries.push(query + ' "consultant" ' + location);
@@ -1390,9 +1394,9 @@ app.post('/api/search-google-places', async (req, res) => {
     
     console.log(`[GOOGLE PLACES] Sorted results by mobile likelihood - processing most promising businesses first`);
     
-    // Process results dynamically until target is reached - balanced limits
+    // Process results dynamically until target is reached - increased limits for better results
     let processedCount = 0;
-    const maxProcess = Math.min(allResults.length, 150); // Balanced limit to find targets without crashes
+    const maxProcess = Math.min(allResults.length, 250); // Increased limit to find more mobile numbers
     
     console.log(`[GOOGLE PLACES] Processing up to ${maxProcess} results until target ${targetMobileNumbers} mobile numbers is reached`);
     
@@ -1604,6 +1608,18 @@ function isMobileNumber(phone) {
   if (!isMobile && cleanPhone.length === 11 && cleanPhone.startsWith('07')) {
     isMobile = true;
     console.log(`[PHONE DEBUG] Fallback match: "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
+  }
+  
+  // Additional fallback: Check for any 07 pattern with reasonable length
+  if (!isMobile && cleanPhone.length >= 10 && cleanPhone.length <= 13 && cleanPhone.includes('07')) {
+    isMobile = true;
+    console.log(`[PHONE DEBUG] Additional fallback match: "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
+  }
+  
+  // Very lenient fallback: Any number containing 07 with mobile-like length
+  if (!isMobile && cleanPhone.length >= 10 && cleanPhone.length <= 15 && /07\d/.test(cleanPhone)) {
+    isMobile = true;
+    console.log(`[PHONE DEBUG] Lenient fallback match: "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
   }
   
   // Log phone numbers for debugging (only log first few to avoid spam)

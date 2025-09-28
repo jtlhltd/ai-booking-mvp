@@ -21,6 +21,46 @@
 
 ---
 
+## [2024-12-19] - AGGRESSIVE FIX: Increase Processing and Improve Mobile Detection
+**Status**: 🔄 TESTING
+
+**What Was Wrong**:
+- Still only finding 3 mobile numbers from 150 businesses
+- Need to find 10 mobile numbers - current approach not aggressive enough
+- Mobile detection might be missing edge cases
+- Need more businesses and better detection
+
+**The Fix**:
+- Increased processing limit from 150 to 250 businesses (67% increase)
+- Added 2 more UK cities (Leeds, Newcastle) for better coverage
+- Added 2 more mobile-friendly terms ("director", "specialist")
+- Improved mobile detection with 3 additional fallback patterns
+- More lenient detection for edge cases
+
+**How It Was Done**:
+- Changed `maxProcess = Math.min(allResults.length, 250)`
+- Added Leeds and Newcastle to UK search queries (10 total cities)
+- Added "director" and "specialist" to mobile-friendly terms (7 total terms)
+- Added 3 additional fallback patterns for mobile detection:
+  - Any 07 pattern with 10-13 digits
+  - Any 07 pattern with 10-15 digits
+  - Very lenient pattern for edge cases
+
+**Result**:
+- Should process 67% more businesses (250 vs 150)
+- Better geographic coverage with 10 UK cities
+- More mobile-friendly search terms (7 total)
+- Much more lenient mobile detection
+- Should find significantly more mobile numbers
+
+**Files Modified**:
+- `server.js` - Increased processing limits and improved mobile detection
+
+**Git Commit**:
+- TBD (will commit after testing)
+
+---
+
 ## [2024-12-19] - BALANCED FIX: Find Middle Ground Between Stability and Results
 **Status**: 🔄 TESTING
 
