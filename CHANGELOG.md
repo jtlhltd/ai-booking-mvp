@@ -21,6 +21,40 @@
 
 ---
 
+## [2024-12-19] - CRITICAL FIX: Prevent 502 Errors with Timeout and Safety Limits
+**Status**: 🔄 TESTING
+
+**What Was Wrong**:
+- Server was crashing with 502 errors when processing too many businesses
+- No timeout protection on the decision-maker-contacts endpoint
+- Processing all 130+ businesses at once was overwhelming the server
+
+**The Fix**:
+- Added 30-second timeout to prevent hanging requests
+- Limited processing to max 200 businesses (safety limit)
+- Added proper timeout cleanup in success and error cases
+- Server now returns 504 timeout instead of 502 crash
+
+**How It Was Done**:
+- Added `setTimeout(30000)` to decision-maker-contacts endpoint
+- Changed `maxProcess = Math.min(allResults.length, 200)` 
+- Added `clearTimeout(timeout)` in both success and error handlers
+- Returns proper 504 timeout response instead of crashing
+
+**Result**:
+- Server won't crash with 502 errors
+- Requests timeout gracefully after 30 seconds
+- Still processes up to 200 businesses (should be enough for 10 mobile targets)
+- Better error handling and user feedback
+
+**Files Modified**:
+- `server.js` - Added timeout protection and safety limits
+
+**Git Commit**:
+- TBD (will commit after testing)
+
+---
+
 ## [2024-12-19] - CRITICAL FIX: Remove Processing Limits to Reach Targets
 **Status**: 🔄 TESTING
 

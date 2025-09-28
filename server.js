@@ -1394,11 +1394,11 @@ app.post('/api/search-google-places', async (req, res) => {
     
     console.log(`[GOOGLE PLACES] Sorted results by mobile likelihood - processing most promising businesses first`);
     
-    // Process results dynamically until target is reached - no artificial limits
+    // Process results dynamically until target is reached - with safety limits
     let processedCount = 0;
-    const maxProcess = allResults.length; // Process ALL available results
+    const maxProcess = Math.min(allResults.length, 200); // Safety limit to prevent 502 errors
     
-    console.log(`[GOOGLE PLACES] Processing ALL ${allResults.length} results until target ${targetMobileNumbers} mobile numbers is reached`);
+    console.log(`[GOOGLE PLACES] Processing up to ${maxProcess} results until target ${targetMobileNumbers} mobile numbers is reached`);
     
     for (let i = 0; i < maxProcess && mobileCount < targetMobileNumbers; i++) {
       const place = allResults[i];
@@ -4064,6 +4064,16 @@ app.post('/api/uk-business-search', async (req, res) => {
 
 // Decision Maker Contact Research endpoint (PUBLIC - no auth required) - WITH REAL API
 app.post('/api/decision-maker-contacts', async (req, res) => {
+  // Set a 30-second timeout to prevent 502 errors
+  const timeout = setTimeout(() => {
+    if (!res.headersSent) {
+      res.status(504).json({ 
+        error: 'Request timeout', 
+        message: 'The request took too long to process. Please try again with a smaller search scope.' 
+      });
+    }
+  }, 30000);
+
   try {
     const { business, industry, targetRole } = req.body;
     
@@ -4162,8 +4172,15 @@ app.post('/api/decision-maker-contacts', async (req, res) => {
       targetRole,
       timestamp: new Date().toISOString()
     });
+    
+    // Clear the timeout since request completed successfully
+    clearTimeout(timeout);
   } catch (error) {
     console.error('[DECISION MAKER CONTACT ERROR]', error);
+    
+    // Clear the timeout since request completed (with error)
+    clearTimeout(timeout);
+    
     res.status(500).json({ 
       error: 'Failed to research decision maker contacts',
       message: error.message 
