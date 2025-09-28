@@ -1452,20 +1452,53 @@ function isMobileNumber(phone) {
   if (!phone || phone === 'No phone listed') return false;
   
   const mobilePatterns = [
+    // Standard UK mobile patterns (7x xxxxxxxx)
     /^\+447[0-9]{9}$/, // +447xxxxxxxxx
     /^07[0-9]{9}$/, // 07xxxxxxxxx
     /^447[0-9]{9}$/, // 447xxxxxxxxx
-    /^\+44\s?7[0-9]{9}$/, // +44 7xxxxxxxxx (with space)
-    /^0\s?7[0-9]{9}$/, // 0 7xxxxxxxxx (with space)
-    /^44\s?7[0-9]{9}$/, // 44 7xxxxxxxxx (with space)
+    
+    // With spaces
+    /^\+44\s?7[0-9]{9}$/, // +44 7xxxxxxxxx
+    /^0\s?7[0-9]{9}$/, // 0 7xxxxxxxxx
+    /^44\s?7[0-9]{9}$/, // 44 7xxxxxxxxx
+    
+    // Formatted with spaces (7xx xxx xxx)
     /^\+44\s?7[0-9]{3}\s?[0-9]{3}\s?[0-9]{3}$/, // +44 7xx xxx xxx
     /^0\s?7[0-9]{3}\s?[0-9]{3}\s?[0-9]{3}$/, // 0 7xx xxx xxx
+    /^44\s?7[0-9]{3}\s?[0-9]{3}\s?[0-9]{3}$/, // 44 7xx xxx xxx
+    
+    // With parentheses
     /^\+44\s?\(0\)\s?7[0-9]{9}$/, // +44 (0) 7xxxxxxxxx
     /^0\s?7[0-9]{3}\s?[0-9]{6}$/, // 0 7xx xxxxxx
-    /^\+44\s?7[0-9]{3}\s?[0-9]{6}$/ // +44 7xx xxxxxx
+    /^\+44\s?7[0-9]{3}\s?[0-9]{6}$/, // +44 7xx xxxxxx
+    
+    // With dashes
+    /^\+44\s?7[0-9]{3}-[0-9]{3}-[0-9]{3}$/, // +44 7xx-xxx-xxx
+    /^0\s?7[0-9]{3}-[0-9]{3}-[0-9]{3}$/, // 0 7xx-xxx-xxx
+    /^44\s?7[0-9]{3}-[0-9]{3}-[0-9]{3}$/, // 44 7xx-xxx-xxx
+    
+    // Mixed formatting
+    /^\+44\s?7[0-9]{3}\s?[0-9]{3}-[0-9]{3}$/, // +44 7xx xxx-xxx
+    /^0\s?7[0-9]{3}\s?[0-9]{3}-[0-9]{3}$/, // 0 7xx xxx-xxx
+    /^44\s?7[0-9]{3}\s?[0-9]{3}-[0-9]{3}$/, // 44 7xx xxx-xxx
+    
+    // With dots
+    /^\+44\s?7[0-9]{3}\.[0-9]{3}\.[0-9]{3}$/, // +44 7xx.xxx.xxx
+    /^0\s?7[0-9]{3}\.[0-9]{3}\.[0-9]{3}$/, // 0 7xx.xxx.xxx
+    /^44\s?7[0-9]{3}\.[0-9]{3}\.[0-9]{3}$/, // 44 7xx.xxx.xxx
+    
+    // Extended UK mobile prefixes (70, 71, 72, 73, 74, 75, 76, 77, 78, 79)
+    /^\+447[0-9][0-9]{8}$/, // +447xxxxxxxxx (all 7x prefixes)
+    /^07[0-9][0-9]{8}$/, // 07xxxxxxxxx (all 7x prefixes)
+    /^447[0-9][0-9]{8}$/, // 447xxxxxxxxx (all 7x prefixes)
+    
+    // Common business formatting variations
+    /^\+44\s?\(0\)\s?7[0-9]\s?[0-9]{3}\s?[0-9]{3}\s?[0-9]{3}$/, // +44 (0) 7x xxx xxx xxx
+    /^0\s?7[0-9]\s?[0-9]{3}\s?[0-9]{3}\s?[0-9]{3}$/, // 0 7x xxx xxx xxx
+    /^44\s?7[0-9]\s?[0-9]{3}\s?[0-9]{3}\s?[0-9]{3}$/ // 44 7x xxx xxx xxx
   ];
   
-  const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
+  const cleanPhone = phone.replace(/[\s\-\(\)\.]/g, '');
   const isMobile = mobilePatterns.some(pattern => pattern.test(cleanPhone));
   
   // Log phone numbers for debugging (only log first few to avoid spam)
