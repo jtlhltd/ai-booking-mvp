@@ -25,17 +25,19 @@
 **Status**: 🔄 TESTING
 
 **What Changed**:
-- Increased processing multiplier from 1.5x to 5x to reach mobile targets
+- Increased processing multiplier from 1.5x to 10x to reach mobile targets
 - Added mobile counting and early stopping when target is reached
-- Added detailed logging for mobile number discovery
+- Added detailed logging for mobile number discovery (mobile + landline)
 - Enhanced response with target achievement status
+- Increased response limit to prevent early stopping
 
 **How It Was Done**:
-- Changed `maxProcess` from `maxResults * 1.5` to `maxResults * 5`
+- Changed `maxProcess` from `maxResults * 1.5` to `maxResults * 10` (increased again)
 - Added `mobileCount` tracking variable
 - Added early break when `mobileCount >= targetMobileNumbers`
-- Added `[MOBILE FOUND]` and `[TARGET REACHED]` console logs
+- Added `[MOBILE FOUND]`, `[LANDLINE FOUND]`, and `[TARGET REACHED]` console logs
 - Enhanced API response with `targetReached` boolean
+- Increased response limit from 5x to 10x to prevent early stopping
 
 **Result**:
 - Should now reliably reach the requested number of mobile numbers
