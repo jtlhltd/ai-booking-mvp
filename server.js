@@ -1401,7 +1401,7 @@ app.post('/api/search-google-places', async (req, res) => {
     for (const searchQuery of searchQueries) {
       let nextPageToken = null;
       let pageCount = 0;
-        const maxPages = 3; // Maximum pagination (reduced to prevent 504 timeouts)
+        const maxPages = 2; // Maximum pagination (very conservative to prevent 502 errors)
       
       do {
         let searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(searchQuery)}&key=${apiKey}`;
@@ -1441,8 +1441,8 @@ app.post('/api/search-google-places', async (req, res) => {
         
       } while (nextPageToken && pageCount < maxPages);
       
-      // Longer delay between different queries to prevent 502 errors
-      await new Promise(resolve => setTimeout(resolve, 3000)); // 3 second delay between queries
+      // Very long delay between different queries to prevent 502 errors
+      await new Promise(resolve => setTimeout(resolve, 5000)); // 5 second delay between queries
     }
     
     console.log(`[GOOGLE PLACES] Total unique results from all queries: ${allResults.length}`);
@@ -1487,9 +1487,9 @@ app.post('/api/search-google-places', async (req, res) => {
     
     console.log(`[GOOGLE PLACES] Processing up to ${maxProcess} results in chunks until target ${targetMobileNumbers} mobile numbers is reached`);
     
-      // Process businesses in smaller chunks to prevent server overload
-      const chunkSize = 25; // Process 25 businesses at a time (reduced from 50)
-      const chunkDelay = 3000; // 3 second delay between chunks (increased from 2)
+      // Process businesses in very small chunks to prevent server overload
+      const chunkSize = 10; // Process 10 businesses at a time (very conservative)
+      const chunkDelay = 5000; // 5 second delay between chunks (very conservative)
     
     for (let chunkStart = 0; chunkStart < maxProcess && mobileCount < targetMobileNumbers; chunkStart += chunkSize) {
       const chunkEnd = Math.min(chunkStart + chunkSize, maxProcess);
