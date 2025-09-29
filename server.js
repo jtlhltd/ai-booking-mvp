@@ -1325,6 +1325,12 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push(query + ' "specialist" UK');
         searchQueries.push(query + ' "advisor" UK');
         searchQueries.push(query + ' "freelance" UK');
+        // Add more variations to get more results
+        searchQueries.push(query + ' "mobile" UK');
+        searchQueries.push(query + ' "personal" UK');
+        searchQueries.push(query + ' "individual" UK');
+        searchQueries.push(query + ' "self-employed" UK');
+        searchQueries.push(query + ' "sole trader" UK');
       } else {
         searchQueries.push(query + ' "private" ' + location);
         searchQueries.push(query + ' "consultant" ' + location);
@@ -1334,6 +1340,14 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push(query + ' "owner" ' + location);
         searchQueries.push(query + ' "director" ' + location);
         searchQueries.push(query + ' "specialist" ' + location);
+        searchQueries.push(query + ' "advisor" ' + location);
+        searchQueries.push(query + ' "freelance" ' + location);
+        // Add more variations to get more results
+        searchQueries.push(query + ' "mobile" ' + location);
+        searchQueries.push(query + ' "personal" ' + location);
+        searchQueries.push(query + ' "individual" ' + location);
+        searchQueries.push(query + ' "self-employed" ' + location);
+        searchQueries.push(query + ' "sole trader" ' + location);
       }
     }
     
