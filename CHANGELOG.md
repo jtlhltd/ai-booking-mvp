@@ -21,6 +21,43 @@
 
 ---
 
+## [2024-12-19] - CRITICAL FIX: Increase Chunked Processing Limits for Higher Targets
+**Status**: 🔄 TESTING
+
+**What Was Wrong**:
+- Chunked processing working (no 502 errors) but only getting 19 mobile numbers from 120 businesses
+- Need to process many more businesses to reach 100+ mobile number targets
+- Current chunked limits too low for higher targets
+
+**The Fix**:
+- Increased main processing limit from 1000 to 2000 businesses
+- Increased pagination from 3 to 4 pages per query (80 results per query vs 60)
+- Increased safety limit from `maxResults * 40` to `maxResults * 100`
+- Increased fallback limit from 1000 to 3000 businesses
+- Keep chunked processing (50 businesses per chunk) to prevent 502 errors
+
+**How It Was Done**:
+- Changed `maxProcess` from 1000 to 2000
+- Changed `maxPages` from 3 to 4
+- Changed safety limit from `maxResults * 40` to `maxResults * 100`
+- Changed fallback limit from 1000 to 3000
+- Kept chunked processing system intact
+
+**Result**:
+- Should process up to 2000 businesses in chunks of 50
+- Should get 4 pages per query (80 results vs 60)
+- With 14 queries × 4 pages = up to 1120 results
+- Process in manageable chunks to prevent 502 errors
+- Much better chance of reaching 100+ mobile number targets
+
+**Files Modified**:
+- `server.js` - Increased chunked processing limits
+
+**Git Commit**:
+- TBD (will commit after testing)
+
+---
+
 ## [2024-12-19] - CRITICAL FIX: Implement Chunked Processing for Higher Targets
 **Status**: 🔄 TESTING
 
