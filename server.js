@@ -1461,7 +1461,7 @@ app.post('/api/search-google-places', async (req, res) => {
       total: results.length,
       mobileCount: finalMobileCount,
       targetMobileNumbers: targetMobileNumbers,
-      processed: maxProcess,
+      processed: allResults.length,
       requested: maxResults,
       targetReached: finalMobileCount >= targetMobileNumbers
     });
