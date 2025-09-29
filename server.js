@@ -1343,7 +1343,7 @@ app.post('/api/search-google-places', async (req, res) => {
     for (const searchQuery of searchQueries) {
       let nextPageToken = null;
       let pageCount = 0;
-      const maxPages = 4; // Higher pagination with chunked processing
+      const maxPages = 3; // Balanced pagination with chunked processing
       
       do {
         let searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(searchQuery)}&key=${apiKey}`;
@@ -1425,7 +1425,7 @@ app.post('/api/search-google-places', async (req, res) => {
     
     // Process results dynamically until target is reached - increased limits for higher targets
     let processedCount = 0;
-    const maxProcess = Math.min(allResults.length, 2000); // Much higher limit with chunked processing
+    const maxProcess = Math.min(allResults.length, 800); // Balanced chunked processing limit
     
     console.log(`[GOOGLE PLACES] Processing up to ${maxProcess} results in chunks until target ${targetMobileNumbers} mobile numbers is reached`);
     
@@ -1530,14 +1530,14 @@ app.post('/api/search-google-places', async (req, res) => {
                     break;
                   }
                   
-                  // Only stop if we've processed way too many (safety limit) - higher with chunked processing
-                  if (results.length >= maxResults * 100) { // Higher safety limit with chunked processing
+                  // Only stop if we've processed way too many (safety limit) - balanced with chunked processing
+                  if (results.length >= maxResults * 60) { // Balanced safety limit with chunked processing
                     console.log(`[SAFETY LIMIT] Processed ${results.length} businesses, stopping search`);
                     break;
                   }
                   
-                  // Fallback limit: stop if we've processed 3,000 businesses (safety limit) - higher with chunked processing
-                  if (results.length >= 3000) { // Higher fallback limit with chunked processing
+                  // Fallback limit: stop if we've processed 1,500 businesses (safety limit) - balanced with chunked processing
+                  if (results.length >= 1500) { // Balanced fallback limit with chunked processing
                     console.log(`[SAFETY LIMIT] Processed ${results.length} businesses, stopping search`);
                     break;
                   }

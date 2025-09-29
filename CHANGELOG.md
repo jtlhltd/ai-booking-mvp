@@ -21,6 +21,43 @@
 
 ---
 
+## [2024-12-19] - CRITICAL FIX: Balance Chunked Processing Limits
+**Status**: 🔄 TESTING
+
+**What Was Wrong**:
+- 502 errors returned with increased chunked limits (2000 businesses, 4 pages)
+- Even chunked processing has limits - server still overloads
+- Need to find the sweet spot for chunked processing
+
+**The Fix**:
+- Reduced main processing limit from 2000 to 800 businesses
+- Reduced pagination from 4 to 3 pages per query (60 results per query vs 80)
+- Reduced safety limit from `maxResults * 100` to `maxResults * 60`
+- Reduced fallback limit from 3000 to 1500 businesses
+- Keep chunked processing (50 businesses per chunk) to prevent 502 errors
+
+**How It Was Done**:
+- Changed `maxProcess` from 2000 to 800
+- Changed `maxPages` from 4 to 3
+- Changed safety limit from `maxResults * 100` to `maxResults * 60`
+- Changed fallback limit from 3000 to 1500
+- Kept chunked processing system intact
+
+**Result**:
+- Should process up to 800 businesses in chunks of 50
+- Should get 3 pages per query (60 results vs 80)
+- With 14 queries × 3 pages = up to 840 results
+- Process in manageable chunks to prevent 502 errors
+- Balanced approach to reach targets without server overload
+
+**Files Modified**:
+- `server.js` - Balanced chunked processing limits
+
+**Git Commit**:
+- TBD (will commit after testing)
+
+---
+
 ## [2024-12-19] - CRITICAL FIX: Increase Chunked Processing Limits for Higher Targets
 **Status**: 🔄 TESTING
 
