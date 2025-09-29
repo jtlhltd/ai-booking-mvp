@@ -21,6 +21,40 @@
 
 ---
 
+## [2024-12-19] - CRITICAL FIX: Add Broader Search Strategies to Get Many More Businesses
+**Status**: 🔄 TESTING
+
+**What Was Wrong**:
+- Still only getting 114 businesses total - not enough to find 100+ mobile numbers
+- Need to search more broadly to get many more businesses
+- Current search terms too specific, missing many businesses
+
+**The Fix**:
+- Added broader search strategies with general medical terms
+- Added 15 more broad search terms: "medical", "healthcare", "clinic", "practice", "doctor", "physician", "surgeon", "dentist", "therapist", "counselor", "psychologist", "psychiatrist", "nurse", "midwife", "pharmacist"
+- These broad terms should find many more businesses
+- More businesses = more chances to find 100+ mobile numbers
+
+**How It Was Done**:
+- Added 15 broad medical/healthcare search terms for UK searches
+- Added 15 broad medical/healthcare search terms for other locations
+- These are general terms that should find many more businesses
+- Combined with existing specific terms for comprehensive coverage
+
+**Result**:
+- Should get many more businesses from broader search terms
+- With 10 pages per query × many more search terms = thousands of results
+- Broader search strategies = many more businesses found
+- Should finally have enough businesses to find 100+ mobile numbers
+
+**Files Modified**:
+- `server.js` - Added broader search strategies
+
+**Git Commit**:
+- TBD (will commit after testing)
+
+---
+
 ## [2024-12-19] - CRITICAL FIX: Add Even More Search Variations and Maximum Pagination
 **Status**: 🔄 TESTING
 

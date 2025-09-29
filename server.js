@@ -1342,6 +1342,22 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push(query + ' "therapist" UK');
         searchQueries.push(query + ' "coach" UK');
         searchQueries.push(query + ' "trainer" UK');
+        // Add broader search strategies to get many more businesses
+        searchQueries.push('"medical" UK');
+        searchQueries.push('"healthcare" UK');
+        searchQueries.push('"clinic" UK');
+        searchQueries.push('"practice" UK');
+        searchQueries.push('"doctor" UK');
+        searchQueries.push('"physician" UK');
+        searchQueries.push('"surgeon" UK');
+        searchQueries.push('"dentist" UK');
+        searchQueries.push('"therapist" UK');
+        searchQueries.push('"counselor" UK');
+        searchQueries.push('"psychologist" UK');
+        searchQueries.push('"psychiatrist" UK');
+        searchQueries.push('"nurse" UK');
+        searchQueries.push('"midwife" UK');
+        searchQueries.push('"pharmacist" UK');
       } else {
         searchQueries.push(query + ' "private" ' + location);
         searchQueries.push(query + ' "consultant" ' + location);
@@ -1370,6 +1386,22 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push(query + ' "therapist" ' + location);
         searchQueries.push(query + ' "coach" ' + location);
         searchQueries.push(query + ' "trainer" ' + location);
+        // Add broader search strategies to get many more businesses
+        searchQueries.push('"medical" ' + location);
+        searchQueries.push('"healthcare" ' + location);
+        searchQueries.push('"clinic" ' + location);
+        searchQueries.push('"practice" ' + location);
+        searchQueries.push('"doctor" ' + location);
+        searchQueries.push('"physician" ' + location);
+        searchQueries.push('"surgeon" ' + location);
+        searchQueries.push('"dentist" ' + location);
+        searchQueries.push('"therapist" ' + location);
+        searchQueries.push('"counselor" ' + location);
+        searchQueries.push('"psychologist" ' + location);
+        searchQueries.push('"psychiatrist" ' + location);
+        searchQueries.push('"nurse" ' + location);
+        searchQueries.push('"midwife" ' + location);
+        searchQueries.push('"pharmacist" ' + location);
       }
     }
     
