@@ -1342,17 +1342,10 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push(query + ' "therapist" UK');
         searchQueries.push(query + ' "coach" UK');
         searchQueries.push(query + ' "trainer" UK');
-        // Add key search terms to get more businesses (reduced to prevent 504 timeouts)
+        // Minimal search terms to prevent 502 errors
         searchQueries.push('"medical" UK');
-        searchQueries.push('"healthcare" UK');
         searchQueries.push('"clinic" UK');
-        searchQueries.push('"practice" UK');
         searchQueries.push('"doctor" UK');
-        searchQueries.push('"GP" UK');
-        searchQueries.push('"therapist" UK');
-        searchQueries.push('"wellness" UK');
-        searchQueries.push('"fitness" UK');
-        searchQueries.push('"beauty" UK');
       } else {
         searchQueries.push(query + ' "private" ' + location);
         searchQueries.push(query + ' "consultant" ' + location);
@@ -1381,17 +1374,10 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push(query + ' "therapist" ' + location);
         searchQueries.push(query + ' "coach" ' + location);
         searchQueries.push(query + ' "trainer" ' + location);
-        // Add key search terms to get more businesses (reduced to prevent 504 timeouts)
+        // Minimal search terms to prevent 502 errors
         searchQueries.push('"medical" ' + location);
-        searchQueries.push('"healthcare" ' + location);
         searchQueries.push('"clinic" ' + location);
-        searchQueries.push('"practice" ' + location);
         searchQueries.push('"doctor" ' + location);
-        searchQueries.push('"GP" ' + location);
-        searchQueries.push('"therapist" ' + location);
-        searchQueries.push('"wellness" ' + location);
-        searchQueries.push('"fitness" ' + location);
-        searchQueries.push('"beauty" ' + location);
       }
     }
     
@@ -1401,7 +1387,7 @@ app.post('/api/search-google-places', async (req, res) => {
     for (const searchQuery of searchQueries) {
       let nextPageToken = null;
       let pageCount = 0;
-        const maxPages = 2; // Maximum pagination (very conservative to prevent 502 errors)
+        const maxPages = 1; // Maximum pagination (minimal to prevent 502 errors)
       
       do {
         let searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(searchQuery)}&key=${apiKey}`;
@@ -1441,8 +1427,8 @@ app.post('/api/search-google-places', async (req, res) => {
         
       } while (nextPageToken && pageCount < maxPages);
       
-      // Very long delay between different queries to prevent 502 errors
-      await new Promise(resolve => setTimeout(resolve, 5000)); // 5 second delay between queries
+      // Long delay between different queries to prevent 502 errors
+      await new Promise(resolve => setTimeout(resolve, 10000)); // 10 second delay between queries
     }
     
     console.log(`[GOOGLE PLACES] Total unique results from all queries: ${allResults.length}`);
@@ -1487,9 +1473,9 @@ app.post('/api/search-google-places', async (req, res) => {
     
     console.log(`[GOOGLE PLACES] Processing up to ${maxProcess} results in chunks until target ${targetMobileNumbers} mobile numbers is reached`);
     
-      // Process businesses in very small chunks to prevent server overload
-      const chunkSize = 10; // Process 10 businesses at a time (very conservative)
-      const chunkDelay = 5000; // 5 second delay between chunks (very conservative)
+      // Process businesses in minimal chunks to prevent server overload
+      const chunkSize = 5; // Process 5 businesses at a time (minimal)
+      const chunkDelay = 10000; // 10 second delay between chunks (minimal)
     
     for (let chunkStart = 0; chunkStart < maxProcess && mobileCount < targetMobileNumbers; chunkStart += chunkSize) {
       const chunkEnd = Math.min(chunkStart + chunkSize, maxProcess);
