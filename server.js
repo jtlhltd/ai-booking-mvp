@@ -1387,9 +1387,15 @@ app.post('/api/search-google-places', async (req, res) => {
       
       try {
         // Search for places
-        const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(searchQuery)}&key=${GOOGLE_PLACES_API_KEY}`;
+        const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(searchQuery)}&key=${apiKey}`;
         const searchResponse = await fetch(searchUrl);
         const searchData = await searchResponse.json();
+        
+        // Check for Google Places API errors
+        if (searchData.error_message) {
+          console.error(`[GOOGLE PLACES ERROR] ${searchData.error_message}`);
+          continue; // Skip this query and continue with the next one
+        }
         
         if (searchData.results && searchData.results.length > 0) {
           allResults.push(...searchData.results);
@@ -1405,9 +1411,15 @@ app.post('/api/search-google-places', async (req, res) => {
             // Wait for next page token to be valid (Google requires this)
             await new Promise(resolve => setTimeout(resolve, 3000));
             
-            const nextPageUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?pagetoken=${nextPageToken}&key=${GOOGLE_PLACES_API_KEY}`;
+            const nextPageUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?pagetoken=${nextPageToken}&key=${apiKey}`;
             const nextPageResponse = await fetch(nextPageUrl);
             const nextPageData = await nextPageResponse.json();
+            
+            // Check for Google Places API errors
+            if (nextPageData.error_message) {
+              console.error(`[GOOGLE PLACES PAGINATION ERROR] ${nextPageData.error_message}`);
+              break; // Stop pagination for this query
+            }
             
             if (nextPageData.results && nextPageData.results.length > 0) {
               allResults.push(...nextPageData.results);
@@ -1461,9 +1473,15 @@ app.post('/api/search-google-places', async (req, res) => {
       for (const place of chunk) {
         try {
           // Get detailed information for each place
-          const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=name,formatted_phone_number,website,formatted_address&key=${GOOGLE_PLACES_API_KEY}`;
+          const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=name,formatted_phone_number,website,formatted_address&key=${apiKey}`;
           const detailsResponse = await fetch(detailsUrl);
           const detailsData = await detailsResponse.json();
+
+          // Check for Google Places API errors
+          if (detailsData.error_message) {
+            console.error(`[GOOGLE PLACES DETAILS ERROR] ${detailsData.error_message}`);
+            continue; // Skip this business and continue with the next one
+          }
 
           if (detailsData.result) {
             const phone = detailsData.result.formatted_phone_number;
