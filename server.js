@@ -1343,7 +1343,7 @@ app.post('/api/search-google-places', async (req, res) => {
     for (const searchQuery of searchQueries) {
       let nextPageToken = null;
       let pageCount = 0;
-      const maxPages = 4; // Higher pagination to reach targets
+      const maxPages = 5; // Maximum pagination to reach targets
       
       do {
         let searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(searchQuery)}&key=${apiKey}`;
@@ -1425,7 +1425,7 @@ app.post('/api/search-google-places', async (req, res) => {
     
     // Process results dynamically until target is reached - increased limits for higher targets
     let processedCount = 0;
-    const maxProcess = Math.min(allResults.length, 1500); // Higher limit to reach targets
+    const maxProcess = allResults.length; // NO LIMIT - process ALL results until target reached
     
     console.log(`[GOOGLE PLACES] Processing up to ${maxProcess} results in chunks until target ${targetMobileNumbers} mobile numbers is reached`);
     
@@ -1530,15 +1530,10 @@ app.post('/api/search-google-places', async (req, res) => {
                     break;
                   }
                   
-                  // Only stop if we've processed way too many (safety limit) - much higher to reach targets
-                  if (results.length >= maxResults * 200) { // Much higher safety limit to reach targets
-                    console.log(`[SAFETY LIMIT] Processed ${results.length} businesses, stopping search`);
-                    break;
-                  }
-                  
-                  // Fallback limit: stop if we've processed 5,000 businesses (safety limit) - much higher to reach targets
-                  if (results.length >= 5000) { // Much higher fallback limit to reach targets
-                    console.log(`[SAFETY LIMIT] Processed ${results.length} businesses, stopping search`);
+                  // NO SAFETY LIMITS - continue until target reached
+                  // Only stop if we've processed an extremely high number (emergency limit)
+                  if (results.length >= 10000) { // Emergency limit only - should never hit this
+                    console.log(`[EMERGENCY LIMIT] Processed ${results.length} businesses, stopping search`);
                     break;
                   }
                 }
