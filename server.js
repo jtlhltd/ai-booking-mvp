@@ -1379,6 +1379,27 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push('"optometrist" UK');
         searchQueries.push('"audiologist" UK');
         searchQueries.push('"podiatrist" UK');
+        // Add EVEN MORE search terms and different business types
+        searchQueries.push('"beauty" UK');
+        searchQueries.push('"salon" UK');
+        searchQueries.push('"spa" UK');
+        searchQueries.push('"aesthetics" UK');
+        searchQueries.push('"cosmetic" UK');
+        searchQueries.push('"skincare" UK');
+        searchQueries.push('"hair" UK');
+        searchQueries.push('"nail" UK');
+        searchQueries.push('"barber" UK');
+        searchQueries.push('"fitness" UK');
+        searchQueries.push('"gym" UK');
+        searchQueries.push('"personal trainer" UK');
+        searchQueries.push('"yoga" UK');
+        searchQueries.push('"pilates" UK');
+        searchQueries.push('"dance" UK');
+        searchQueries.push('"martial arts" UK');
+        searchQueries.push('"swimming" UK');
+        searchQueries.push('"tennis" UK');
+        searchQueries.push('"golf" UK');
+        searchQueries.push('"sports" UK');
       } else {
         searchQueries.push(query + ' "private" ' + location);
         searchQueries.push(query + ' "consultant" ' + location);
@@ -1444,6 +1465,27 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push('"optometrist" ' + location);
         searchQueries.push('"audiologist" ' + location);
         searchQueries.push('"podiatrist" ' + location);
+        // Add EVEN MORE search terms and different business types
+        searchQueries.push('"beauty" ' + location);
+        searchQueries.push('"salon" ' + location);
+        searchQueries.push('"spa" ' + location);
+        searchQueries.push('"aesthetics" ' + location);
+        searchQueries.push('"cosmetic" ' + location);
+        searchQueries.push('"skincare" ' + location);
+        searchQueries.push('"hair" ' + location);
+        searchQueries.push('"nail" ' + location);
+        searchQueries.push('"barber" ' + location);
+        searchQueries.push('"fitness" ' + location);
+        searchQueries.push('"gym" ' + location);
+        searchQueries.push('"personal trainer" ' + location);
+        searchQueries.push('"yoga" ' + location);
+        searchQueries.push('"pilates" ' + location);
+        searchQueries.push('"dance" ' + location);
+        searchQueries.push('"martial arts" ' + location);
+        searchQueries.push('"swimming" ' + location);
+        searchQueries.push('"tennis" ' + location);
+        searchQueries.push('"golf" ' + location);
+        searchQueries.push('"sports" ' + location);
       }
     }
     
