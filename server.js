@@ -1383,52 +1383,30 @@ app.post('/api/search-google-places', async (req, res) => {
     
     const allResults = [];
     
-    // Search with multiple queries and pagination
+    // Basic search only - no pagination, no complex processing
     for (const searchQuery of searchQueries) {
-      let nextPageToken = null;
-      let pageCount = 0;
-        const maxPages = 1; // Maximum pagination (minimal to prevent 502 errors)
+      let searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(searchQuery)}&key=${apiKey}`;
       
-      do {
-        let searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(searchQuery)}&key=${apiKey}`;
-        
-        // Add pagination token if we have one
-        if (nextPageToken) {
-          searchUrl += `&pagetoken=${nextPageToken}`;
+      console.log(`[GOOGLE PLACES] Basic search: "${searchQuery}"`);
+      
+      const response = await fetch(searchUrl);
+      const data = await response.json();
+      
+      if (data.status === 'OK') {
+        // Add unique results to our collection
+        for (const result of data.results) {
+          if (!allResults.find(r => r.place_id === result.place_id)) {
+            allResults.push(result);
+          }
         }
         
-        console.log(`[GOOGLE PLACES SEARCH] Searching: "${searchQuery}" (Page ${pageCount + 1})`);
-        
-        const response = await fetch(searchUrl);
-        const data = await response.json();
-        
-        if (data.status === 'OK') {
-          // Add results to our collection, avoiding duplicates
-          for (const result of data.results) {
-            if (!allResults.find(existing => existing.place_id === result.place_id)) {
-              allResults.push(result);
-            }
-          }
-          console.log(`[GOOGLE PLACES] Query "${searchQuery}" Page ${pageCount + 1} found ${data.results.length} results, total unique: ${allResults.length}`);
-          
-          // Check if there's a next page
-          nextPageToken = data.next_page_token;
-          pageCount++;
-          
-          // If we have a next page token, wait before making the next request (required by Google)
-          if (nextPageToken) {
-            console.log(`[GOOGLE PLACES] Next page available for "${searchQuery}", waiting 2 seconds...`);
-            await new Promise(resolve => setTimeout(resolve, 2000)); // Google requires delay for pagination
-          }
-        } else {
-          console.error(`[GOOGLE PLACES ERROR] Query "${searchQuery}" Page ${pageCount + 1}: ${data.status}: ${data.error_message || 'Unknown error'}`);
-          break;
-        }
-        
-      } while (nextPageToken && pageCount < maxPages);
+        console.log(`[GOOGLE PLACES] Query "${searchQuery}" found ${data.results.length} results, total unique: ${allResults.length}`);
+      } else {
+        console.error(`[GOOGLE PLACES ERROR] Query "${searchQuery}": ${data.status}: ${data.error_message || 'Unknown error'}`);
+      }
       
-      // Long delay between different queries to prevent 502 errors
-      await new Promise(resolve => setTimeout(resolve, 10000)); // 10 second delay between queries
+      // Simple delay between queries
+      await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay between queries
     }
     
     console.log(`[GOOGLE PLACES] Total unique results from all queries: ${allResults.length}`);
