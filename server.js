@@ -1331,6 +1331,17 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push(query + ' "individual" UK');
         searchQueries.push(query + ' "self-employed" UK');
         searchQueries.push(query + ' "sole trader" UK');
+        // Add even more variations to get many more results
+        searchQueries.push(query + ' "home based" UK');
+        searchQueries.push(query + ' "online" UK');
+        searchQueries.push(query + ' "virtual" UK');
+        searchQueries.push(query + ' "remote" UK');
+        searchQueries.push(query + ' "freelancer" UK');
+        searchQueries.push(query + ' "contractor" UK');
+        searchQueries.push(query + ' "practitioner" UK');
+        searchQueries.push(query + ' "therapist" UK');
+        searchQueries.push(query + ' "coach" UK');
+        searchQueries.push(query + ' "trainer" UK');
       } else {
         searchQueries.push(query + ' "private" ' + location);
         searchQueries.push(query + ' "consultant" ' + location);
@@ -1348,6 +1359,17 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push(query + ' "individual" ' + location);
         searchQueries.push(query + ' "self-employed" ' + location);
         searchQueries.push(query + ' "sole trader" ' + location);
+        // Add even more variations to get many more results
+        searchQueries.push(query + ' "home based" ' + location);
+        searchQueries.push(query + ' "online" ' + location);
+        searchQueries.push(query + ' "virtual" ' + location);
+        searchQueries.push(query + ' "remote" ' + location);
+        searchQueries.push(query + ' "freelancer" ' + location);
+        searchQueries.push(query + ' "contractor" ' + location);
+        searchQueries.push(query + ' "practitioner" ' + location);
+        searchQueries.push(query + ' "therapist" ' + location);
+        searchQueries.push(query + ' "coach" ' + location);
+        searchQueries.push(query + ' "trainer" ' + location);
       }
     }
     
@@ -1357,7 +1379,7 @@ app.post('/api/search-google-places', async (req, res) => {
     for (const searchQuery of searchQueries) {
       let nextPageToken = null;
       let pageCount = 0;
-      const maxPages = 5; // Maximum pagination to reach targets
+      const maxPages = 10; // Maximum pagination to get many more results
       
       do {
         let searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(searchQuery)}&key=${apiKey}`;
