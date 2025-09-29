@@ -1358,6 +1358,27 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push('"nurse" UK');
         searchQueries.push('"midwife" UK');
         searchQueries.push('"pharmacist" UK');
+        // Add MANY more search terms to get thousands of businesses
+        searchQueries.push('"GP" UK');
+        searchQueries.push('"general practitioner" UK');
+        searchQueries.push('"family doctor" UK');
+        searchQueries.push('"private practice" UK');
+        searchQueries.push('"medical center" UK');
+        searchQueries.push('"health center" UK');
+        searchQueries.push('"wellness" UK');
+        searchQueries.push('"alternative medicine" UK');
+        searchQueries.push('"holistic" UK');
+        searchQueries.push('"complementary" UK');
+        searchQueries.push('"osteopath" UK');
+        searchQueries.push('"chiropractor" UK');
+        searchQueries.push('"physiotherapist" UK');
+        searchQueries.push('"massage therapist" UK');
+        searchQueries.push('"acupuncturist" UK');
+        searchQueries.push('"nutritionist" UK');
+        searchQueries.push('"dietitian" UK');
+        searchQueries.push('"optometrist" UK');
+        searchQueries.push('"audiologist" UK');
+        searchQueries.push('"podiatrist" UK');
       } else {
         searchQueries.push(query + ' "private" ' + location);
         searchQueries.push(query + ' "consultant" ' + location);
@@ -1402,6 +1423,27 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push('"nurse" ' + location);
         searchQueries.push('"midwife" ' + location);
         searchQueries.push('"pharmacist" ' + location);
+        // Add MANY more search terms to get thousands of businesses
+        searchQueries.push('"GP" ' + location);
+        searchQueries.push('"general practitioner" ' + location);
+        searchQueries.push('"family doctor" ' + location);
+        searchQueries.push('"private practice" ' + location);
+        searchQueries.push('"medical center" ' + location);
+        searchQueries.push('"health center" ' + location);
+        searchQueries.push('"wellness" ' + location);
+        searchQueries.push('"alternative medicine" ' + location);
+        searchQueries.push('"holistic" ' + location);
+        searchQueries.push('"complementary" ' + location);
+        searchQueries.push('"osteopath" ' + location);
+        searchQueries.push('"chiropractor" ' + location);
+        searchQueries.push('"physiotherapist" ' + location);
+        searchQueries.push('"massage therapist" ' + location);
+        searchQueries.push('"acupuncturist" ' + location);
+        searchQueries.push('"nutritionist" ' + location);
+        searchQueries.push('"dietitian" ' + location);
+        searchQueries.push('"optometrist" ' + location);
+        searchQueries.push('"audiologist" ' + location);
+        searchQueries.push('"podiatrist" ' + location);
       }
     }
     
