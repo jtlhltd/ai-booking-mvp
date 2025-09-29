@@ -1343,7 +1343,7 @@ app.post('/api/search-google-places', async (req, res) => {
     for (const searchQuery of searchQueries) {
       let nextPageToken = null;
       let pageCount = 0;
-      const maxPages = 2; // Very conservative pagination to prevent 502 errors
+      const maxPages = 3; // Moderate pagination with chunked processing
       
       do {
         let searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(searchQuery)}&key=${apiKey}`;
@@ -1425,12 +1425,21 @@ app.post('/api/search-google-places', async (req, res) => {
     
     // Process results dynamically until target is reached - increased limits for higher targets
     let processedCount = 0;
-    const maxProcess = Math.min(allResults.length, 300); // Very conservative to prevent 502 errors
+    const maxProcess = Math.min(allResults.length, 1000); // Higher limit with chunked processing
     
-    console.log(`[GOOGLE PLACES] Processing up to ${maxProcess} results until target ${targetMobileNumbers} mobile numbers is reached`);
+    console.log(`[GOOGLE PLACES] Processing up to ${maxProcess} results in chunks until target ${targetMobileNumbers} mobile numbers is reached`);
     
-    for (let i = 0; i < maxProcess && mobileCount < targetMobileNumbers; i++) {
-      const place = allResults[i];
+    // Process businesses in chunks to prevent server overload
+    const chunkSize = 50; // Process 50 businesses at a time
+    const chunkDelay = 2000; // 2 second delay between chunks
+    
+    for (let chunkStart = 0; chunkStart < maxProcess && mobileCount < targetMobileNumbers; chunkStart += chunkSize) {
+      const chunkEnd = Math.min(chunkStart + chunkSize, maxProcess);
+      console.log(`[GOOGLE PLACES] Processing chunk ${Math.floor(chunkStart/chunkSize) + 1}: businesses ${chunkStart + 1} to ${chunkEnd}`);
+      
+      // Process this chunk
+      for (let i = chunkStart; i < chunkEnd && mobileCount < targetMobileNumbers; i++) {
+        const place = allResults[i];
       
       try {
         // Get place details
@@ -1540,6 +1549,13 @@ app.post('/api/search-google-places', async (req, res) => {
         
       } catch (error) {
         console.error(`[GOOGLE PLACES DETAILS ERROR] ${error.message}`);
+      }
+      }
+      
+      // Delay between chunks to prevent server overload
+      if (chunkEnd < maxProcess && mobileCount < targetMobileNumbers) {
+        console.log(`[GOOGLE PLACES] Chunk complete, waiting ${chunkDelay}ms before next chunk...`);
+        await new Promise(resolve => setTimeout(resolve, chunkDelay));
       }
     }
     
