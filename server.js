@@ -1342,64 +1342,17 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push(query + ' "therapist" UK');
         searchQueries.push(query + ' "coach" UK');
         searchQueries.push(query + ' "trainer" UK');
-        // Add broader search strategies to get many more businesses
+        // Add key search terms to get more businesses (reduced to prevent 504 timeouts)
         searchQueries.push('"medical" UK');
         searchQueries.push('"healthcare" UK');
         searchQueries.push('"clinic" UK');
         searchQueries.push('"practice" UK');
         searchQueries.push('"doctor" UK');
-        searchQueries.push('"physician" UK');
-        searchQueries.push('"surgeon" UK');
-        searchQueries.push('"dentist" UK');
-        searchQueries.push('"therapist" UK');
-        searchQueries.push('"counselor" UK');
-        searchQueries.push('"psychologist" UK');
-        searchQueries.push('"psychiatrist" UK');
-        searchQueries.push('"nurse" UK');
-        searchQueries.push('"midwife" UK');
-        searchQueries.push('"pharmacist" UK');
-        // Add MANY more search terms to get thousands of businesses
         searchQueries.push('"GP" UK');
-        searchQueries.push('"general practitioner" UK');
-        searchQueries.push('"family doctor" UK');
-        searchQueries.push('"private practice" UK');
-        searchQueries.push('"medical center" UK');
-        searchQueries.push('"health center" UK');
+        searchQueries.push('"therapist" UK');
         searchQueries.push('"wellness" UK');
-        searchQueries.push('"alternative medicine" UK');
-        searchQueries.push('"holistic" UK');
-        searchQueries.push('"complementary" UK');
-        searchQueries.push('"osteopath" UK');
-        searchQueries.push('"chiropractor" UK');
-        searchQueries.push('"physiotherapist" UK');
-        searchQueries.push('"massage therapist" UK');
-        searchQueries.push('"acupuncturist" UK');
-        searchQueries.push('"nutritionist" UK');
-        searchQueries.push('"dietitian" UK');
-        searchQueries.push('"optometrist" UK');
-        searchQueries.push('"audiologist" UK');
-        searchQueries.push('"podiatrist" UK');
-        // Add EVEN MORE search terms and different business types
-        searchQueries.push('"beauty" UK');
-        searchQueries.push('"salon" UK');
-        searchQueries.push('"spa" UK');
-        searchQueries.push('"aesthetics" UK');
-        searchQueries.push('"cosmetic" UK');
-        searchQueries.push('"skincare" UK');
-        searchQueries.push('"hair" UK');
-        searchQueries.push('"nail" UK');
-        searchQueries.push('"barber" UK');
         searchQueries.push('"fitness" UK');
-        searchQueries.push('"gym" UK');
-        searchQueries.push('"personal trainer" UK');
-        searchQueries.push('"yoga" UK');
-        searchQueries.push('"pilates" UK');
-        searchQueries.push('"dance" UK');
-        searchQueries.push('"martial arts" UK');
-        searchQueries.push('"swimming" UK');
-        searchQueries.push('"tennis" UK');
-        searchQueries.push('"golf" UK');
-        searchQueries.push('"sports" UK');
+        searchQueries.push('"beauty" UK');
       } else {
         searchQueries.push(query + ' "private" ' + location);
         searchQueries.push(query + ' "consultant" ' + location);
@@ -1428,64 +1381,17 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push(query + ' "therapist" ' + location);
         searchQueries.push(query + ' "coach" ' + location);
         searchQueries.push(query + ' "trainer" ' + location);
-        // Add broader search strategies to get many more businesses
+        // Add key search terms to get more businesses (reduced to prevent 504 timeouts)
         searchQueries.push('"medical" ' + location);
         searchQueries.push('"healthcare" ' + location);
         searchQueries.push('"clinic" ' + location);
         searchQueries.push('"practice" ' + location);
         searchQueries.push('"doctor" ' + location);
-        searchQueries.push('"physician" ' + location);
-        searchQueries.push('"surgeon" ' + location);
-        searchQueries.push('"dentist" ' + location);
-        searchQueries.push('"therapist" ' + location);
-        searchQueries.push('"counselor" ' + location);
-        searchQueries.push('"psychologist" ' + location);
-        searchQueries.push('"psychiatrist" ' + location);
-        searchQueries.push('"nurse" ' + location);
-        searchQueries.push('"midwife" ' + location);
-        searchQueries.push('"pharmacist" ' + location);
-        // Add MANY more search terms to get thousands of businesses
         searchQueries.push('"GP" ' + location);
-        searchQueries.push('"general practitioner" ' + location);
-        searchQueries.push('"family doctor" ' + location);
-        searchQueries.push('"private practice" ' + location);
-        searchQueries.push('"medical center" ' + location);
-        searchQueries.push('"health center" ' + location);
+        searchQueries.push('"therapist" ' + location);
         searchQueries.push('"wellness" ' + location);
-        searchQueries.push('"alternative medicine" ' + location);
-        searchQueries.push('"holistic" ' + location);
-        searchQueries.push('"complementary" ' + location);
-        searchQueries.push('"osteopath" ' + location);
-        searchQueries.push('"chiropractor" ' + location);
-        searchQueries.push('"physiotherapist" ' + location);
-        searchQueries.push('"massage therapist" ' + location);
-        searchQueries.push('"acupuncturist" ' + location);
-        searchQueries.push('"nutritionist" ' + location);
-        searchQueries.push('"dietitian" ' + location);
-        searchQueries.push('"optometrist" ' + location);
-        searchQueries.push('"audiologist" ' + location);
-        searchQueries.push('"podiatrist" ' + location);
-        // Add EVEN MORE search terms and different business types
-        searchQueries.push('"beauty" ' + location);
-        searchQueries.push('"salon" ' + location);
-        searchQueries.push('"spa" ' + location);
-        searchQueries.push('"aesthetics" ' + location);
-        searchQueries.push('"cosmetic" ' + location);
-        searchQueries.push('"skincare" ' + location);
-        searchQueries.push('"hair" ' + location);
-        searchQueries.push('"nail" ' + location);
-        searchQueries.push('"barber" ' + location);
         searchQueries.push('"fitness" ' + location);
-        searchQueries.push('"gym" ' + location);
-        searchQueries.push('"personal trainer" ' + location);
-        searchQueries.push('"yoga" ' + location);
-        searchQueries.push('"pilates" ' + location);
-        searchQueries.push('"dance" ' + location);
-        searchQueries.push('"martial arts" ' + location);
-        searchQueries.push('"swimming" ' + location);
-        searchQueries.push('"tennis" ' + location);
-        searchQueries.push('"golf" ' + location);
-        searchQueries.push('"sports" ' + location);
+        searchQueries.push('"beauty" ' + location);
       }
     }
     
@@ -1495,7 +1401,7 @@ app.post('/api/search-google-places', async (req, res) => {
     for (const searchQuery of searchQueries) {
       let nextPageToken = null;
       let pageCount = 0;
-        const maxPages = 5; // Maximum pagination (reduced to prevent 502 errors)
+        const maxPages = 3; // Maximum pagination (reduced to prevent 504 timeouts)
       
       do {
         let searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(searchQuery)}&key=${apiKey}`;
