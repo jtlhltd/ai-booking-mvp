@@ -1343,7 +1343,7 @@ app.post('/api/search-google-places', async (req, res) => {
     for (const searchQuery of searchQueries) {
       let nextPageToken = null;
       let pageCount = 0;
-      const maxPages = 3; // Moderate pagination to hit higher targets
+      const maxPages = 2; // Very conservative pagination to prevent 502 errors
       
       do {
         let searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(searchQuery)}&key=${apiKey}`;
@@ -1425,7 +1425,7 @@ app.post('/api/search-google-places', async (req, res) => {
     
     // Process results dynamically until target is reached - increased limits for higher targets
     let processedCount = 0;
-    const maxProcess = Math.min(allResults.length, 600); // Moderate increase to hit higher targets
+    const maxProcess = Math.min(allResults.length, 300); // Very conservative to prevent 502 errors
     
     console.log(`[GOOGLE PLACES] Processing up to ${maxProcess} results until target ${targetMobileNumbers} mobile numbers is reached`);
     
@@ -1521,14 +1521,14 @@ app.post('/api/search-google-places', async (req, res) => {
                     break;
                   }
                   
-                  // Only stop if we've processed way too many (safety limit) - moderate for higher targets
-                  if (results.length >= maxResults * 75) { // Moderate safety limit for higher targets
+                  // Only stop if we've processed way too many (safety limit) - very conservative to prevent 502
+                  if (results.length >= maxResults * 40) { // Very conservative safety limit to prevent 502
                     console.log(`[SAFETY LIMIT] Processed ${results.length} businesses, stopping search`);
                     break;
                   }
                   
-                  // Fallback limit: stop if we've processed 2,500 businesses (safety limit) - moderate for higher targets
-                  if (results.length >= 2500) { // Moderate fallback limit for higher targets
+                  // Fallback limit: stop if we've processed 1,000 businesses (safety limit) - very conservative to prevent 502
+                  if (results.length >= 1000) { // Very conservative fallback limit to prevent 502
                     console.log(`[SAFETY LIMIT] Processed ${results.length} businesses, stopping search`);
                     break;
                   }
