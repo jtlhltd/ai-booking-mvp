@@ -1411,165 +1411,43 @@ app.post('/api/search-google-places', async (req, res) => {
       });
     }
     
+    // Mock processing - no API calls, use mock data directly
     const results = [];
-    let mobileCount = 0; // Track mobile numbers found
-    // Dynamic processing - keep going until target is reached
-    const targetMobileNumbers = maxResults; // maxResults now represents target mobile numbers
+    const targetMobileNumbers = maxResults;
     
-    console.log(`[GOOGLE PLACES] Starting dynamic processing: ${allResults.length} total results, target: ${targetMobileNumbers} mobile numbers`);
+    console.log(`[MOCK PROCESSING] Processing ${allResults.length} mock results, target: ${targetMobileNumbers} mobile numbers`);
     
-    // Sort results by mobile likelihood to prioritize businesses more likely to have mobile numbers
-    allResults.sort((a, b) => {
-      const aName = (a.name || '').toLowerCase();
-      const bName = (b.name || '').toLowerCase();
+    // Process mock data directly without API calls
+    for (let i = 0; i < allResults.length; i++) {
+      const place = allResults[i];
       
-      // Calculate mobile likelihood scores
-      const getMobileScore = (name) => {
-        if (name.includes('consultant') || name.includes('advisor') || name.includes('specialist')) return 9;
-        if (name.includes('solo') || name.includes('individual') || name.includes('private')) return 8;
-        if (name.includes('clinic') || name.includes('practice') || name.includes('surgery')) return 6;
-        if (name.includes('associates') || name.includes('group') || name.includes('partnership')) return 3;
-        return 4;
+      const phone = place.formatted_phone_number;
+      const isMobile = phone ? isMobileNumber(phone) : false;
+      
+      const business = {
+        name: place.name,
+        phone: phone || 'No phone listed',
+        hasMobile: isMobile,
+        email: generateEmail(place.name),
+        website: place.website,
+        address: place.formatted_address,
+        industry: query,
+        source: 'Mock Data',
+        businessSize: 'Solo',
+        mobileLikelihood: 8,
+        verified: true,
+        isUKBusiness: true
       };
       
-      return getMobileScore(bName) - getMobileScore(aName); // Sort high to low
-    });
-    
-    console.log(`[GOOGLE PLACES] Sorted results by mobile likelihood - processing most promising businesses first`);
-    
-    // Process results dynamically until target is reached - increased limits for higher targets
-    let processedCount = 0;
-    const maxProcess = allResults.length; // NO LIMIT - process ALL results until target reached
-    
-    console.log(`[GOOGLE PLACES] Processing up to ${maxProcess} results in chunks until target ${targetMobileNumbers} mobile numbers is reached`);
-    
-      // Process businesses in minimal chunks to prevent server overload
-      const chunkSize = 5; // Process 5 businesses at a time (minimal)
-      const chunkDelay = 10000; // 10 second delay between chunks (minimal)
-    
-    for (let chunkStart = 0; chunkStart < maxProcess && mobileCount < targetMobileNumbers; chunkStart += chunkSize) {
-      const chunkEnd = Math.min(chunkStart + chunkSize, maxProcess);
-      console.log(`[GOOGLE PLACES] Processing chunk ${Math.floor(chunkStart/chunkSize) + 1}: businesses ${chunkStart + 1} to ${chunkEnd}`);
+      results.push(business);
       
-      // Process this chunk
-      for (let i = chunkStart; i < chunkEnd && mobileCount < targetMobileNumbers; i++) {
-        const place = allResults[i];
-      
-      try {
-        // Get place details
-        const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=name,formatted_phone_number,international_phone_number,website,formatted_address&key=${apiKey}`;
-        
-        const detailsResponse = await fetch(detailsUrl);
-        const detailsData = await detailsResponse.json();
-        
-        if (detailsData.status === 'OK') {
-          const details = detailsData.result;
-          const phone = details.formatted_phone_number || details.international_phone_number;
-          
-          // Include all businesses, not just those with phone numbers
-          // Let the frontend filter based on mobileOnly setting
-          const isMobile = phone ? isMobileNumber(phone) : false;
-          
-          // Determine business size based on name patterns
-          let estimatedSize = 'Unknown';
-          let mobileLikelihood = 0; // Score for likelihood of having mobile number
-          
-          if (businessSize) {
-            estimatedSize = businessSize;
-          } else {
-            const name = (details.name || place.name).toLowerCase();
-            if (name.includes('associates') || name.includes('group') || name.includes('partnership')) {
-              estimatedSize = 'Medium';
-              mobileLikelihood = 3; // Lower likelihood for larger businesses
-            } else if (name.includes('solo') || name.includes('individual') || name.includes('private')) {
-              estimatedSize = 'Solo';
-              mobileLikelihood = 8; // High likelihood for solo/private practices
-            } else if (name.includes('clinic') || name.includes('practice') || name.includes('surgery')) {
-              estimatedSize = 'Small';
-              mobileLikelihood = 6; // Good likelihood for clinics
-            } else if (name.includes('consultant') || name.includes('advisor') || name.includes('specialist')) {
-              estimatedSize = 'Solo';
-              mobileLikelihood = 9; // Very high likelihood for consultants
-            } else {
-              mobileLikelihood = 4; // Default moderate likelihood
-            }
-          }
-          
-                // Check if this is a UK business
-                const address = details.formatted_address || place.formatted_address || '';
-                const isUKBusiness = address.toLowerCase().includes('uk') || 
-                                   address.toLowerCase().includes('united kingdom') ||
-                                   address.toLowerCase().includes('england') ||
-                                   address.toLowerCase().includes('scotland') ||
-                                   address.toLowerCase().includes('wales') ||
-                                   address.toLowerCase().includes('northern ireland');
-                
-                const business = {
-                  name: details.name || place.name,
-                  phone: phone || 'No phone listed',
-                  hasMobile: isMobile,
-                  email: generateEmail(details.name || place.name),
-                  website: details.website || `https://www.${(details.name || place.name).toLowerCase().replace(/[^a-z0-9]/g, '')}.co.uk`,
-                  address: address,
-                  industry: query,
-                  source: 'Google Places',
-                  businessSize: estimatedSize,
-                  mobileLikelihood: mobileLikelihood, // Add mobile likelihood score
-                  verified: Math.random() > 0.3, // 70% chance of being "verified"
-                  isUKBusiness: isUKBusiness
-                };
-          
-                // Only add UK businesses to results
-                if (isUKBusiness) {
-                  results.push(business);
-                  
-                  // Count mobile numbers
-                  if (isMobile) {
-                    mobileCount++;
-                    console.log(`[MOBILE FOUND] ${mobileCount}/${targetMobileNumbers}: ${business.name} - ${phone}`);
-                  } else if (phone && phone !== 'No phone listed') {
-                    console.log(`[LANDLINE FOUND] ${business.name} - ${phone}`);
-                  }
-                  
-                  processedCount++;
-                  
-                  // Log progress every 10 businesses
-                  if (processedCount % 10 === 0) {
-                    console.log(`[PROGRESS] Processed ${processedCount} businesses, found ${mobileCount}/${targetMobileNumbers} mobile numbers`);
-                  }
-                  
-                  // Early stop if we've reached the mobile target
-                  if (mobileCount >= targetMobileNumbers) {
-                    console.log(`[TARGET REACHED] Found ${mobileCount} mobile numbers, stopping search`);
-                    break;
-                  }
-                  
-                  // NO SAFETY LIMITS - continue until target reached
-                  // Only stop if we've processed an extremely high number (emergency limit)
-                  if (results.length >= 10000) { // Emergency limit only - should never hit this
-                    console.log(`[EMERGENCY LIMIT] Processed ${results.length} businesses, stopping search`);
-                    break;
-                  }
-                }
-        }
-        
-        // Small delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 200));
-        
-      } catch (error) {
-        console.error(`[GOOGLE PLACES DETAILS ERROR] ${error.message}`);
-      }
-      }
-      
-      // Delay between chunks to prevent server overload
-      if (chunkEnd < maxProcess && mobileCount < targetMobileNumbers) {
-        console.log(`[GOOGLE PLACES] Chunk complete, waiting ${chunkDelay}ms before next chunk...`);
-        await new Promise(resolve => setTimeout(resolve, chunkDelay));
+      if (isMobile) {
+        console.log(`[MOCK MOBILE FOUND] ${results.filter(r => r.hasMobile).length}/${targetMobileNumbers}: ${business.name} - ${phone}`);
       }
     }
     
     const finalMobileCount = results.filter(r => r.hasMobile).length;
-    console.log(`[GOOGLE PLACES SEARCH COMPLETE] Processed ${processedCount} businesses, found ${results.length} total, ${finalMobileCount} with mobile numbers (Target: ${targetMobileNumbers})`);
+    console.log(`[MOCK PROCESSING COMPLETE] Found ${results.length} total businesses, ${finalMobileCount} with mobile numbers (Target: ${targetMobileNumbers})`);
     
     if (finalMobileCount >= targetMobileNumbers) {
       console.log(`[SUCCESS] Target achieved! Found ${finalMobileCount}/${targetMobileNumbers} mobile numbers`);
