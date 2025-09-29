@@ -1375,23 +1375,65 @@ app.post('/api/search-google-places', async (req, res) => {
     
     const allResults = [];
     
-    // Mock response - server cannot handle Google Places API calls
-    console.log(`[MOCK RESPONSE] Server cannot handle Google Places API calls, returning mock data`);
+    // Real Google Places API calls with conservative settings
+    console.log(`[GOOGLE PLACES] Starting search with ${searchQueries.length} queries`);
     
-    // Generate mock results to get the system working
-    const mockResults = [];
-    for (let i = 1; i <= 150; i++) {
-      mockResults.push({
-        place_id: `mock_place_${i}`,
-        name: `Mock Medical Practice ${i}`,
-        formatted_address: `${i} Mock Street, London, UK`,
-        formatted_phone_number: i <= 100 ? `07${String(i).padStart(9, '0')}` : `020 ${String(i).padStart(8, '0')}`,
-        website: `https://mockpractice${i}.co.uk`
-      });
+    const maxPages = 2; // Conservative pagination
+    const queryDelay = 2000; // 2 second delay between queries
+    
+    for (let i = 0; i < searchQueries.length; i++) {
+      const searchQuery = searchQueries[i];
+      console.log(`[GOOGLE PLACES] Searching: "${searchQuery}" (${i + 1}/${searchQueries.length})`);
+      
+      try {
+        // Search for places
+        const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(searchQuery)}&key=${GOOGLE_PLACES_API_KEY}`;
+        const searchResponse = await fetch(searchUrl);
+        const searchData = await searchResponse.json();
+        
+        if (searchData.results && searchData.results.length > 0) {
+          allResults.push(...searchData.results);
+          console.log(`[GOOGLE PLACES] Found ${searchData.results.length} results for "${searchQuery}"`);
+          
+          // Handle pagination with conservative limits
+          let nextPageToken = searchData.next_page_token;
+          let pageCount = 1;
+          
+          while (nextPageToken && pageCount < maxPages) {
+            console.log(`[GOOGLE PLACES] Getting page ${pageCount + 1} for "${searchQuery}"`);
+            
+            // Wait for next page token to be valid (Google requires this)
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            
+            const nextPageUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?pagetoken=${nextPageToken}&key=${GOOGLE_PLACES_API_KEY}`;
+            const nextPageResponse = await fetch(nextPageUrl);
+            const nextPageData = await nextPageResponse.json();
+            
+            if (nextPageData.results && nextPageData.results.length > 0) {
+              allResults.push(...nextPageData.results);
+              console.log(`[GOOGLE PLACES] Found ${nextPageData.results.length} more results on page ${pageCount + 1}`);
+              nextPageToken = nextPageData.next_page_token;
+              pageCount++;
+            } else {
+              break;
+            }
+          }
+        } else {
+          console.log(`[GOOGLE PLACES] No results found for "${searchQuery}"`);
+        }
+        
+        // Delay between queries to prevent rate limiting
+        if (i < searchQueries.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, queryDelay));
+        }
+        
+      } catch (error) {
+        console.error(`[GOOGLE PLACES ERROR] Failed to search "${searchQuery}":`, error.message);
+        // Continue with next query instead of failing completely
+      }
     }
     
-    allResults.push(...mockResults);
-    console.log(`[MOCK RESPONSE] Generated ${mockResults.length} mock results`);
+    console.log(`[GOOGLE PLACES] Total results collected: ${allResults.length}`);
     
     console.log(`[GOOGLE PLACES] Total unique results from all queries: ${allResults.length}`);
     
@@ -1403,44 +1445,66 @@ app.post('/api/search-google-places', async (req, res) => {
       });
     }
     
-    // Mock processing - no API calls, use mock data directly
+    // Real processing with conservative chunked approach
     const results = [];
     const targetMobileNumbers = maxResults;
-    
-    console.log(`[MOCK PROCESSING] Processing ${allResults.length} mock results, target: ${targetMobileNumbers} mobile numbers`);
-    
-    // Process mock data directly without API calls
-    for (let i = 0; i < allResults.length; i++) {
-      const place = allResults[i];
-      
-      const phone = place.formatted_phone_number;
-      const isMobile = phone ? isMobileNumber(phone) : false;
-      
-      const business = {
-        name: place.name,
-        phone: phone || 'No phone listed',
-        hasMobile: isMobile,
-        email: generateEmail(place.name),
-        website: place.website,
-        address: place.formatted_address,
-        industry: query,
-        source: 'Mock Data',
-        businessSize: 'Solo',
-        mobileLikelihood: 8,
-        verified: true,
-        isUKBusiness: true
-      };
-      
-      results.push(business);
-      
-      if (isMobile) {
-        console.log(`[MOCK MOBILE FOUND] ${results.filter(r => r.hasMobile).length}/${targetMobileNumbers}: ${business.name} - ${phone}`);
+    const chunkSize = 10; // Very conservative chunk size
+    const chunkDelay = 3000; // 3 second delay between chunks
+
+    console.log(`[PROCESSING] Processing ${allResults.length} results in chunks of ${chunkSize}, target: ${targetMobileNumbers} mobile numbers`);
+
+    // Process results in small chunks to prevent server overload
+    for (let i = 0; i < allResults.length; i += chunkSize) {
+      const chunk = allResults.slice(i, i + chunkSize);
+      console.log(`[PROCESSING] Processing chunk ${Math.floor(i / chunkSize) + 1}/${Math.ceil(allResults.length / chunkSize)} (${chunk.length} businesses)`);
+
+      for (const place of chunk) {
+        try {
+          // Get detailed information for each place
+          const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=name,formatted_phone_number,website,formatted_address&key=${GOOGLE_PLACES_API_KEY}`;
+          const detailsResponse = await fetch(detailsUrl);
+          const detailsData = await detailsResponse.json();
+
+          if (detailsData.result) {
+            const phone = detailsData.result.formatted_phone_number;
+            const isMobile = phone ? isMobileNumber(phone) : false;
+
+            const business = {
+              name: detailsData.result.name || place.name,
+              phone: phone || 'No phone listed',
+              hasMobile: isMobile,
+              email: generateEmail(detailsData.result.name || place.name),
+              website: detailsData.result.website || place.website,
+              address: detailsData.result.formatted_address || place.formatted_address,
+              industry: query,
+              source: 'Google Places',
+              businessSize: 'Solo',
+              mobileLikelihood: 8,
+              verified: true,
+              isUKBusiness: true
+            };
+
+            results.push(business);
+
+            if (isMobile) {
+              console.log(`[MOBILE FOUND] ${results.filter(r => r.hasMobile).length}/${targetMobileNumbers}: ${business.name} - ${phone}`);
+            }
+          }
+        } catch (error) {
+          console.error(`[PROCESSING ERROR] Failed to get details for ${place.name}:`, error.message);
+          // Continue processing other businesses
+        }
+      }
+
+      // Delay between chunks to prevent server overload
+      if (i + chunkSize < allResults.length) {
+        await new Promise(resolve => setTimeout(resolve, chunkDelay));
       }
     }
-    
+
     const finalMobileCount = results.filter(r => r.hasMobile).length;
-    console.log(`[MOCK PROCESSING COMPLETE] Found ${results.length} total businesses, ${finalMobileCount} with mobile numbers (Target: ${targetMobileNumbers})`);
-    
+    console.log(`[PROCESSING COMPLETE] Found ${results.length} total businesses, ${finalMobileCount} with mobile numbers (Target: ${targetMobileNumbers})`);
+
     if (finalMobileCount >= targetMobileNumbers) {
       console.log(`[SUCCESS] Target achieved! Found ${finalMobileCount}/${targetMobileNumbers} mobile numbers`);
     } else {
