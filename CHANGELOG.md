@@ -21,6 +21,41 @@
 
 ---
 
+## [2024-12-19] - CRITICAL FIX: Moderate Increase to Hit Higher Targets
+**Status**: 🔄 TESTING
+
+**What Was Wrong**:
+- Conservative limits working but only getting 16 mobile numbers from 106 businesses
+- Need to hit higher targets (100+ mobile numbers)
+- Current limits too low for higher targets
+
+**The Fix**:
+- Increased main processing limit from 400 to 600 businesses
+- Increased pagination from 2 to 3 pages per query (60 results per query vs 40)
+- Increased safety limit from `maxResults * 50` to `maxResults * 75`
+- Increased fallback limit from 1500 to 2500 businesses
+
+**How It Was Done**:
+- Changed `maxProcess` from 400 to 600
+- Changed `maxPages` from 2 to 3
+- Changed safety limit from `maxResults * 50` to `maxResults * 75`
+- Changed fallback limit from 1500 to 2500
+
+**Result**:
+- Should process up to 600 businesses (moderate increase)
+- Should get 3 pages per query (60 results vs 40)
+- With 14 queries × 3 pages = up to 840 results (vs 560)
+- Better chance of hitting higher targets
+- Still conservative enough to avoid 502 errors
+
+**Files Modified**:
+- `server.js` - Moderate processing and safety limits
+
+**Git Commit**:
+- TBD (will commit after testing)
+
+---
+
 ## [2024-12-19] - CRITICAL FIX: Conservative Limits to Stop 502 Errors
 **Status**: 🔄 TESTING
 
