@@ -1486,6 +1486,195 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push('"home based" UK');
         searchQueries.push('"personal" UK');
         searchQueries.push('"individual" UK');
+        
+        // EXPANDED SEARCH SCOPE - Add many more business types to reach 100+ mobile numbers
+        // Healthcare & Medical Professionals
+        searchQueries.push('"nurse" UK');
+        searchQueries.push('"midwife" UK');
+        searchQueries.push('"pharmacist" UK');
+        searchQueries.push('"optician" UK');
+        searchQueries.push('"hearing aid" UK');
+        searchQueries.push('"podiatrist" UK');
+        searchQueries.push('"chiropodist" UK');
+        searchQueries.push('"reflexologist" UK');
+        searchQueries.push('"aromatherapist" UK');
+        searchQueries.push('"homeopath" UK');
+        searchQueries.push('"herbalist" UK');
+        searchQueries.push('"naturopath" UK');
+        searchQueries.push('"reiki" UK');
+        searchQueries.push('"crystal healing" UK');
+        
+        // Therapists & Bodywork
+        searchQueries.push('"massage" UK');
+        searchQueries.push('"sports massage" UK');
+        searchQueries.push('"deep tissue" UK');
+        searchQueries.push('"swedish massage" UK');
+        searchQueries.push('"thai massage" UK');
+        searchQueries.push('"hot stone massage" UK');
+        searchQueries.push('"pregnancy massage" UK');
+        searchQueries.push('"craniosacral" UK');
+        searchQueries.push('"bowen therapy" UK');
+        searchQueries.push('"rolfing" UK');
+        searchQueries.push('"myofascial release" UK');
+        
+        // Fitness & Wellness
+        searchQueries.push('"personal training" UK');
+        searchQueries.push('"fitness coaching" UK');
+        searchQueries.push('"nutrition coaching" UK');
+        searchQueries.push('"weight loss coach" UK');
+        searchQueries.push('"yoga instructor" UK');
+        searchQueries.push('"pilates instructor" UK');
+        searchQueries.push('"dance instructor" UK');
+        searchQueries.push('"swimming instructor" UK');
+        searchQueries.push('"tennis coach" UK');
+        searchQueries.push('"golf instructor" UK');
+        searchQueries.push('"martial arts instructor" UK');
+        searchQueries.push('"boxing trainer" UK');
+        searchQueries.push('"crossfit trainer" UK');
+        
+        // Coaching & Therapy
+        searchQueries.push('"life coaching" UK');
+        searchQueries.push('"business coaching" UK');
+        searchQueries.push('"career coaching" UK');
+        searchQueries.push('"executive coaching" UK');
+        searchQueries.push('"relationship coaching" UK');
+        searchQueries.push('"parenting coach" UK');
+        searchQueries.push('"counselling" UK');
+        searchQueries.push('"therapy" UK');
+        searchQueries.push('"psychotherapy" UK');
+        searchQueries.push('"cognitive therapy" UK');
+        searchQueries.push('"art therapy" UK');
+        searchQueries.push('"music therapy" UK');
+        searchQueries.push('"drama therapy" UK');
+        searchQueries.push('"play therapy" UK');
+        searchQueries.push('"speech therapy" UK');
+        searchQueries.push('"occupational therapy" UK');
+        searchQueries.push('"physiotherapy" UK');
+        
+        // Alternative Medicine
+        searchQueries.push('"osteopathy" UK');
+        searchQueries.push('"chiropractic" UK');
+        searchQueries.push('"acupuncture" UK');
+        searchQueries.push('"dry needling" UK');
+        searchQueries.push('"cupping" UK');
+        searchQueries.push('"moxibustion" UK');
+        searchQueries.push('"shiatsu" UK');
+        searchQueries.push('"tui na" UK');
+        searchQueries.push('"kinesiology" UK');
+        searchQueries.push('"bioresonance" UK');
+        searchQueries.push('"electrotherapy" UK');
+        searchQueries.push('"magnetic therapy" UK');
+        
+        // Beauty & Aesthetics
+        searchQueries.push('"beauty treatment" UK');
+        searchQueries.push('"facial" UK');
+        searchQueries.push('"skincare" UK');
+        searchQueries.push('"anti-aging" UK');
+        searchQueries.push('"botox" UK');
+        searchQueries.push('"dermal fillers" UK');
+        searchQueries.push('"lip fillers" UK');
+        searchQueries.push('"cheek fillers" UK');
+        searchQueries.push('"hair removal" UK');
+        searchQueries.push('"laser hair removal" UK');
+        searchQueries.push('"waxing" UK');
+        searchQueries.push('"threading" UK');
+        searchQueries.push('"eyebrow" UK');
+        searchQueries.push('"eyelash" UK');
+        searchQueries.push('"nail art" UK');
+        searchQueries.push('"manicure" UK');
+        searchQueries.push('"pedicure" UK');
+        searchQueries.push('"barber" UK');
+        searchQueries.push('"hair salon" UK');
+        searchQueries.push('"hair stylist" UK');
+        searchQueries.push('"hair colourist" UK');
+        searchQueries.push('"wedding hair" UK');
+        searchQueries.push('"bridal hair" UK');
+        searchQueries.push('"hair extensions" UK');
+        searchQueries.push('"hair transplant" UK');
+        
+        // Professional Services
+        searchQueries.push('"financial advisor" UK');
+        searchQueries.push('"mortgage broker" UK');
+        searchQueries.push('"insurance advisor" UK');
+        searchQueries.push('"pension advisor" UK');
+        searchQueries.push('"investment advisor" UK');
+        searchQueries.push('"tax advisor" UK');
+        searchQueries.push('"bookkeeper" UK');
+        searchQueries.push('"payroll" UK');
+        searchQueries.push('"HR consultant" UK');
+        searchQueries.push('"recruitment" UK');
+        searchQueries.push('"headhunter" UK');
+        searchQueries.push('"executive search" UK');
+        
+        // Creative & Design
+        searchQueries.push('"photographer" UK');
+        searchQueries.push('"wedding photographer" UK');
+        searchQueries.push('"portrait photographer" UK');
+        searchQueries.push('"commercial photographer" UK');
+        searchQueries.push('"event photographer" UK');
+        searchQueries.push('"videographer" UK');
+        searchQueries.push('"wedding videographer" UK');
+        searchQueries.push('"graphic designer" UK');
+        searchQueries.push('"web designer" UK');
+        searchQueries.push('"interior designer" UK');
+        searchQueries.push('"landscape designer" UK');
+        searchQueries.push('"fashion designer" UK');
+        searchQueries.push('"jewellery designer" UK');
+        
+        // Education & Training
+        searchQueries.push('"private tutor" UK');
+        searchQueries.push('"maths tutor" UK');
+        searchQueries.push('"english tutor" UK');
+        searchQueries.push('"science tutor" UK');
+        searchQueries.push('"music teacher" UK');
+        searchQueries.push('"piano teacher" UK');
+        searchQueries.push('"guitar teacher" UK');
+        searchQueries.push('"violin teacher" UK');
+        searchQueries.push('"singing teacher" UK');
+        searchQueries.push('"dance teacher" UK');
+        searchQueries.push('"ballet teacher" UK');
+        searchQueries.push('"driving instructor" UK');
+        searchQueries.push('"language teacher" UK');
+        searchQueries.push('"ESL teacher" UK');
+        
+        // Home & Garden Services
+        searchQueries.push('"gardener" UK');
+        searchQueries.push('"landscaper" UK');
+        searchQueries.push('"tree surgeon" UK');
+        searchQueries.push('"plumber" UK');
+        searchQueries.push('"electrician" UK');
+        searchQueries.push('"handyman" UK');
+        searchQueries.push('"painter" UK');
+        searchQueries.push('"decorator" UK');
+        searchQueries.push('"carpenter" UK');
+        searchQueries.push('"roofer" UK');
+        searchQueries.push('"tiler" UK');
+        searchQueries.push('"flooring" UK');
+        searchQueries.push('"kitchen fitter" UK');
+        searchQueries.push('"bathroom fitter" UK');
+        
+        // Pet Services
+        searchQueries.push('"dog walker" UK');
+        searchQueries.push('"pet sitter" UK');
+        searchQueries.push('"dog trainer" UK');
+        searchQueries.push('"pet groomer" UK');
+        searchQueries.push('"veterinary" UK');
+        searchQueries.push('"animal physiotherapist" UK');
+        searchQueries.push('"pet nutritionist" UK');
+        
+        // Event & Entertainment
+        searchQueries.push('"event planner" UK');
+        searchQueries.push('"wedding planner" UK');
+        searchQueries.push('"party planner" UK');
+        searchQueries.push('"caterer" UK');
+        searchQueries.push('"private chef" UK');
+        searchQueries.push('"DJ" UK');
+        searchQueries.push('"magician" UK');
+        searchQueries.push('"entertainer" UK');
+        searchQueries.push('"face painter" UK');
+        searchQueries.push('"balloon artist" UK');
+        
+        console.log(`[EXPANDED SEARCH] Added comprehensive business types - total search queries: ${searchQueries.length}`);
       } else {
         searchQueries.push(query + ' "private" ' + location);
         searchQueries.push(query + ' "consultant" ' + location);
@@ -1522,7 +1711,7 @@ app.post('/api/search-google-places', async (req, res) => {
     // Real Google Places API calls with conservative settings
     console.log(`[GOOGLE PLACES] Starting search with ${searchQueries.length} queries`);
     
-    const maxPages = 3; // Increased pagination to get more results per query
+    const maxPages = 5; // Increased pagination to get more results per query - should help reach 100+ mobile numbers
     const queryDelay = 500; // Reduced delay for faster processing
     
     for (let i = 0; i < searchQueries.length; i++) {
