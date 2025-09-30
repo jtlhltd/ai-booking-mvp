@@ -1453,6 +1453,23 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push('"mobile" UK');
         searchQueries.push('"general practitioner" UK');
         searchQueries.push('"family doctor" UK');
+        
+        // Add individual practitioner searches - these are more likely to have mobile numbers
+        searchQueries.push('"Dr" UK');
+        searchQueries.push('"Doctor" UK');
+        searchQueries.push('"Mr" UK');
+        searchQueries.push('"Mrs" UK');
+        searchQueries.push('"Ms" UK');
+        searchQueries.push('"individual" UK');
+        searchQueries.push('"solo" UK');
+        searchQueries.push('"independent" UK');
+        searchQueries.push('"home based" UK');
+        searchQueries.push('"mobile service" UK');
+        searchQueries.push('"home visit" UK');
+        searchQueries.push('"house call" UK');
+        searchQueries.push('"on-site" UK');
+        searchQueries.push('"mobile clinic" UK');
+        searchQueries.push('"mobile practice" UK');
         searchQueries.push('"private medical" UK');
         searchQueries.push('"private clinic" UK');
         searchQueries.push('"medical practice" UK');
@@ -1505,7 +1522,7 @@ app.post('/api/search-google-places', async (req, res) => {
     // Real Google Places API calls with conservative settings
     console.log(`[GOOGLE PLACES] Starting search with ${searchQueries.length} queries`);
     
-    const maxPages = 2; // Reduced pagination to prevent timeout
+    const maxPages = 3; // Increased pagination to get more results per query
     const queryDelay = 500; // Reduced delay for faster processing
     
     for (let i = 0; i < searchQueries.length; i++) {
@@ -1587,7 +1604,7 @@ app.post('/api/search-google-places', async (req, res) => {
     // Real processing with conservative chunked approach
     const results = [];
     const targetMobileNumbers = maxResults;
-    const chunkSize = 25; // Increased chunk size for faster processing
+    const chunkSize = 30; // Increased chunk size for faster processing
     const chunkDelay = 500; // Reduced delay for faster processing
 
     console.log(`[PROCESSING] Processing ${allResults.length} results in chunks of ${chunkSize}, target: ${targetMobileNumbers} mobile numbers`);
