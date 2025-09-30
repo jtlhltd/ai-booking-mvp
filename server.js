@@ -1334,7 +1334,7 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push(query + ' "therapist" UK');
         searchQueries.push(query + ' "coach" UK');
         searchQueries.push(query + ' "trainer" UK');
-        // Minimal essential terms to prevent 502 errors
+        // Essential terms + additional high-value terms
         searchQueries.push('"medical" UK');
         searchQueries.push('"clinic" UK');
         searchQueries.push('"doctor" UK');
@@ -1345,6 +1345,31 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push('"freelance" UK');
         searchQueries.push('"self-employed" UK');
         searchQueries.push('"mobile" UK');
+        // Add more high-value terms for mobile numbers
+        searchQueries.push('"general practitioner" UK');
+        searchQueries.push('"family doctor" UK');
+        searchQueries.push('"private medical" UK');
+        searchQueries.push('"private clinic" UK');
+        searchQueries.push('"medical practice" UK');
+        searchQueries.push('"healthcare" UK');
+        searchQueries.push('"wellness" UK');
+        searchQueries.push('"alternative medicine" UK');
+        searchQueries.push('"holistic" UK');
+        searchQueries.push('"osteopath" UK');
+        searchQueries.push('"chiropractor" UK');
+        searchQueries.push('"physiotherapist" UK');
+        searchQueries.push('"massage therapist" UK');
+        searchQueries.push('"acupuncturist" UK');
+        searchQueries.push('"nutritionist" UK');
+        searchQueries.push('"dietitian" UK');
+        searchQueries.push('"optometrist" UK');
+        searchQueries.push('"audiologist" UK');
+        searchQueries.push('"podiatrist" UK');
+        searchQueries.push('"solo practitioner" UK');
+        searchQueries.push('"independent practitioner" UK');
+        searchQueries.push('"home based" UK');
+        searchQueries.push('"personal" UK');
+        searchQueries.push('"individual" UK');
       } else {
         searchQueries.push(query + ' "private" ' + location);
         searchQueries.push(query + ' "consultant" ' + location);
@@ -1373,7 +1398,7 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push(query + ' "therapist" ' + location);
         searchQueries.push(query + ' "coach" ' + location);
         searchQueries.push(query + ' "trainer" ' + location);
-        // Minimal essential terms to prevent 502 errors
+        // Essential terms + additional high-value terms
         searchQueries.push('"medical" ' + location);
         searchQueries.push('"clinic" ' + location);
         searchQueries.push('"doctor" ' + location);
@@ -1384,6 +1409,31 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push('"freelance" ' + location);
         searchQueries.push('"self-employed" ' + location);
         searchQueries.push('"mobile" ' + location);
+        // Add more high-value terms for mobile numbers
+        searchQueries.push('"general practitioner" ' + location);
+        searchQueries.push('"family doctor" ' + location);
+        searchQueries.push('"private medical" ' + location);
+        searchQueries.push('"private clinic" ' + location);
+        searchQueries.push('"medical practice" ' + location);
+        searchQueries.push('"healthcare" ' + location);
+        searchQueries.push('"wellness" ' + location);
+        searchQueries.push('"alternative medicine" ' + location);
+        searchQueries.push('"holistic" ' + location);
+        searchQueries.push('"osteopath" ' + location);
+        searchQueries.push('"chiropractor" ' + location);
+        searchQueries.push('"physiotherapist" ' + location);
+        searchQueries.push('"massage therapist" ' + location);
+        searchQueries.push('"acupuncturist" ' + location);
+        searchQueries.push('"nutritionist" ' + location);
+        searchQueries.push('"dietitian" ' + location);
+        searchQueries.push('"optometrist" ' + location);
+        searchQueries.push('"audiologist" ' + location);
+        searchQueries.push('"podiatrist" ' + location);
+        searchQueries.push('"solo practitioner" ' + location);
+        searchQueries.push('"independent practitioner" ' + location);
+        searchQueries.push('"home based" ' + location);
+        searchQueries.push('"personal" ' + location);
+        searchQueries.push('"individual" ' + location);
       }
     }
     
@@ -1392,8 +1442,8 @@ app.post('/api/search-google-places', async (req, res) => {
     // Real Google Places API calls with conservative settings
     console.log(`[GOOGLE PLACES] Starting search with ${searchQueries.length} queries`);
     
-    const maxPages = 1; // Very conservative pagination to prevent 502 errors
-    const queryDelay = 3000; // Longer delay between queries
+    const maxPages = 2; // Increased pagination to get more results
+    const queryDelay = 2000; // Balanced delay between queries
     
     for (let i = 0; i < searchQueries.length; i++) {
       const searchQuery = searchQueries[i];
@@ -1474,8 +1524,8 @@ app.post('/api/search-google-places', async (req, res) => {
     // Real processing with conservative chunked approach
     const results = [];
     const targetMobileNumbers = maxResults;
-    const chunkSize = 5; // Very small chunk size to prevent 502 errors
-    const chunkDelay = 5000; // Longer delay between chunks
+    const chunkSize = 10; // Moderate chunk size for balanced processing
+    const chunkDelay = 3000; // Moderate delay between chunks
 
     console.log(`[PROCESSING] Processing ${allResults.length} results in chunks of ${chunkSize}, target: ${targetMobileNumbers} mobile numbers`);
 
@@ -3679,8 +3729,7 @@ async function ensureDataFiles() {
   await fs.mkdir(DATA_DIR, { recursive: true });
   for (const p of [LEADS_PATH, CALLS_PATH, SMS_STATUS_PATH, JOBS_PATH]) {
     try { await fs.access(p); } catch { await fs.writeFile(p, '[]', 'utf8'); }
-  }
-}
+  }image.png
 await ensureDataFiles();
 
 async function readJson(p, fallback = null) {
