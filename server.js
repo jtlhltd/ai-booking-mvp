@@ -1334,19 +1334,12 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push(query + ' "therapist" UK');
         searchQueries.push(query + ' "coach" UK');
         searchQueries.push(query + ' "trainer" UK');
-        // Minimal search terms to prevent 502 errors
+        // Focus on core medical terms that work well
         searchQueries.push('"medical" UK');
         searchQueries.push('"clinic" UK');
         searchQueries.push('"doctor" UK');
-        // Add more business types likely to have mobile numbers
-        searchQueries.push('"accountant" UK');
-        searchQueries.push('"solicitor" UK');
-        searchQueries.push('"lawyer" UK');
-        searchQueries.push('"estate agent" UK');
-        searchQueries.push('"financial advisor" UK');
-        searchQueries.push('"insurance" UK');
-        searchQueries.push('"tutor" UK');
-        searchQueries.push('"teacher" UK');
+        searchQueries.push('"private practice" UK');
+        searchQueries.push('"healthcare" UK');
       } else {
         searchQueries.push(query + ' "private" ' + location);
         searchQueries.push(query + ' "consultant" ' + location);
@@ -1375,19 +1368,12 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push(query + ' "therapist" ' + location);
         searchQueries.push(query + ' "coach" ' + location);
         searchQueries.push(query + ' "trainer" ' + location);
-        // Minimal search terms to prevent 502 errors
+        // Focus on core medical terms that work well
         searchQueries.push('"medical" ' + location);
         searchQueries.push('"clinic" ' + location);
         searchQueries.push('"doctor" ' + location);
-        // Add more business types likely to have mobile numbers
-        searchQueries.push('"accountant" ' + location);
-        searchQueries.push('"solicitor" ' + location);
-        searchQueries.push('"lawyer" ' + location);
-        searchQueries.push('"estate agent" ' + location);
-        searchQueries.push('"financial advisor" ' + location);
-        searchQueries.push('"insurance" ' + location);
-        searchQueries.push('"tutor" ' + location);
-        searchQueries.push('"teacher" ' + location);
+        searchQueries.push('"private practice" ' + location);
+        searchQueries.push('"healthcare" ' + location);
       }
     }
     
@@ -1396,8 +1382,8 @@ app.post('/api/search-google-places', async (req, res) => {
     // Real Google Places API calls with conservative settings
     console.log(`[GOOGLE PLACES] Starting search with ${searchQueries.length} queries`);
     
-    const maxPages = 3; // Increased pagination to get more results
-    const queryDelay = 2000; // 2 second delay between queries
+    const maxPages = 2; // Conservative pagination to prevent errors
+    const queryDelay = 1500; // Faster processing
     
     for (let i = 0; i < searchQueries.length; i++) {
       const searchQuery = searchQueries[i];
@@ -1478,8 +1464,8 @@ app.post('/api/search-google-places', async (req, res) => {
     // Real processing with conservative chunked approach
     const results = [];
     const targetMobileNumbers = maxResults;
-    const chunkSize = 10; // Very conservative chunk size
-    const chunkDelay = 3000; // 3 second delay between chunks
+    const chunkSize = 20; // Increased chunk size for faster processing
+    const chunkDelay = 2000; // Reduced delay between chunks
 
     console.log(`[PROCESSING] Processing ${allResults.length} results in chunks of ${chunkSize}, target: ${targetMobileNumbers} mobile numbers`);
 
