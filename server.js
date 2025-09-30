@@ -1363,6 +1363,15 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push('"optometrist" UK');
         searchQueries.push('"audiologist" UK');
         searchQueries.push('"podiatrist" UK');
+        // Add solo practitioner terms that are more likely to have mobile numbers
+        searchQueries.push('"solo practitioner" UK');
+        searchQueries.push('"independent practitioner" UK');
+        searchQueries.push('"freelance" UK');
+        searchQueries.push('"self-employed" UK');
+        searchQueries.push('"home based" UK');
+        searchQueries.push('"mobile" UK');
+        searchQueries.push('"personal" UK');
+        searchQueries.push('"individual" UK');
       } else {
         searchQueries.push(query + ' "private" ' + location);
         searchQueries.push(query + ' "consultant" ' + location);
@@ -1420,6 +1429,15 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push('"optometrist" ' + location);
         searchQueries.push('"audiologist" ' + location);
         searchQueries.push('"podiatrist" ' + location);
+        // Add solo practitioner terms that are more likely to have mobile numbers
+        searchQueries.push('"solo practitioner" ' + location);
+        searchQueries.push('"independent practitioner" ' + location);
+        searchQueries.push('"freelance" ' + location);
+        searchQueries.push('"self-employed" ' + location);
+        searchQueries.push('"home based" ' + location);
+        searchQueries.push('"mobile" ' + location);
+        searchQueries.push('"personal" ' + location);
+        searchQueries.push('"individual" ' + location);
       }
     }
     
@@ -1536,6 +1554,11 @@ app.post('/api/search-google-places', async (req, res) => {
           if (detailsData.result) {
             const phone = detailsData.result.formatted_phone_number;
             const isMobile = phone ? isMobileNumber(phone) : false;
+            
+            // Debug logging for mobile detection
+            if (phone) {
+              console.log(`[PHONE CHECK] ${detailsData.result.name}: ${phone} -> Mobile: ${isMobile}`);
+            }
 
             const business = {
               name: detailsData.result.name || place.name,
