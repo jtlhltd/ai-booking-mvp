@@ -1317,6 +1317,49 @@ app.post('/api/search-google-places', async (req, res) => {
       searchQueries.push(query + ' Nottingham');
       searchQueries.push(query + ' Cardiff');
       searchQueries.push(query + ' Belfast');
+      
+      // Add more UK cities for broader coverage
+      searchQueries.push(query + ' Brighton');
+      searchQueries.push(query + ' Southampton');
+      searchQueries.push(query + ' Portsmouth');
+      searchQueries.push(query + ' Plymouth');
+      searchQueries.push(query + ' Exeter');
+      searchQueries.push(query + ' Bath');
+      searchQueries.push(query + ' Oxford');
+      searchQueries.push(query + ' Cambridge');
+      searchQueries.push(query + ' Norwich');
+      searchQueries.push(query + ' Ipswich');
+      searchQueries.push(query + ' Colchester');
+      searchQueries.push(query + ' Chelmsford');
+      searchQueries.push(query + ' Reading');
+      searchQueries.push(query + ' Slough');
+      searchQueries.push(query + ' Milton Keynes');
+      searchQueries.push(query + ' Northampton');
+      searchQueries.push(query + ' Leicester');
+      searchQueries.push(query + ' Coventry');
+      searchQueries.push(query + ' Wolverhampton');
+      searchQueries.push(query + ' Stoke-on-Trent');
+      searchQueries.push(query + ' Derby');
+      searchQueries.push(query + ' Chester');
+      searchQueries.push(query + ' York');
+      searchQueries.push(query + ' Hull');
+      searchQueries.push(query + ' Middlesbrough');
+      searchQueries.push(query + ' Sunderland');
+      searchQueries.push(query + ' Durham');
+      searchQueries.push(query + ' Aberdeen');
+      searchQueries.push(query + ' Dundee');
+      searchQueries.push(query + ' Stirling');
+      searchQueries.push(query + ' Perth');
+      searchQueries.push(query + ' Inverness');
+      searchQueries.push(query + ' Swansea');
+      searchQueries.push(query + ' Newport');
+      searchQueries.push(query + ' Wrexham');
+      searchQueries.push(query + ' Bangor');
+      searchQueries.push(query + ' Newry');
+      searchQueries.push(query + ' Derry');
+      searchQueries.push(query + ' Armagh');
+      searchQueries.push(query + ' Lisburn');
+      searchQueries.push(query + ' Craigavon');
     } else {
       searchQueries.push(query + ' ' + location);
     }
@@ -1364,6 +1407,81 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push('"GP" UK');
         searchQueries.push('"private GP" UK');
         searchQueries.push('"private doctor" UK');
+        
+        // Add more specific business types likely to have mobile numbers
+        searchQueries.push('"dentist" UK');
+        searchQueries.push('"dental practice" UK');
+        searchQueries.push('"private dentist" UK');
+        searchQueries.push('"orthodontist" UK');
+        searchQueries.push('"physiotherapist" UK');
+        searchQueries.push('"osteopath" UK');
+        searchQueries.push('"chiropractor" UK');
+        searchQueries.push('"massage therapist" UK');
+        searchQueries.push('"acupuncturist" UK');
+        searchQueries.push('"nutritionist" UK');
+        searchQueries.push('"dietitian" UK');
+        searchQueries.push('"psychologist" UK');
+        searchQueries.push('"psychiatrist" UK');
+        searchQueries.push('"counselor" UK');
+        searchQueries.push('"therapist" UK');
+        searchQueries.push('"counsellor" UK');
+        searchQueries.push('"life coach" UK');
+        searchQueries.push('"business coach" UK');
+        searchQueries.push('"executive coach" UK');
+        searchQueries.push('"personal trainer" UK');
+        searchQueries.push('"fitness trainer" UK');
+        searchQueries.push('"yoga instructor" UK');
+        searchQueries.push('"pilates instructor" UK');
+        searchQueries.push('"beauty therapist" UK');
+        searchQueries.push('"aesthetic practitioner" UK');
+        searchQueries.push('"cosmetic surgeon" UK');
+        searchQueries.push('"plastic surgeon" UK');
+        searchQueries.push('"dermatologist" UK');
+        searchQueries.push('"optometrist" UK');
+        searchQueries.push('"audiologist" UK');
+        searchQueries.push('"podiatrist" UK');
+        searchQueries.push('"veterinarian" UK');
+        searchQueries.push('"vet" UK');
+        searchQueries.push('"veterinary practice" UK');
+        searchQueries.push('"solicitor" UK');
+        searchQueries.push('"lawyer" UK');
+        searchQueries.push('"barrister" UK');
+        searchQueries.push('"legal practice" UK');
+        searchQueries.push('"accountant" UK');
+        searchQueries.push('"accounting practice" UK');
+        searchQueries.push('"financial advisor" UK');
+        searchQueries.push('"mortgage advisor" UK');
+        searchQueries.push('"insurance broker" UK');
+        searchQueries.push('"estate agent" UK');
+        searchQueries.push('"property consultant" UK');
+        searchQueries.push('"architect" UK');
+        searchQueries.push('"interior designer" UK');
+        searchQueries.push('"graphic designer" UK');
+        searchQueries.push('"web designer" UK');
+        searchQueries.push('"photographer" UK');
+        searchQueries.push('"wedding photographer" UK');
+        searchQueries.push('"event planner" UK');
+        searchQueries.push('"wedding planner" UK');
+        searchQueries.push('"caterer" UK');
+        searchQueries.push('"private chef" UK');
+        searchQueries.push('"music teacher" UK');
+        searchQueries.push('"piano teacher" UK');
+        searchQueries.push('"guitar teacher" UK');
+        searchQueries.push('"dance teacher" UK');
+        searchQueries.push('"driving instructor" UK');
+        searchQueries.push('"tutor" UK');
+        searchQueries.push('"private tutor" UK');
+        searchQueries.push('"consultant" UK');
+        searchQueries.push('"business consultant" UK');
+        searchQueries.push('"management consultant" UK');
+        searchQueries.push('"IT consultant" UK');
+        searchQueries.push('"marketing consultant" UK');
+        searchQueries.push('"HR consultant" UK');
+        searchQueries.push('"recruitment consultant" UK');
+        searchQueries.push('"freelancer" UK');
+        searchQueries.push('"contractor" UK');
+        searchQueries.push('"self-employed" UK');
+        searchQueries.push('"sole trader" UK');
         searchQueries.push('"freelance" UK');
         searchQueries.push('"self-employed" UK');
         searchQueries.push('"mobile" UK');
@@ -1421,7 +1539,7 @@ app.post('/api/search-google-places', async (req, res) => {
     // Real Google Places API calls with conservative settings
     console.log(`[GOOGLE PLACES] Starting search with ${searchQueries.length} queries`);
     
-    const maxPages = 1; // Conservative pagination to prevent 502 errors
+    const maxPages = 3; // Increased pagination to get more results per query
     const queryDelay = 1500; // Reduced delay for faster processing
     
     for (let i = 0; i < searchQueries.length; i++) {
@@ -1503,7 +1621,7 @@ app.post('/api/search-google-places', async (req, res) => {
     // Real processing with conservative chunked approach
     const results = [];
     const targetMobileNumbers = maxResults;
-    const chunkSize = 10; // Moderate chunk size for balanced processing
+    const chunkSize = 20; // Increased chunk size for faster processing
     const chunkDelay = 1000; // Reduced delay for faster processing
 
     console.log(`[PROCESSING] Processing ${allResults.length} results in chunks of ${chunkSize}, target: ${targetMobileNumbers} mobile numbers`);
@@ -1512,6 +1630,12 @@ app.post('/api/search-google-places', async (req, res) => {
     for (let i = 0; i < allResults.length; i += chunkSize) {
       const chunk = allResults.slice(i, i + chunkSize);
       console.log(`[PROCESSING] Processing chunk ${Math.floor(i / chunkSize) + 1}/${Math.ceil(allResults.length / chunkSize)} (${chunk.length} businesses)`);
+
+      // Early exit if we've reached our target
+      if (results.length >= targetMobileNumbers) {
+        console.log(`[EARLY EXIT] Target reached! Found ${results.length}/${targetMobileNumbers} mobile numbers`);
+        break;
+      }
 
       for (const place of chunk) {
         try {
