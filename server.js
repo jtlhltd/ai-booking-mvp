@@ -1338,6 +1338,15 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push('"medical" UK');
         searchQueries.push('"clinic" UK');
         searchQueries.push('"doctor" UK');
+        // Add more business types likely to have mobile numbers
+        searchQueries.push('"accountant" UK');
+        searchQueries.push('"solicitor" UK');
+        searchQueries.push('"lawyer" UK');
+        searchQueries.push('"estate agent" UK');
+        searchQueries.push('"financial advisor" UK');
+        searchQueries.push('"insurance" UK');
+        searchQueries.push('"tutor" UK');
+        searchQueries.push('"teacher" UK');
       } else {
         searchQueries.push(query + ' "private" ' + location);
         searchQueries.push(query + ' "consultant" ' + location);
@@ -1370,6 +1379,15 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push('"medical" ' + location);
         searchQueries.push('"clinic" ' + location);
         searchQueries.push('"doctor" ' + location);
+        // Add more business types likely to have mobile numbers
+        searchQueries.push('"accountant" ' + location);
+        searchQueries.push('"solicitor" ' + location);
+        searchQueries.push('"lawyer" ' + location);
+        searchQueries.push('"estate agent" ' + location);
+        searchQueries.push('"financial advisor" ' + location);
+        searchQueries.push('"insurance" ' + location);
+        searchQueries.push('"tutor" ' + location);
+        searchQueries.push('"teacher" ' + location);
       }
     }
     
@@ -1378,7 +1396,7 @@ app.post('/api/search-google-places', async (req, res) => {
     // Real Google Places API calls with conservative settings
     console.log(`[GOOGLE PLACES] Starting search with ${searchQueries.length} queries`);
     
-    const maxPages = 2; // Conservative pagination
+    const maxPages = 3; // Increased pagination to get more results
     const queryDelay = 2000; // 2 second delay between queries
     
     for (let i = 0; i < searchQueries.length; i++) {
