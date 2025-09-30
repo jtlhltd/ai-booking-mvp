@@ -1267,7 +1267,7 @@ app.post('/api/import-leads-csv', requireApiKey, async (req, res) => {
 app.post('/api/search-google-places', async (req, res) => {
   console.log('[SEARCH REQUEST] Received request:', req.body);
   
-  // Set a 60-second timeout to prevent 502 errors
+  // Set a 120-second timeout to prevent 502 errors
   const timeout = setTimeout(() => {
     if (!res.headersSent) {
       res.status(504).json({ 
@@ -1275,7 +1275,7 @@ app.post('/api/search-google-places', async (req, res) => {
         message: 'The request took too long to process. Please try again with a smaller search scope.' 
       });
     }
-  }, 60000);
+  }, 120000);
   
   try {
     const { query, location, maxResults = 20, businessSize, mobileOnly, decisionMakerTitles } = req.body;
@@ -1422,7 +1422,7 @@ app.post('/api/search-google-places', async (req, res) => {
     console.log(`[GOOGLE PLACES] Starting search with ${searchQueries.length} queries`);
     
     const maxPages = 1; // Conservative pagination to prevent 502 errors
-    const queryDelay = 2500; // Longer delay between queries
+    const queryDelay = 1500; // Reduced delay for faster processing
     
     for (let i = 0; i < searchQueries.length; i++) {
       const searchQuery = searchQueries[i];
@@ -1504,7 +1504,7 @@ app.post('/api/search-google-places', async (req, res) => {
     const results = [];
     const targetMobileNumbers = maxResults;
     const chunkSize = 10; // Moderate chunk size for balanced processing
-    const chunkDelay = 3000; // Moderate delay between chunks
+    const chunkDelay = 1000; // Reduced delay for faster processing
 
     console.log(`[PROCESSING] Processing ${allResults.length} results in chunks of ${chunkSize}, target: ${targetMobileNumbers} mobile numbers`);
 
@@ -1582,6 +1582,12 @@ app.post('/api/search-google-places', async (req, res) => {
     // Clear the timeout since request completed successfully
     clearTimeout(timeout);
     
+    // Check if response was already sent (timeout case)
+    if (res.headersSent) {
+      console.log('[SEARCH RESPONSE] Response already sent, skipping');
+      return;
+    }
+    
     res.json({
       success: true,
       results: results,
@@ -1598,6 +1604,12 @@ app.post('/api/search-google-places', async (req, res) => {
     
     // Clear the timeout since request completed (with error)
     clearTimeout(timeout);
+    
+    // Check if response was already sent (timeout case)
+    if (res.headersSent) {
+      console.log('[SEARCH ERROR] Response already sent, skipping error response');
+      return;
+    }
     
     res.status(500).json({
       success: false,
