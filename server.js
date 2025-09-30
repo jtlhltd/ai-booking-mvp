@@ -1275,7 +1275,7 @@ app.post('/api/search-google-places', async (req, res) => {
         message: 'The request took too long to process. Please try again with a smaller search scope.' 
       });
     }
-  }, 300000); // 300 seconds for large searches
+  }, 600000); // 600 seconds (10 minutes) for comprehensive searches
   
   try {
     const { query, location, maxResults = 20, businessSize, mobileOnly, decisionMakerTitles } = req.body;
@@ -2144,14 +2144,14 @@ app.post('/api/search-google-places', async (req, res) => {
     
     console.log('[SEARCH RESPONSE] Sending response with', results.length, 'results');
     
-    // Clear the timeout since request completed successfully
-    clearTimeout(timeout);
-    
     // Check if response was already sent (timeout case)
     if (res.headersSent) {
       console.log('[SEARCH RESPONSE] Response already sent, skipping');
       return;
     }
+    
+    // Clear the timeout since request completed successfully
+    clearTimeout(timeout);
     
     res.json({
       success: true,
