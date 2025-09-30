@@ -1267,7 +1267,7 @@ app.post('/api/import-leads-csv', requireApiKey, async (req, res) => {
 app.post('/api/search-google-places', async (req, res) => {
   console.log('[SEARCH REQUEST] Received request:', req.body);
   
-  // Set a 120-second timeout to prevent 502 errors
+  // Set a 300-second timeout to prevent 504 errors on large searches
   const timeout = setTimeout(() => {
     if (!res.headersSent) {
       res.status(504).json({ 
@@ -1275,7 +1275,7 @@ app.post('/api/search-google-places', async (req, res) => {
         message: 'The request took too long to process. Please try again with a smaller search scope.' 
       });
     }
-  }, 120000);
+  }, 300000); // 300 seconds for large searches
   
   try {
     const { query, location, maxResults = 20, businessSize, mobileOnly, decisionMakerTitles } = req.body;
@@ -1539,8 +1539,8 @@ app.post('/api/search-google-places', async (req, res) => {
     // Real Google Places API calls with conservative settings
     console.log(`[GOOGLE PLACES] Starting search with ${searchQueries.length} queries`);
     
-    const maxPages = 3; // Increased pagination to get more results per query
-    const queryDelay = 1500; // Reduced delay for faster processing
+    const maxPages = 2; // Reduced pagination to prevent timeout
+    const queryDelay = 500; // Reduced delay for faster processing
     
     for (let i = 0; i < searchQueries.length; i++) {
       const searchQuery = searchQueries[i];
@@ -1621,10 +1621,11 @@ app.post('/api/search-google-places', async (req, res) => {
     // Real processing with conservative chunked approach
     const results = [];
     const targetMobileNumbers = maxResults;
-    const chunkSize = 20; // Increased chunk size for faster processing
-    const chunkDelay = 1000; // Reduced delay for faster processing
+    const chunkSize = 25; // Increased chunk size for faster processing
+    const chunkDelay = 500; // Reduced delay for faster processing
 
     console.log(`[PROCESSING] Processing ${allResults.length} results in chunks of ${chunkSize}, target: ${targetMobileNumbers} mobile numbers`);
+    console.log(`[DEBUG] maxResults: ${maxResults}, targetMobileNumbers: ${targetMobileNumbers}`);
 
     // Process results in small chunks to prevent server overload
     for (let i = 0; i < allResults.length; i += chunkSize) {
@@ -1796,22 +1797,31 @@ function isMobileNumber(phone) {
   const cleanPhone = phone.replace(/[\s\-\(\)\.]/g, '');
   let isMobile = mobilePatterns.some(pattern => pattern.test(cleanPhone));
   
-  // Fallback: Check if it starts with 07 and has 11 digits total (UK mobile pattern)
+  // UK-specific fallback: Check if it starts with 07 and has 11 digits total (UK mobile pattern)
   if (!isMobile && cleanPhone.length === 11 && cleanPhone.startsWith('07')) {
     isMobile = true;
-    console.log(`[PHONE DEBUG] Fallback match: "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
+    console.log(`[PHONE DEBUG] UK fallback match: "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
   }
   
-  // Additional fallback: Check for any 07 pattern with reasonable length
-  if (!isMobile && cleanPhone.length >= 10 && cleanPhone.length <= 13 && cleanPhone.includes('07')) {
+  // UK-specific fallback: Check for +44 7 pattern (UK mobile with country code)
+  if (!isMobile && cleanPhone.length >= 12 && cleanPhone.startsWith('447')) {
     isMobile = true;
-    console.log(`[PHONE DEBUG] Additional fallback match: "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
+    console.log(`[PHONE DEBUG] UK +44 fallback match: "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
   }
   
-  // Very lenient fallback: Any number containing 07 with mobile-like length
-  if (!isMobile && cleanPhone.length >= 10 && cleanPhone.length <= 15 && /07\d/.test(cleanPhone)) {
+  // UK-specific fallback: Check for 07 pattern with UK mobile length
+  if (!isMobile && cleanPhone.length >= 10 && cleanPhone.length <= 13 && cleanPhone.startsWith('07')) {
     isMobile = true;
-    console.log(`[PHONE DEBUG] Lenient fallback match: "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
+    console.log(`[PHONE DEBUG] UK 07 fallback match: "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
+  }
+  
+  // REJECT non-UK numbers: Filter out US numbers (5xx), Canadian (2xx), etc.
+  if (isMobile && (cleanPhone.startsWith('5') || cleanPhone.startsWith('2') || cleanPhone.startsWith('3') || cleanPhone.startsWith('4') || cleanPhone.startsWith('6') || cleanPhone.startsWith('8') || cleanPhone.startsWith('9'))) {
+    // Only reject if it doesn't start with UK patterns
+    if (!cleanPhone.startsWith('07') && !cleanPhone.startsWith('447') && !cleanPhone.startsWith('+447')) {
+      isMobile = false;
+      console.log(`[PHONE DEBUG] Rejected non-UK number: "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
+    }
   }
   
   // Log phone numbers for debugging (only log first few to avoid spam)
