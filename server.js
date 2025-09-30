@@ -1275,7 +1275,7 @@ app.post('/api/search-google-places', async (req, res) => {
         message: 'The request took too long to process. Please try again with a smaller search scope.' 
       });
     }
-  }, 600000); // 600 seconds (10 minutes) for optimized searches
+  }, 1200000); // 1200 seconds (20 minutes) for comprehensive searches
   
   try {
     const { query, location, maxResults = 20, businessSize, mobileOnly, decisionMakerTitles } = req.body;
@@ -1961,7 +1961,7 @@ app.post('/api/search-google-places', async (req, res) => {
     console.log(`[GOOGLE PLACES] Starting search with ${searchQueries.length} queries`);
     
     const maxPages = 1; // Reduced pagination to prevent 504 errors while maintaining comprehensive city coverage
-    const queryDelay = 1000; // Conservative delay to prevent 502 errors
+    const queryDelay = 200; // Fast processing - reduced delay for speed
     
     for (let i = 0; i < searchQueries.length; i++) {
       const searchQuery = searchQueries[i];
@@ -2073,8 +2073,8 @@ app.post('/api/search-google-places', async (req, res) => {
     // Real processing with conservative chunked approach
     const results = [];
     const targetMobileNumbers = maxResults; // This is just for logging/target purposes
-    const chunkSize = 30; // Conservative chunk size to prevent 502 errors
-    const chunkDelay = 500; // Conservative delay to prevent 502 errors
+    const chunkSize = 100; // Large chunk size for fast processing
+    const chunkDelay = 100; // Minimal delay for fast processing
 
     console.log(`[PROCESSING] Processing ${allResults.length} results in chunks of ${chunkSize}, target: ${targetMobileNumbers} mobile numbers`);
     console.log(`[DEBUG] maxResults: ${maxResults}, targetMobileNumbers: ${targetMobileNumbers}`);
@@ -2303,8 +2303,8 @@ function isMobileNumber(phone) {
     }
   }
   
-  // Log phone numbers for debugging (only log 5% of phone numbers for better performance)
-  if (Math.random() < 0.05) { // Log 5% of phone numbers for better debugging
+  // Log phone numbers for debugging (only log 1% of phone numbers for maximum speed)
+  if (Math.random() < 0.01) { // Log 1% of phone numbers for maximum speed
     console.log(`[PHONE DEBUG] "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
   }
   
@@ -10107,8 +10107,8 @@ async function startServer() {
       console.log(`SMS-Email pipeline: ${smsEmailPipeline ? 'Available' : 'Not Available'}`);
     });
     
-    // Set server timeout to 12 minutes to handle optimized searches
-    server.timeout = 720000; // 12 minutes
+    // Set server timeout to 25 minutes to handle comprehensive searches
+    server.timeout = 1500000; // 25 minutes
   } catch (error) {
     console.error('❌ Failed to start server:', error);
     process.exit(1);
