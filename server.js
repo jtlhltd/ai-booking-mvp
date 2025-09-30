@@ -1593,6 +1593,37 @@ app.post('/api/search-google-places', async (req, res) => {
     
     console.log(`[GOOGLE PLACES] Total unique results from all queries: ${allResults.length}`);
     
+    // If we don't have enough results, add more search variations
+    if (allResults.length < maxResults * 5) { // If less than 5x target, add more searches
+      console.log(`[FALLBACK] Only found ${allResults.length} businesses, adding more search variations...`);
+      
+      // Add more business types for broader coverage
+      const additionalBusinessTypes = [
+        '"nurse" UK', '"midwife" UK', '"pharmacist" UK', '"optician" UK', '"hearing aid" UK',
+        '"podiatrist" UK', '"chiropodist" UK', '"reflexologist" UK', '"aromatherapist" UK',
+        '"homeopath" UK', '"herbalist" UK', '"naturopath" UK', '"reiki" UK', '"crystal healing" UK',
+        '"massage" UK', '"sports massage" UK', '"deep tissue" UK', '"swedish massage" UK',
+        '"personal training" UK', '"fitness coaching" UK', '"nutrition coaching" UK',
+        '"life coaching" UK', '"business coaching" UK', '"career coaching" UK',
+        '"counselling" UK', '"therapy" UK', '"psychotherapy" UK', '"cognitive therapy" UK',
+        '"art therapy" UK', '"music therapy" UK', '"drama therapy" UK', '"play therapy" UK',
+        '"speech therapy" UK', '"occupational therapy" UK', '"physiotherapy" UK',
+        '"osteopathy" UK', '"chiropractic" UK', '"acupuncture" UK', '"dry needling" UK',
+        '"cupping" UK', '"moxibustion" UK', '"shiatsu" UK', '"tui na" UK',
+        '"beauty treatment" UK', '"facial" UK', '"skincare" UK', '"anti-aging" UK',
+        '"botox" UK', '"dermal fillers" UK', '"lip fillers" UK', '"cheek fillers" UK',
+        '"hair removal" UK', '"laser hair removal" UK', '"waxing" UK', '"threading" UK',
+        '"eyebrow" UK', '"eyelash" UK', '"nail art" UK', '"manicure" UK', '"pedicure" UK',
+        '"barber" UK', '"hair salon" UK', '"hair stylist" UK', '"hair colourist" UK',
+        '"wedding hair" UK', '"bridal hair" UK', '"hair extensions" UK', '"hair transplant" UK'
+      ];
+      
+      // Add additional searches to the existing searchQueries
+      searchQueries.push(...additionalBusinessTypes);
+      
+      console.log(`[FALLBACK] Added ${additionalBusinessTypes.length} more search terms, total: ${searchQueries.length}`);
+    }
+    
     if (allResults.length === 0) {
       console.error(`[GOOGLE PLACES ERROR] No results found from any query`);
       return res.status(400).json({
@@ -1615,11 +1646,8 @@ app.post('/api/search-google-places', async (req, res) => {
       const chunk = allResults.slice(i, i + chunkSize);
       console.log(`[PROCESSING] Processing chunk ${Math.floor(i / chunkSize) + 1}/${Math.ceil(allResults.length / chunkSize)} (${chunk.length} businesses)`);
 
-      // Early exit if we've reached our target
-      if (results.length >= targetMobileNumbers) {
-        console.log(`[EARLY EXIT] Target reached! Found ${results.length}/${targetMobileNumbers} mobile numbers`);
-        break;
-      }
+      // Continue processing until ALL businesses are checked - no early exit
+      console.log(`[PROGRESS] Found ${results.length}/${targetMobileNumbers} mobile numbers so far, continuing...`);
 
       for (const place of chunk) {
         try {
@@ -1682,7 +1710,8 @@ app.post('/api/search-google-places', async (req, res) => {
     if (finalMobileCount >= targetMobileNumbers) {
       console.log(`[SUCCESS] Target achieved! Found ${finalMobileCount}/${targetMobileNumbers} mobile numbers`);
     } else {
-      console.log(`[PARTIAL] Found ${finalMobileCount}/${targetMobileNumbers} mobile numbers - target not fully reached`);
+      console.log(`[INSUFFICIENT] Found ${finalMobileCount}/${targetMobileNumbers} mobile numbers - target not reached, but continuing with available results`);
+      console.log(`[NOTE] System processed all available businesses. To reach 100+ mobile numbers, try increasing search scope or using different search terms.`);
     }
     
     console.log('[SEARCH RESPONSE] Sending response with', results.length, 'results');
