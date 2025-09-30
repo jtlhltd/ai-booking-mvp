@@ -1255,6 +1255,16 @@ app.post('/api/import-leads-csv', requireApiKey, async (req, res) => {
 app.post('/api/search-google-places', async (req, res) => {
   console.log('[SEARCH REQUEST] Received request:', req.body);
   
+  // Set a 60-second timeout to prevent 502 errors
+  const timeout = setTimeout(() => {
+    if (!res.headersSent) {
+      res.status(504).json({ 
+        error: 'Request timeout', 
+        message: 'The request took too long to process. Please try again with a smaller search scope.' 
+      });
+    }
+  }, 60000);
+  
   try {
     const { query, location, maxResults = 20, businessSize, mobileOnly, decisionMakerTitles } = req.body;
     
@@ -1391,35 +1401,6 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push(query + ' "therapist" ' + location);
         searchQueries.push(query + ' "coach" ' + location);
         searchQueries.push(query + ' "trainer" ' + location);
-        // Balanced search terms to prevent 502 errors while finding mobile numbers
-        searchQueries.push('"medical" ' + location);
-        searchQueries.push('"clinic" ' + location);
-        searchQueries.push('"doctor" ' + location);
-        searchQueries.push('"private practice" ' + location);
-        searchQueries.push('"GP" ' + location);
-        searchQueries.push('"private GP" ' + location);
-        searchQueries.push('"private doctor" ' + location);
-        searchQueries.push('"freelance" ' + location);
-        searchQueries.push('"self-employed" ' + location);
-        searchQueries.push('"mobile" ' + location);
-        searchQueries.push('"general practitioner" ' + location);
-        searchQueries.push('"family doctor" ' + location);
-        searchQueries.push('"private medical" ' + location);
-        searchQueries.push('"private clinic" ' + location);
-        searchQueries.push('"medical practice" ' + location);
-        searchQueries.push('"healthcare" ' + location);
-        searchQueries.push('"wellness" ' + location);
-        searchQueries.push('"osteopath" ' + location);
-        searchQueries.push('"chiropractor" ' + location);
-        searchQueries.push('"physiotherapist" ' + location);
-        searchQueries.push('"massage therapist" ' + location);
-        searchQueries.push('"acupuncturist" ' + location);
-        searchQueries.push('"nutritionist" ' + location);
-        searchQueries.push('"solo practitioner" ' + location);
-        searchQueries.push('"independent practitioner" ' + location);
-        searchQueries.push('"home based" ' + location);
-        searchQueries.push('"personal" ' + location);
-        searchQueries.push('"individual" ' + location);
       }
     }
     
@@ -1585,6 +1566,9 @@ app.post('/api/search-google-places', async (req, res) => {
     }
     
     console.log('[SEARCH RESPONSE] Sending response with', results.length, 'results');
+    
+    // Clear the timeout since request completed successfully
+    clearTimeout(timeout);
     
     res.json({
       success: true,
