@@ -1340,6 +1340,29 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push('"doctor" UK');
         searchQueries.push('"private practice" UK');
         searchQueries.push('"healthcare" UK');
+        // Add more specific terms that are likely to have mobile numbers
+        searchQueries.push('"GP" UK');
+        searchQueries.push('"general practitioner" UK');
+        searchQueries.push('"family doctor" UK');
+        searchQueries.push('"private GP" UK');
+        searchQueries.push('"private doctor" UK');
+        searchQueries.push('"private medical" UK');
+        searchQueries.push('"private clinic" UK');
+        searchQueries.push('"medical practice" UK');
+        searchQueries.push('"health practice" UK');
+        searchQueries.push('"wellness" UK');
+        searchQueries.push('"alternative medicine" UK');
+        searchQueries.push('"holistic" UK');
+        searchQueries.push('"osteopath" UK');
+        searchQueries.push('"chiropractor" UK');
+        searchQueries.push('"physiotherapist" UK');
+        searchQueries.push('"massage therapist" UK');
+        searchQueries.push('"acupuncturist" UK');
+        searchQueries.push('"nutritionist" UK');
+        searchQueries.push('"dietitian" UK');
+        searchQueries.push('"optometrist" UK');
+        searchQueries.push('"audiologist" UK');
+        searchQueries.push('"podiatrist" UK');
       } else {
         searchQueries.push(query + ' "private" ' + location);
         searchQueries.push(query + ' "consultant" ' + location);
@@ -1374,6 +1397,29 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push('"doctor" ' + location);
         searchQueries.push('"private practice" ' + location);
         searchQueries.push('"healthcare" ' + location);
+        // Add more specific terms that are likely to have mobile numbers
+        searchQueries.push('"GP" ' + location);
+        searchQueries.push('"general practitioner" ' + location);
+        searchQueries.push('"family doctor" ' + location);
+        searchQueries.push('"private GP" ' + location);
+        searchQueries.push('"private doctor" ' + location);
+        searchQueries.push('"private medical" ' + location);
+        searchQueries.push('"private clinic" ' + location);
+        searchQueries.push('"medical practice" ' + location);
+        searchQueries.push('"health practice" ' + location);
+        searchQueries.push('"wellness" ' + location);
+        searchQueries.push('"alternative medicine" ' + location);
+        searchQueries.push('"holistic" ' + location);
+        searchQueries.push('"osteopath" ' + location);
+        searchQueries.push('"chiropractor" ' + location);
+        searchQueries.push('"physiotherapist" ' + location);
+        searchQueries.push('"massage therapist" ' + location);
+        searchQueries.push('"acupuncturist" ' + location);
+        searchQueries.push('"nutritionist" ' + location);
+        searchQueries.push('"dietitian" ' + location);
+        searchQueries.push('"optometrist" ' + location);
+        searchQueries.push('"audiologist" ' + location);
+        searchQueries.push('"podiatrist" ' + location);
       }
     }
     
