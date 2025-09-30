@@ -1275,7 +1275,7 @@ app.post('/api/search-google-places', async (req, res) => {
         message: 'The request took too long to process. Please try again with a smaller search scope.' 
       });
     }
-  }, 600000); // 600 seconds (10 minutes) for comprehensive searches
+  }, 900000); // 900 seconds (15 minutes) for comprehensive searches
   
   try {
     const { query, location, maxResults = 20, businessSize, mobileOnly, decisionMakerTitles } = req.body;
@@ -10093,12 +10093,15 @@ async function startServer() {
     await initDb();
     console.log('✅ Database initialized');
     
-    app.listen(process.env.PORT ? Number(process.env.PORT) : 10000, '0.0.0.0', () => {
+    const server = app.listen(process.env.PORT ? Number(process.env.PORT) : 10000, '0.0.0.0', () => {
       console.log(`AI Booking MVP listening on http://localhost:${process.env.PORT || 10000} (DB: ${DB_PATH})`);
       console.log(`Security middleware: Enhanced authentication and rate limiting enabled`);
       console.log(`Booking system: ${bookingSystem ? 'Available' : 'Not Available'}`);
       console.log(`SMS-Email pipeline: ${smsEmailPipeline ? 'Available' : 'Not Available'}`);
     });
+    
+    // Set server timeout to 20 minutes to handle comprehensive searches
+    server.timeout = 1200000; // 20 minutes
   } catch (error) {
     console.error('❌ Failed to start server:', error);
     process.exit(1);
