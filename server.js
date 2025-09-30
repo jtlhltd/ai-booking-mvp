@@ -1951,7 +1951,7 @@ app.post('/api/search-google-places', async (req, res) => {
     console.log(`[GOOGLE PLACES] Starting search with ${searchQueries.length} queries`);
     
     const maxPages = 3; // Conservative pagination to avoid 502 errors while still getting good results
-    const queryDelay = 500; // Reduced delay for faster processing
+    const queryDelay = 1000; // Conservative delay to prevent 502 errors
     
     for (let i = 0; i < searchQueries.length; i++) {
       const searchQuery = searchQueries[i];
@@ -2063,8 +2063,8 @@ app.post('/api/search-google-places', async (req, res) => {
     // Real processing with conservative chunked approach
     const results = [];
     const targetMobileNumbers = maxResults; // This is just for logging/target purposes
-    const chunkSize = 50; // Increased chunk size for faster processing
-    const chunkDelay = 200; // Reduced delay for faster processing
+    const chunkSize = 30; // Conservative chunk size to prevent 502 errors
+    const chunkDelay = 500; // Conservative delay to prevent 502 errors
 
     console.log(`[PROCESSING] Processing ${allResults.length} results in chunks of ${chunkSize}, target: ${targetMobileNumbers} mobile numbers`);
     console.log(`[DEBUG] maxResults: ${maxResults}, targetMobileNumbers: ${targetMobileNumbers}`);
