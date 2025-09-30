@@ -3711,7 +3711,8 @@ async function ensureDataFiles() {
   await fs.mkdir(DATA_DIR, { recursive: true });
   for (const p of [LEADS_PATH, CALLS_PATH, SMS_STATUS_PATH, JOBS_PATH]) {
     try { await fs.access(p); } catch { await fs.writeFile(p, '[]', 'utf8'); }
-  }image.png
+  }
+}
 await ensureDataFiles();
 
 async function readJson(p, fallback = null) {
@@ -9484,7 +9485,6 @@ async function startServer() {
     console.error('❌ Failed to start server:', error);
     process.exit(1);
   }
-}
 }
 
 startServer();
