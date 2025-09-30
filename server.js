@@ -1334,7 +1334,7 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push(query + ' "therapist" UK');
         searchQueries.push(query + ' "coach" UK');
         searchQueries.push(query + ' "trainer" UK');
-        // Essential terms + additional high-value terms
+        // Balanced search terms to prevent 502 errors while finding mobile numbers
         searchQueries.push('"medical" UK');
         searchQueries.push('"clinic" UK');
         searchQueries.push('"doctor" UK');
@@ -1345,7 +1345,6 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push('"freelance" UK');
         searchQueries.push('"self-employed" UK');
         searchQueries.push('"mobile" UK');
-        // Add more high-value terms for mobile numbers
         searchQueries.push('"general practitioner" UK');
         searchQueries.push('"family doctor" UK');
         searchQueries.push('"private medical" UK');
@@ -1353,18 +1352,12 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push('"medical practice" UK');
         searchQueries.push('"healthcare" UK');
         searchQueries.push('"wellness" UK');
-        searchQueries.push('"alternative medicine" UK');
-        searchQueries.push('"holistic" UK');
         searchQueries.push('"osteopath" UK');
         searchQueries.push('"chiropractor" UK');
         searchQueries.push('"physiotherapist" UK');
         searchQueries.push('"massage therapist" UK');
         searchQueries.push('"acupuncturist" UK');
         searchQueries.push('"nutritionist" UK');
-        searchQueries.push('"dietitian" UK');
-        searchQueries.push('"optometrist" UK');
-        searchQueries.push('"audiologist" UK');
-        searchQueries.push('"podiatrist" UK');
         searchQueries.push('"solo practitioner" UK');
         searchQueries.push('"independent practitioner" UK');
         searchQueries.push('"home based" UK');
@@ -1398,7 +1391,7 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push(query + ' "therapist" ' + location);
         searchQueries.push(query + ' "coach" ' + location);
         searchQueries.push(query + ' "trainer" ' + location);
-        // Essential terms + additional high-value terms
+        // Balanced search terms to prevent 502 errors while finding mobile numbers
         searchQueries.push('"medical" ' + location);
         searchQueries.push('"clinic" ' + location);
         searchQueries.push('"doctor" ' + location);
@@ -1409,7 +1402,6 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push('"freelance" ' + location);
         searchQueries.push('"self-employed" ' + location);
         searchQueries.push('"mobile" ' + location);
-        // Add more high-value terms for mobile numbers
         searchQueries.push('"general practitioner" ' + location);
         searchQueries.push('"family doctor" ' + location);
         searchQueries.push('"private medical" ' + location);
@@ -1417,18 +1409,12 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push('"medical practice" ' + location);
         searchQueries.push('"healthcare" ' + location);
         searchQueries.push('"wellness" ' + location);
-        searchQueries.push('"alternative medicine" ' + location);
-        searchQueries.push('"holistic" ' + location);
         searchQueries.push('"osteopath" ' + location);
         searchQueries.push('"chiropractor" ' + location);
         searchQueries.push('"physiotherapist" ' + location);
         searchQueries.push('"massage therapist" ' + location);
         searchQueries.push('"acupuncturist" ' + location);
         searchQueries.push('"nutritionist" ' + location);
-        searchQueries.push('"dietitian" ' + location);
-        searchQueries.push('"optometrist" ' + location);
-        searchQueries.push('"audiologist" ' + location);
-        searchQueries.push('"podiatrist" ' + location);
         searchQueries.push('"solo practitioner" ' + location);
         searchQueries.push('"independent practitioner" ' + location);
         searchQueries.push('"home based" ' + location);
@@ -1442,8 +1428,8 @@ app.post('/api/search-google-places', async (req, res) => {
     // Real Google Places API calls with conservative settings
     console.log(`[GOOGLE PLACES] Starting search with ${searchQueries.length} queries`);
     
-    const maxPages = 2; // Increased pagination to get more results
-    const queryDelay = 2000; // Balanced delay between queries
+    const maxPages = 1; // Conservative pagination to prevent 502 errors
+    const queryDelay = 2500; // Longer delay between queries
     
     for (let i = 0; i < searchQueries.length; i++) {
       const searchQuery = searchQueries[i];
