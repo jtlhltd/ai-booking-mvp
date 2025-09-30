@@ -1350,14 +1350,42 @@ app.post('/api/search-google-places', async (req, res) => {
       searchQueries.push(query + ' Lisburn');
       searchQueries.push(query + ' Craigavon');
       
-      // Major UK cities only - reduced scope to prevent 504 timeouts
-      const majorCities = ['London', 'Manchester', 'Birmingham', 'Glasgow', 'Edinburgh', 'Liverpool', 'Bristol', 'Leeds', 'Newcastle', 'Sheffield', 'Nottingham', 'Cardiff', 'Belfast', 'Brighton', 'Oxford', 'Cambridge', 'Reading', 'Southampton', 'Leicester', 'Coventry'];
-      
-      majorCities.forEach(city => {
-        searchQueries.push(query + ' ' + city);
-      });
-      // Individual city entries removed - using majorCities array above instead
-      // All individual city entries removed - using majorCities array above instead
+      // Comprehensive UK cities for maximum coverage - restored for better results
+      searchQueries.push(query + ' Reading');
+      searchQueries.push(query + ' Oxford');
+      searchQueries.push(query + ' Cambridge');
+      searchQueries.push(query + ' Canterbury');
+      searchQueries.push(query + ' Brighton');
+      searchQueries.push(query + ' Hastings');
+      searchQueries.push(query + ' Eastbourne');
+      searchQueries.push(query + ' Worthing');
+      searchQueries.push(query + ' Crawley');
+      searchQueries.push(query + ' Guildford');
+      searchQueries.push(query + ' Woking');
+      searchQueries.push(query + ' Farnborough');
+      searchQueries.push(query + ' Aldershot');
+      searchQueries.push(query + ' Winchester');
+      searchQueries.push(query + ' Southampton');
+      searchQueries.push(query + ' Bournemouth');
+      searchQueries.push(query + ' Poole');
+      searchQueries.push(query + ' Weymouth');
+      searchQueries.push(query + ' Dorchester');
+      searchQueries.push(query + ' Salisbury');
+      searchQueries.push(query + ' Swindon');
+      searchQueries.push(query + ' Gloucester');
+      searchQueries.push(query + ' Cheltenham');
+      searchQueries.push(query + ' Worcester');
+      searchQueries.push(query + ' Hereford');
+      searchQueries.push(query + ' Shrewsbury');
+      searchQueries.push(query + ' Telford');
+      searchQueries.push(query + ' Walsall');
+      searchQueries.push(query + ' Dudley');
+      searchQueries.push(query + ' Sandwell');
+      searchQueries.push(query + ' Solihull');
+      searchQueries.push(query + ' Redditch');
+      searchQueries.push(query + ' Bromsgrove');
+      searchQueries.push(query + ' Kidderminster');
+      searchQueries.push(query + ' Stourbridge');
       searchQueries.push(query + ' Shrewsbury');
       searchQueries.push(query + ' Telford');
       searchQueries.push(query + ' Walsall');
@@ -1932,7 +1960,7 @@ app.post('/api/search-google-places', async (req, res) => {
     // Real Google Places API calls with conservative settings
     console.log(`[GOOGLE PLACES] Starting search with ${searchQueries.length} queries`);
     
-    const maxPages = 3; // Conservative pagination to avoid 502 errors while still getting good results
+    const maxPages = 1; // Reduced pagination to prevent 504 errors while maintaining comprehensive city coverage
     const queryDelay = 1000; // Conservative delay to prevent 502 errors
     
     for (let i = 0; i < searchQueries.length; i++) {
