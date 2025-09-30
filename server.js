@@ -1334,44 +1334,17 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push(query + ' "therapist" UK');
         searchQueries.push(query + ' "coach" UK');
         searchQueries.push(query + ' "trainer" UK');
-        // Focus on core medical terms that work well
+        // Minimal essential terms to prevent 502 errors
         searchQueries.push('"medical" UK');
         searchQueries.push('"clinic" UK');
         searchQueries.push('"doctor" UK');
         searchQueries.push('"private practice" UK');
-        searchQueries.push('"healthcare" UK');
-        // Add more specific terms that are likely to have mobile numbers
         searchQueries.push('"GP" UK');
-        searchQueries.push('"general practitioner" UK');
-        searchQueries.push('"family doctor" UK');
         searchQueries.push('"private GP" UK');
         searchQueries.push('"private doctor" UK');
-        searchQueries.push('"private medical" UK');
-        searchQueries.push('"private clinic" UK');
-        searchQueries.push('"medical practice" UK');
-        searchQueries.push('"health practice" UK');
-        searchQueries.push('"wellness" UK');
-        searchQueries.push('"alternative medicine" UK');
-        searchQueries.push('"holistic" UK');
-        searchQueries.push('"osteopath" UK');
-        searchQueries.push('"chiropractor" UK');
-        searchQueries.push('"physiotherapist" UK');
-        searchQueries.push('"massage therapist" UK');
-        searchQueries.push('"acupuncturist" UK');
-        searchQueries.push('"nutritionist" UK');
-        searchQueries.push('"dietitian" UK');
-        searchQueries.push('"optometrist" UK');
-        searchQueries.push('"audiologist" UK');
-        searchQueries.push('"podiatrist" UK');
-        // Add solo practitioner terms that are more likely to have mobile numbers
-        searchQueries.push('"solo practitioner" UK');
-        searchQueries.push('"independent practitioner" UK');
         searchQueries.push('"freelance" UK');
         searchQueries.push('"self-employed" UK');
-        searchQueries.push('"home based" UK');
         searchQueries.push('"mobile" UK');
-        searchQueries.push('"personal" UK');
-        searchQueries.push('"individual" UK');
       } else {
         searchQueries.push(query + ' "private" ' + location);
         searchQueries.push(query + ' "consultant" ' + location);
@@ -1400,44 +1373,17 @@ app.post('/api/search-google-places', async (req, res) => {
         searchQueries.push(query + ' "therapist" ' + location);
         searchQueries.push(query + ' "coach" ' + location);
         searchQueries.push(query + ' "trainer" ' + location);
-        // Focus on core medical terms that work well
+        // Minimal essential terms to prevent 502 errors
         searchQueries.push('"medical" ' + location);
         searchQueries.push('"clinic" ' + location);
         searchQueries.push('"doctor" ' + location);
         searchQueries.push('"private practice" ' + location);
-        searchQueries.push('"healthcare" ' + location);
-        // Add more specific terms that are likely to have mobile numbers
         searchQueries.push('"GP" ' + location);
-        searchQueries.push('"general practitioner" ' + location);
-        searchQueries.push('"family doctor" ' + location);
         searchQueries.push('"private GP" ' + location);
         searchQueries.push('"private doctor" ' + location);
-        searchQueries.push('"private medical" ' + location);
-        searchQueries.push('"private clinic" ' + location);
-        searchQueries.push('"medical practice" ' + location);
-        searchQueries.push('"health practice" ' + location);
-        searchQueries.push('"wellness" ' + location);
-        searchQueries.push('"alternative medicine" ' + location);
-        searchQueries.push('"holistic" ' + location);
-        searchQueries.push('"osteopath" ' + location);
-        searchQueries.push('"chiropractor" ' + location);
-        searchQueries.push('"physiotherapist" ' + location);
-        searchQueries.push('"massage therapist" ' + location);
-        searchQueries.push('"acupuncturist" ' + location);
-        searchQueries.push('"nutritionist" ' + location);
-        searchQueries.push('"dietitian" ' + location);
-        searchQueries.push('"optometrist" ' + location);
-        searchQueries.push('"audiologist" ' + location);
-        searchQueries.push('"podiatrist" ' + location);
-        // Add solo practitioner terms that are more likely to have mobile numbers
-        searchQueries.push('"solo practitioner" ' + location);
-        searchQueries.push('"independent practitioner" ' + location);
         searchQueries.push('"freelance" ' + location);
         searchQueries.push('"self-employed" ' + location);
-        searchQueries.push('"home based" ' + location);
         searchQueries.push('"mobile" ' + location);
-        searchQueries.push('"personal" ' + location);
-        searchQueries.push('"individual" ' + location);
       }
     }
     
@@ -1446,8 +1392,8 @@ app.post('/api/search-google-places', async (req, res) => {
     // Real Google Places API calls with conservative settings
     console.log(`[GOOGLE PLACES] Starting search with ${searchQueries.length} queries`);
     
-    const maxPages = 2; // Conservative pagination to prevent errors
-    const queryDelay = 1500; // Faster processing
+    const maxPages = 1; // Very conservative pagination to prevent 502 errors
+    const queryDelay = 3000; // Longer delay between queries
     
     for (let i = 0; i < searchQueries.length; i++) {
       const searchQuery = searchQueries[i];
@@ -1528,8 +1474,8 @@ app.post('/api/search-google-places', async (req, res) => {
     // Real processing with conservative chunked approach
     const results = [];
     const targetMobileNumbers = maxResults;
-    const chunkSize = 20; // Increased chunk size for faster processing
-    const chunkDelay = 2000; // Reduced delay between chunks
+    const chunkSize = 5; // Very small chunk size to prevent 502 errors
+    const chunkDelay = 5000; // Longer delay between chunks
 
     console.log(`[PROCESSING] Processing ${allResults.length} results in chunks of ${chunkSize}, target: ${targetMobileNumbers} mobile numbers`);
 
