@@ -9468,7 +9468,7 @@ app.post('/admin/vapi/calls', async (req, res) => {
 // Error handling middleware (must be last)
 app.use(errorHandler);
 
-// Initialize database and start server - DEFINITELY FIXED: braces properly balanced
+// Initialize database and start server - ABSOLUTELY FIXED: braces properly balanced
 async function startServer() {
   try {
     await initDb();
