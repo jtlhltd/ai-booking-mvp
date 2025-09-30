@@ -1832,10 +1832,31 @@ function isMobileNumber(phone) {
     console.log(`[PHONE DEBUG] UK +44 fallback match: "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
   }
   
-  // UK-specific fallback: Check for 07 pattern with UK mobile length
-  if (!isMobile && cleanPhone.length >= 10 && cleanPhone.length <= 13 && cleanPhone.startsWith('07')) {
-    isMobile = true;
-    console.log(`[PHONE DEBUG] UK 07 fallback match: "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
+  // More lenient UK mobile detection - catch more mobile numbers
+  if (!isMobile && cleanPhone.length >= 10 && cleanPhone.length <= 15) {
+    // Check for any 07 pattern (UK mobile)
+    if (cleanPhone.includes('07') && /07\d/.test(cleanPhone)) {
+      isMobile = true;
+      console.log(`[PHONE DEBUG] Lenient 07 match: "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
+    }
+    // Check for any +44 7 pattern (UK mobile with country code)
+    else if (cleanPhone.includes('447') && /447\d/.test(cleanPhone)) {
+      isMobile = true;
+      console.log(`[PHONE DEBUG] Lenient +44 7 match: "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
+    }
+    // Check for any 44 7 pattern (UK mobile with country code, no +)
+    else if (cleanPhone.includes('447') && /447\d/.test(cleanPhone)) {
+      isMobile = true;
+      console.log(`[PHONE DEBUG] Lenient 44 7 match: "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
+    }
+  }
+  
+  // Even more lenient: Check for any number that looks like a mobile (starts with 7)
+  if (!isMobile && cleanPhone.length >= 10 && cleanPhone.length <= 15) {
+    if (cleanPhone.startsWith('7') && /^7\d{9,14}$/.test(cleanPhone)) {
+      isMobile = true;
+      console.log(`[PHONE DEBUG] Very lenient 7xxx match: "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
+    }
   }
   
   // REJECT non-UK numbers: Filter out US numbers (5xx), Canadian (2xx), etc.
@@ -1848,7 +1869,7 @@ function isMobileNumber(phone) {
   }
   
   // Log phone numbers for debugging (only log first few to avoid spam)
-  if (Math.random() < 0.2) { // Log 20% of phone numbers for better debugging
+  if (Math.random() < 0.1) { // Log 10% of phone numbers for better debugging
     console.log(`[PHONE DEBUG] "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
   }
   
