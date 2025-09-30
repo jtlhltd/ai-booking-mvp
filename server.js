@@ -92,6 +92,18 @@ import vapiWebhooks from './routes/vapi-webhooks.js';
 
 const app = express();
 
+// API key guard middleware
+function requireApiKey(req, res, next) {
+  if (req.method === 'GET' && (req.path === '/health' || req.path === '/gcal/ping' || req.path === '/healthz')) return next();
+  if (req.path.startsWith('/webhooks/twilio-status') || req.path.startsWith('/webhooks/twilio-inbound') || req.path.startsWith('/webhooks/twilio/sms-inbound') || req.path.startsWith('/webhooks/vapi') || req.path === '/webhook/sms-reply') return next();
+  if (req.path === '/api/test' || req.path === '/api/test-linkedin' || req.path === '/api/uk-business-search' || req.path === '/api/decision-maker-contacts' || req.path === '/api/industry-categories' || req.path === '/test-sms-pipeline' || req.path === '/sms-test' || req.path === '/api/initiate-lead-capture') return next();
+  if (req.path === '/uk-business-search' || req.path === '/booking-simple.html') return next();
+  if (!API_KEY) return res.status(500).json({ error: 'Server missing API_KEY' });
+  const key = req.get('X-API-Key');
+  if (key && key === API_KEY) return next();
+  return res.status(401).json({ error: 'Unauthorized' });
+}
+
 // CORS middleware for dashboard access
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -3856,17 +3868,6 @@ function deriveIdemKey(req) {
   return 'auto:' + h;
 }
 
-// API key guard
-function requireApiKey(req, res, next) {
-  if (req.method === 'GET' && (req.path === '/health' || req.path === '/gcal/ping' || req.path === '/healthz')) return next();
-  if (req.path.startsWith('/webhooks/twilio-status') || req.path.startsWith('/webhooks/twilio-inbound') || req.path.startsWith('/webhooks/twilio/sms-inbound') || req.path.startsWith('/webhooks/vapi') || req.path === '/webhook/sms-reply') return next();
-  if (req.path === '/api/test' || req.path === '/api/test-linkedin' || req.path === '/api/uk-business-search' || req.path === '/api/decision-maker-contacts' || req.path === '/api/industry-categories' || req.path === '/test-sms-pipeline' || req.path === '/sms-test' || req.path === '/api/initiate-lead-capture') return next();
-  if (req.path === '/uk-business-search' || req.path === '/booking-simple.html') return next();
-  if (!API_KEY) return res.status(500).json({ error: 'Server missing API_KEY' });
-  const key = req.get('X-API-Key');
-  if (key && key === API_KEY) return next();
-  return res.status(401).json({ error: 'Unauthorized' });
-}
 
 // Real decision maker contact research only - no fake contacts
 
