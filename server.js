@@ -1960,7 +1960,7 @@ app.post('/api/search-google-places', async (req, res) => {
     // Real Google Places API calls with conservative settings
     console.log(`[GOOGLE PLACES] Starting search with ${searchQueries.length} queries`);
     
-    const maxPages = 2; // Increased pagination for more results per city
+    const maxPages = 3; // Increased pagination for even more results per city
     const queryDelay = 200; // Fast processing - reduced delay for speed
     
     for (let i = 0; i < searchQueries.length; i++) {
