@@ -2062,12 +2062,13 @@ app.post('/api/search-google-places', async (req, res) => {
     
     // Real processing with conservative chunked approach
     const results = [];
-    const targetMobileNumbers = maxResults;
+    const targetMobileNumbers = maxResults; // This is just for logging/target purposes
     const chunkSize = 50; // Increased chunk size for faster processing
     const chunkDelay = 200; // Reduced delay for faster processing
 
     console.log(`[PROCESSING] Processing ${allResults.length} results in chunks of ${chunkSize}, target: ${targetMobileNumbers} mobile numbers`);
     console.log(`[DEBUG] maxResults: ${maxResults}, targetMobileNumbers: ${targetMobileNumbers}`);
+    console.log(`[NOTE] Will return ALL mobile numbers found, not limited to ${targetMobileNumbers}`);
 
     // Process results in small chunks to prevent server overload
     for (let i = 0; i < allResults.length; i += chunkSize) {
@@ -2260,39 +2261,35 @@ function isMobileNumber(phone) {
     console.log(`[PHONE DEBUG] UK +44 fallback match: "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
   }
   
-  // More lenient UK mobile detection - catch more mobile numbers
+  // STRICT UK mobile detection - only accept true mobile patterns
   if (!isMobile && cleanPhone.length >= 10 && cleanPhone.length <= 15) {
-    // Check for any 07 pattern (UK mobile)
-    if (cleanPhone.includes('07') && /07\d/.test(cleanPhone)) {
+    // Only accept if it starts with 07 (UK mobile) or 447 (UK mobile with country code)
+    if (cleanPhone.startsWith('07') && cleanPhone.length === 11) {
       isMobile = true;
-      console.log(`[PHONE DEBUG] Lenient 07 match: "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
+      console.log(`[PHONE DEBUG] Strict 07 match: "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
     }
-    // Check for any +44 7 pattern (UK mobile with country code)
-    else if (cleanPhone.includes('447') && /447\d/.test(cleanPhone)) {
+    else if (cleanPhone.startsWith('447') && cleanPhone.length >= 12) {
       isMobile = true;
-      console.log(`[PHONE DEBUG] Lenient +44 7 match: "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
-    }
-    // Check for any 44 7 pattern (UK mobile with country code, no +)
-    else if (cleanPhone.includes('447') && /447\d/.test(cleanPhone)) {
-      isMobile = true;
-      console.log(`[PHONE DEBUG] Lenient 44 7 match: "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
+      console.log(`[PHONE DEBUG] Strict 447 match: "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
     }
   }
   
-  // Even more lenient: Check for any number that looks like a mobile (starts with 7)
-  if (!isMobile && cleanPhone.length >= 10 && cleanPhone.length <= 15) {
-    if (cleanPhone.startsWith('7') && /^7\d{9,14}$/.test(cleanPhone)) {
-      isMobile = true;
-      console.log(`[PHONE DEBUG] Very lenient 7xxx match: "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
-    }
-  }
-  
-  // REJECT non-UK numbers: Filter out US numbers (5xx), Canadian (2xx), etc.
-  if (isMobile && (cleanPhone.startsWith('5') || cleanPhone.startsWith('2') || cleanPhone.startsWith('3') || cleanPhone.startsWith('4') || cleanPhone.startsWith('6') || cleanPhone.startsWith('8') || cleanPhone.startsWith('9'))) {
-    // Only reject if it doesn't start with UK patterns
-    if (!cleanPhone.startsWith('07') && !cleanPhone.startsWith('447') && !cleanPhone.startsWith('+447')) {
+  // REJECT landline numbers that might contain mobile-like patterns
+  if (isMobile) {
+    // Reject 01x, 02x, 03x numbers (UK landlines)
+    if (cleanPhone.startsWith('01') || cleanPhone.startsWith('02') || cleanPhone.startsWith('03')) {
       isMobile = false;
-      console.log(`[PHONE DEBUG] Rejected non-UK number: "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
+      console.log(`[PHONE DEBUG] Rejected landline: "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
+    }
+    // Reject 08x numbers (UK special services)
+    else if (cleanPhone.startsWith('08')) {
+      isMobile = false;
+      console.log(`[PHONE DEBUG] Rejected special service: "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
+    }
+    // Reject 09x numbers (UK premium rate)
+    else if (cleanPhone.startsWith('09')) {
+      isMobile = false;
+      console.log(`[PHONE DEBUG] Rejected premium rate: "${phone}" -> "${cleanPhone}" -> Mobile: ${isMobile}`);
     }
   }
   
