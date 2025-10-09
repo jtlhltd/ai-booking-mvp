@@ -6,7 +6,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "render-start": "node server.js",
+    "render-start": "node run-migration.js && node server.js",
     "render-build": "echo \"no build step\"",
     "migrate": "node run-migration.js",
     "release": "standard-version",
