@@ -1,6 +1,7 @@
 import express from 'express';
 import * as store from '../store.js';
 import * as sheets from '../sheets.js';
+import { analyzeCall } from '../lib/call-quality-analysis.js';
 
 const router = express.Router();
 
@@ -15,12 +16,20 @@ router.post('/webhooks/vapi', async (req, res) => {
     const cost = body.call?.cost || body.cost;
     const metadata = body.call?.metadata || body.metadata || {};
     
+    // Extract transcript and recording (NEW)
+    const transcript = body.call?.transcript || body.transcript || body.summary || '';
+    const recordingUrl = body.call?.recordingUrl || body.recordingUrl || body.recording_url || '';
+    const vapiMetrics = body.call?.metrics || body.metrics || {};
+    
     console.log('[VAPI WEBHOOK]', { 
       callId, 
       status, 
       outcome, 
       duration, 
       cost,
+      hasTranscript: !!transcript,
+      transcriptLength: transcript.length,
+      hasRecording: !!recordingUrl,
       metadata: Object.keys(metadata).length > 0 ? metadata : 'none'
     });
 
@@ -33,7 +42,28 @@ router.post('/webhooks/vapi', async (req, res) => {
       return res.status(200).json({ ok: true });
     }
 
-    // Update call tracking in database
+    // Analyze call quality (NEW)
+    const analysis = analyzeCall({
+      outcome,
+      duration,
+      transcript,
+      metrics: {
+        talk_time_ratio: vapiMetrics.talk_time_ratio,
+        interruptions: vapiMetrics.interruptions,
+        response_time_avg: vapiMetrics.response_time_avg,
+        completion_rate: vapiMetrics.completion_rate
+      }
+    });
+    
+    console.log('[CALL ANALYSIS]', {
+      callId,
+      sentiment: analysis.sentiment,
+      qualityScore: analysis.qualityScore,
+      objections: analysis.objections,
+      keyPhrases: analysis.keyPhrases.slice(0, 3)
+    });
+
+    // Update call tracking in database with quality data
     await updateCallTracking({
       callId,
       tenantKey,
@@ -43,7 +73,16 @@ router.post('/webhooks/vapi', async (req, res) => {
       duration,
       cost,
       metadata,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      // Quality data (NEW)
+      transcript,
+      recordingUrl,
+      sentiment: analysis.sentiment,
+      qualityScore: analysis.qualityScore,
+      objections: analysis.objections,
+      keyPhrases: analysis.keyPhrases,
+      metrics: vapiMetrics,
+      analyzedAt: analysis.analyzedAt
     });
 
     // Handle specific outcomes
@@ -86,12 +125,31 @@ router.post('/webhooks/vapi', async (req, res) => {
 });
 
 // Update call tracking in the database
-async function updateCallTracking({ callId, tenantKey, leadPhone, status, outcome, duration, cost, metadata, timestamp }) {
+async function updateCallTracking({ 
+  callId, 
+  tenantKey, 
+  leadPhone, 
+  status, 
+  outcome, 
+  duration, 
+  cost, 
+  metadata, 
+  timestamp,
+  // Quality data (NEW)
+  transcript,
+  recordingUrl,
+  sentiment,
+  qualityScore,
+  objections,
+  keyPhrases,
+  metrics,
+  analyzedAt
+}) {
   try {
     // Import database functions
     const { upsertCall, trackCost } = await import('../db.js');
     
-    // Store call data in database
+    // Store call data with quality metrics in database
     await upsertCall({
       callId,
       clientKey: tenantKey,
@@ -100,7 +158,16 @@ async function updateCallTracking({ callId, tenantKey, leadPhone, status, outcom
       outcome,
       duration,
       cost,
-      metadata
+      metadata,
+      // Quality fields (NEW)
+      transcript,
+      recordingUrl,
+      sentiment,
+      qualityScore,
+      objections,
+      keyPhrases,
+      metrics,
+      analyzedAt
     });
     
     // Track cost if available
@@ -135,6 +202,8 @@ async function updateCallTracking({ callId, tenantKey, leadPhone, status, outcom
       status,
       outcome,
       duration: duration ? `${duration}s` : 'unknown',
+      qualityScore: qualityScore || 'not scored',
+      sentiment: sentiment || 'unknown',
       cost: cost ? `$${cost}` : 'unknown',
       timestamp,
       stored: true

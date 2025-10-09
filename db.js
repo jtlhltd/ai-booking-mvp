@@ -157,6 +157,14 @@ async function initPostgres() {
       cost DECIMAL(10,4),
       metadata JSONB,
       retry_attempt INTEGER DEFAULT 0,
+      transcript TEXT,
+      recording_url TEXT,
+      sentiment TEXT,
+      quality_score INTEGER,
+      objections JSONB,
+      key_phrases JSONB,
+      metrics JSONB,
+      analyzed_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ DEFAULT now(),
       updated_at TIMESTAMPTZ DEFAULT now()
     );
@@ -165,6 +173,27 @@ async function initPostgres() {
     CREATE INDEX IF NOT EXISTS calls_status_idx ON calls(status);
     CREATE INDEX IF NOT EXISTS calls_outcome_idx ON calls(outcome);
     CREATE INDEX IF NOT EXISTS calls_created_idx ON calls(created_at);
+    CREATE INDEX IF NOT EXISTS calls_quality_idx ON calls(client_key, quality_score) WHERE quality_score IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS calls_sentiment_idx ON calls(client_key, sentiment) WHERE sentiment IS NOT NULL;
+
+    CREATE TABLE IF NOT EXISTS quality_alerts (
+      id BIGSERIAL PRIMARY KEY,
+      client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
+      alert_type TEXT NOT NULL,
+      severity TEXT NOT NULL,
+      metric TEXT,
+      actual_value TEXT,
+      expected_value TEXT,
+      message TEXT NOT NULL,
+      action TEXT,
+      impact TEXT,
+      metadata JSONB,
+      resolved BOOLEAN DEFAULT FALSE,
+      resolved_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS quality_alerts_client_created_idx ON quality_alerts(client_key, created_at DESC);
+    CREATE INDEX IF NOT EXISTS quality_alerts_unresolved_idx ON quality_alerts(client_key) WHERE resolved = FALSE;
 
     CREATE TABLE IF NOT EXISTS retry_queue (
       id BIGSERIAL PRIMARY KEY,
@@ -659,12 +688,38 @@ export async function markBooked({ tenantKey, leadId = null, eventId, slot }) {
 }
 
 // Call tracking functions
-export async function upsertCall({ callId, clientKey, leadPhone, status, outcome, duration, cost, metadata, retryAttempt = 0 }) {
+export async function upsertCall({ 
+  callId, 
+  clientKey, 
+  leadPhone, 
+  status, 
+  outcome, 
+  duration, 
+  cost, 
+  metadata, 
+  retryAttempt = 0,
+  // Quality fields (NEW)
+  transcript,
+  recordingUrl,
+  sentiment,
+  qualityScore,
+  objections,
+  keyPhrases,
+  metrics,
+  analyzedAt
+}) {
   const metadataJson = metadata ? JSON.stringify(metadata) : null;
+  const objectionsJson = objections ? JSON.stringify(objections) : null;
+  const keyPhrasesJson = keyPhrases ? JSON.stringify(keyPhrases) : null;
+  const metricsJson = metrics ? JSON.stringify(metrics) : null;
   
   await query(`
-    INSERT INTO calls (call_id, client_key, lead_phone, status, outcome, duration, cost, metadata, retry_attempt, updated_at)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+    INSERT INTO calls (
+      call_id, client_key, lead_phone, status, outcome, duration, cost, metadata, retry_attempt,
+      transcript, recording_url, sentiment, quality_score, objections, key_phrases, metrics, analyzed_at,
+      updated_at
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, now())
     ON CONFLICT (call_id) 
     DO UPDATE SET 
       status = EXCLUDED.status,
@@ -673,8 +728,19 @@ export async function upsertCall({ callId, clientKey, leadPhone, status, outcome
       cost = EXCLUDED.cost,
       metadata = EXCLUDED.metadata,
       retry_attempt = EXCLUDED.retry_attempt,
+      transcript = EXCLUDED.transcript,
+      recording_url = EXCLUDED.recording_url,
+      sentiment = EXCLUDED.sentiment,
+      quality_score = EXCLUDED.quality_score,
+      objections = EXCLUDED.objections,
+      key_phrases = EXCLUDED.key_phrases,
+      metrics = EXCLUDED.metrics,
+      analyzed_at = EXCLUDED.analyzed_at,
       updated_at = now()
-  `, [callId, clientKey, leadPhone, status, outcome, duration, cost, metadataJson, retryAttempt]);
+  `, [
+    callId, clientKey, leadPhone, status, outcome, duration, cost, metadataJson, retryAttempt,
+    transcript, recordingUrl, sentiment, qualityScore, objectionsJson, keyPhrasesJson, metricsJson, analyzedAt
+  ]);
 }
 
 export async function getCallsByTenant(clientKey, limit = 100) {
@@ -703,6 +769,72 @@ export async function getRecentCallsCount(clientKey, minutesBack = 60) {
     WHERE client_key = $1 AND created_at > now() - interval '${minutesBack} minutes'
   `, [clientKey]);
   return parseInt(rows[0]?.count || 0);
+}
+
+// Get quality metrics for a client
+export async function getCallQualityMetrics(clientKey, days = 30) {
+  const { rows } = await query(`
+    SELECT 
+      COUNT(*) as total_calls,
+      COUNT(*) FILTER (WHERE status = 'completed') as successful_calls,
+      COUNT(*) FILTER (WHERE outcome = 'booked') as bookings,
+      AVG(quality_score) as avg_quality_score,
+      AVG(duration) as avg_duration,
+      COUNT(*) FILTER (WHERE sentiment = 'positive') as positive_sentiment_count,
+      COUNT(*) FILTER (WHERE sentiment = 'negative') as negative_sentiment_count,
+      COUNT(*) FILTER (WHERE sentiment = 'neutral') as neutral_sentiment_count
+    FROM calls
+    WHERE client_key = $1 
+      AND created_at >= now() - interval '${days} days'
+      AND quality_score IS NOT NULL
+  `, [clientKey]);
+  
+  return rows[0] || {
+    total_calls: 0,
+    successful_calls: 0,
+    bookings: 0,
+    avg_quality_score: 0,
+    avg_duration: 0,
+    positive_sentiment_count: 0,
+    negative_sentiment_count: 0,
+    neutral_sentiment_count: 0
+  };
+}
+
+// Get quality alerts for a client
+export async function getQualityAlerts(clientKey, options = {}) {
+  const { resolved = false, limit = 50 } = options;
+  
+  const { rows } = await query(`
+    SELECT * FROM quality_alerts
+    WHERE client_key = $1 
+      AND resolved = $2
+    ORDER BY created_at DESC
+    LIMIT $3
+  `, [clientKey, resolved, limit]);
+  
+  return rows || [];
+}
+
+// Resolve a quality alert
+export async function resolveQualityAlert(alertId) {
+  await query(`
+    UPDATE quality_alerts
+    SET resolved = TRUE, resolved_at = NOW()
+    WHERE id = $1
+  `, [alertId]);
+}
+
+// Store quality alert
+export async function storeQualityAlert({ clientKey, alertType, severity, metric, actualValue, expectedValue, message, action, impact, metadata }) {
+  const metadataJson = metadata ? JSON.stringify(metadata) : null;
+  
+  await query(`
+    INSERT INTO quality_alerts (
+      client_key, alert_type, severity, metric, actual_value, expected_value,
+      message, action, impact, metadata
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+  `, [clientKey, alertType, severity, metric, actualValue, expectedValue, message, action, impact, metadataJson]);
 }
 
 // Retry queue functions
