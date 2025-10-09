@@ -8,6 +8,7 @@
     "start": "node server.js",
     "render-start": "node server.js",
     "render-build": "echo \"no build step\"",
+    "migrate": "node run-migration.js",
     "release": "standard-version",
     "release:patch": "standard-version --release-as patch",
     "release:minor": "standard-version --release-as minor",
