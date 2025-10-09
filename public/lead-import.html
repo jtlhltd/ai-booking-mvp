@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Import Leads - AI Booking Service</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 2.5rem;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1rem;
+        }
+        
+        .import-section {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 30px;
+            margin: 20px 0;
+        }
+        
+        .import-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+        }
+        
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 60px 20px;
+            text-align: center;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .upload-area:hover {
+            background: #f0f4ff;
+            border-color: #764ba2;
+        }
+        
+        .upload-area.dragover {
+            background: #e6f0ff;
+            border-color: #28a745;
+        }
+        
+        .upload-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+        }
+        
+        input[type="file"] {
+            display: none;
+        }
+        
+        textarea {
+            width: 100%;
+            min-height: 200px;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            font-family: monospace;
+            font-size: 0.9rem;
+            resize: vertical;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+        }
+        
+        .options {
+            margin: 20px 0;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+        }
+        
+        .checkbox-group {
+            margin: 15px 0;
+        }
+        
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            font-size: 1rem;
+            color: #333;
+            cursor: pointer;
+        }
+        
+        .checkbox-group input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+        
+        .results {
+            margin-top: 30px;
+            padding: 25px;
+            background: #d4edda;
+            border-radius: 15px;
+            border-left: 5px solid #28a745;
+            display: none;
+        }
+        
+        .results.error {
+            background: #f8d7da;
+            border-left-color: #dc3545;
+        }
+        
+        .results h3 {
+            color: #155724;
+            margin-bottom: 15px;
+        }
+        
+        .results.error h3 {
+            color: #721c24;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .stat {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            display: none;
+        }
+        
+        .loading.active {
+            display: block;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .example {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            border-left: 4px solid #ffc107;
+        }
+        
+        .example h4 {
+            color: #856404;
+            margin-bottom: 10px;
+        }
+        
+        .example code {
+            display: block;
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 0.9rem;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📥 Import Leads</h1>
+        <p class="subtitle">Upload your leads and we'll start converting them into appointments</p>
+        
+        <!-- Method 1: CSV Upload -->
+        <div class="import-section">
+            <h2>Method 1: Upload CSV File</h2>
+            
+            <div class="upload-area" id="uploadArea" onclick="document.getElementById('csvFile').click()">
+                <div class="upload-icon">📄</div>
+                <h3>Drop CSV file here or click to browse</h3>
+                <p style="color: #666; margin-top: 10px;">Supports: .csv files</p>
+            </div>
+            
+            <input type="file" id="csvFile" accept=".csv" onchange="handleFileSelect(event)">
+            
+            <div class="example">
+                <h4>📋 CSV Format Example:</h4>
+                <code>Name,Phone,Email,Service,Source
+John Smith,07700123456,john@example.com,GP Consultation,Facebook Ad
+Jane Doe,07700234567,jane@example.com,Botox Treatment,Website Form</code>
+                <p style="margin-top: 10px; font-size: 0.9rem; color: #856404;">
+                    <strong>Required:</strong> Phone number<br>
+                    <strong>Optional:</strong> Name, Email, Service, Source
+                </p>
+            </div>
+            
+            <div class="options">
+                <h4>Import Options:</h4>
+                <div class="checkbox-group">
+                    <label>
+                        <input type="checkbox" id="validatePhones">
+                        <span>Validate phone numbers with Twilio (+£0.005 per number, 20-30% better results)</span>
+                    </label>
+                </div>
+                <div class="checkbox-group">
+                    <label>
+                        <input type="checkbox" id="autoStart">
+                        <span>Auto-start campaign after import (call leads immediately)</span>
+                    </label>
+                </div>
+            </div>
+            
+            <button class="btn" id="importBtn" onclick="importCSV()" disabled>
+                Import Leads
+            </button>
+        </div>
+        
+        <!-- Method 2: Paste CSV Data -->
+        <div class="import-section">
+            <h2>Method 2: Paste CSV Data</h2>
+            <p style="color: #666; margin-bottom: 15px;">Copy and paste from Excel or Google Sheets</p>
+            
+            <textarea id="csvTextarea" placeholder="Name,Phone,Email,Service
+John Smith,07700123456,john@example.com,Consultation
+Jane Doe,07700234567,jane@example.com,Follow-up"></textarea>
+            
+            <button class="btn" onclick="importFromTextarea()" style="margin-top: 15px;">
+                Import from Text
+            </button>
+        </div>
+        
+        <!-- Method 3: Email Forward -->
+        <div class="import-section">
+            <h2>Method 3: Email Forward</h2>
+            <p style="color: #666; margin-bottom: 15px;">Forward inquiry emails to import leads automatically</p>
+            
+            <div style="background: white; padding: 20px; border-radius: 10px;">
+                <h4>Your Unique Email Address:</h4>
+                <code style="display: block; background: #f8f9fa; padding: 15px; border-radius: 8px; font-size: 1.1rem; text-align: center; margin: 15px 0;">
+                    leads+<span id="clientKeyEmail">YOUR_CLIENT_KEY</span>@ai-booking.com
+                </code>
+                
+                <p style="margin-top: 15px; color: #666;">
+                    <strong>How it works:</strong><br>
+                    1. Set up email forwarding rule in Gmail/Outlook<br>
+                    2. Forward all inquiry emails to the address above<br>
+                    3. We automatically extract name, phone, email<br>
+                    4. Lead added to your campaign within minutes<br>
+                    5. Our AI calls them automatically
+                </p>
+            </div>
+        </div>
+        
+        <!-- Results -->
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Importing leads...</p>
+        </div>
+        
+        <div class="results" id="results">
+            <h3>✅ Import Complete!</h3>
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value" id="statTotal">0</div>
+                    <div class="stat-label">Total Rows</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="statImported">0</div>
+                    <div class="stat-label">Imported</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="statDuplicates">0</div>
+                    <div class="stat-label">Duplicates</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="statInvalid">0</div>
+                    <div class="stat-label">Invalid</div>
+                </div>
+            </div>
+            
+            <div id="campaignStarted" style="margin-top: 20px; padding: 15px; background: #d1ecf1; border-radius: 10px; display: none;">
+                <p style="color: #0c5460; font-weight: 600;">
+                    🚀 Campaign started! Your AI is now calling these leads.
+                </p>
+            </div>
+            
+            <button class="btn" onclick="location.reload()" style="margin-top: 20px;">
+                Import More Leads
+            </button>
+        </div>
+    </div>
+    
+    <script>
+        const BASE_URL = 'https://ai-booking-mvp.onrender.com';
+        
+        // Get client key from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const clientKey = urlParams.get('client') || 'demo_client';
+        
+        // Update email address display
+        document.getElementById('clientKeyEmail').textContent = clientKey;
+        
+        let csvData = null;
+        
+        // Handle file selection
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                csvData = e.target.result;
+                document.getElementById('importBtn').disabled = false;
+                document.getElementById('uploadArea').innerHTML = `
+                    <div class="upload-icon">✅</div>
+                    <h3>${file.name} loaded</h3>
+                    <p style="color: #666; margin-top: 10px;">${csvData.split('\\n').length - 1} rows</p>
+                `;
+            };
+            reader.readAsText(file);
+        }
+        
+        // Handle drag and drop
+        const uploadArea = document.getElementById('uploadArea');
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            
+            const file = e.dataTransfer.files[0];
+            if (file && file.name.endsWith('.csv')) {
+                const event = { target: { files: [file] } };
+                handleFileSelect(event);
+            } else {
+                alert('Please drop a CSV file');
+            }
+        });
+        
+        // Import CSV
+        async function importCSV() {
+            if (!csvData) {
+                alert('Please select a CSV file first');
+                return;
+            }
+            
+            const validatePhones = document.getElementById('validatePhones').checked;
+            const autoStart = document.getElementById('autoStart').checked;
+            
+            // Show loading
+            document.getElementById('loading').classList.add('active');
+            document.getElementById('results').style.display = 'none';
+            
+            try {
+                const response = await fetch(`${BASE_URL}/api/import-leads/${clientKey}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        csvData,
+                        validatePhones,
+                        autoStartCampaign: autoStart
+                    })
+                });
+                
+                const data = await response.json();
+                
+                // Hide loading
+                document.getElementById('loading').classList.remove('active');
+                
+                if (data.ok) {
+                    // Show results
+                    const resultsDiv = document.getElementById('results');
+                    resultsDiv.style.display = 'block';
+                    resultsDiv.classList.remove('error');
+                    
+                    document.getElementById('statTotal').textContent = data.results.total;
+                    document.getElementById('statImported').textContent = data.results.imported;
+                    document.getElementById('statDuplicates').textContent = data.results.duplicates;
+                    document.getElementById('statInvalid').textContent = data.results.invalid;
+                    
+                    if (autoStart) {
+                        document.getElementById('campaignStarted').style.display = 'block';
+                    }
+                } else {
+                    // Show error
+                    const resultsDiv = document.getElementById('results');
+                    resultsDiv.style.display = 'block';
+                    resultsDiv.classList.add('error');
+                    resultsDiv.innerHTML = `
+                        <h3>❌ Import Failed</h3>
+                        <p>${data.error}</p>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('loading').classList.remove('active');
+                alert('Import failed: ' + error.message);
+            }
+        }
+        
+        // Import from textarea
+        async function importFromTextarea() {
+            const textData = document.getElementById('csvTextarea').value.trim();
+            if (!textData) {
+                alert('Please paste CSV data first');
+                return;
+            }
+            
+            csvData = textData;
+            await importCSV();
+        }
+    </script>
+</body>
+</html>
+

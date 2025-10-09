@@ -2738,6 +2738,88 @@ app.post('/api/quality-alerts/:alertId/resolve', async (req, res) => {
   }
 });
 
+// API endpoint to import leads from CSV
+app.post('/api/import-leads/:clientKey', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const { csvData, columnMapping, validatePhones, autoStartCampaign } = req.body;
+    
+    if (!csvData) {
+      return res.status(400).json({ ok: false, error: 'No CSV data provided' });
+    }
+    
+    const { parseCSV, importLeads } = await import('./lib/lead-import.js');
+    
+    // Parse CSV
+    const leads = parseCSV(csvData, columnMapping || {});
+    
+    // Import leads
+    const results = await importLeads(clientKey, leads, {
+      validatePhones: validatePhones === true,
+      skipDuplicates: true,
+      autoStartCampaign: autoStartCampaign === true
+    });
+    
+    res.json({
+      ok: true,
+      message: `Imported ${results.imported} leads`,
+      results
+    });
+    
+  } catch (error) {
+    console.error('[LEAD IMPORT ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// API endpoint to import lead from email forward
+app.post('/api/import-lead-email/:clientKey', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const { emailBody, emailSubject, emailFrom } = req.body;
+    
+    if (!emailBody) {
+      return res.status(400).json({ ok: false, error: 'No email body provided' });
+    }
+    
+    const { parseEmailForLead } = await import('./lib/lead-import.js');
+    
+    // Parse email to extract lead
+    const lead = parseEmailForLead(emailBody, emailSubject);
+    
+    // If no phone found, try to extract from sender
+    if (!lead.email && emailFrom) {
+      lead.email = emailFrom;
+    }
+    
+    if (!lead.phone && !lead.email) {
+      return res.status(400).json({ 
+        ok: false, 
+        error: 'Could not extract phone or email from forwarded message' 
+      });
+    }
+    
+    // Import single lead
+    await findOrCreateLead({
+      tenantKey: clientKey,
+      phone: lead.phone,
+      name: lead.name,
+      service: lead.service,
+      source: 'email_forward'
+    });
+    
+    res.json({
+      ok: true,
+      message: 'Lead imported from email',
+      lead
+    });
+    
+  } catch (error) {
+    console.error('[EMAIL IMPORT ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 // API endpoint to calculate ROI
 app.get('/api/roi/:clientKey', async (req, res) => {
   try {

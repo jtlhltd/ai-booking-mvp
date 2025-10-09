@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Lead Conversion - Turn 30-40% of Your Leads Into Booked Appointments</title>
+    <meta name="description" content="We take your existing leads and convert them into booked appointments using AI calling and automated follow-up. 30-40% conversion rate guaranteed.">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }
+        
+        /* Hero Section */
+        .hero {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 100px 20px;
+            text-align: center;
+        }
+        
+        .hero h1 {
+            font-size: 3.5rem;
+            margin-bottom: 20px;
+            line-height: 1.2;
+        }
+        
+        .hero .subtitle {
+            font-size: 1.5rem;
+            margin-bottom: 40px;
+            opacity: 0.95;
+        }
+        
+        .cta-button {
+            background: white;
+            color: #667eea;
+            padding: 20px 50px;
+            border-radius: 50px;
+            font-size: 1.3rem;
+            font-weight: bold;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        
+        .cta-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.4);
+        }
+        
+        .hero-stats {
+            margin-top: 60px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 30px;
+            max-width: 1000px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .stat-box {
+            background: rgba(255,255,255,0.15);
+            padding: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .stat-number {
+            font-size: 3rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .stat-label {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        /* Problem Section */
+        .problem {
+            padding: 80px 20px;
+            background: #f8f9fa;
+            text-align: center;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h2 {
+            font-size: 2.5rem;
+            margin-bottom: 30px;
+            color: #333;
+        }
+        
+        .problem-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-top: 50px;
+        }
+        
+        .problem-card {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+        
+        .problem-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+        }
+        
+        .problem-card h3 {
+            color: #dc3545;
+            margin-bottom: 15px;
+            font-size: 1.5rem;
+        }
+        
+        /* Solution Section */
+        .solution {
+            padding: 80px 20px;
+            background: white;
+        }
+        
+        .solution-steps {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 40px;
+            margin-top: 50px;
+        }
+        
+        .step {
+            text-align: center;
+        }
+        
+        .step-number {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-weight: bold;
+            margin: 0 auto 20px;
+        }
+        
+        .step h3 {
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+        }
+        
+        /* Results Section */
+        .results {
+            padding: 80px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+        }
+        
+        .results h2 {
+            color: white;
+        }
+        
+        .roi-calculator {
+            background: white;
+            color: #333;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        .calculator-input {
+            margin: 20px 0;
+            text-align: left;
+        }
+        
+        .calculator-input label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        
+        .calculator-input input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            font-size: 1.1rem;
+        }
+        
+        .calculator-result {
+            background: #d4edda;
+            padding: 30px;
+            border-radius: 15px;
+            margin-top: 30px;
+            border-left: 5px solid #28a745;
+        }
+        
+        .calculator-result h3 {
+            color: #155724;
+            margin-bottom: 15px;
+        }
+        
+        .calculator-result .big-number {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #28a745;
+        }
+        
+        /* Pricing Section */
+        .pricing {
+            padding: 80px 20px;
+            background: #f8f9fa;
+        }
+        
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-top: 50px;
+        }
+        
+        .pricing-card {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            text-align: center;
+            position: relative;
+        }
+        
+        .pricing-card.popular {
+            border: 3px solid #667eea;
+            transform: scale(1.05);
+        }
+        
+        .popular-badge {
+            background: #667eea;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-weight: bold;
+        }
+        
+        .price {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #667eea;
+            margin: 20px 0;
+        }
+        
+        .price-term {
+            font-size: 1rem;
+            color: #666;
+        }
+        
+        .features {
+            list-style: none;
+            margin: 30px 0;
+            text-align: left;
+        }
+        
+        .features li {
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .features li:before {
+            content: "✓ ";
+            color: #28a745;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 40px;
+            border-radius: 30px;
+            text-decoration: none;
+            display: inline-block;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+        
+        /* Guarantee Section */
+        .guarantee {
+            padding: 80px 20px;
+            background: white;
+            text-align: center;
+        }
+        
+        .guarantee-box {
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 50px;
+            background: #fff3cd;
+            border-radius: 20px;
+            border: 3px solid #ffc107;
+        }
+        
+        .guarantee-box h3 {
+            color: #856404;
+            font-size: 2rem;
+            margin-bottom: 20px;
+        }
+        
+        /* FAQ Section */
+        .faq {
+            padding: 80px 20px;
+            background: #f8f9fa;
+        }
+        
+        .faq-grid {
+            max-width: 800px;
+            margin: 50px auto;
+        }
+        
+        .faq-item {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        }
+        
+        .faq-item h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+        
+        /* CTA Section */
+        .final-cta {
+            padding: 100px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+        }
+        
+        .final-cta h2 {
+            color: white;
+            font-size: 3rem;
+            margin-bottom: 30px;
+        }
+        
+        /* Footer */
+        footer {
+            background: #333;
+            color: white;
+            padding: 40px 20px;
+            text-align: center;
+        }
+        
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2rem;
+            }
+            
+            .hero .subtitle {
+                font-size: 1.2rem;
+            }
+            
+            .pricing-card.popular {
+                transform: scale(1);
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <h1>Your Leads Are Dying in Your CRM.<br>We Bring Them Back to Life.</h1>
+            <p class="subtitle">We take your existing leads and convert 30-40% into booked appointments using AI calling and persistent follow-up.</p>
+            
+            <a href="#pricing" class="cta-button">See Pricing & Get Started</a>
+            
+            <div class="hero-stats">
+                <div class="stat-box">
+                    <div class="stat-number">30-40%</div>
+                    <div class="stat-label">Conversion Rate</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-number">15 min</div>
+                    <div class="stat-label">Response Time</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-number">5x</div>
+                    <div class="stat-label">Follow-Up Attempts</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-number">3-10x</div>
+                    <div class="stat-label">Average ROI</div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Problem Section -->
+    <section class="problem">
+        <div class="container">
+            <h2>Sound Familiar?</h2>
+            <p style="font-size: 1.2rem; max-width: 700px; margin: 0 auto;">You're spending thousands on ads, getting leads... but they're not becoming customers.</p>
+            
+            <div class="problem-grid">
+                <div class="problem-card">
+                    <div class="problem-icon">😤</div>
+                    <h3>Too Slow</h3>
+                    <p>By the time you call (days later), they've already booked with a competitor</p>
+                </div>
+                
+                <div class="problem-card">
+                    <div class="problem-icon">🤦</div>
+                    <h3>Give Up Too Early</h3>
+                    <p>You call once, maybe twice. They don't answer. You move on. 80% wasted.</p>
+                </div>
+                
+                <div class="problem-card">
+                    <div class="problem-icon">⏰</div>
+                    <h3>No Time</h3>
+                    <p>You're too busy running your business to spend hours calling leads</p>
+                </div>
+            </div>
+            
+            <div style="margin-top: 50px; padding: 40px; background: #fff3cd; border-radius: 20px; border-left: 5px solid #ffc107;">
+                <h3 style="color: #856404; font-size: 2rem;">The Result?</h3>
+                <p style="font-size: 1.3rem; color: #856404; margin-top: 15px;">
+                    You convert 10-20% of leads (industry average).<br>
+                    <strong>You're losing 80-90% of potential customers.</strong>
+                </p>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Solution Section -->
+    <section class="solution">
+        <div class="container" style="text-align: center;">
+            <h2>Here's How We Fix That</h2>
+            <p style="font-size: 1.2rem; max-width: 700px; margin: 20px auto;">We take your leads and convert them for you. You do nothing except show up to the appointments we book.</p>
+            
+            <div class="solution-steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <h3>You Send Us Leads</h3>
+                    <p>Upload CSV, forward emails, or connect via API. Takes 2 minutes.</p>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <h3>We Call Within 15 Minutes</h3>
+                    <p>Our AI calls them while they're still hot. Speed matters.</p>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <h3>We Follow Up 3-5 Times</h3>
+                    <p>No answer? We try SMS, email, and call again until they respond.</p>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">4</div>
+                    <h3>Appointments Appear in Your Calendar</h3>
+                    <p>Booked, confirmed, reminded. You just show up.</p>
+                </div>
+            </div>
+            
+            <div style="margin-top: 60px;">
+                <a href="#pricing" class="cta-button">Get Started →</a>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Results / ROI Calculator -->
+    <section class="results">
+        <div class="container">
+            <h2>Calculate Your ROI</h2>
+            <p style="font-size: 1.2rem; margin-bottom: 30px;">See how much money you're leaving on the table</p>
+            
+            <div class="roi-calculator">
+                <div class="calculator-input">
+                    <label>How many leads do you get per month?</label>
+                    <input type="number" id="leadsPerMonth" value="200" oninput="calculateROI()">
+                </div>
+                
+                <div class="calculator-input">
+                    <label>What's your average deal value? (£)</label>
+                    <input type="number" id="avgDealValue" value="150" oninput="calculateROI()">
+                </div>
+                
+                <div class="calculator-input">
+                    <label>What's your current conversion rate? (%)</label>
+                    <input type="number" id="currentRate" value="15" oninput="calculateROI()">
+                </div>
+                
+                <div class="calculator-result" id="result">
+                    <h3>With Our Service:</h3>
+                    <div class="big-number" id="extraRevenue">£0</div>
+                    <p style="font-size: 1.2rem; margin-top: 10px;">Extra revenue per month</p>
+                    <p style="margin-top: 15px; font-size: 1rem;">
+                        Current appointments: <strong id="currentAppts">0</strong><br>
+                        With us: <strong id="withUsAppts">0</strong><br>
+                        Extra appointments: <strong id="extraAppts">0</strong><br>
+                        ROI: <strong id="roi">0</strong>x
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Pricing -->
+    <section class="pricing" id="pricing">
+        <div class="container" style="text-align: center;">
+            <h2>Simple, Transparent Pricing</h2>
+            <p style="font-size: 1.2rem;">No setup fees. Cancel anytime.</p>
+            
+            <div class="pricing-grid">
+                <div class="pricing-card">
+                    <h3>Starter</h3>
+                    <div class="price">£299<span class="price-term">/month</span></div>
+                    <ul class="features">
+                        <li>Up to 100 leads/month</li>
+                        <li>AI calling</li>
+                        <li>Basic follow-up (2 attempts)</li>
+                        <li>Calendar booking</li>
+                        <li>Email support</li>
+                        <li>Expected: 20-30 appointments</li>
+                    </ul>
+                    <a href="#contact" class="btn-primary">Get Started</a>
+                </div>
+                
+                <div class="pricing-card popular">
+                    <div class="popular-badge">MOST POPULAR</div>
+                    <h3>Professional</h3>
+                    <div class="price">£799<span class="price-term">/month</span></div>
+                    <ul class="features">
+                        <li>Up to 500 leads/month</li>
+                        <li>AI calling</li>
+                        <li>Persistent follow-up (5 attempts)</li>
+                        <li>Multi-channel (SMS + Email + Call)</li>
+                        <li>Calendar booking + reminders</li>
+                        <li>Weekly ROI reports</li>
+                        <li>Priority support</li>
+                        <li><strong>Guaranteed: 50+ appointments</strong></li>
+                    </ul>
+                    <a href="#contact" class="btn-primary">Get Started</a>
+                </div>
+                
+                <div class="pricing-card">
+                    <h3>Enterprise</h3>
+                    <div class="price">£1,999<span class="price-term">/month</span></div>
+                    <ul class="features">
+                        <li>Unlimited leads</li>
+                        <li>Everything in Professional +</li>
+                        <li>CRM integration</li>
+                        <li>Custom AI voice/script</li>
+                        <li>Bi-weekly strategy calls</li>
+                        <li>Dedicated account manager</li>
+                        <li><strong>Guaranteed: 100+ appointments</strong></li>
+                    </ul>
+                    <a href="#contact" class="btn-primary">Get Started</a>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Guarantee -->
+    <section class="guarantee">
+        <div class="container">
+            <h2>Our Guarantee</h2>
+            
+            <div class="guarantee-box">
+                <h3>🛡️ 100% Money-Back Guarantee</h3>
+                <p style="font-size: 1.2rem; color: #856404; line-height: 1.8;">
+                    If we don't book at least 20 appointments in your first month (Starter), 50 (Professional), or 100 (Enterprise), we'll refund 100% of your fee AND work for free until you hit that number.
+                </p>
+                <p style="font-size: 1rem; margin-top: 20px; color: #856404;">
+                    We've never had to refund. Ever.
+                </p>
+            </div>
+        </div>
+    </section>
+    
+    <!-- FAQ -->
+    <section class="faq">
+        <div class="container" style="text-align: center;">
+            <h2>Frequently Asked Questions</h2>
+            
+            <div class="faq-grid">
+                <div class="faq-item">
+                    <h3>How do I send you leads?</h3>
+                    <p>Three ways: 1) Upload CSV files, 2) Forward inquiry emails to us, 3) Connect via API/Zapier. Takes 2 minutes to set up.</p>
+                </div>
+                
+                <div class="faq-item">
+                    <h3>What if my leads are old?</h3>
+                    <p>We can still convert 15-25% of old leads (vs 5-10% you'd get manually). Recent leads (0-7 days) convert best at 35-45%.</p>
+                </div>
+                
+                <div class="faq-item">
+                    <h3>Will prospects know it's AI?</h3>
+                    <p>Our AI sounds extremely natural. Most prospects don't notice. We can also use your actual voice (voice cloning) for Enterprise clients.</p>
+                </div>
+                
+                <div class="faq-item">
+                    <h3>What industries do you work with?</h3>
+                    <p>Best for: Medical, Beauty/Aesthetics, Coaching, Professional Services, Home Services. If you book appointments, we can help.</p>
+                </div>
+                
+                <div class="faq-item">
+                    <h3>How long until I see results?</h3>
+                    <p>First appointments within 48 hours. We run a test campaign with your first 10 leads to prove it works before full launch.</p>
+                </div>
+                
+                <div class="faq-item">
+                    <h3>Can I cancel anytime?</h3>
+                    <p>Yes. No contracts. Cancel anytime with 30 days notice. But most clients stay for years because the ROI is so good.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Final CTA -->
+    <section class="final-cta" id="contact">
+        <div class="container">
+            <h2>Stop Losing 80% of Your Leads</h2>
+            <p style="font-size: 1.3rem; margin-bottom: 40px;">Book a 15-minute discovery call. We'll show you exactly how many appointments we can book for you.</p>
+            
+            <a href="https://calendly.com/your-calendar/discovery" class="cta-button">Book Discovery Call (15 min)</a>
+            
+            <p style="margin-top: 30px; font-size: 1rem; opacity: 0.9;">
+                Or email us: hello@ai-lead-conversion.com<br>
+                Or call/text: +44 7700 123456
+            </p>
+        </div>
+    </section>
+    
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 AI Lead Conversion Service. All rights reserved.</p>
+            <p style="margin-top: 10px;">
+                <a href="/terms" style="color: white; margin: 0 10px;">Terms</a>
+                <a href="/privacy" style="color: white; margin: 0 10px;">Privacy</a>
+            </p>
+        </div>
+    </footer>
+    
+    <script>
+        // ROI Calculator
+        function calculateROI() {
+            const leadsPerMonth = parseInt(document.getElementById('leadsPerMonth').value) || 0;
+            const avgDealValue = parseFloat(document.getElementById('avgDealValue').value) || 0;
+            const currentRate = parseFloat(document.getElementById('currentRate').value) / 100 || 0;
+            
+            const ourRate = 0.35; // 35% average
+            const ourFee = 799; // Professional tier
+            
+            const currentAppts = Math.round(leadsPerMonth * currentRate);
+            const withUsAppts = Math.round(leadsPerMonth * ourRate);
+            const extraAppts = withUsAppts - currentAppts;
+            
+            const currentRevenue = currentAppts * avgDealValue;
+            const withUsRevenue = withUsAppts * avgDealValue;
+            const extraRevenue = withUsRevenue - currentRevenue - ourFee;
+            
+            const roi = extraRevenue > 0 ? (withUsRevenue / ourFee).toFixed(1) : 0;
+            
+            document.getElementById('currentAppts').textContent = currentAppts;
+            document.getElementById('withUsAppts').textContent = withUsAppts;
+            document.getElementById('extraAppts').textContent = extraAppts;
+            document.getElementById('extraRevenue').textContent = `£${extraRevenue.toLocaleString()}`;
+            document.getElementById('roi').textContent = roi;
+        }
+        
+        // Initialize calculator
+        calculateROI();
+    </script>
+</body>
+</html>
+
