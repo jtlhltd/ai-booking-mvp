@@ -2772,8 +2772,10 @@ app.post('/api/import-leads/:clientKey', async (req, res) => {
       autoStartCampaign: autoStartCampaign === true
     });
     
-    // Notify admin of lead upload
+    // Get client data
     const client = await getFullClient(clientKey);
+    
+    // Notify admin of lead upload
     await notifyLeadUpload({
       clientKey,
       clientName: client?.business_name || clientKey,
@@ -2781,11 +2783,48 @@ app.post('/api/import-leads/:clientKey', async (req, res) => {
       importMethod: 'csv_upload'
     });
     
+    // AUTO-START INSTANT CALLING (if enabled or by default)
+    let callResults = null;
+    if (autoStartCampaign !== false && results.imported > 0) {
+      console.log(`[INSTANT CALLING] Starting immediate calls for ${results.imported} leads...`);
+      
+      const { processCallQueue, estimateCallTime } = await import('./lib/instant-calling.js');
+      
+      // Get imported leads (sorted by score already)
+      const leadsToCall = leads.filter(l => {
+        // Only call leads that were successfully imported (not duplicates/invalid)
+        return l.phone && l.leadScore > 0;
+      }).slice(0, results.imported);
+      
+      const estimate = estimateCallTime(leadsToCall.length, 2000);
+      console.log(`[INSTANT CALLING] ETA: ${estimate.formatted} (complete by ${estimate.completionTime})`);
+      
+      // Start calling in background (don't block response)
+      processCallQueue(leadsToCall, client, {
+        maxConcurrent: 5,
+        delayBetweenCalls: 2000,
+        maxCallsPerBatch: 50
+      }).then(callResults => {
+        console.log(`[INSTANT CALLING] ✅ Campaign complete: ${callResults.initiated} calls made`);
+      }).catch(error => {
+        console.error(`[INSTANT CALLING] ❌ Campaign failed:`, error);
+      });
+      
+      callResults = {
+        status: 'started',
+        totalLeads: leadsToCall.length,
+        estimatedTime: estimate.formatted,
+        completionTime: estimate.completionTime,
+        message: `Campaign started! Calling ${leadsToCall.length} leads now...`
+      };
+    }
+    
     res.json({
       ok: true,
-      message: `Imported ${results.imported} leads`,
+      message: `Imported ${results.imported} leads${callResults ? ' - Campaign started!' : ''}`,
       results,
-      avgLeadScore: Math.round(leads.reduce((sum, l) => sum + l.leadScore, 0) / leads.length)
+      avgLeadScore: Math.round(leads.reduce((sum, l) => sum + l.leadScore, 0) / leads.length),
+      calling: callResults
     });
     
   } catch (error) {

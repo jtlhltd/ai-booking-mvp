@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Call Monitor - Admin Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #000000;
+            color: white;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            padding: 30px 0;
+            border-bottom: 1px solid #333;
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        
+        .live-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            background: #28a745;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+            margin-right: 8px;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        
+        .stat-box {
+            background: #1a1a1a;
+            padding: 25px;
+            border: 1px solid #333;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 3rem;
+            font-weight: 700;
+            color: #28a745;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            color: #999;
+            margin-top: 8px;
+        }
+        
+        .call-feed {
+            max-width: 1400px;
+            margin: 30px auto;
+        }
+        
+        .call-card {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            padding: 20px;
+            margin-bottom: 15px;
+            display: grid;
+            grid-template-columns: 80px 1fr 150px 150px;
+            gap: 20px;
+            align-items: center;
+            transition: all 0.3s ease;
+            animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .call-card:hover {
+            border-color: #666;
+            background: #222;
+        }
+        
+        .call-status {
+            text-align: center;
+            font-size: 2rem;
+        }
+        
+        .call-info h3 {
+            font-size: 1.2rem;
+            margin-bottom: 5px;
+        }
+        
+        .call-info p {
+            color: #999;
+            font-size: 0.9rem;
+        }
+        
+        .call-score {
+            text-align: center;
+        }
+        
+        .score-circle {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin: 0 auto;
+        }
+        
+        .score-high { background: #28a745; color: white; }
+        .score-medium { background: #ffc107; color: black; }
+        .score-low { background: #dc3545; color: white; }
+        
+        .call-time {
+            text-align: center;
+            font-size: 0.85rem;
+            color: #999;
+        }
+        
+        .status-calling { color: #ffc107; }
+        .status-completed { color: #28a745; }
+        .status-failed { color: #dc3545; }
+        .status-queued { color: #6c757d; }
+        
+        .filters {
+            margin: 20px 0;
+            padding: 20px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+        }
+        
+        .filters select {
+            background: #000;
+            color: white;
+            border: 1px solid #666;
+            padding: 10px 15px;
+            margin: 0 10px;
+            font-size: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>
+            <span class="live-indicator"></span>
+            Live Call Monitor
+        </h1>
+        <p>Real-time view of all outbound campaigns</p>
+    </div>
+    
+    <div class="stats-bar">
+        <div class="stat-box">
+            <div class="stat-value" id="totalCalls">0</div>
+            <div class="stat-label">Calls Today</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-value" id="activeCalls">0</div>
+            <div class="stat-label">Active Now</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-value" id="bookedToday">0</div>
+            <div class="stat-label">Booked Today</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-value" id="avgResponseTime">--</div>
+            <div class="stat-label">Avg Response Time</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-value" id="conversionRate">--</div>
+            <div class="stat-label">Conversion Rate</div>
+        </div>
+    </div>
+    
+    <div class="filters">
+        <label style="color: #999;">Filter by client:</label>
+        <select id="clientFilter" onchange="filterCalls()">
+            <option value="all">All Clients</option>
+        </select>
+        
+        <label style="color: #999;">Filter by status:</label>
+        <select id="statusFilter" onchange="filterCalls()">
+            <option value="all">All Status</option>
+            <option value="calling">Calling</option>
+            <option value="completed">Completed</option>
+            <option value="failed">Failed</option>
+            <option value="queued">Queued</option>
+        </select>
+    </div>
+    
+    <div class="call-feed" id="callFeed">
+        <p style="text-align: center; color: #666; padding: 60px;">
+            Waiting for calls to start...<br>
+            <small>Upload leads to see live calling activity</small>
+        </p>
+    </div>
+    
+    <script>
+        const BASE_URL = 'https://ai-booking-mvp.onrender.com';
+        let callHistory = [];
+        
+        // Mock call feed for demonstration
+        function addCallToFeed(call) {
+            callHistory.unshift(call);
+            if (callHistory.length > 50) callHistory.pop();
+            renderCallFeed();
+        }
+        
+        function renderCallFeed() {
+            const feed = document.getElementById('callFeed');
+            
+            if (callHistory.length === 0) {
+                feed.innerHTML = `
+                    <p style="text-align: center; color: #666; padding: 60px;">
+                        No calls yet today<br>
+                        <small>Upload leads to see live calling activity</small>
+                    </p>
+                `;
+                return;
+            }
+            
+            feed.innerHTML = callHistory.map(call => {
+                const scoreClass = call.score >= 80 ? 'score-high' : call.score >= 50 ? 'score-medium' : 'score-low';
+                const statusClass = `status-${call.status}`;
+                const statusEmoji = {
+                    calling: '📞',
+                    completed: '✅',
+                    failed: '❌',
+                    queued: '⏳'
+                }[call.status] || '📞';
+                
+                return `
+                    <div class="call-card">
+                        <div class="call-status ${statusClass}">${statusEmoji}</div>
+                        <div class="call-info">
+                            <h3>${call.leadName || call.leadPhone}</h3>
+                            <p>${call.clientName} • ${call.service || 'Consultation'}</p>
+                        </div>
+                        <div class="call-score">
+                            <div class="score-circle ${scoreClass}">${call.score}</div>
+                            <div style="margin-top: 5px; font-size: 0.85rem; color: #999;">Lead Score</div>
+                        </div>
+                        <div class="call-time">
+                            ${new Date(call.timestamp).toLocaleTimeString('en-GB')}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        // Update stats
+        function updateStats() {
+            const today = callHistory.filter(c => {
+                const callDate = new Date(c.timestamp).toDateString();
+                const todayDate = new Date().toDateString();
+                return callDate === todayDate;
+            });
+            
+            document.getElementById('totalCalls').textContent = today.length;
+            document.getElementById('activeCalls').textContent = today.filter(c => c.status === 'calling').length;
+            document.getElementById('bookedToday').textContent = today.filter(c => c.outcome === 'booked').length;
+            
+            const completed = today.filter(c => c.status === 'completed');
+            if (completed.length > 0) {
+                const booked = completed.filter(c => c.outcome === 'booked').length;
+                const rate = ((booked / completed.length) * 100).toFixed(1);
+                document.getElementById('conversionRate').textContent = rate + '%';
+            }
+            
+            // Calculate avg response time (mock for now)
+            document.getElementById('avgResponseTime').textContent = '28s';
+        }
+        
+        // Simulate real-time updates (in production, use WebSocket or polling)
+        function simulateRealTimeUpdates() {
+            // This would be replaced with actual API polling or WebSocket
+            setInterval(() => {
+                // In production: fetch('/api/admin/active-calls')
+                // For now, show concept
+            }, 5000);
+        }
+        
+        // Initialize
+        renderCallFeed();
+        updateStats();
+        simulateRealTimeUpdates();
+    </script>
+</body>
+</html>
+

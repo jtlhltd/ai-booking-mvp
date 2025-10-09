@@ -281,10 +281,13 @@ Jane Doe,07700234567,jane@example.com,Botox Treatment,Website Form</code>
                 </div>
                 <div class="checkbox-group">
                     <label>
-                        <input type="checkbox" id="autoStart">
-                        <span>Auto-start campaign after import (call leads immediately)</span>
+                        <input type="checkbox" id="autoStart" checked>
+                        <span>⚡ <strong>Call leads instantly</strong> (within 30 seconds - RECOMMENDED)</span>
                     </label>
                 </div>
+                <p style="margin-top: 10px; padding: 15px; background: #d1ecf1; border-radius: 8px; border-left: 4px solid #0c5460;">
+                    <strong>⚡ Speed Matters:</strong> Leads called within 15 minutes are 100x more likely to convert than leads called after 1 hour. We call in 30 seconds.
+                </p>
             </div>
             
             <button class="btn" id="importBtn" onclick="importCSV()" disabled>
@@ -465,7 +468,24 @@ Jane Doe,07700234567,jane@example.com,Follow-up"></textarea>
                     document.getElementById('statDuplicates').textContent = data.results.duplicates;
                     document.getElementById('statInvalid').textContent = data.results.invalid;
                     
-                    if (autoStart) {
+                    // Show calling status
+                    if (data.calling && data.calling.status === 'started') {
+                        const campaignDiv = document.getElementById('campaignStarted');
+                        campaignDiv.style.display = 'block';
+                        campaignDiv.innerHTML = `
+                            <p style="color: #0c5460; font-weight: 600; font-size: 1.1rem; margin-bottom: 10px;">
+                                ⚡ Campaign Started - Calling ${data.calling.totalLeads} Leads NOW!
+                            </p>
+                            <p style="color: #0c5460;">
+                                <strong>Speed:</strong> First lead called in ~30 seconds<br>
+                                <strong>Estimated completion:</strong> ${data.calling.estimatedTime}<br>
+                                <strong>Completion time:</strong> ${new Date(data.calling.completionTime).toLocaleTimeString('en-GB')}
+                            </p>
+                            <p style="margin-top: 15px; padding: 10px; background: #fff3cd; border-radius: 6px; color: #856404;">
+                                💡 <strong>Tip:</strong> Check your Vapi dashboard to see calls in real-time!
+                            </p>
+                        `;
+                    } else if (autoStart) {
                         document.getElementById('campaignStarted').style.display = 'block';
                     }
                 } else {
