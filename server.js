@@ -2103,11 +2103,26 @@ app.post('/api/search-google-places', async (req, res) => {
 
           if (detailsData.result) {
             const phone = detailsData.result.formatted_phone_number;
-            const isMobile = phone ? isMobileNumber(phone) : false;
+            let isMobile = phone ? isMobileNumber(phone) : false;
+            let phoneValidation = null;
+            
+            // Optional: Validate phone number with Twilio Lookup API (costs $0.005/number)
+            // Enable with query parameter: ?validatePhones=true
+            if (phone && req.query.validatePhones === 'true') {
+              const { validatePhoneNumber, isPhoneValidationEnabled } = await import('./lib/phone-validation.js');
+              if (isPhoneValidationEnabled()) {
+                phoneValidation = await validatePhoneNumber(phone);
+                // Override isMobile with validated data
+                if (phoneValidation.validated) {
+                  isMobile = phoneValidation.lineType === 'mobile' && phoneValidation.recommended;
+                  console.log(`[PHONE VALIDATED] ${detailsData.result.name}: ${phone} -> ${phoneValidation.lineType} (risk: ${phoneValidation.riskLevel})`);
+                }
+              }
+            }
             
             // Debug logging for mobile detection
             if (phone) {
-              console.log(`[PHONE CHECK] ${detailsData.result.name}: ${phone} -> Mobile: ${isMobile}`);
+              console.log(`[PHONE CHECK] ${detailsData.result.name}: ${phone} -> Mobile: ${isMobile}${phoneValidation ? ' (validated)' : ''}`);
             }
 
             const business = {
@@ -2122,13 +2137,24 @@ app.post('/api/search-google-places', async (req, res) => {
               businessSize: 'Solo',
               mobileLikelihood: 8,
               verified: true,
-              isUKBusiness: true
+              isUKBusiness: true,
+              // Add validation data if available
+              ...(phoneValidation && {
+                phoneValidation: {
+                  lineType: phoneValidation.lineType,
+                  carrier: phoneValidation.carrier,
+                  riskScore: phoneValidation.riskScore,
+                  riskLevel: phoneValidation.riskLevel,
+                  validated: phoneValidation.validated,
+                  validatedAt: phoneValidation.validatedAt
+                }
+              })
             };
 
             results.push(business);
 
             if (isMobile) {
-              console.log(`[MOBILE FOUND] ${results.filter(r => r.hasMobile).length}/${targetMobileNumbers}: ${business.name} - ${phone}`);
+              console.log(`[MOBILE FOUND] ${results.filter(r => r.hasMobile).length}/${targetMobileNumbers}: ${business.name} - ${phone}${phoneValidation ? ` [${phoneValidation.carrier}]` : ''}`);
             }
           }
         } catch (error) {
