@@ -173,8 +173,6 @@ async function initPostgres() {
     CREATE INDEX IF NOT EXISTS calls_status_idx ON calls(status);
     CREATE INDEX IF NOT EXISTS calls_outcome_idx ON calls(outcome);
     CREATE INDEX IF NOT EXISTS calls_created_idx ON calls(created_at);
-    CREATE INDEX IF NOT EXISTS calls_quality_idx ON calls(client_key, quality_score) WHERE quality_score IS NOT NULL;
-    CREATE INDEX IF NOT EXISTS calls_sentiment_idx ON calls(client_key, sentiment) WHERE sentiment IS NOT NULL;
 
     CREATE TABLE IF NOT EXISTS quality_alerts (
       id BIGSERIAL PRIMARY KEY,
@@ -193,7 +191,6 @@ async function initPostgres() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS quality_alerts_client_created_idx ON quality_alerts(client_key, created_at DESC);
-    CREATE INDEX IF NOT EXISTS quality_alerts_unresolved_idx ON quality_alerts(client_key) WHERE resolved = FALSE;
 
     CREATE TABLE IF NOT EXISTS retry_queue (
       id BIGSERIAL PRIMARY KEY,
