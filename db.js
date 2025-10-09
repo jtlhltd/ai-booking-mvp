@@ -191,6 +191,69 @@ async function initPostgres() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS quality_alerts_client_created_idx ON quality_alerts(client_key, created_at DESC);
+    
+    -- Objections tracking table
+    CREATE TABLE IF NOT EXISTS objections (
+      id BIGSERIAL PRIMARY KEY,
+      client_key TEXT NOT NULL,
+      call_id TEXT,
+      lead_phone TEXT NOT NULL,
+      objection_type TEXT NOT NULL,
+      objection_text TEXT NOT NULL,
+      response_used TEXT NOT NULL,
+      outcome TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS objections_type_outcome_idx ON objections(objection_type, outcome);
+    CREATE INDEX IF NOT EXISTS objections_client_idx ON objections(client_key, created_at DESC);
+    
+    -- Lead intelligence tracking
+    CREATE TABLE IF NOT EXISTS lead_engagement (
+      id BIGSERIAL PRIMARY KEY,
+      client_key TEXT NOT NULL,
+      lead_phone TEXT NOT NULL,
+      lead_score INTEGER DEFAULT 50,
+      followup_score INTEGER DEFAULT 50,
+      optimal_channel TEXT DEFAULT 'sms',
+      engagement_data JSONB,
+      last_updated TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(client_key, lead_phone)
+    );
+    CREATE INDEX IF NOT EXISTS lead_engagement_phone_idx ON lead_engagement(client_key, lead_phone);
+    CREATE INDEX IF NOT EXISTS lead_engagement_score_idx ON lead_engagement(lead_score DESC);
+    
+    -- Client referrals tracking
+    CREATE TABLE IF NOT EXISTS referrals (
+      id BIGSERIAL PRIMARY KEY,
+      referrer_client_key TEXT NOT NULL,
+      referred_client_key TEXT,
+      referred_email TEXT,
+      referred_phone TEXT,
+      status TEXT DEFAULT 'pending',
+      reward_type TEXT,
+      reward_value NUMERIC,
+      reward_redeemed BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      converted_at TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS referrals_referrer_idx ON referrals(referrer_client_key, status);
+    
+    -- Success benchmarks tracking
+    CREATE TABLE IF NOT EXISTS client_goals (
+      id BIGSERIAL PRIMARY KEY,
+      client_key TEXT NOT NULL,
+      month TEXT NOT NULL,
+      goal_appointments INTEGER,
+      goal_conversion_rate NUMERIC,
+      goal_revenue NUMERIC,
+      actual_appointments INTEGER DEFAULT 0,
+      actual_conversion_rate NUMERIC DEFAULT 0,
+      actual_revenue NUMERIC DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(client_key, month)
+    );
+    CREATE INDEX IF NOT EXISTS client_goals_month_idx ON client_goals(client_key, month);
 
     CREATE TABLE IF NOT EXISTS retry_queue (
       id BIGSERIAL PRIMARY KEY,

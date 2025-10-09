@@ -2749,9 +2749,21 @@ app.post('/api/import-leads/:clientKey', async (req, res) => {
     }
     
     const { parseCSV, importLeads } = await import('./lib/lead-import.js');
+    const { notifyLeadUpload } = await import('./lib/notifications.js');
+    const { calculateLeadScore } = await import('./lib/lead-intelligence.js');
     
     // Parse CSV
     const leads = parseCSV(csvData, columnMapping || {});
+    
+    // Calculate lead scores for prioritization
+    leads.forEach(lead => {
+      lead.leadScore = calculateLeadScore(lead);
+    });
+    
+    // Sort by score (call highest quality leads first)
+    leads.sort((a, b) => b.leadScore - a.leadScore);
+    
+    console.log(`[LEAD IMPORT] Top lead score: ${leads[0]?.leadScore}, Lowest: ${leads[leads.length - 1]?.leadScore}`);
     
     // Import leads
     const results = await importLeads(clientKey, leads, {
@@ -2760,10 +2772,20 @@ app.post('/api/import-leads/:clientKey', async (req, res) => {
       autoStartCampaign: autoStartCampaign === true
     });
     
+    // Notify admin of lead upload
+    const client = await getFullClient(clientKey);
+    await notifyLeadUpload({
+      clientKey,
+      clientName: client?.business_name || clientKey,
+      leadCount: results.imported,
+      importMethod: 'csv_upload'
+    });
+    
     res.json({
       ok: true,
       message: `Imported ${results.imported} leads`,
-      results
+      results,
+      avgLeadScore: Math.round(leads.reduce((sum, l) => sum + l.leadScore, 0) / leads.length)
     });
     
   } catch (error) {
