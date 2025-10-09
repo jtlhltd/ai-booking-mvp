@@ -89,7 +89,7 @@ async function initPostgres() {
     ssl: { rejectUnauthorized: false },
   });
 
-  // Run migrations
+  // Run migrations for schema creation
   await pool.query(`
     CREATE TABLE IF NOT EXISTS tenants (
       client_key TEXT PRIMARY KEY,
@@ -425,6 +425,77 @@ async function initPostgres() {
       PRIMARY KEY (client_key, key)
     );
   `);
+
+  // Add missing columns to existing tables (safe migration)
+  // This handles cases where tables exist but are missing new columns
+  try {
+    console.log('🔄 Checking for missing columns in calls table...');
+    
+    // Add quality analysis columns if they don't exist
+    await pool.query(`
+      DO $$ 
+      BEGIN
+        -- Add transcript column
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='calls' AND column_name='transcript') THEN
+          ALTER TABLE calls ADD COLUMN transcript TEXT;
+          RAISE NOTICE 'Added column: transcript';
+        END IF;
+        
+        -- Add recording_url column
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='calls' AND column_name='recording_url') THEN
+          ALTER TABLE calls ADD COLUMN recording_url TEXT;
+          RAISE NOTICE 'Added column: recording_url';
+        END IF;
+        
+        -- Add sentiment column
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='calls' AND column_name='sentiment') THEN
+          ALTER TABLE calls ADD COLUMN sentiment TEXT;
+          RAISE NOTICE 'Added column: sentiment';
+        END IF;
+        
+        -- Add quality_score column
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='calls' AND column_name='quality_score') THEN
+          ALTER TABLE calls ADD COLUMN quality_score INTEGER;
+          RAISE NOTICE 'Added column: quality_score';
+        END IF;
+        
+        -- Add objections column
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='calls' AND column_name='objections') THEN
+          ALTER TABLE calls ADD COLUMN objections JSONB;
+          RAISE NOTICE 'Added column: objections';
+        END IF;
+        
+        -- Add key_phrases column
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='calls' AND column_name='key_phrases') THEN
+          ALTER TABLE calls ADD COLUMN key_phrases JSONB;
+          RAISE NOTICE 'Added column: key_phrases';
+        END IF;
+        
+        -- Add metrics column
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='calls' AND column_name='metrics') THEN
+          ALTER TABLE calls ADD COLUMN metrics JSONB;
+          RAISE NOTICE 'Added column: metrics';
+        END IF;
+        
+        -- Add analyzed_at column
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='calls' AND column_name='analyzed_at') THEN
+          ALTER TABLE calls ADD COLUMN analyzed_at TIMESTAMPTZ;
+          RAISE NOTICE 'Added column: analyzed_at';
+        END IF;
+      END $$;
+    `);
+    
+    // Add indexes for quality queries
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS calls_quality_idx ON calls(client_key, quality_score) WHERE quality_score IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS calls_sentiment_idx ON calls(client_key, sentiment) WHERE sentiment IS NOT NULL;
+    `);
+    
+    console.log('✅ Call quality columns migration complete');
+  } catch (migrationError) {
+    console.error('⚠️  Column migration error (non-fatal):', migrationError.message);
+    // Don't fail startup if migration fails - columns might already exist
+  }
 
   DB_PATH = 'postgres';
   console.log('DB: Postgres connected');
