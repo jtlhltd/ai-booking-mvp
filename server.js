@@ -2642,6 +2642,73 @@ app.post('/api/create-client', async (req, res) => {
   }
 });
 
+// API endpoint to get call quality metrics
+app.get('/api/quality-metrics/:clientKey', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const days = parseInt(req.query.days) || 30;
+    
+    const metrics = await getCallQualityMetrics(clientKey, days);
+    
+    if (!metrics || metrics.total_calls === 0) {
+      return res.json({
+        ok: true,
+        period: `Last ${days} days`,
+        metrics: {
+          total_calls: 0,
+          successful_calls: 0,
+          bookings: 0,
+          success_rate: '0.0%',
+          booking_rate: '0.0%',
+          avg_quality_score: '0.0',
+          avg_duration: '0s',
+          sentiment: {
+            positive: 0,
+            negative: 0,
+            neutral: 0,
+            positive_rate: '0.0%'
+          }
+        },
+        message: 'No call data available yet'
+      });
+    }
+    
+    // Calculate rates
+    const successRate = metrics.total_calls > 0 
+      ? (metrics.successful_calls / metrics.total_calls) 
+      : 0;
+    const bookingRate = metrics.total_calls > 0 
+      ? (metrics.bookings / metrics.total_calls) 
+      : 0;
+    const positiveRate = metrics.total_calls > 0 
+      ? (metrics.positive_sentiment_count / metrics.total_calls) 
+      : 0;
+    
+    res.json({
+      ok: true,
+      period: `Last ${days} days`,
+      metrics: {
+        total_calls: parseInt(metrics.total_calls) || 0,
+        successful_calls: parseInt(metrics.successful_calls) || 0,
+        bookings: parseInt(metrics.bookings) || 0,
+        success_rate: (successRate * 100).toFixed(1) + '%',
+        booking_rate: (bookingRate * 100).toFixed(1) + '%',
+        avg_quality_score: parseFloat(metrics.avg_quality_score || 0).toFixed(1),
+        avg_duration: Math.round(metrics.avg_duration || 0) + 's',
+        sentiment: {
+          positive: parseInt(metrics.positive_sentiment_count) || 0,
+          negative: parseInt(metrics.negative_sentiment_count) || 0,
+          neutral: parseInt(metrics.neutral_sentiment_count) || 0,
+          positive_rate: (positiveRate * 100).toFixed(1) + '%'
+        }
+      }
+    });
+  } catch (error) {
+    console.error('[QUALITY METRICS ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 // Helper function to adjust color brightness
 function adjustColorBrightness(hex, percent) {
   const num = parseInt(hex.replace("#", ""), 16);

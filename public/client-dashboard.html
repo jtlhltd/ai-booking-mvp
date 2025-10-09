@@ -272,6 +272,112 @@
             margin: 0 10px;
         }
         
+        /* Quality Metrics Styles */
+        .quality-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        
+        .quality-card {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 20%);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+        
+        .quality-card:hover {
+            border-color: var(--client-color, #667eea);
+            transform: translateY(-3px);
+        }
+        
+        .quality-score {
+            font-size: 3rem;
+            font-weight: bold;
+            color: var(--client-color, #667eea);
+            margin: 10px 0;
+        }
+        
+        .quality-label {
+            font-size: 0.9rem;
+            color: #666;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .quality-subtitle {
+            font-size: 0.8rem;
+            color: #999;
+            margin-top: 5px;
+        }
+        
+        .sentiment-breakdown {
+            margin-top: 20px;
+        }
+        
+        .sentiment-bar {
+            width: 100%;
+            height: 40px;
+            background: #e9ecef;
+            border-radius: 20px;
+            overflow: hidden;
+            display: flex;
+            margin: 15px 0;
+        }
+        
+        .sentiment-positive {
+            background: linear-gradient(90deg, #28a745 0%, #34d058 100%);
+            transition: width 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .sentiment-neutral {
+            background: linear-gradient(90deg, #ffc107 0%, #ffca2c 100%);
+            transition: width 0.5s ease;
+        }
+        
+        .sentiment-negative {
+            background: linear-gradient(90deg, #dc3545 0%, #e4606d 100%);
+            transition: width 0.5s ease;
+        }
+        
+        .sentiment-legend {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 10px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .sentiment-legend span {
+            font-size: 0.9rem;
+            padding: 5px 10px;
+            border-radius: 5px;
+        }
+        
+        .sentiment-legend .positive {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .sentiment-legend .neutral {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .sentiment-legend .negative {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
         @media (max-width: 768px) {
             .dashboard {
                 grid-template-columns: 1fr;
@@ -284,6 +390,10 @@
             .client-info {
                 flex-direction: column;
                 text-align: center;
+            }
+            
+            .quality-grid {
+                grid-template-columns: repeat(2, 1fr);
             }
         }
     </style>
@@ -318,6 +428,14 @@
                 <h3>📊 Your Performance</h3>
                 <div id="client-metrics">
                     <div class="loading">Loading your metrics...</div>
+                </div>
+            </div>
+            
+            <!-- Call Quality Metrics (NEW) -->
+            <div class="card" style="grid-column: 1 / -1;">
+                <h3>🎯 Call Quality Metrics</h3>
+                <div id="quality-metrics">
+                    <div class="loading">Loading quality metrics...</div>
                 </div>
             </div>
             
@@ -618,9 +736,95 @@
             alert(`SMS Test for ${config.name}:\n\nSend "START" to:\n${config.phone}\n\nCheck logs for [AUTO-CALL TRIGGER] or [AUTO-CALL DEFERRED]`);
         }
         
+        async function loadQualityMetrics() {
+            const clientKey = getClientFromURL();
+            if (!clientKey) return;
+            
+            try {
+                const response = await fetch(`${BASE_URL}/api/quality-metrics/${clientKey}?days=30`);
+                const data = await response.json();
+                
+                const container = document.getElementById('quality-metrics');
+                
+                if (data.ok && data.metrics) {
+                    const m = data.metrics;
+                    
+                    container.innerHTML = `
+                        <div class="quality-grid">
+                            <div class="quality-card">
+                                <div class="quality-label">Avg Quality Score</div>
+                                <div class="quality-score">${m.avg_quality_score}</div>
+                                <div class="quality-subtitle">Out of 10</div>
+                            </div>
+                            
+                            <div class="quality-card">
+                                <div class="quality-label">Positive Sentiment</div>
+                                <div class="quality-score">${m.sentiment.positive_rate}</div>
+                                <div class="quality-subtitle">% of calls</div>
+                            </div>
+                            
+                            <div class="quality-card">
+                                <div class="quality-label">Connection Rate</div>
+                                <div class="quality-score">${m.success_rate}</div>
+                                <div class="quality-subtitle">Calls answered</div>
+                            </div>
+                            
+                            <div class="quality-card">
+                                <div class="quality-label">Booking Rate</div>
+                                <div class="quality-score">${m.booking_rate}</div>
+                                <div class="quality-subtitle">Calls → Bookings</div>
+                            </div>
+                        </div>
+                        
+                        <div class="sentiment-breakdown">
+                            <h4>Sentiment Breakdown (${m.total_calls} calls)</h4>
+                            <div class="sentiment-bar">
+                                <div class="sentiment-positive" style="width: ${m.sentiment.positive_rate}" 
+                                     title="Positive: ${m.sentiment.positive} calls"></div>
+                                <div class="sentiment-neutral" style="width: ${(m.sentiment.neutral / m.total_calls * 100).toFixed(1)}%" 
+                                     title="Neutral: ${m.sentiment.neutral} calls"></div>
+                                <div class="sentiment-negative" style="width: ${(m.sentiment.negative / m.total_calls * 100).toFixed(1)}%" 
+                                     title="Negative: ${m.sentiment.negative} calls"></div>
+                            </div>
+                            <div class="sentiment-legend">
+                                <span class="positive">😊 Positive: ${m.sentiment.positive}</span>
+                                <span class="neutral">😐 Neutral: ${m.sentiment.neutral}</span>
+                                <span class="negative">😞 Negative: ${m.sentiment.negative}</span>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 10px;">
+                            <h4 style="margin-bottom: 10px;">📊 Key Stats</h4>
+                            <p style="margin: 5px 0;"><strong>Total Calls:</strong> ${m.total_calls}</p>
+                            <p style="margin: 5px 0;"><strong>Successful Calls:</strong> ${m.successful_calls} (${m.success_rate})</p>
+                            <p style="margin: 5px 0;"><strong>Bookings:</strong> ${m.bookings} (${m.booking_rate})</p>
+                            <p style="margin: 5px 0;"><strong>Avg Call Duration:</strong> ${m.avg_duration}</p>
+                            <p style="margin: 5px 0; color: #666; font-size: 0.9rem;"><em>Last updated: ${new Date().toLocaleString()}</em></p>
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = `
+                        <div style="text-align: center; padding: 40px;">
+                            <p style="font-size: 1.2rem; color: #666;">📞 No call data available yet</p>
+                            <p style="margin-top: 10px; color: #999;">Make your first Vapi call to see quality metrics here</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Failed to load quality metrics:', error);
+                document.getElementById('quality-metrics').innerHTML = `
+                    <div style="text-align: center; padding: 20px; color: #dc3545;">
+                        <p>❌ Failed to load quality metrics</p>
+                        <p style="font-size: 0.9rem; margin-top: 5px;">${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
         function refreshClientData() {
             if (currentClient) {
                 loadClientData();
+                loadQualityMetrics();
             }
         }
         
@@ -633,12 +837,14 @@
             currentClient = getClientFromURL();
             applyClientTheme(currentClient);
             loadClientData();
+            loadQualityMetrics(); // Load quality metrics on init
         }
         
         // Auto-refresh every 30 seconds
         setInterval(() => {
             if (currentClient) {
                 loadClientData();
+                loadQualityMetrics(); // Refresh quality metrics too
             }
         }, 30000);
         
