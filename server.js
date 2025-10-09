@@ -2642,6 +2642,50 @@ app.post('/api/create-client', async (req, res) => {
   }
 });
 
+// API endpoint to get quality alerts
+app.get('/api/quality-alerts/:clientKey', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const resolved = req.query.resolved === 'true';
+    
+    const alerts = await getQualityAlerts(clientKey, { resolved });
+    
+    res.json({
+      ok: true,
+      alerts: alerts.map(alert => ({
+        id: alert.id,
+        type: alert.alert_type,
+        severity: alert.severity,
+        message: alert.message,
+        action: alert.action,
+        impact: alert.impact,
+        actual: alert.actual_value,
+        expected: alert.expected_value,
+        createdAt: alert.created_at,
+        resolved: alert.resolved,
+        resolvedAt: alert.resolved_at
+      }))
+    });
+  } catch (error) {
+    console.error('[QUALITY ALERTS ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// API endpoint to resolve a quality alert
+app.post('/api/quality-alerts/:alertId/resolve', async (req, res) => {
+  try {
+    const { alertId } = req.params;
+    
+    await resolveQualityAlert(alertId);
+    
+    res.json({ ok: true, message: 'Alert resolved' });
+  } catch (error) {
+    console.error('[RESOLVE ALERT ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 // API endpoint to get call quality metrics
 app.get('/api/quality-metrics/:clientKey', async (req, res) => {
   try {
@@ -10176,6 +10220,19 @@ async function startServer() {
     
     // Set server timeout to 25 minutes to handle comprehensive searches
     server.timeout = 1500000; // 25 minutes
+    
+    // Start quality monitoring cron job (runs every hour)
+    const { monitorAllClients } = await import('./lib/quality-monitoring.js');
+    cron.schedule('0 * * * *', async () => {
+      console.log('[CRON] 🔄 Running hourly quality monitoring...');
+      try {
+        await monitorAllClients();
+      } catch (error) {
+        console.error('[CRON ERROR] Quality monitoring failed:', error);
+      }
+    });
+    console.log('✅ Quality monitoring cron job scheduled (runs every hour)');
+    
   } catch (error) {
     console.error('❌ Failed to start server:', error);
     process.exit(1);

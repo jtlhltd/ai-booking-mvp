@@ -378,6 +378,103 @@
             color: #721c24;
         }
         
+        /* Quality Alerts Styles */
+        .alert-item {
+            background: white;
+            border-left: 4px solid #ffc107;
+            padding: 18px;
+            margin: 12px 0;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+        }
+        
+        .alert-item:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateX(5px);
+        }
+        
+        .alert-item.high {
+            border-left-color: #dc3545;
+            background: linear-gradient(to right, #fff5f5 0%, white 100%);
+        }
+        
+        .alert-item.medium {
+            border-left-color: #ffc107;
+            background: linear-gradient(to right, #fffbf0 0%, white 100%);
+        }
+        
+        .alert-item.low {
+            border-left-color: #17a2b8;
+            background: linear-gradient(to right, #f0f9ff 0%, white 100%);
+        }
+        
+        .alert-content {
+            flex: 1;
+        }
+        
+        .alert-content h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 1.1rem;
+        }
+        
+        .alert-content p {
+            margin: 8px 0;
+            color: #666;
+            font-size: 0.95rem;
+        }
+        
+        .alert-content .alert-meta {
+            font-size: 0.85rem;
+            color: #999;
+            margin-top: 10px;
+        }
+        
+        .alert-actions {
+            display: flex;
+            gap: 10px;
+            margin-left: 15px;
+        }
+        
+        .resolve-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+        
+        .resolve-btn:hover {
+            background: #218838;
+            transform: scale(1.05);
+        }
+        
+        .resolve-btn:active {
+            transform: scale(0.98);
+        }
+        
+        .no-alerts {
+            text-align: center;
+            padding: 40px;
+            color: #28a745;
+            font-size: 1.2rem;
+        }
+        
+        .no-alerts::before {
+            content: '✅';
+            display: block;
+            font-size: 3rem;
+            margin-bottom: 15px;
+        }
+        
         @media (max-width: 768px) {
             .dashboard {
                 grid-template-columns: 1fr;
@@ -436,6 +533,14 @@
                 <h3>🎯 Call Quality Metrics</h3>
                 <div id="quality-metrics">
                     <div class="loading">Loading quality metrics...</div>
+                </div>
+            </div>
+            
+            <!-- Quality Alerts (NEW) -->
+            <div class="card" style="grid-column: 1 / -1;" id="quality-alerts-card">
+                <h3>⚠️ Active Quality Alerts</h3>
+                <div id="quality-alerts">
+                    <div class="loading">Loading alerts...</div>
                 </div>
             </div>
             
@@ -821,10 +926,92 @@
             }
         }
         
+        async function loadQualityAlerts() {
+            const clientKey = getClientFromURL();
+            if (!clientKey) return;
+            
+            try {
+                const response = await fetch(`${BASE_URL}/api/quality-alerts/${clientKey}`);
+                const data = await response.json();
+                
+                const container = document.getElementById('quality-alerts');
+                const card = document.getElementById('quality-alerts-card');
+                
+                if (data.ok && data.alerts && data.alerts.length > 0) {
+                    // Show alerts
+                    container.innerHTML = data.alerts.map(alert => `
+                        <div class="alert-item ${alert.severity}" data-alert-id="${alert.id}">
+                            <div class="alert-content">
+                                <h4>${alert.severity === 'high' ? '🚨' : alert.severity === 'medium' ? '⚠️' : 'ℹ️'} ${alert.message}</h4>
+                                <p><strong>Action:</strong> ${alert.action}</p>
+                                <p><strong>Impact:</strong> ${alert.impact}</p>
+                                <p style="color: #666; font-size: 0.9rem;">
+                                    Expected: <strong>${alert.expected}</strong> | Actual: <strong>${alert.actual}</strong>
+                                </p>
+                                <p class="alert-meta">
+                                    ${new Date(alert.createdAt).toLocaleString()}
+                                </p>
+                            </div>
+                            <div class="alert-actions">
+                                <button class="resolve-btn" onclick="resolveAlert(${alert.id})">
+                                    ✓ Resolve
+                                </button>
+                            </div>
+                        </div>
+                    `).join('');
+                    card.style.display = 'block';
+                } else {
+                    // No alerts - show success message
+                    container.innerHTML = '<div class="no-alerts">All systems healthy!</div>';
+                    // Optionally hide the card entirely when no alerts
+                    // card.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Failed to load quality alerts:', error);
+                document.getElementById('quality-alerts').innerHTML = `
+                    <div style="text-align: center; padding: 20px; color: #666;">
+                        <p>Unable to load alerts</p>
+                    </div>
+                `;
+            }
+        }
+        
+        async function resolveAlert(alertId) {
+            try {
+                const response = await fetch(`${BASE_URL}/api/quality-alerts/${alertId}/resolve`, {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    // Remove alert from UI with animation
+                    const alertElement = document.querySelector(`[data-alert-id="${alertId}"]`);
+                    if (alertElement) {
+                        alertElement.style.opacity = '0';
+                        alertElement.style.transform = 'translateX(100px)';
+                        setTimeout(() => {
+                            alertElement.remove();
+                            
+                            // Check if no alerts left
+                            const container = document.getElementById('quality-alerts');
+                            if (!container.querySelector('.alert-item')) {
+                                container.innerHTML = '<div class="no-alerts">All systems healthy!</div>';
+                            }
+                        }, 300);
+                    }
+                } else {
+                    alert('Failed to resolve alert. Please try again.');
+                }
+            } catch (error) {
+                console.error('Failed to resolve alert:', error);
+                alert('Failed to resolve alert. Please try again.');
+            }
+        }
+        
         function refreshClientData() {
             if (currentClient) {
                 loadClientData();
                 loadQualityMetrics();
+                loadQualityAlerts();
             }
         }
         
@@ -838,6 +1025,7 @@
             applyClientTheme(currentClient);
             loadClientData();
             loadQualityMetrics(); // Load quality metrics on init
+            loadQualityAlerts(); // Load quality alerts on init
         }
         
         // Auto-refresh every 30 seconds
@@ -845,6 +1033,7 @@
             if (currentClient) {
                 loadClientData();
                 loadQualityMetrics(); // Refresh quality metrics too
+                loadQualityAlerts(); // Refresh alerts too
             }
         }, 30000);
         
