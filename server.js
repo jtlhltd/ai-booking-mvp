@@ -2090,8 +2090,8 @@ app.post('/api/search-google-places', async (req, res) => {
 
       for (const place of chunk) {
         try {
-          // Get detailed information for each place
-          const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=name,formatted_phone_number,website,formatted_address&key=${apiKey}`;
+          // Get detailed information for each place (including reviews for pain point analysis)
+          const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=name,formatted_phone_number,website,formatted_address,reviews,rating&key=${apiKey}`;
           const detailsResponse = await fetch(detailsUrl);
           const detailsData = await detailsResponse.json();
 
@@ -2105,6 +2105,19 @@ app.post('/api/search-google-places', async (req, res) => {
             const phone = detailsData.result.formatted_phone_number;
             let isMobile = phone ? isMobileNumber(phone) : false;
             let phoneValidation = null;
+            let reviewsAnalysis = null;
+            
+            // Analyze Google reviews for pain points (free, already included in API response)
+            if (detailsData.result.reviews && detailsData.result.reviews.length > 0) {
+              const { analyzeReviewsForPainPoints, calculateReviewScore, generatePersonalizedPitch } = await import('./lib/reviews-analysis.js');
+              reviewsAnalysis = analyzeReviewsForPainPoints(detailsData.result.reviews);
+              reviewsAnalysis.score = calculateReviewScore(reviewsAnalysis);
+              reviewsAnalysis.personalizedPitch = generatePersonalizedPitch(reviewsAnalysis, { 
+                name: detailsData.result.name 
+              });
+              
+              console.log(`[REVIEWS] ${detailsData.result.name}: ${reviewsAnalysis.painPoints.length} pain points, score: ${reviewsAnalysis.score}`);
+            }
             
             // Optional: Validate phone number with Twilio Lookup API (costs $0.005/number)
             // Enable with query parameter: ?validatePhones=true
@@ -2122,7 +2135,7 @@ app.post('/api/search-google-places', async (req, res) => {
             
             // Debug logging for mobile detection
             if (phone) {
-              console.log(`[PHONE CHECK] ${detailsData.result.name}: ${phone} -> Mobile: ${isMobile}${phoneValidation ? ' (validated)' : ''}`);
+              console.log(`[PHONE CHECK] ${detailsData.result.name}: ${phone} -> Mobile: ${isMobile}${phoneValidation ? ' (validated)' : ''}${reviewsAnalysis ? ` | Reviews: ${reviewsAnalysis.score}/100` : ''}`);
             }
 
             const business = {
@@ -2132,6 +2145,7 @@ app.post('/api/search-google-places', async (req, res) => {
               email: generateEmail(detailsData.result.name || place.name),
               website: detailsData.result.website || place.website,
               address: detailsData.result.formatted_address || place.formatted_address,
+              rating: detailsData.result.rating || 0,
               industry: query,
               source: 'Google Places',
               businessSize: 'Solo',
@@ -2147,6 +2161,18 @@ app.post('/api/search-google-places', async (req, res) => {
                   riskLevel: phoneValidation.riskLevel,
                   validated: phoneValidation.validated,
                   validatedAt: phoneValidation.validatedAt
+                }
+              }),
+              // Add reviews analysis if available
+              ...(reviewsAnalysis && {
+                reviewsAnalysis: {
+                  painPoints: reviewsAnalysis.painPoints,
+                  opportunities: reviewsAnalysis.opportunities,
+                  sentiment: reviewsAnalysis.sentiment,
+                  avgRating: reviewsAnalysis.avgRating,
+                  totalReviews: reviewsAnalysis.totalReviews,
+                  score: reviewsAnalysis.score,
+                  personalizedPitch: reviewsAnalysis.personalizedPitch
                 }
               })
             };
@@ -2708,6 +2734,29 @@ app.post('/api/quality-alerts/:alertId/resolve', async (req, res) => {
     res.json({ ok: true, message: 'Alert resolved' });
   } catch (error) {
     console.error('[RESOLVE ALERT ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// API endpoint to calculate ROI
+app.get('/api/roi/:clientKey', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const days = parseInt(req.query.days) || 30;
+    const avgDealValue = parseFloat(req.query.avgDealValue) || 150;
+    
+    const { calculateROI, projectROI } = await import('./lib/roi-calculator.js');
+    
+    const roi = await calculateROI(clientKey, days, { avgDealValue });
+    const projection = projectROI(roi, 30);
+    
+    res.json({
+      ok: true,
+      ...roi,
+      projection
+    });
+  } catch (error) {
+    console.error('[ROI ERROR]', error);
     res.status(500).json({ ok: false, error: error.message });
   }
 });

@@ -103,6 +103,18 @@ router.post('/webhooks/vapi', async (req, res) => {
         reason: outcome,
         metadata
       });
+      
+      // Schedule automated follow-up sequence
+      const { scheduleFollowUps } = await import('../lib/follow-up-sequences.js');
+      await scheduleFollowUps({
+        clientKey: tenantKey,
+        leadPhone,
+        leadName: metadata.leadName || metadata.businessName,
+        businessName: metadata.businessName,
+        industry: metadata.industry,
+        outcome,
+        callId
+      });
     } else if (status === 'completed' && (outcome === 'interested' || outcome === 'positive' || body.summary?.includes('interest') || body.summary?.includes('interested'))) {
       // Trigger SMS pipeline for interested prospects
       await handleInterestedProspect({

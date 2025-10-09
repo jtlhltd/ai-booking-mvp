@@ -528,6 +528,14 @@
                 </div>
             </div>
             
+            <!-- ROI Calculator (NEW) -->
+            <div class="card" style="grid-column: 1 / -1; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                <h3 style="color: white;">💰 Return on Investment</h3>
+                <div id="roi-calculator">
+                    <div class="loading" style="color: white;">Calculating ROI...</div>
+                </div>
+            </div>
+            
             <!-- Call Quality Metrics (NEW) -->
             <div class="card" style="grid-column: 1 / -1;">
                 <h3>🎯 Call Quality Metrics</h3>
@@ -926,6 +934,113 @@
             }
         }
         
+        async function loadROI() {
+            const clientKey = getClientFromURL();
+            if (!clientKey) return;
+            
+            try {
+                const response = await fetch(`${BASE_URL}/api/roi/${clientKey}?days=30&avgDealValue=150`);
+                const data = await response.json();
+                
+                const container = document.getElementById('roi-calculator');
+                
+                if (data.ok && data.roi) {
+                    const r = data.roi;
+                    const c = data.costs;
+                    const rev = data.revenue;
+                    const eff = data.efficiency;
+                    const summary = data.summary;
+                    
+                    const profitColor = r.profit > 0 ? '#28a745' : '#dc3545';
+                    const roiColor = r.multiplier >= 5 ? '#28a745' : r.multiplier >= 2 ? '#ffc107' : '#dc3545';
+                    
+                    container.innerHTML = `
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 25px;">
+                            <div style="background: rgba(255,255,255,0.15); padding: 25px; border-radius: 12px; text-align: center;">
+                                <div style="font-size: 0.9rem; opacity: 0.9; text-transform: uppercase; letter-spacing: 1px;">Total Spent</div>
+                                <div style="font-size: 2.5rem; font-weight: bold; margin: 10px 0;">£${c.total.toFixed(2)}</div>
+                                <div style="font-size: 0.85rem; opacity: 0.8;">${c.breakdown.totalCalls} calls, ${c.breakdown.estimatedSMS} SMS</div>
+                            </div>
+                            
+                            <div style="background: rgba(255,255,255,0.15); padding: 25px; border-radius: 12px; text-align: center;">
+                                <div style="font-size: 0.9rem; opacity: 0.9; text-transform: uppercase; letter-spacing: 1px;">Total Revenue</div>
+                                <div style="font-size: 2.5rem; font-weight: bold; margin: 10px 0;">£${rev.total.toFixed(2)}</div>
+                                <div style="font-size: 0.85rem; opacity: 0.8;">${rev.bookings} bookings × £${rev.avgDealValue}</div>
+                            </div>
+                            
+                            <div style="background: rgba(255,255,255,0.15); padding: 25px; border-radius: 12px; text-align: center;">
+                                <div style="font-size: 0.9rem; opacity: 0.9; text-transform: uppercase; letter-spacing: 1px;">Profit</div>
+                                <div style="font-size: 2.5rem; font-weight: bold; margin: 10px 0; color: ${profitColor};">
+                                    ${r.profit >= 0 ? '+' : ''}£${r.profit.toFixed(2)}
+                                </div>
+                                <div style="font-size: 0.85rem; opacity: 0.8;">${r.multiplier.toFixed(1)}x return</div>
+                            </div>
+                            
+                            <div style="background: rgba(255,255,255,0.2); padding: 25px; border-radius: 12px; text-align: center; border: 2px solid rgba(255,255,255,0.3);">
+                                <div style="font-size: 0.9rem; opacity: 0.9; text-transform: uppercase; letter-spacing: 1px;">ROI</div>
+                                <div style="font-size: 3rem; font-weight: bold; margin: 10px 0;">
+                                    ${r.multiplier.toFixed(1)}x
+                                </div>
+                                <div style="font-size: 0.85rem; opacity: 0.8;">${r.percentage.toFixed(0)}% return</div>
+                            </div>
+                        </div>
+                        
+                        <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+                            <h4 style="margin: 0 0 15px 0; color: white;">📊 Efficiency Metrics</h4>
+                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+                                <div>
+                                    <div style="opacity: 0.8; font-size: 0.9rem;">Conversion Rate</div>
+                                    <div style="font-size: 1.5rem; font-weight: bold;">${eff.conversionRate}</div>
+                                </div>
+                                <div>
+                                    <div style="opacity: 0.8; font-size: 0.9rem;">Cost Per Booking</div>
+                                    <div style="font-size: 1.5rem; font-weight: bold;">£${eff.costPerBooking}</div>
+                                </div>
+                                <div>
+                                    <div style="opacity: 0.8; font-size: 0.9rem;">Revenue Per Call</div>
+                                    <div style="font-size: 1.5rem; font-weight: bold;">£${eff.revenuePerCall}</div>
+                                </div>
+                                <div>
+                                    <div style="opacity: 0.8; font-size: 0.9rem;">Profit Per Call</div>
+                                    <div style="font-size: 1.5rem; font-weight: bold; color: ${profitColor};">£${eff.profitPerCall}</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        ${summary.insights && summary.insights.length > 0 ? `
+                            <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px;">
+                                <h4 style="margin: 0 0 15px 0; color: white;">💡 Insights</h4>
+                                ${summary.insights.map(insight => `
+                                    <div style="margin: 10px 0; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 6px;">
+                                        <span style="font-size: 1.2rem; margin-right: 8px;">${insight.icon}</span>
+                                        <span>${insight.message}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                        
+                        <div style="margin-top: 15px; opacity: 0.7; font-size: 0.85rem; text-align: center;">
+                            Based on last 30 days • Avg deal value: £${rev.avgDealValue}
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = `
+                        <div style="text-align: center; padding: 40px; color: white;">
+                            <p style="font-size: 1.2rem;">📊 No ROI data available yet</p>
+                            <p style="margin-top: 10px; opacity: 0.8;">Make some calls and bookings to see your ROI</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Failed to load ROI:', error);
+                document.getElementById('roi-calculator').innerHTML = `
+                    <div style="text-align: center; padding: 20px; color: white;">
+                        <p>❌ Failed to load ROI data</p>
+                    </div>
+                `;
+            }
+        }
+        
         async function loadQualityAlerts() {
             const clientKey = getClientFromURL();
             if (!clientKey) return;
@@ -1024,6 +1139,7 @@
             currentClient = getClientFromURL();
             applyClientTheme(currentClient);
             loadClientData();
+            loadROI(); // Load ROI calculator
             loadQualityMetrics(); // Load quality metrics on init
             loadQualityAlerts(); // Load quality alerts on init
         }
@@ -1032,6 +1148,7 @@
         setInterval(() => {
             if (currentClient) {
                 loadClientData();
+                loadROI(); // Refresh ROI
                 loadQualityMetrics(); // Refresh quality metrics too
                 loadQualityAlerts(); // Refresh alerts too
             }
