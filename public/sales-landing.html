@@ -13,17 +13,31 @@
         }
         
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
             line-height: 1.6;
-            color: #333;
+            color: #1a1a1a;
+            background: #ffffff;
         }
         
         /* Hero Section */
         .hero {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #000000;
             color: white;
-            padding: 100px 20px;
+            padding: 120px 20px 100px;
             text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 100%);
+            pointer-events: none;
         }
         
         .hero h1 {
@@ -39,21 +53,23 @@
         }
         
         .cta-button {
-            background: white;
-            color: #667eea;
-            padding: 20px 50px;
-            border-radius: 50px;
-            font-size: 1.3rem;
-            font-weight: bold;
+            background: #ffffff;
+            color: #000000;
+            padding: 18px 45px;
+            border-radius: 4px;
+            font-size: 1.1rem;
+            font-weight: 600;
             text-decoration: none;
             display: inline-block;
             transition: all 0.3s ease;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            border: 2px solid #ffffff;
+            letter-spacing: 0.5px;
         }
         
         .cta-button:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 15px 40px rgba(0,0,0,0.4);
+            background: transparent;
+            color: #ffffff;
+            transform: translateY(-2px);
         }
         
         .hero-stats {
@@ -67,10 +83,16 @@
         }
         
         .stat-box {
-            background: rgba(255,255,255,0.15);
-            padding: 30px;
-            border-radius: 15px;
-            backdrop-filter: blur(10px);
+            background: rgba(255,255,255,0.08);
+            padding: 35px 30px;
+            border-radius: 2px;
+            border: 1px solid rgba(255,255,255,0.2);
+            transition: all 0.3s ease;
+        }
+        
+        .stat-box:hover {
+            background: rgba(255,255,255,0.12);
+            border-color: rgba(255,255,255,0.4);
         }
         
         .stat-number {
@@ -86,8 +108,8 @@
         
         /* Problem Section */
         .problem {
-            padding: 80px 20px;
-            background: #f8f9fa;
+            padding: 100px 20px;
+            background: #fafafa;
             text-align: center;
         }
         
@@ -97,9 +119,11 @@
         }
         
         h2 {
-            font-size: 2.5rem;
-            margin-bottom: 30px;
-            color: #333;
+            font-size: 2.8rem;
+            margin-bottom: 25px;
+            color: #000000;
+            font-weight: 700;
+            letter-spacing: -0.5px;
         }
         
         .problem-grid {
@@ -111,9 +135,15 @@
         
         .problem-card {
             background: white;
-            padding: 40px;
-            border-radius: 20px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            padding: 45px 35px;
+            border-radius: 0;
+            border: 1px solid #e0e0e0;
+            transition: all 0.3s ease;
+        }
+        
+        .problem-card:hover {
+            border-color: #000000;
+            transform: translateY(-5px);
         }
         
         .problem-icon {
@@ -122,15 +152,17 @@
         }
         
         .problem-card h3 {
-            color: #dc3545;
+            color: #000000;
             margin-bottom: 15px;
-            font-size: 1.5rem;
+            font-size: 1.4rem;
+            font-weight: 600;
         }
         
         /* Solution Section */
         .solution {
-            padding: 80px 20px;
-            background: white;
+            padding: 100px 20px;
+            background: #ffffff;
+            border-top: 1px solid #e0e0e0;
         }
         
         .solution-steps {
@@ -145,17 +177,18 @@
         }
         
         .step-number {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #000000;
             color: white;
-            width: 80px;
-            height: 80px;
-            border-radius: 50%;
+            width: 70px;
+            height: 70px;
+            border-radius: 0;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 2rem;
-            font-weight: bold;
-            margin: 0 auto 20px;
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin: 0 auto 25px;
+            border: 2px solid #000000;
         }
         
         .step h3 {
@@ -165,24 +198,25 @@
         
         /* Results Section */
         .results {
-            padding: 80px 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 100px 20px;
+            background: #000000;
             color: white;
             text-align: center;
         }
         
         .results h2 {
             color: white;
+            letter-spacing: -0.5px;
         }
         
         .roi-calculator {
             background: white;
-            color: #333;
+            color: #1a1a1a;
             max-width: 600px;
             margin: 50px auto;
-            padding: 40px;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 50px 45px;
+            border-radius: 0;
+            border: 1px solid #e0e0e0;
         }
         
         .calculator-input {
@@ -199,34 +233,42 @@
         .calculator-input input {
             width: 100%;
             padding: 15px;
-            border: 2px solid #ddd;
-            border-radius: 10px;
+            border: 1px solid #d0d0d0;
+            border-radius: 0;
             font-size: 1.1rem;
+            transition: border-color 0.3s ease;
+        }
+        
+        .calculator-input input:focus {
+            outline: none;
+            border-color: #000000;
         }
         
         .calculator-result {
-            background: #d4edda;
-            padding: 30px;
-            border-radius: 15px;
+            background: #000000;
+            color: white;
+            padding: 35px;
+            border-radius: 0;
             margin-top: 30px;
-            border-left: 5px solid #28a745;
         }
         
         .calculator-result h3 {
-            color: #155724;
+            color: white;
             margin-bottom: 15px;
+            font-weight: 600;
         }
         
         .calculator-result .big-number {
-            font-size: 3rem;
-            font-weight: bold;
-            color: #28a745;
+            font-size: 3.5rem;
+            font-weight: 700;
+            color: #ffffff;
+            letter-spacing: -1px;
         }
         
         /* Pricing Section */
         .pricing {
-            padding: 80px 20px;
-            background: #f8f9fa;
+            padding: 100px 20px;
+            background: #fafafa;
         }
         
         .pricing-grid {
@@ -238,35 +280,48 @@
         
         .pricing-card {
             background: white;
-            padding: 40px;
-            border-radius: 20px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            padding: 50px 40px;
+            border-radius: 0;
+            border: 1px solid #e0e0e0;
             text-align: center;
             position: relative;
+            transition: all 0.3s ease;
+        }
+        
+        .pricing-card:hover {
+            border-color: #000000;
+            transform: translateY(-5px);
         }
         
         .pricing-card.popular {
-            border: 3px solid #667eea;
-            transform: scale(1.05);
+            border: 2px solid #000000;
+            transform: scale(1);
+        }
+        
+        .pricing-card.popular:hover {
+            transform: translateY(-5px) scale(1);
         }
         
         .popular-badge {
-            background: #667eea;
+            background: #000000;
             color: white;
-            padding: 10px 20px;
-            border-radius: 20px;
+            padding: 8px 20px;
+            border-radius: 0;
             position: absolute;
-            top: -15px;
+            top: -1px;
             left: 50%;
             transform: translateX(-50%);
-            font-weight: bold;
+            font-weight: 600;
+            font-size: 0.85rem;
+            letter-spacing: 1px;
         }
         
         .price {
-            font-size: 3rem;
-            font-weight: bold;
-            color: #667eea;
-            margin: 20px 0;
+            font-size: 3.5rem;
+            font-weight: 700;
+            color: #000000;
+            margin: 25px 0;
+            letter-spacing: -2px;
         }
         
         .price-term {
@@ -293,47 +348,53 @@
         }
         
         .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #000000;
             color: white;
             padding: 15px 40px;
-            border-radius: 30px;
+            border-radius: 0;
             text-decoration: none;
             display: inline-block;
             font-weight: 600;
             transition: all 0.3s ease;
+            border: 2px solid #000000;
+            letter-spacing: 0.5px;
         }
         
         .btn-primary:hover {
+            background: transparent;
+            color: #000000;
             transform: translateY(-2px);
-            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
         }
         
         /* Guarantee Section */
         .guarantee {
-            padding: 80px 20px;
+            padding: 100px 20px;
             background: white;
             text-align: center;
+            border-top: 1px solid #e0e0e0;
         }
         
         .guarantee-box {
             max-width: 800px;
             margin: 50px auto;
-            padding: 50px;
-            background: #fff3cd;
-            border-radius: 20px;
-            border: 3px solid #ffc107;
+            padding: 60px 50px;
+            background: #fafafa;
+            border-radius: 0;
+            border: 2px solid #000000;
         }
         
         .guarantee-box h3 {
-            color: #856404;
-            font-size: 2rem;
-            margin-bottom: 20px;
+            color: #000000;
+            font-size: 2.2rem;
+            margin-bottom: 25px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
         }
         
         /* FAQ Section */
         .faq {
-            padding: 80px 20px;
-            background: #f8f9fa;
+            padding: 100px 20px;
+            background: #fafafa;
         }
         
         .faq-grid {
@@ -343,37 +404,56 @@
         
         .faq-item {
             background: white;
-            padding: 30px;
-            border-radius: 15px;
-            margin-bottom: 20px;
-            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+            padding: 35px;
+            border-radius: 0;
+            margin-bottom: 15px;
+            border: 1px solid #e0e0e0;
+            transition: all 0.3s ease;
+        }
+        
+        .faq-item:hover {
+            border-color: #000000;
         }
         
         .faq-item h3 {
-            color: #667eea;
+            color: #000000;
             margin-bottom: 15px;
+            font-weight: 600;
+            font-size: 1.2rem;
         }
         
         /* CTA Section */
         .final-cta {
-            padding: 100px 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 120px 20px;
+            background: #000000;
             color: white;
             text-align: center;
         }
         
         .final-cta h2 {
             color: white;
-            font-size: 3rem;
+            font-size: 3.2rem;
             margin-bottom: 30px;
+            font-weight: 700;
+            letter-spacing: -1px;
         }
         
         /* Footer */
         footer {
-            background: #333;
-            color: white;
-            padding: 40px 20px;
+            background: #1a1a1a;
+            color: #999;
+            padding: 50px 20px;
             text-align: center;
+            border-top: 1px solid #333;
+        }
+        
+        footer a {
+            color: #ccc;
+            transition: color 0.3s ease;
+        }
+        
+        footer a:hover {
+            color: #ffffff;
         }
         
         @media (max-width: 768px) {
