@@ -5566,6 +5566,29 @@ app.post('/webhooks/vapi', async (req, res) => {
       console.error('[confirm sms failed]', e?.message || e);
     }
 
+    // Schedule appointment reminders (24h and 1h before)
+    try {
+      const { scheduleAppointmentReminders } = await import('./lib/appointment-reminders.js');
+      
+      const reminderResult = await scheduleAppointmentReminders({
+        leadPhone: lead.phone,
+        leadName: lead.name || 'Customer',
+        leadEmail: lead.email || null,
+        businessName: client?.displayName || client?.clientKey || 'Our Business',
+        service: service,
+        appointmentTime: startISO,
+        location: client?.address || client?.location || 'TBD',
+        businessPhone: client?.phone || client?.businessPhone || '',
+        clientKey: clientKey,
+        appointmentId: event.id
+      });
+      
+      console.log('[REMINDERS] Scheduled:', reminderResult);
+    } catch (reminderError) {
+      console.error('[REMINDER SCHEDULING ERROR]', reminderError);
+      // Don't fail the booking if reminders fail
+    }
+
     return res.json({ ok:true, eventId: event.id, htmlLink: event.htmlLink || null });
   } catch (err) {
     console.error('[VAPI WEBHOOK ERROR]', err?.response?.data || err?.message || err);
@@ -10521,6 +10544,21 @@ async function startServer() {
       }
     });
     console.log('✅ Quality monitoring cron job scheduled (runs every hour)');
+    
+    // Start appointment reminder processing (runs every 5 minutes)
+    const { processReminderQueue } = await import('./lib/appointment-reminders.js');
+    cron.schedule('*/5 * * * *', async () => {
+      console.log('[CRON] ⏰ Processing appointment reminders...');
+      try {
+        const result = await processReminderQueue();
+        if (result.processed > 0) {
+          console.log(`[CRON] ✅ Processed ${result.processed} reminders`);
+        }
+      } catch (error) {
+        console.error('[CRON ERROR] Reminder processing failed:', error);
+      }
+    });
+    console.log('✅ Appointment reminder cron job scheduled (runs every 5 minutes)');
     
   } catch (error) {
     console.error('❌ Failed to start server:', error);
