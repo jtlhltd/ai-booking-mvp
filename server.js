@@ -410,6 +410,41 @@ app.get('/api/lead-status/:leadId', async (req, res) => {
 
 
 
+// Twilio Webhook for SMS Replies (Alternative endpoint for Twilio compatibility)
+app.post('/webhooks/sms', express.urlencoded({ extended: false }), async (req, res) => {
+  try {
+    const { From, Body } = req.body;
+    
+    console.log('[SMS WEBHOOK /webhooks/sms]', { From, Body, smsEmailPipelineAvailable: !!smsEmailPipeline, bodyKeys: Object.keys(req.body || {}) });
+    
+    // Extract email from SMS body
+    const emailMatch = Body.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+    
+    if (emailMatch) {
+      const emailAddress = emailMatch[1];
+      console.log('[SMS WEBHOOK] Extracted email:', emailAddress);
+      
+      if (smsEmailPipeline) {
+        try {
+          await smsEmailPipeline.sendBookingEmail(emailAddress, From);
+          console.log('[SMS WEBHOOK] Booking email sent successfully to:', emailAddress);
+        } catch (emailError) {
+          console.error('[SMS WEBHOOK] Failed to send booking email:', emailError);
+        }
+      } else {
+        console.log('[SMS WEBHOOK] Email service not available');
+      }
+    } else {
+      console.log('[SMS WEBHOOK] No email found in SMS body');
+    }
+    
+    res.status(200).send('OK');
+  } catch (error) {
+    console.error('[SMS WEBHOOK] Error processing SMS:', error);
+    res.status(500).send('Error');
+  }
+});
+
 // Twilio Webhook for SMS Replies
 app.post('/webhook/sms-reply', express.urlencoded({ extended: false }), async (req, res) => {
   try {
