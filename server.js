@@ -426,10 +426,15 @@ app.post('/webhooks/sms', express.urlencoded({ extended: false }), async (req, r
       
       if (smsEmailPipeline) {
         try {
-          await smsEmailPipeline.sendBookingEmail(emailAddress, From);
-          console.log('[SMS WEBHOOK] Booking email sent successfully to:', emailAddress);
+          const result = await smsEmailPipeline.processEmailResponse(From, emailAddress);
+          console.log('[SMS WEBHOOK] Email processing result:', result);
+          if (result.success) {
+            console.log('[SMS WEBHOOK] Booking email sent successfully to:', emailAddress);
+          } else {
+            console.log('[SMS WEBHOOK] Email processing failed:', result.message || result.error);
+          }
         } catch (emailError) {
-          console.error('[SMS WEBHOOK] Failed to send booking email:', emailError);
+          console.error('[SMS WEBHOOK] Failed to process email:', emailError);
         }
       } else {
         console.log('[SMS WEBHOOK] Email service not available');
