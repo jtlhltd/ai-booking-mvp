@@ -426,7 +426,34 @@ app.post('/webhooks/sms', express.urlencoded({ extended: false }), async (req, r
       
       if (smsEmailPipeline) {
         try {
-          const result = await smsEmailPipeline.processEmailResponse(From, emailAddress);
+          // Try to find existing lead first
+          let result = await smsEmailPipeline.processEmailResponse(From, emailAddress);
+          
+          // If no pending lead found, send email directly
+          if (!result.success && result.message === 'No pending lead found for this phone number') {
+            console.log('[SMS WEBHOOK] No pending lead found, sending direct booking email');
+            
+            // Generate booking link
+            const bookingLink = `${process.env.BASE_URL || 'https://ai-booking-mvp.onrender.com'}/booking-simple.html?email=${encodeURIComponent(emailAddress)}&phone=${encodeURIComponent(From)}`;
+            
+            // Send email directly
+            const leadData = {
+              email: emailAddress,
+              decisionMaker: 'there', // Generic greeting
+              businessName: 'your business'
+            };
+            
+            await smsEmailPipeline.sendConfirmationEmail(leadData, bookingLink);
+            
+            // Send SMS confirmation
+            await smsEmailPipeline.sendSMS({
+              to: From,
+              body: `Perfect! I've sent the booking link to ${emailAddress}. Check your email and click the link to schedule your appointment.`
+            });
+            
+            result = { success: true, message: 'Direct email sent successfully' };
+          }
+          
           console.log('[SMS WEBHOOK] Email processing result:', result);
           if (result.success) {
             console.log('[SMS WEBHOOK] Booking email sent successfully to:', emailAddress);
