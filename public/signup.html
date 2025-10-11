@@ -246,7 +246,7 @@
     <!-- Form Section -->
     <div id="form-section">
       <h1>🚀 Launch Your AI Lead System</h1>
-      <p class="subtitle">Start converting leads in 5 minutes. 14-day free trial, custom pricing.</p>
+      <p class="subtitle">Start converting leads in 5 minutes. Custom pricing based on your needs.</p>
 
       <div class="error" id="error-message"></div>
 
@@ -257,14 +257,7 @@
           
           <div class="form-group">
             <label for="businessName">Business Name *</label>
-            <input type="text" id="businessName" name="businessName" required placeholder="e.g. Acme Plumbing" list="business-suggestions">
-            <datalist id="business-suggestions">
-              <option value="Acme Plumbing">
-              <option value="Premier Electric">
-              <option value="City HVAC">
-              <option value="Metro Dental">
-              <option value="Pro Legal">
-            </datalist>
+            <input type="text" id="businessName" name="businessName" required placeholder="e.g. Acme Plumbing">
           </div>
 
           <div class="form-group">
@@ -425,23 +418,12 @@
             </select>
           </div>
 
-          <div class="form-group">
-            <label for="goals">Primary Goal *</label>
-            <select id="goals" name="goals" required>
-              <option value="">Select goal...</option>
-              <option value="book_appointments">Book Appointments</option>
-              <option value="generate_leads">Generate Qualified Leads</option>
-              <option value="follow_up">Follow Up Existing Leads</option>
-              <option value="customer_service">Customer Service</option>
-              <option value="sales_calls">Direct Sales Calls</option>
-            </select>
-          </div>
         </div>
 
 
-        <button type="submit" id="submit-btn">🚀 Start 14-Day Free Trial</button>
+        <button type="submit" id="submit-btn">🚀 Get Started</button>
         <p style="text-align: center; margin-top: 16px; color: #666; font-size: 13px;">
-          No credit card required. Cancel anytime.
+          No credit card required. We'll discuss pricing after setup.
         </p>
       </form>
     </div>
@@ -478,26 +460,56 @@
   </div>
 
   <script>
-    // Auto-fill business name based on industry
+    // Handle "Other" selections
     document.getElementById('industry').addEventListener('change', function() {
       const industry = this.value;
-      const businessNameField = document.getElementById('businessName');
-      
-      if (!businessNameField.value) {
-        const suggestions = {
-          'plumbing': 'Premier Plumbing',
-          'hvac': 'City HVAC',
-          'electrical': 'Metro Electric',
-          'dental': 'Smile Dental',
-          'medical': 'HealthFirst Medical',
-          'real_estate': 'Prime Properties',
-          'home_improvement': 'Dream Homes',
-          'legal': 'Justice Legal',
-          'automotive': 'AutoPro'
-        };
-        
-        if (suggestions[industry]) {
-          businessNameField.value = suggestions[industry];
+      if (industry === 'other') {
+        // Show custom industry input
+        let customInput = document.getElementById('customIndustry');
+        if (!customInput) {
+          customInput = document.createElement('input');
+          customInput.type = 'text';
+          customInput.id = 'customIndustry';
+          customInput.name = 'customIndustry';
+          customInput.placeholder = 'Please specify your industry...';
+          customInput.required = true;
+          customInput.style.marginTop = '8px';
+          this.parentNode.appendChild(customInput);
+        }
+        customInput.style.display = 'block';
+      } else {
+        // Hide custom input
+        const customInput = document.getElementById('customIndustry');
+        if (customInput) {
+          customInput.style.display = 'none';
+          customInput.required = false;
+        }
+      }
+    });
+
+    // Handle custom hours
+    document.getElementById('callHours').addEventListener('change', function() {
+      const callHours = this.value;
+      if (callHours === 'custom') {
+        // Show custom hours input
+        let customInput = document.getElementById('customCallHours');
+        if (!customInput) {
+          customInput = document.createElement('input');
+          customInput.type = 'text';
+          customInput.id = 'customCallHours';
+          customInput.name = 'customCallHours';
+          customInput.placeholder = 'e.g. 8am-6pm Mon-Fri, 9am-4pm Sat';
+          customInput.required = true;
+          customInput.style.marginTop = '8px';
+          this.parentNode.appendChild(customInput);
+        }
+        customInput.style.display = 'block';
+      } else {
+        // Hide custom input
+        const customInput = document.getElementById('customCallHours');
+        if (customInput) {
+          customInput.style.display = 'none';
+          customInput.required = false;
         }
       }
     });
@@ -507,6 +519,18 @@
       
       const formData = new FormData(e.target);
       const data = Object.fromEntries(formData.entries());
+      
+      // Handle custom industry
+      if (data.industry === 'other' && data.customIndustry) {
+        data.industry = data.customIndustry;
+        delete data.customIndustry;
+      }
+      
+      // Handle custom call hours
+      if (data.callHours === 'custom' && data.customCallHours) {
+        data.callHours = data.customCallHours;
+        delete data.customCallHours;
+      }
       
       // Show loading
       document.getElementById('form-section').style.display = 'none';

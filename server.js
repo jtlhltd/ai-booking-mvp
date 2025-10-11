@@ -10849,7 +10849,6 @@ app.post('/api/signup', async (req, res) => {
       voiceGender,
       callHours,
       urgency,
-      goals,
       businessSize,
       monthlyLeads,
       timezone,
@@ -10884,7 +10883,6 @@ app.post('/api/signup', async (req, res) => {
       voiceGender,
       callHours,
       urgency,
-      goals,
       businessSize,
       monthlyLeads,
       timezone,
@@ -10901,7 +10899,6 @@ app.post('/api/signup', async (req, res) => {
       systemPrompt: result.systemPrompt,
       businessSize,
       monthlyLeads,
-      goals,
       urgency
     }).catch(error => {
       console.error('[SIGNUP] Welcome email failed:', error);
@@ -10966,7 +10963,6 @@ app.post('/api/signup', async (req, res) => {
           voiceGender,
           callHours,
           urgency,
-          goals,
           businessSize,
           monthlyLeads,
           timezone,
@@ -10982,7 +10978,6 @@ app.post('/api/signup', async (req, res) => {
           systemPrompt: result.systemPrompt,
           businessSize,
           monthlyLeads,
-          goals,
           urgency
         }).catch(emailError => {
           console.error('[SIGNUP] Welcome email failed:', emailError);
