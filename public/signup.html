@@ -335,7 +335,14 @@
           
           <div class="form-group">
             <label for="businessName">Business Name *</label>
-            <input type="text" id="businessName" name="businessName" required placeholder="Acme Plumbing">
+            <input type="text" id="businessName" name="businessName" required placeholder="e.g. Acme Plumbing" list="business-suggestions">
+            <datalist id="business-suggestions">
+              <option value="Acme Plumbing">
+              <option value="Premier Electric">
+              <option value="City HVAC">
+              <option value="Metro Dental">
+              <option value="Pro Legal">
+            </datalist>
           </div>
 
           <div class="form-group">
@@ -357,12 +364,40 @@
 
           <div class="form-group">
             <label for="primaryService">Primary Service *</label>
-            <input type="text" id="primaryService" name="primaryService" required placeholder="Emergency Plumbing Repairs">
+            <select id="primaryService" name="primaryService" required>
+              <option value="">Select your main service...</option>
+              <option value="Emergency Repairs">Emergency Repairs</option>
+              <option value="Installation">Installation</option>
+              <option value="Maintenance">Maintenance</option>
+              <option value="Consultation">Consultation</option>
+              <option value="Treatment">Treatment</option>
+              <option value="Home Visits">Home Visits</option>
+              <option value="Commercial Services">Commercial Services</option>
+              <option value="Other">Other (specify in notes)</option>
+            </select>
           </div>
 
           <div class="form-group">
             <label for="serviceArea">Service Area *</label>
-            <input type="text" id="serviceArea" name="serviceArea" required placeholder="Los Angeles, CA">
+            <select id="serviceArea" name="serviceArea" required>
+              <option value="">Select your area...</option>
+              <option value="London">London</option>
+              <option value="Manchester">Manchester</option>
+              <option value="Birmingham">Birmingham</option>
+              <option value="Leeds">Leeds</option>
+              <option value="Liverpool">Liverpool</option>
+              <option value="Newcastle">Newcastle</option>
+              <option value="Bristol">Bristol</option>
+              <option value="Sheffield">Sheffield</option>
+              <option value="Nottingham">Nottingham</option>
+              <option value="Leicester">Leicester</option>
+              <option value="Edinburgh">Edinburgh</option>
+              <option value="Glasgow">Glasgow</option>
+              <option value="Cardiff">Cardiff</option>
+              <option value="Belfast">Belfast</option>
+              <option value="Nationwide">Nationwide</option>
+              <option value="Other">Other</option>
+            </select>
           </div>
 
           <div class="form-group">
@@ -387,7 +422,7 @@
 
           <div class="form-group">
             <label for="phone">Phone *</label>
-            <input type="tel" id="phone" name="phone" required placeholder="+1 (234) 567-8900">
+            <input type="tel" id="phone" name="phone" required placeholder="+44 20 1234 5678">
           </div>
         </div>
 
@@ -403,10 +438,6 @@
             </select>
           </div>
 
-          <div class="form-group">
-            <label for="businessHours">Business Hours *</label>
-            <input type="text" id="businessHours" name="businessHours" required placeholder="9am-5pm Mon-Fri">
-          </div>
         </div>
 
         <!-- Pricing -->
@@ -510,11 +541,58 @@
       document.querySelector(`[data-plan="${plan}"]`).classList.add('selected');
     }
 
+    // Auto-fill suggestions based on industry
+    document.getElementById('industry').addEventListener('change', function() {
+      const industry = this.value;
+      const businessNameField = document.getElementById('businessName');
+      const serviceField = document.getElementById('primaryService');
+      
+      if (!businessNameField.value) {
+        const suggestions = {
+          'plumbing': 'Premier Plumbing',
+          'hvac': 'City HVAC',
+          'electrical': 'Metro Electric',
+          'dental': 'Smile Dental',
+          'medical': 'HealthFirst Medical',
+          'real_estate': 'Prime Properties',
+          'home_improvement': 'Dream Homes',
+          'legal': 'Justice Legal',
+          'automotive': 'AutoPro'
+        };
+        
+        if (suggestions[industry]) {
+          businessNameField.value = suggestions[industry];
+        }
+      }
+      
+      // Auto-select common service for industry
+      if (!serviceField.value) {
+        const serviceMap = {
+          'plumbing': 'Emergency Repairs',
+          'hvac': 'Installation',
+          'electrical': 'Emergency Repairs',
+          'dental': 'Treatment',
+          'medical': 'Consultation',
+          'real_estate': 'Consultation',
+          'home_improvement': 'Installation',
+          'legal': 'Consultation',
+          'automotive': 'Maintenance'
+        };
+        
+        if (serviceMap[industry]) {
+          serviceField.value = serviceMap[industry];
+        }
+      }
+    });
+
     document.getElementById('signup-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       
       const formData = new FormData(e.target);
       const data = Object.fromEntries(formData.entries());
+      
+      // Remove businessHours if it exists (we removed the field)
+      delete data.businessHours;
       
       // Show loading
       document.getElementById('form-section').style.display = 'none';

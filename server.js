@@ -10908,9 +10908,70 @@ app.post('/api/signup', async (req, res) => {
       });
     }
     
+    // Handle specific database errors
+    if (error.code === '42P01') { // Table doesn't exist
+      console.error('[SIGNUP] Database table missing, creating...');
+      try {
+        // Try to create the missing table and retry
+        const { query } = await import('./db.js');
+        await query(`
+          CREATE TABLE IF NOT EXISTS client_metadata (
+            id BIGSERIAL PRIMARY KEY,
+            client_key TEXT NOT NULL UNIQUE,
+            owner_name TEXT,
+            owner_email TEXT,
+            owner_phone TEXT,
+            industry TEXT,
+            website TEXT,
+            service_area TEXT,
+            plan_name TEXT,
+            trial_ends_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          )
+        `);
+        
+        // Retry the signup
+        const { createClient, sendWelcomeEmail } = await import('./lib/auto-onboarding.js');
+        const result = await createClient({
+          businessName,
+          industry,
+          primaryService,
+          serviceArea,
+          website,
+          ownerName,
+          email,
+          phone,
+          voiceGender,
+          businessHours: '9am-5pm Mon-Fri',
+          plan
+        });
+        
+        sendWelcomeEmail({
+          clientKey: result.clientKey,
+          businessName: result.businessName,
+          ownerEmail: result.ownerEmail,
+          apiKey: result.apiKey,
+          systemPrompt: result.systemPrompt
+        }).catch(emailError => {
+          console.error('[SIGNUP] Welcome email failed:', emailError);
+        });
+        
+        return res.json({
+          success: true,
+          clientKey: result.clientKey,
+          apiKey: result.apiKey,
+          message: 'Account created successfully! Check your email for setup instructions.'
+        });
+        
+      } catch (retryError) {
+        console.error('[SIGNUP] Retry failed:', retryError);
+      }
+    }
+    
     res.status(500).json({
       success: false,
-      error: 'Failed to create account. Please try again or contact support.'
+      error: 'Failed to create account. Please try again or contact support.',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
