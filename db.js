@@ -87,6 +87,9 @@ async function initPostgres() {
   pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false },
+    max: 20, // Maximum 20 connections in pool
+    idleTimeoutMillis: 30000, // Close idle connections after 30 seconds
+    connectionTimeoutMillis: 2000, // Timeout after 2 seconds if no connection available
   });
 
   // Run migrations for schema creation
@@ -298,7 +301,7 @@ async function initPostgres() {
       call_id TEXT,
       cost_type TEXT NOT NULL,
       amount DECIMAL(10,4) NOT NULL,
-      currency TEXT DEFAULT 'USD',
+      currency TEXT DEFAULT 'GBP',
       description TEXT,
       metadata JSONB,
       created_at TIMESTAMPTZ DEFAULT now()
@@ -314,7 +317,7 @@ async function initPostgres() {
       daily_limit DECIMAL(10,4),
       weekly_limit DECIMAL(10,4),
       monthly_limit DECIMAL(10,4),
-      currency TEXT DEFAULT 'USD',
+      currency TEXT DEFAULT 'GBP',
       is_active BOOLEAN DEFAULT TRUE,
       created_at TIMESTAMPTZ DEFAULT now(),
       updated_at TIMESTAMPTZ DEFAULT now()
@@ -1095,7 +1098,7 @@ export async function cleanupOldCallQueue(daysOld = 7) {
 }
 
 // Cost tracking functions
-export async function trackCost({ clientKey, callId, costType, amount, currency = 'USD', description, metadata }) {
+export async function trackCost({ clientKey, callId, costType, amount, currency = 'GBP', description, metadata }) {
   const metadataJson = metadata ? JSON.stringify(metadata) : null;
   
   const { rows } = await query(`
@@ -1163,7 +1166,7 @@ export async function getTotalCostsByTenant(clientKey, period = 'daily') {
 }
 
 // Budget management functions
-export async function setBudgetLimit({ clientKey, budgetType, dailyLimit, weeklyLimit, monthlyLimit, currency = 'USD' }) {
+export async function setBudgetLimit({ clientKey, budgetType, dailyLimit, weeklyLimit, monthlyLimit, currency = 'GBP' }) {
   const { rows } = await query(`
     INSERT INTO budget_limits (client_key, budget_type, daily_limit, weekly_limit, monthly_limit, currency)
     VALUES ($1, $2, $3, $4, $5, $6)

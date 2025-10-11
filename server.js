@@ -482,6 +482,14 @@ app.post('/webhooks/sms', express.urlencoded({ extended: false }), async (req, r
 
 // Twilio Webhook for SMS Replies
 app.post('/webhook/sms-reply', express.urlencoded({ extended: false }), async (req, res) => {
+  // Verify Twilio signature for security
+  const { twilioWebhookVerification } = await import('./lib/security.js');
+  const verified = await new Promise((resolve) => {
+    twilioWebhookVerification(req, res, () => resolve(true));
+  });
+  
+  if (!verified) return; // Response already sent by verification middleware
+  
   try {
     const { From, Body } = req.body;
     
@@ -5767,8 +5775,8 @@ async function bootstrapClients() {
   }
 }
 
-// Health (DB)
-app.get('/health', async (_req, res) => {
+// Simple Health Check (Basic - for load balancers/uptime monitors)
+app.get('/healthz', async (_req, res) => {
   try {
     const rows = await listFullClients();
     res.json({
@@ -6077,7 +6085,15 @@ app.post('/api/notify/send', async (req, res) => {
     return res.status(500).json({ ok:false, error: msg });
   }
 });
-app.post('/webhooks/twilio-status', async (req, res) => {
+app.post('/webhooks/twilio-status', express.urlencoded({ extended: false }), async (req, res) => {
+  // Verify Twilio signature for security
+  const { twilioWebhookVerification } = await import('./lib/security.js');
+  const verified = await new Promise((resolve) => {
+    twilioWebhookVerification(req, res, () => resolve(true));
+  });
+  
+  if (!verified) return; // Response already sent by verification middleware
+  
   const rows = await readJson(SMS_STATUS_PATH, []);
   const log = {
     evt: 'sms.status',
@@ -6101,7 +6117,15 @@ const VAPI_PRIVATE_KEY     = process.env.VAPI_PRIVATE_KEY || '';
 const VAPI_ASSISTANT_ID    = process.env.VAPI_ASSISTANT_ID || '';
 const VAPI_PHONE_NUMBER_ID = process.env.VAPI_PHONE_NUMBER_ID || '';
 
-app.post('/webhooks/twilio-inbound', smsRateLimit, safeAsync(async (req, res) => {
+app.post('/webhooks/twilio-inbound', express.urlencoded({ extended: false }), smsRateLimit, safeAsync(async (req, res) => {
+  // Verify Twilio signature for security
+  const { twilioWebhookVerification } = await import('./lib/security.js');
+  const verified = await new Promise((resolve) => {
+    twilioWebhookVerification(req, res, () => resolve(true));
+  });
+  
+  if (!verified) return; // Response already sent by verification middleware
+  
   try {
     const rawFrom = (req.body.From || '').toString();
     const rawTo   = (req.body.To   || '').toString();
