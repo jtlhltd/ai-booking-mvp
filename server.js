@@ -10844,7 +10844,15 @@ app.post('/api/signup', async (req, res) => {
       ownerName,
       email,
       phone,
+      role,
+      currentLeadSource,
       voiceGender,
+      callHours,
+      urgency,
+      goals,
+      businessSize,
+      monthlyLeads,
+      timezone,
       businessHours,
       plan
     } = req.body;
@@ -10871,7 +10879,15 @@ app.post('/api/signup', async (req, res) => {
       ownerName,
       email,
       phone,
+      role,
+      currentLeadSource,
       voiceGender,
+      callHours,
+      urgency,
+      goals,
+      businessSize,
+      monthlyLeads,
+      timezone,
       businessHours,
       plan
     });
@@ -10882,7 +10898,11 @@ app.post('/api/signup', async (req, res) => {
       businessName: result.businessName,
       ownerEmail: result.ownerEmail,
       apiKey: result.apiKey,
-      systemPrompt: result.systemPrompt
+      systemPrompt: result.systemPrompt,
+      businessSize,
+      monthlyLeads,
+      goals,
+      urgency
     }).catch(error => {
       console.error('[SIGNUP] Welcome email failed:', error);
     });
@@ -10941,7 +10961,15 @@ app.post('/api/signup', async (req, res) => {
           ownerName,
           email,
           phone,
+          role,
+          currentLeadSource,
           voiceGender,
+          callHours,
+          urgency,
+          goals,
+          businessSize,
+          monthlyLeads,
+          timezone,
           businessHours: '9am-5pm Mon-Fri',
           plan
         });
@@ -10951,7 +10979,11 @@ app.post('/api/signup', async (req, res) => {
           businessName: result.businessName,
           ownerEmail: result.ownerEmail,
           apiKey: result.apiKey,
-          systemPrompt: result.systemPrompt
+          systemPrompt: result.systemPrompt,
+          businessSize,
+          monthlyLeads,
+          goals,
+          urgency
         }).catch(emailError => {
           console.error('[SIGNUP] Welcome email failed:', emailError);
         });

@@ -298,6 +298,47 @@
             <label for="website">Website (optional)</label>
             <input type="url" id="website" name="website" placeholder="https://acmeplumbing.com">
           </div>
+
+          <div class="form-group">
+            <label for="businessSize">Business Size *</label>
+            <select id="businessSize" name="businessSize" required>
+              <option value="">Select size...</option>
+              <option value="solo">Solo Entrepreneur</option>
+              <option value="small">Small Business (2-10 employees)</option>
+              <option value="medium">Medium Business (11-50 employees)</option>
+              <option value="large">Large Business (50+ employees)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="monthlyLeads">Monthly Lead Volume *</label>
+            <select id="monthlyLeads" name="monthlyLeads" required>
+              <option value="">Select volume...</option>
+              <option value="1-50">1-50 leads/month</option>
+              <option value="51-200">51-200 leads/month</option>
+              <option value="201-500">201-500 leads/month</option>
+              <option value="501-1000">501-1,000 leads/month</option>
+              <option value="1000+">1,000+ leads/month</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="timezone">Timezone *</label>
+            <select id="timezone" name="timezone" required>
+              <option value="">Select timezone...</option>
+              <option value="Europe/London">GMT (London)</option>
+              <option value="Europe/Dublin">GMT (Dublin)</option>
+              <option value="Europe/Paris">CET (Paris, Berlin)</option>
+              <option value="Europe/Rome">CET (Rome, Madrid)</option>
+              <option value="Europe/Amsterdam">CET (Amsterdam)</option>
+              <option value="America/New_York">EST (New York)</option>
+              <option value="America/Chicago">CST (Chicago)</option>
+              <option value="America/Denver">MST (Denver)</option>
+              <option value="America/Los_Angeles">PST (Los Angeles)</option>
+              <option value="Australia/Sydney">AEST (Sydney)</option>
+              <option value="Australia/Melbourne">AEST (Melbourne)</option>
+            </select>
+          </div>
         </div>
 
         <!-- Contact Info -->
@@ -318,6 +359,33 @@
             <label for="phone">Phone *</label>
             <input type="tel" id="phone" name="phone" required placeholder="+44 20 1234 5678">
           </div>
+
+          <div class="form-group">
+            <label for="role">Your Role *</label>
+            <select id="role" name="role" required>
+              <option value="">Select role...</option>
+              <option value="owner">Business Owner</option>
+              <option value="manager">Manager</option>
+              <option value="director">Director</option>
+              <option value="marketing">Marketing Manager</option>
+              <option value="sales">Sales Manager</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="currentLeadSource">Current Lead Sources (optional)</label>
+            <select id="currentLeadSource" name="currentLeadSource">
+              <option value="">Select main source...</option>
+              <option value="google">Google Ads</option>
+              <option value="facebook">Facebook/Instagram</option>
+              <option value="referrals">Referrals</option>
+              <option value="website">Website</option>
+              <option value="social">Social Media</option>
+              <option value="direct">Direct Mail</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
         </div>
 
         <!-- AI Preferences -->
@@ -327,26 +395,49 @@
           <div class="form-group">
             <label for="voiceGender">Voice Gender *</label>
             <select id="voiceGender" name="voiceGender" required>
+              <option value="">Select voice...</option>
               <option value="female">Female (Recommended)</option>
               <option value="male">Male</option>
             </select>
           </div>
 
+          <div class="form-group">
+            <label for="callHours">Preferred Call Hours *</label>
+            <select id="callHours" name="callHours" required>
+              <option value="">Select hours...</option>
+              <option value="9am-5pm">9am-5pm (Business Hours)</option>
+              <option value="8am-6pm">8am-6pm (Extended Hours)</option>
+              <option value="7am-7pm">7am-7pm (Early/Late)</option>
+              <option value="24/7">24/7 (Always Available)</option>
+              <option value="custom">Custom Hours</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="urgency">How Urgent is Lead Response? *</label>
+            <select id="urgency" name="urgency" required>
+              <option value="">Select urgency...</option>
+              <option value="immediate">Immediate (within 30 seconds)</option>
+              <option value="fast">Fast (within 5 minutes)</option>
+              <option value="quick">Quick (within 1 hour)</option>
+              <option value="same_day">Same Day</option>
+              <option value="next_day">Next Business Day</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="goals">Primary Goal *</label>
+            <select id="goals" name="goals" required>
+              <option value="">Select goal...</option>
+              <option value="book_appointments">Book Appointments</option>
+              <option value="generate_leads">Generate Qualified Leads</option>
+              <option value="follow_up">Follow Up Existing Leads</option>
+              <option value="customer_service">Customer Service</option>
+              <option value="sales_calls">Direct Sales Calls</option>
+            </select>
+          </div>
         </div>
 
-        <!-- Pricing Info -->
-        <div class="form-section">
-          <h2>💰 Pricing</h2>
-          <div class="info-box" style="background: #f8f9ff; border-left: 4px solid #667eea; padding: 16px; margin: 20px 0; border-radius: 4px;">
-            <h3 style="margin-top: 0; color: #667eea; font-size: 16px;">🎯 Custom Pricing</h3>
-            <p style="margin-bottom: 0; color: #666; font-size: 14px; line-height: 1.6;">
-              We'll discuss pricing based on your specific needs and lead volume. 
-              Most clients see 3-5x ROI within the first month.
-            </p>
-          </div>
-          
-          <input type="hidden" id="plan" name="plan" value="custom">
-        </div>
 
         <button type="submit" id="submit-btn">🚀 Start 14-Day Free Trial</button>
         <p style="text-align: center; margin-top: 16px; color: #666; font-size: 13px;">
@@ -416,9 +507,6 @@
       
       const formData = new FormData(e.target);
       const data = Object.fromEntries(formData.entries());
-      
-      // Remove businessHours if it exists (we removed the field)
-      delete data.businessHours;
       
       // Show loading
       document.getElementById('form-section').style.display = 'none';
