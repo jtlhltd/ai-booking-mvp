@@ -10880,9 +10880,11 @@ app.get('/setup-my-client', async (req, res) => {
     'Expires': '0'
   });
   try {
+    console.log('[SETUP] Starting setup-my-client endpoint...');
     const { query } = await import('./db.js');
     
     // Create my_leads client
+    console.log('[SETUP] Creating my_leads client...');
     await query(`
       INSERT INTO tenants (
         client_key,
@@ -10917,6 +10919,7 @@ app.get('/setup-my-client', async (req, res) => {
       SET vapi_json = EXCLUDED.vapi_json,
           display_name = EXCLUDED.display_name
     `);
+    console.log('[SETUP] ✅ my_leads client created/updated');
     
     // Create or update opt_out_list table with full schema
     await query(`
@@ -10976,6 +10979,7 @@ app.get('/setup-my-client', async (req, res) => {
       WHERE client_key = 'my_leads'
     `);
     
+    console.log('[SETUP] ✅ Setup complete! Client:', result.rows[0]);
     res.json({
       success: true,
       message: '✅ Setup complete!',
