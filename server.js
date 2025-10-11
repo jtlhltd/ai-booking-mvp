@@ -10873,6 +10873,12 @@ app.use(errorHandler);
 
 // Quick setup endpoint to create my_leads client
 app.get('/setup-my-client', async (req, res) => {
+  // Add cache-busting headers to prevent 304 responses
+  res.set({
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0'
+  });
   try {
     const { query } = await import('./db.js');
     
