@@ -412,6 +412,9 @@ app.get('/api/lead-status/:leadId', async (req, res) => {
 
 // Twilio Webhook for SMS Replies (Alternative endpoint for Twilio compatibility)
 app.post('/webhooks/sms', express.urlencoded({ extended: false }), async (req, res) => {
+  // Verify Twilio signature for security
+  const { twilioWebhookVerification } = await import('./lib/security.js');
+  const isValid = twilioWebhookVerification(req, res, () => {});
   try {
     const { From, Body } = req.body;
     
@@ -2818,26 +2821,46 @@ app.post('/api/import-leads/:clientKey', async (req, res) => {
     const { parseCSV, importLeads } = await import('./lib/lead-import.js');
     const { notifyLeadUpload } = await import('./lib/notifications.js');
     const { calculateLeadScore } = await import('./lib/lead-intelligence.js');
+    const { bulkProcessLeads } = await import('./lib/lead-deduplication.js');
     
     // Parse CSV
     const leads = parseCSV(csvData, columnMapping || {});
     
+    // === NEW: Apply lead deduplication and validation ===
+    console.log(`[LEAD DEDUP] Processing ${leads.length} leads for validation and deduplication...`);
+    const dedupResults = await bulkProcessLeads(leads, clientKey);
+    
+    console.log(`[LEAD DEDUP] Results: ${dedupResults.valid} valid, ${dedupResults.invalid} invalid, ${dedupResults.duplicates} duplicates, ${dedupResults.optedOut} opted-out`);
+    
+    // Use only valid leads for import
+    const validLeads = dedupResults.validLeads;
+    
     // Calculate lead scores for prioritization
-    leads.forEach(lead => {
+    validLeads.forEach(lead => {
       lead.leadScore = calculateLeadScore(lead);
     });
     
     // Sort by score (call highest quality leads first)
-    leads.sort((a, b) => b.leadScore - a.leadScore);
+    validLeads.sort((a, b) => b.leadScore - a.leadScore);
     
-    console.log(`[LEAD IMPORT] Top lead score: ${leads[0]?.leadScore}, Lowest: ${leads[leads.length - 1]?.leadScore}`);
+    console.log(`[LEAD IMPORT] Top lead score: ${validLeads[0]?.leadScore}, Lowest: ${validLeads[validLeads.length - 1]?.leadScore}`);
     
     // Import leads
-    const results = await importLeads(clientKey, leads, {
-      validatePhones: validatePhones === true,
-      skipDuplicates: true,
+    const results = await importLeads(clientKey, validLeads, {
+      validatePhones: false, // Already validated by dedup
+      skipDuplicates: false, // Already deduplicated
       autoStartCampaign: autoStartCampaign === true
     });
+    
+    // Add deduplication stats to results
+    results.validation = {
+      totalProcessed: leads.length,
+      valid: dedupResults.valid,
+      invalid: dedupResults.invalid,
+      duplicates: dedupResults.duplicates,
+      optedOut: dedupResults.optedOut,
+      invalidReasons: dedupResults.invalidLeads.slice(0, 5).map(l => ({ phone: l.phone, issues: l.issues }))
+    };
     
     // Get client data
     const client = await getFullClient(clientKey);
@@ -2858,7 +2881,7 @@ app.post('/api/import-leads/:clientKey', async (req, res) => {
       const { processCallQueue, estimateCallTime } = await import('./lib/instant-calling.js');
       
       // Get imported leads (sorted by score already)
-      const leadsToCall = leads.filter(l => {
+      const leadsToCall = validLeads.filter(l => {
         // Only call leads that were successfully imported (not duplicates/invalid)
         return l.phone && l.leadScore > 0;
       }).slice(0, results.imported);
@@ -2890,7 +2913,7 @@ app.post('/api/import-leads/:clientKey', async (req, res) => {
       ok: true,
       message: `Imported ${results.imported} leads${callResults ? ' - Campaign started!' : ''}`,
       results,
-      avgLeadScore: Math.round(leads.reduce((sum, l) => sum + l.leadScore, 0) / leads.length),
+      avgLeadScore: validLeads.length > 0 ? Math.round(validLeads.reduce((sum, l) => sum + l.leadScore, 0) / validLeads.length) : 0,
       calling: callResults
     });
     
@@ -5654,6 +5677,51 @@ app.post('/webhooks/vapi', async (req, res) => {
     } catch (reminderError) {
       console.error('[REMINDER SCHEDULING ERROR]', reminderError);
       // Don't fail the booking if reminders fail
+    }
+
+    // === NEW: Track call outcome in analytics ===
+    try {
+      const { trackCallOutcome } = await import('./lib/analytics-tracker.js');
+      
+      const callId = p?.call?.id || p?.callId || `vapi_${Date.now()}`;
+      const duration = p?.call?.duration || p?.duration || 0;
+      const cost = p?.call?.cost || p?.cost || 0;
+      
+      await trackCallOutcome({
+        callId,
+        clientKey,
+        leadPhone: lead.phone,
+        outcome: 'booked', // Successful booking
+        duration,
+        cost,
+        appointmentBooked: true,
+        appointmentTime: startISO,
+        transcript: p?.transcript || null,
+        sentiment: 'positive'
+      });
+      
+      console.log('[ANALYTICS] Tracked successful booking:', callId);
+    } catch (analyticsError) {
+      console.error('[ANALYTICS TRACKING ERROR]', analyticsError);
+      // Don't fail the booking if analytics fail
+    }
+
+    // === NEW: Emit real-time event to client dashboard ===
+    try {
+      const { emitAppointmentBooked } = await import('./lib/realtime-events.js');
+      
+      emitAppointmentBooked(clientKey, {
+        appointmentId: event.id,
+        leadName: lead.name || 'Customer',
+        leadPhone: lead.phone,
+        appointmentTime: startISO,
+        service: service
+      });
+      
+      console.log('[REALTIME] Emitted appointment_booked event');
+    } catch (realtimeError) {
+      console.error('[REALTIME EVENT ERROR]', realtimeError);
+      // Don't fail the booking if real-time fails
     }
 
     return res.json({ ok:true, eventId: event.id, htmlLink: event.htmlLink || null });
