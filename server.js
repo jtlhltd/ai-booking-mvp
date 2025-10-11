@@ -10871,6 +10871,81 @@ app.post('/api/migrations/run', async (req, res) => {
 // Error handling middleware (must be last)
 app.use(errorHandler);
 
+// Quick setup endpoint to create my_leads client
+app.get('/setup-my-client', async (req, res) => {
+  try {
+    const { query } = await import('./db.js');
+    
+    // Create my_leads client
+    await query(`
+      INSERT INTO tenants (
+        client_key,
+        display_name,
+        is_enabled,
+        locale,
+        timezone,
+        calendar_json,
+        twilio_json,
+        vapi_json,
+        numbers_json,
+        sms_templates_json,
+        created_at
+      ) VALUES (
+        'my_leads',
+        'My Sales Leads',
+        true,
+        'en-GB',
+        'Europe/London',
+        '{"calendarId": null, "timezone": "Europe/London", "services": {}, "booking": {"defaultDurationMin": 30}}'::jsonb,
+        '{}'::jsonb,
+        '{
+          "assistantId": "dd67a51c-7485-4b62-930a-4a84f328a1c9",
+          "phoneNumberId": "934ecfdb-fe7b-4d53-81c0-7908b97036b5",
+          "maxDurationSeconds": 300
+        }'::jsonb,
+        '{}'::jsonb,
+        '{}'::jsonb,
+        NOW()
+      )
+      ON CONFLICT (client_key) DO UPDATE 
+      SET vapi_json = EXCLUDED.vapi_json,
+          display_name = EXCLUDED.display_name
+    `);
+    
+    // Create opt_out_list table
+    await query(`
+      CREATE TABLE IF NOT EXISTS opt_out_list (
+        id SERIAL PRIMARY KEY,
+        phone TEXT UNIQUE NOT NULL,
+        opted_out_at TIMESTAMP DEFAULT NOW(),
+        reason TEXT,
+        source TEXT
+      )
+    `);
+    
+    // Verify
+    const result = await query(`
+      SELECT 
+        client_key, 
+        display_name,
+        vapi_json->>'assistantId' as assistant_id,
+        vapi_json->>'phoneNumberId' as phone_number_id
+      FROM tenants
+      WHERE client_key = 'my_leads'
+    `);
+    
+    res.json({
+      success: true,
+      message: '✅ Setup complete!',
+      client: result.rows[0],
+      importUrl: `${req.protocol}://${req.get('host')}/lead-import.html?client=my_leads`
+    });
+    
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Initialize database and start server - FIXED: braces properly balanced
 async function startServer() {
   try {
