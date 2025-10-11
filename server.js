@@ -5600,7 +5600,7 @@ app.post('/webhooks/vapi', async (req, res) => {
       return res.status(409).json({ ok:false, error:'slot_unavailable', busy });
     }
 
-    // Create event (deterministic ID to prevent dupes)
+    // Create event (deterministic ID to prevent dupes) with retry logic
     const { google } = await import('googleapis');
     const cal = google.calendar({ version: 'v3', auth });
     const summary = `${service} — ${lead.name || ''}`.trim();
@@ -5612,34 +5612,52 @@ app.post('/webhooks/vapi', async (req, res) => {
     ].filter(Boolean).join('\\n');
 
     let event;
+    
+    // Helper: Retry Google Calendar API with exponential backoff
+    const retryGoogleCalendar = async (eventData, maxRetries = 3) => {
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          return (await cal.events.insert({
+            calendarId,
+            requestBody: eventData
+          })).data;
+        } catch (err) {
+          if (attempt === maxRetries) throw err;
+          
+          // Retry on rate limit (429) or server errors (5xx)
+          const shouldRetry = err?.code === 429 || (err?.code >= 500 && err?.code < 600);
+          if (!shouldRetry) throw err;
+          
+          const delay = 1000 * Math.pow(2, attempt - 1); // 1s, 2s, 4s
+          console.warn(`[GOOGLE CALENDAR] Retry attempt ${attempt}/${maxRetries} after ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    };
+    
     try {
       const rawKey = `${client?.clientKey || 'default'}|${service}|${startISO}|${lead.phone}`;
       const crypto = await import('crypto');
       const deterministicId = ('bk' + crypto.createHash('sha1').update(rawKey).digest('hex').slice(0, 20)).toLowerCase();
 
-      event = (await cal.events.insert({
-        calendarId,
-        requestBody: {
-          id: deterministicId,
-          summary,
-          description,
-          start: { dateTime: startISO, timeZone: tz },
-          end:   { dateTime: endISO,   timeZone: tz },
-          extendedProperties: { private: { leadPhone: lead.phone, leadId: lead.id || '' } }
-        }
-      })).data;
+      event = await retryGoogleCalendar({
+        id: deterministicId,
+        summary,
+        description,
+        start: { dateTime: startISO, timeZone: tz },
+        end:   { dateTime: endISO,   timeZone: tz },
+        extendedProperties: { private: { leadPhone: lead.phone, leadId: lead.id || '' } }
+      });
     } catch (err) {
       // Retry without custom id if Google rejects it
-      event = (await cal.events.insert({
-        calendarId,
-        requestBody: {
-          summary,
-          description,
-          start: { dateTime: startISO, timeZone: tz },
-          end:   { dateTime: endISO,   timeZone: tz },
-          extendedProperties: { private: { leadPhone: lead.phone, leadId: lead.id || '' } }
-        }
-      })).data;
+      console.log('[GOOGLE CALENDAR] Retrying without custom ID...');
+      event = await retryGoogleCalendar({
+        summary,
+        description,
+        start: { dateTime: startISO, timeZone: tz },
+        end:   { dateTime: endISO,   timeZone: tz },
+        extendedProperties: { private: { leadPhone: lead.phone, leadId: lead.id || '' } }
+      });
     }
 
     // Send confirmation SMS (tenant-aware)
