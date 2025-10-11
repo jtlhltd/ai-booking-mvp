@@ -10610,6 +10610,121 @@ app.post('/admin/vapi/calls', async (req, res) => {
   }
 });
 
+// Client Onboarding API
+app.post('/api/onboard-client', async (req, res) => {
+  try {
+    // Check API key (admin only)
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const { onboardClient } = await import('./lib/client-onboarding.js');
+    
+    const result = await onboardClient(req.body);
+    
+    res.json(result);
+  } catch (error) {
+    console.error('[ONBOARDING API ERROR]', error);
+    res.status(500).json({ 
+      ok: false, 
+      error: error.message,
+      details: error.stack 
+    });
+  }
+});
+
+// Update Client Configuration
+app.patch('/api/clients/:clientKey/config', async (req, res) => {
+  try {
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const { updateClientConfig } = await import('./lib/client-onboarding.js');
+    
+    const result = await updateClientConfig(req.params.clientKey, req.body);
+    
+    res.json(result);
+  } catch (error) {
+    console.error('[UPDATE CONFIG ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Deactivate Client
+app.post('/api/clients/:clientKey/deactivate', async (req, res) => {
+  try {
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const { deactivateClient } = await import('./lib/client-onboarding.js');
+    
+    const result = await deactivateClient(req.params.clientKey, req.body.reason);
+    
+    res.json(result);
+  } catch (error) {
+    console.error('[DEACTIVATE CLIENT ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Real-Time Events Stream (SSE)
+app.get('/api/realtime/:clientKey/events', async (req, res) => {
+  const { clientKey } = req.params;
+  
+  // Set SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // Disable buffering in nginx
+  
+  // Send initial connection message
+  res.write(`data: ${JSON.stringify({ type: 'connected', timestamp: new Date().toISOString() })}\n\n`);
+  
+  // Register connection
+  const { registerConnection } = await import('./lib/realtime-events.js');
+  registerConnection(clientKey, res);
+  
+  console.log(`[SSE] Client ${clientKey} connected to real-time stream`);
+  
+  // Keep connection alive with heartbeat every 30 seconds
+  const heartbeat = setInterval(() => {
+    try {
+      res.write(`:heartbeat\n\n`);
+    } catch (error) {
+      clearInterval(heartbeat);
+    }
+  }, 30000);
+  
+  // Clean up on connection close
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    console.log(`[SSE] Client ${clientKey} disconnected from real-time stream`);
+  });
+});
+
+// Real-Time Connection Statistics
+app.get('/api/realtime/stats', async (req, res) => {
+  try {
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const { getConnectionStats } = await import('./lib/realtime-events.js');
+    const stats = getConnectionStats();
+    
+    res.json(stats);
+  } catch (error) {
+    console.error('[REALTIME STATS ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 // Error handling middleware (must be last)
 app.use(errorHandler);
 
