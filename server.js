@@ -94,7 +94,7 @@ const app = express();
 
 // API key guard middleware
 function requireApiKey(req, res, next) {
-  if (req.method === 'GET' && (req.path === '/health' || req.path === '/gcal/ping' || req.path === '/healthz' || req.path === '/setup-my-client' || req.path === '/clear-my-leads')) return next();
+  if (req.method === 'GET' && (req.path === '/health' || req.path === '/gcal/ping' || req.path === '/healthz' || req.path === '/setup-my-client' || req.path === '/clear-my-leads' || req.path === '/check-db')) return next();
   if (req.path.startsWith('/webhooks/twilio-status') || req.path.startsWith('/webhooks/twilio-inbound') || req.path.startsWith('/webhooks/twilio/sms-inbound') || req.path.startsWith('/webhooks/vapi') || req.path === '/webhook/sms-reply' || req.path === '/webhooks/sms') return next();
   if (req.path === '/api/test' || req.path === '/api/test-linkedin' || req.path === '/api/uk-business-search' || req.path === '/api/decision-maker-contacts' || req.path === '/api/industry-categories' || req.path === '/test-sms-pipeline' || req.path === '/sms-test' || req.path === '/api/initiate-lead-capture') return next();
   if (req.path === '/uk-business-search' || req.path === '/booking-simple.html') return next();
@@ -10870,6 +10870,32 @@ app.post('/api/migrations/run', async (req, res) => {
 
 // Error handling middleware (must be last)
 app.use(errorHandler);
+
+// Check database endpoint for debugging
+app.get('/check-db', async (req, res) => {
+  res.set({
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0'
+  });
+  try {
+    console.log('[CHECK] Checking database...');
+    const { query } = await import('./db.js');
+    
+    // Check all tenants
+    const tenants = await query(`SELECT client_key, display_name, vapi_json FROM tenants ORDER BY client_key`);
+    
+    console.log('[CHECK] Found tenants:', tenants.rows);
+    res.json({
+      success: true,
+      tenants: tenants.rows
+    });
+    
+  } catch (error) {
+    console.error('[CHECK] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 // Clear leads endpoint for testing
 app.get('/clear-my-leads', async (req, res) => {
