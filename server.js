@@ -8934,9 +8934,6 @@ const { id } = req.body || {};
   }
 });
 
-
-await bootstrapClients(); // <--- run after routes loaded & DB ready
-
 // Retry processor - runs every 5 minutes to process pending retries
 async function processRetryQueue() {
   try {
@@ -10733,6 +10730,9 @@ async function startServer() {
   try {
     await initDb();
     console.log('✅ Database initialized');
+    
+    // Bootstrap clients after DB is ready
+    await bootstrapClients();
     
     const server = app.listen(process.env.PORT ? Number(process.env.PORT) : 10000, '0.0.0.0', () => {
       console.log(`AI Booking MVP listening on http://localhost:${process.env.PORT || 10000} (DB: ${DB_PATH})`);
