@@ -10912,7 +10912,7 @@ app.get('/setup-my-client', async (req, res) => {
           display_name = EXCLUDED.display_name
     `);
     
-    // Create opt_out_list table with full schema
+    // Create or update opt_out_list table with full schema
     await query(`
       CREATE TABLE IF NOT EXISTS opt_out_list (
         id BIGSERIAL PRIMARY KEY,
@@ -10924,6 +10924,15 @@ app.get('/setup-my-client', async (req, res) => {
         notes TEXT
       )
     `);
+    
+    // Add missing columns if they don't exist
+    try {
+      await query(`ALTER TABLE opt_out_list ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE`);
+      await query(`ALTER TABLE opt_out_list ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`);
+      await query(`ALTER TABLE opt_out_list ADD COLUMN IF NOT EXISTS notes TEXT`);
+    } catch (error) {
+      console.log('[SETUP] Column migration:', error.message);
+    }
     
     // Create indexes
     await query(`
