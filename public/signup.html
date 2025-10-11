@@ -90,6 +90,105 @@
       margin-bottom: 12px;
     }
 
+    /* Interactive Calendar Styles */
+    .calendar-container, .hours-container {
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 20px;
+      margin-top: 12px;
+      background: #fafafa;
+    }
+
+    .calendar-header h4 {
+      margin: 0 0 16px 0;
+      color: #333;
+      font-size: 16px;
+    }
+
+    .days-grid, .hours-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .hours-grid {
+      grid-template-columns: repeat(5, 1fr);
+    }
+
+    .day-header {
+      text-align: center;
+      font-weight: 600;
+      color: #666;
+      padding: 8px;
+      font-size: 12px;
+    }
+
+    .day-option, .time-slot {
+      position: relative;
+      text-align: center;
+    }
+
+    .day-option input, .time-slot input {
+      display: none;
+    }
+
+    .day-option label, .time-slot label {
+      display: block;
+      padding: 12px 8px;
+      border: 2px solid #e0e0e0;
+      border-radius: 6px;
+      background: white;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .day-option label:hover, .time-slot label:hover {
+      border-color: #667eea;
+      background: #f8f9ff;
+    }
+
+    .day-option input:checked + label, .time-slot input:checked + label {
+      background: #667eea;
+      color: white;
+      border-color: #667eea;
+    }
+
+    .quick-select {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+
+    .quick-btn {
+      padding: 8px 16px;
+      border: 2px solid #e0e0e0;
+      border-radius: 6px;
+      background: white;
+      color: #333;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    .quick-btn:hover {
+      border-color: #667eea;
+      background: #f8f9ff;
+    }
+
+    .quick-btn.clear-btn {
+      border-color: #ef4444;
+      color: #ef4444;
+    }
+
+    .quick-btn.clear-btn:hover {
+      background: #fef2f2;
+    }
+
     button {
       width: 100%;
       padding: 16px;
@@ -395,29 +494,132 @@
           </div>
 
           <div class="form-group">
-            <label for="workingDays">When are you available for appointments? *</label>
-            <select id="workingDays" name="workingDays" required>
-              <option value="">Choose your working days...</option>
-              <option value="monday-friday">📅 Monday to Friday (Standard business week)</option>
-              <option value="monday-saturday">📅 Monday to Saturday (6 days a week)</option>
-              <option value="tuesday-saturday">📅 Tuesday to Saturday (Skip Mondays)</option>
-              <option value="monday-sunday">📅 Monday to Sunday (7 days a week)</option>
-              <option value="weekends-only">📅 Weekends Only (Saturday & Sunday)</option>
-              <option value="custom">✏️ Custom Days (Specify your own)</option>
-            </select>
+            <label>📅 When are you available for appointments? *</label>
+            <div class="calendar-container">
+              <div class="calendar-header">
+                <h4>Select your working days:</h4>
+              </div>
+              <div class="days-grid">
+                <div class="day-header">Mon</div>
+                <div class="day-header">Tue</div>
+                <div class="day-header">Wed</div>
+                <div class="day-header">Thu</div>
+                <div class="day-header">Fri</div>
+                <div class="day-header">Sat</div>
+                <div class="day-header">Sun</div>
+                
+                <div class="day-option" data-day="monday">
+                  <input type="checkbox" id="day-monday" name="workingDays[]" value="monday">
+                  <label for="day-monday">Mon</label>
+                </div>
+                <div class="day-option" data-day="tuesday">
+                  <input type="checkbox" id="day-tuesday" name="workingDays[]" value="tuesday">
+                  <label for="day-tuesday">Tue</label>
+                </div>
+                <div class="day-option" data-day="wednesday">
+                  <input type="checkbox" id="day-wednesday" name="workingDays[]" value="wednesday">
+                  <label for="day-wednesday">Wed</label>
+                </div>
+                <div class="day-option" data-day="thursday">
+                  <input type="checkbox" id="day-thursday" name="workingDays[]" value="thursday">
+                  <label for="day-thursday">Thu</label>
+                </div>
+                <div class="day-option" data-day="friday">
+                  <input type="checkbox" id="day-friday" name="workingDays[]" value="friday">
+                  <label for="day-friday">Fri</label>
+                </div>
+                <div class="day-option" data-day="saturday">
+                  <input type="checkbox" id="day-saturday" name="workingDays[]" value="saturday">
+                  <label for="day-saturday">Sat</label>
+                </div>
+                <div class="day-option" data-day="sunday">
+                  <input type="checkbox" id="day-sunday" name="workingDays[]" value="sunday">
+                  <label for="day-sunday">Sun</label>
+                </div>
+              </div>
+              
+              <div class="quick-select">
+                <button type="button" class="quick-btn" data-days="monday,tuesday,wednesday,thursday,friday">Weekdays</button>
+                <button type="button" class="quick-btn" data-days="saturday,sunday">Weekends</button>
+                <button type="button" class="quick-btn" data-days="monday,tuesday,wednesday,thursday,friday,saturday,sunday">All Days</button>
+                <button type="button" class="quick-btn clear-btn">Clear All</button>
+              </div>
+            </div>
           </div>
 
           <div class="form-group">
-            <label for="workingHours">What hours are you available? *</label>
-            <select id="workingHours" name="workingHours" required>
-              <option value="">Choose your working hours...</option>
-              <option value="9am-5pm">🕘 9am - 5pm (Standard business hours)</option>
-              <option value="8am-6pm">🕗 8am - 6pm (Extended hours)</option>
-              <option value="7am-7pm">🕖 7am - 7pm (Early to late)</option>
-              <option value="10am-4pm">🕙 10am - 4pm (Shortened hours)</option>
-              <option value="24/7">🌙 24/7 (Always available)</option>
-              <option value="custom">✏️ Custom Hours (Specify your own)</option>
-            </select>
+            <label>🕘 What hours are you available? *</label>
+            <div class="hours-container">
+              <div class="hours-grid">
+                <div class="time-slot" data-time="6am">
+                  <input type="checkbox" id="hour-6am" name="workingHours[]" value="6am">
+                  <label for="hour-6am">6am</label>
+                </div>
+                <div class="time-slot" data-time="7am">
+                  <input type="checkbox" id="hour-7am" name="workingHours[]" value="7am">
+                  <label for="hour-7am">7am</label>
+                </div>
+                <div class="time-slot" data-time="8am">
+                  <input type="checkbox" id="hour-8am" name="workingHours[]" value="8am">
+                  <label for="hour-8am">8am</label>
+                </div>
+                <div class="time-slot" data-time="9am">
+                  <input type="checkbox" id="hour-9am" name="workingHours[]" value="9am">
+                  <label for="hour-9am">9am</label>
+                </div>
+                <div class="time-slot" data-time="10am">
+                  <input type="checkbox" id="hour-10am" name="workingHours[]" value="10am">
+                  <label for="hour-10am">10am</label>
+                </div>
+                <div class="time-slot" data-time="11am">
+                  <input type="checkbox" id="hour-11am" name="workingHours[]" value="11am">
+                  <label for="hour-11am">11am</label>
+                </div>
+                <div class="time-slot" data-time="12pm">
+                  <input type="checkbox" id="hour-12pm" name="workingHours[]" value="12pm">
+                  <label for="hour-12pm">12pm</label>
+                </div>
+                <div class="time-slot" data-time="1pm">
+                  <input type="checkbox" id="hour-1pm" name="workingHours[]" value="1pm">
+                  <label for="hour-1pm">1pm</label>
+                </div>
+                <div class="time-slot" data-time="2pm">
+                  <input type="checkbox" id="hour-2pm" name="workingHours[]" value="2pm">
+                  <label for="hour-2pm">2pm</label>
+                </div>
+                <div class="time-slot" data-time="3pm">
+                  <input type="checkbox" id="hour-3pm" name="workingHours[]" value="3pm">
+                  <label for="hour-3pm">3pm</label>
+                </div>
+                <div class="time-slot" data-time="4pm">
+                  <input type="checkbox" id="hour-4pm" name="workingHours[]" value="4pm">
+                  <label for="hour-4pm">4pm</label>
+                </div>
+                <div class="time-slot" data-time="5pm">
+                  <input type="checkbox" id="hour-5pm" name="workingHours[]" value="5pm">
+                  <label for="hour-5pm">5pm</label>
+                </div>
+                <div class="time-slot" data-time="6pm">
+                  <input type="checkbox" id="hour-6pm" name="workingHours[]" value="6pm">
+                  <label for="hour-6pm">6pm</label>
+                </div>
+                <div class="time-slot" data-time="7pm">
+                  <input type="checkbox" id="hour-7pm" name="workingHours[]" value="7pm">
+                  <label for="hour-7pm">7pm</label>
+                </div>
+                <div class="time-slot" data-time="8pm">
+                  <input type="checkbox" id="hour-8pm" name="workingHours[]" value="8pm">
+                  <label for="hour-8pm">8pm</label>
+                </div>
+              </div>
+              
+              <div class="quick-select">
+                <button type="button" class="quick-btn" data-hours="9am,10am,11am,12pm,1pm,2pm,3pm,4pm,5pm">Business Hours</button>
+                <button type="button" class="quick-btn" data-hours="8am,9am,10am,11am,12pm,1pm,2pm,3pm,4pm,5pm,6pm">Extended Hours</button>
+                <button type="button" class="quick-btn" data-hours="6am,7am,8am,9am,10am,11am,12pm,1pm,2pm,3pm,4pm,5pm,6pm,7pm,8pm">All Day</button>
+                <button type="button" class="quick-btn clear-btn">Clear All</button>
+              </div>
+            </div>
           </div>
 
           <div class="form-group">
@@ -501,58 +703,47 @@
       }
     });
 
-    // Handle custom working days
-    document.getElementById('workingDays').addEventListener('change', function() {
-      const workingDays = this.value;
-      if (workingDays === 'custom') {
-        // Show custom days input
-        let customInput = document.getElementById('customWorkingDays');
-        if (!customInput) {
-          customInput = document.createElement('input');
-          customInput.type = 'text';
-          customInput.id = 'customWorkingDays';
-          customInput.name = 'customWorkingDays';
-          customInput.placeholder = 'e.g. "Monday, Wednesday, Friday" or "Monday to Thursday"';
-          customInput.required = true;
-          customInput.style.marginTop = '8px';
-          this.parentNode.appendChild(customInput);
-        }
-        customInput.style.display = 'block';
-      } else {
-        // Hide custom input
-        const customInput = document.getElementById('customWorkingDays');
-        if (customInput) {
-          customInput.style.display = 'none';
-          customInput.required = false;
-        }
-      }
+    // Interactive Calendar Functionality
+    // Quick select buttons for days
+    document.querySelectorAll('.quick-btn[data-days]').forEach(btn => {
+      btn.addEventListener('click', function() {
+        const days = this.dataset.days.split(',');
+        // Clear all first
+        document.querySelectorAll('input[name="workingDays[]"]').forEach(input => {
+          input.checked = false;
+        });
+        // Select specified days
+        days.forEach(day => {
+          const input = document.getElementById(`day-${day}`);
+          if (input) input.checked = true;
+        });
+      });
     });
 
-    // Handle custom working hours
-    document.getElementById('workingHours').addEventListener('change', function() {
-      const workingHours = this.value;
-      if (workingHours === 'custom') {
-        // Show custom hours input
-        let customInput = document.getElementById('customWorkingHours');
-        if (!customInput) {
-          customInput = document.createElement('input');
-          customInput.type = 'text';
-          customInput.id = 'customWorkingHours';
-          customInput.name = 'customWorkingHours';
-          customInput.placeholder = 'e.g. "8am to 6pm" or "9am to 12pm, 2pm to 5pm"';
-          customInput.required = true;
-          customInput.style.marginTop = '8px';
-          this.parentNode.appendChild(customInput);
-        }
-        customInput.style.display = 'block';
-      } else {
-        // Hide custom input
-        const customInput = document.getElementById('customWorkingHours');
-        if (customInput) {
-          customInput.style.display = 'none';
-          customInput.required = false;
-        }
-      }
+    // Quick select buttons for hours
+    document.querySelectorAll('.quick-btn[data-hours]').forEach(btn => {
+      btn.addEventListener('click', function() {
+        const hours = this.dataset.hours.split(',');
+        // Clear all first
+        document.querySelectorAll('input[name="workingHours[]"]').forEach(input => {
+          input.checked = false;
+        });
+        // Select specified hours
+        hours.forEach(hour => {
+          const input = document.getElementById(`hour-${hour}`);
+          if (input) input.checked = true;
+        });
+      });
+    });
+
+    // Clear all buttons
+    document.querySelectorAll('.clear-btn').forEach(btn => {
+      btn.addEventListener('click', function() {
+        const container = this.closest('.calendar-container, .hours-container');
+        container.querySelectorAll('input[type="checkbox"]').forEach(input => {
+          input.checked = false;
+        });
+      });
     });
 
     // Handle custom yearly schedule
@@ -594,16 +785,20 @@
         delete data.customIndustry;
       }
       
-      // Handle custom working days
-      if (data.workingDays === 'custom' && data.customWorkingDays) {
-        data.workingDays = data.customWorkingDays;
-        delete data.customWorkingDays;
+      // Handle working days array
+      if (data['workingDays[]']) {
+        data.workingDays = Array.isArray(data['workingDays[]']) 
+          ? data['workingDays[]'].join(',') 
+          : data['workingDays[]'];
+        delete data['workingDays[]'];
       }
       
-      // Handle custom working hours
-      if (data.workingHours === 'custom' && data.customWorkingHours) {
-        data.workingHours = data.customWorkingHours;
-        delete data.customWorkingHours;
+      // Handle working hours array
+      if (data['workingHours[]']) {
+        data.workingHours = Array.isArray(data['workingHours[]']) 
+          ? data['workingHours[]'].join(',') 
+          : data['workingHours[]'];
+        delete data['workingHours[]'];
       }
       
       // Handle custom yearly schedule
