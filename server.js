@@ -10912,15 +10912,25 @@ app.get('/setup-my-client', async (req, res) => {
           display_name = EXCLUDED.display_name
     `);
     
-    // Create opt_out_list table
+    // Create opt_out_list table with full schema
     await query(`
       CREATE TABLE IF NOT EXISTS opt_out_list (
-        id SERIAL PRIMARY KEY,
-        phone TEXT UNIQUE NOT NULL,
-        opted_out_at TIMESTAMP DEFAULT NOW(),
+        id BIGSERIAL PRIMARY KEY,
+        phone TEXT NOT NULL UNIQUE,
         reason TEXT,
-        source TEXT
+        opted_out_at TIMESTAMPTZ DEFAULT NOW(),
+        active BOOLEAN DEFAULT TRUE,
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        notes TEXT
       )
+    `);
+    
+    // Create indexes
+    await query(`
+      CREATE INDEX IF NOT EXISTS opt_out_phone_idx ON opt_out_list(phone) WHERE active = TRUE
+    `);
+    await query(`
+      CREATE INDEX IF NOT EXISTS opt_out_active_idx ON opt_out_list(active)
     `);
     
     // Verify
