@@ -78,84 +78,6 @@
       border-color: #667eea;
     }
 
-    .pricing-cards {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-
-    .pricing-card {
-      border: 2px solid #e0e0e0;
-      border-radius: 8px;
-      padding: 20px;
-      cursor: pointer;
-      transition: all 0.3s;
-      position: relative;
-    }
-
-    .pricing-card:hover {
-      border-color: #667eea;
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
-    }
-
-    .pricing-card.selected {
-      border-color: #667eea;
-      background: #f8f9ff;
-    }
-
-    .pricing-card.selected::after {
-      content: '✓';
-      position: absolute;
-      top: 16px;
-      right: 16px;
-      background: #667eea;
-      color: white;
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-    }
-
-    .plan-name {
-      font-size: 18px;
-      font-weight: 600;
-      margin-bottom: 4px;
-    }
-
-    .plan-price {
-      font-size: 24px;
-      font-weight: 700;
-      color: #667eea;
-      margin-bottom: 8px;
-    }
-
-    .plan-price span {
-      font-size: 14px;
-      color: #666;
-      font-weight: 400;
-    }
-
-    .plan-features {
-      list-style: none;
-      margin-top: 12px;
-    }
-
-    .plan-features li {
-      padding: 4px 0;
-      color: #666;
-      font-size: 14px;
-    }
-
-    .plan-features li::before {
-      content: '✓ ';
-      color: #667eea;
-      font-weight: bold;
-      margin-right: 8px;
-    }
 
     .trial-badge {
       display: inline-block;
@@ -324,7 +246,7 @@
     <!-- Form Section -->
     <div id="form-section">
       <h1>🚀 Launch Your AI Lead System</h1>
-      <p class="subtitle">Start converting leads in 5 minutes. No credit card required for 14-day trial.</p>
+      <p class="subtitle">Start converting leads in 5 minutes. 14-day free trial, custom pricing.</p>
 
       <div class="error" id="error-message"></div>
 
@@ -364,40 +286,12 @@
 
           <div class="form-group">
             <label for="primaryService">Primary Service *</label>
-            <select id="primaryService" name="primaryService" required>
-              <option value="">Select your main service...</option>
-              <option value="Emergency Repairs">Emergency Repairs</option>
-              <option value="Installation">Installation</option>
-              <option value="Maintenance">Maintenance</option>
-              <option value="Consultation">Consultation</option>
-              <option value="Treatment">Treatment</option>
-              <option value="Home Visits">Home Visits</option>
-              <option value="Commercial Services">Commercial Services</option>
-              <option value="Other">Other (specify in notes)</option>
-            </select>
+            <input type="text" id="primaryService" name="primaryService" required placeholder="e.g. Emergency Plumbing, Dental Checkups, Legal Consultation">
           </div>
 
           <div class="form-group">
             <label for="serviceArea">Service Area *</label>
-            <select id="serviceArea" name="serviceArea" required>
-              <option value="">Select your area...</option>
-              <option value="London">London</option>
-              <option value="Manchester">Manchester</option>
-              <option value="Birmingham">Birmingham</option>
-              <option value="Leeds">Leeds</option>
-              <option value="Liverpool">Liverpool</option>
-              <option value="Newcastle">Newcastle</option>
-              <option value="Bristol">Bristol</option>
-              <option value="Sheffield">Sheffield</option>
-              <option value="Nottingham">Nottingham</option>
-              <option value="Leicester">Leicester</option>
-              <option value="Edinburgh">Edinburgh</option>
-              <option value="Glasgow">Glasgow</option>
-              <option value="Cardiff">Cardiff</option>
-              <option value="Belfast">Belfast</option>
-              <option value="Nationwide">Nationwide</option>
-              <option value="Other">Other</option>
-            </select>
+            <input type="text" id="serviceArea" name="serviceArea" required placeholder="e.g. London, Manchester, Nationwide">
           </div>
 
           <div class="form-group">
@@ -440,53 +334,18 @@
 
         </div>
 
-        <!-- Pricing -->
+        <!-- Pricing Info -->
         <div class="form-section">
-          <h2>💳 Choose Your Plan</h2>
-          <span class="trial-badge">14-Day Free Trial</span>
-          
-          <div class="pricing-cards">
-            <div class="pricing-card" data-plan="starter" onclick="selectPlan('starter')">
-              <div class="plan-name">Starter</div>
-              <div class="plan-price">£500<span>/month</span></div>
-              <ul class="plan-features">
-                <li>Up to 200 leads/month</li>
-                <li>AI calling in 30 seconds</li>
-                <li>Automated booking</li>
-                <li>SMS & Email follow-ups</li>
-                <li>Basic analytics</li>
-                <li>Email support</li>
-              </ul>
-            </div>
-
-            <div class="pricing-card selected" data-plan="growth" onclick="selectPlan('growth')">
-              <div class="plan-name">Growth</div>
-              <div class="plan-price">£1,200<span>/month</span></div>
-              <ul class="plan-features">
-                <li>Up to 500 leads/month</li>
-                <li>Everything in Starter</li>
-                <li>Advanced analytics</li>
-                <li>Custom Vapi voice</li>
-                <li>Priority support</li>
-                <li>Dedicated account manager</li>
-              </ul>
-            </div>
-
-            <div class="pricing-card" data-plan="pro" onclick="selectPlan('pro')">
-              <div class="plan-name">Pro</div>
-              <div class="plan-price">£2,500<span>/month</span></div>
-              <ul class="plan-features">
-                <li>Unlimited leads</li>
-                <li>Everything in Growth</li>
-                <li>White-label dashboard</li>
-                <li>API access</li>
-                <li>Custom integrations</li>
-                <li>24/7 priority support</li>
-              </ul>
-            </div>
+          <h2>💰 Pricing</h2>
+          <div class="info-box" style="background: #f8f9ff; border-left: 4px solid #667eea; padding: 16px; margin: 20px 0; border-radius: 4px;">
+            <h3 style="margin-top: 0; color: #667eea; font-size: 16px;">🎯 Custom Pricing</h3>
+            <p style="margin-bottom: 0; color: #666; font-size: 14px; line-height: 1.6;">
+              We'll discuss pricing based on your specific needs and lead volume. 
+              Most clients see 3-5x ROI within the first month.
+            </p>
           </div>
-
-          <input type="hidden" id="plan" name="plan" value="growth">
+          
+          <input type="hidden" id="plan" name="plan" value="custom">
         </div>
 
         <button type="submit" id="submit-btn">🚀 Start 14-Day Free Trial</button>
@@ -528,24 +387,10 @@
   </div>
 
   <script>
-    let selectedPlan = 'growth';
-
-    function selectPlan(plan) {
-      selectedPlan = plan;
-      document.getElementById('plan').value = plan;
-      
-      document.querySelectorAll('.pricing-card').forEach(card => {
-        card.classList.remove('selected');
-      });
-      
-      document.querySelector(`[data-plan="${plan}"]`).classList.add('selected');
-    }
-
-    // Auto-fill suggestions based on industry
+    // Auto-fill business name based on industry
     document.getElementById('industry').addEventListener('change', function() {
       const industry = this.value;
       const businessNameField = document.getElementById('businessName');
-      const serviceField = document.getElementById('primaryService');
       
       if (!businessNameField.value) {
         const suggestions = {
@@ -562,25 +407,6 @@
         
         if (suggestions[industry]) {
           businessNameField.value = suggestions[industry];
-        }
-      }
-      
-      // Auto-select common service for industry
-      if (!serviceField.value) {
-        const serviceMap = {
-          'plumbing': 'Emergency Repairs',
-          'hvac': 'Installation',
-          'electrical': 'Emergency Repairs',
-          'dental': 'Treatment',
-          'medical': 'Consultation',
-          'real_estate': 'Consultation',
-          'home_improvement': 'Installation',
-          'legal': 'Consultation',
-          'automotive': 'Maintenance'
-        };
-        
-        if (serviceMap[industry]) {
-          serviceField.value = serviceMap[industry];
         }
       }
     });
