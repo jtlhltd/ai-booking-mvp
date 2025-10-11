@@ -395,26 +395,28 @@
           </div>
 
           <div class="form-group">
-            <label for="callHours">Preferred Call Hours *</label>
-            <select id="callHours" name="callHours" required>
-              <option value="">Select hours...</option>
-              <option value="9am-5pm">9am-5pm (Business Hours)</option>
-              <option value="8am-6pm">8am-6pm (Extended Hours)</option>
-              <option value="7am-7pm">7am-7pm (Early/Late)</option>
-              <option value="24/7">24/7 (Always Available)</option>
-              <option value="custom">Custom Hours</option>
+            <label for="workingDays">Working Days *</label>
+            <select id="workingDays" name="workingDays" required>
+              <option value="">Select days...</option>
+              <option value="monday-friday">Monday - Friday</option>
+              <option value="monday-saturday">Monday - Saturday</option>
+              <option value="tuesday-saturday">Tuesday - Saturday</option>
+              <option value="monday-sunday">Monday - Sunday</option>
+              <option value="weekends-only">Weekends Only</option>
+              <option value="custom">Custom Days</option>
             </select>
           </div>
 
           <div class="form-group">
-            <label for="urgency">How Urgent is Lead Response? *</label>
-            <select id="urgency" name="urgency" required>
-              <option value="">Select urgency...</option>
-              <option value="immediate">Immediate (within 30 seconds)</option>
-              <option value="fast">Fast (within 5 minutes)</option>
-              <option value="quick">Quick (within 1 hour)</option>
-              <option value="same_day">Same Day</option>
-              <option value="next_day">Next Business Day</option>
+            <label for="workingHours">Working Hours *</label>
+            <select id="workingHours" name="workingHours" required>
+              <option value="">Select hours...</option>
+              <option value="9am-5pm">9am - 5pm</option>
+              <option value="8am-6pm">8am - 6pm</option>
+              <option value="7am-7pm">7am - 7pm</option>
+              <option value="10am-4pm">10am - 4pm</option>
+              <option value="24/7">24/7</option>
+              <option value="custom">Custom Hours</option>
             </select>
           </div>
 
@@ -487,18 +489,18 @@
       }
     });
 
-    // Handle custom hours
-    document.getElementById('callHours').addEventListener('change', function() {
-      const callHours = this.value;
-      if (callHours === 'custom') {
-        // Show custom hours input
-        let customInput = document.getElementById('customCallHours');
+    // Handle custom working days
+    document.getElementById('workingDays').addEventListener('change', function() {
+      const workingDays = this.value;
+      if (workingDays === 'custom') {
+        // Show custom days input
+        let customInput = document.getElementById('customWorkingDays');
         if (!customInput) {
           customInput = document.createElement('input');
           customInput.type = 'text';
-          customInput.id = 'customCallHours';
-          customInput.name = 'customCallHours';
-          customInput.placeholder = 'e.g. 8am-6pm Mon-Fri, 9am-4pm Sat';
+          customInput.id = 'customWorkingDays';
+          customInput.name = 'customWorkingDays';
+          customInput.placeholder = 'e.g. Mon, Wed, Fri or Monday-Thursday';
           customInput.required = true;
           customInput.style.marginTop = '8px';
           this.parentNode.appendChild(customInput);
@@ -506,7 +508,34 @@
         customInput.style.display = 'block';
       } else {
         // Hide custom input
-        const customInput = document.getElementById('customCallHours');
+        const customInput = document.getElementById('customWorkingDays');
+        if (customInput) {
+          customInput.style.display = 'none';
+          customInput.required = false;
+        }
+      }
+    });
+
+    // Handle custom working hours
+    document.getElementById('workingHours').addEventListener('change', function() {
+      const workingHours = this.value;
+      if (workingHours === 'custom') {
+        // Show custom hours input
+        let customInput = document.getElementById('customWorkingHours');
+        if (!customInput) {
+          customInput = document.createElement('input');
+          customInput.type = 'text';
+          customInput.id = 'customWorkingHours';
+          customInput.name = 'customWorkingHours';
+          customInput.placeholder = 'e.g. 8am-6pm or 9am-12pm, 2pm-5pm';
+          customInput.required = true;
+          customInput.style.marginTop = '8px';
+          this.parentNode.appendChild(customInput);
+        }
+        customInput.style.display = 'block';
+      } else {
+        // Hide custom input
+        const customInput = document.getElementById('customWorkingHours');
         if (customInput) {
           customInput.style.display = 'none';
           customInput.required = false;
@@ -526,10 +555,16 @@
         delete data.customIndustry;
       }
       
-      // Handle custom call hours
-      if (data.callHours === 'custom' && data.customCallHours) {
-        data.callHours = data.customCallHours;
-        delete data.customCallHours;
+      // Handle custom working days
+      if (data.workingDays === 'custom' && data.customWorkingDays) {
+        data.workingDays = data.customWorkingDays;
+        delete data.customWorkingDays;
+      }
+      
+      // Handle custom working hours
+      if (data.workingHours === 'custom' && data.customWorkingHours) {
+        data.workingHours = data.customWorkingHours;
+        delete data.customWorkingHours;
       }
       
       // Show loading
