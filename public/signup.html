@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Start Your AI Lead System - Sign Up</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 16px;
+      padding: 40px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+
+    h1 {
+      font-size: 32px;
+      margin-bottom: 8px;
+      color: #1a1a1a;
+    }
+
+    .subtitle {
+      color: #666;
+      margin-bottom: 32px;
+      font-size: 16px;
+    }
+
+    .form-section {
+      margin-bottom: 32px;
+    }
+
+    .form-section h2 {
+      font-size: 18px;
+      margin-bottom: 16px;
+      color: #1a1a1a;
+      border-bottom: 2px solid #667eea;
+      padding-bottom: 8px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 500;
+      color: #333;
+      font-size: 14px;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 15px;
+      transition: border-color 0.3s;
+      font-family: inherit;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .pricing-cards {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .pricing-card {
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 20px;
+      cursor: pointer;
+      transition: all 0.3s;
+      position: relative;
+    }
+
+    .pricing-card:hover {
+      border-color: #667eea;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    }
+
+    .pricing-card.selected {
+      border-color: #667eea;
+      background: #f8f9ff;
+    }
+
+    .pricing-card.selected::after {
+      content: '✓';
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: #667eea;
+      color: white;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+    }
+
+    .plan-name {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .plan-price {
+      font-size: 24px;
+      font-weight: 700;
+      color: #667eea;
+      margin-bottom: 8px;
+    }
+
+    .plan-price span {
+      font-size: 14px;
+      color: #666;
+      font-weight: 400;
+    }
+
+    .plan-features {
+      list-style: none;
+      margin-top: 12px;
+    }
+
+    .plan-features li {
+      padding: 4px 0;
+      color: #666;
+      font-size: 14px;
+    }
+
+    .plan-features li::before {
+      content: '✓ ';
+      color: #667eea;
+      font-weight: bold;
+      margin-right: 8px;
+    }
+
+    .trial-badge {
+      display: inline-block;
+      background: #10b981;
+      color: white;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    button {
+      width: 100%;
+      padding: 16px;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    button:hover {
+      background: #5568d3;
+    }
+
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 40px;
+    }
+
+    .loading.active {
+      display: block;
+    }
+
+    .loading-spinner {
+      width: 60px;
+      height: 60px;
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+      font-size: 18px;
+      color: #667eea;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .loading-subtext {
+      color: #666;
+      font-size: 14px;
+    }
+
+    .success {
+      display: none;
+      text-align: center;
+      padding: 40px;
+    }
+
+    .success.active {
+      display: block;
+    }
+
+    .success-icon {
+      font-size: 80px;
+      margin-bottom: 20px;
+    }
+
+    .success h2 {
+      font-size: 28px;
+      margin-bottom: 12px;
+      color: #10b981;
+    }
+
+    .success-details {
+      background: #f8f9ff;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 24px 0;
+      text-align: left;
+    }
+
+    .success-details h3 {
+      font-size: 16px;
+      margin-bottom: 12px;
+      color: #333;
+    }
+
+    .success-details p {
+      margin: 8px 0;
+      color: #666;
+      font-size: 14px;
+    }
+
+    .success-details strong {
+      color: #1a1a1a;
+    }
+
+    .action-buttons {
+      display: grid;
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    .action-buttons a {
+      display: block;
+      padding: 14px;
+      background: #667eea;
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+      text-align: center;
+      transition: background 0.3s;
+    }
+
+    .action-buttons a:hover {
+      background: #5568d3;
+    }
+
+    .action-buttons a.secondary {
+      background: white;
+      color: #667eea;
+      border: 2px solid #667eea;
+    }
+
+    .action-buttons a.secondary:hover {
+      background: #f8f9ff;
+    }
+
+    .error {
+      background: #fee;
+      border: 1px solid #fcc;
+      color: #c33;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .error.active {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Form Section -->
+    <div id="form-section">
+      <h1>🚀 Launch Your AI Lead System</h1>
+      <p class="subtitle">Start converting leads in 5 minutes. No credit card required for 14-day trial.</p>
+
+      <div class="error" id="error-message"></div>
+
+      <form id="signup-form">
+        <!-- Business Info -->
+        <div class="form-section">
+          <h2>📊 Business Information</h2>
+          
+          <div class="form-group">
+            <label for="businessName">Business Name *</label>
+            <input type="text" id="businessName" name="businessName" required placeholder="Acme Plumbing">
+          </div>
+
+          <div class="form-group">
+            <label for="industry">Industry *</label>
+            <select id="industry" name="industry" required>
+              <option value="">Select industry...</option>
+              <option value="plumbing">Plumbing</option>
+              <option value="hvac">HVAC</option>
+              <option value="electrical">Electrical</option>
+              <option value="dental">Dental</option>
+              <option value="medical">Medical</option>
+              <option value="real_estate">Real Estate</option>
+              <option value="home_improvement">Home Improvement</option>
+              <option value="legal">Legal</option>
+              <option value="automotive">Automotive</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="primaryService">Primary Service *</label>
+            <input type="text" id="primaryService" name="primaryService" required placeholder="Emergency Plumbing Repairs">
+          </div>
+
+          <div class="form-group">
+            <label for="serviceArea">Service Area *</label>
+            <input type="text" id="serviceArea" name="serviceArea" required placeholder="Los Angeles, CA">
+          </div>
+
+          <div class="form-group">
+            <label for="website">Website (optional)</label>
+            <input type="url" id="website" name="website" placeholder="https://acmeplumbing.com">
+          </div>
+        </div>
+
+        <!-- Contact Info -->
+        <div class="form-section">
+          <h2>👤 Your Contact Information</h2>
+          
+          <div class="form-group">
+            <label for="ownerName">Your Name *</label>
+            <input type="text" id="ownerName" name="ownerName" required placeholder="John Smith">
+          </div>
+
+          <div class="form-group">
+            <label for="email">Email *</label>
+            <input type="email" id="email" name="email" required placeholder="john@acmeplumbing.com">
+          </div>
+
+          <div class="form-group">
+            <label for="phone">Phone *</label>
+            <input type="tel" id="phone" name="phone" required placeholder="+1 (234) 567-8900">
+          </div>
+        </div>
+
+        <!-- AI Preferences -->
+        <div class="form-section">
+          <h2>🤖 AI Assistant Preferences</h2>
+          
+          <div class="form-group">
+            <label for="voiceGender">Voice Gender *</label>
+            <select id="voiceGender" name="voiceGender" required>
+              <option value="female">Female (Recommended)</option>
+              <option value="male">Male</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="businessHours">Business Hours *</label>
+            <input type="text" id="businessHours" name="businessHours" required placeholder="9am-5pm Mon-Fri">
+          </div>
+        </div>
+
+        <!-- Pricing -->
+        <div class="form-section">
+          <h2>💳 Choose Your Plan</h2>
+          <span class="trial-badge">14-Day Free Trial</span>
+          
+          <div class="pricing-cards">
+            <div class="pricing-card" data-plan="starter" onclick="selectPlan('starter')">
+              <div class="plan-name">Starter</div>
+              <div class="plan-price">£500<span>/month</span></div>
+              <ul class="plan-features">
+                <li>Up to 200 leads/month</li>
+                <li>AI calling in 30 seconds</li>
+                <li>Automated booking</li>
+                <li>SMS & Email follow-ups</li>
+                <li>Basic analytics</li>
+                <li>Email support</li>
+              </ul>
+            </div>
+
+            <div class="pricing-card selected" data-plan="growth" onclick="selectPlan('growth')">
+              <div class="plan-name">Growth</div>
+              <div class="plan-price">£1,200<span>/month</span></div>
+              <ul class="plan-features">
+                <li>Up to 500 leads/month</li>
+                <li>Everything in Starter</li>
+                <li>Advanced analytics</li>
+                <li>Custom Vapi voice</li>
+                <li>Priority support</li>
+                <li>Dedicated account manager</li>
+              </ul>
+            </div>
+
+            <div class="pricing-card" data-plan="pro" onclick="selectPlan('pro')">
+              <div class="plan-name">Pro</div>
+              <div class="plan-price">£2,500<span>/month</span></div>
+              <ul class="plan-features">
+                <li>Unlimited leads</li>
+                <li>Everything in Growth</li>
+                <li>White-label dashboard</li>
+                <li>API access</li>
+                <li>Custom integrations</li>
+                <li>24/7 priority support</li>
+              </ul>
+            </div>
+          </div>
+
+          <input type="hidden" id="plan" name="plan" value="growth">
+        </div>
+
+        <button type="submit" id="submit-btn">🚀 Start 14-Day Free Trial</button>
+        <p style="text-align: center; margin-top: 16px; color: #666; font-size: 13px;">
+          No credit card required. Cancel anytime.
+        </p>
+      </form>
+    </div>
+
+    <!-- Loading Section -->
+    <div class="loading" id="loading-section">
+      <div class="loading-spinner"></div>
+      <div class="loading-text" id="loading-text">Creating your AI system...</div>
+      <div class="loading-subtext" id="loading-subtext">This will take about 30 seconds</div>
+    </div>
+
+    <!-- Success Section -->
+    <div class="success" id="success-section">
+      <div class="success-icon">🎉</div>
+      <h2>Your AI System is Live!</h2>
+      <p style="color: #666; margin-bottom: 24px;">Check your email for complete setup instructions</p>
+
+      <div class="success-details">
+        <h3>📥 Your Lead Import URL:</h3>
+        <p><strong id="import-url">Loading...</strong></p>
+        
+        <h3 style="margin-top: 16px;">🔑 Your API Key:</h3>
+        <p><strong id="api-key">Loading...</strong></p>
+        
+        <h3 style="margin-top: 16px;">🆔 Your Client ID:</h3>
+        <p><strong id="client-key">Loading...</strong></p>
+      </div>
+
+      <div class="action-buttons">
+        <a href="#" id="import-link">📥 Import Your First Leads</a>
+        <a href="#" id="dashboard-link" class="secondary">📊 View Dashboard</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let selectedPlan = 'growth';
+
+    function selectPlan(plan) {
+      selectedPlan = plan;
+      document.getElementById('plan').value = plan;
+      
+      document.querySelectorAll('.pricing-card').forEach(card => {
+        card.classList.remove('selected');
+      });
+      
+      document.querySelector(`[data-plan="${plan}"]`).classList.add('selected');
+    }
+
+    document.getElementById('signup-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const formData = new FormData(e.target);
+      const data = Object.fromEntries(formData.entries());
+      
+      // Show loading
+      document.getElementById('form-section').style.display = 'none';
+      document.getElementById('loading-section').classList.add('active');
+      
+      const loadingSteps = [
+        { text: 'Creating your AI system...', subtext: 'Setting up your account' },
+        { text: 'Generating unique credentials...', subtext: 'Creating API keys' },
+        { text: 'Preparing your dashboard...', subtext: 'Almost there!' },
+        { text: 'Sending welcome email...', subtext: 'Final touches' }
+      ];
+      
+      let stepIndex = 0;
+      const stepInterval = setInterval(() => {
+        if (stepIndex < loadingSteps.length) {
+          document.getElementById('loading-text').textContent = loadingSteps[stepIndex].text;
+          document.getElementById('loading-subtext').textContent = loadingSteps[stepIndex].subtext;
+          stepIndex++;
+        }
+      }, 3000);
+      
+      try {
+        const response = await fetch('/api/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        
+        clearInterval(stepInterval);
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Signup failed');
+        }
+        
+        const result = await response.json();
+        
+        // Show success
+        document.getElementById('loading-section').classList.remove('active');
+        document.getElementById('success-section').classList.add('active');
+        
+        // Fill in details
+        const baseUrl = window.location.origin;
+        const importUrl = `${baseUrl}/lead-import.html?client=${result.clientKey}&key=${result.apiKey}`;
+        
+        document.getElementById('import-url').textContent = importUrl;
+        document.getElementById('api-key').textContent = result.apiKey;
+        document.getElementById('client-key').textContent = result.clientKey;
+        document.getElementById('import-link').href = importUrl;
+        document.getElementById('dashboard-link').href = `${baseUrl}/dashboard/${result.clientKey}`;
+        
+      } catch (error) {
+        clearInterval(stepInterval);
+        document.getElementById('loading-section').classList.remove('active');
+        document.getElementById('form-section').style.display = 'block';
+        
+        const errorEl = document.getElementById('error-message');
+        errorEl.textContent = error.message;
+        errorEl.classList.add('active');
+      }
+    });
+  </script>
+</body>
+</html>
+

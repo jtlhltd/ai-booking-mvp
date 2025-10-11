@@ -96,7 +96,7 @@ const app = express();
 function requireApiKey(req, res, next) {
   if (req.method === 'GET' && (req.path === '/health' || req.path === '/gcal/ping' || req.path === '/healthz' || req.path === '/setup-my-client' || req.path === '/clear-my-leads' || req.path === '/check-db')) return next();
   if (req.path.startsWith('/webhooks/twilio-status') || req.path.startsWith('/webhooks/twilio-inbound') || req.path.startsWith('/webhooks/twilio/sms-inbound') || req.path.startsWith('/webhooks/vapi') || req.path === '/webhook/sms-reply' || req.path === '/webhooks/sms') return next();
-  if (req.path === '/api/test' || req.path === '/api/test-linkedin' || req.path === '/api/uk-business-search' || req.path === '/api/decision-maker-contacts' || req.path === '/api/industry-categories' || req.path === '/test-sms-pipeline' || req.path === '/sms-test' || req.path === '/api/initiate-lead-capture') return next();
+  if (req.path === '/api/test' || req.path === '/api/test-linkedin' || req.path === '/api/uk-business-search' || req.path === '/api/decision-maker-contacts' || req.path === '/api/industry-categories' || req.path === '/test-sms-pipeline' || req.path === '/sms-test' || req.path === '/api/initiate-lead-capture' || req.path === '/api/signup') return next();
   if (req.path === '/uk-business-search' || req.path === '/booking-simple.html') return next();
   if (!API_KEY) return res.status(500).json({ error: 'Server missing API_KEY' });
   const key = req.get('X-API-Key');
@@ -10812,6 +10812,107 @@ app.get('/api/realtime/:clientKey/events', async (req, res) => {
     clearInterval(heartbeat);
     console.log(`[SSE] Client ${clientKey} disconnected from real-time stream`);
   });
+});
+
+// ============================================================================
+// CLIENT PORTAL PAGES (Dashboard, Settings)
+// ============================================================================
+
+// Client dashboard page
+app.get('/dashboard/:clientKey', (req, res) => {
+  res.sendFile('public/dashboard.html', { root: '.' });
+});
+
+// Client settings page
+app.get('/settings/:clientKey', (req, res) => {
+  res.sendFile('public/settings.html', { root: '.' });
+});
+
+// ============================================================================
+// AUTOMATED CLIENT SIGNUP (Self-Service Onboarding)
+// ============================================================================
+
+// Public signup endpoint (no API key required)
+app.post('/api/signup', async (req, res) => {
+  try {
+    const {
+      businessName,
+      industry,
+      primaryService,
+      serviceArea,
+      website,
+      ownerName,
+      email,
+      phone,
+      voiceGender,
+      businessHours,
+      plan
+    } = req.body;
+
+    // Validate required fields
+    if (!businessName || !industry || !primaryService || !serviceArea || !ownerName || !email || !phone || !plan) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields'
+      });
+    }
+
+    console.log(`[SIGNUP] New signup request for ${businessName} (${email})`);
+
+    // Create client with automated onboarding
+    const { createClient, sendWelcomeEmail } = await import('./lib/auto-onboarding.js');
+    
+    const result = await createClient({
+      businessName,
+      industry,
+      primaryService,
+      serviceArea,
+      website,
+      ownerName,
+      email,
+      phone,
+      voiceGender,
+      businessHours,
+      plan
+    });
+
+    // Send welcome email with credentials (don't wait for it)
+    sendWelcomeEmail({
+      clientKey: result.clientKey,
+      businessName: result.businessName,
+      ownerEmail: result.ownerEmail,
+      apiKey: result.apiKey,
+      systemPrompt: result.systemPrompt
+    }).catch(error => {
+      console.error('[SIGNUP] Welcome email failed:', error);
+    });
+
+    console.log(`[SIGNUP] ✅ Successfully onboarded ${businessName} (${result.clientKey})`);
+
+    // Return success with credentials
+    res.json({
+      success: true,
+      clientKey: result.clientKey,
+      apiKey: result.apiKey, // Only returned once!
+      message: 'Account created successfully! Check your email for setup instructions.'
+    });
+
+  } catch (error) {
+    console.error('[SIGNUP] Error:', error);
+    
+    // Handle duplicate client key (very rare)
+    if (error.code === '23505') { // PostgreSQL unique violation
+      return res.status(409).json({
+        success: false,
+        error: 'An account with this business name already exists. Please contact support.'
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create account. Please try again or contact support.'
+    });
+  }
 });
 
 // Real-Time Connection Statistics
