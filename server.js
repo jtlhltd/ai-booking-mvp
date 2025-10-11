@@ -10790,6 +10790,42 @@ app.get('/api/realtime/stats', async (req, res) => {
   }
 });
 
+// Migration Status Endpoint
+app.get('/api/migrations/status', async (req, res) => {
+  try {
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const { getMigrationStatus } = await import('./lib/migration-runner.js');
+    const status = await getMigrationStatus();
+    
+    res.json(status);
+  } catch (error) {
+    console.error('[MIGRATION STATUS ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Run Migrations Manually
+app.post('/api/migrations/run', async (req, res) => {
+  try {
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const { runMigrations } = await import('./lib/migration-runner.js');
+    const result = await runMigrations();
+    
+    res.json(result);
+  } catch (error) {
+    console.error('[RUN MIGRATIONS ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 // Error handling middleware (must be last)
 app.use(errorHandler);
 
@@ -10802,6 +10838,13 @@ async function startServer() {
     
     await initDb();
     console.log('✅ Database initialized');
+    
+    // Run database migrations
+    const { runMigrations } = await import('./lib/migration-runner.js');
+    const migrationResult = await runMigrations();
+    if (migrationResult.applied > 0) {
+      console.log(`✅ Applied ${migrationResult.applied} new migrations`);
+    }
     
     // Bootstrap clients after DB is ready
     await bootstrapClients();
