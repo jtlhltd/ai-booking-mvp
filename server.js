@@ -10796,6 +10796,10 @@ app.use(errorHandler);
 // Initialize database and start server - FIXED: braces properly balanced
 async function startServer() {
   try {
+    // Validate environment variables first
+    const { validateEnvironment } = await import('./lib/env-validator.js');
+    validateEnvironment();
+    
     await initDb();
     console.log('✅ Database initialized');
     
@@ -10867,6 +10871,41 @@ async function startServer() {
       }
     });
     console.log('✅ Database health monitoring scheduled (runs every 5 minutes)');
+    
+    // Start weekly report generation (runs every Monday at 9am)
+    const { generateWeeklyReport } = await import('./lib/analytics-tracker.js');
+    cron.schedule('0 9 * * 1', async () => {
+      console.log('[CRON] 📊 Generating weekly reports...');
+      try {
+        const clients = await listFullClients();
+        let generated = 0;
+        
+        for (const client of clients) {
+          if (!client.isEnabled) continue;
+          
+          try {
+            const { report } = await generateWeeklyReport(client.clientKey);
+            
+            // TODO: Email report to client
+            // For now, just log it
+            console.log(`[WEEKLY REPORT] Generated for ${client.clientKey || client.displayName}:`, {
+              calls: report.summary.total_calls,
+              appointments: report.summary.appointments_booked,
+              conversionRate: report.summary.conversion_rate_percent + '%'
+            });
+            
+            generated++;
+          } catch (clientError) {
+            console.error(`[WEEKLY REPORT] Failed for ${client.clientKey}:`, clientError.message);
+          }
+        }
+        
+        console.log(`[CRON] ✅ Generated ${generated} weekly reports`);
+      } catch (error) {
+        console.error('[CRON ERROR] Weekly report failed:', error);
+      }
+    });
+    console.log('✅ Weekly report cron job scheduled (runs every Monday 9am)');
     
   } catch (error) {
     console.error('❌ Failed to start server:', error);
