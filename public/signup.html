@@ -420,6 +420,18 @@
             </select>
           </div>
 
+          <div class="form-group">
+            <label for="yearlySchedule">Yearly Schedule (optional)</label>
+            <select id="yearlySchedule" name="yearlySchedule">
+              <option value="">Select yearly schedule...</option>
+              <option value="year-round">Year Round (No closures)</option>
+              <option value="holidays-only">Holidays Only (Christmas, New Year)</option>
+              <option value="seasonal">Seasonal Business (e.g. Summer only)</option>
+              <option value="academic">Academic Schedule (School holidays)</option>
+              <option value="custom">Custom Schedule</option>
+            </select>
+          </div>
+
         </div>
 
 
@@ -543,6 +555,33 @@
       }
     });
 
+    // Handle custom yearly schedule
+    document.getElementById('yearlySchedule').addEventListener('change', function() {
+      const yearlySchedule = this.value;
+      if (yearlySchedule === 'custom') {
+        // Show custom yearly schedule input
+        let customInput = document.getElementById('customYearlySchedule');
+        if (!customInput) {
+          customInput = document.createElement('input');
+          customInput.type = 'text';
+          customInput.id = 'customYearlySchedule';
+          customInput.name = 'customYearlySchedule';
+          customInput.placeholder = 'e.g. Closed Dec 24-26, Jan 1, July 4-6, Aug 15-30';
+          customInput.required = true;
+          customInput.style.marginTop = '8px';
+          this.parentNode.appendChild(customInput);
+        }
+        customInput.style.display = 'block';
+      } else {
+        // Hide custom input
+        const customInput = document.getElementById('customYearlySchedule');
+        if (customInput) {
+          customInput.style.display = 'none';
+          customInput.required = false;
+        }
+      }
+    });
+
     document.getElementById('signup-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       
@@ -565,6 +604,12 @@
       if (data.workingHours === 'custom' && data.customWorkingHours) {
         data.workingHours = data.customWorkingHours;
         delete data.customWorkingHours;
+      }
+      
+      // Handle custom yearly schedule
+      if (data.yearlySchedule === 'custom' && data.customYearlySchedule) {
+        data.yearlySchedule = data.customYearlySchedule;
+        delete data.customYearlySchedule;
       }
       
       // Show loading
