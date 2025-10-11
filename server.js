@@ -8454,26 +8454,55 @@ app.post('/admin/fix-tenants', async (req, res) => {
 // Health check endpoint
 app.get('/health', async (req, res) => {
   try {
+    const { getLastHealthCheck, getDatabaseStats } = await import('./lib/database-health.js');
+    const messagingService = (await import('./lib/messaging-service.js')).default;
+    
     const health = {
       status: 'healthy',
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
-      memory: process.memoryUsage(),
+      uptimeFormatted: `${Math.floor(process.uptime() / 3600)}h ${Math.floor((process.uptime() % 3600) / 60)}m`,
+      memory: {
+        rss: `${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB`,
+        heapUsed: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`,
+        heapTotal: `${Math.round(process.memoryUsage().heapTotal / 1024 / 1024)}MB`
+      },
       version: process.env.npm_package_version || '1.0.0'
     };
     
-    // Check database connectivity
-    try {
-      await listFullClients();
-      health.database = 'connected';
-    } catch (e) {
-      health.database = 'disconnected';
+    // Check database connectivity and health
+    const dbHealth = getLastHealthCheck();
+    health.database = {
+      status: dbHealth.status || 'unknown',
+      lastCheck: dbHealth.timestamp,
+      responseTime: dbHealth.responseTime ? `${dbHealth.responseTime}ms` : 'N/A',
+      consecutiveFailures: dbHealth.consecutiveFailures || 0
+    };
+    
+    // Check messaging services
+    const messagingConfig = messagingService.isConfigured();
+    health.messaging = {
+      sms: messagingConfig.sms ? 'configured' : 'not_configured',
+      email: messagingConfig.email ? 'configured' : 'not_configured'
+    };
+    
+    // Check critical services
+    health.services = {
+      vapi: !!(process.env.VAPI_PRIVATE_KEY && process.env.VAPI_ASSISTANT_ID) ? 'configured' : 'not_configured',
+      googleCalendar: !!(GOOGLE_CLIENT_EMAIL && GOOGLE_CALENDAR_ID) ? 'configured' : 'not_configured',
+      twilio: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) ? 'configured' : 'not_configured'
+    };
+    
+    // Overall status determination
+    if (dbHealth.status === 'critical') {
+      health.status = 'critical';
+    } else if (dbHealth.status === 'degraded' || !messagingConfig.sms) {
       health.status = 'degraded';
     }
     
     res.json(health);
   } catch (e) {
-    res.status(500).json({ status: 'unhealthy', error: e.message });
+    res.status(500).json({ status: 'unhealthy', error: e.message, timestamp: new Date().toISOString() });
   }
 });
 
@@ -10626,6 +10655,35 @@ async function startServer() {
       }
     });
     console.log('✅ Appointment reminder cron job scheduled (runs every 5 minutes)');
+    
+    // Start follow-up processing (runs every 5 minutes)
+    const { processFollowUpQueue } = await import('./lib/follow-up-processor.js');
+    cron.schedule('*/5 * * * *', async () => {
+      console.log('[CRON] 📨 Processing follow-up messages...');
+      try {
+        const result = await processFollowUpQueue();
+        if (result.processed > 0) {
+          console.log(`[CRON] ✅ Processed ${result.processed} follow-ups (${result.failed} failed)`);
+        }
+      } catch (error) {
+        console.error('[CRON ERROR] Follow-up processing failed:', error);
+      }
+    });
+    console.log('✅ Follow-up message cron job scheduled (runs every 5 minutes)');
+    
+    // Start database health monitoring (runs every 5 minutes)
+    const { checkDatabaseHealth } = await import('./lib/database-health.js');
+    cron.schedule('*/5 * * * *', async () => {
+      try {
+        const health = await checkDatabaseHealth();
+        if (health.status !== 'healthy') {
+          console.error(`[DB HEALTH] ⚠️ Status: ${health.status}, Failures: ${health.consecutiveFailures}`);
+        }
+      } catch (error) {
+        console.error('[CRON ERROR] Database health check failed:', error);
+      }
+    });
+    console.log('✅ Database health monitoring scheduled (runs every 5 minutes)');
     
   } catch (error) {
     console.error('❌ Failed to start server:', error);
