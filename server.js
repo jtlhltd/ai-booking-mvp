@@ -10925,13 +10925,30 @@ app.get('/setup-my-client', async (req, res) => {
       )
     `);
     
-    // Add missing columns if they don't exist
+    // Add missing columns if they don't exist (PostgreSQL compatible)
     try {
-      await query(`ALTER TABLE opt_out_list ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE`);
-      await query(`ALTER TABLE opt_out_list ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`);
-      await query(`ALTER TABLE opt_out_list ADD COLUMN IF NOT EXISTS notes TEXT`);
+      // Check if active column exists, if not add it
+      const checkActive = await query(`SELECT column_name FROM information_schema.columns WHERE table_name = 'opt_out_list' AND column_name = 'active'`);
+      if (checkActive.rows.length === 0) {
+        await query(`ALTER TABLE opt_out_list ADD COLUMN active BOOLEAN DEFAULT TRUE`);
+        console.log('[SETUP] Added active column');
+      }
+      
+      // Check if updated_at column exists, if not add it
+      const checkUpdated = await query(`SELECT column_name FROM information_schema.columns WHERE table_name = 'opt_out_list' AND column_name = 'updated_at'`);
+      if (checkUpdated.rows.length === 0) {
+        await query(`ALTER TABLE opt_out_list ADD COLUMN updated_at TIMESTAMPTZ DEFAULT NOW()`);
+        console.log('[SETUP] Added updated_at column');
+      }
+      
+      // Check if notes column exists, if not add it
+      const checkNotes = await query(`SELECT column_name FROM information_schema.columns WHERE table_name = 'opt_out_list' AND column_name = 'notes'`);
+      if (checkNotes.rows.length === 0) {
+        await query(`ALTER TABLE opt_out_list ADD COLUMN notes TEXT`);
+        console.log('[SETUP] Added notes column');
+      }
     } catch (error) {
-      console.log('[SETUP] Column migration:', error.message);
+      console.log('[SETUP] Column migration error:', error.message);
     }
     
     // Create indexes
