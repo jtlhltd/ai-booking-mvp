@@ -10936,7 +10936,11 @@ app.get('/setup-my-client', async (req, res) => {
     console.log('[SETUP] Starting setup-my-client endpoint...');
     const { query } = await import('./db.js');
     
-    // Create my_leads client
+    // Delete existing my_leads client first
+    console.log('[SETUP] Deleting existing my_leads client...');
+    await query(`DELETE FROM tenants WHERE client_key = 'my_leads'`);
+    
+    // Create my_leads client fresh
     console.log('[SETUP] Creating my_leads client...');
     await query(`
       INSERT INTO tenants (
@@ -10968,11 +10972,8 @@ app.get('/setup-my-client', async (req, res) => {
         '{}'::jsonb,
         NOW()
       )
-      ON CONFLICT (client_key) DO UPDATE 
-      SET vapi_json = EXCLUDED.vapi_json,
-          display_name = EXCLUDED.display_name
     `);
-    console.log('[SETUP] ✅ my_leads client created/updated');
+    console.log('[SETUP] ✅ my_leads client created fresh');
     
     // Create or update opt_out_list table with full schema
     await query(`
