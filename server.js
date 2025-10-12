@@ -11600,10 +11600,15 @@ async function startServer() {
     console.log('✅ Database initialized');
     
     // Run database migrations
-    const { runMigrations } = await import('./lib/migration-runner.js');
-    const migrationResult = await runMigrations();
-    if (migrationResult.applied > 0) {
-      console.log(`✅ Applied ${migrationResult.applied} new migrations`);
+    try {
+      const { runMigrations } = await import('./lib/migration-runner.js');
+      const migrationResult = await runMigrations();
+      if (migrationResult.applied > 0) {
+        console.log(`✅ Applied ${migrationResult.applied} new migrations`);
+      }
+    } catch (migrationError) {
+      console.warn('⚠️ Migration failed, but continuing server startup:', migrationError.message);
+      // Continue anyway - migrations can be run manually
     }
     
     // Bootstrap clients after DB is ready
