@@ -172,7 +172,7 @@
       border: 1px solid #ddd;
     }
 
-    .legend-color.bank-holiday {
+    .legend-color.uk-holiday {
       background: #dc2626;
     }
 
@@ -184,84 +184,56 @@
       background: white;
     }
 
-    .calendar-navigation {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 16px;
-      margin-bottom: 20px;
-    }
-
-    .nav-btn {
-      padding: 8px 16px;
-      border: 2px solid #e0e0e0;
-      border-radius: 6px;
-      background: white;
-      color: #333;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: 500;
-      transition: all 0.2s;
-    }
-
-    .nav-btn:hover {
-      border-color: #667eea;
-      background: #f8f9ff;
-    }
-
-    .current-year {
-      font-size: 18px;
-      font-weight: 600;
-      color: #333;
-    }
-
     .full-year-calendar {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 20px;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
       margin-bottom: 20px;
+      max-height: 600px;
+      overflow-y: auto;
     }
 
     .month-calendar {
       border: 1px solid #e0e0e0;
-      border-radius: 8px;
-      padding: 12px;
+      border-radius: 6px;
+      padding: 8px;
       background: white;
+      min-width: 0;
     }
 
     .month-title {
       text-align: center;
       font-weight: 600;
       color: #333;
-      margin-bottom: 8px;
-      font-size: 14px;
+      margin-bottom: 6px;
+      font-size: 12px;
     }
 
     .month-days {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
-      gap: 2px;
+      gap: 1px;
     }
 
     .day-header {
       text-align: center;
       font-weight: 600;
       color: #666;
-      padding: 4px;
-      font-size: 10px;
+      padding: 2px;
+      font-size: 9px;
     }
 
     .calendar-day {
-      width: 24px;
-      height: 24px;
+      width: 20px;
+      height: 20px;
       border: 1px solid #e0e0e0;
-      border-radius: 4px;
+      border-radius: 3px;
       background: white;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 11px;
+      font-size: 10px;
       color: #333;
       transition: all 0.2s;
       position: relative;
@@ -278,16 +250,23 @@
       border-color: #667eea;
     }
 
-    .calendar-day.bank-holiday {
+    .calendar-day.uk-holiday {
       background: #dc2626;
       color: white;
       border-color: #dc2626;
       font-weight: 600;
     }
 
-    .calendar-day.bank-holiday.selected {
+    .calendar-day.uk-holiday.selected {
       background: #b91c1c;
       border-color: #b91c1c;
+    }
+
+    .calendar-day.uk-holiday.deselected {
+      background: white;
+      color: #dc2626;
+      border-color: #dc2626;
+      font-weight: 600;
     }
 
     .calendar-day.other-month {
@@ -835,16 +814,10 @@
               <div class="yearly-header">
                 <h4>2025 Calendar - Click dates to block them:</h4>
                 <p class="calendar-legend">
-                  <span class="legend-item"><span class="legend-color bank-holiday"></span> UK Bank Holiday</span>
+                  <span class="legend-item"><span class="legend-color uk-holiday"></span> UK Holiday (Pre-selected)</span>
                   <span class="legend-item"><span class="legend-color selected"></span> Selected (Closed)</span>
                   <span class="legend-item"><span class="legend-color available"></span> Available</span>
                 </p>
-              </div>
-              
-              <div class="calendar-navigation">
-                <button type="button" class="nav-btn" id="prev-year">← 2024</button>
-                <span class="current-year">2025</span>
-                <button type="button" class="nav-btn" id="next-year">2026 →</button>
               </div>
               
               <div class="full-year-calendar" id="yearly-calendar">
@@ -852,14 +825,14 @@
               </div>
               
               <div class="quick-select">
-                <button type="button" class="quick-btn" id="select-bank-holidays">Select UK Bank Holidays</button>
+                <button type="button" class="quick-btn" id="select-bank-holidays">Select All UK Holidays</button>
                 <button type="button" class="quick-btn" id="select-christmas">Christmas Week</button>
                 <button type="button" class="quick-btn" id="select-new-year">New Year Week</button>
                 <button type="button" class="quick-btn clear-btn">Clear All</button>
               </div>
               
               <div class="yearly-note">
-                <small>💡 Tip: Click any date to mark it as closed. UK bank holidays are pre-marked in red.</small>
+                <small>💡 Tip: UK holidays are pre-selected (red) but can be toggled. Click any date to mark it as closed.</small>
               </div>
             </div>
           </div>
@@ -992,54 +965,38 @@
       });
     });
 
-    // Full Year Calendar with UK Bank Holidays
-    let currentYear = 2025;
+    // Full Year Calendar with UK Holidays
+    const currentYear = 2025;
     let selectedDates = new Set();
+    let deselectedHolidays = new Set();
 
-    // UK Bank Holidays 2025
-    const ukBankHolidays2025 = [
+    // UK Holidays 2025 (Bank Holidays + Major Holidays)
+    const ukHolidays2025 = [
       '2025-01-01', // New Year's Day
+      '2025-02-14', // Valentine's Day
+      '2025-03-17', // St. Patrick's Day
       '2025-04-18', // Good Friday
       '2025-04-21', // Easter Monday
       '2025-05-05', // Early May Bank Holiday
       '2025-05-26', // Spring Bank Holiday
+      '2025-06-21', // Summer Solstice
       '2025-08-25', // Summer Bank Holiday
+      '2025-10-31', // Halloween
+      '2025-11-05', // Bonfire Night
+      '2025-11-11', // Remembrance Day
+      '2025-12-21', // Winter Solstice
+      '2025-12-24', // Christmas Eve
       '2025-12-25', // Christmas Day
-      '2025-12-26'  // Boxing Day
+      '2025-12-26', // Boxing Day
+      '2025-12-31'  // New Year's Eve
     ];
 
-    const ukBankHolidays2024 = [
-      '2024-01-01', // New Year's Day
-      '2024-03-29', // Good Friday
-      '2024-04-01', // Easter Monday
-      '2024-05-06', // Early May Bank Holiday
-      '2024-05-27', // Spring Bank Holiday
-      '2024-08-26', // Summer Bank Holiday
-      '2024-12-25', // Christmas Day
-      '2024-12-26'  // Boxing Day
-    ];
-
-    const ukBankHolidays2026 = [
-      '2026-01-01', // New Year's Day
-      '2026-04-03', // Good Friday
-      '2026-04-06', // Easter Monday
-      '2026-05-04', // Early May Bank Holiday
-      '2026-05-25', // Spring Bank Holiday
-      '2026-08-31', // Summer Bank Holiday
-      '2026-12-25', // Christmas Day
-      '2026-12-26'  // Boxing Day
-    ];
-
-    function getBankHolidays(year) {
-      if (year === 2024) return ukBankHolidays2024;
-      if (year === 2025) return ukBankHolidays2025;
-      if (year === 2026) return ukBankHolidays2026;
-      return [];
+    function isUkHoliday(dateStr) {
+      return ukHolidays2025.includes(dateStr);
     }
 
     function generateCalendar() {
       const calendar = document.getElementById('yearly-calendar');
-      const bankHolidays = getBankHolidays(currentYear);
       const today = new Date();
       
       calendar.innerHTML = '';
@@ -1087,29 +1044,50 @@
           
           const dateStr = `${currentYear}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           
-          // Check if it's a bank holiday
-          if (bankHolidays.includes(dateStr)) {
-            dayDiv.classList.add('bank-holiday');
-          }
-          
           // Check if it's today
           const date = new Date(currentYear, month, day);
           if (date.toDateString() === today.toDateString()) {
             dayDiv.classList.add('today');
           }
           
-          // Check if it's selected
-          if (selectedDates.has(dateStr)) {
+          // Check if it's a UK holiday
+          if (isUkHoliday(dateStr)) {
+            dayDiv.classList.add('uk-holiday');
+            
+            // If holiday is not deselected, it's selected by default
+            if (!deselectedHolidays.has(dateStr)) {
+              dayDiv.classList.add('selected');
+              selectedDates.add(dateStr);
+            }
+          } else if (selectedDates.has(dateStr)) {
             dayDiv.classList.add('selected');
           }
           
           dayDiv.addEventListener('click', () => {
-            if (dayDiv.classList.contains('selected')) {
-              dayDiv.classList.remove('selected');
-              selectedDates.delete(dateStr);
+            if (isUkHoliday(dateStr)) {
+              // Handle UK holiday toggling
+              if (deselectedHolidays.has(dateStr)) {
+                // Re-select the holiday
+                deselectedHolidays.delete(dateStr);
+                dayDiv.classList.remove('deselected');
+                dayDiv.classList.add('selected');
+                selectedDates.add(dateStr);
+              } else {
+                // Deselect the holiday
+                deselectedHolidays.add(dateStr);
+                dayDiv.classList.remove('selected');
+                dayDiv.classList.add('deselected');
+                selectedDates.delete(dateStr);
+              }
             } else {
-              dayDiv.classList.add('selected');
-              selectedDates.add(dateStr);
+              // Handle regular date selection
+              if (selectedDates.has(dateStr)) {
+                selectedDates.delete(dateStr);
+                dayDiv.classList.remove('selected');
+              } else {
+                selectedDates.add(dateStr);
+                dayDiv.classList.add('selected');
+              }
             }
           });
           
@@ -1131,23 +1109,13 @@
       }
     }
 
-    // Navigation
-    document.getElementById('prev-year').addEventListener('click', () => {
-      currentYear--;
-      document.querySelector('.current-year').textContent = currentYear;
-      generateCalendar();
-    });
-
-    document.getElementById('next-year').addEventListener('click', () => {
-      currentYear++;
-      document.querySelector('.current-year').textContent = currentYear;
-      generateCalendar();
-    });
-
     // Quick select buttons
     document.getElementById('select-bank-holidays').addEventListener('click', () => {
-      const bankHolidays = getBankHolidays(currentYear);
-      bankHolidays.forEach(date => selectedDates.add(date));
+      // Select all UK holidays (they're already pre-selected by default)
+      ukHolidays2025.forEach(date => {
+        selectedDates.add(date);
+        deselectedHolidays.delete(date);
+      });
       generateCalendar();
     });
 
@@ -1162,7 +1130,10 @@
         `${currentYear}-12-30`,
         `${currentYear}-12-31`
       ];
-      christmasWeek.forEach(date => selectedDates.add(date));
+      christmasWeek.forEach(date => {
+        selectedDates.add(date);
+        deselectedHolidays.delete(date);
+      });
       generateCalendar();
     });
 
@@ -1176,13 +1147,17 @@
         `${currentYear}-01-06`,
         `${currentYear}-01-07`
       ];
-      newYearWeek.forEach(date => selectedDates.add(date));
+      newYearWeek.forEach(date => {
+        selectedDates.add(date);
+        deselectedHolidays.delete(date);
+      });
       generateCalendar();
     });
 
     // Clear all button for yearly calendar
     document.querySelector('.yearly-container .clear-btn').addEventListener('click', () => {
       selectedDates.clear();
+      deselectedHolidays.clear();
       generateCalendar();
     });
 
