@@ -215,50 +215,63 @@
     }
 
     .month-calendar {
-      border: 1px solid #e0e0e0;
-      border-radius: 6px;
-      padding: 8px;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 12px;
       background: white;
       min-width: 0;
+      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
     }
 
     .month-title {
       text-align: center;
       font-weight: 600;
-      color: #333;
-      margin-bottom: 6px;
-      font-size: 12px;
+      color: #374151;
+      margin-bottom: 8px;
+      font-size: 13px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid #f3f4f6;
     }
 
     .month-days {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
-      gap: 1px;
+      gap: 2px;
+      justify-items: center;
+      align-items: center;
     }
 
     .day-header {
       text-align: center;
       font-weight: 600;
-      color: #666;
-      padding: 2px;
-      font-size: 9px;
+      color: #6b7280;
+      padding: 4px 0;
+      font-size: 10px;
+      width: 28px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     .calendar-day {
-      width: 24px;
-      height: 24px;
-      border: 1px solid #e0e0e0;
+      width: 28px;
+      height: 28px;
+      border: 1px solid #e5e7eb;
       border-radius: 4px;
       background: white;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 11px;
-      color: #333;
-      transition: all 0.2s;
+      font-size: 12px;
+      font-weight: 500;
+      color: #374151;
+      transition: all 0.15s ease;
       position: relative;
       user-select: none;
+      margin: 0;
+      padding: 0;
     }
 
     .calendar-day:hover {
@@ -280,8 +293,10 @@
     }
 
     .calendar-day.uk-holiday.selected {
-      background: #b91c1c;
-      border-color: #b91c1c;
+      background: #dc2626;
+      color: white;
+      border-color: #dc2626;
+      font-weight: 600;
     }
 
     .calendar-day.uk-holiday.deselected {
@@ -308,12 +323,14 @@
     }
 
     .calendar-day.weekend {
-      background: #f8f9fa;
-      color: #6c757d;
+      background: #f8fafc;
+      color: #64748b;
+      border-color: #e2e8f0;
     }
 
     .calendar-day.weekend:hover {
-      background: #e9ecef;
+      background: #f1f5f9;
+      border-color: #cbd5e1;
     }
 
     .day-option input, .time-slot input, .month-option input {
