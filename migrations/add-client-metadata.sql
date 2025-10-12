@@ -27,34 +27,34 @@ CREATE TABLE IF NOT EXISTS client_metadata (
 );
 
 -- Add columns if they don't exist (for existing tables)
--- Note: Using ALTER TABLE IF EXISTS pattern to avoid issues with migration runner
+-- Note: Each statement needs semicolon for migration runner
 
 -- Add subscription_status if missing
-ALTER TABLE client_metadata ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'active'
+ALTER TABLE client_metadata ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'active';
 
 -- Add owner_role if missing  
-ALTER TABLE client_metadata ADD COLUMN IF NOT EXISTS owner_role TEXT
+ALTER TABLE client_metadata ADD COLUMN IF NOT EXISTS owner_role TEXT;
 
 -- Add business_size if missing
-ALTER TABLE client_metadata ADD COLUMN IF NOT EXISTS business_size TEXT
+ALTER TABLE client_metadata ADD COLUMN IF NOT EXISTS business_size TEXT;
 
 -- Add monthly_leads if missing
-ALTER TABLE client_metadata ADD COLUMN IF NOT EXISTS monthly_leads TEXT
+ALTER TABLE client_metadata ADD COLUMN IF NOT EXISTS monthly_leads TEXT;
 
 -- Add timezone if missing
-ALTER TABLE client_metadata ADD COLUMN IF NOT EXISTS timezone TEXT
+ALTER TABLE client_metadata ADD COLUMN IF NOT EXISTS timezone TEXT;
 
 -- Add current_lead_source if missing
-ALTER TABLE client_metadata ADD COLUMN IF NOT EXISTS current_lead_source TEXT
+ALTER TABLE client_metadata ADD COLUMN IF NOT EXISTS current_lead_source TEXT;
 
 -- Add working_days if missing
-ALTER TABLE client_metadata ADD COLUMN IF NOT EXISTS working_days TEXT
+ALTER TABLE client_metadata ADD COLUMN IF NOT EXISTS working_days TEXT;
 
 -- Add working_hours if missing
-ALTER TABLE client_metadata ADD COLUMN IF NOT EXISTS working_hours TEXT
+ALTER TABLE client_metadata ADD COLUMN IF NOT EXISTS working_hours TEXT;
 
 -- Add yearly_schedule if missing
-ALTER TABLE client_metadata ADD COLUMN IF NOT EXISTS yearly_schedule TEXT
+ALTER TABLE client_metadata ADD COLUMN IF NOT EXISTS yearly_schedule TEXT;
 
 -- Indexes (only create if columns exist)
 CREATE INDEX IF NOT EXISTS client_metadata_email_idx ON client_metadata(owner_email);
