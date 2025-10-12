@@ -91,7 +91,7 @@
     }
 
     /* Interactive Calendar Styles */
-    .calendar-container, .hours-container {
+    .calendar-container, .hours-container, .yearly-container {
       border: 2px solid #e0e0e0;
       border-radius: 8px;
       padding: 20px;
@@ -99,24 +99,31 @@
       background: #fafafa;
     }
 
-    .calendar-header h4 {
+    .calendar-header h4, .yearly-header h4 {
       margin: 0 0 16px 0;
       color: #333;
       font-size: 16px;
     }
 
-    .days-grid, .hours-grid {
+    .days-grid, .hours-grid, .months-grid {
       display: grid;
-      grid-template-columns: repeat(7, 1fr);
       gap: 8px;
       margin-bottom: 16px;
     }
 
-    .hours-grid {
-      grid-template-columns: repeat(5, 1fr);
+    .days-grid {
+      grid-template-columns: repeat(7, 1fr);
     }
 
-    .day-header {
+    .hours-grid {
+      grid-template-columns: repeat(6, 1fr);
+    }
+
+    .months-grid {
+      grid-template-columns: repeat(6, 1fr);
+    }
+
+    .day-header, .month-header {
       text-align: center;
       font-weight: 600;
       color: #666;
@@ -124,16 +131,29 @@
       font-size: 12px;
     }
 
-    .day-option, .time-slot {
+    .day-option, .time-slot, .month-option {
       position: relative;
       text-align: center;
     }
 
-    .day-option input, .time-slot input {
+    .yearly-note {
+      margin-top: 16px;
+      padding: 12px;
+      background: #f0f9ff;
+      border-left: 4px solid #0ea5e9;
+      border-radius: 4px;
+    }
+
+    .yearly-note small {
+      color: #0369a1;
+      font-size: 13px;
+    }
+
+    .day-option input, .time-slot input, .month-option input {
       display: none;
     }
 
-    .day-option label, .time-slot label {
+    .day-option label, .time-slot label, .month-option label {
       display: block;
       padding: 12px 8px;
       border: 2px solid #e0e0e0;
@@ -145,12 +165,12 @@
       font-weight: 500;
     }
 
-    .day-option label:hover, .time-slot label:hover {
+    .day-option label:hover, .time-slot label:hover, .month-option label:hover {
       border-color: #667eea;
       background: #f8f9ff;
     }
 
-    .day-option input:checked + label, .time-slot input:checked + label {
+    .day-option input:checked + label, .time-slot input:checked + label, .month-option input:checked + label {
       background: #667eea;
       color: white;
       border-color: #667eea;
@@ -551,6 +571,30 @@
             <label>🕘 What hours are you available? *</label>
             <div class="hours-container">
               <div class="hours-grid">
+                <div class="time-slot" data-time="12am">
+                  <input type="checkbox" id="hour-12am" name="workingHours[]" value="12am">
+                  <label for="hour-12am">12am</label>
+                </div>
+                <div class="time-slot" data-time="1am">
+                  <input type="checkbox" id="hour-1am" name="workingHours[]" value="1am">
+                  <label for="hour-1am">1am</label>
+                </div>
+                <div class="time-slot" data-time="2am">
+                  <input type="checkbox" id="hour-2am" name="workingHours[]" value="2am">
+                  <label for="hour-2am">2am</label>
+                </div>
+                <div class="time-slot" data-time="3am">
+                  <input type="checkbox" id="hour-3am" name="workingHours[]" value="3am">
+                  <label for="hour-3am">3am</label>
+                </div>
+                <div class="time-slot" data-time="4am">
+                  <input type="checkbox" id="hour-4am" name="workingHours[]" value="4am">
+                  <label for="hour-4am">4am</label>
+                </div>
+                <div class="time-slot" data-time="5am">
+                  <input type="checkbox" id="hour-5am" name="workingHours[]" value="5am">
+                  <label for="hour-5am">5am</label>
+                </div>
                 <div class="time-slot" data-time="6am">
                   <input type="checkbox" id="hour-6am" name="workingHours[]" value="6am">
                   <label for="hour-6am">6am</label>
@@ -611,6 +655,18 @@
                   <input type="checkbox" id="hour-8pm" name="workingHours[]" value="8pm">
                   <label for="hour-8pm">8pm</label>
                 </div>
+                <div class="time-slot" data-time="9pm">
+                  <input type="checkbox" id="hour-9pm" name="workingHours[]" value="9pm">
+                  <label for="hour-9pm">9pm</label>
+                </div>
+                <div class="time-slot" data-time="10pm">
+                  <input type="checkbox" id="hour-10pm" name="workingHours[]" value="10pm">
+                  <label for="hour-10pm">10pm</label>
+                </div>
+                <div class="time-slot" data-time="11pm">
+                  <input type="checkbox" id="hour-11pm" name="workingHours[]" value="11pm">
+                  <label for="hour-11pm">11pm</label>
+                </div>
               </div>
               
               <div class="quick-select">
@@ -623,15 +679,87 @@
           </div>
 
           <div class="form-group">
-            <label for="yearlySchedule">Do you close for holidays or seasonal breaks?</label>
-            <select id="yearlySchedule" name="yearlySchedule">
-              <option value="">Choose your yearly schedule...</option>
-              <option value="year-round">✅ Open year-round (No planned closures)</option>
-              <option value="holidays-only">🎄 Closed for major holidays (Christmas, New Year, etc.)</option>
-              <option value="seasonal">☀️ Seasonal business (e.g. Summer only, Winter only)</option>
-              <option value="academic">🎓 Follow school calendar (Closed during school holidays)</option>
-              <option value="custom">✏️ Custom schedule (Specify your closure dates)</option>
-            </select>
+            <label>📅 Do you close for holidays or seasonal breaks?</label>
+            <div class="yearly-container">
+              <div class="yearly-header">
+                <h4>Select your closure periods:</h4>
+              </div>
+              <div class="months-grid">
+                <div class="month-header">Jan</div>
+                <div class="month-header">Feb</div>
+                <div class="month-header">Mar</div>
+                <div class="month-header">Apr</div>
+                <div class="month-header">May</div>
+                <div class="month-header">Jun</div>
+                <div class="month-header">Jul</div>
+                <div class="month-header">Aug</div>
+                <div class="month-header">Sep</div>
+                <div class="month-header">Oct</div>
+                <div class="month-header">Nov</div>
+                <div class="month-header">Dec</div>
+                
+                <div class="month-option" data-month="january">
+                  <input type="checkbox" id="month-january" name="yearlySchedule[]" value="january">
+                  <label for="month-january">Jan</label>
+                </div>
+                <div class="month-option" data-month="february">
+                  <input type="checkbox" id="month-february" name="yearlySchedule[]" value="february">
+                  <label for="month-february">Feb</label>
+                </div>
+                <div class="month-option" data-month="march">
+                  <input type="checkbox" id="month-march" name="yearlySchedule[]" value="march">
+                  <label for="month-march">Mar</label>
+                </div>
+                <div class="month-option" data-month="april">
+                  <input type="checkbox" id="month-april" name="yearlySchedule[]" value="april">
+                  <label for="month-april">Apr</label>
+                </div>
+                <div class="month-option" data-month="may">
+                  <input type="checkbox" id="month-may" name="yearlySchedule[]" value="may">
+                  <label for="month-may">May</label>
+                </div>
+                <div class="month-option" data-month="june">
+                  <input type="checkbox" id="month-june" name="yearlySchedule[]" value="june">
+                  <label for="month-june">Jun</label>
+                </div>
+                <div class="month-option" data-month="july">
+                  <input type="checkbox" id="month-july" name="yearlySchedule[]" value="july">
+                  <label for="month-july">Jul</label>
+                </div>
+                <div class="month-option" data-month="august">
+                  <input type="checkbox" id="month-august" name="yearlySchedule[]" value="august">
+                  <label for="month-august">Aug</label>
+                </div>
+                <div class="month-option" data-month="september">
+                  <input type="checkbox" id="month-september" name="yearlySchedule[]" value="september">
+                  <label for="month-september">Sep</label>
+                </div>
+                <div class="month-option" data-month="october">
+                  <input type="checkbox" id="month-october" name="yearlySchedule[]" value="october">
+                  <label for="month-october">Oct</label>
+                </div>
+                <div class="month-option" data-month="november">
+                  <input type="checkbox" id="month-november" name="yearlySchedule[]" value="november">
+                  <label for="month-november">Nov</label>
+                </div>
+                <div class="month-option" data-month="december">
+                  <input type="checkbox" id="month-december" name="yearlySchedule[]" value="december">
+                  <label for="month-december">Dec</label>
+                </div>
+              </div>
+              
+              <div class="quick-select">
+                <button type="button" class="quick-btn" data-months="december,january">Winter Holidays</button>
+                <button type="button" class="quick-btn" data-months="july,august">Summer Break</button>
+                <button type="button" class="quick-btn" data-months="december,january,february">Winter Season</button>
+                <button type="button" class="quick-btn" data-months="june,july,august,september">Summer Season</button>
+                <button type="button" class="quick-btn clear-btn">Clear All</button>
+              </div>
+              
+              <div class="yearly-note">
+                <small>💡 Tip: Select months when you're typically closed (holidays, seasonal breaks, etc.)</small>
+              </div>
+            </div>
           </div>
 
         </div>
@@ -736,42 +864,33 @@
       });
     });
 
+    // Quick select buttons for months
+    document.querySelectorAll('.quick-btn[data-months]').forEach(btn => {
+      btn.addEventListener('click', function() {
+        const months = this.dataset.months.split(',');
+        // Clear all first
+        document.querySelectorAll('input[name="yearlySchedule[]"]').forEach(input => {
+          input.checked = false;
+        });
+        // Select specified months
+        months.forEach(month => {
+          const input = document.getElementById(`month-${month}`);
+          if (input) input.checked = true;
+        });
+      });
+    });
+
     // Clear all buttons
     document.querySelectorAll('.clear-btn').forEach(btn => {
       btn.addEventListener('click', function() {
-        const container = this.closest('.calendar-container, .hours-container');
+        const container = this.closest('.calendar-container, .hours-container, .yearly-container');
         container.querySelectorAll('input[type="checkbox"]').forEach(input => {
           input.checked = false;
         });
       });
     });
 
-    // Handle custom yearly schedule
-    document.getElementById('yearlySchedule').addEventListener('change', function() {
-      const yearlySchedule = this.value;
-      if (yearlySchedule === 'custom') {
-        // Show custom yearly schedule input
-        let customInput = document.getElementById('customYearlySchedule');
-        if (!customInput) {
-          customInput = document.createElement('input');
-          customInput.type = 'text';
-          customInput.id = 'customYearlySchedule';
-          customInput.name = 'customYearlySchedule';
-          customInput.placeholder = 'e.g. "Closed Dec 24-26, Jan 1" or "Open May to September only"';
-          customInput.required = true;
-          customInput.style.marginTop = '8px';
-          this.parentNode.appendChild(customInput);
-        }
-        customInput.style.display = 'block';
-      } else {
-        // Hide custom input
-        const customInput = document.getElementById('customYearlySchedule');
-        if (customInput) {
-          customInput.style.display = 'none';
-          customInput.required = false;
-        }
-      }
-    });
+    // Yearly schedule is now handled by the interactive calendar above
 
     document.getElementById('signup-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -801,10 +920,12 @@
         delete data['workingHours[]'];
       }
       
-      // Handle custom yearly schedule
-      if (data.yearlySchedule === 'custom' && data.customYearlySchedule) {
-        data.yearlySchedule = data.customYearlySchedule;
-        delete data.customYearlySchedule;
+      // Handle yearly schedule array
+      if (data['yearlySchedule[]']) {
+        data.yearlySchedule = Array.isArray(data['yearlySchedule[]']) 
+          ? data['yearlySchedule[]'].join(',') 
+          : data['yearlySchedule[]'];
+        delete data['yearlySchedule[]'];
       }
       
       // Show loading
