@@ -136,6 +136,35 @@
       text-align: center;
     }
 
+    .yearly-controls {
+      margin: 16px 0;
+      text-align: center;
+    }
+
+    .weekend-toggle-btn {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+    }
+
+    .weekend-toggle-btn:hover {
+      background: #5a67d8;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 8px rgba(102, 126, 234, 0.4);
+    }
+
+    .weekend-toggle-btn:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+    }
+
     .yearly-note {
       margin-top: 16px;
       padding: 12px;
@@ -878,9 +907,13 @@
               </div>
               
               
-              <div class="yearly-note">
-                <small>💡 Click any date to toggle it as closed. Double-click any date to select the entire month. UK holidays are pre-selected (red) but can be deselected. Weekends are highlighted in grey.</small>
-              </div>
+           <div class="yearly-controls">
+             <button type="button" id="toggle-weekends" class="weekend-toggle-btn">📅 Toggle All Weekends</button>
+           </div>
+           
+           <div class="yearly-note">
+             <small>💡 Click any date to toggle it as closed. Double-click any date to select the entire month. UK holidays are pre-selected (red) but can be deselected. Weekends are highlighted in grey and can be toggled all at once.</small>
+           </div>
             </div>
           </div>
 
@@ -1016,6 +1049,7 @@
     const currentYear = 2025;
     let selectedDates = new Set();
     let deselectedHolidays = new Set();
+    let weekendsSelected = false;
 
     // UK Holidays 2025 (Bank Holidays + Major Holidays)
     const ukHolidays2025 = [
@@ -1040,6 +1074,25 @@
 
     function isUkHoliday(dateStr) {
       return ukHolidays2025.includes(dateStr);
+    }
+
+    function isWeekend(dateStr) {
+      const date = new Date(dateStr);
+      return date.getDay() === 0 || date.getDay() === 6; // Sunday or Saturday
+    }
+
+    function getAllWeekendDates(year) {
+      const weekends = [];
+      for (let month = 0; month < 12; month++) {
+        const lastDay = new Date(year, month + 1, 0).getDate();
+        for (let day = 1; day <= lastDay; day++) {
+          const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          if (isWeekend(dateStr) && !isUkHoliday(dateStr)) {
+            weekends.push(dateStr);
+          }
+        }
+      }
+      return weekends;
     }
 
     function generateCalendar() {
@@ -1139,6 +1192,14 @@
                 selectedDates.add(dateStr);
                 dayDiv.classList.add('selected');
               }
+              
+              // Update weekendsSelected state if this is a weekend
+              if (isWeekend(dateStr)) {
+                const allWeekends = getAllWeekendDates(currentYear);
+                const selectedWeekends = allWeekends.filter(date => selectedDates.has(date));
+                weekendsSelected = selectedWeekends.length === allWeekends.length;
+                document.getElementById('toggle-weekends').textContent = weekendsSelected ? '📅 Deselect All Weekends' : '📅 Toggle All Weekends';
+              }
             }
           });
 
@@ -1167,6 +1228,25 @@
 
     // Initialize calendar
     generateCalendar();
+
+    // Toggle weekends functionality
+    document.getElementById('toggle-weekends').addEventListener('click', () => {
+      const allWeekends = getAllWeekendDates(currentYear);
+      
+      if (weekendsSelected) {
+        // Remove all weekends from selected dates
+        allWeekends.forEach(date => selectedDates.delete(date));
+        weekendsSelected = false;
+        document.getElementById('toggle-weekends').textContent = '📅 Toggle All Weekends';
+      } else {
+        // Add all weekends to selected dates
+        allWeekends.forEach(date => selectedDates.add(date));
+        weekendsSelected = true;
+        document.getElementById('toggle-weekends').textContent = '📅 Deselect All Weekends';
+      }
+      
+      generateCalendar(); // Regenerate calendar to show changes
+    });
 
     document.getElementById('signup-form').addEventListener('submit', async (e) => {
       e.preventDefault();
