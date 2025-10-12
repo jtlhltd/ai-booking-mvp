@@ -103,7 +103,7 @@ app.use(performanceMiddleware(performanceMonitor));
 
 // API key guard middleware
 function requireApiKey(req, res, next) {
-  if (req.method === 'GET' && (req.path === '/health' || req.path === '/gcal/ping' || req.path === '/healthz' || req.path === '/setup-my-client' || req.path === '/clear-my-leads' || req.path === '/check-db' || req.path === '/lead-import.html')) return next();
+  if (req.method === 'GET' && (req.path === '/health' || req.path === '/gcal/ping' || req.path === '/healthz' || req.path === '/setup-my-client' || req.path === '/clear-my-leads' || req.path === '/check-db' || req.path === '/lead-import.html' || req.path === '/complete-setup')) return next();
   if (req.path.startsWith('/webhooks/twilio-status') || req.path.startsWith('/webhooks/twilio-inbound') || req.path.startsWith('/webhooks/twilio/sms-inbound') || req.path.startsWith('/webhooks/vapi') || req.path === '/webhook/sms-reply' || req.path === '/webhooks/sms') return next();
   if (req.path === '/api/test' || req.path === '/api/test-linkedin' || req.path === '/api/uk-business-search' || req.path === '/api/decision-maker-contacts' || req.path === '/api/industry-categories' || req.path === '/test-sms-pipeline' || req.path === '/sms-test' || req.path === '/api/initiate-lead-capture' || req.path === '/api/signup') return next();
   if (req.path === '/uk-business-search' || req.path === '/booking-simple.html') return next();
@@ -11129,6 +11129,125 @@ app.get('/zapier-docs.html', (req, res) => {
 
 app.get('/zapier', (req, res) => {
   res.sendFile('public/zapier-docs.html', { root: '.' });
+});
+
+// Complete setup endpoint - adds missing columns to make system 100%
+app.get('/complete-setup', async (req, res) => {
+  try {
+    console.log('[COMPLETE-SETUP] Running final database setup...');
+    
+    const { query } = await import('./db.js');
+    const results = [];
+
+    // Add email column
+    try {
+      await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS email TEXT`);
+      results.push('✅ Added email column');
+    } catch (e) {
+      results.push(`⚠️ Email column: ${e.message}`);
+    }
+
+    // Add tags column
+    try {
+      await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS tags TEXT`);
+      results.push('✅ Added tags column');
+    } catch (e) {
+      results.push(`⚠️ Tags column: ${e.message}`);
+    }
+
+    // Add score column
+    try {
+      await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS score INTEGER DEFAULT 50`);
+      results.push('✅ Added score column');
+    } catch (e) {
+      results.push(`⚠️ Score column: ${e.message}`);
+    }
+
+    // Add custom_fields column
+    try {
+      await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS custom_fields JSONB DEFAULT '{}'::jsonb`);
+      results.push('✅ Added custom_fields column');
+    } catch (e) {
+      results.push(`⚠️ Custom fields column: ${e.message}`);
+    }
+
+    // Add last_contacted_at column
+    try {
+      await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS last_contacted_at TIMESTAMPTZ`);
+      results.push('✅ Added last_contacted_at column');
+    } catch (e) {
+      results.push(`⚠️ Last contacted column: ${e.message}`);
+    }
+
+    // Add updated_at column
+    try {
+      await query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()`);
+      results.push('✅ Added updated_at column');
+    } catch (e) {
+      results.push(`⚠️ Updated at column: ${e.message}`);
+    }
+
+    // Create indexes
+    try {
+      await query(`CREATE INDEX IF NOT EXISTS idx_leads_email ON leads(email)`);
+      results.push('✅ Created email index');
+    } catch (e) {
+      results.push(`⚠️ Email index: ${e.message}`);
+    }
+
+    try {
+      await query(`CREATE INDEX IF NOT EXISTS idx_leads_score ON leads(score DESC)`);
+      results.push('✅ Created score index');
+    } catch (e) {
+      results.push(`⚠️ Score index: ${e.message}`);
+    }
+
+    try {
+      await query(`CREATE INDEX IF NOT EXISTS idx_leads_source ON leads(source)`);
+      results.push('✅ Created source index');
+    } catch (e) {
+      results.push(`⚠️ Source index: ${e.message}`);
+    }
+
+    try {
+      await query(`CREATE INDEX IF NOT EXISTS idx_leads_last_contacted ON leads(last_contacted_at)`);
+      results.push('✅ Created last_contacted index');
+    } catch (e) {
+      results.push(`⚠️ Last contacted index: ${e.message}`);
+    }
+
+    try {
+      await query(`CREATE INDEX IF NOT EXISTS idx_leads_updated ON leads(updated_at DESC)`);
+      results.push('✅ Created updated_at index');
+    } catch (e) {
+      results.push(`⚠️ Updated at index: ${e.message}`);
+    }
+
+    // Verify columns exist
+    const verification = await query(`
+      SELECT column_name, data_type 
+      FROM information_schema.columns 
+      WHERE table_name = 'leads' 
+      ORDER BY ordinal_position
+    `);
+
+    console.log('[COMPLETE-SETUP] ✅ Setup complete!');
+
+    res.json({
+      success: true,
+      message: 'Database setup complete! All features unlocked.',
+      results,
+      columns: verification.rows
+    });
+
+  } catch (error) {
+    console.error('[COMPLETE-SETUP] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Setup failed',
+      details: error.message
+    });
+  }
 });
 
 // ============================================================================
