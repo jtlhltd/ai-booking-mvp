@@ -10823,6 +10823,11 @@ app.get('/dashboard/:clientKey', (req, res) => {
   res.sendFile('public/dashboard.html', { root: '.' });
 });
 
+// Lead import page
+app.get('/lead-import.html', (req, res) => {
+  res.sendFile('public/lead-import.html', { root: '.' });
+});
+
 // Client settings page
 app.get('/settings/:clientKey', (req, res) => {
   res.sendFile('public/settings.html', { root: '.' });
