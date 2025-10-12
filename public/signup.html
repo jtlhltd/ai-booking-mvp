@@ -149,6 +149,157 @@
       font-size: 13px;
     }
 
+    /* Full Year Calendar Styles */
+    .calendar-legend {
+      margin: 8px 0 16px 0;
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #666;
+    }
+
+    .legend-color {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+      border: 1px solid #ddd;
+    }
+
+    .legend-color.bank-holiday {
+      background: #dc2626;
+    }
+
+    .legend-color.selected {
+      background: #667eea;
+    }
+
+    .legend-color.available {
+      background: white;
+    }
+
+    .calendar-navigation {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .nav-btn {
+      padding: 8px 16px;
+      border: 2px solid #e0e0e0;
+      border-radius: 6px;
+      background: white;
+      color: #333;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    .nav-btn:hover {
+      border-color: #667eea;
+      background: #f8f9ff;
+    }
+
+    .current-year {
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .full-year-calendar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    .month-calendar {
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 12px;
+      background: white;
+    }
+
+    .month-title {
+      text-align: center;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .month-days {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+    }
+
+    .day-header {
+      text-align: center;
+      font-weight: 600;
+      color: #666;
+      padding: 4px;
+      font-size: 10px;
+    }
+
+    .calendar-day {
+      width: 24px;
+      height: 24px;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      background: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      color: #333;
+      transition: all 0.2s;
+      position: relative;
+    }
+
+    .calendar-day:hover {
+      background: #f8f9ff;
+      border-color: #667eea;
+    }
+
+    .calendar-day.selected {
+      background: #667eea;
+      color: white;
+      border-color: #667eea;
+    }
+
+    .calendar-day.bank-holiday {
+      background: #dc2626;
+      color: white;
+      border-color: #dc2626;
+      font-weight: 600;
+    }
+
+    .calendar-day.bank-holiday.selected {
+      background: #b91c1c;
+      border-color: #b91c1c;
+    }
+
+    .calendar-day.other-month {
+      color: #ccc;
+      background: #f9f9f9;
+    }
+
+    .calendar-day.today {
+      border-color: #10b981;
+      font-weight: 600;
+    }
+
     .day-option input, .time-slot input, .month-option input {
       display: none;
     }
@@ -571,30 +722,6 @@
             <label>🕘 What hours are you available? *</label>
             <div class="hours-container">
               <div class="hours-grid">
-                <div class="time-slot" data-time="12am">
-                  <input type="checkbox" id="hour-12am" name="workingHours[]" value="12am">
-                  <label for="hour-12am">12am</label>
-                </div>
-                <div class="time-slot" data-time="1am">
-                  <input type="checkbox" id="hour-1am" name="workingHours[]" value="1am">
-                  <label for="hour-1am">1am</label>
-                </div>
-                <div class="time-slot" data-time="2am">
-                  <input type="checkbox" id="hour-2am" name="workingHours[]" value="2am">
-                  <label for="hour-2am">2am</label>
-                </div>
-                <div class="time-slot" data-time="3am">
-                  <input type="checkbox" id="hour-3am" name="workingHours[]" value="3am">
-                  <label for="hour-3am">3am</label>
-                </div>
-                <div class="time-slot" data-time="4am">
-                  <input type="checkbox" id="hour-4am" name="workingHours[]" value="4am">
-                  <label for="hour-4am">4am</label>
-                </div>
-                <div class="time-slot" data-time="5am">
-                  <input type="checkbox" id="hour-5am" name="workingHours[]" value="5am">
-                  <label for="hour-5am">5am</label>
-                </div>
                 <div class="time-slot" data-time="6am">
                   <input type="checkbox" id="hour-6am" name="workingHours[]" value="6am">
                   <label for="hour-6am">6am</label>
@@ -667,6 +794,30 @@
                   <input type="checkbox" id="hour-11pm" name="workingHours[]" value="11pm">
                   <label for="hour-11pm">11pm</label>
                 </div>
+                <div class="time-slot" data-time="12am">
+                  <input type="checkbox" id="hour-12am" name="workingHours[]" value="12am">
+                  <label for="hour-12am">12am</label>
+                </div>
+                <div class="time-slot" data-time="1am">
+                  <input type="checkbox" id="hour-1am" name="workingHours[]" value="1am">
+                  <label for="hour-1am">1am</label>
+                </div>
+                <div class="time-slot" data-time="2am">
+                  <input type="checkbox" id="hour-2am" name="workingHours[]" value="2am">
+                  <label for="hour-2am">2am</label>
+                </div>
+                <div class="time-slot" data-time="3am">
+                  <input type="checkbox" id="hour-3am" name="workingHours[]" value="3am">
+                  <label for="hour-3am">3am</label>
+                </div>
+                <div class="time-slot" data-time="4am">
+                  <input type="checkbox" id="hour-4am" name="workingHours[]" value="4am">
+                  <label for="hour-4am">4am</label>
+                </div>
+                <div class="time-slot" data-time="5am">
+                  <input type="checkbox" id="hour-5am" name="workingHours[]" value="5am">
+                  <label for="hour-5am">5am</label>
+                </div>
               </div>
               
               <div class="quick-select">
@@ -679,85 +830,36 @@
           </div>
 
           <div class="form-group">
-            <label>📅 Do you close for holidays or seasonal breaks?</label>
+            <label>📅 Select specific dates when you're closed</label>
             <div class="yearly-container">
               <div class="yearly-header">
-                <h4>Select your closure periods:</h4>
+                <h4>2025 Calendar - Click dates to block them:</h4>
+                <p class="calendar-legend">
+                  <span class="legend-item"><span class="legend-color bank-holiday"></span> UK Bank Holiday</span>
+                  <span class="legend-item"><span class="legend-color selected"></span> Selected (Closed)</span>
+                  <span class="legend-item"><span class="legend-color available"></span> Available</span>
+                </p>
               </div>
-              <div class="months-grid">
-                <div class="month-header">Jan</div>
-                <div class="month-header">Feb</div>
-                <div class="month-header">Mar</div>
-                <div class="month-header">Apr</div>
-                <div class="month-header">May</div>
-                <div class="month-header">Jun</div>
-                <div class="month-header">Jul</div>
-                <div class="month-header">Aug</div>
-                <div class="month-header">Sep</div>
-                <div class="month-header">Oct</div>
-                <div class="month-header">Nov</div>
-                <div class="month-header">Dec</div>
-                
-                <div class="month-option" data-month="january">
-                  <input type="checkbox" id="month-january" name="yearlySchedule[]" value="january">
-                  <label for="month-january">Jan</label>
-                </div>
-                <div class="month-option" data-month="february">
-                  <input type="checkbox" id="month-february" name="yearlySchedule[]" value="february">
-                  <label for="month-february">Feb</label>
-                </div>
-                <div class="month-option" data-month="march">
-                  <input type="checkbox" id="month-march" name="yearlySchedule[]" value="march">
-                  <label for="month-march">Mar</label>
-                </div>
-                <div class="month-option" data-month="april">
-                  <input type="checkbox" id="month-april" name="yearlySchedule[]" value="april">
-                  <label for="month-april">Apr</label>
-                </div>
-                <div class="month-option" data-month="may">
-                  <input type="checkbox" id="month-may" name="yearlySchedule[]" value="may">
-                  <label for="month-may">May</label>
-                </div>
-                <div class="month-option" data-month="june">
-                  <input type="checkbox" id="month-june" name="yearlySchedule[]" value="june">
-                  <label for="month-june">Jun</label>
-                </div>
-                <div class="month-option" data-month="july">
-                  <input type="checkbox" id="month-july" name="yearlySchedule[]" value="july">
-                  <label for="month-july">Jul</label>
-                </div>
-                <div class="month-option" data-month="august">
-                  <input type="checkbox" id="month-august" name="yearlySchedule[]" value="august">
-                  <label for="month-august">Aug</label>
-                </div>
-                <div class="month-option" data-month="september">
-                  <input type="checkbox" id="month-september" name="yearlySchedule[]" value="september">
-                  <label for="month-september">Sep</label>
-                </div>
-                <div class="month-option" data-month="october">
-                  <input type="checkbox" id="month-october" name="yearlySchedule[]" value="october">
-                  <label for="month-october">Oct</label>
-                </div>
-                <div class="month-option" data-month="november">
-                  <input type="checkbox" id="month-november" name="yearlySchedule[]" value="november">
-                  <label for="month-november">Nov</label>
-                </div>
-                <div class="month-option" data-month="december">
-                  <input type="checkbox" id="month-december" name="yearlySchedule[]" value="december">
-                  <label for="month-december">Dec</label>
-                </div>
+              
+              <div class="calendar-navigation">
+                <button type="button" class="nav-btn" id="prev-year">← 2024</button>
+                <span class="current-year">2025</span>
+                <button type="button" class="nav-btn" id="next-year">2026 →</button>
+              </div>
+              
+              <div class="full-year-calendar" id="yearly-calendar">
+                <!-- Calendar will be generated by JavaScript -->
               </div>
               
               <div class="quick-select">
-                <button type="button" class="quick-btn" data-months="december,january">Winter Holidays</button>
-                <button type="button" class="quick-btn" data-months="july,august">Summer Break</button>
-                <button type="button" class="quick-btn" data-months="december,january,february">Winter Season</button>
-                <button type="button" class="quick-btn" data-months="june,july,august,september">Summer Season</button>
+                <button type="button" class="quick-btn" id="select-bank-holidays">Select UK Bank Holidays</button>
+                <button type="button" class="quick-btn" id="select-christmas">Christmas Week</button>
+                <button type="button" class="quick-btn" id="select-new-year">New Year Week</button>
                 <button type="button" class="quick-btn clear-btn">Clear All</button>
               </div>
               
               <div class="yearly-note">
-                <small>💡 Tip: Select months when you're typically closed (holidays, seasonal breaks, etc.)</small>
+                <small>💡 Tip: Click any date to mark it as closed. UK bank holidays are pre-marked in red.</small>
               </div>
             </div>
           </div>
@@ -890,7 +992,202 @@
       });
     });
 
-    // Yearly schedule is now handled by the interactive calendar above
+    // Full Year Calendar with UK Bank Holidays
+    let currentYear = 2025;
+    let selectedDates = new Set();
+
+    // UK Bank Holidays 2025
+    const ukBankHolidays2025 = [
+      '2025-01-01', // New Year's Day
+      '2025-04-18', // Good Friday
+      '2025-04-21', // Easter Monday
+      '2025-05-05', // Early May Bank Holiday
+      '2025-05-26', // Spring Bank Holiday
+      '2025-08-25', // Summer Bank Holiday
+      '2025-12-25', // Christmas Day
+      '2025-12-26'  // Boxing Day
+    ];
+
+    const ukBankHolidays2024 = [
+      '2024-01-01', // New Year's Day
+      '2024-03-29', // Good Friday
+      '2024-04-01', // Easter Monday
+      '2024-05-06', // Early May Bank Holiday
+      '2024-05-27', // Spring Bank Holiday
+      '2024-08-26', // Summer Bank Holiday
+      '2024-12-25', // Christmas Day
+      '2024-12-26'  // Boxing Day
+    ];
+
+    const ukBankHolidays2026 = [
+      '2026-01-01', // New Year's Day
+      '2026-04-03', // Good Friday
+      '2026-04-06', // Easter Monday
+      '2026-05-04', // Early May Bank Holiday
+      '2026-05-25', // Spring Bank Holiday
+      '2026-08-31', // Summer Bank Holiday
+      '2026-12-25', // Christmas Day
+      '2026-12-26'  // Boxing Day
+    ];
+
+    function getBankHolidays(year) {
+      if (year === 2024) return ukBankHolidays2024;
+      if (year === 2025) return ukBankHolidays2025;
+      if (year === 2026) return ukBankHolidays2026;
+      return [];
+    }
+
+    function generateCalendar() {
+      const calendar = document.getElementById('yearly-calendar');
+      const bankHolidays = getBankHolidays(currentYear);
+      const today = new Date();
+      
+      calendar.innerHTML = '';
+      
+      for (let month = 0; month < 12; month++) {
+        const monthDiv = document.createElement('div');
+        monthDiv.className = 'month-calendar';
+        
+        const monthTitle = document.createElement('div');
+        monthTitle.className = 'month-title';
+        monthTitle.textContent = new Date(currentYear, month).toLocaleDateString('en-GB', { month: 'long' });
+        monthDiv.appendChild(monthTitle);
+        
+        const daysDiv = document.createElement('div');
+        daysDiv.className = 'month-days';
+        
+        // Day headers
+        const dayHeaders = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+        dayHeaders.forEach(day => {
+          const dayHeader = document.createElement('div');
+          dayHeader.className = 'day-header';
+          dayHeader.textContent = day;
+          daysDiv.appendChild(dayHeader);
+        });
+        
+        const firstDay = new Date(currentYear, month, 1);
+        const lastDay = new Date(currentYear, month + 1, 0);
+        const startDay = firstDay.getDay();
+        const daysInMonth = lastDay.getDate();
+        
+        // Previous month's days
+        const prevMonth = new Date(currentYear, month - 1, 0);
+        for (let i = startDay - 1; i >= 0; i--) {
+          const dayDiv = document.createElement('div');
+          dayDiv.className = 'calendar-day other-month';
+          dayDiv.textContent = prevMonth.getDate() - i;
+          daysDiv.appendChild(dayDiv);
+        }
+        
+        // Current month's days
+        for (let day = 1; day <= daysInMonth; day++) {
+          const dayDiv = document.createElement('div');
+          dayDiv.className = 'calendar-day';
+          dayDiv.textContent = day;
+          
+          const dateStr = `${currentYear}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          
+          // Check if it's a bank holiday
+          if (bankHolidays.includes(dateStr)) {
+            dayDiv.classList.add('bank-holiday');
+          }
+          
+          // Check if it's today
+          const date = new Date(currentYear, month, day);
+          if (date.toDateString() === today.toDateString()) {
+            dayDiv.classList.add('today');
+          }
+          
+          // Check if it's selected
+          if (selectedDates.has(dateStr)) {
+            dayDiv.classList.add('selected');
+          }
+          
+          dayDiv.addEventListener('click', () => {
+            if (dayDiv.classList.contains('selected')) {
+              dayDiv.classList.remove('selected');
+              selectedDates.delete(dateStr);
+            } else {
+              dayDiv.classList.add('selected');
+              selectedDates.add(dateStr);
+            }
+          });
+          
+          daysDiv.appendChild(dayDiv);
+        }
+        
+        // Next month's days to fill the grid
+        const totalCells = daysDiv.children.length;
+        const remainingCells = 42 - totalCells; // 6 rows * 7 days
+        for (let i = 1; i <= remainingCells; i++) {
+          const dayDiv = document.createElement('div');
+          dayDiv.className = 'calendar-day other-month';
+          dayDiv.textContent = i;
+          daysDiv.appendChild(dayDiv);
+        }
+        
+        monthDiv.appendChild(daysDiv);
+        calendar.appendChild(monthDiv);
+      }
+    }
+
+    // Navigation
+    document.getElementById('prev-year').addEventListener('click', () => {
+      currentYear--;
+      document.querySelector('.current-year').textContent = currentYear;
+      generateCalendar();
+    });
+
+    document.getElementById('next-year').addEventListener('click', () => {
+      currentYear++;
+      document.querySelector('.current-year').textContent = currentYear;
+      generateCalendar();
+    });
+
+    // Quick select buttons
+    document.getElementById('select-bank-holidays').addEventListener('click', () => {
+      const bankHolidays = getBankHolidays(currentYear);
+      bankHolidays.forEach(date => selectedDates.add(date));
+      generateCalendar();
+    });
+
+    document.getElementById('select-christmas').addEventListener('click', () => {
+      const christmasWeek = [
+        `${currentYear}-12-24`,
+        `${currentYear}-12-25`,
+        `${currentYear}-12-26`,
+        `${currentYear}-12-27`,
+        `${currentYear}-12-28`,
+        `${currentYear}-12-29`,
+        `${currentYear}-12-30`,
+        `${currentYear}-12-31`
+      ];
+      christmasWeek.forEach(date => selectedDates.add(date));
+      generateCalendar();
+    });
+
+    document.getElementById('select-new-year').addEventListener('click', () => {
+      const newYearWeek = [
+        `${currentYear}-01-01`,
+        `${currentYear}-01-02`,
+        `${currentYear}-01-03`,
+        `${currentYear}-01-04`,
+        `${currentYear}-01-05`,
+        `${currentYear}-01-06`,
+        `${currentYear}-01-07`
+      ];
+      newYearWeek.forEach(date => selectedDates.add(date));
+      generateCalendar();
+    });
+
+    // Clear all button for yearly calendar
+    document.querySelector('.yearly-container .clear-btn').addEventListener('click', () => {
+      selectedDates.clear();
+      generateCalendar();
+    });
+
+    // Initialize calendar
+    generateCalendar();
 
     document.getElementById('signup-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -920,13 +1217,8 @@
         delete data['workingHours[]'];
       }
       
-      // Handle yearly schedule array
-      if (data['yearlySchedule[]']) {
-        data.yearlySchedule = Array.isArray(data['yearlySchedule[]']) 
-          ? data['yearlySchedule[]'].join(',') 
-          : data['yearlySchedule[]'];
-        delete data['yearlySchedule[]'];
-      }
+      // Handle selected dates from yearly calendar
+      data.yearlySchedule = Array.from(selectedDates).join(',');
       
       // Show loading
       document.getElementById('form-section').style.display = 'none';
