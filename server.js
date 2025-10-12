@@ -10852,13 +10852,11 @@ app.post('/api/signup', async (req, res) => {
       yearlySchedule,
       businessSize,
       monthlyLeads,
-      timezone,
-      businessHours,
-      plan
+      timezone
     } = req.body;
 
     // Validate required fields
-    if (!businessName || !industry || !primaryService || !serviceArea || !ownerName || !email || !phone || !plan) {
+    if (!businessName || !industry || !primaryService || !serviceArea || !ownerName || !email || !phone) {
       return res.status(400).json({
         success: false,
         error: 'Missing required fields'
