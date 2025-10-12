@@ -27,80 +27,34 @@ CREATE TABLE IF NOT EXISTS client_metadata (
 );
 
 -- Add columns if they don't exist (for existing tables)
-DO $$ 
-BEGIN
-  -- Add subscription_status if missing
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns 
-    WHERE table_name='client_metadata' AND column_name='subscription_status'
-  ) THEN
-    ALTER TABLE client_metadata ADD COLUMN subscription_status TEXT DEFAULT 'active';
-  END IF;
-  
-  -- Add owner_role if missing
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns 
-    WHERE table_name='client_metadata' AND column_name='owner_role'
-  ) THEN
-    ALTER TABLE client_metadata ADD COLUMN owner_role TEXT;
-  END IF;
-  
-  -- Add business_size if missing
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns 
-    WHERE table_name='client_metadata' AND column_name='business_size'
-  ) THEN
-    ALTER TABLE client_metadata ADD COLUMN business_size TEXT;
-  END IF;
-  
-  -- Add monthly_leads if missing
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns 
-    WHERE table_name='client_metadata' AND column_name='monthly_leads'
-  ) THEN
-    ALTER TABLE client_metadata ADD COLUMN monthly_leads TEXT;
-  END IF;
-  
-  -- Add timezone if missing
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns 
-    WHERE table_name='client_metadata' AND column_name='timezone'
-  ) THEN
-    ALTER TABLE client_metadata ADD COLUMN timezone TEXT;
-  END IF;
-  
-  -- Add current_lead_source if missing
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns 
-    WHERE table_name='client_metadata' AND column_name='current_lead_source'
-  ) THEN
-    ALTER TABLE client_metadata ADD COLUMN current_lead_source TEXT;
-  END IF;
-  
-  -- Add working_days if missing
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns 
-    WHERE table_name='client_metadata' AND column_name='working_days'
-  ) THEN
-    ALTER TABLE client_metadata ADD COLUMN working_days TEXT;
-  END IF;
-  
-  -- Add working_hours if missing
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns 
-    WHERE table_name='client_metadata' AND column_name='working_hours'
-  ) THEN
-    ALTER TABLE client_metadata ADD COLUMN working_hours TEXT;
-  END IF;
-  
-  -- Add yearly_schedule if missing
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns 
-    WHERE table_name='client_metadata' AND column_name='yearly_schedule'
-  ) THEN
-    ALTER TABLE client_metadata ADD COLUMN yearly_schedule TEXT;
-  END IF;
-END $$;
+-- Note: Using ALTER TABLE IF EXISTS pattern to avoid issues with migration runner
+
+-- Add subscription_status if missing
+ALTER TABLE client_metadata ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'active'
+
+-- Add owner_role if missing  
+ALTER TABLE client_metadata ADD COLUMN IF NOT EXISTS owner_role TEXT
+
+-- Add business_size if missing
+ALTER TABLE client_metadata ADD COLUMN IF NOT EXISTS business_size TEXT
+
+-- Add monthly_leads if missing
+ALTER TABLE client_metadata ADD COLUMN IF NOT EXISTS monthly_leads TEXT
+
+-- Add timezone if missing
+ALTER TABLE client_metadata ADD COLUMN IF NOT EXISTS timezone TEXT
+
+-- Add current_lead_source if missing
+ALTER TABLE client_metadata ADD COLUMN IF NOT EXISTS current_lead_source TEXT
+
+-- Add working_days if missing
+ALTER TABLE client_metadata ADD COLUMN IF NOT EXISTS working_days TEXT
+
+-- Add working_hours if missing
+ALTER TABLE client_metadata ADD COLUMN IF NOT EXISTS working_hours TEXT
+
+-- Add yearly_schedule if missing
+ALTER TABLE client_metadata ADD COLUMN IF NOT EXISTS yearly_schedule TEXT
 
 -- Indexes (only create if columns exist)
 CREATE INDEX IF NOT EXISTS client_metadata_email_idx ON client_metadata(owner_email);
