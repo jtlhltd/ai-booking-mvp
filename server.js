@@ -4152,22 +4152,7 @@ app.use(compression({
   }
 }));
 
-// Cache cleanup job
-setInterval(() => {
-  const now = Date.now();
-  let cleaned = 0;
-  
-  for (const [key, item] of cache.entries()) {
-    if (now > item.expires) {
-      cache.delete(key);
-      cleaned++;
-    }
-  }
-  
-  if (cleaned > 0) {
-    console.log('[CACHE CLEANUP]', { cleaned, remaining: cache.size });
-  }
-}, 60 * 1000); // Every minute
+// Cache cleanup is handled automatically by lib/cache.js (runs every 5 minutes)
 
 // Connection pool optimization
 setInterval(optimizeDatabaseConnections, 5 * 60 * 1000); // Every 5 minutes
