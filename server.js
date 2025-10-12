@@ -10885,9 +10885,7 @@ app.post('/api/signup', async (req, res) => {
       yearlySchedule,
       businessSize,
       monthlyLeads,
-      timezone,
-      businessHours,
-      plan
+      timezone
     });
 
     // Send welcome email with credentials (don't wait for it)
