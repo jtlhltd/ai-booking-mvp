@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lead Management - AI Lead System</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --primary: #667eea;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --gray-50: #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-600: #4b5563;
+      --gray-900: #111827;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--gray-50);
+      min-height: 100vh;
+    }
+
+    .header {
+      background: white;
+      border-bottom: 1px solid var(--gray-200);
+      padding: 20px 40px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+
+    .header-content {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .header h1 {
+      font-size: 24px;
+      color: var(--gray-900);
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 14px;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #5568d3;
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: white;
+      color: var(--primary);
+      border: 2px solid var(--primary);
+    }
+
+    .btn-secondary:hover {
+      background: var(--gray-50);
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 30px 40px;
+    }
+
+    .filters {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .filters-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .filter-group label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--gray-600);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .filter-group input,
+    .filter-group select {
+      padding: 10px 12px;
+      border: 1px solid var(--gray-200);
+      border-radius: 8px;
+      font-size: 14px;
+    }
+
+    .filter-group input:focus,
+    .filter-group select:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    .tag-filter {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .tag-chip {
+      padding: 6px 12px;
+      border-radius: 16px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: 2px solid var(--gray-200);
+      background: white;
+    }
+
+    .tag-chip:hover {
+      border-color: var(--primary);
+    }
+
+    .tag-chip.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+
+    .tag-chip.hot { border-color: #ef4444; color: #ef4444; }
+    .tag-chip.hot.active { background: #ef4444; color: white; }
+    
+    .tag-chip.warm { border-color: #f59e0b; color: #f59e0b; }
+    .tag-chip.warm.active { background: #f59e0b; color: white; }
+    
+    .tag-chip.cold { border-color: #3b82f6; color: #3b82f6; }
+    .tag-chip.cold.active { background: #3b82f6; color: white; }
+    
+    .tag-chip.vip { border-color: #8b5cf6; color: #8b5cf6; }
+    .tag-chip.vip.active { background: #8b5cf6; color: white; }
+
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-box {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .stat-box .label {
+      font-size: 12px;
+      color: var(--gray-600);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .stat-box .value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--gray-900);
+    }
+
+    .leads-table {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead {
+      background: var(--gray-50);
+    }
+
+    th {
+      text-align: left;
+      padding: 16px;
+      font-weight: 600;
+      color: var(--gray-600);
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 2px solid var(--gray-200);
+    }
+
+    td {
+      padding: 16px;
+      border-bottom: 1px solid var(--gray-100);
+    }
+
+    tr:hover {
+      background: var(--gray-50);
+    }
+
+    .lead-name {
+      font-weight: 600;
+      color: var(--gray-900);
+    }
+
+    .lead-phone {
+      color: var(--gray-600);
+      font-size: 14px;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .status-badge.new { background: #dbeafe; color: #1e40af; }
+    .status-badge.called { background: #fef3c7; color: #92400e; }
+    .status-badge.interested { background: #d1fae5; color: #065f46; }
+    .status-badge.booked { background: #d1fae5; color: #065f46; }
+    .status-badge.not_interested { background: #fee2e2; color: #991b1b; }
+
+    .lead-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .lead-tag {
+      padding: 3px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .lead-tag.hot { background: #fee2e2; color: #991b1b; }
+    .lead-tag.warm { background: #fef3c7; color: #92400e; }
+    .lead-tag.cold { background: #dbeafe; color: #1e40af; }
+    .lead-tag.vip { background: #ede9fe; color: #6b21a8; }
+    .lead-tag.referral { background: #d1fae5; color: #065f46; }
+
+    .score-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .score-bar-bg {
+      flex: 1;
+      height: 8px;
+      background: var(--gray-200);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .score-bar-fill {
+      height: 100%;
+      background: var(--primary);
+      border-radius: 4px;
+      transition: width 0.3s;
+    }
+
+    .score-bar-fill.high { background: var(--success); }
+    .score-bar-fill.medium { background: var(--warning); }
+    .score-bar-fill.low { background: var(--danger); }
+
+    .score-value {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--gray-900);
+      min-width: 35px;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .action-btn {
+      padding: 6px 12px;
+      border: 1px solid var(--gray-300);
+      background: white;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .action-btn:hover {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+
+    .loading {
+      text-align: center;
+      padding: 60px;
+      color: var(--gray-600);
+    }
+
+    .loading-spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid var(--gray-200);
+      border-top: 4px solid var(--primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 80px 20px;
+      color: var(--gray-600);
+    }
+
+    .empty-state .icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+      opacity: 0.3;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal.show {
+      display: flex;
+    }
+
+    .modal-content {
+      background: white;
+      border-radius: 16px;
+      padding: 32px;
+      max-width: 500px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+
+    .modal-header {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 24px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--gray-900);
+    }
+
+    .form-group input,
+    .form-group textarea,
+    .form-group select {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid var(--gray-300);
+      border-radius: 8px;
+      font-size: 14px;
+    }
+
+    .form-group textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      margin-top: 24px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-content">
+      <h1>👥 Lead Management</h1>
+      <div class="header-actions">
+        <button class="btn btn-secondary" onclick="window.location.href='/lead-import.html'">📥 Import Leads</button>
+        <button class="btn btn-primary" onclick="showAddLeadModal()">➕ Add Lead</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- Stats Bar -->
+    <div class="stats-bar">
+      <div class="stat-box">
+        <div class="label">Total Leads</div>
+        <div class="value" id="stat-total">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">New</div>
+        <div class="value" id="stat-new">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">Called</div>
+        <div class="value" id="stat-called">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">Booked</div>
+        <div class="value" id="stat-booked">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">Avg Score</div>
+        <div class="value" id="stat-score">0</div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters">
+      <div class="filters-row">
+        <div class="filter-group">
+          <label>Search</label>
+          <input type="text" id="search" placeholder="Name, phone, email..." oninput="filterLeads()">
+        </div>
+        <div class="filter-group">
+          <label>Status</label>
+          <select id="statusFilter" onchange="filterLeads()">
+            <option value="">All Statuses</option>
+            <option value="new">New</option>
+            <option value="called">Called</option>
+            <option value="interested">Interested</option>
+            <option value="booked">Booked</option>
+            <option value="not_interested">Not Interested</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Source</label>
+          <select id="sourceFilter" onchange="filterLeads()">
+            <option value="">All Sources</option>
+            <option value="Zapier">Zapier</option>
+            <option value="CSV">CSV Upload</option>
+            <option value="Manual">Manual</option>
+            <option value="Facebook">Facebook</option>
+            <option value="Google">Google</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Sort By</label>
+          <select id="sortBy" onchange="sortLeads()">
+            <option value="created_at">Newest First</option>
+            <option value="score">Highest Score</option>
+            <option value="name">Name (A-Z)</option>
+            <option value="last_contacted_at">Last Contacted</option>
+          </select>
+        </div>
+      </div>
+      <div class="filter-group">
+        <label>Filter by Tags</label>
+        <div class="tag-filter">
+          <div class="tag-chip hot" onclick="toggleTagFilter('hot')">🔥 Hot</div>
+          <div class="tag-chip warm" onclick="toggleTagFilter('warm')">⚡ Warm</div>
+          <div class="tag-chip cold" onclick="toggleTagFilter('cold')">❄️ Cold</div>
+          <div class="tag-chip vip" onclick="toggleTagFilter('vip')">⭐ VIP</div>
+          <div class="tag-chip" onclick="toggleTagFilter('referral')">🤝 Referral</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Leads Table -->
+    <div class="leads-table">
+      <div class="loading" id="loading">
+        <div class="loading-spinner"></div>
+        <p>Loading leads...</p>
+      </div>
+
+      <div id="leads-content" style="display: none;">
+        <table>
+          <thead>
+            <tr>
+              <th>Lead</th>
+              <th>Status</th>
+              <th>Tags</th>
+              <th>Source</th>
+              <th>Score</th>
+              <th>Created</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="leads-tbody">
+            <!-- Populated by JavaScript -->
+          </tbody>
+        </table>
+      </div>
+
+      <div class="empty-state" id="empty-state" style="display: none;">
+        <div class="icon">👥</div>
+        <h3>No leads yet</h3>
+        <p>Import your first leads to get started</p>
+        <button class="btn btn-primary" style="margin-top: 20px;" onclick="window.location.href='/lead-import.html'">Import Leads</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add/Edit Lead Modal -->
+  <div class="modal" id="leadModal">
+    <div class="modal-content">
+      <div class="modal-header" id="modalTitle">Add New Lead</div>
+      <form id="leadForm" onsubmit="saveLead(event)">
+        <div class="form-group">
+          <label>Name</label>
+          <input type="text" id="leadName" required>
+        </div>
+        <div class="form-group">
+          <label>Phone *</label>
+          <input type="tel" id="leadPhone" required>
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="leadEmail">
+        </div>
+        <div class="form-group">
+          <label>Tags (comma-separated)</label>
+          <input type="text" id="leadTags" placeholder="hot, referral, vip">
+        </div>
+        <div class="form-group">
+          <label>Source</label>
+          <select id="leadSource">
+            <option value="Manual">Manual</option>
+            <option value="Zapier">Zapier</option>
+            <option value="CSV">CSV</option>
+            <option value="Facebook">Facebook</option>
+            <option value="Google">Google</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Notes</label>
+          <textarea id="leadNotes"></textarea>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Lead</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Global state
+    let leads = [];
+    let filteredLeads = [];
+    let activeTags = [];
+    const clientKey = new URLSearchParams(window.location.search).get('client') || 'unknown';
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', loadLeads);
+
+    async function loadLeads() {
+      try {
+        // Fetch leads from API (mock for now)
+        const response = await fetch(`/api/leads?clientKey=${clientKey}`);
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch leads');
+        }
+
+        const data = await response.json();
+        leads = data.leads || [];
+        
+        updateStats();
+        displayLeads();
+
+        document.getElementById('loading').style.display = 'none';
+        
+        if (leads.length === 0) {
+          document.getElementById('empty-state').style.display = 'block';
+        } else {
+          document.getElementById('leads-content').style.display = 'block';
+        }
+
+      } catch (error) {
+        console.error('Failed to load leads:', error);
+        
+        // Show mock data for demo
+        leads = generateMockLeads();
+        updateStats();
+        displayLeads();
+        
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('leads-content').style.display = 'block';
+      }
+    }
+
+    function generateMockLeads() {
+      const names = ['John Doe', 'Jane Smith', 'Bob Johnson', 'Alice Williams', 'Charlie Brown'];
+      const statuses = ['new', 'called', 'interested', 'booked', 'not_interested'];
+      const tags = [['hot'], ['warm', 'referral'], ['cold'], ['vip', 'hot'], ['warm']];
+      const sources = ['Zapier', 'CSV', 'Manual', 'Facebook', 'Google'];
+      
+      return names.map((name, i) => ({
+        id: i + 1,
+        name,
+        phone: `+4474916832${60 + i}`,
+        email: `${name.toLowerCase().replace(' ', '.')}@example.com`,
+        status: statuses[i],
+        tags: tags[i],
+        source: sources[i],
+        score: 50 + (i * 10),
+        created_at: new Date(Date.now() - (i * 24 * 60 * 60 * 1000)).toISOString(),
+        last_contacted_at: i < 3 ? new Date(Date.now() - (i * 60 * 60 * 1000)).toISOString() : null
+      }));
+    }
+
+    function updateStats() {
+      document.getElementById('stat-total').textContent = leads.length;
+      document.getElementById('stat-new').textContent = leads.filter(l => l.status === 'new').length;
+      document.getElementById('stat-called').textContent = leads.filter(l => l.status === 'called').length;
+      document.getElementById('stat-booked').textContent = leads.filter(l => l.status === 'booked').length;
+      
+      const avgScore = leads.length > 0 
+        ? Math.round(leads.reduce((sum, l) => sum + (l.score || 50), 0) / leads.length)
+        : 0;
+      document.getElementById('stat-score').textContent = avgScore;
+    }
+
+    function displayLeads() {
+      filteredLeads = [...leads];
+      filterLeads();
+    }
+
+    function filterLeads() {
+      const search = document.getElementById('search').value.toLowerCase();
+      const statusFilter = document.getElementById('statusFilter').value;
+      const sourceFilter = document.getElementById('sourceFilter').value;
+
+      filteredLeads = leads.filter(lead => {
+        // Search filter
+        const matchesSearch = !search || 
+          lead.name.toLowerCase().includes(search) ||
+          lead.phone.includes(search) ||
+          (lead.email && lead.email.toLowerCase().includes(search));
+
+        // Status filter
+        const matchesStatus = !statusFilter || lead.status === statusFilter;
+
+        // Source filter
+        const matchesSource = !sourceFilter || lead.source === sourceFilter;
+
+        // Tags filter
+        const matchesTags = activeTags.length === 0 || 
+          activeTags.some(tag => lead.tags && lead.tags.includes(tag));
+
+        return matchesSearch && matchesStatus && matchesSource && matchesTags;
+      });
+
+      sortLeads();
+    }
+
+    function sortLeads() {
+      const sortBy = document.getElementById('sortBy').value;
+
+      filteredLeads.sort((a, b) => {
+        if (sortBy === 'created_at') {
+          return new Date(b.created_at) - new Date(a.created_at);
+        } else if (sortBy === 'score') {
+          return (b.score || 0) - (a.score || 0);
+        } else if (sortBy === 'name') {
+          return a.name.localeCompare(b.name);
+        } else if (sortBy === 'last_contacted_at') {
+          const aTime = a.last_contacted_at ? new Date(a.last_contacted_at).getTime() : 0;
+          const bTime = b.last_contacted_at ? new Date(b.last_contacted_at).getTime() : 0;
+          return bTime - aTime;
+        }
+        return 0;
+      });
+
+      renderTable();
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('leads-tbody');
+      
+      if (filteredLeads.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: #999;">No leads match your filters</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = filteredLeads.map(lead => `
+        <tr>
+          <td>
+            <div class="lead-name">${lead.name}</div>
+            <div class="lead-phone">${lead.phone}</div>
+            ${lead.email ? `<div class="lead-phone">${lead.email}</div>` : ''}
+          </td>
+          <td>
+            <span class="status-badge ${lead.status}">${lead.status.replace('_', ' ')}</span>
+          </td>
+          <td>
+            <div class="lead-tags">
+              ${(lead.tags || []).map(tag => `<span class="lead-tag ${tag}">${tag}</span>`).join('')}
+            </div>
+          </td>
+          <td>${lead.source}</td>
+          <td>
+            <div class="score-bar">
+              <div class="score-bar-bg">
+                <div class="score-bar-fill ${getScoreClass(lead.score)}" style="width: ${lead.score}%"></div>
+              </div>
+              <div class="score-value">${lead.score}</div>
+            </div>
+          </td>
+          <td>${formatDate(lead.created_at)}</td>
+          <td>
+            <div class="action-buttons">
+              <button class="action-btn" onclick="editLead(${lead.id})">✏️</button>
+              <button class="action-btn" onclick="callLead(${lead.id})">📞</button>
+              <button class="action-btn" onclick="deleteLead(${lead.id})">🗑️</button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function getScoreClass(score) {
+      if (score >= 70) return 'high';
+      if (score >= 40) return 'medium';
+      return 'low';
+    }
+
+    function formatDate(dateStr) {
+      const date = new Date(dateStr);
+      const now = new Date();
+      const diff = now - date;
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      
+      if (days === 0) return 'Today';
+      if (days === 1) return 'Yesterday';
+      if (days < 7) return `${days} days ago`;
+      return date.toLocaleDateString();
+    }
+
+    function toggleTagFilter(tag) {
+      const chip = event.target;
+      chip.classList.toggle('active');
+
+      if (activeTags.includes(tag)) {
+        activeTags = activeTags.filter(t => t !== tag);
+      } else {
+        activeTags.push(tag);
+      }
+
+      filterLeads();
+    }
+
+    function showAddLeadModal() {
+      document.getElementById('modalTitle').textContent = 'Add New Lead';
+      document.getElementById('leadForm').reset();
+      document.getElementById('leadModal').classList.add('show');
+    }
+
+    function editLead(id) {
+      const lead = leads.find(l => l.id === id);
+      if (!lead) return;
+
+      document.getElementById('modalTitle').textContent = 'Edit Lead';
+      document.getElementById('leadName').value = lead.name;
+      document.getElementById('leadPhone').value = lead.phone;
+      document.getElementById('leadEmail').value = lead.email || '';
+      document.getElementById('leadTags').value = (lead.tags || []).join(', ');
+      document.getElementById('leadSource').value = lead.source;
+      document.getElementById('leadNotes').value = lead.notes || '';
+      
+      document.getElementById('leadModal').classList.add('show');
+    }
+
+    function callLead(id) {
+      alert(`Initiating call to lead ${id}...`);
+      // In production, this would trigger a Vapi call
+    }
+
+    async function deleteLead(id) {
+      if (!confirm('Are you sure you want to delete this lead?')) return;
+      
+      // In production, call API to delete
+      leads = leads.filter(l => l.id !== id);
+      updateStats();
+      filterLeads();
+      
+      alert('Lead deleted successfully!');
+    }
+
+    function closeModal() {
+      document.getElementById('leadModal').classList.remove('show');
+    }
+
+    async function saveLead(event) {
+      event.preventDefault();
+      
+      const leadData = {
+        name: document.getElementById('leadName').value,
+        phone: document.getElementById('leadPhone').value,
+        email: document.getElementById('leadEmail').value,
+        tags: document.getElementById('leadTags').value.split(',').map(t => t.trim()),
+        source: document.getElementById('leadSource').value,
+        notes: document.getElementById('leadNotes').value
+      };
+
+      // In production, call API to save
+      console.log('Saving lead:', leadData);
+      
+      closeModal();
+      alert('Lead saved successfully!');
+      loadLeads();
+    }
+
+    // Close modal when clicking outside
+    document.getElementById('leadModal').addEventListener('click', (e) => {
+      if (e.target.id === 'leadModal') {
+        closeModal();
+      }
+    });
+  </script>
+</body>
+</html>
+

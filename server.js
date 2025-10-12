@@ -11010,6 +11010,78 @@ app.get('/lead-import.html', (req, res) => {
   res.sendFile('public/lead-import.html', { root: '.' });
 });
 
+// Lead management page
+app.get('/leads', (req, res) => {
+  res.sendFile('public/leads.html', { root: '.' });
+});
+
+// API endpoint to fetch leads
+app.get('/api/leads', async (req, res) => {
+  try {
+    const clientKey = req.query.clientKey || req.get('X-Client-Key');
+    
+    if (!clientKey) {
+      return res.status(400).json({
+        success: false,
+        error: 'clientKey is required'
+      });
+    }
+
+    const { query } = await import('./db.js');
+    
+    const result = await query(`
+      SELECT 
+        id,
+        name,
+        phone,
+        email,
+        status,
+        tags,
+        source,
+        score,
+        notes,
+        custom_fields,
+        created_at,
+        updated_at,
+        last_contacted_at
+      FROM leads
+      WHERE client_key = $1
+      ORDER BY created_at DESC
+      LIMIT 1000
+    `, [clientKey]);
+
+    const leads = result.rows.map(row => ({
+      id: row.id,
+      name: row.name || 'Unknown',
+      phone: row.phone,
+      email: row.email,
+      status: row.status || 'new',
+      tags: row.tags ? row.tags.split(',').map(t => t.trim()) : [],
+      source: row.source || 'Unknown',
+      score: row.score || 50,
+      notes: row.notes || '',
+      customFields: row.custom_fields || {},
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      last_contacted_at: row.last_contacted_at
+    }));
+
+    res.json({
+      success: true,
+      count: leads.length,
+      leads
+    });
+
+  } catch (error) {
+    console.error('[LEADS API ERROR]', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch leads',
+      details: error.message
+    });
+  }
+});
+
 // Client settings page
 app.get('/settings/:clientKey', (req, res) => {
   res.sendFile('public/settings.html', { root: '.' });
