@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy & Data Management - AI Booking MVP</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 16px;
+      padding: 48px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+
+    h1 {
+      font-size: 36px;
+      margin-bottom: 12px;
+      color: #1a1a1a;
+    }
+
+    .subtitle {
+      color: #666;
+      margin-bottom: 40px;
+      font-size: 18px;
+    }
+
+    .section {
+      margin-bottom: 40px;
+      padding: 24px;
+      background: #f9fafb;
+      border-radius: 12px;
+      border-left: 4px solid #667eea;
+    }
+
+    .section h2 {
+      font-size: 24px;
+      margin-bottom: 16px;
+      color: #1a1a1a;
+    }
+
+    .section p {
+      line-height: 1.8;
+      color: #555;
+      margin-bottom: 12px;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 14px;
+      text-decoration: none;
+      display: inline-block;
+      margin-right: 12px;
+      margin-bottom: 12px;
+    }
+
+    .btn-primary {
+      background: #667eea;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #5568d3;
+      transform: translateY(-1px);
+    }
+
+    .btn-danger {
+      background: #ef4444;
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #dc2626;
+    }
+
+    .btn-secondary {
+      background: white;
+      color: #667eea;
+      border: 2px solid #667eea;
+    }
+
+    .btn-secondary:hover {
+      background: #f5f7fa;
+    }
+
+    .consent-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px;
+      background: white;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      border: 1px solid #e0e0e0;
+    }
+
+    .consent-info {
+      flex: 1;
+    }
+
+    .consent-title {
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: #1a1a1a;
+    }
+
+    .consent-description {
+      font-size: 14px;
+      color: #666;
+    }
+
+    .toggle {
+      position: relative;
+      width: 60px;
+      height: 30px;
+    }
+
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: 0.4s;
+      border-radius: 30px;
+    }
+
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 22px;
+      width: 22px;
+      left: 4px;
+      bottom: 4px;
+      background-color: white;
+      transition: 0.4s;
+      border-radius: 50%;
+    }
+
+    .toggle input:checked + .toggle-slider {
+      background-color: #10b981;
+    }
+
+    .toggle input:checked + .toggle-slider:before {
+      transform: translateX(30px);
+    }
+
+    .alert {
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+
+    .alert-info {
+      background: #dbeafe;
+      border-left: 4px solid #3b82f6;
+      color: #1e40af;
+    }
+
+    .alert-warning {
+      background: #fef3c7;
+      border-left: 4px solid #f59e0b;
+      color: #92400e;
+    }
+
+    .alert-success {
+      background: #d1fae5;
+      border-left: 4px solid #10b981;
+      color: #065f46;
+    }
+
+    ul {
+      margin: 16px 0 16px 32px;
+      line-height: 1.8;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal.show {
+      display: flex;
+    }
+
+    .modal-content {
+      background: white;
+      border-radius: 16px;
+      padding: 32px;
+      max-width: 500px;
+      width: 90%;
+    }
+
+    .modal-title {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      margin-top: 24px;
+    }
+
+    .input-group {
+      margin-bottom: 20px;
+    }
+
+    .input-group label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #1a1a1a;
+    }
+
+    .input-group input {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔒 Privacy & Data Management</h1>
+    <p class="subtitle">Manage your data, privacy settings, and GDPR rights</p>
+
+    <!-- Your Rights -->
+    <div class="section">
+      <h2>Your Rights Under GDPR</h2>
+      <p>You have the following rights regarding your personal data:</p>
+      <ul>
+        <li><strong>Right to Access:</strong> Request a copy of all your personal data</li>
+        <li><strong>Right to Rectification:</strong> Correct inaccurate personal data</li>
+        <li><strong>Right to Erasure:</strong> Request deletion of your personal data</li>
+        <li><strong>Right to Restriction:</strong> Limit how we use your data</li>
+        <li><strong>Right to Data Portability:</strong> Receive your data in a structured format</li>
+        <li><strong>Right to Object:</strong> Object to processing of your data</li>
+      </ul>
+    </div>
+
+    <!-- Consent Management -->
+    <div class="section">
+      <h2>Consent Management</h2>
+      <p style="margin-bottom: 20px;">Control how we use your data:</p>
+
+      <div class="consent-item">
+        <div class="consent-info">
+          <div class="consent-title">Marketing Communications</div>
+          <div class="consent-description">Receive promotional emails and SMS</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="consent-marketing" onchange="updateConsent('marketing', this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="consent-item">
+        <div class="consent-info">
+          <div class="consent-title">Data Analytics</div>
+          <div class="consent-description">Help us improve our services through usage analytics</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="consent-analytics" checked onchange="updateConsent('analytics', this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="consent-item">
+        <div class="consent-info">
+          <div class="consent-title">Call Recording</div>
+          <div class="consent-description">Record AI calls for quality and training purposes</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="consent-recording" checked onchange="updateConsent('recording', this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="consent-item">
+        <div class="consent-info">
+          <div class="consent-title">Third-Party Sharing</div>
+          <div class="consent-description">Share data with trusted partners for service delivery</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="consent-sharing" onchange="updateConsent('sharing', this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Data Export -->
+    <div class="section">
+      <h2>Export Your Data</h2>
+      <p>Download a copy of all your personal data in JSON format. This includes your profile, leads, consent records, and activity logs.</p>
+      <div class="alert alert-info" style="margin-top: 16px;">
+        📊 Your data export will be prepared and sent to your email address within 48 hours.
+      </div>
+      <button class="btn btn-primary" onclick="exportData()">📥 Request Data Export</button>
+    </div>
+
+    <!-- Delete Account -->
+    <div class="section">
+      <h2>Delete Your Account</h2>
+      <div class="alert alert-warning">
+        ⚠️ <strong>Warning:</strong> This action is irreversible. All your data will be permanently deleted within 30 days.
+      </div>
+      <p>If you wish to delete your account and all associated data, click the button below. You will be asked to confirm this action.</p>
+      <button class="btn btn-danger" onclick="showDeleteModal()">🗑️ Delete My Account</button>
+    </div>
+
+    <!-- Data Retention -->
+    <div class="section">
+      <h2>Data Retention Policy</h2>
+      <p>We retain your data for the following periods:</p>
+      <ul>
+        <li><strong>Active leads:</strong> Retained until booking is completed or marked as inactive</li>
+        <li><strong>Call recordings:</strong> 90 days from recording date</li>
+        <li><strong>Consent records:</strong> 6 years for legal compliance</li>
+        <li><strong>Audit logs:</strong> 2 years for security purposes</li>
+        <li><strong>Inactive accounts:</strong> Automatically deleted after 2 years of inactivity</li>
+      </ul>
+    </div>
+
+    <!-- Contact -->
+    <div class="section">
+      <h2>Questions or Concerns?</h2>
+      <p>If you have any questions about your privacy rights or how we handle your data, please contact our Data Protection Officer:</p>
+      <ul>
+        <li>📧 Email: privacy@yourcompany.com</li>
+        <li>📞 Phone: +44 123 456 7890</li>
+        <li>📍 Address: [Your Company Address]</li>
+      </ul>
+    </div>
+
+    <div style="text-align: center; margin-top: 40px;">
+      <a href="/" class="btn btn-secondary">← Back to Dashboard</a>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div class="modal" id="deleteModal">
+    <div class="modal-content">
+      <div class="modal-title">⚠️ Confirm Account Deletion</div>
+      <p style="margin-bottom: 20px; color: #666;">This action cannot be undone. All your data will be permanently deleted.</p>
+      
+      <div class="alert alert-warning" style="font-size: 14px;">
+        The following will be deleted:
+        <ul style="margin-top: 8px;">
+          <li>Your profile and account</li>
+          <li>All leads and contacts</li>
+          <li>Call history and recordings</li>
+          <li>Dashboard and analytics data</li>
+        </ul>
+      </div>
+
+      <div class="input-group">
+        <label>Type "DELETE" to confirm:</label>
+        <input type="text" id="deleteConfirmation" placeholder="DELETE">
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+        <button class="btn btn-danger" onclick="confirmDelete()">Delete My Account</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function updateConsent(type, granted) {
+      console.log(`Consent updated: ${type} = ${granted}`);
+      
+      // In production, send to API
+      fetch('/api/consent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, granted })
+      })
+      .then(res => res.json())
+      .then(data => {
+        showAlert(`Consent updated: ${type}`, 'success');
+      })
+      .catch(error => {
+        console.error('Failed to update consent:', error);
+        showAlert('Failed to update consent. Please try again.', 'error');
+      });
+    }
+
+    function exportData() {
+      showAlert('Data export requested. You will receive an email within 48 hours.', 'success');
+      
+      // In production, trigger data export
+      fetch('/api/gdpr/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      .then(res => res.json())
+      .then(data => {
+        console.log('Data export initiated:', data);
+      })
+      .catch(error => {
+        console.error('Failed to export data:', error);
+      });
+    }
+
+    function showDeleteModal() {
+      document.getElementById('deleteModal').classList.add('show');
+      document.getElementById('deleteConfirmation').value = '';
+    }
+
+    function closeDeleteModal() {
+      document.getElementById('deleteModal').classList.remove('show');
+    }
+
+    function confirmDelete() {
+      const confirmation = document.getElementById('deleteConfirmation').value;
+      
+      if (confirmation !== 'DELETE') {
+        alert('Please type "DELETE" to confirm account deletion.');
+        return;
+      }
+
+      // In production, call API to delete account
+      fetch('/api/gdpr/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'User request' })
+      })
+      .then(res => res.json())
+      .then(data => {
+        alert('Your account deletion request has been submitted. You will be logged out shortly.');
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 2000);
+      })
+      .catch(error => {
+        console.error('Failed to delete account:', error);
+        alert('Failed to delete account. Please contact support.');
+      });
+    }
+
+    function showAlert(message, type) {
+      const alertDiv = document.createElement('div');
+      alertDiv.className = `alert alert-${type}`;
+      alertDiv.style.position = 'fixed';
+      alertDiv.style.top = '20px';
+      alertDiv.style.right = '20px';
+      alertDiv.style.zIndex = '10000';
+      alertDiv.style.minWidth = '300px';
+      alertDiv.textContent = message;
+      
+      document.body.appendChild(alertDiv);
+      
+      setTimeout(() => {
+        alertDiv.remove();
+      }, 3000);
+    }
+
+    // Close modal when clicking outside
+    document.getElementById('deleteModal').addEventListener('click', (e) => {
+      if (e.target.id === 'deleteModal') {
+        closeDeleteModal();
+      }
+    });
+  </script>
+</body>
+</html>
+
