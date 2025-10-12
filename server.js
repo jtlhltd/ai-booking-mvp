@@ -10864,9 +10864,31 @@ app.post('/api/signup', async (req, res) => {
     }
 
     console.log(`[SIGNUP] New signup request for ${businessName} (${email})`);
+    console.log(`[SIGNUP] Request body:`, req.body);
 
     // Create client with automated onboarding
     const { createClient, sendWelcomeEmail } = await import('./lib/auto-onboarding.js');
+    console.log(`[SIGNUP] Auto-onboarding module imported successfully`);
+    
+    console.log(`[SIGNUP] Calling createClient with parameters:`, {
+      businessName,
+      industry,
+      primaryService,
+      serviceArea,
+      website,
+      ownerName,
+      email,
+      phone,
+      role,
+      currentLeadSource,
+      voiceGender,
+      workingDays,
+      workingHours,
+      yearlySchedule,
+      businessSize,
+      monthlyLeads,
+      timezone
+    });
     
     const result = await createClient({
       businessName,
@@ -10887,6 +10909,8 @@ app.post('/api/signup', async (req, res) => {
       monthlyLeads,
       timezone
     });
+    
+    console.log(`[SIGNUP] createClient completed successfully:`, result);
 
     // Send welcome email with credentials (don't wait for it)
     sendWelcomeEmail({
