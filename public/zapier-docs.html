@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zapier Integration - API Documentation</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 16px;
+      padding: 48px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+
+    h1 {
+      font-size: 36px;
+      margin-bottom: 12px;
+      color: #1a1a1a;
+    }
+
+    .subtitle {
+      color: #666;
+      margin-bottom: 40px;
+      font-size: 18px;
+    }
+
+    .section {
+      margin-bottom: 48px;
+    }
+
+    .section h2 {
+      font-size: 24px;
+      margin-bottom: 16px;
+      color: #1a1a1a;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #667eea;
+    }
+
+    .section h3 {
+      font-size: 18px;
+      margin: 24px 0 12px 0;
+      color: #333;
+    }
+
+    .section p {
+      line-height: 1.8;
+      color: #555;
+      margin-bottom: 16px;
+    }
+
+    .code-block {
+      background: #f5f7fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 20px;
+      overflow-x: auto;
+      margin: 16px 0;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 14px;
+    }
+
+    .code-block pre {
+      margin: 0;
+    }
+
+    .inline-code {
+      background: #f5f7fa;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 14px;
+      color: #667eea;
+    }
+
+    .highlight {
+      background: #fff3cd;
+      padding: 16px;
+      border-left: 4px solid #f59e0b;
+      border-radius: 4px;
+      margin: 16px 0;
+    }
+
+    .success {
+      background: #d1fae5;
+      padding: 16px;
+      border-left: 4px solid #10b981;
+      border-radius: 4px;
+      margin: 16px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+    }
+
+    th {
+      background: #f5f7fa;
+      text-align: left;
+      padding: 12px;
+      font-weight: 600;
+      border-bottom: 2px solid #e0e0e0;
+    }
+
+    td {
+      padding: 12px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .button {
+      display: inline-block;
+      padding: 12px 24px;
+      background: #667eea;
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+      transition: background 0.3s;
+      margin-right: 12px;
+    }
+
+    .button:hover {
+      background: #5568d3;
+    }
+
+    .button.secondary {
+      background: white;
+      color: #667eea;
+      border: 2px solid #667eea;
+    }
+
+    .button.secondary:hover {
+      background: #f5f7fa;
+    }
+
+    ul {
+      margin: 16px 0 16px 32px;
+      line-height: 1.8;
+    }
+
+    li {
+      margin-bottom: 8px;
+    }
+
+    .step-number {
+      display: inline-block;
+      width: 32px;
+      height: 32px;
+      background: #667eea;
+      color: white;
+      border-radius: 50%;
+      text-align: center;
+      line-height: 32px;
+      font-weight: 700;
+      margin-right: 12px;
+    }
+
+    .example-card {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 16px 0;
+    }
+
+    .example-card h4 {
+      margin-bottom: 12px;
+      color: #667eea;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔗 Zapier Integration</h1>
+    <p class="subtitle">Connect your AI Booking System with 5,000+ apps instantly</p>
+
+    <!-- Quick Start -->
+    <div class="section">
+      <h2>⚡ Quick Start</h2>
+      <p>Integrate your AI Booking System with Zapier to automatically import leads from:</p>
+      <ul>
+        <li>📧 <strong>Email</strong> - Gmail, Outlook, etc.</li>
+        <li>📋 <strong>Forms</strong> - Google Forms, Typeform, JotForm</li>
+        <li>📱 <strong>Social Media</strong> - Facebook Lead Ads, LinkedIn, Instagram</li>
+        <li>🗂️ <strong>CRMs</strong> - HubSpot, Salesforce, Pipedrive</li>
+        <li>📊 <strong>Spreadsheets</strong> - Google Sheets, Airtable</li>
+        <li>🛒 <strong>E-commerce</strong> - Shopify, WooCommerce</li>
+      </ul>
+
+      <div class="success">
+        <strong>✅ Zero Configuration Required!</strong><br>
+        Just send lead data to our webhook and we'll handle the rest.
+      </div>
+    </div>
+
+    <!-- Webhook Endpoint -->
+    <div class="section">
+      <h2>🎯 Webhook Endpoint</h2>
+      <h3>POST Request</h3>
+      <div class="code-block">
+        <pre>POST https://ai-booking-mvp.onrender.com/api/webhooks/zapier</pre>
+      </div>
+
+      <h3>Headers</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Header</th>
+            <th>Value</th>
+            <th>Required</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="inline-code">Content-Type</span></td>
+            <td><span class="inline-code">application/json</span></td>
+            <td>✅ Yes</td>
+          </tr>
+          <tr>
+            <td><span class="inline-code">X-API-Key</span></td>
+            <td>Your API key</td>
+            <td>✅ Yes</td>
+          </tr>
+          <tr>
+            <td><span class="inline-code">X-Client-Key</span></td>
+            <td>Your client key</td>
+            <td>✅ Yes</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Request Body</h3>
+      <div class="code-block">
+<pre>{
+  "name": "John Doe",
+  "phone": "+447491683261",
+  "email": "john@example.com",
+  "tags": ["facebook", "hot"],
+  "notes": "Interested in beauty services",
+  "source": "Facebook Lead Ad",
+  "customFields": {
+    "service": "Hair Coloring",
+    "budget": "£150-200"
+  }
+}</pre>
+      </div>
+
+      <h3>Field Descriptions</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Field</th>
+            <th>Type</th>
+            <th>Required</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="inline-code">name</span></td>
+            <td>string</td>
+            <td>❌ No</td>
+            <td>Lead's full name</td>
+          </tr>
+          <tr>
+            <td><span class="inline-code">phone</span></td>
+            <td>string</td>
+            <td>✅ Yes</td>
+            <td>Phone number (E.164 format recommended)</td>
+          </tr>
+          <tr>
+            <td><span class="inline-code">email</span></td>
+            <td>string</td>
+            <td>❌ No</td>
+            <td>Email address</td>
+          </tr>
+          <tr>
+            <td><span class="inline-code">tags</span></td>
+            <td>array</td>
+            <td>❌ No</td>
+            <td>Tags for lead categorization (e.g., "hot", "referral")</td>
+          </tr>
+          <tr>
+            <td><span class="inline-code">notes</span></td>
+            <td>string</td>
+            <td>❌ No</td>
+            <td>Additional notes about the lead</td>
+          </tr>
+          <tr>
+            <td><span class="inline-code">source</span></td>
+            <td>string</td>
+            <td>❌ No</td>
+            <td>Where the lead came from</td>
+          </tr>
+          <tr>
+            <td><span class="inline-code">customFields</span></td>
+            <td>object</td>
+            <td>❌ No</td>
+            <td>Any additional custom data</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Response</h3>
+      <div class="code-block">
+<pre>{
+  "success": true,
+  "message": "Lead imported successfully",
+  "leadId": "lead_abc123",
+  "callScheduled": true,
+  "scheduledFor": "2025-10-12T14:30:00Z"
+}</pre>
+      </div>
+    </div>
+
+    <!-- Setup Guide -->
+    <div class="section">
+      <h2>🛠️ Setup Guide</h2>
+      
+      <h3><span class="step-number">1</span> Create a Zap</h3>
+      <p>Go to <a href="https://zapier.com" target="_blank">Zapier.com</a> and click "Create Zap"</p>
+
+      <h3><span class="step-number">2</span> Choose Your Trigger App</h3>
+      <p>Select the app where your leads come from (e.g., "Google Forms", "Facebook Lead Ads")</p>
+
+      <h3><span class="step-number">3</span> Add Webhooks Action</h3>
+      <p>Search for "Webhooks by Zapier" and select "POST" as the action</p>
+
+      <h3><span class="step-number">4</span> Configure the Webhook</h3>
+      <ul>
+        <li><strong>URL:</strong> <span class="inline-code">https://ai-booking-mvp.onrender.com/api/webhooks/zapier</span></li>
+        <li><strong>Payload Type:</strong> JSON</li>
+        <li><strong>Data:</strong> Map your form fields to our API format</li>
+        <li><strong>Headers:</strong>
+          <ul>
+            <li><span class="inline-code">Content-Type: application/json</span></li>
+            <li><span class="inline-code">X-API-Key: YOUR_API_KEY</span></li>
+            <li><span class="inline-code">X-Client-Key: YOUR_CLIENT_KEY</span></li>
+          </ul>
+        </li>
+      </ul>
+
+      <h3><span class="step-number">5</span> Test & Activate</h3>
+      <p>Send a test lead to verify everything works, then activate your Zap!</p>
+
+      <div class="highlight">
+        <strong>💡 Pro Tip:</strong> Use Zapier's "Formatter" step to clean phone numbers into E.164 format (+447491683261) for best results.
+      </div>
+    </div>
+
+    <!-- Examples -->
+    <div class="section">
+      <h2>📚 Integration Examples</h2>
+
+      <div class="example-card">
+        <h4>📋 Google Forms → AI Booking</h4>
+        <p><strong>Trigger:</strong> New form response</p>
+        <p><strong>Action:</strong> POST to Zapier webhook</p>
+        <p><strong>Map fields:</strong></p>
+        <ul>
+          <li>Form "Full Name" → <span class="inline-code">name</span></li>
+          <li>Form "Phone" → <span class="inline-code">phone</span></li>
+          <li>Form "Email" → <span class="inline-code">email</span></li>
+          <li>Static text "google_form" → <span class="inline-code">source</span></li>
+        </ul>
+      </div>
+
+      <div class="example-card">
+        <h4>📱 Facebook Lead Ads → AI Booking</h4>
+        <p><strong>Trigger:</strong> New lead</p>
+        <p><strong>Action:</strong> POST to Zapier webhook</p>
+        <p><strong>Map fields:</strong></p>
+        <ul>
+          <li>Lead "Full Name" → <span class="inline-code">name</span></li>
+          <li>Lead "Phone Number" → <span class="inline-code">phone</span></li>
+          <li>Lead "Email" → <span class="inline-code">email</span></li>
+          <li>Array: ["facebook", "hot"] → <span class="inline-code">tags</span></li>
+        </ul>
+      </div>
+
+      <div class="example-card">
+        <h4>📊 Google Sheets → AI Booking</h4>
+        <p><strong>Trigger:</strong> New row in spreadsheet</p>
+        <p><strong>Action:</strong> POST to Zapier webhook</p>
+        <p><strong>Map fields:</strong></p>
+        <ul>
+          <li>Column A "Name" → <span class="inline-code">name</span></li>
+          <li>Column B "Phone" → <span class="inline-code">phone</span></li>
+          <li>Column C "Email" → <span class="inline-code">email</span></li>
+          <li>Column D "Notes" → <span class="inline-code">notes</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Testing -->
+    <div class="section">
+      <h2>🧪 Testing</h2>
+      <p>Test your integration with cURL:</p>
+      <div class="code-block">
+<pre>curl -X POST https://ai-booking-mvp.onrender.com/api/webhooks/zapier \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -H "X-Client-Key: YOUR_CLIENT_KEY" \
+  -d '{
+    "name": "Test Lead",
+    "phone": "+447491683261",
+    "email": "test@example.com",
+    "tags": ["test"],
+    "source": "API Test"
+  }'</pre>
+      </div>
+
+      <p>Expected response:</p>
+      <div class="code-block">
+<pre>{
+  "success": true,
+  "message": "Lead imported successfully",
+  "leadId": "lead_xyz789",
+  "callScheduled": true
+}</pre>
+      </div>
+    </div>
+
+    <!-- Support -->
+    <div class="section">
+      <h2>💬 Need Help?</h2>
+      <p>If you have questions or need assistance setting up your Zapier integration:</p>
+      <ul>
+        <li>📧 Email: support@yourcompany.com</li>
+        <li>💬 Live chat in your dashboard</li>
+        <li>📖 Full API docs: <a href="/api-docs">View Documentation</a></li>
+      </ul>
+    </div>
+
+    <!-- Actions -->
+    <div style="margin-top: 48px; text-align: center;">
+      <a href="https://zapier.com" target="_blank" class="button">Open Zapier</a>
+      <a href="/dashboard/" class="button secondary">Back to Dashboard</a>
+    </div>
+  </div>
+</body>
+</html>
+
