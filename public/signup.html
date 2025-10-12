@@ -355,6 +355,12 @@
       border-color: #e2e8f0;
     }
 
+    .calendar-day.weekend.selected {
+      background: #667eea;
+      color: white;
+      border-color: #667eea;
+    }
+
     .calendar-day.weekend:hover {
       background: #f1f5f9;
       border-color: #cbd5e1;
@@ -1149,10 +1155,14 @@
             dayDiv.classList.add('today');
           }
           
-          // Check if it's a weekend
-          if (date.getDay() === 0 || date.getDay() === 6) {
-            dayDiv.classList.add('weekend');
-          }
+             // Check if it's a weekend
+             if (date.getDay() === 0 || date.getDay() === 6) {
+               dayDiv.classList.add('weekend');
+               // Weekends can be selected/deselected like any other date
+               if (selectedDates.has(dateStr)) {
+                 dayDiv.classList.add('selected');
+               }
+             }
           
           // Check if it's a UK holiday
           if (isUkHoliday(dateStr)) {
@@ -1184,7 +1194,7 @@
                 selectedDates.delete(dateStr);
               }
             } else {
-              // Handle regular date selection
+              // Handle regular date selection (including weekends)
               if (selectedDates.has(dateStr)) {
                 selectedDates.delete(dateStr);
                 dayDiv.classList.remove('selected');
