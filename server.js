@@ -3976,8 +3976,8 @@ async function getABTestResults(clientKey, experimentName) {
   }
 }
 
-// Performance optimization functions
-const cache = new Map();
+// Performance optimization functions (using imported cache from lib/cache.js)
+// Old cache code removed - now using centralized cache system
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 function getCacheKey(prefix, ...params) {
@@ -3985,22 +3985,13 @@ function getCacheKey(prefix, ...params) {
 }
 
 function getCached(key) {
-  const item = cache.get(key);
-  if (!item) return null;
-  
-  if (Date.now() > item.expires) {
-    cache.delete(key);
-    return null;
-  }
-  
-  return item.data;
+  // Use centralized cache system from lib/cache.js
+  return cache.get(key);
 }
 
 function setCache(key, data, ttl = CACHE_TTL) {
-  cache.set(key, {
-    data,
-    expires: Date.now() + ttl
-  });
+  // Use centralized cache system from lib/cache.js
+  cache.set(key, data, ttl);
 }
 
 function clearCache(pattern = null) {
