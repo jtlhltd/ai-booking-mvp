@@ -180,6 +180,11 @@
       background: #667eea;
     }
 
+    .legend-color.weekend {
+      background: #f8f9fa;
+      border-color: #6c757d;
+    }
+
     .legend-color.available {
       background: white;
     }
@@ -191,6 +196,22 @@
       margin-bottom: 20px;
       max-height: 600px;
       overflow-y: auto;
+    }
+
+    @media (max-width: 768px) {
+      .full-year-calendar {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+        max-height: 400px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .full-year-calendar {
+        grid-template-columns: 1fr;
+        gap: 6px;
+        max-height: 300px;
+      }
     }
 
     .month-calendar {
@@ -269,14 +290,29 @@
       font-weight: 600;
     }
 
-    .calendar-day.other-month {
-      color: #ccc;
-      background: #f9f9f9;
+    .calendar-day.empty {
+      background: transparent;
+      border: none;
+      cursor: default;
+    }
+
+    .calendar-day.empty:hover {
+      background: transparent;
+      border: none;
     }
 
     .calendar-day.today {
       border-color: #10b981;
       font-weight: 600;
+    }
+
+    .calendar-day.weekend {
+      background: #f8f9fa;
+      color: #6c757d;
+    }
+
+    .calendar-day.weekend:hover {
+      background: #e9ecef;
     }
 
     .day-option input, .time-slot input, .month-option input {
@@ -814,8 +850,9 @@
               <div class="yearly-header">
                 <h4>2025 Calendar - Click dates to block them:</h4>
                 <p class="calendar-legend">
-                  <span class="legend-item"><span class="legend-color uk-holiday"></span> UK Holiday (Pre-selected)</span>
-                  <span class="legend-item"><span class="legend-color selected"></span> Selected (Closed)</span>
+                  <span class="legend-item"><span class="legend-color uk-holiday"></span> UK Holiday</span>
+                  <span class="legend-item"><span class="legend-color selected"></span> Closed</span>
+                  <span class="legend-item"><span class="legend-color weekend"></span> Weekend</span>
                   <span class="legend-item"><span class="legend-color available"></span> Available</span>
                 </p>
               </div>
@@ -825,14 +862,15 @@
               </div>
               
               <div class="quick-select">
-                <button type="button" class="quick-btn" id="select-bank-holidays">Select All UK Holidays</button>
+                <button type="button" class="quick-btn" id="select-all">Select All</button>
+                <button type="button" class="quick-btn" id="select-bank-holidays">UK Holidays</button>
+                <button type="button" class="quick-btn" id="select-weekends">Weekends</button>
                 <button type="button" class="quick-btn" id="select-christmas">Christmas Week</button>
-                <button type="button" class="quick-btn" id="select-new-year">New Year Week</button>
                 <button type="button" class="quick-btn clear-btn">Clear All</button>
               </div>
               
               <div class="yearly-note">
-                <small>💡 Tip: UK holidays are pre-selected (red) but can be toggled. Click any date to mark it as closed.</small>
+                <small>💡 UK holidays are pre-selected (red) but can be toggled. Weekends are highlighted in grey. Use quick-select buttons or click individual dates to mark them as closed.</small>
               </div>
             </div>
           </div>
@@ -1027,12 +1065,10 @@
         const startDay = firstDay.getDay();
         const daysInMonth = lastDay.getDate();
         
-        // Previous month's days
-        const prevMonth = new Date(currentYear, month - 1, 0);
-        for (let i = startDay - 1; i >= 0; i--) {
+        // Empty cells for previous month's days (no overhangs)
+        for (let i = 0; i < startDay; i++) {
           const dayDiv = document.createElement('div');
-          dayDiv.className = 'calendar-day other-month';
-          dayDiv.textContent = prevMonth.getDate() - i;
+          dayDiv.className = 'calendar-day empty';
           daysDiv.appendChild(dayDiv);
         }
         
@@ -1048,6 +1084,11 @@
           const date = new Date(currentYear, month, day);
           if (date.toDateString() === today.toDateString()) {
             dayDiv.classList.add('today');
+          }
+          
+          // Check if it's a weekend
+          if (date.getDay() === 0 || date.getDay() === 6) {
+            dayDiv.classList.add('weekend');
           }
           
           // Check if it's a UK holiday
@@ -1094,13 +1135,12 @@
           daysDiv.appendChild(dayDiv);
         }
         
-        // Next month's days to fill the grid
+        // Empty cells to fill the grid (no overhangs)
         const totalCells = daysDiv.children.length;
         const remainingCells = 42 - totalCells; // 6 rows * 7 days
         for (let i = 1; i <= remainingCells; i++) {
           const dayDiv = document.createElement('div');
-          dayDiv.className = 'calendar-day other-month';
-          dayDiv.textContent = i;
+          dayDiv.className = 'calendar-day empty';
           daysDiv.appendChild(dayDiv);
         }
         
@@ -1110,12 +1150,41 @@
     }
 
     // Quick select buttons
+    document.getElementById('select-all').addEventListener('click', () => {
+      // Select all dates in 2025
+      for (let month = 0; month < 12; month++) {
+        const lastDay = new Date(currentYear, month + 1, 0).getDate();
+        for (let day = 1; day <= lastDay; day++) {
+          const dateStr = `${currentYear}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          selectedDates.add(dateStr);
+          deselectedHolidays.delete(dateStr);
+        }
+      }
+      generateCalendar();
+    });
+
     document.getElementById('select-bank-holidays').addEventListener('click', () => {
       // Select all UK holidays (they're already pre-selected by default)
       ukHolidays2025.forEach(date => {
         selectedDates.add(date);
         deselectedHolidays.delete(date);
       });
+      generateCalendar();
+    });
+
+    document.getElementById('select-weekends').addEventListener('click', () => {
+      // Select all weekends in 2025
+      for (let month = 0; month < 12; month++) {
+        const lastDay = new Date(currentYear, month + 1, 0).getDate();
+        for (let day = 1; day <= lastDay; day++) {
+          const date = new Date(currentYear, month, day);
+          if (date.getDay() === 0 || date.getDay() === 6) { // Sunday or Saturday
+            const dateStr = `${currentYear}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            selectedDates.add(dateStr);
+            deselectedHolidays.delete(dateStr); // Ensure holidays aren't deselected
+          }
+        }
+      }
       generateCalendar();
     });
 
