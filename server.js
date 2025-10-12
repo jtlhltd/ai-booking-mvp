@@ -68,6 +68,8 @@ import { nanoid } from 'nanoid';
 import rateLimit from 'express-rate-limit';
 import twilio from 'twilio';
 import { createHash } from 'crypto';
+import { performanceMiddleware, getPerformanceMonitor } from './lib/performance-monitor.js';
+import { cacheMiddleware, getCache } from './lib/cache.js';
 
 import { makeJwtAuth, insertEvent, freeBusy } from './gcal.js';
 import { init as initDb,  upsertFullClient, getFullClient, listFullClients, deleteClient, DB_PATH } from './db.js'; // SQLite-backed tenants
@@ -91,6 +93,13 @@ import vapiWebhooks from './routes/vapi-webhooks.js';
 
 
 const app = express();
+
+// Initialize performance monitoring and caching
+const performanceMonitor = getPerformanceMonitor();
+const cache = getCache();
+
+// Add performance monitoring middleware (tracks all API calls)
+app.use(performanceMiddleware(performanceMonitor));
 
 // API key guard middleware
 function requireApiKey(req, res, next) {
@@ -8757,8 +8766,49 @@ app.get('/monitor/sms-delivery', async (req, res) => {
   }
 });
 
-// Stats
-app.get('/api/stats', async (req, res) => {
+// Performance monitoring endpoints
+app.get('/api/performance/stats', (req, res) => {
+  try {
+    const stats = performanceMonitor.getStats();
+    res.json({ success: true, ...stats });
+  } catch (error) {
+    console.error('[PERF STATS ERROR]', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/performance/report', (req, res) => {
+  try {
+    const report = performanceMonitor.generateReport();
+    res.json({ success: true, report });
+  } catch (error) {
+    console.error('[PERF REPORT ERROR]', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/cache/stats', (req, res) => {
+  try {
+    const stats = cache.getStats();
+    res.json({ success: true, ...stats });
+  } catch (error) {
+    console.error('[CACHE STATS ERROR]', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/cache/clear', (req, res) => {
+  try {
+    cache.clear();
+    res.json({ success: true, message: 'Cache cleared successfully' });
+  } catch (error) {
+    console.error('[CACHE CLEAR ERROR]', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Stats (with caching)
+app.get('/api/stats', cacheMiddleware({ ttl: 60000 }), async (req, res) => {
   try {
     const clientKey = req.query.clientKey;
     const range = req.query.range || '30d';
