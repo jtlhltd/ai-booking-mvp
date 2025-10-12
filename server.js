@@ -107,7 +107,7 @@ function requireApiKey(req, res, next) {
   if (req.path.startsWith('/webhooks/twilio-status') || req.path.startsWith('/webhooks/twilio-inbound') || req.path.startsWith('/webhooks/twilio/sms-inbound') || req.path.startsWith('/webhooks/vapi') || req.path === '/webhook/sms-reply' || req.path === '/webhooks/sms') return next();
   if (req.path === '/api/test' || req.path === '/api/test-linkedin' || req.path === '/api/uk-business-search' || req.path === '/api/decision-maker-contacts' || req.path === '/api/industry-categories' || req.path === '/test-sms-pipeline' || req.path === '/sms-test' || req.path === '/api/initiate-lead-capture' || req.path === '/api/signup') return next();
   if (req.path === '/uk-business-search' || req.path === '/booking-simple.html') return next();
-  if (req.path.startsWith('/dashboard/') || req.path.startsWith('/settings/')) return next();
+  if (req.path.startsWith('/dashboard/') || req.path.startsWith('/settings/') || req.path.startsWith('/leads') || req.path === '/privacy.html' || req.path === '/privacy' || req.path === '/zapier-docs.html' || req.path === '/zapier') return next();
   if (!API_KEY) return res.status(500).json({ error: 'Server missing API_KEY' });
   const key = req.get('X-API-Key');
   if (key && key === API_KEY) return next();
@@ -11135,6 +11135,24 @@ app.get('/api/leads', async (req, res) => {
 // Client settings page
 app.get('/settings/:clientKey', (req, res) => {
   res.sendFile('public/settings.html', { root: '.' });
+});
+
+// Privacy & GDPR page
+app.get('/privacy.html', (req, res) => {
+  res.sendFile('public/privacy.html', { root: '.' });
+});
+
+app.get('/privacy', (req, res) => {
+  res.sendFile('public/privacy.html', { root: '.' });
+});
+
+// Zapier documentation page
+app.get('/zapier-docs.html', (req, res) => {
+  res.sendFile('public/zapier-docs.html', { root: '.' });
+});
+
+app.get('/zapier', (req, res) => {
+  res.sendFile('public/zapier-docs.html', { root: '.' });
 });
 
 // ============================================================================
