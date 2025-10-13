@@ -2580,7 +2580,16 @@ app.post('/api/book-demo', async (req, res) => {
     }
 
     // Use preferredTimes if provided, otherwise generate default slots
-    const slotsToUse = (preferredTimes && Array.isArray(preferredTimes) && preferredTimes.length > 0) ? preferredTimes : bookingSystem.generateTimeSlots(7);
+    let slotsToUse;
+    
+    if (preferredTimes && Array.isArray(preferredTimes) && preferredTimes.length > 0) {
+      slotsToUse = preferredTimes;
+    } else if (preferredTimes && typeof preferredTimes === 'object' && Object.keys(preferredTimes).length > 0) {
+      // Handle case where preferredTimes is an object with numeric keys instead of array
+      slotsToUse = Object.values(preferredTimes);
+    } else {
+      slotsToUse = bookingSystem.generateTimeSlots(7);
+    }
     
     console.log('[BOOKING DEMO] leadData:', leadData);
     console.log('[BOOKING DEMO] preferredTimes:', preferredTimes);
