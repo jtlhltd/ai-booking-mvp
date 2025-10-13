@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Booking Dashboard - AI Booking Solutions</title>
+    <title>Book a Demo - JTLH Media | Lead Follow-Up Service</title>
     <style>
         * {
             margin: 0;
@@ -28,20 +28,45 @@
         }
 
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
             color: white;
-            padding: 30px;
+            padding: 40px 30px;
             text-align: center;
+            position: relative;
+        }
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 20px;
+            background: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-weight: bold;
+            color: #2c3e50;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         }
 
         .header h1 {
-            font-size: 2.5rem;
+            font-size: 2.2rem;
             margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header .company-name {
+            font-size: 1.8rem;
+            margin-bottom: 5px;
+            color: #ecf0f1;
         }
 
         .header p {
             font-size: 1.1rem;
             opacity: 0.9;
+            max-width: 600px;
+            margin: 0 auto;
         }
 
         .content {
@@ -81,7 +106,7 @@
         .form-group select:focus,
         .form-group textarea:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: #2c3e50;
         }
 
         .form-row {
@@ -107,18 +132,18 @@
         }
 
         .time-slot:hover {
-            border-color: #667eea;
-            background: #f0f2ff;
+            border-color: #2c3e50;
+            background: #ecf0f1;
         }
 
         .time-slot.selected {
-            border-color: #667eea;
-            background: #667eea;
+            border-color: #2c3e50;
+            background: #2c3e50;
             color: white;
         }
 
         .btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
             color: white;
             border: none;
             padding: 15px 30px;
@@ -166,20 +191,112 @@
             border: 1px solid #bee5eb;
         }
 
+        .footer {
+            background: #f8f9fa;
+            padding: 30px;
+            text-align: center;
+            border-top: 1px solid #e1e5e9;
+        }
 
+        .footer h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+
+        .footer p {
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .contact-info {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-top: 20px;
+        }
+
+        .contact-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #2c3e50;
+        }
+
+        .benefits {
+            background: #f8f9fa;
+            padding: 30px;
+            margin-bottom: 30px;
+            border-radius: 10px;
+        }
+
+        .benefits h3 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .benefits-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .benefit-item {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .benefit-icon {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        .benefit-item h4 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .benefit-item p {
+            color: #666;
+            font-size: 0.9rem;
+        }
 
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>📅 Booking Dashboard</h1>
-            <p>Schedule demo calls with cold call leads</p>
+            <div class="logo">JTLH</div>
+            <div class="company-name">JTLH Media</div>
+            <h1>Book Your Demo Call</h1>
+            <p>Let's discuss how we can help your business convert more leads into booked appointments</p>
         </div>
 
         <div class="content">
+            <div class="benefits">
+                <h3>What You'll Get From This Demo</h3>
+                <div class="benefits-grid">
+                    <div class="benefit-item">
+                        <div class="benefit-icon">⚡</div>
+                        <h4>Instant Lead Response</h4>
+                        <p>See how we respond to every lead within 5 minutes</p>
+                    </div>
+                    <div class="benefit-item">
+                        <div class="benefit-icon">📈</div>
+                        <h4>Higher Conversion</h4>
+                        <p>Learn how to convert 3-5x more leads into appointments</p>
+                    </div>
+                    <div class="benefit-item">
+                        <div class="benefit-icon">🤖</div>
+                        <h4>AI-Powered Follow-up</h4>
+                        <p>Discover our automated lead nurturing system</p>
+                    </div>
+                </div>
+            </div>
+
             <div class="booking-form">
-                <h2>Book Demo Call</h2>
+                <h2>Schedule Your 15-Minute Demo</h2>
+                <p style="color: #666; margin-bottom: 25px;">Choose a convenient time to discuss how our lead follow-up service can help your business.</p>
                 <form id="bookingForm">
                     <div class="form-row">
                         <div class="form-group">
@@ -199,10 +316,28 @@
                         </div>
                     </div>
 
-                    <button type="submit" class="btn" id="bookBtn">Book Demo Call</button>
+                    <button type="submit" class="btn" id="bookBtn">Confirm Demo Booking</button>
                 </form>
 
                 <div id="status" class="status" style="display: none;"></div>
+            </div>
+
+            <div class="footer">
+                <h3>JTLH Media</h3>
+                <p>Professional Lead Follow-Up Services</p>
+                <div class="contact-info">
+                    <div class="contact-item">
+                        <span>📧</span>
+                        <span>jonah@jtlhmedia.com</span>
+                    </div>
+                    <div class="contact-item">
+                        <span>🌐</span>
+                        <span>www.jtlhmedia.com</span>
+                    </div>
+                </div>
+                <p style="margin-top: 20px; font-size: 0.9rem; color: #999;">
+                    Transform your lead conversion with AI-powered follow-up. Never miss another opportunity.
+                </p>
             </div>
 
         </div>
@@ -321,7 +456,7 @@
                 showStatus('error', 'Error booking demo: ' + error.message);
             } finally {
                 bookBtn.disabled = false;
-                bookBtn.textContent = 'Book Demo Call';
+                bookBtn.textContent = 'Confirm Demo Booking';
             }
         });
 
