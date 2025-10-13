@@ -13,7 +13,7 @@
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #000000;
             min-height: 100vh;
             padding: 20px;
         }
@@ -28,26 +28,45 @@
         }
 
         .header {
-            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            background: #000000;
             color: white;
             padding: 40px 30px;
             text-align: center;
             position: relative;
+            border-bottom: 1px solid #333;
         }
 
-        .logo {
-            width: 80px;
-            height: 80px;
-            margin: 0 auto 20px;
-            background: white;
-            border-radius: 50%;
+        .logo-container {
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 2rem;
-            font-weight: bold;
-            color: #2c3e50;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            gap: 20px;
+        }
+
+        .logo {
+            width: 60px;
+            height: 60px;
+            background: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .logo::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: 
+                linear-gradient(45deg, transparent 40%, #000 40%, #000 60%, transparent 60%),
+                linear-gradient(-45deg, transparent 40%, #000 40%, #000 60%, transparent 60%),
+                linear-gradient(135deg, transparent 40%, #000 40%, #000 60%, transparent 60%),
+                linear-gradient(-135deg, transparent 40%, #000 40%, #000 60%, transparent 60%);
+            background-size: 50% 50%;
+            background-position: 0 0, 100% 0, 0 100%, 100% 100%;
+            background-repeat: no-repeat;
         }
 
         .header h1 {
@@ -56,10 +75,18 @@
             font-weight: 700;
         }
 
-        .header .company-name {
-            font-size: 1.8rem;
-            margin-bottom: 5px;
-            color: #ecf0f1;
+        .company-name {
+            font-size: 1.5rem;
+            font-weight: bold;
+            letter-spacing: 2px;
+            color: white;
+        }
+
+        .tagline {
+            font-size: 0.9rem;
+            letter-spacing: 1px;
+            color: #ccc;
+            margin-top: 5px;
         }
 
         .header p {
@@ -106,7 +133,7 @@
         .form-group select:focus,
         .form-group textarea:focus {
             outline: none;
-            border-color: #2c3e50;
+            border-color: #000000;
         }
 
         .form-row {
@@ -132,30 +159,32 @@
         }
 
         .time-slot:hover {
-            border-color: #2c3e50;
-            background: #ecf0f1;
+            border-color: #000000;
+            background: #f0f0f0;
         }
 
         .time-slot.selected {
-            border-color: #2c3e50;
-            background: #2c3e50;
+            border-color: #000000;
+            background: #000000;
             color: white;
         }
 
         .btn {
-            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            background: #000000;
             color: white;
-            border: none;
+            border: 2px solid #000000;
             padding: 15px 30px;
             border-radius: 8px;
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
-            transition: transform 0.3s ease;
+            transition: all 0.3s ease;
             width: 100%;
         }
 
         .btn:hover {
+            background: white;
+            color: #000000;
             transform: translateY(-2px);
         }
 
@@ -199,7 +228,7 @@
         }
 
         .footer h3 {
-            color: #2c3e50;
+            color: #000000;
             margin-bottom: 15px;
         }
 
@@ -219,7 +248,7 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            color: #2c3e50;
+            color: #000000;
         }
 
         .benefits {
@@ -230,7 +259,7 @@
         }
 
         .benefits h3 {
-            color: #2c3e50;
+            color: #000000;
             margin-bottom: 20px;
             text-align: center;
         }
@@ -252,7 +281,7 @@
         }
 
         .benefit-item h4 {
-            color: #2c3e50;
+            color: #000000;
             margin-bottom: 10px;
         }
 
@@ -266,8 +295,13 @@
 <body>
     <div class="container">
         <div class="header">
-            <div class="logo">JTLH</div>
-            <div class="company-name">JTLH Media</div>
+            <div class="logo-container">
+                <div class="logo"></div>
+                <div>
+                    <div class="company-name">JTLH MEDIA</div>
+                    <div class="tagline">AI POWERED LEAD BOOKING DONE FOR YOU</div>
+                </div>
+            </div>
             <h1>Book Your Demo Call</h1>
             <p>Let's discuss how we can help your business convert more leads into booked appointments</p>
         </div>
