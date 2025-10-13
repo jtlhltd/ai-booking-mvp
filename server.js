@@ -2584,9 +2584,15 @@ app.post('/api/book-demo', async (req, res) => {
     
     if (preferredTimes && Array.isArray(preferredTimes) && preferredTimes.length > 0) {
       slotsToUse = preferredTimes;
-    } else if (preferredTimes && typeof preferredTimes === 'object' && Object.keys(preferredTimes).length > 0) {
+    } else if (preferredTimes && typeof preferredTimes === 'object') {
       // Handle case where preferredTimes is an object with numeric keys instead of array
-      slotsToUse = Object.values(preferredTimes);
+      const values = [];
+      for (const key in preferredTimes) {
+        if (preferredTimes.hasOwnProperty(key)) {
+          values.push(preferredTimes[key]);
+        }
+      }
+      slotsToUse = values.length > 0 ? values : bookingSystem.generateTimeSlots(7);
     } else {
       slotsToUse = bookingSystem.generateTimeSlots(7);
     }
