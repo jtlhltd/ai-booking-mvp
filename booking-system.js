@@ -87,6 +87,8 @@ class BookingSystem {
 
   async bookDemo(leadData, preferredTimes = [], smsPipeline = null) {
     try {
+      console.log('[BOOKING SYSTEM] bookDemo called with:', { leadData, preferredTimes });
+      
       const booking = {
         id: `demo_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         lead: leadData,
@@ -98,9 +100,16 @@ class BookingSystem {
 
       // Try to book the first available time
       let bookedTime = null;
+      console.log('[BOOKING SYSTEM] Checking availability for', preferredTimes.length, 'time slots');
+      
       for (const timeSlot of preferredTimes) {
-        if (await this.isTimeSlotAvailable(timeSlot)) {
+        console.log('[BOOKING SYSTEM] Checking slot:', timeSlot);
+        const isAvailable = await this.isTimeSlotAvailable(timeSlot);
+        console.log('[BOOKING SYSTEM] Slot available:', isAvailable);
+        
+        if (isAvailable) {
           bookedTime = timeSlot;
+          console.log('[BOOKING SYSTEM] Selected slot:', bookedTime);
           break;
         }
       }
@@ -384,11 +393,16 @@ Notes: Cold call lead - interested in AI booking service
   }
 
   async isTimeSlotAvailable(timeSlot) {
+    console.log('[BOOKING SYSTEM] isTimeSlotAvailable called with:', timeSlot);
+    
     if (!this.calendar) {
+      console.log('[BOOKING SYSTEM] Calendar not configured, assuming available');
       return true; // Assume available if calendar not configured
     }
 
     try {
+      console.log('[BOOKING SYSTEM] Checking calendar for conflicts between:', timeSlot.startDateTime, 'and', timeSlot.endDateTime);
+      
       const response = await this.calendar.events.list({
         calendarId: 'primary',
         timeMin: timeSlot.startDateTime,
@@ -397,7 +411,9 @@ Notes: Cold call lead - interested in AI booking service
         orderBy: 'startTime'
       });
 
-      return response.data.items.length === 0;
+      const isAvailable = response.data.items.length === 0;
+      console.log('[BOOKING SYSTEM] Found', response.data.items.length, 'conflicting events. Available:', isAvailable);
+      return isAvailable;
     } catch (error) {
       console.error('❌ Error checking calendar availability:', error.message);
       return false;

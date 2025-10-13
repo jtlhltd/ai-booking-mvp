@@ -2579,10 +2579,14 @@ app.post('/api/book-demo', async (req, res) => {
       });
     }
 
-    // Generate time slots if not provided
-    const timeSlots = (preferredTimes && Array.isArray(preferredTimes)) ? preferredTimes : bookingSystem.generateTimeSlots(7);
+    // Use preferredTimes if provided, otherwise generate default slots
+    const slotsToUse = (preferredTimes && Array.isArray(preferredTimes) && preferredTimes.length > 0) ? preferredTimes : bookingSystem.generateTimeSlots(7);
     
-    const result = await bookingSystem.bookDemo(leadData, timeSlots, smsEmailPipeline);
+    console.log('[BOOKING DEMO] leadData:', leadData);
+    console.log('[BOOKING DEMO] preferredTimes:', preferredTimes);
+    console.log('[BOOKING DEMO] slotsToUse:', slotsToUse);
+    
+    const result = await bookingSystem.bookDemo(leadData, slotsToUse, smsEmailPipeline);
     
     res.json(result);
     
