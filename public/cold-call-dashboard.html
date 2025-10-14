@@ -411,11 +411,13 @@
             loading.style.display = 'block';
             
             try {
+                const apiKey = prompt('Enter API_KEY from your .env file:') || 'test-key';
+                
                 const response = await fetch('/admin/vapi/cold-call-assistant', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-API-Key': 'your-api-key-here' // Replace with actual API key
+                        'X-API-Key': apiKey
                     }
                 });
                 
@@ -453,11 +455,13 @@
             loading.style.display = 'block';
             
             try {
+                const apiKey = prompt('Enter API_KEY from your .env file:') || 'test-key';
+                
                 const response = await fetch('/admin/vapi/cold-call-campaign', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-API-Key': 'your-api-key-here' // Replace with actual API key
+                        'X-API-Key': apiKey
                     },
                     body: JSON.stringify({
                         assistantId: document.getElementById('assistantId').value,
@@ -484,45 +488,115 @@
             }
         });
         
-        // Load businesses from UK Business Search
+        // Load businesses from UK Business Search or test-leads.csv
         async function loadBusinessesFromSearch() {
             try {
-                // This would typically load from a stored search or make a new search
-                // For now, we'll use sample data
-                const sampleBusinesses = [
+                // Load from your test-leads.csv (converted to JSON)
+                // Run: node load-prospects-to-dashboard.js
+                // Then paste the generated businesses array here:
+                
+                const prospectsFromCSV = [
                     {
-                        id: '1',
-                        name: 'Scott Arms Dental Practice',
-                        phone: '0121 357 5000',
-                        email: 'info@scottarmsdentalpractice.co.uk',
-                        address: '914-916 Walsall Rd, Birmingham B42 1TG, UK',
-                        website: 'http://www.scottarmsdentalpractice.com',
+                        id: 'prospect-1',
+                        name: 'JTLH Media',
+                        phone: '555-0100',
+                        email: 'jonah@jtlhmedia.com',
+                        address: '',
+                        website: 'https://jtlhmedia.com',
                         decisionMaker: {
-                            name: 'Dr. Sarah Johnson',
-                            role: 'Practice Owner',
-                            email: 'sarah@scottarmsdentalpractice.co.uk',
-                            phone: '0121 357 5001'
-                        }
+                            name: 'Jonah Hughes',
+                            role: 'Owner',
+                            email: 'jonah@jtlhmedia.com',
+                            phone: '555-0100'
+                        },
+                        industry: 'Marketing Services',
+                        notes: 'Testing email templates'
                     },
                     {
-                        id: '2',
-                        name: 'Covent Garden Dental Practice',
-                        phone: '020 7836 9161',
-                        email: 'info@coventgardendentalpractice.co.uk',
-                        address: '61G Odhams Walk, London WC2H 9SD, UK',
-                        website: 'https://coventgardendentalpractice.co.uk',
+                        id: 'prospect-2',
+                        name: 'Smith & Associates',
+                        phone: '555-0101',
+                        email: 'test1@example.com',
+                        address: '',
+                        website: 'https://smithlaw.com',
                         decisionMaker: {
-                            name: 'Dr. Michael Brown',
-                            role: 'Practice Owner',
-                            email: 'michael@coventgardendentalpractice.co.uk',
-                            phone: '020 7836 9162'
-                        }
+                            name: 'John Smith',
+                            role: 'Owner',
+                            email: 'test1@example.com',
+                            phone: '555-0101'
+                        },
+                        industry: 'Legal Services',
+                        notes: 'Interested in lead follow-up services'
+                    },
+                    {
+                        id: 'prospect-3',
+                        name: 'Johnson Dental',
+                        phone: '555-0102',
+                        email: 'test2@example.com',
+                        address: '',
+                        website: 'https://johnsondental.com',
+                        decisionMaker: {
+                            name: 'Sarah Johnson',
+                            role: 'Owner',
+                            email: 'test2@example.com',
+                            phone: '555-0102'
+                        },
+                        industry: 'Healthcare',
+                        notes: 'Looking for appointment booking solution'
+                    },
+                    {
+                        id: 'prospect-4',
+                        name: 'Chen Construction',
+                        phone: '555-0103',
+                        email: 'test3@example.com',
+                        address: '',
+                        website: 'https://chenconstruction.com',
+                        decisionMaker: {
+                            name: 'Mike Chen',
+                            role: 'Owner',
+                            email: 'test3@example.com',
+                            phone: '555-0103'
+                        },
+                        industry: 'Construction',
+                        notes: 'Needs help with lead conversion'
+                    },
+                    {
+                        id: 'prospect-5',
+                        name: 'Williams Accounting',
+                        phone: '555-0104',
+                        email: 'test4@example.com',
+                        address: '',
+                        website: 'https://williamsaccounting.com',
+                        decisionMaker: {
+                            name: 'Lisa Williams',
+                            role: 'Owner',
+                            email: 'test4@example.com',
+                            phone: '555-0104'
+                        },
+                        industry: 'Professional Services',
+                        notes: 'Wants to improve follow-up process'
+                    },
+                    {
+                        id: 'prospect-6',
+                        name: 'Brown Real Estate',
+                        phone: '555-0105',
+                        email: 'test5@example.com',
+                        address: '',
+                        website: 'https://brownrealestate.com',
+                        decisionMaker: {
+                            name: 'David Brown',
+                            role: 'Owner',
+                            email: 'test5@example.com',
+                            phone: '555-0105'
+                        },
+                        industry: 'Real Estate',
+                        notes: 'Interested in AI-powered booking'
                     }
                 ];
                 
-                selectedBusinesses = sampleBusinesses;
+                selectedBusinesses = prospectsFromCSV;
                 updateBusinessList();
-                showAlert('success', `Loaded ${sampleBusinesses.length} businesses from search`);
+                showAlert('success', `Loaded ${prospectsFromCSV.length} prospects from test-leads.csv`);
                 
             } catch (error) {
                 showAlert('error', `Failed to load businesses: ${error.message}`);

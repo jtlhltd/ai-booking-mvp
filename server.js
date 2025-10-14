@@ -5274,9 +5274,13 @@ app.get('/api/test-companies-house-officers/:companyNumber', async (req, res) =>
 });
 
 // UK Business Search endpoint (PUBLIC - no auth required) - WITH REAL API
+// FILTERS FOR MOBILE NUMBERS ONLY BY DEFAULT
 app.post('/api/uk-business-search', async (req, res) => {
   try {
     const { query, filters = {} } = req.body;
+    
+    // Default to mobiles only unless explicitly disabled
+    const mobilesOnly = filters.mobilesOnly !== false;
     
     if (!query) {
       return res.status(400).json({ error: 'Query is required' });
@@ -5310,13 +5314,27 @@ app.post('/api/uk-business-search', async (req, res) => {
       results = generateUKBusinesses(query, filters);
     }
     
+    // Filter for mobile numbers only if requested
+    if (mobilesOnly) {
+      const beforeFilter = results.length;
+      results = results.filter(business => {
+        const hasMobile = isMobileNumber(business.phone);
+        if (!hasMobile) {
+          console.log(`[MOBILE FILTER] Rejected ${business.name}: ${business.phone} (landline)`);
+        }
+        return hasMobile;
+      });
+      console.log(`[MOBILE FILTER] Filtered ${beforeFilter} → ${results.length} businesses (mobiles only)`);
+    }
+    
     res.json({
       success: true,
       results,
       count: results.length,
       query,
-      filters,
+      filters: { ...filters, mobilesOnly },
       usingRealData,
+      mobilesFiltered: mobilesOnly,
       timestamp: new Date().toISOString()
     });
   } catch (error) {

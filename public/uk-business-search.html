@@ -794,6 +794,17 @@
                         <option value="500">500 Results</option>
                     </select>
                 </div>
+                
+                <div class="filter-group">
+                    <label class="filter-label">Phone Type</label>
+                    <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0;">
+                        <input type="checkbox" id="mobilesOnlyFilter" checked style="width: 18px; height: 18px; cursor: pointer;">
+                        <label for="mobilesOnlyFilter" style="cursor: pointer; margin: 0; font-weight: normal;">
+                            📱 Mobile Numbers Only (07xxx)
+                        </label>
+                    </div>
+                    <small style="color: #64748b; font-size: 0.8rem;">Uncheck to include landlines</small>
+                </div>
             </div>
         </div>
         
@@ -974,6 +985,7 @@
             const location = document.getElementById('locationFilter').value;
             const contact = document.getElementById('contactFilter').value;
             const limit = parseInt(document.getElementById('limitFilter').value);
+            const mobilesOnly = document.getElementById('mobilesOnlyFilter') ? document.getElementById('mobilesOnlyFilter').checked : true;
             
             if (!query) {
                 alert('Please enter a search term');
@@ -984,12 +996,12 @@
             const minRating = document.getElementById('minRatingFilter') ? document.getElementById('minRatingFilter').value : '';
             const sortBy = document.getElementById('sortByFilter') ? document.getElementById('sortByFilter').value : 'leadScore';
             
-            performSearch(query, location, contact, limit, category, minRating, sortBy);
+            performSearch(query, location, contact, limit, category, minRating, sortBy, mobilesOnly);
         }
         
         // Perform search
-        async function performSearch(query, location, contact, limit, category, minRating, sortBy) {
-            console.log('performSearch called with:', { query, location, contact, limit, category, minRating, sortBy });
+        async function performSearch(query, location, contact, limit, category, minRating, sortBy, mobilesOnly = true) {
+            console.log('performSearch called with:', { query, location, contact, limit, category, minRating, sortBy, mobilesOnly });
             showLoading();
             searchCount++;
             
@@ -1004,7 +1016,10 @@
                         industry: category || 'dentist',
                         location: location,
                         contactInfo: contact,
-                        limit: limit
+                        limit: limit,
+                        filters: {
+                            mobilesOnly: mobilesOnly
+                        }
                     })
                 });
                 
