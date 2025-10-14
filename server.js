@@ -1441,7 +1441,10 @@ app.post('/api/search-google-places', async (req, res) => {
   try {
     const { query, location, maxResults = 20, businessSize, mobileOnly, decisionMakerTitles } = req.body;
     
+    console.log('[SEARCH REQUEST] Parsed parameters:', { query, location, maxResults, businessSize, mobileOnly, decisionMakerTitles });
+    
     if (!query || !location) {
+      console.log('[SEARCH REQUEST] Missing required fields:', { query: !!query, location: !!location });
       return res.status(400).json({
         success: false,
         error: 'Query and location are required'
