@@ -203,6 +203,11 @@ app.get('/uk-business-search', (req, res) => {
   res.sendFile(path.join(process.cwd(), 'public', 'uk-business-search.html'));
 });
 
+// Serve Decision Maker Finder page (finds owner mobile numbers)
+app.get('/decision-maker-finder', (req, res) => {
+  res.sendFile(path.join(process.cwd(), 'public', 'decision-maker-finder.html'));
+});
+
 // Serve Cold Call Dashboard page
 app.get('/cold-call-dashboard', (req, res) => {
   res.sendFile(path.join(process.cwd(), 'public', 'cold-call-dashboard.html'));
