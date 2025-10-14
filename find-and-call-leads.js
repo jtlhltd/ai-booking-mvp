@@ -42,9 +42,53 @@ async function findLeads(query) {
     }
     
     const data = await response.json();
-    const businesses = data.businesses || [];
+    let businesses = data.businesses || [];
     
     console.log(`✅ Found ${businesses.length} businesses!\n`);
+    
+    // Step 1.5: Find decision maker mobile numbers for each business
+    console.log('🔍 Finding decision maker mobile numbers...\n');
+    
+    for (let i = 0; i < businesses.length; i++) {
+      const business = businesses[i];
+      console.log(`  ${i + 1}/${businesses.length} Searching for ${business.name} owner's mobile...`);
+      
+      try {
+        const dmResponse = await fetch(`${BASE_URL}/api/decision-maker-contacts`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            business: {
+              name: business.name,
+              website: business.website,
+              address: business.address
+            },
+            industry: business.industry || 'business',
+            targetRole: 'Owner'
+          })
+        });
+        
+        if (dmResponse.ok) {
+          const dmData = await dmResponse.json();
+          if (dmData.contacts && dmData.contacts.primary && dmData.contacts.primary.length > 0) {
+            const primaryContact = dmData.contacts.primary[0];
+            if (primaryContact.phone && primaryContact.phone.includes('07')) {
+              business.phone = primaryContact.phone; // Replace with mobile
+              business.decisionMaker = primaryContact;
+              console.log(`     ✅ Found mobile: ${primaryContact.phone} (${primaryContact.name})`);
+            }
+          }
+        }
+      } catch (error) {
+        console.log(`     ❌ No mobile found for ${business.name}`);
+      }
+    }
+    
+    // Filter to only businesses with mobiles
+    businesses = businesses.filter(b => b.phone && b.phone.includes('07'));
+    console.log(`\n✅ Final: ${businesses.length} businesses with decision maker mobiles!\n`);
     
     // Display found businesses
     businesses.forEach((b, i) => {
