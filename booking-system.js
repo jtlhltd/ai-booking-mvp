@@ -19,6 +19,13 @@ class BookingSystem {
           // Use service account authentication (same as working server endpoints)
           const privateKey = process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n');
           
+          // Ensure the private key has proper formatting
+          if (!privateKey.includes('BEGIN PRIVATE KEY')) {
+            throw new Error('Invalid private key format - missing BEGIN PRIVATE KEY');
+          }
+          
+          console.log('[BOOKING SYSTEM] Private key format check passed');
+          
           const auth = new google.auth.GoogleAuth({
             credentials: {
               type: 'service_account',
