@@ -26,16 +26,15 @@ class BookingSystem {
           
           console.log('[BOOKING SYSTEM] Private key format check passed');
           
-          const auth = new google.auth.GoogleAuth({
-            credentials: {
-              client_email: process.env.GOOGLE_CLIENT_EMAIL,
-              private_key: privateKey,
-            },
-            scopes: [
+          const auth = new google.auth.JWT(
+            process.env.GOOGLE_CLIENT_EMAIL,
+            null,
+            privateKey,
+            [
               'https://www.googleapis.com/auth/calendar',
               'https://www.googleapis.com/auth/calendar.events'
             ]
-          });
+          );
           
           this.calendar = google.calendar({ version: 'v3', auth });
           console.log('✅ Google Calendar initialized with service account credentials');
