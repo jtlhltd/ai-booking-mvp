@@ -38,6 +38,12 @@ class BookingSystem {
           console.log('✅ Google Calendar initialized with existing credentials');
         } catch (error) {
           console.log('⚠️ Google Calendar initialization failed:', error.message);
+          console.log('   Error details:', {
+            name: error.name,
+            code: error.code,
+            status: error.status,
+            response: error.response?.data
+          });
           this.calendar = null;
         }
       } else {
@@ -440,6 +446,37 @@ Notes: Cold call lead - interested in AI booking service
       console.error('❌ Error checking calendar availability:', error.message);
       console.log('[BOOKING SYSTEM] Calendar check failed, assuming available for business hour slot');
       return true; // Assume available if calendar check fails
+    }
+  }
+
+  async testCalendarConnection() {
+    console.log('[BOOKING SYSTEM] Testing calendar connection...');
+    
+    if (!this.calendar) {
+      console.log('[BOOKING SYSTEM] Calendar not initialized');
+      return { success: false, error: 'Calendar not initialized' };
+    }
+
+    try {
+      // Test by listing calendars
+      const response = await this.calendar.calendarList.list();
+      console.log('[BOOKING SYSTEM] Calendar test successful:', response.data.items?.length || 0, 'calendars found');
+      return { 
+        success: true, 
+        calendars: response.data.items?.length || 0,
+        message: 'Calendar connection successful'
+      };
+    } catch (error) {
+      console.error('[BOOKING SYSTEM] Calendar test failed:', error.message);
+      return { 
+        success: false, 
+        error: error.message,
+        details: {
+          name: error.name,
+          code: error.code,
+          status: error.status
+        }
+      };
     }
   }
 

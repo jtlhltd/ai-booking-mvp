@@ -8146,6 +8146,28 @@ app.get('/admin/performance/system/overview', async (req, res) => {
   }
 });
 
+// Test booking system calendar connection
+app.get('/test-booking-calendar', async (req, res) => {
+  try {
+    if (!bookingSystem) {
+      return res.status(503).json({ 
+        success: false, 
+        message: 'Booking system not available' 
+      });
+    }
+
+    const result = await bookingSystem.testCalendarConnection();
+    res.json(result);
+    
+  } catch (error) {
+    console.error('[BOOKING CALENDAR TEST ERROR]', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Google Calendar Test Endpoints
 // Test calendar booking
 app.post('/test-calendar-booking', async (req, res) => {
