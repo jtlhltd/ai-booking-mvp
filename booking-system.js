@@ -14,7 +14,7 @@ class BookingSystem {
   async initializeServices() {
     try {
       // Initialize Google Calendar with service account auth
-      if (false && process.env.GOOGLE_CLIENT_EMAIL && (process.env.GOOGLE_PRIVATE_KEY || process.env.GOOGLE_PRIVATE_KEY_B64)) {
+      if (process.env.GOOGLE_CLIENT_EMAIL && (process.env.GOOGLE_PRIVATE_KEY || process.env.GOOGLE_PRIVATE_KEY_B64)) {
         try {
           // Use JWT authentication (same as working server endpoints)
           let privateKey = process.env.GOOGLE_PRIVATE_KEY || '';
@@ -39,6 +39,13 @@ class BookingSystem {
           }
           
           console.log('[BOOKING SYSTEM] Private key format check passed');
+          console.log('[BOOKING SYSTEM] Credentials summary:', {
+            clientEmail: process.env.GOOGLE_CLIENT_EMAIL,
+            privateKeyLength: privateKey.length,
+            privateKeyStart: privateKey.substring(0, 50) + '...',
+            privateKeyEnd: '...' + privateKey.substring(privateKey.length - 50),
+            calendarId: process.env.GOOGLE_CALENDAR_ID || 'primary'
+          });
           
           const auth = new google.auth.JWT(
             process.env.GOOGLE_CLIENT_EMAIL,
