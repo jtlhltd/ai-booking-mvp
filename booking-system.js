@@ -337,7 +337,7 @@ Notes: Cold call lead - interested in AI booking service
     // Send confirmation email to lead
     await this.sendNotificationEmail({
       to: lead.email,
-      subject: `Demo Call Confirmed - AI Booking Solutions`,
+      subject: `Demo Call Confirmed - JTLH Media`,
       html: `
         <h2>Demo Call Confirmed!</h2>
         <p>Hi ${lead.decisionMaker},</p>
@@ -357,7 +357,7 @@ Notes: Cold call lead - interested in AI booking service
           <li>Next steps discussion</li>
         </ul>
         <p>If you need to reschedule, please reply to this email or call us.</p>
-        <p>Best regards,<br>Sarah<br>AI Booking Solutions</p>
+        <p>Best regards,<br>Jonah<br>JTLH Media</p>
       `
     });
 
@@ -384,7 +384,7 @@ Notes: Cold call lead - interested in AI booking service
 
     try {
       await this.emailTransporter.sendMail({
-        from: process.env.EMAIL_USER,
+        from: process.env.BUSINESS_EMAIL || process.env.EMAIL_USER || 'noreply@jtlhmedia.com',
         to: to,
         subject: subject,
         html: html
@@ -420,7 +420,7 @@ Notes: Cold call lead - interested in AI booking service
 
     await this.sendNotificationEmail({
       to: leadData.email,
-      subject: `Follow-up: Demo Call Scheduling - AI Booking Solutions`,
+      subject: `Follow-up: Demo Call Scheduling - JTLH Media`,
       html: `
         <h2>Demo Call Follow-up</h2>
         <p>Hi ${leadData.decisionMaker},</p>
