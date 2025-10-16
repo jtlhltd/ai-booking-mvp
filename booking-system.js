@@ -395,8 +395,25 @@ Notes: Cold call lead - interested in AI booking service
   async isTimeSlotAvailable(timeSlot) {
     console.log('[BOOKING SYSTEM] isTimeSlotAvailable called with:', timeSlot);
     
+    // Check if the slot time is during business hours (9 AM - 5 PM, Mon-Fri)
+    const slotDate = new Date(timeSlot.startDateTime);
+    const dayOfWeek = slotDate.getDay(); // 0 = Sunday, 6 = Saturday
+    const hour = slotDate.getHours();
+    
+    // Skip weekends
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      console.log('[BOOKING SYSTEM] Slot is on weekend, not available');
+      return false;
+    }
+    
+    // Check if slot is during business hours (9 AM - 5 PM)
+    if (hour < 9 || hour >= 17) {
+      console.log('[BOOKING SYSTEM] Slot is outside business hours (9 AM - 5 PM), not available');
+      return false;
+    }
+    
     if (!this.calendar) {
-      console.log('[BOOKING SYSTEM] Calendar not configured, assuming available');
+      console.log('[BOOKING SYSTEM] Calendar not configured, assuming available for business hour slot');
       return true; // Assume available if calendar not configured
     }
 
@@ -416,7 +433,8 @@ Notes: Cold call lead - interested in AI booking service
       return isAvailable;
     } catch (error) {
       console.error('❌ Error checking calendar availability:', error.message);
-      return false;
+      console.log('[BOOKING SYSTEM] Calendar check failed, assuming available for business hour slot');
+      return true; // Assume available if calendar check fails
     }
   }
 
@@ -424,12 +442,17 @@ Notes: Cold call lead - interested in AI booking service
     const slots = [];
     const now = new Date();
     
+    console.log('[BOOKING SYSTEM] Generating time slots for', days, 'days starting from:', now.toISOString());
+    
     for (let i = 1; i <= days; i++) {
       const date = new Date(now);
       date.setDate(now.getDate() + i);
       
       // Skip weekends
-      if (date.getDay() === 0 || date.getDay() === 6) continue;
+      if (date.getDay() === 0 || date.getDay() === 6) {
+        console.log('[BOOKING SYSTEM] Skipping weekend:', date.toLocaleDateString('en-GB'));
+        continue;
+      }
       
       // Generate time slots for business hours (9 AM - 5 PM)
       for (let hour = 9; hour <= 16; hour++) {
@@ -439,16 +462,20 @@ Notes: Cold call lead - interested in AI booking service
         const endTime = new Date(date);
         endTime.setHours(hour + 1, 0, 0, 0);
         
-        slots.push({
+        const slot = {
           date: date.toLocaleDateString('en-GB'),
           startTime: startTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
           endTime: endTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
           startDateTime: startTime.toISOString(),
           endDateTime: endTime.toISOString()
-        });
+        };
+        
+        slots.push(slot);
+        console.log('[BOOKING SYSTEM] Generated slot:', slot.date, slot.startTime, '-', slot.endTime);
       }
     }
     
+    console.log('[BOOKING SYSTEM] Generated', slots.length, 'total slots');
     return slots;
   }
 }
