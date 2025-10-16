@@ -14,7 +14,7 @@ class BookingSystem {
   async initializeServices() {
     try {
       // Initialize Google Calendar with service account auth
-      if (process.env.GOOGLE_CLIENT_EMAIL && (process.env.GOOGLE_PRIVATE_KEY || process.env.GOOGLE_PRIVATE_KEY_B64)) {
+      if (false && process.env.GOOGLE_CLIENT_EMAIL && (process.env.GOOGLE_PRIVATE_KEY || process.env.GOOGLE_PRIVATE_KEY_B64)) {
         try {
           // Use JWT authentication (same as working server endpoints)
           let privateKey = process.env.GOOGLE_PRIVATE_KEY || '';
