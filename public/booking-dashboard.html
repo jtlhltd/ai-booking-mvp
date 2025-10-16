@@ -330,6 +330,11 @@
                     </div>
 
                     <div class="form-group">
+                        <label for="email">Email Address</label>
+                        <input type="email" id="email" name="email" required placeholder="your@email.com">
+                    </div>
+
+                    <div class="form-group">
                         <label>Available Time Slots</label>
                         <div class="time-slots" id="timeSlots">
                             <div class="time-slot" data-slot="loading">Loading available slots...</div>
@@ -436,7 +441,7 @@
             const leadData = {
                 businessName: formData.get('businessName'),
                 decisionMaker: formData.get('decisionMaker'),
-                email: urlParams.get('email') || 'jonah@jtlhmedia.com',
+                email: formData.get('email') || urlParams.get('email') || 'jonah@jtlhmedia.com',
                 phoneNumber: urlParams.get('phone') || '+447000000000',
                 industry: urlParams.get('industry') || 'business',
                 location: urlParams.get('location') || 'UK'
