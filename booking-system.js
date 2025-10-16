@@ -276,7 +276,7 @@ Notes: Cold call lead - interested in AI booking service
 
     // Send email to you
     await this.sendNotificationEmail({
-      to: process.env.YOUR_EMAIL,
+      to: process.env.YOUR_EMAIL || 'jonah@jtlhmedia.com',
       subject: `🎉 New Demo Booked - ${lead.businessName}`,
       html: `
         <h2>New Demo Call Booked!</h2>
@@ -325,7 +325,7 @@ Notes: Cold call lead - interested in AI booking service
 
     // Send SMS to you
     await this.sendSMS({
-      to: process.env.YOUR_PHONE,
+      to: process.env.YOUR_PHONE || '+447491683261',
       body: `🎉 New demo booked! ${lead.businessName} - ${lead.decisionMaker} on ${confirmedTime.date || new Date(confirmedTime.startDateTime).toLocaleDateString('en-GB')} at ${confirmedTime.startTime || new Date(confirmedTime.startDateTime).toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit'})}`
     });
 
