@@ -50,8 +50,11 @@ class BookingSystem {
             ]
           );
           
+          // Authorize the JWT token (same as server.js)
+          await auth.authorize();
+          
           this.calendar = google.calendar({ version: 'v3', auth });
-          console.log('✅ Google Calendar initialized with service account credentials');
+          console.log('✅ Google Calendar initialized with JWT credentials');
         } catch (error) {
           console.log('⚠️ Google Calendar initialization failed:', error.message);
           console.log('   Error details:', {
