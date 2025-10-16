@@ -42,6 +42,10 @@ class BookingSystem {
         }
       } else {
         console.log('⚠️ Google Calendar credentials not found - calendar integration disabled');
+        console.log('   Missing:', {
+          GOOGLE_CLIENT_EMAIL: !!process.env.GOOGLE_CLIENT_EMAIL,
+          GOOGLE_PRIVATE_KEY: !!process.env.GOOGLE_PRIVATE_KEY
+        });
         this.calendar = null;
       }
 
@@ -171,6 +175,7 @@ class BookingSystem {
   async createCalendarEvent(leadData, timeSlot) {
     if (!this.calendar) {
       console.log('📅 Google Calendar not configured - skipping calendar event creation');
+      console.log('   To enable calendar integration, set GOOGLE_CLIENT_EMAIL and GOOGLE_PRIVATE_KEY environment variables');
       return null; // Return null instead of throwing error
     }
 
