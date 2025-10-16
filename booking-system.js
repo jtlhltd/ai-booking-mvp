@@ -14,10 +14,24 @@ class BookingSystem {
   async initializeServices() {
     try {
       // Initialize Google Calendar with service account auth
-      if (process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY) {
+      if (process.env.GOOGLE_CLIENT_EMAIL && (process.env.GOOGLE_PRIVATE_KEY || process.env.GOOGLE_PRIVATE_KEY_B64)) {
         try {
-          // Use service account authentication (same as working server endpoints)
-          const privateKey = process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n');
+          // Use JWT authentication (same as working server endpoints)
+          let privateKey = process.env.GOOGLE_PRIVATE_KEY || '';
+          
+          // Handle base64 encoded private key
+          if (!privateKey && process.env.GOOGLE_PRIVATE_KEY_B64) {
+            try { 
+              privateKey = Buffer.from(process.env.GOOGLE_PRIVATE_KEY_B64, 'base64').toString('utf8'); 
+            } catch (e) {
+              console.log('[BOOKING SYSTEM] Failed to decode base64 private key:', e.message);
+            }
+          }
+          
+          // Handle escaped newlines
+          if (privateKey && privateKey.includes('\\n')) {
+            privateKey = privateKey.replace(/\\n/g, '\n');
+          }
           
           // Ensure the private key has proper formatting
           if (!privateKey.includes('BEGIN PRIVATE KEY')) {
