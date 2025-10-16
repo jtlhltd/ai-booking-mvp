@@ -13,20 +13,26 @@ class BookingSystem {
 
   async initializeServices() {
     try {
-      // Initialize Google Calendar with JWT auth (same as server)
+      // Initialize Google Calendar with service account auth
       if (process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY) {
         try {
-          // Use the same JWT auth method as the server
-          const { makeJwtAuth } = await import('./gcal.js');
+          // Use service account authentication (same as working server endpoints)
+          const privateKey = process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n');
           
-          const auth = makeJwtAuth({
-            clientEmail: process.env.GOOGLE_CLIENT_EMAIL,
-            privateKey: process.env.GOOGLE_PRIVATE_KEY,
-            privateKeyB64: process.env.GOOGLE_PRIVATE_KEY_B64
+          const auth = new google.auth.GoogleAuth({
+            credentials: {
+              type: 'service_account',
+              client_email: process.env.GOOGLE_CLIENT_EMAIL,
+              private_key: privateKey
+            },
+            scopes: [
+              'https://www.googleapis.com/auth/calendar',
+              'https://www.googleapis.com/auth/calendar.events'
+            ]
           });
           
           this.calendar = google.calendar({ version: 'v3', auth });
-          console.log('✅ Google Calendar initialized with JWT credentials');
+          console.log('✅ Google Calendar initialized with service account credentials');
         } catch (error) {
           console.log('⚠️ Google Calendar initialization failed:', error.message);
           console.log('   Error details:', {
@@ -213,6 +219,11 @@ Notes: Cold call lead - interested in AI booking service
       const calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
       
       console.log('[BOOKING SYSTEM] Creating calendar event in calendar:', calendarId);
+      console.log('[BOOKING SYSTEM] Event details:', {
+        summary: event.summary,
+        start: event.start.dateTime,
+        end: event.end.dateTime
+      });
       
       const response = await this.calendar.events.insert({
         calendarId: calendarId,
