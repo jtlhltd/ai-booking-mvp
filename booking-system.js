@@ -488,9 +488,16 @@ Notes: Cold call lead - interested in AI booking service
       // Test by listing calendars
       const response = await this.calendar.calendarList.list();
       console.log('[BOOKING SYSTEM] Calendar test successful:', response.data.items?.length || 0, 'calendars found');
+      
+      // Test specific calendar access
+      const calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
+      const calendarResponse = await this.calendar.calendars.get({ calendarId });
+      console.log('[BOOKING SYSTEM] Target calendar access successful:', calendarResponse.data.summary);
+      
       return { 
         success: true, 
         calendars: response.data.items?.length || 0,
+        targetCalendar: calendarResponse.data.summary,
         message: 'Calendar connection successful'
       };
     } catch (error) {
