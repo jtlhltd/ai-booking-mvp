@@ -361,17 +361,19 @@ Notes: Cold call lead - interested in AI booking service
       `
     });
 
-    // Send SMS to you
-    await this.sendSMS({
-      to: process.env.YOUR_PHONE || '+447491683261',
-      body: `🎉 New demo booked! ${lead.businessName} - ${lead.decisionMaker} on ${confirmedTime.date || new Date(confirmedTime.startDateTime).toLocaleDateString('en-GB')} at ${confirmedTime.startTime || new Date(confirmedTime.startDateTime).toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit'})}`
-    });
+    // Send SMS to you (if Twilio configured)
+    if (process.env.TWILIO_PHONE_NUMBER) {
+      await this.sendSMS({
+        to: process.env.YOUR_PHONE || '+447491683261',
+        body: `🎉 New demo booked! ${lead.businessName} - ${lead.decisionMaker} on ${confirmedTime.date || new Date(confirmedTime.startDateTime).toLocaleDateString('en-GB')} at ${confirmedTime.startTime || new Date(confirmedTime.startDateTime).toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit'})}`
+      });
+    }
 
-    // Send SMS to lead (if they have a mobile number)
-    if (lead.phoneNumber && lead.phoneNumber.startsWith('+44')) {
+    // Send SMS to lead (if they have a mobile number and Twilio configured)
+    if (lead.phoneNumber && lead.phoneNumber.startsWith('+44') && process.env.TWILIO_PHONE_NUMBER) {
       await this.sendSMS({
         to: lead.phoneNumber,
-        body: `Hi ${lead.decisionMaker}, your demo call with AI Booking Solutions is confirmed for ${confirmedTime.date || new Date(confirmedTime.startDateTime).toLocaleDateString('en-GB')} at ${confirmedTime.startTime || new Date(confirmedTime.startDateTime).toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit'})}. We'll call you then!`
+        body: `Hi ${lead.decisionMaker}, your demo call with JTLH Media is confirmed for ${confirmedTime.date || new Date(confirmedTime.startDateTime).toLocaleDateString('en-GB')} at ${confirmedTime.startTime || new Date(confirmedTime.startDateTime).toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit'})}. We'll call you then!`
       });
     }
   }
