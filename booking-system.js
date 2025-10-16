@@ -13,29 +13,20 @@ class BookingSystem {
 
   async initializeServices() {
     try {
-      // Initialize Google Calendar with OAuth2 (personal account)
+      // Initialize Google Calendar with JWT auth (same as server)
       if (process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY) {
         try {
-          // For personal accounts, we'll use a simpler approach
-          // Create calendar events without sending invitations
-          const privateKey = process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n');
-          if (!privateKey.includes('BEGIN PRIVATE KEY')) {
-            throw new Error('Invalid private key format');
-          }
+          // Use the same JWT auth method as the server
+          const { makeJwtAuth } = await import('./gcal.js');
           
-          const auth = new google.auth.GoogleAuth({
-            credentials: {
-              type: 'service_account',
-              client_email: process.env.GOOGLE_CLIENT_EMAIL,
-              private_key: privateKey
-            },
-            scopes: [
-              'https://www.googleapis.com/auth/calendar',
-              'https://www.googleapis.com/auth/calendar.events'
-            ]
+          const auth = makeJwtAuth({
+            clientEmail: process.env.GOOGLE_CLIENT_EMAIL,
+            privateKey: process.env.GOOGLE_PRIVATE_KEY,
+            privateKeyB64: process.env.GOOGLE_PRIVATE_KEY_B64
           });
+          
           this.calendar = google.calendar({ version: 'v3', auth });
-          console.log('✅ Google Calendar initialized with existing credentials');
+          console.log('✅ Google Calendar initialized with JWT credentials');
         } catch (error) {
           console.log('⚠️ Google Calendar initialization failed:', error.message);
           console.log('   Error details:', {
@@ -221,6 +212,8 @@ Notes: Cold call lead - interested in AI booking service
       // Use your existing calendar ID from environment variable
       const calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
       
+      console.log('[BOOKING SYSTEM] Creating calendar event in calendar:', calendarId);
+      
       const response = await this.calendar.events.insert({
         calendarId: calendarId,
         resource: event
@@ -260,6 +253,7 @@ Notes: Cold call lead - interested in AI booking service
           };
 
           const calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
+          console.log('[BOOKING SYSTEM] Retrying calendar event creation in calendar:', calendarId);
           const response = await this.calendar.events.insert({
             calendarId: calendarId,
             resource: eventWithoutAttendees
