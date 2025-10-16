@@ -14,7 +14,7 @@ class BookingSystem {
   async initializeServices() {
     try {
       // Initialize Google Calendar with service account auth
-      if (false && process.env.GOOGLE_CLIENT_EMAIL && (process.env.GOOGLE_PRIVATE_KEY || process.env.GOOGLE_PRIVATE_KEY_B64)) {
+      if (process.env.GOOGLE_CLIENT_EMAIL && (process.env.GOOGLE_PRIVATE_KEY || process.env.GOOGLE_PRIVATE_KEY_B64)) {
         try {
           // Use JWT authentication (same as working server endpoints)
           let privateKey = process.env.GOOGLE_PRIVATE_KEY || '';
@@ -61,7 +61,14 @@ class BookingSystem {
             name: error.name,
             code: error.code,
             status: error.status,
-            response: error.response?.data
+            response: error.response?.data,
+            stack: error.stack
+          });
+          console.log('   Environment check:', {
+            GOOGLE_CLIENT_EMAIL: !!process.env.GOOGLE_CLIENT_EMAIL,
+            GOOGLE_PRIVATE_KEY: !!process.env.GOOGLE_PRIVATE_KEY,
+            GOOGLE_PRIVATE_KEY_B64: !!process.env.GOOGLE_PRIVATE_KEY_B64,
+            GOOGLE_CALENDAR_ID: process.env.GOOGLE_CALENDAR_ID || 'primary'
           });
           this.calendar = null;
         }
