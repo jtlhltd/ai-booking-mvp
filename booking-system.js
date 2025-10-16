@@ -28,9 +28,8 @@ class BookingSystem {
           
           const auth = new google.auth.GoogleAuth({
             credentials: {
-              type: 'service_account',
               client_email: process.env.GOOGLE_CLIENT_EMAIL,
-              private_key: privateKey
+              private_key: privateKey,
             },
             scopes: [
               'https://www.googleapis.com/auth/calendar',
