@@ -38,24 +38,13 @@ class BookingSystem {
             throw new Error('Invalid private key format - missing BEGIN PRIVATE KEY');
           }
           
-          console.log('[BOOKING SYSTEM] Private key format check passed');
-          console.log('[BOOKING SYSTEM] Credentials summary:', {
+          // Use the same JWT auth method as server.js
+          const { makeJwtAuth } = await import('./gcal.js');
+          const auth = makeJwtAuth({
             clientEmail: process.env.GOOGLE_CLIENT_EMAIL,
-            privateKeyLength: privateKey.length,
-            privateKeyStart: privateKey.substring(0, 50) + '...',
-            privateKeyEnd: '...' + privateKey.substring(privateKey.length - 50),
-            calendarId: process.env.GOOGLE_CALENDAR_ID || 'primary'
+            privateKey: process.env.GOOGLE_PRIVATE_KEY,
+            privateKeyB64: process.env.GOOGLE_PRIVATE_KEY_B64
           });
-          
-          const auth = new google.auth.JWT(
-            process.env.GOOGLE_CLIENT_EMAIL,
-            null,
-            privateKey,
-            [
-              'https://www.googleapis.com/auth/calendar',
-              'https://www.googleapis.com/auth/calendar.events'
-            ]
-          );
           
           // Authorize the JWT token (same as server.js)
           console.log('[BOOKING SYSTEM] Attempting to authorize JWT token...');
