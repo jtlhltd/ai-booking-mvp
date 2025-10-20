@@ -89,6 +89,9 @@ import cron from 'node-cron';
 import leadsRouter from './routes/leads.js';
 import twilioWebhooks from './routes/twilio-webhooks.js';
 import vapiWebhooks from './routes/vapi-webhooks.js';
+import * as store from './store.js';
+import * as sheets from './sheets.js';
+import messagingService from './lib/messaging-service.js';
 // Real API integration - dynamic imports will be used in endpoints
 
 
@@ -9741,6 +9744,647 @@ RULES:
     res.status(500).json({ 
       error: 'Failed to create cold call assistant',
       message: error.message 
+    });
+  }
+});
+
+// VAPI Tool Handlers
+app.post('/tools/access_google_sheet', async (req, res) => {
+  try {
+    console.log('[GOOGLE SHEET TOOL] Request received:', req.body);
+    
+    const { action, data, tenantKey } = req.body;
+    
+    if (!action) {
+      return res.status(400).json({ error: 'Action is required' });
+    }
+    
+    // Get tenant configuration
+    const tenant = await store.getTenant(tenantKey || 'logistics_client');
+    if (!tenant) {
+      return res.status(404).json({ error: 'Tenant not found' });
+    }
+    
+    const logisticsSheetId = tenant.vapi_json?.logisticsSheetId || process.env.LOGISTICS_SHEET_ID;
+    
+    if (!logisticsSheetId) {
+      return res.status(400).json({ error: 'Google Sheet ID not configured' });
+    }
+    
+    if (action === 'append' && data) {
+      // Ensure logistics headers are present
+      await sheets.ensureLogisticsHeader(logisticsSheetId);
+      
+      // Append data to sheet
+      await sheets.appendLogistics(logisticsSheetId, {
+        ...data,
+        timestamp: new Date().toISOString()
+      });
+      
+      console.log('[GOOGLE SHEET TOOL] Data appended successfully');
+      return res.json({ 
+        success: true, 
+        message: 'Data appended to Google Sheet successfully',
+        action: 'append'
+      });
+    }
+    
+    if (action === 'read') {
+      // Read data from sheet (basic implementation)
+      const sheetData = await sheets.readSheet(logisticsSheetId);
+      return res.json({ 
+        success: true, 
+        data: sheetData,
+        action: 'read'
+      });
+    }
+    
+    return res.status(400).json({ error: 'Invalid action or missing data' });
+    
+  } catch (error) {
+    console.error('[GOOGLE SHEET TOOL ERROR]', error);
+    return res.status(500).json({ 
+      error: 'Failed to access Google Sheet',
+      message: error.message 
+    });
+  }
+});
+
+app.post('/tools/schedule_callback', async (req, res) => {
+  try {
+    console.log('[CALLBACK TOOL] Request received:', req.body);
+    
+    const { businessName, phone, receptionistName, reason, preferredTime, notes, tenantKey } = req.body;
+    
+    if (!businessName || !phone || !reason) {
+      return res.status(400).json({ error: 'Business name, phone, and reason are required' });
+    }
+    
+    // Get tenant configuration
+    const tenant = await store.getTenant(tenantKey || 'logistics_client');
+    if (!tenant) {
+      return res.status(404).json({ error: 'Tenant not found' });
+    }
+    
+    const callbackInboxEmail = tenant.vapi_json?.callbackInboxEmail || process.env.CALLBACK_INBOX_EMAIL;
+    
+    if (!callbackInboxEmail) {
+      return res.status(400).json({ error: 'Callback inbox email not configured' });
+    }
+    
+    const emailSubject = `Callback Scheduled: ${businessName} - ${phone}`;
+    const emailBody = `
+      <h2>Callback Scheduled</h2>
+      <p><strong>Business:</strong> ${businessName}</p>
+      <p><strong>Phone:</strong> ${phone}</p>
+      <p><strong>Receptionist:</strong> ${receptionistName || 'Unknown'}</p>
+      <p><strong>Reason:</strong> ${reason}</p>
+      <p><strong>Preferred Time:</strong> ${preferredTime || 'Not specified'}</p>
+      <p><strong>Notes:</strong> ${notes || 'None'}</p>
+      <p><strong>Scheduled:</strong> ${new Date().toISOString()}</p>
+    `;
+    
+    await messagingService.sendEmail({
+      to: callbackInboxEmail,
+      subject: emailSubject,
+      html: emailBody
+    });
+    
+    console.log('[CALLBACK TOOL] Callback email sent successfully');
+    return res.json({ 
+      success: true, 
+      message: 'Callback scheduled and email sent successfully',
+      callbackEmail: callbackInboxEmail
+    });
+    
+  } catch (error) {
+    console.error('[CALLBACK TOOL ERROR]', error);
+    return res.status(500).json({ 
+      error: 'Failed to schedule callback',
+      message: error.message 
+    });
+  }
+});
+
+// CSV Import for Logistics Outreach
+app.post('/admin/vapi/logistics-csv-import', async (req, res) => {
+  try {
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { csvData, assistantId, tenantKey = 'logistics_client' } = req.body;
+    
+    if (!csvData || !assistantId) {
+      return res.status(400).json({ error: 'csvData and assistantId are required' });
+    }
+
+    console.log('[LOGISTICS CSV IMPORT]', { 
+      assistantId, 
+      tenantKey,
+      csvRows: csvData.length,
+      requestedBy: req.ip
+    });
+
+    // Parse CSV data into businesses array
+    const businesses = csvData.map((row, index) => ({
+      name: row['Business Name'] || row['Company Name'] || row['Name'] || `Business ${index + 1}`,
+      phone: row['Phone'] || row['Phone Number'] || row['Mobile'] || row['Contact Number'],
+      address: row['Address'] || row['Location'] || row['City'] || '',
+      website: row['Website'] || row['URL'] || '',
+      decisionMaker: row['Decision Maker'] || row['Contact Person'] || row['Manager'] || '',
+      email: row['Email'] || row['Email Address'] || '',
+      industry: row['Industry'] || row['Sector'] || 'Logistics',
+      source: 'CSV Import'
+    })).filter(business => business.phone); // Only include businesses with phone numbers
+
+    if (businesses.length === 0) {
+      return res.status(400).json({ error: 'No valid businesses found in CSV (need phone numbers)' });
+    }
+
+    console.log(`[LOGISTICS CSV IMPORT] Parsed ${businesses.length} valid businesses`);
+
+    // Now run the outreach
+    const outreachResult = await runLogisticsOutreach({
+      assistantId,
+      businesses,
+      tenantKey,
+      vapiKey: process.env.VAPI_PRIVATE_KEY || process.env.VAPI_PUBLIC_KEY || process.env.VAPI_API_KEY
+    });
+
+    res.json({
+      success: true,
+      message: 'CSV import and outreach completed',
+      tenantKey,
+      totalBusinesses: businesses.length,
+      validBusinesses: businesses.length,
+      results: outreachResult
+    });
+    
+  } catch (error) {
+    console.error('[LOGISTICS CSV IMPORT ERROR]', error);
+    res.status(500).json({
+      error: 'Failed to import CSV and run outreach',
+      message: error.message
+    });
+  }
+});
+
+// Helper function to run logistics outreach
+async function runLogisticsOutreach({ assistantId, businesses, tenantKey, vapiKey }) {
+  if (!vapiKey) {
+    throw new Error('VAPI API key not configured');
+  }
+
+  const results = [];
+  const batchSize = 3; // Process 3 calls at a time
+  
+  for (let i = 0; i < businesses.length; i += batchSize) {
+    const batch = businesses.slice(i, i + batchSize);
+    
+    const batchPromises = batch.map(async (business, index) => {
+      try {
+        // Add staggered delay within batch
+        await new Promise(resolve => setTimeout(resolve, index * 2000));
+        
+        const callData = {
+          assistantId,
+          customer: {
+            number: business.phone,
+            name: business.name || 'Business'
+          },
+          metadata: {
+            tenantKey,
+            leadPhone: business.phone,
+            businessName: business.name,
+            businessAddress: business.address,
+            businessWebsite: business.website,
+            decisionMaker: business.decisionMaker,
+            callTime: new Date().toISOString(),
+            priority: i + index + 1
+          }
+        };
+        
+        const callResponse = await fetch('https://api.vapi.ai/call', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${vapiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(callData)
+        });
+        
+        if (callResponse.ok) {
+          const callResult = await callResponse.json();
+          results.push({
+            businessName: business.name,
+            phone: business.phone,
+            status: 'call_initiated',
+            callId: callResult.id,
+            priority: i + index + 1,
+            message: 'Call initiated successfully'
+          });
+          
+          console.log(`[LOGISTICS CALL] Initiated for ${business.name} (${business.phone})`);
+        } else {
+          const errorData = await callResponse.json();
+          results.push({
+            businessName: business.name,
+            phone: business.phone,
+            status: 'call_failed',
+            error: errorData.message || 'Unknown error',
+            message: 'Failed to initiate call'
+          });
+          
+          console.error(`[LOGISTICS CALL ERROR] Failed to call ${business.name}:`, errorData);
+        }
+        
+      } catch (error) {
+        results.push({
+          businessName: business.name,
+          phone: business.phone,
+          status: 'call_failed',
+          error: error.message,
+          message: 'Call failed due to error'
+        });
+        
+        console.error(`[LOGISTICS CALL ERROR] Error calling ${business.name}:`, error.message);
+      }
+    });
+    
+    await Promise.all(batchPromises);
+    
+    // Delay between batches
+    if (i + batchSize < businesses.length) {
+      console.log(`[LOGISTICS OUTREACH] Batch ${Math.floor(i/batchSize) + 1} completed. Waiting 5s before next batch.`);
+      await new Promise(resolve => setTimeout(resolve, 5000));
+    }
+  }
+  
+  return results;
+}
+
+// Automated Logistics Outreach - Batch calling with proper metadata
+app.post('/admin/vapi/logistics-outreach', async (req, res) => {
+  try {
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { assistantId, businesses, tenantKey = 'logistics_client' } = req.body;
+    
+    if (!assistantId || !businesses || !Array.isArray(businesses)) {
+      return res.status(400).json({ error: 'assistantId and businesses array are required' });
+    }
+
+    console.log('[LOGISTICS OUTREACH]', { 
+      assistantId, 
+      businessCount: businesses.length,
+      tenantKey,
+      requestedBy: req.ip
+    });
+
+    const vapiKey = process.env.VAPI_PRIVATE_KEY || process.env.VAPI_PUBLIC_KEY || process.env.VAPI_API_KEY;
+    if (!vapiKey) {
+      return res.status(500).json({
+        error: 'VAPI API key not configured',
+        message: 'Please add VAPI_PRIVATE_KEY, VAPI_PUBLIC_KEY, or VAPI_API_KEY to your environment variables'
+      });
+    }
+
+    const results = [];
+    const batchSize = 3; // Process 3 calls at a time
+    
+    for (let i = 0; i < businesses.length; i += batchSize) {
+      const batch = businesses.slice(i, i + batchSize);
+      
+      const batchPromises = batch.map(async (business, index) => {
+        try {
+          // Add staggered delay within batch
+          await new Promise(resolve => setTimeout(resolve, index * 2000));
+          
+          const callData = {
+            assistantId,
+            customer: {
+              number: business.phone,
+              name: business.name || 'Business'
+            },
+            metadata: {
+              tenantKey,
+              leadPhone: business.phone,
+              businessName: business.name,
+              businessAddress: business.address,
+              businessWebsite: business.website,
+              decisionMaker: business.decisionMaker,
+              callTime: new Date().toISOString(),
+              priority: i + index + 1
+            }
+          };
+          
+          const callResponse = await fetch('https://api.vapi.ai/call', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${vapiKey}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(callData)
+          });
+          
+          if (callResponse.ok) {
+            const callResult = await callResponse.json();
+            results.push({
+              businessName: business.name,
+              phone: business.phone,
+              status: 'call_initiated',
+              callId: callResult.id,
+              priority: i + index + 1,
+              message: 'Call initiated successfully'
+            });
+            
+            console.log(`[LOGISTICS CALL] Initiated for ${business.name} (${business.phone})`);
+          } else {
+            const errorData = await callResponse.json();
+            results.push({
+              businessName: business.name,
+              phone: business.phone,
+              status: 'call_failed',
+              error: errorData.message || 'Unknown error',
+              message: 'Failed to initiate call'
+            });
+            
+            console.error(`[LOGISTICS CALL ERROR] Failed to call ${business.name}:`, errorData);
+          }
+          
+        } catch (error) {
+          results.push({
+            businessName: business.name,
+            phone: business.phone,
+            status: 'call_failed',
+            error: error.message,
+            message: 'Call failed due to error'
+          });
+          
+          console.error(`[LOGISTICS CALL ERROR] Error calling ${business.name}:`, error.message);
+        }
+      });
+      
+      await Promise.all(batchPromises);
+      
+      // Delay between batches
+      if (i + batchSize < businesses.length) {
+        console.log(`[LOGISTICS OUTREACH] Batch ${Math.floor(i/batchSize) + 1} completed. Waiting 5s before next batch.`);
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
+    }
+    
+    console.log(`[LOGISTICS OUTREACH] Completed. Results:`, results.length);
+    
+    res.json({
+      success: true,
+      message: 'Logistics outreach campaign completed',
+      tenantKey,
+      totalBusinesses: businesses.length,
+      results
+    });
+    
+  } catch (error) {
+    console.error('[LOGISTICS OUTREACH ERROR]', error);
+    res.status(500).json({
+      error: 'Failed to run logistics outreach',
+      message: error.message
+    });
+  }
+});
+
+// Create Logistics & Shipping Script Assistant (STRICT adherence)
+app.post('/admin/vapi/logistics-assistant', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    console.log('[LOGISTICS ASSISTANT CREATION REQUESTED]', {
+      requestedBy: req.ip
+    });
+
+    // Check if VAPI API key is configured
+    const vapiKey = process.env.VAPI_PRIVATE_KEY || process.env.VAPI_PUBLIC_KEY || process.env.VAPI_API_KEY;
+    if (!vapiKey) {
+      return res.status(500).json({
+        error: 'VAPI API key not configured',
+        message: 'Please add VAPI_PRIVATE_KEY, VAPI_PUBLIC_KEY, or VAPI_API_KEY to your environment variables'
+      });
+    }
+
+    // Strict script for logistics & shipping assistant
+    const firstMessage = "Hi, Please can I speak with the person in charge of logistics and shipping?";
+
+    const systemMessage = `You are a caller strictly following the provided logistics and shipping script. You must adhere 100% to the exact wording and flow below. Do not improvise, do not add content, do not change phrasing, do not reorder steps. Speak naturally but use ONLY the exact script sentences and bullet questions. If the callee goes off script, steer back to the next exact scripted line. If asked who you are or why calling, only proceed per the script lines when relevant.
+
+SCRIPT:
+
+RECEPTIONIST
+Hi, Please can I speak with the person in charge of logistics and shipping?
+
+If they don’t put you through to the correct person, get a name of who that is and add to your call backs on sheets.
+
+CORRECT PERSON
+It will either be a call back to the business where you ask for the persons name in charge of shipping because of your call with the receptionist or:
+
+Hi, Please can I speak with the person in charge of logistics and shipping?
+
+It’s me.
+
+Great, I am a partner of UPS, FEDEX & DHL, we offer all these couriers on one online platform, I am just wondering if I can I get an email across to you with some rates and services we can offer?
+
+If they say yes.
+
+Which is the best email to send too?
+
+So that I can tailor this email to you a little bit more, do you send outside the UK at all?
+- Who are your main couriers you use?
+- How often is this? (spell this out to them if they are saying it can be anything…’do you have parcels going out weekly? Or at least a couple a month?)
+- Do you have any main countries you send to and I will make sure I put some rates to these specific lanes on the email?
+- You don’t happen to have a last example of a shipment you sent to one of these countries you mentioned and what it cost(get the weight and dimensions if you can)? Feeling confident and they are nice, ask for an invoice!
+
+If you have ALL the above and rates, end the call. UNLESS they are super happy to talk, then move to Domestic. If they give you small info on the above, move onto Domestic to see if you can get more from this. If they don’t do International, move straight to the Domestic Q’s.
+
+How often do you send around the UK? Is this daily or weekly? (get the number of daily or weekly)
+Who is your main courier for your UK parcels?
+
+Do you have a standard rate you pay up to a certain kg?
+- Is that excluding fuel and VAT?
+- Do you mainly send single parcels or multiple parcels to one address?
+
+ICE BREAKERS in the middle of your questions so it’s not too formal:
+Moving from International to Domestic Questions – Really appreciate the answers for your INTL, I will get some Domestic prices to you as well, just a couple more questions apologies on this…
+Really appreciate all of this information, just lastly can I confirm…
+Thanks for this, I know this has taken longer than expected, but this info just helps tailor this email as best as possible so we can ensure we are saving you money and keeping your service levels high
+Just the last question sorry…
+It does look like we can definitely help here, can I just please confirm a couple of things before I send this email…
+Really sorry to keep you, I do appreciate the time, can I quickly confirm a few last things…
+
+STRICT RULES:
+- Temperature must be low; do not deviate or add content.
+- Use EXACT sentences as written above.
+- Only ask the bullet questions as listed, in order.
+- If receptionist blocks, politely ask for the correct person’s name and note “CALL BACK” in sheets.
+- If they decline to share info or email, politely end the call (no extra wording).
+- End the call once you have ALL the specified info (or after confirming they don’t do International and you finish Domestic questions).
+- Keep tone professional and concise.`;
+
+    const assistant = {
+      name: 'Logistics & Shipping Script Assistant',
+      model: {
+        provider: 'openai',
+        model: 'gpt-4o',
+        temperature: 0.1,
+        maxTokens: 300
+      },
+      voice: {
+        provider: '11labs',
+        voiceId: '21m00Tcm4TlvDq8ikWAM',
+        stability: 0.7,
+        clarity: 0.85,
+        style: 0.2,
+        similarityBoost: 0.8
+      },
+      firstMessage,
+      systemMessage,
+      maxDurationSeconds: 300,
+      endCallMessage: 'Thank you for your time.',
+      endCallPhrases: ['not interested', 'no', 'busy', 'call back later'],
+      recordingEnabled: true,
+      voicemailDetectionEnabled: true,
+      tools: [
+        {
+          type: 'function',
+          function: {
+            name: 'access_google_sheet',
+            description: 'Access the Google Sheet to read or write data during the call',
+            parameters: {
+              type: 'object',
+              properties: {
+                action: {
+                  type: 'string',
+                  enum: ['read', 'write', 'append'],
+                  description: 'Action to perform on the sheet'
+                },
+                data: {
+                  type: 'object',
+                  description: 'Data to write or append to the sheet',
+                  properties: {
+                    businessName: { type: 'string' },
+                    phone: { type: 'string' },
+                    email: { type: 'string' },
+                    couriers: { type: 'string' },
+                    frequency: { type: 'string' },
+                    countries: { type: 'string' },
+                    shipmentExample: { type: 'string' },
+                    domesticFrequency: { type: 'string' },
+                    domesticCourier: { type: 'string' },
+                    domesticRate: { type: 'string' },
+                    receptionistName: { type: 'string' },
+                    callbackNeeded: { type: 'boolean' },
+                    callbackReason: { type: 'string' },
+                    callStatus: { type: 'string' }
+                  }
+                }
+              },
+              required: ['action']
+            }
+          }
+        },
+        {
+          type: 'function',
+          function: {
+            name: 'schedule_callback',
+            description: 'Schedule a callback when receptionist blocks the call or person is not available',
+            parameters: {
+              type: 'object',
+              properties: {
+                businessName: {
+                  type: 'string',
+                  description: 'Name of the business'
+                },
+                phone: {
+                  type: 'string',
+                  description: 'Phone number to call back'
+                },
+                receptionistName: {
+                  type: 'string',
+                  description: 'Name of the receptionist who answered'
+                },
+                reason: {
+                  type: 'string',
+                  description: 'Reason for callback (e.g., "not available", "in meeting", "call back later")'
+                },
+                preferredTime: {
+                  type: 'string',
+                  description: 'Preferred time for callback if mentioned'
+                },
+                notes: {
+                  type: 'string',
+                  description: 'Additional notes about the call'
+                }
+              },
+              required: ['businessName', 'phone', 'reason']
+            }
+          }
+        }
+      ],
+      backgroundSound: 'office',
+      silenceTimeoutSeconds: 12,
+      responseDelaySeconds: 0.8,
+      llmRequestDelaySeconds: 0.1
+    };
+
+    // Create assistant via VAPI API
+    const vapiResponse = await fetch('https://api.vapi.ai/assistant', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${vapiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(assistant)
+    });
+
+    if (!vapiResponse.ok) {
+      const errorData = await vapiResponse.json();
+      console.error('[VAPI LOGISTICS ASSISTANT ERROR]', errorData);
+      return res.status(400).json({
+        error: 'Failed to create Logistics assistant',
+        details: errorData
+      });
+    }
+
+    const assistantData = await vapiResponse.json();
+
+    console.log('[LOGISTICS ASSISTANT CREATED]', {
+      assistantId: assistantData.id,
+      name: assistantData.name
+    });
+
+    res.json({
+      success: true,
+      message: 'Logistics & Shipping assistant created successfully',
+      assistant: {
+        id: assistantData.id,
+        name: assistantData.name,
+        status: assistantData.status,
+        createdAt: assistantData.createdAt
+      }
+    });
+
+  } catch (error) {
+    console.error('[LOGISTICS ASSISTANT CREATION ERROR]', error);
+    res.status(500).json({
+      error: 'Failed to create logistics assistant',
+      message: error.message
     });
   }
 });

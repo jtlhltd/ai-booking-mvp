@@ -2,6 +2,73 @@ import express from 'express';
 import * as store from '../store.js';
 import * as sheets from '../sheets.js';
 import { analyzeCall } from '../lib/call-quality-analysis.js';
+import messagingService from '../lib/messaging-service.js';
+// Lightweight first-pass extractor for logistics script fields
+
+function extractLogisticsFields(transcript) {
+  const text = (transcript || '').toLowerCase();
+  const pick = (re) => {
+    const m = text.match(re);
+    return m ? (m[1] || m[0]).trim() : '';
+  };
+  const pickAll = (re) => {
+    const matches = [...text.matchAll(re)].map(m => (m[1] || m[0]).trim());
+    return Array.from(new Set(matches));
+  };
+
+  // Email
+  const email = pick(/([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})/i);
+
+  // International yes/no (look for clear affirmations around "outside the uk")
+  let international = '';
+  if (/outside\s+the\s+uk.*\byes\b|\binternational\b.*\byes\b/i.test(transcript)) international = 'Y';
+  else if (/outside\s+the\s+uk.*\bno\b|\binternational\b.*\bno\b/i.test(transcript)) international = 'N';
+
+  // Main couriers (UPS/FEDEX/DHL/DPD/Hermes/Royal Mail)
+  const knownCouriers = ['ups','fedex','dhl','dpd','hermes','evri','royal mail','parcel force','parcelforce'];
+  const mainCouriers = knownCouriers.filter(c => text.includes(c));
+
+  // Frequency (weekly/daily + number)
+  const frequency = pick(/(\b\d+\s*(?:per\s*)?(?:day|week|weekly|daily)\b|\b(daily|weekly)\b)/i);
+
+  // Main countries (naive pick of common country names mentioned)
+  const countryWords = ['usa','united states','canada','germany','france','spain','italy','netherlands','ireland','australia','china','hong kong','japan','uae','dubai','saudi','india','poland','sweden','norway','denmark'];
+  const mainCountries = countryWords.filter(c => text.includes(c));
+
+  // Example shipment: weight/dimensions and cost
+  const weightDims = pick(/(\b\d+(?:\.\d+)?\s*(?:kg|kilograms)\b[^\n]{0,40}?(?:\b\d+\s*x\s*\d+\s*x\s*\d+\s*(?:cm|mm|in)?\b)?)/i);
+  const cost = pick(/(£\s?\d+(?:[\.,]\d{2})?|\$\s?\d+(?:[\.,]\d{2})?)/);
+
+  // Domestic frequency
+  const domesticFrequency = pick(/(\b\d+\s*(?:per\s*)?(?:day|week)\b.*\buk\b|\b(daily|weekly)\b.*\buk\b)/i);
+
+  // UK courier (look for named courier near 'uk')
+  const ukCourier = pick(/uk[^\n]{0,50}\b(ups|fedex|dhl|dpd|hermes|evri|royal\s*mail|parcelforce)\b/i);
+
+  // Standard rate up to kg
+  const standardRateUpToKg = pick(/standard\s+rate[^\n]{0,40}\b(\d+\s*kg)\b/i);
+
+  // Excluding fuel and VAT?
+  const excludingFuelVat = /excluding\s+fuel|excl\.?\s+fuel|vat/i.test(transcript) ? 'mentioned' : '';
+
+  // Single vs multi-parcel
+  const singleVsMulti = /single\s+parcels?/i.test(transcript) ? 'single' : (/multiple\s+parcels?|multi-?parcel/i.test(transcript) ? 'multiple' : '');
+
+  return {
+    email,
+    international,
+    mainCouriers,
+    frequency,
+    mainCountries,
+    exampleShipment: weightDims,
+    exampleShipmentCost: cost,
+    domesticFrequency,
+    ukCourier,
+    standardRateUpToKg,
+    excludingFuelVat,
+    singleVsMulti
+  };
+}
 
 const router = express.Router();
 
@@ -41,6 +108,9 @@ router.post('/webhooks/vapi', async (req, res) => {
       console.log('[VAPI WEBHOOK SKIP]', { reason: 'missing_tenant_or_phone', tenantKey: !!tenantKey, leadPhone: !!leadPhone });
       return res.status(200).json({ ok: true });
     }
+
+    // Load tenant config (per-client settings)
+    const tenant = tenantKey ? await store.getFullClient(tenantKey).catch(() => null) : null;
 
     // Analyze call quality (NEW)
     const analysis = analyzeCall({
@@ -84,6 +154,121 @@ router.post('/webhooks/vapi', async (req, res) => {
       metrics: vapiMetrics,
       analyzedAt: analysis.analyzedAt
     });
+
+    // Handle tool calls from VAPI assistant
+    if (body.toolCalls && body.toolCalls.length > 0) {
+      console.log('[VAPI WEBHOOK] Processing tool calls:', body.toolCalls.length);
+      
+      for (const toolCall of body.toolCalls) {
+        try {
+          if (toolCall.function.name === 'access_google_sheet') {
+            const args = JSON.parse(toolCall.function.arguments);
+            const { action, data } = args;
+            
+            // Get tenant configuration
+            const logisticsSheetId = tenant?.vapi?.logisticsSheetId || tenant?.gsheet_id || process.env.LOGISTICS_SHEET_ID;
+            
+            if (logisticsSheetId) {
+              if (action === 'append' && data) {
+                // Ensure logistics headers are present
+                await sheets.ensureLogisticsHeader(logisticsSheetId);
+                
+                // Append data to sheet
+                await sheets.appendLogistics(logisticsSheetId, {
+                  ...data,
+                  callId: body.id,
+                  timestamp: new Date().toISOString(),
+                  businessName: metadata.businessName || 'Unknown',
+                  leadPhone: leadPhone
+                });
+                
+                console.log('[VAPI WEBHOOK] Data appended to sheet via tool call');
+              }
+            }
+            
+          } else if (toolCall.function.name === 'schedule_callback') {
+            const args = JSON.parse(toolCall.function.arguments);
+            const { businessName, phone, receptionistName, reason, preferredTime, notes } = args;
+            
+            const callbackInboxEmail = tenant?.vapi?.callbackInboxEmail || process.env.CALLBACK_INBOX_EMAIL;
+            
+            if (callbackInboxEmail) {
+              const emailSubject = `Callback Scheduled: ${businessName} - ${phone}`;
+              const emailBody = `
+                <h2>Callback Scheduled</h2>
+                <p><strong>Business:</strong> ${businessName}</p>
+                <p><strong>Phone:</strong> ${phone}</p>
+                <p><strong>Receptionist:</strong> ${receptionistName || 'Unknown'}</p>
+                <p><strong>Reason:</strong> ${reason}</p>
+                <p><strong>Preferred Time:</strong> ${preferredTime || 'Not specified'}</p>
+                <p><strong>Notes:</strong> ${notes || 'None'}</p>
+                <p><strong>Call ID:</strong> ${body.id}</p>
+                <p><strong>Recording:</strong> <a href="${recordingUrl || 'N/A'}">Listen to call</a></p>
+              `;
+              
+              await messagingService.sendEmail({
+                to: callbackInboxEmail,
+                subject: emailSubject,
+                html: emailBody
+              });
+              
+              console.log('[VAPI WEBHOOK] Callback email sent via tool call');
+            }
+          }
+          
+        } catch (error) {
+          console.error('[VAPI WEBHOOK] Error processing tool call:', error);
+        }
+      }
+    }
+
+    // Logistics extraction (only if configured and we have transcript)
+    // Prefer per-tenant configuration, fall back to env
+    const logisticsSheetId = tenant?.vapi?.logisticsSheetId || tenant?.gsheet_id || process.env.LOGISTICS_SHEET_ID;
+    if (logisticsSheetId && transcript && status === 'completed') {
+      try {
+        const extracted = extractLogisticsFields(transcript);
+        const businessName = metadata.businessName || '';
+        const decisionMaker = metadata.decisionMaker?.name || '';
+        const receptionistName = pickReceptionistName(transcript) || metadata.receptionistName || '';
+        const callbackNeeded = /call\s*back|transfer|not\s*available|not\s*in|back\s*later|try\s*again/i.test(transcript) && !decisionMaker;
+
+        await sheets.appendLogistics(logisticsSheetId, {
+          businessName,
+          decisionMaker,
+          phone: leadPhone,
+          email: extracted.email,
+          international: extracted.international,
+          mainCouriers: extracted.mainCouriers,
+          frequency: extracted.frequency,
+          mainCountries: extracted.mainCountries,
+          exampleShipment: extracted.exampleShipment,
+          exampleShipmentCost: extracted.exampleShipmentCost,
+          domesticFrequency: extracted.domesticFrequency,
+          ukCourier: extracted.ukCourier,
+          standardRateUpToKg: extracted.standardRateUpToKg,
+          excludingFuelVat: extracted.excludingFuelVat,
+          singleVsMulti: extracted.singleVsMulti,
+          receptionistName,
+          callbackNeeded,
+          callId,
+          recordingUrl,
+          transcriptSnippet: transcript.slice(0, 500)
+        });
+
+        console.log('[LOGISTICS SHEET APPEND]', { callId, phone: leadPhone });
+
+        // Email fallback notification for callback queue (per-tenant if available)
+        const callbackInbox = tenant?.vapi?.callbackInboxEmail || process.env.CALLBACK_INBOX_EMAIL;
+        if (callbackNeeded && callbackInbox) {
+          const subject = `Callback needed: ${businessName || 'Unknown business'} (${leadPhone})`;
+          const body = `A receptionist requested a callback or decision maker was unavailable.\n\nBusiness: ${businessName || 'Unknown'}\nReceptionist: ${receptionistName || 'Unknown'}\nPhone: ${leadPhone}\nEmail: ${extracted.email || 'N/A'}\nInternational: ${extracted.international || 'N/A'}\nCouriers: ${(extracted.mainCouriers || []).join(', ') || 'N/A'}\nFrequency: ${extracted.frequency || 'N/A'}\nCountries: ${(extracted.mainCountries || []).join(', ') || 'N/A'}\nExample Shipment: ${extracted.exampleShipment || 'N/A'} (Cost: ${extracted.exampleShipmentCost || 'N/A'})\nRecording: ${recordingUrl || 'N/A'}\nCall ID: ${callId}\n\nTranscript snippet:\n${transcript.slice(0, 800)}`;
+          await messagingService.sendEmail({ to: callbackInbox, subject, body }).catch(() => {});
+        }
+      } catch (sheetErr) {
+        console.error('[LOGISTICS SHEET ERROR]', sheetErr?.message || sheetErr);
+      }
+    }
 
     // Handle specific outcomes
     if (outcome === 'booked' || body.booked === true) {
@@ -223,6 +408,14 @@ async function updateCallTracking({
   } catch (error) {
     console.error('[CALL TRACKING ERROR]', error);
   }
+}
+
+// Naive receptionist name picker from transcript
+function pickReceptionistName(transcript) {
+  const m = transcript.match(/(this is|i am)\s+([A-Z][a-z]+)(?:\s+[A-Z][a-z]+)?\b.*(reception|speaking)/i);
+  if (m) return m[2];
+  const m2 = transcript.match(/receptionist\s+(?:is|was)\s+([A-Z][a-z]+)(?:\s+[A-Z][a-z]+)?/i);
+  return m2 ? m2[1] : '';
 }
 
 // Handle successful booking outcomes
