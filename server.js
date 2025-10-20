@@ -9866,71 +9866,6 @@ app.post('/tools/schedule_callback', async (req, res) => {
   }
 });
 
-// CSV Import for Logistics Outreach
-app.post('/admin/vapi/logistics-csv-import', async (req, res) => {
-  try {
-    const apiKey = req.get('X-API-Key');
-    if (!apiKey || apiKey !== process.env.API_KEY) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    const { csvData, assistantId, tenantKey = 'logistics_client' } = req.body;
-    
-    if (!csvData || !assistantId) {
-      return res.status(400).json({ error: 'csvData and assistantId are required' });
-    }
-
-    console.log('[LOGISTICS CSV IMPORT]', { 
-      assistantId, 
-      tenantKey,
-      csvRows: csvData.length,
-      requestedBy: req.ip
-    });
-
-    // Parse CSV data into businesses array
-    const businesses = csvData.map((row, index) => ({
-      name: row['Business Name'] || row['Company Name'] || row['Name'] || `Business ${index + 1}`,
-      phone: row['Phone'] || row['Phone Number'] || row['Mobile'] || row['Contact Number'],
-      address: row['Address'] || row['Location'] || row['City'] || '',
-      website: row['Website'] || row['URL'] || '',
-      decisionMaker: row['Decision Maker'] || row['Contact Person'] || row['Manager'] || '',
-      email: row['Email'] || row['Email Address'] || '',
-      industry: row['Industry'] || row['Sector'] || 'Logistics',
-      source: 'CSV Import'
-    })).filter(business => business.phone); // Only include businesses with phone numbers
-
-    if (businesses.length === 0) {
-      return res.status(400).json({ error: 'No valid businesses found in CSV (need phone numbers)' });
-    }
-
-    console.log(`[LOGISTICS CSV IMPORT] Parsed ${businesses.length} valid businesses`);
-
-    // Now run the outreach
-    const outreachResult = await runLogisticsOutreach({
-      assistantId,
-      businesses,
-      tenantKey,
-      vapiKey: process.env.VAPI_PRIVATE_KEY || process.env.VAPI_PUBLIC_KEY || process.env.VAPI_API_KEY
-    });
-
-    res.json({
-      success: true,
-      message: 'CSV import and outreach completed',
-      tenantKey,
-      totalBusinesses: businesses.length,
-      validBusinesses: businesses.length,
-      results: outreachResult
-    });
-    
-  } catch (error) {
-    console.error('[LOGISTICS CSV IMPORT ERROR]', error);
-    res.status(500).json({
-      error: 'Failed to import CSV and run outreach',
-      message: error.message
-    });
-  }
-});
-
 // Helper function to run logistics outreach
 async function runLogisticsOutreach({ assistantId, businesses, tenantKey, vapiKey }) {
   if (!vapiKey) {
@@ -10024,6 +9959,71 @@ async function runLogisticsOutreach({ assistantId, businesses, tenantKey, vapiKe
   
   return results;
 }
+
+// CSV Import for Logistics Outreach
+app.post('/admin/vapi/logistics-csv-import', async (req, res) => {
+  try {
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { csvData, assistantId, tenantKey = 'logistics_client' } = req.body;
+    
+    if (!csvData || !assistantId) {
+      return res.status(400).json({ error: 'csvData and assistantId are required' });
+    }
+
+    console.log('[LOGISTICS CSV IMPORT]', { 
+      assistantId, 
+      tenantKey,
+      csvRows: csvData.length,
+      requestedBy: req.ip
+    });
+
+    // Parse CSV data into businesses array
+    const businesses = csvData.map((row, index) => ({
+      name: row['Business Name'] || row['Company Name'] || row['Name'] || `Business ${index + 1}`,
+      phone: row['Phone'] || row['Phone Number'] || row['Mobile'] || row['Contact Number'],
+      address: row['Address'] || row['Location'] || row['City'] || '',
+      website: row['Website'] || row['URL'] || '',
+      decisionMaker: row['Decision Maker'] || row['Contact Person'] || row['Manager'] || '',
+      email: row['Email'] || row['Email Address'] || '',
+      industry: row['Industry'] || row['Sector'] || 'Logistics',
+      source: 'CSV Import'
+    })).filter(business => business.phone); // Only include businesses with phone numbers
+
+    if (businesses.length === 0) {
+      return res.status(400).json({ error: 'No valid businesses found in CSV (need phone numbers)' });
+    }
+
+    console.log(`[LOGISTICS CSV IMPORT] Parsed ${businesses.length} valid businesses`);
+
+    // Now run the outreach
+    const outreachResult = await runLogisticsOutreach({
+      assistantId,
+      businesses,
+      tenantKey,
+      vapiKey: process.env.VAPI_PRIVATE_KEY || process.env.VAPI_PUBLIC_KEY || process.env.VAPI_API_KEY
+    });
+
+    res.json({
+      success: true,
+      message: 'CSV import and outreach completed',
+      tenantKey,
+      totalBusinesses: businesses.length,
+      validBusinesses: businesses.length,
+      results: outreachResult
+    });
+    
+  } catch (error) {
+    console.error('[LOGISTICS CSV IMPORT ERROR]', error);
+    res.status(500).json({
+      error: 'Failed to import CSV and run outreach',
+      message: error.message
+    });
+  }
+});
 
 // Automated Logistics Outreach - Batch calling with proper metadata
 app.post('/admin/vapi/logistics-outreach', async (req, res) => {
