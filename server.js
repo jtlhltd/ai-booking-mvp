@@ -5764,31 +5764,36 @@ function hoursFor(client) {
       || asJson(client?.hoursJson, null)
       || { mon:['09:00-17:00'], tue:['09:00-17:00'], wed:['09:00-17:00'], thu:['09:00-17:00'], fri:['09:00-17:00'] };
 }
-      const crypto = await import('crypto');
-      const deterministicId = ('bk' + crypto.createHash('sha1').update(rawKey).digest('hex').slice(0, 20)).toLowerCase();
 
-      event = await retryGoogleCalendar({
-        id: deterministicId,
-        summary,
-        description,
-        start: { dateTime: startISO, timeZone: tz },
-        end:   { dateTime: endISO,   timeZone: tz },
-        extendedProperties: { private: { leadPhone: lead.phone, leadId: lead.id || '' } }
-      });
-    } catch (err) {
-      // Retry without custom id if Google rejects it
-      console.log('[GOOGLE CALENDAR] Retrying without custom ID...');
-      event = await retryGoogleCalendar({
-        summary,
-        description,
-        start: { dateTime: startISO, timeZone: tz },
-        end:   { dateTime: endISO,   timeZone: tz },
-        extendedProperties: { private: { leadPhone: lead.phone, leadId: lead.id || '' } }
-      });
-    }
+// === Availability === (respects hours/closures/min notice/max advance + per-service duration)
+app.post('/api/calendar/find-slots', async (req, res) => {
+  try {
+    const client = await getClientFromHeader(req);
+    if (!client) return res.status(400).json({ ok:false, error: 'Unknown tenant (missing X-Client-Key)' });
+    if (!(GOOGLE_CLIENT_EMAIL && (GOOGLE_PRIVATE_KEY || GOOGLE_PRIVATE_KEY_B64)))
+      return res.status(400).json({ ok:false, error:'Google env missing' });
 
-    // Send confirmation SMS (tenant-aware)
-    try {
+    const tz = pickTimezone(client);
+    const calendarId = pickCalendarId(client);
+
+    const services = servicesFor(client);
+    const requestedService = req.body?.service;
+    const svc = services.find(s => s.id === requestedService);
+    const durationMin = (svc?.durationMin) || req.body?.durationMin || client?.booking?.defaultDurationMin || 30;
+    const bufferMin = (svc?.bufferMin) || 0;
+
+    const minNoticeMin   = client?.booking?.minNoticeMin   ?? client?.minNoticeMin   ?? 0;
+    const maxAdvanceDays = client?.booking?.maxAdvanceDays ?? client?.maxAdvanceDays ?? 14;
+    const business = hoursFor(client);
+    const closedDates = new Set(closedDatesFor(client));
+    const stepMinutes = Math.max(5, Number((req.body?.stepMinutes ?? svc?.slotStepMin ?? durationMin ?? 15)));
+const windowStart = new Date(Date.now() + minNoticeMin * 60000);
+const windowEnd   = new Date(Date.now() + maxAdvanceDays * 86400000);
+
+    function alignToGrid(d) {
+      const dt = new Date(d);
+      dt.setSeconds(0,0);
+      const minutes = dt.getMinutes();
       const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
       if (configured) {
         const when = new Date(startISO).toLocaleString(client?.locale || 'en-GB', {
