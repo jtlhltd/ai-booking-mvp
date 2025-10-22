@@ -1,0 +1,1329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Hub - AI Booking System</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --primary: #667eea;
+      --primary-dark: #5568d3;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --info: #3b82f6;
+      --gray-50: #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-300: #d1d5db;
+      --gray-600: #4b5563;
+      --gray-700: #374151;
+      --gray-900: #111827;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--gray-50);
+      min-height: 100vh;
+    }
+
+    /* Header */
+    .header {
+      background: white;
+      border-bottom: 1px solid var(--gray-200);
+      padding: 20px 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+
+    .header h1 {
+      font-size: 28px;
+      color: var(--gray-900);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .live-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--success);
+      background: #d1fae5;
+      padding: 4px 12px;
+      border-radius: 12px;
+    }
+
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--success);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .btn {
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 14px;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-dark);
+    }
+
+    .btn-success {
+      background: var(--success);
+      color: white;
+    }
+
+    .btn-success:hover {
+      background: #059669;
+    }
+
+    /* Navigation */
+    .nav {
+      background: white;
+      border-bottom: 1px solid var(--gray-200);
+      padding: 0 40px;
+      display: flex;
+      gap: 32px;
+    }
+
+    .nav-item {
+      padding: 16px 0;
+      color: var(--gray-600);
+      text-decoration: none;
+      font-weight: 500;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .nav-item:hover,
+    .nav-item.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+
+    /* Container */
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 32px 40px;
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 24px;
+      margin-bottom: 32px;
+    }
+
+    .stat-card {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      border: 1px solid var(--gray-200);
+    }
+
+    .stat-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .stat-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--gray-600);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .stat-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+
+    .stat-icon.primary { background: #e0e7ff; color: var(--primary); }
+    .stat-icon.success { background: #d1fae5; color: var(--success); }
+    .stat-icon.warning { background: #fef3c7; color: var(--warning); }
+    .stat-icon.danger { background: #fee2e2; color: var(--danger); }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--gray-900);
+      margin-bottom: 8px;
+    }
+
+    .stat-change {
+      font-size: 14px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .stat-change.positive { color: var(--success); }
+    .stat-change.negative { color: var(--danger); }
+
+    /* Charts Grid */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 24px;
+      margin-bottom: 32px;
+    }
+
+    .chart-card {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      border: 1px solid var(--gray-200);
+    }
+
+    .chart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+
+    .chart-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--gray-900);
+    }
+
+    .chart-container {
+      position: relative;
+      height: 300px;
+    }
+
+    /* Tables */
+    .table-card {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      border: 1px solid var(--gray-200);
+      margin-bottom: 24px;
+    }
+
+    .table-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .table-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--gray-900);
+    }
+
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .table th,
+    .table td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--gray-200);
+    }
+
+    .table th {
+      font-weight: 600;
+      color: var(--gray-700);
+      background: var(--gray-50);
+    }
+
+    .table tr:hover {
+      background: var(--gray-50);
+    }
+
+    .status-badge {
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .status-active { background: #d1fae5; color: var(--success); }
+    .status-pending { background: #fef3c7; color: var(--warning); }
+    .status-inactive { background: #fee2e2; color: var(--danger); }
+
+    /* Quick Actions */
+    .quick-actions {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+
+    .action-card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      border: 1px solid var(--gray-200);
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .action-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    .action-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      margin: 0 auto 12px;
+    }
+
+    .action-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--gray-900);
+      margin-bottom: 4px;
+    }
+
+    .action-desc {
+      font-size: 14px;
+      color: var(--gray-600);
+    }
+
+    /* Loading States */
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 200px;
+      color: var(--gray-600);
+    }
+
+    .spinner {
+      width: 24px;
+      height: 24px;
+      border: 2px solid var(--gray-200);
+      border-top: 2px solid var(--primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-right: 12px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .header {
+        padding: 16px 20px;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .nav {
+        padding: 0 20px;
+        overflow-x: auto;
+      }
+
+      .container {
+        padding: 20px 16px;
+      }
+
+      .charts-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .quick-actions {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Hidden sections */
+    .section {
+      display: none;
+    }
+
+    .section.active {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <div class="header">
+    <h1>
+      🎯 Admin Hub
+      <span class="live-indicator">
+        <span class="live-dot"></span>
+        LIVE
+      </span>
+    </h1>
+    <div class="header-actions">
+      <button class="btn btn-primary" onclick="refreshAllData()">
+        🔄 Refresh All
+      </button>
+      <a href="/signup.html" class="btn btn-success">
+        ➕ New Client
+      </a>
+    </div>
+  </div>
+
+  <!-- Navigation -->
+  <div class="nav">
+    <a href="#" class="nav-item active" onclick="showSection('overview')">📊 Overview</a>
+    <a href="#" class="nav-item" onclick="showSection('clients')">👥 Clients</a>
+    <a href="#" class="nav-item" onclick="showSection('calls')">📞 Calls</a>
+    <a href="#" class="nav-item" onclick="showSection('analytics')">📈 Analytics</a>
+    <a href="#" class="nav-item" onclick="showSection('system')">⚙️ System</a>
+  </div>
+
+  <!-- Container -->
+  <div class="container">
+    <!-- Overview Section -->
+    <div id="overview" class="section active">
+      <!-- Quick Actions -->
+      <div class="quick-actions">
+        <div class="action-card" onclick="createNewClient()">
+          <div class="action-icon" style="background: #e0e7ff; color: var(--primary);">👤</div>
+          <div class="action-title">New Client</div>
+          <div class="action-desc">Onboard a new client</div>
+        </div>
+        <div class="action-card" onclick="importLeads()">
+          <div class="action-icon" style="background: #d1fae5; color: var(--success);">📥</div>
+          <div class="action-title">Import Leads</div>
+          <div class="action-desc">Bulk import leads</div>
+        </div>
+        <div class="action-card" onclick="viewSystemHealth()">
+          <div class="action-icon" style="background: #fef3c7; color: var(--warning);">🔧</div>
+          <div class="action-title">System Health</div>
+          <div class="action-desc">Check system status</div>
+        </div>
+        <div class="action-card" onclick="viewReports()">
+          <div class="action-icon" style="background: #fee2e2; color: var(--danger);">📊</div>
+          <div class="action-title">Reports</div>
+          <div class="action-desc">Generate reports</div>
+        </div>
+      </div>
+
+      <!-- Business Stats -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-header">
+            <div class="stat-title">Monthly Revenue</div>
+            <div class="stat-icon primary">💰</div>
+          </div>
+          <div class="stat-value" id="monthlyRevenue">£0</div>
+          <div class="stat-change positive" id="revenueChange">
+            <span>↗</span> +0% this month
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-header">
+            <div class="stat-title">Active Clients</div>
+            <div class="stat-icon success">👥</div>
+          </div>
+          <div class="stat-value" id="activeClients">0</div>
+          <div class="stat-change positive" id="clientsChange">
+            <span>↗</span> +0 this month
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-header">
+            <div class="stat-title">Total Calls</div>
+            <div class="stat-icon warning">📞</div>
+          </div>
+          <div class="stat-value" id="totalCalls">0</div>
+          <div class="stat-change positive" id="callsChange">
+            <span>↗</span> +0 today
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-header">
+            <div class="stat-title">Conversion Rate</div>
+            <div class="stat-icon danger">🎯</div>
+          </div>
+          <div class="stat-value" id="conversionRate">0%</div>
+          <div class="stat-change positive" id="conversionChange">
+            <span>↗</span> +0% vs last month
+          </div>
+        </div>
+      </div>
+
+      <!-- Charts -->
+      <div class="charts-grid">
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-title">Revenue Trend</div>
+            <div class="btn btn-primary" onclick="refreshChart('revenue')">Refresh</div>
+          </div>
+          <div class="chart-container">
+            <canvas id="revenueChart"></canvas>
+          </div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-title">Call Outcomes</div>
+            <div class="btn btn-primary" onclick="refreshChart('outcomes')">Refresh</div>
+          </div>
+          <div class="chart-container">
+            <canvas id="outcomesChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Activity -->
+      <div class="table-card">
+        <div class="table-header">
+          <div class="table-title">Recent Activity</div>
+          <div class="btn btn-primary" onclick="refreshActivity()">Refresh</div>
+        </div>
+        <div class="loading" id="activityLoading">
+          <div class="spinner"></div>
+          Loading recent activity...
+        </div>
+        <table class="table" id="activityTable" style="display: none;">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Client</th>
+              <th>Action</th>
+              <th>Details</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="activityBody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Clients Section -->
+    <div id="clients" class="section">
+      <div class="table-card">
+        <div class="table-header">
+          <div class="table-title">All Clients</div>
+          <div class="btn btn-success" onclick="createNewClient()">Add Client</div>
+        </div>
+        <div class="loading" id="clientsLoading">
+          <div class="spinner"></div>
+          Loading clients...
+        </div>
+        <table class="table" id="clientsTable" style="display: none;">
+          <thead>
+            <tr>
+              <th>Client</th>
+              <th>Industry</th>
+              <th>Status</th>
+              <th>Leads</th>
+              <th>Calls</th>
+              <th>Conversion</th>
+              <th>Revenue</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="clientsBody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Calls Section -->
+    <div id="calls" class="section">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-header">
+            <div class="stat-title">Live Calls</div>
+            <div class="stat-icon primary">📞</div>
+          </div>
+          <div class="stat-value" id="liveCalls">0</div>
+          <div class="stat-change">Currently active</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-header">
+            <div class="stat-title">Queue</div>
+            <div class="stat-icon warning">⏳</div>
+          </div>
+          <div class="stat-value" id="callQueue">0</div>
+          <div class="stat-change">Waiting to call</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-header">
+            <div class="stat-title">Success Rate</div>
+            <div class="stat-icon success">✅</div>
+          </div>
+          <div class="stat-value" id="successRate">0%</div>
+          <div class="stat-change">Last 24 hours</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-header">
+            <div class="stat-title">Avg Duration</div>
+            <div class="stat-icon info">⏱️</div>
+          </div>
+          <div class="stat-value" id="avgDuration">0m</div>
+          <div class="stat-change">Per call</div>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-header">
+          <div class="table-title">Recent Calls</div>
+          <div class="btn btn-primary" onclick="refreshCalls()">Refresh</div>
+        </div>
+        <div class="loading" id="callsLoading">
+          <div class="spinner"></div>
+          Loading calls...
+        </div>
+        <table class="table" id="callsTable" style="display: none;">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Client</th>
+              <th>Lead</th>
+              <th>Duration</th>
+              <th>Outcome</th>
+              <th>Recording</th>
+            </tr>
+          </thead>
+          <tbody id="callsBody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Analytics Section -->
+    <div id="analytics" class="section">
+      <div class="charts-grid">
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-title">Conversion Funnel</div>
+            <div class="btn btn-primary" onclick="refreshChart('funnel')">Refresh</div>
+          </div>
+          <div class="chart-container">
+            <canvas id="funnelChart"></canvas>
+          </div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-title">Peak Hours</div>
+            <div class="btn btn-primary" onclick="refreshChart('peak')">Refresh</div>
+          </div>
+          <div class="chart-container">
+            <canvas id="peakChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-header">
+          <div class="table-title">Performance by Client</div>
+          <div class="btn btn-primary" onclick="refreshAnalytics()">Refresh</div>
+        </div>
+        <div class="loading" id="analyticsLoading">
+          <div class="spinner"></div>
+          Loading analytics...
+        </div>
+        <table class="table" id="analyticsTable" style="display: none;">
+          <thead>
+            <tr>
+              <th>Client</th>
+              <th>Leads</th>
+              <th>Calls</th>
+              <th>Bookings</th>
+              <th>Conversion</th>
+              <th>Revenue</th>
+              <th>ROI</th>
+            </tr>
+          </thead>
+          <tbody id="analyticsBody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- System Section -->
+    <div id="system" class="section">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-header">
+            <div class="stat-title">System Status</div>
+            <div class="stat-icon success">✅</div>
+          </div>
+          <div class="stat-value" id="systemStatus">Healthy</div>
+          <div class="stat-change">All systems operational</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-header">
+            <div class="stat-title">Uptime</div>
+            <div class="stat-icon primary">⏰</div>
+          </div>
+          <div class="stat-value" id="uptime">99.9%</div>
+          <div class="stat-change">Last 30 days</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-header">
+            <div class="stat-title">Errors</div>
+            <div class="stat-icon danger">⚠️</div>
+          </div>
+          <div class="stat-value" id="errorCount">0</div>
+          <div class="stat-change">Last 24 hours</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-header">
+            <div class="stat-title">Response Time</div>
+            <div class="stat-icon warning">⚡</div>
+          </div>
+          <div class="stat-value" id="responseTime">120ms</div>
+          <div class="stat-change">Average API</div>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-header">
+          <div class="table-title">Recent Errors</div>
+          <div class="btn btn-primary" onclick="refreshErrors()">Refresh</div>
+        </div>
+        <div class="loading" id="errorsLoading">
+          <div class="spinner"></div>
+          Loading errors...
+        </div>
+        <table class="table" id="errorsTable" style="display: none;">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Type</th>
+              <th>Message</th>
+              <th>Client</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="errorsBody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Global variables
+    let charts = {};
+    let refreshInterval;
+    let apiKey = null;
+
+    // Initialize Admin Hub
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('🎯 Admin Hub initialized');
+      
+      // Check for API key
+      apiKey = localStorage.getItem('admin_api_key') || prompt('Enter your API key:');
+      if (!apiKey) {
+        alert('API key required to access Admin Hub');
+        return;
+      }
+      localStorage.setItem('admin_api_key', apiKey);
+      
+      loadAllData();
+      startAutoRefresh();
+    });
+
+    // Navigation
+    function showSection(sectionId) {
+      // Hide all sections
+      document.querySelectorAll('.section').forEach(section => {
+        section.classList.remove('active');
+      });
+      
+      // Remove active class from nav items
+      document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.remove('active');
+      });
+      
+      // Show selected section
+      document.getElementById(sectionId).classList.add('active');
+      
+      // Add active class to clicked nav item
+      event.target.classList.add('active');
+      
+      // Load section-specific data
+      loadSectionData(sectionId);
+    }
+
+    // Load all data
+    async function loadAllData() {
+      try {
+        await Promise.all([
+          loadBusinessStats(),
+          loadRecentActivity(),
+          loadClients(),
+          loadCalls(),
+          loadAnalytics(),
+          loadSystemHealth()
+        ]);
+        
+        console.log('✅ All data loaded successfully');
+      } catch (error) {
+        console.error('❌ Error loading data:', error);
+      }
+    }
+
+    // Load section-specific data
+    async function loadSectionData(sectionId) {
+      switch(sectionId) {
+        case 'overview':
+          await loadBusinessStats();
+          await loadRecentActivity();
+          break;
+        case 'clients':
+          await loadClients();
+          break;
+        case 'calls':
+          await loadCalls();
+          break;
+        case 'analytics':
+          await loadAnalytics();
+          break;
+        case 'system':
+          await loadSystemHealth();
+          break;
+      }
+    }
+
+    // Business Stats
+    async function loadBusinessStats() {
+      try {
+        const response = await fetch('/api/admin/business-stats', {
+          headers: {
+            'X-API-Key': apiKey
+          }
+        });
+        const data = await response.json();
+        
+        document.getElementById('monthlyRevenue').textContent = `£${data.monthlyRevenue || 0}`;
+        document.getElementById('activeClients').textContent = data.activeClients || 0;
+        document.getElementById('totalCalls').textContent = data.totalCalls || 0;
+        document.getElementById('conversionRate').textContent = `${data.conversionRate || 0}%`;
+        
+        // Update change indicators
+        updateChangeIndicator('revenueChange', data.revenueChange);
+        updateChangeIndicator('clientsChange', data.clientsChange);
+        updateChangeIndicator('callsChange', data.callsChange);
+        updateChangeIndicator('conversionChange', data.conversionChange);
+        
+        // Load charts
+        loadRevenueChart(data.revenueTrend);
+        loadOutcomesChart(data.callOutcomes);
+        
+      } catch (error) {
+        console.error('Error loading business stats:', error);
+      }
+    }
+
+    // Recent Activity
+    async function loadRecentActivity() {
+      const loading = document.getElementById('activityLoading');
+      const table = document.getElementById('activityTable');
+      const body = document.getElementById('activityBody');
+      
+      try {
+        const response = await fetch('/api/admin/recent-activity', {
+          headers: {
+            'X-API-Key': apiKey
+          }
+        });
+        const activities = await response.json();
+        
+        loading.style.display = 'none';
+        table.style.display = 'table';
+        
+        body.innerHTML = activities.map(activity => `
+          <tr>
+            <td>${formatTime(activity.timestamp)}</td>
+            <td>${activity.clientName}</td>
+            <td>${activity.action}</td>
+            <td>${activity.details}</td>
+            <td><span class="status-badge status-${activity.status}">${activity.status}</span></td>
+          </tr>
+        `).join('');
+        
+      } catch (error) {
+        console.error('Error loading recent activity:', error);
+        loading.innerHTML = '<div class="spinner"></div>Error loading activity';
+      }
+    }
+
+    // Clients
+    async function loadClients() {
+      const loading = document.getElementById('clientsLoading');
+      const table = document.getElementById('clientsTable');
+      const body = document.getElementById('clientsBody');
+      
+      try {
+        const response = await fetch('/api/admin/clients', {
+          headers: {
+            'X-API-Key': apiKey
+          }
+        });
+        const clients = await response.json();
+        
+        loading.style.display = 'none';
+        table.style.display = 'table';
+        
+        body.innerHTML = clients.map(client => `
+          <tr>
+            <td>
+              <strong>${client.businessName}</strong><br>
+              <small>${client.ownerEmail}</small>
+            </td>
+            <td>${client.industry}</td>
+            <td><span class="status-badge status-${client.status}">${client.status}</span></td>
+            <td>${client.leadCount}</td>
+            <td>${client.callCount}</td>
+            <td>${client.conversionRate}%</td>
+            <td>£${client.monthlyRevenue}</td>
+            <td>
+              <button class="btn btn-primary" onclick="viewClient('${client.clientKey}')">View</button>
+              <button class="btn btn-success" onclick="editClient('${client.clientKey}')">Edit</button>
+            </td>
+          </tr>
+        `).join('');
+        
+      } catch (error) {
+        console.error('Error loading clients:', error);
+        loading.innerHTML = '<div class="spinner"></div>Error loading clients';
+      }
+    }
+
+    // Calls
+    async function loadCalls() {
+      const loading = document.getElementById('callsLoading');
+      const table = document.getElementById('callsTable');
+      const body = document.getElementById('callsBody');
+      
+      try {
+        const response = await fetch('/api/admin/calls', {
+          headers: {
+            'X-API-Key': apiKey
+          }
+        });
+        const data = await response.json();
+        
+        // Update call stats
+        document.getElementById('liveCalls').textContent = data.liveCalls || 0;
+        document.getElementById('callQueue').textContent = data.queue || 0;
+        document.getElementById('successRate').textContent = `${data.successRate || 0}%`;
+        document.getElementById('avgDuration').textContent = `${data.avgDuration || 0}m`;
+        
+        loading.style.display = 'none';
+        table.style.display = 'table';
+        
+        body.innerHTML = data.recentCalls.map(call => `
+          <tr>
+            <td>${formatTime(call.timestamp)}</td>
+            <td>${call.clientName}</td>
+            <td>${call.leadName}</td>
+            <td>${call.duration}m</td>
+            <td><span class="status-badge status-${call.outcome}">${call.outcome}</span></td>
+            <td>
+              ${call.recordingUrl ? 
+                `<a href="${call.recordingUrl}" target="_blank" class="btn btn-primary">Listen</a>` : 
+                'No recording'
+              }
+            </td>
+          </tr>
+        `).join('');
+        
+      } catch (error) {
+        console.error('Error loading calls:', error);
+        loading.innerHTML = '<div class="spinner"></div>Error loading calls';
+      }
+    }
+
+    // Analytics
+    async function loadAnalytics() {
+      const loading = document.getElementById('analyticsLoading');
+      const table = document.getElementById('analyticsTable');
+      const body = document.getElementById('analyticsBody');
+      
+      try {
+        const response = await fetch('/api/admin/analytics', {
+          headers: {
+            'X-API-Key': apiKey
+          }
+        });
+        const data = await response.json();
+        
+        loading.style.display = 'none';
+        table.style.display = 'table';
+        
+        body.innerHTML = data.clientPerformance.map(client => `
+          <tr>
+            <td><strong>${client.businessName}</strong></td>
+            <td>${client.leads}</td>
+            <td>${client.calls}</td>
+            <td>${client.bookings}</td>
+            <td>${client.conversionRate}%</td>
+            <td>£${client.revenue}</td>
+            <td>${client.roi}x</td>
+          </tr>
+        `).join('');
+        
+        // Load charts
+        loadFunnelChart(data.conversionFunnel);
+        loadPeakChart(data.peakHours);
+        
+      } catch (error) {
+        console.error('Error loading analytics:', error);
+        loading.innerHTML = '<div class="spinner"></div>Error loading analytics';
+      }
+    }
+
+    // System Health
+    async function loadSystemHealth() {
+      const loading = document.getElementById('errorsLoading');
+      const table = document.getElementById('errorsTable');
+      const body = document.getElementById('errorsBody');
+      
+      try {
+        const response = await fetch('/api/admin/system-health', {
+          headers: {
+            'X-API-Key': apiKey
+          }
+        });
+        const data = await response.json();
+        
+        // Update system stats
+        document.getElementById('systemStatus').textContent = data.status;
+        document.getElementById('uptime').textContent = `${data.uptime}%`;
+        document.getElementById('errorCount').textContent = data.errorCount || 0;
+        document.getElementById('responseTime').textContent = `${data.responseTime}ms`;
+        
+        loading.style.display = 'none';
+        table.style.display = 'table';
+        
+        body.innerHTML = data.recentErrors.map(error => `
+          <tr>
+            <td>${formatTime(error.timestamp)}</td>
+            <td>${error.type}</td>
+            <td>${error.message}</td>
+            <td>${error.clientName || 'System'}</td>
+            <td><span class="status-badge status-${error.status}">${error.status}</span></td>
+          </tr>
+        `).join('');
+        
+      } catch (error) {
+        console.error('Error loading system health:', error);
+        loading.innerHTML = '<div class="spinner"></div>Error loading system health';
+      }
+    }
+
+    // Chart functions
+    function loadRevenueChart(data) {
+      const ctx = document.getElementById('revenueChart').getContext('2d');
+      
+      if (charts.revenue) {
+        charts.revenue.destroy();
+      }
+      
+      charts.revenue = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: data.labels || ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+          datasets: [{
+            label: 'Monthly Revenue',
+            data: data.values || [0, 0, 0, 0, 0, 0],
+            borderColor: '#667eea',
+            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+            tension: 0.4,
+            fill: true
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: false
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                callback: function(value) {
+                  return '£' + value;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function loadOutcomesChart(data) {
+      const ctx = document.getElementById('outcomesChart').getContext('2d');
+      
+      if (charts.outcomes) {
+        charts.outcomes.destroy();
+      }
+      
+      charts.outcomes = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: data.labels || ['Booked', 'Not Interested', 'No Answer', 'Callback'],
+          datasets: [{
+            data: data.values || [0, 0, 0, 0],
+            backgroundColor: ['#10b981', '#ef4444', '#f59e0b', '#3b82f6']
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom'
+            }
+          }
+        }
+      });
+    }
+
+    function loadFunnelChart(data) {
+      const ctx = document.getElementById('funnelChart').getContext('2d');
+      
+      if (charts.funnel) {
+        charts.funnel.destroy();
+      }
+      
+      charts.funnel = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: data.labels || ['Leads', 'Called', 'Interested', 'Booked'],
+          datasets: [{
+            data: data.values || [0, 0, 0, 0],
+            backgroundColor: '#667eea'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          indexAxis: 'y',
+          plugins: {
+            legend: {
+              display: false
+            }
+          },
+          scales: {
+            x: {
+              beginAtZero: true
+            }
+          }
+        }
+      });
+    }
+
+    function loadPeakChart(data) {
+      const ctx = document.getElementById('peakChart').getContext('2d');
+      
+      if (charts.peak) {
+        charts.peak.destroy();
+      }
+      
+      charts.peak = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: data.labels || ['9AM', '10AM', '11AM', '12PM', '1PM', '2PM', '3PM', '4PM', '5PM'],
+          datasets: [{
+            label: 'Calls',
+            data: data.values || [0, 0, 0, 0, 0, 0, 0, 0, 0],
+            backgroundColor: '#f59e0b'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: false
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true
+            }
+          }
+        }
+      });
+    }
+
+    // Utility functions
+    function updateChangeIndicator(elementId, change) {
+      const element = document.getElementById(elementId);
+      if (change > 0) {
+        element.className = 'stat-change positive';
+        element.innerHTML = `<span>↗</span> +${change}%`;
+      } else if (change < 0) {
+        element.className = 'stat-change negative';
+        element.innerHTML = `<span>↘</span> ${change}%`;
+      } else {
+        element.className = 'stat-change';
+        element.innerHTML = `<span>→</span> No change`;
+      }
+    }
+
+    function formatTime(timestamp) {
+      return new Date(timestamp).toLocaleString();
+    }
+
+    // Quick actions
+    function createNewClient() {
+      window.open('/signup.html', '_blank');
+    }
+
+    function importLeads() {
+      // Open lead import modal or page
+      alert('Lead import functionality - to be implemented');
+    }
+
+    function viewSystemHealth() {
+      showSection('system');
+    }
+
+    function viewReports() {
+      showSection('analytics');
+    }
+
+    function viewClient(clientKey) {
+      window.open(`/dashboard/${clientKey}`, '_blank');
+    }
+
+    function editClient(clientKey) {
+      window.open(`/settings/${clientKey}`, '_blank');
+    }
+
+    // Refresh functions
+    function refreshAllData() {
+      loadAllData();
+    }
+
+    function refreshActivity() {
+      loadRecentActivity();
+    }
+
+    function refreshCalls() {
+      loadCalls();
+    }
+
+    function refreshAnalytics() {
+      loadAnalytics();
+    }
+
+    function refreshErrors() {
+      loadSystemHealth();
+    }
+
+    function refreshChart(chartType) {
+      switch(chartType) {
+        case 'revenue':
+          loadBusinessStats();
+          break;
+        case 'outcomes':
+          loadBusinessStats();
+          break;
+        case 'funnel':
+          loadAnalytics();
+          break;
+        case 'peak':
+          loadAnalytics();
+          break;
+      }
+    }
+
+    // Auto-refresh
+    function startAutoRefresh() {
+      refreshInterval = setInterval(() => {
+        const activeSection = document.querySelector('.section.active');
+        if (activeSection) {
+          const sectionId = activeSection.id;
+          loadSectionData(sectionId);
+        }
+      }, 30000); // Refresh every 30 seconds
+    }
+
+    function stopAutoRefresh() {
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+      }
+    }
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', stopAutoRefresh);
+  </script>
+</body>
+</html>
