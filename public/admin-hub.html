@@ -781,14 +781,7 @@
     document.addEventListener('DOMContentLoaded', function() {
       console.log('🎯 Admin Hub initialized');
       
-      // Check for API key
-      apiKey = localStorage.getItem('admin_api_key') || prompt('Enter your API key:');
-      if (!apiKey) {
-        alert('API key required to access Admin Hub');
-        return;
-      }
-      localStorage.setItem('admin_api_key', apiKey);
-      
+      // No API key required - load data directly
       loadAllData();
       startAutoRefresh();
     });
@@ -858,11 +851,7 @@
     // Business Stats
     async function loadBusinessStats() {
       try {
-        const response = await fetch('/api/admin/business-stats', {
-          headers: {
-            'X-API-Key': apiKey
-          }
-        });
+        const response = await fetch('/api/admin/business-stats');
         const data = await response.json();
         
         document.getElementById('monthlyRevenue').textContent = `£${data.monthlyRevenue || 0}`;
@@ -892,11 +881,7 @@
       const body = document.getElementById('activityBody');
       
       try {
-        const response = await fetch('/api/admin/recent-activity', {
-          headers: {
-            'X-API-Key': apiKey
-          }
-        });
+        const response = await fetch('/api/admin/recent-activity');
         const activities = await response.json();
         
         loading.style.display = 'none';
@@ -925,11 +910,7 @@
       const body = document.getElementById('clientsBody');
       
       try {
-        const response = await fetch('/api/admin/clients', {
-          headers: {
-            'X-API-Key': apiKey
-          }
-        });
+        const response = await fetch('/api/admin/clients');
         const clients = await response.json();
         
         loading.style.display = 'none';
@@ -967,11 +948,7 @@
       const body = document.getElementById('callsBody');
       
       try {
-        const response = await fetch('/api/admin/calls', {
-          headers: {
-            'X-API-Key': apiKey
-          }
-        });
+        const response = await fetch('/api/admin/calls');
         const data = await response.json();
         
         // Update call stats
@@ -1012,11 +989,7 @@
       const body = document.getElementById('analyticsBody');
       
       try {
-        const response = await fetch('/api/admin/analytics', {
-          headers: {
-            'X-API-Key': apiKey
-          }
-        });
+        const response = await fetch('/api/admin/analytics');
         const data = await response.json();
         
         loading.style.display = 'none';
@@ -1051,11 +1024,7 @@
       const body = document.getElementById('errorsBody');
       
       try {
-        const response = await fetch('/api/admin/system-health', {
-          headers: {
-            'X-API-Key': apiKey
-          }
-        });
+        const response = await fetch('/api/admin/system-health');
         const data = await response.json();
         
         // Update system stats
