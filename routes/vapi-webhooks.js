@@ -76,8 +76,13 @@ const router = express.Router();
 router.post('/webhooks/vapi', async (req, res) => {
   try {
     console.log('[VAPI WEBHOOK DEBUG] Raw body:', JSON.stringify(req.body, null, 2));
+    console.log('[VAPI WEBHOOK DEBUG] Headers:', JSON.stringify(req.headers, null, 2));
     
     const body = req.body || {};
+    
+    // Always return 200 to prevent VAPI from retrying
+    res.status(200).json({ ok: true, received: true });
+    
     const callId = body.call?.id || body.id;
     const status = body.call?.status || body.status;
     const outcome = body.call?.outcome || body.outcome;
@@ -313,7 +318,7 @@ router.post('/webhooks/vapi', async (req, res) => {
       });
     }
 
-    res.status(200).json({ ok: true });
+    // Response already sent at the beginning
   } catch (e) {
     console.error('[VAPI WEBHOOK ERROR]', { 
       error: e?.message || e,
