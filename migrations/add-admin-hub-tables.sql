@@ -1,7 +1,7 @@
--- Simple Security Tables Migration
--- This creates only the essential tables needed for the Admin Hub
+-- Essential Admin Hub Tables
+-- Simple migration for Admin Hub functionality
 
--- User accounts table (for authentication)
+-- User accounts for authentication
 CREATE TABLE IF NOT EXISTS user_accounts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   username VARCHAR(255) UNIQUE NOT NULL,
@@ -13,28 +13,26 @@ CREATE TABLE IF NOT EXISTS user_accounts (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Sessions table (for session management)
+-- Sessions for user management
 CREATE TABLE IF NOT EXISTS sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL,
   token TEXT UNIQUE NOT NULL,
   expires_at TIMESTAMPTZ NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  FOREIGN KEY (user_id) REFERENCES user_accounts(id) ON DELETE CASCADE
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Audit logs table (for compliance)
+-- Audit logs for compliance
 CREATE TABLE IF NOT EXISTS audit_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID,
   action VARCHAR(100) NOT NULL,
   resource VARCHAR(255),
   details JSONB,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  FOREIGN KEY (user_id) REFERENCES user_accounts(id) ON DELETE SET NULL
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Notifications table (for alerts)
+-- Notifications for alerts
 CREATE TABLE IF NOT EXISTS notifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title VARCHAR(255) NOT NULL,
