@@ -111,6 +111,7 @@ function requireApiKey(req, res, next) {
   if (req.path === '/api/test' || req.path === '/api/test-linkedin' || req.path === '/api/uk-business-search' || req.path === '/api/decision-maker-contacts' || req.path === '/api/industry-categories' || req.path === '/test-sms-pipeline' || req.path === '/sms-test' || req.path === '/api/initiate-lead-capture' || req.path === '/api/signup') return next();
   if (req.path === '/uk-business-search' || req.path === '/booking-simple.html') return next();
   if (req.path.startsWith('/dashboard/') || req.path.startsWith('/settings/') || req.path.startsWith('/leads') || req.path === '/privacy.html' || req.path === '/privacy' || req.path === '/zapier-docs.html' || req.path === '/zapier') return next();
+  if (req.path === '/admin-hub.html' || req.path === '/admin-hub') return next();
   if (!API_KEY) return res.status(500).json({ error: 'Server missing API_KEY' });
   const key = req.get('X-API-Key');
   if (key && key === API_KEY) return next();
@@ -219,6 +220,122 @@ app.get('/cold-call-dashboard', (req, res) => {
 // VAPI Test Dashboard Route
 app.get('/vapi-test-dashboard', (req, res) => {
   res.sendFile(path.join(process.cwd(), 'public', 'vapi-test-dashboard.html'));
+});
+
+// Admin Hub routes
+app.get('/admin-hub.html', (req, res) => {
+  res.sendFile(path.join(process.cwd(), 'public', 'admin-hub.html'));
+});
+
+app.get('/admin-hub', (req, res) => {
+  res.sendFile(path.join(process.cwd(), 'public', 'admin-hub.html'));
+});
+
+// Admin API endpoints
+app.get('/api/admin/business-stats', async (req, res) => {
+  try {
+    const clients = await listFullClients();
+    const activeClients = clients.filter(c => c.status === 'active').length;
+    const monthlyRevenue = activeClients * 500; // £500 per client per month
+    
+    // Get call and booking stats
+    const totalCalls = clients.reduce((sum, c) => sum + (c.callCount || 0), 0);
+    const totalBookings = clients.reduce((sum, c) => sum + (c.bookingCount || 0), 0);
+    const conversionRate = totalCalls > 0 ? (totalBookings / totalCalls * 100).toFixed(1) : 0;
+    
+    res.json({
+      activeClients,
+      monthlyRevenue,
+      totalCalls,
+      totalBookings,
+      conversionRate: `${conversionRate}%`
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/admin/recent-activity', async (req, res) => {
+  try {
+    // Mock recent activity data
+    const activities = [
+      { type: 'new_lead', message: 'New lead imported for Client A', timestamp: new Date().toISOString() },
+      { type: 'call_completed', message: 'Call completed for Client B', timestamp: new Date(Date.now() - 300000).toISOString() },
+      { type: 'booking_made', message: 'Appointment booked for Client C', timestamp: new Date(Date.now() - 600000).toISOString() }
+    ];
+    
+    res.json(activities);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/admin/clients', async (req, res) => {
+  try {
+    const clients = await listFullClients();
+    const clientData = clients.map(client => ({
+      name: client.displayName || client.clientKey,
+      email: client.email,
+      industry: client.industry || 'Not specified',
+      status: client.status || 'active',
+      leadCount: client.leadCount || 0,
+      callCount: client.callCount || 0,
+      conversionRate: client.callCount > 0 ? ((client.bookingCount || 0) / client.callCount * 100).toFixed(1) + '%' : '0%',
+      monthlyRevenue: client.status === 'active' ? 500 : 0
+    }));
+    
+    res.json(clientData);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/admin/calls', async (req, res) => {
+  try {
+    const clients = await listFullClients();
+    const totalCalls = clients.reduce((sum, c) => sum + (c.callCount || 0), 0);
+    const totalBookings = clients.reduce((sum, c) => sum + (c.bookingCount || 0), 0);
+    
+    res.json({
+      liveCalls: 0, // Mock data
+      queueSize: 0, // Mock data
+      successRate: totalCalls > 0 ? (totalBookings / totalCalls * 100).toFixed(1) + '%' : '0%',
+      averageDuration: '2:30', // Mock data
+      recentCalls: [] // Mock data
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/admin/analytics', async (req, res) => {
+  try {
+    res.json({
+      conversionFunnel: {
+        leads: 100,
+        calls: 80,
+        bookings: 25
+      },
+      peakHours: ['9:00 AM', '2:00 PM', '4:00 PM'],
+      clientPerformance: []
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/admin/system-health', async (req, res) => {
+  try {
+    res.json({
+      status: 'healthy',
+      uptime: '99.9%',
+      errorCount: 0,
+      responseTime: '120ms',
+      recentErrors: []
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Mock Lead Call Route (No API Key Required)
