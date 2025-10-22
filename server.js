@@ -5728,10 +5728,6 @@ app.use(twilioWebhooks);
 
 app.use(vapiWebhooks);
 
-// Retry helper
-
-// Helper functions
-
 // --- Bootstrap tenants from env (for free Render without disk) ---
 async function bootstrapClients() {
   try {
@@ -5794,22 +5790,108 @@ const windowEnd   = new Date(Date.now() + maxAdvanceDays * 86400000);
       const dt = new Date(d);
       dt.setSeconds(0,0);
       const minutes = dt.getMinutes();
-      const aligned = Math.floor(minutes / stepMinutes) * stepMinutes;
-      dt.setMinutes(aligned);
-      return dt;
+      const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
+      if (configured) {
+        const when = new Date(startISO).toLocaleString(client?.locale || 'en-GB', {
+          timeZone: tz, weekday:'short', day:'numeric', month:'short',
+          hour:'numeric', minute:'2-digit', hour12:true
+        });
+        const brand = client?.displayName || client?.clientKey || 'Our Clinic';
+        const link  = event?.htmlLink ? ` Calendar: ${event.htmlLink}` : '';
+        const sig   = client?.brandSignature ? ` ${client.brandSignature}` : '';
+        const defaultBody  = `Hi {{name}}, your {{service}} is booked with {{brand}} for {{when}} {{tz}}.{{link}}{{sig}} Reply STOP to opt out.`;
+        const templ = client?.smsTemplates?.confirm || defaultBody;
+        const body  = renderTemplate(templ, { name: lead.name, service, brand, when, tz, link, sig });
+        const payload = { to: lead.phone, body };
+        if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid; else if (fromNumber) payload.from = fromNumber;
+        await smsClient.messages.create(payload);
+      }
+    } catch (e) {
+      console.error('[confirm sms failed]', e?.message || e);
     }
-const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY, privateKeyB64: GOOGLE_PRIVATE_KEY_B64 });
-    await auth.authorize();
-    const busy = await freeBusy({ auth, calendarId, timeMinISO: windowStart.toISOString(), timeMaxISO: windowEnd.toISOString() });
 
-    const slotMs = (durationMin + bufferMin) * 60000;
-    const results = [];
-    let cursor = alignToGrid(windowStart);
-    cursor.setSeconds(0,0);
+    // Schedule appointment reminders (24h and 1h before)
+    try {
+      const { scheduleAppointmentReminders } = await import('./lib/appointment-reminders.js');
+      
+      const reminderResult = await scheduleAppointmentReminders({
+        leadPhone: lead.phone,
+        leadName: lead.name || 'Customer',
+        leadEmail: lead.email || null,
+        businessName: client?.displayName || client?.clientKey || 'Our Business',
+        service: service,
+        appointmentTime: startISO,
+        location: client?.address || client?.location || 'TBD',
+        businessPhone: client?.phone || client?.businessPhone || '',
+        clientKey: clientKey,
+        appointmentId: event.id
+      });
+      
+      console.log('[REMINDERS] Scheduled:', reminderResult);
+    } catch (reminderError) {
+      console.error('[REMINDER SCHEDULING ERROR]', reminderError);
+      // Don't fail the booking if reminders fail
+    }
 
-    const dowName = ['sun','mon','tue','wed','thu','fri','sat'];
+    // === NEW: Track call outcome in analytics ===
+    try {
+      const { trackCallOutcome } = await import('./lib/analytics-tracker.js');
+      
+      const callId = p?.call?.id || p?.callId || `vapi_${Date.now()}`;
+      const duration = p?.call?.duration || p?.duration || 0;
+      const cost = p?.call?.cost || p?.cost || 0;
+      
+      await trackCallOutcome({
+        callId,
+        clientKey,
+        leadPhone: lead.phone,
+        outcome: 'booked', // Successful booking
+        duration,
+        cost,
+        appointmentBooked: true,
+        appointmentTime: startISO,
+        transcript: p?.transcript || null,
+        sentiment: 'positive'
+      });
+      
+      console.log('[ANALYTICS] Tracked successful booking:', callId);
+    } catch (analyticsError) {
+      console.error('[ANALYTICS TRACKING ERROR]', analyticsError);
+      // Don't fail the booking if analytics fail
+    }
 
-    function formatHMLocal(dt) {
+    // === NEW: Emit real-time event to client dashboard ===
+    try {
+      const { emitAppointmentBooked } = await import('./lib/realtime-events.js');
+      
+      emitAppointmentBooked(clientKey, {
+        appointmentId: event.id,
+        leadName: lead.name || 'Customer',
+        leadPhone: lead.phone,
+        appointmentTime: startISO,
+        service: service
+      });
+      
+      console.log('[REALTIME] Emitted appointment_booked event');
+    } catch (realtimeError) {
+      console.error('[REALTIME EVENT ERROR]', realtimeError);
+      // Don't fail the booking if real-time fails
+    }
+
+    return res.json({ ok:true, eventId: event.id, htmlLink: event.htmlLink || null });
+  } catch (err) {
+    console.error('[VAPI WEBHOOK ERROR]', err?.response?.data || err?.message || err);
+    return res.status(500).json({ ok:false, error: String(err?.response?.data || err?.message || err) });
+  }
+// });
+
+// Retry helper
+async function withRetry(fn, { retries = 2, delayMs = 250 } = {}) {
+  let lastErr;
+  for (let i = 0; i <= retries; i++) {
+    try { return await fn(); }
+    catch (e) {
+      lastErr = e;
       const status = e?.response?.status || e?.code || e?.status || 0;
       const retriable = (status === 429) || (status >= 500) || !status;
       if (!retriable || i === retries) throw e;
