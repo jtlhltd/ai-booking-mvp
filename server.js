@@ -56,6 +56,8 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import axios from 'axios';
+import { createServer } from 'http';
+import { Server as SocketIOServer } from 'socket.io';
 import { generateUKBusinesses, getIndustryCategories, fuzzySearch } from './enhanced-business-search.js';
 import RealUKBusinessSearch from './real-uk-business-search.js';
 import BookingSystem from './booking-system.js';
@@ -97,9 +99,305 @@ import messagingService from './lib/messaging-service.js';
 
 const app = express();
 
+// Create HTTP server and Socket.IO server
+const server = createServer(app);
+const io = new SocketIOServer(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
+
 // Initialize performance monitoring and caching
 const performanceMonitor = getPerformanceMonitor();
 const cache = getCache();
+
+// WebSocket connection handling
+io.on('connection', (socket) => {
+  console.log('Admin Hub client connected:', socket.id);
+  
+  // Join admin room for real-time updates
+  socket.join('admin-hub');
+  
+  // Handle client disconnection
+  socket.on('disconnect', () => {
+    console.log('Admin Hub client disconnected:', socket.id);
+  });
+  
+  // Handle real-time data requests
+  socket.on('request-update', async (dataType) => {
+    try {
+      let updateData = {};
+      
+      switch(dataType) {
+        case 'business-stats':
+          updateData = await getBusinessStats();
+          break;
+        case 'recent-activity':
+          updateData = await getRecentActivity();
+          break;
+        case 'clients':
+          updateData = await getClientsData();
+          break;
+        case 'calls':
+          updateData = await getCallsData();
+          break;
+        case 'analytics':
+          updateData = await getAnalyticsData();
+          break;
+        case 'system-health':
+          updateData = await getSystemHealthData();
+          break;
+        case 'all':
+          updateData = {
+            businessStats: await getBusinessStats(),
+            recentActivity: await getRecentActivity(),
+            clients: await getClientsData(),
+            calls: await getCallsData(),
+            analytics: await getAnalyticsData(),
+            systemHealth: await getSystemHealthData()
+          };
+          break;
+      }
+      
+      socket.emit('data-update', { type: dataType, data: updateData });
+    } catch (error) {
+      console.error('Error handling real-time update request:', error);
+      socket.emit('error', { message: 'Failed to fetch data' });
+    }
+  });
+});
+
+// Helper functions for real-time data
+async function getBusinessStats() {
+  const clients = await listFullClients();
+  const activeClients = clients.filter(c => c.isEnabled).length;
+  const monthlyRevenue = activeClients * 500;
+  
+  let totalCalls = 0;
+  let totalBookings = 0;
+  
+  for (const client of clients) {
+    try {
+      const calls = await getCallsByTenant(client.clientKey, 1000);
+      const appointments = await query(`
+        SELECT COUNT(*) as count FROM appointments 
+        WHERE client_key = $1 AND created_at >= NOW() - INTERVAL '30 days'
+      `, [client.clientKey]);
+      
+      totalCalls += calls ? calls.length : 0;
+      totalBookings += parseInt(appointments?.rows?.[0]?.count || 0);
+    } catch (clientError) {
+      console.error(`Error getting data for client ${client.clientKey}:`, clientError);
+    }
+  }
+  
+  const conversionRate = totalCalls > 0 ? (totalBookings / totalCalls * 100).toFixed(1) : 0;
+  
+  return {
+    activeClients: activeClients || 0,
+    monthlyRevenue: monthlyRevenue || 0,
+    totalCalls: totalCalls || 0,
+    totalBookings: totalBookings || 0,
+    conversionRate: conversionRate || 0
+  };
+}
+
+async function getRecentActivity() {
+  const activities = [];
+  
+  try {
+    const recentLeads = await query(`
+      SELECT l.*, t.display_name as client_name 
+      FROM leads l 
+      JOIN tenants t ON l.client_key = t.client_key 
+      WHERE l.created_at >= NOW() - INTERVAL '24 hours'
+      ORDER BY l.created_at DESC 
+      LIMIT 10
+    `);
+    
+    if (recentLeads?.rows) {
+      for (const lead of recentLeads.rows) {
+        activities.push({
+          type: 'new_lead',
+          message: `New lead "${lead.name || 'Unknown'}" imported for ${lead.client_name}`,
+          timestamp: lead.created_at,
+          client: lead.client_name
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Error getting recent activity:', error);
+  }
+  
+  return activities.slice(0, 20);
+}
+
+async function getClientsData() {
+  const clients = await listFullClients();
+  const clientData = [];
+  
+  for (const client of clients) {
+    try {
+      const leads = await getLeadsByClient(client.clientKey, 1000);
+      const calls = await getCallsByTenant(client.clientKey, 1000);
+      const appointments = await query(`
+        SELECT COUNT(*) as count FROM appointments 
+        WHERE client_key = $1 AND created_at >= NOW() - INTERVAL '30 days'
+      `, [client.clientKey]);
+      
+      const leadCount = leads ? leads.length : 0;
+      const callCount = calls ? calls.length : 0;
+      const bookingCount = parseInt(appointments?.rows?.[0]?.count || 0);
+      const conversionRate = callCount > 0 ? ((bookingCount / callCount) * 100).toFixed(1) : 0;
+      
+      const clientName = client.displayName || client.clientKey || 'Unknown Client';
+      const clientEmail = client.email || `${client.clientKey}@example.com`;
+      
+      clientData.push({
+        name: clientName,
+        email: clientEmail,
+        industry: client.industry || 'Not specified',
+        status: client.isEnabled ? 'active' : 'inactive',
+        leadCount,
+        callCount,
+        conversionRate,
+        monthlyRevenue: client.isEnabled ? 500 : 0,
+        createdAt: client.createdAt,
+        clientKey: client.clientKey
+      });
+    } catch (clientError) {
+      console.error(`Error getting data for client ${client.clientKey}:`, clientError);
+    }
+  }
+  
+  return clientData;
+}
+
+async function getCallsData() {
+  const clients = await listFullClients();
+  
+  let totalCalls = 0;
+  let totalBookings = 0;
+  let totalDuration = 0;
+  const recentCalls = [];
+  
+  for (const client of clients) {
+    const calls = await getCallsByTenant(client.clientKey, 100);
+    totalCalls += calls.length;
+    
+    const appointments = await query(`
+      SELECT COUNT(*) as count FROM appointments 
+      WHERE client_key = $1 AND created_at >= NOW() - INTERVAL '30 days'
+    `, [client.clientKey]);
+    totalBookings += parseInt(appointments.rows[0]?.count || 0);
+    
+    for (const call of calls.slice(0, 5)) {
+      totalDuration += call.duration || 0;
+      recentCalls.push({
+        client: client.displayName || client.clientKey,
+        phone: call.lead_phone,
+        status: call.status,
+        outcome: call.outcome,
+        duration: call.duration ? `${Math.floor(call.duration / 60)}:${(call.duration % 60).toString().padStart(2, '0')}` : 'N/A',
+        timestamp: call.created_at
+      });
+    }
+  }
+  
+  const averageDuration = totalCalls > 0 ? Math.round(totalDuration / totalCalls) : 0;
+  const successRate = totalCalls > 0 ? (totalBookings / totalCalls * 100).toFixed(1) + '%' : '0%';
+  
+  const queueSize = await query(`
+    SELECT COUNT(*) as count FROM call_queue 
+    WHERE status = 'pending' AND scheduled_for <= NOW() + INTERVAL '1 hour'
+  `);
+  
+  return {
+    liveCalls: 0,
+    queueSize: parseInt(queueSize.rows[0]?.count || 0),
+    successRate,
+    averageDuration: `${Math.floor(averageDuration / 60)}:${(averageDuration % 60).toString().padStart(2, '0')}`,
+    recentCalls: recentCalls.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 10)
+  };
+}
+
+async function getAnalyticsData() {
+  const clients = await listFullClients();
+  
+  let totalLeads = 0;
+  let totalCalls = 0;
+  let totalBookings = 0;
+  
+  for (const client of clients) {
+    const leads = await getLeadsByClient(client.clientKey, 1000);
+    const calls = await getCallsByTenant(client.clientKey, 1000);
+    const appointments = await query(`
+      SELECT COUNT(*) as count FROM appointments 
+      WHERE client_key = $1 AND created_at >= NOW() - INTERVAL '30 days'
+    `, [client.clientKey]);
+    
+    totalLeads += leads.length;
+    totalCalls += calls.length;
+    totalBookings += parseInt(appointments.rows[0]?.count || 0);
+  }
+  
+  const peakHoursData = await query(`
+    SELECT EXTRACT(HOUR FROM created_at) as hour, COUNT(*) as count
+    FROM calls 
+    WHERE created_at >= NOW() - INTERVAL '30 days'
+    GROUP BY EXTRACT(HOUR FROM created_at)
+    ORDER BY count DESC
+    LIMIT 5
+  `);
+  
+  const peakHours = peakHoursData.rows.map(row => {
+    const hour = parseInt(row.hour);
+    return `${hour.toString().padStart(2, '0')}:00`;
+  });
+  
+  return {
+    conversionFunnel: {
+      leads: totalLeads,
+      calls: totalCalls,
+      bookings: totalBookings
+    },
+    peakHours: peakHours.length > 0 ? peakHours : ['9:00', '14:00', '16:00'],
+    clientPerformance: []
+  };
+}
+
+async function getSystemHealthData() {
+  const uptime = process.uptime();
+  const uptimePercentage = uptime > 3600 ? 99.9 : 95.0;
+  
+  const recentErrors = await query(`
+    SELECT * FROM quality_alerts 
+    WHERE created_at >= NOW() - INTERVAL '24 hours'
+    ORDER BY created_at DESC 
+    LIMIT 10
+  `);
+  
+  const status = recentErrors?.rows?.length > 5 ? 'warning' : 'healthy';
+  
+  return {
+    status: status || 'healthy',
+    uptime: uptimePercentage,
+    errorCount: 0,
+    responseTime: 120,
+    recentErrors: recentErrors?.rows?.map(error => ({
+      type: error.alert_type,
+      severity: error.severity,
+      message: error.message,
+      timestamp: error.created_at
+    })) || []
+  };
+}
+
+// Broadcast real-time updates
+function broadcastUpdate(type, data) {
+  io.to('admin-hub').emit('data-update', { type, data });
+}
 
 // Add performance monitoring middleware (tracks all API calls)
 app.use(performanceMiddleware(performanceMonitor));
@@ -229,11 +527,11 @@ app.get('/vapi-test-dashboard', (req, res) => {
 
 // Admin Hub routes
 app.get('/admin-hub.html', (req, res) => {
-  res.sendFile(path.join(process.cwd(), 'public', 'admin-hub.html'));
+  res.sendFile(path.join(process.cwd(), 'public', 'admin-hub-enhanced.html'));
 });
 
 app.get('/admin-hub', (req, res) => {
-  res.sendFile(path.join(process.cwd(), 'public', 'admin-hub.html'));
+  res.sendFile(path.join(process.cwd(), 'public', 'admin-hub-enhanced.html'));
 });
 
 // Admin API endpoints
@@ -268,6 +566,15 @@ app.get('/api/admin/business-stats', async (req, res) => {
     const conversionRate = totalCalls > 0 ? (totalBookings / totalCalls * 100).toFixed(1) : 0;
     
     res.json({
+      activeClients: activeClients || 0,
+      monthlyRevenue: monthlyRevenue || 0,
+      totalCalls: totalCalls || 0,
+      totalBookings: totalBookings || 0,
+      conversionRate: conversionRate || 0
+    });
+    
+    // Broadcast real-time update
+    broadcastUpdate('business-stats', {
       activeClients: activeClients || 0,
       monthlyRevenue: monthlyRevenue || 0,
       totalCalls: totalCalls || 0,
@@ -785,8 +1092,268 @@ app.post('/api/admin/client', async (req, res) => {
     await upsertFullClient(newClient);
     
     res.json({ success: true, message: 'Client created successfully', clientKey });
+    
+    // Broadcast real-time update
+    broadcastUpdate('clients', await getClientsData());
   } catch (error) {
     console.error('Error creating client:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Advanced Search and Filtering Endpoints
+app.get('/api/admin/search', async (req, res) => {
+  try {
+    const { q, type, filters } = req.query;
+    
+    if (!q) {
+      return res.status(400).json({ error: 'Search query is required' });
+    }
+    
+    const results = {
+      clients: [],
+      leads: [],
+      calls: [],
+      appointments: []
+    };
+    
+    // Search clients
+    if (!type || type === 'clients') {
+      const clients = await listFullClients();
+      results.clients = clients.filter(client => 
+        client.displayName?.toLowerCase().includes(q.toLowerCase()) ||
+        client.clientKey?.toLowerCase().includes(q.toLowerCase()) ||
+        client.industry?.toLowerCase().includes(q.toLowerCase())
+      );
+    }
+    
+    // Search leads
+    if (!type || type === 'leads') {
+      const leads = await query(`
+        SELECT l.*, t.display_name as client_name 
+        FROM leads l 
+        JOIN tenants t ON l.client_key = t.client_key 
+        WHERE l.name ILIKE $1 OR l.phone ILIKE $1 OR l.service ILIKE $1
+        ORDER BY l.created_at DESC 
+        LIMIT 50
+      `, [`%${q}%`]);
+      
+      results.leads = leads.rows || [];
+    }
+    
+    // Search calls
+    if (!type || type === 'calls') {
+      const calls = await query(`
+        SELECT c.*, t.display_name as client_name 
+        FROM calls c 
+        JOIN tenants t ON c.client_key = t.client_key 
+        WHERE c.lead_phone ILIKE $1 OR c.outcome ILIKE $1 OR c.status ILIKE $1
+        ORDER BY c.created_at DESC 
+        LIMIT 50
+      `, [`%${q}%`]);
+      
+      results.calls = calls.rows || [];
+    }
+    
+    res.json(results);
+  } catch (error) {
+    console.error('Error performing search:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/admin/filter', async (req, res) => {
+  try {
+    const { type, filters } = req.query;
+    const filterObj = filters ? JSON.parse(filters) : {};
+    
+    let results = [];
+    
+    switch(type) {
+      case 'clients':
+        const clients = await listFullClients();
+        results = clients.filter(client => {
+          if (filterObj.status && client.isEnabled !== (filterObj.status === 'active')) return false;
+          if (filterObj.industry && client.industry !== filterObj.industry) return false;
+          if (filterObj.dateFrom && new Date(client.createdAt) < new Date(filterObj.dateFrom)) return false;
+          if (filterObj.dateTo && new Date(client.createdAt) > new Date(filterObj.dateTo)) return false;
+          return true;
+        });
+        break;
+        
+      case 'calls':
+        const calls = await query(`
+          SELECT c.*, t.display_name as client_name 
+          FROM calls c 
+          JOIN tenants t ON c.client_key = t.client_key 
+          WHERE ($1::text IS NULL OR c.status = $1)
+            AND ($2::text IS NULL OR c.outcome = $2)
+            AND ($3::timestamp IS NULL OR c.created_at >= $3)
+            AND ($4::timestamp IS NULL OR c.created_at <= $4)
+          ORDER BY c.created_at DESC 
+          LIMIT 100
+        `, [
+          filterObj.status || null,
+          filterObj.outcome || null,
+          filterObj.dateFrom || null,
+          filterObj.dateTo || null
+        ]);
+        results = calls.rows || [];
+        break;
+        
+      case 'leads':
+        const leads = await query(`
+          SELECT l.*, t.display_name as client_name 
+          FROM leads l 
+          JOIN tenants t ON l.client_key = t.client_key 
+          WHERE ($1::text IS NULL OR l.status = $1)
+            AND ($2::text IS NULL OR l.source = $2)
+            AND ($3::timestamp IS NULL OR l.created_at >= $3)
+            AND ($4::timestamp IS NULL OR l.created_at <= $4)
+          ORDER BY l.created_at DESC 
+          LIMIT 100
+        `, [
+          filterObj.status || null,
+          filterObj.source || null,
+          filterObj.dateFrom || null,
+          filterObj.dateTo || null
+        ]);
+        results = leads.rows || [];
+        break;
+    }
+    
+    res.json(results);
+  } catch (error) {
+    console.error('Error applying filters:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Data Export Endpoints
+app.get('/api/admin/export/:type', async (req, res) => {
+  try {
+    const { type } = req.params;
+    const { format = 'csv' } = req.query;
+    
+    let data = [];
+    let filename = '';
+    
+    switch(type) {
+      case 'clients':
+        data = await getClientsData();
+        filename = `clients-export-${new Date().toISOString().split('T')[0]}`;
+        break;
+        
+      case 'calls':
+        data = await getCallsData();
+        filename = `calls-export-${new Date().toISOString().split('T')[0]}`;
+        break;
+        
+      case 'leads':
+        const leads = await query(`
+          SELECT l.*, t.display_name as client_name 
+          FROM leads l 
+          JOIN tenants t ON l.client_key = t.client_key 
+          ORDER BY l.created_at DESC
+        `);
+        data = leads.rows || [];
+        filename = `leads-export-${new Date().toISOString().split('T')[0]}`;
+        break;
+        
+      default:
+        return res.status(400).json({ error: 'Invalid export type' });
+    }
+    
+    if (format === 'csv') {
+      const csv = convertToCSV(data);
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}.csv"`);
+      res.send(csv);
+    } else if (format === 'json') {
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}.json"`);
+      res.json(data);
+    } else {
+      return res.status(400).json({ error: 'Invalid format. Use csv or json' });
+    }
+  } catch (error) {
+    console.error('Error exporting data:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper function to convert data to CSV
+function convertToCSV(data) {
+  if (!data.length) return '';
+  
+  const headers = Object.keys(data[0]);
+  const csvRows = [headers.join(',')];
+  
+  for (const row of data) {
+    const values = headers.map(header => {
+      const value = row[header];
+      return typeof value === 'string' && value.includes(',') ? `"${value}"` : value;
+    });
+    csvRows.push(values.join(','));
+  }
+  
+  return csvRows.join('\n');
+}
+
+// Bulk Operations Endpoints
+app.post('/api/admin/bulk/:operation', async (req, res) => {
+  try {
+    const { operation } = req.params;
+    const { items, action } = req.body;
+    
+    if (!items || !Array.isArray(items)) {
+      return res.status(400).json({ error: 'Items array is required' });
+    }
+    
+    let results = [];
+    
+    switch(operation) {
+      case 'clients':
+        for (const item of items) {
+          try {
+            if (action === 'delete') {
+              await deleteClient(item.clientKey);
+              results.push({ id: item.clientKey, status: 'deleted' });
+            } else if (action === 'update') {
+              await upsertFullClient(item);
+              results.push({ id: item.clientKey, status: 'updated' });
+            }
+          } catch (error) {
+            results.push({ id: item.clientKey, status: 'error', error: error.message });
+          }
+        }
+        break;
+        
+      case 'leads':
+        for (const item of items) {
+          try {
+            if (action === 'update') {
+              await query(`
+                UPDATE leads 
+                SET status = $1, notes = $2 
+                WHERE id = $3
+              `, [item.status, item.notes, item.id]);
+              results.push({ id: item.id, status: 'updated' });
+            }
+          } catch (error) {
+            results.push({ id: item.id, status: 'error', error: error.message });
+          }
+        }
+        break;
+    }
+    
+    res.json({ 
+      success: true, 
+      processed: results.length, 
+      results 
+    });
+  } catch (error) {
+    console.error('Error performing bulk operation:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -13009,11 +13576,12 @@ async function startServer() {
     // Bootstrap clients after DB is ready
     await bootstrapClients();
     
-    const server = app.listen(process.env.PORT ? Number(process.env.PORT) : 10000, '0.0.0.0', () => {
+    server.listen(process.env.PORT ? Number(process.env.PORT) : 10000, '0.0.0.0', () => {
       console.log(`AI Booking MVP listening on http://localhost:${process.env.PORT || 10000} (DB: ${DB_PATH})`);
       console.log(`Security middleware: Enhanced authentication and rate limiting enabled`);
       console.log(`Booking system: ${bookingSystem ? 'Available' : 'Not Available'}`);
       console.log(`SMS-Email pipeline: ${smsEmailPipeline ? 'Available' : 'Not Available'}`);
+      console.log(`WebSocket server: Real-time Admin Hub updates enabled`);
     });
     
     // Set server timeout to 25 minutes to handle comprehensive searches

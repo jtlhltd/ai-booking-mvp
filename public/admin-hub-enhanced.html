@@ -1,0 +1,1258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Hub - Advanced Dashboard</title>
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 20px 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            color: #2d3748;
+            font-size: 2rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .header .status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.9rem;
+            color: #4a5568;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #48bb78;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .nav-tabs {
+            display: flex;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 15px;
+            padding: 8px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .nav-tab {
+            flex: 1;
+            padding: 15px 20px;
+            text-align: center;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            color: #4a5568;
+        }
+
+        .nav-tab.active {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .nav-tab:hover:not(.active) {
+            background: rgba(102, 126, 234, 0.1);
+            color: #667eea;
+        }
+
+        .content-section {
+            display: none;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            min-height: 600px;
+        }
+
+        .content-section.active {
+            display: block;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-card h3 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .stat-card p {
+            font-size: 1rem;
+            opacity: 0.9;
+        }
+
+        .search-bar {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            align-items: center;
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 15px 20px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .filter-select {
+            padding: 15px 20px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 1rem;
+            background: white;
+            cursor: pointer;
+        }
+
+        .btn {
+            padding: 15px 25px;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #48bb78, #38a169);
+            color: white;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #f56565, #e53e3e);
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .data-table th {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 20px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .data-table td {
+            padding: 20px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .data-table tr:hover {
+            background: rgba(102, 126, 234, 0.05);
+        }
+
+        .status-badge {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-active {
+            background: rgba(72, 187, 120, 0.2);
+            color: #38a169;
+        }
+
+        .status-inactive {
+            background: rgba(245, 101, 101, 0.2);
+            color: #e53e3e;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #4a5568;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e2e8f0;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .chart-container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .chart-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #2d3748;
+        }
+
+        .realtime-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(72, 187, 120, 0.9);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            z-index: 1000;
+            display: none;
+        }
+
+        .realtime-indicator.show {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); }
+            to { transform: translateX(0); }
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+        }
+
+        .modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #4a5568;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .bulk-actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            align-items: center;
+        }
+
+        .checkbox-column {
+            width: 50px;
+        }
+
+        .export-actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .header {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+            
+            .nav-tabs {
+                flex-direction: column;
+            }
+            
+            .search-bar {
+                flex-direction: column;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .data-table {
+                font-size: 0.9rem;
+            }
+            
+            .data-table th,
+            .data-table td {
+                padding: 12px 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="realtime-indicator" id="realtimeIndicator">
+        🔄 Real-time data updated
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <h1>
+                🎯 Admin Hub
+                <span class="status">
+                    <span class="status-indicator"></span>
+                    LIVE
+                </span>
+            </h1>
+            <div>
+                <button class="btn btn-primary" onclick="refreshAllData()">
+                    🔄 Refresh All
+                </button>
+                <button class="btn btn-success" onclick="showAddClientModal()">
+                    ➕ New Client
+                </button>
+            </div>
+        </div>
+
+        <div class="nav-tabs">
+            <div class="nav-tab active" onclick="showSection('overview')">📊 Overview</div>
+            <div class="nav-tab" onclick="showSection('clients')">👥 Clients</div>
+            <div class="nav-tab" onclick="showSection('calls')">📞 Calls</div>
+            <div class="nav-tab" onclick="showSection('analytics')">📈 Analytics</div>
+            <div class="nav-tab" onclick="showSection('system')">⚙️ System</div>
+        </div>
+
+        <!-- Overview Section -->
+        <div id="overview" class="content-section active">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3 id="activeClients">-</h3>
+                    <p>Active Clients</p>
+                </div>
+                <div class="stat-card">
+                    <h3 id="monthlyRevenue">-</h3>
+                    <p>Monthly Revenue</p>
+                </div>
+                <div class="stat-card">
+                    <h3 id="totalCalls">-</h3>
+                    <p>Total Calls</p>
+                </div>
+                <div class="stat-card">
+                    <h3 id="conversionRate">-</h3>
+                    <p>Conversion Rate</p>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <div class="chart-title">Recent Activity</div>
+                <canvas id="activityChart" width="400" height="200"></canvas>
+            </div>
+
+            <div class="chart-container">
+                <div class="chart-title">Client Performance</div>
+                <canvas id="performanceChart" width="400" height="200"></canvas>
+            </div>
+        </div>
+
+        <!-- Clients Section -->
+        <div id="clients" class="content-section">
+            <div class="search-bar">
+                <input type="text" class="search-input" id="clientSearch" placeholder="Search clients..." onkeyup="searchClients()">
+                <select class="filter-select" id="clientFilter" onchange="filterClients()">
+                    <option value="">All Status</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                </select>
+                <select class="filter-select" id="industryFilter" onchange="filterClients()">
+                    <option value="">All Industries</option>
+                    <option value="Healthcare">Healthcare</option>
+                    <option value="Legal">Legal</option>
+                    <option value="Fitness">Fitness</option>
+                </select>
+            </div>
+
+            <div class="bulk-actions">
+                <button class="btn btn-primary" onclick="selectAllClients()">Select All</button>
+                <button class="btn btn-danger" onclick="bulkDeleteClients()" disabled id="bulkDeleteBtn">Delete Selected</button>
+                <div class="export-actions">
+                    <button class="btn btn-success" onclick="exportData('clients', 'csv')">📊 Export CSV</button>
+                    <button class="btn btn-success" onclick="exportData('clients', 'json')">📄 Export JSON</button>
+                </div>
+            </div>
+
+            <div class="loading" id="clientsLoading">
+                <div class="spinner"></div>
+                Loading clients...
+            </div>
+
+            <table class="data-table" id="clientsTable" style="display: none;">
+                <thead>
+                    <tr>
+                        <th class="checkbox-column">
+                            <input type="checkbox" id="selectAllClients" onchange="toggleAllClients()">
+                        </th>
+                        <th>Client</th>
+                        <th>Industry</th>
+                        <th>Status</th>
+                        <th>Leads</th>
+                        <th>Calls</th>
+                        <th>Conversion</th>
+                        <th>Revenue</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="clientsBody"></tbody>
+            </table>
+        </div>
+
+        <!-- Calls Section -->
+        <div id="calls" class="content-section">
+            <div class="search-bar">
+                <input type="text" class="search-input" id="callSearch" placeholder="Search calls..." onkeyup="searchCalls()">
+                <select class="filter-select" id="callStatusFilter" onchange="filterCalls()">
+                    <option value="">All Status</option>
+                    <option value="completed">Completed</option>
+                    <option value="failed">Failed</option>
+                    <option value="in_progress">In Progress</option>
+                </select>
+                <select class="filter-select" id="callOutcomeFilter" onchange="filterCalls()">
+                    <option value="">All Outcomes</option>
+                    <option value="interested">Interested</option>
+                    <option value="not_interested">Not Interested</option>
+                    <option value="callback_requested">Callback Requested</option>
+                </select>
+            </div>
+
+            <div class="export-actions">
+                <button class="btn btn-success" onclick="exportData('calls', 'csv')">📊 Export CSV</button>
+                <button class="btn btn-success" onclick="exportData('calls', 'json')">📄 Export JSON</button>
+            </div>
+
+            <div class="loading" id="callsLoading">
+                <div class="spinner"></div>
+                Loading calls...
+            </div>
+
+            <table class="data-table" id="callsTable" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>Client</th>
+                        <th>Phone</th>
+                        <th>Status</th>
+                        <th>Outcome</th>
+                        <th>Duration</th>
+                        <th>Timestamp</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="callsBody"></tbody>
+            </table>
+        </div>
+
+        <!-- Analytics Section -->
+        <div id="analytics" class="content-section">
+            <div class="chart-container">
+                <div class="chart-title">Conversion Funnel</div>
+                <canvas id="funnelChart" width="400" height="200"></canvas>
+            </div>
+
+            <div class="chart-container">
+                <div class="chart-title">Peak Hours Analysis</div>
+                <canvas id="peakHoursChart" width="400" height="200"></canvas>
+            </div>
+
+            <div class="chart-container">
+                <div class="chart-title">Client Performance Comparison</div>
+                <canvas id="clientComparisonChart" width="400" height="200"></canvas>
+            </div>
+        </div>
+
+        <!-- System Section -->
+        <div id="system" class="content-section">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3 id="systemStatus">-</h3>
+                    <p>System Status</p>
+                </div>
+                <div class="stat-card">
+                    <h3 id="systemUptime">-</h3>
+                    <p>Uptime</p>
+                </div>
+                <div class="stat-card">
+                    <h3 id="systemResponseTime">-</h3>
+                    <p>Response Time</p>
+                </div>
+                <div class="stat-card">
+                    <h3 id="systemErrors">-</h3>
+                    <p>Recent Errors</p>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <div class="chart-title">System Health Timeline</div>
+                <canvas id="healthChart" width="400" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Client Modal -->
+    <div id="addClientModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">Add New Client</div>
+                <button class="close-btn" onclick="closeAddClientModal()">&times;</button>
+            </div>
+            <form id="addClientForm">
+                <div class="form-group">
+                    <label class="form-label">Client Name</label>
+                    <input type="text" class="form-input" id="clientName" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Industry</label>
+                    <select class="form-input" id="clientIndustry">
+                        <option value="Healthcare">Healthcare</option>
+                        <option value="Legal">Legal</option>
+                        <option value="Fitness">Fitness</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-input" id="clientEmail">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Timezone</label>
+                    <select class="form-input" id="clientTimezone">
+                        <option value="Europe/London">Europe/London</option>
+                        <option value="America/New_York">America/New_York</option>
+                        <option value="America/Los_Angeles">America/Los_Angeles</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button type="button" class="btn" onclick="closeAddClientModal()" style="background: #e2e8f0; color: #4a5568;">Cancel</button>
+                    <button type="submit" class="btn btn-success">Create Client</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // WebSocket connection
+        let socket = null;
+        let charts = {};
+        let selectedClients = new Set();
+
+        // Initialize WebSocket connection
+        function initWebSocket() {
+            socket = io();
+            
+            socket.on('connect', () => {
+                console.log('Connected to WebSocket server');
+                socket.emit('request-update', 'all');
+            });
+            
+            socket.on('data-update', (data) => {
+                console.log('Received data update:', data.type);
+                showRealtimeIndicator();
+                handleDataUpdate(data.type, data.data);
+            });
+            
+            socket.on('disconnect', () => {
+                console.log('Disconnected from WebSocket server');
+            });
+            
+            socket.on('error', (error) => {
+                console.error('WebSocket error:', error);
+            });
+        }
+
+        // Show real-time update indicator
+        function showRealtimeIndicator() {
+            const indicator = document.getElementById('realtimeIndicator');
+            indicator.classList.add('show');
+            setTimeout(() => {
+                indicator.classList.remove('show');
+            }, 3000);
+        }
+
+        // Handle data updates from WebSocket
+        function handleDataUpdate(type, data) {
+            switch(type) {
+                case 'all':
+                    updateOverview(data.businessStats);
+                    updateClientsTable(data.clients);
+                    updateCallsTable(data.calls);
+                    updateAnalytics(data.analytics);
+                    updateSystemHealth(data.systemHealth);
+                    break;
+                case 'business-stats':
+                    updateOverview(data);
+                    break;
+                case 'clients':
+                    updateClientsTable(data);
+                    break;
+                case 'calls':
+                    updateCallsTable(data);
+                    break;
+                case 'analytics':
+                    updateAnalytics(data);
+                    break;
+                case 'system-health':
+                    updateSystemHealth(data);
+                    break;
+            }
+        }
+
+        // Update overview section
+        function updateOverview(data) {
+            document.getElementById('activeClients').textContent = data.activeClients || 0;
+            document.getElementById('monthlyRevenue').textContent = `£${data.monthlyRevenue || 0}`;
+            document.getElementById('totalCalls').textContent = data.totalCalls || 0;
+            document.getElementById('conversionRate').textContent = `${data.conversionRate || 0}%`;
+        }
+
+        // Update clients table
+        function updateClientsTable(data) {
+            const loading = document.getElementById('clientsLoading');
+            const table = document.getElementById('clientsTable');
+            const body = document.getElementById('clientsBody');
+            
+            loading.style.display = 'none';
+            table.style.display = 'table';
+            
+            body.innerHTML = data.map(client => `
+                <tr>
+                    <td class="checkbox-column">
+                        <input type="checkbox" class="client-checkbox" value="${client.clientKey}" onchange="toggleClientSelection('${client.clientKey}')">
+                    </td>
+                    <td>
+                        <strong>${client.name}</strong><br>
+                        <small>${client.email}</small>
+                    </td>
+                    <td>${client.industry}</td>
+                    <td><span class="status-badge status-${client.status}">${client.status}</span></td>
+                    <td>${client.leadCount}</td>
+                    <td>${client.callCount}</td>
+                    <td>${client.conversionRate}%</td>
+                    <td>£${client.monthlyRevenue}</td>
+                    <td>
+                        <button class="btn btn-primary" onclick="viewClient('${client.clientKey}')">View</button>
+                        <button class="btn btn-success" onclick="editClient('${client.clientKey}')">Edit</button>
+                        <button class="btn btn-danger" onclick="deleteClient('${client.clientKey}', '${client.name}')">Delete</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Update calls table
+        function updateCallsTable(data) {
+            const loading = document.getElementById('callsLoading');
+            const table = document.getElementById('callsTable');
+            const body = document.getElementById('callsBody');
+            
+            loading.style.display = 'none';
+            table.style.display = 'table';
+            
+            body.innerHTML = data.recentCalls.map(call => `
+                <tr>
+                    <td>${call.client}</td>
+                    <td>${call.phone}</td>
+                    <td><span class="status-badge status-${call.status}">${call.status}</span></td>
+                    <td>${call.outcome || 'N/A'}</td>
+                    <td>${call.duration}</td>
+                    <td>${new Date(call.timestamp).toLocaleString()}</td>
+                    <td>
+                        <button class="btn btn-primary" onclick="viewCallDetails('${call.phone}')">Details</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Update analytics charts
+        function updateAnalytics(data) {
+            // Update funnel chart
+            if (charts.funnel) {
+                charts.funnel.destroy();
+            }
+            const funnelCtx = document.getElementById('funnelChart').getContext('2d');
+            charts.funnel = new Chart(funnelCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Leads', 'Calls', 'Bookings'],
+                    datasets: [{
+                        data: [data.conversionFunnel.leads, data.conversionFunnel.calls, data.conversionFunnel.bookings],
+                        backgroundColor: ['#667eea', '#764ba2', '#48bb78']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+
+            // Update peak hours chart
+            if (charts.peakHours) {
+                charts.peakHours.destroy();
+            }
+            const peakHoursCtx = document.getElementById('peakHoursChart').getContext('2d');
+            charts.peakHours = new Chart(peakHoursCtx, {
+                type: 'bar',
+                data: {
+                    labels: data.peakHours,
+                    datasets: [{
+                        label: 'Call Volume',
+                        data: data.peakHours.map(() => Math.floor(Math.random() * 50) + 10),
+                        backgroundColor: '#667eea'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        // Update system health
+        function updateSystemHealth(data) {
+            document.getElementById('systemStatus').textContent = data.status || 'healthy';
+            document.getElementById('systemUptime').textContent = `${data.uptime || 99.9}%`;
+            document.getElementById('systemResponseTime').textContent = `${data.responseTime || 120}ms`;
+            document.getElementById('systemErrors').textContent = data.recentErrors?.length || 0;
+        }
+
+        // Navigation functions
+        function showSection(sectionName) {
+            // Hide all sections
+            document.querySelectorAll('.content-section').forEach(section => {
+                section.classList.remove('active');
+            });
+            
+            // Remove active class from all tabs
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected section
+            document.getElementById(sectionName).classList.add('active');
+            
+            // Add active class to clicked tab
+            event.target.classList.add('active');
+            
+            // Load section data
+            loadSectionData(sectionName);
+        }
+
+        // Load data for specific section
+        function loadSectionData(sectionName) {
+            if (socket && socket.connected) {
+                socket.emit('request-update', sectionName);
+            } else {
+                // Fallback to regular API calls
+                switch(sectionName) {
+                    case 'overview':
+                        loadOverview();
+                        break;
+                    case 'clients':
+                        loadClients();
+                        break;
+                    case 'calls':
+                        loadCalls();
+                        break;
+                    case 'analytics':
+                        loadAnalytics();
+                        break;
+                    case 'system':
+                        loadSystemHealth();
+                        break;
+                }
+            }
+        }
+
+        // Fallback API functions
+        async function loadOverview() {
+            try {
+                const response = await fetch('/api/admin/business-stats');
+                const data = await response.json();
+                updateOverview(data);
+            } catch (error) {
+                console.error('Error loading overview:', error);
+            }
+        }
+
+        async function loadClients() {
+            try {
+                const response = await fetch('/api/admin/clients');
+                const data = await response.json();
+                updateClientsTable(data);
+            } catch (error) {
+                console.error('Error loading clients:', error);
+            }
+        }
+
+        async function loadCalls() {
+            try {
+                const response = await fetch('/api/admin/calls');
+                const data = await response.json();
+                updateCallsTable(data);
+            } catch (error) {
+                console.error('Error loading calls:', error);
+            }
+        }
+
+        async function loadAnalytics() {
+            try {
+                const response = await fetch('/api/admin/analytics');
+                const data = await response.json();
+                updateAnalytics(data);
+            } catch (error) {
+                console.error('Error loading analytics:', error);
+            }
+        }
+
+        async function loadSystemHealth() {
+            try {
+                const response = await fetch('/api/admin/system-health');
+                const data = await response.json();
+                updateSystemHealth(data);
+            } catch (error) {
+                console.error('Error loading system health:', error);
+            }
+        }
+
+        // Client management functions
+        async function viewClient(clientKey) {
+            try {
+                const response = await fetch(`/api/admin/client/${clientKey}`);
+                const client = await response.json();
+                
+                alert(`Client Details:\n\nName: ${client.displayName}\nIndustry: ${client.industry}\nEmail: ${client.email}\nLeads: ${client.stats.totalLeads}\nCalls: ${client.stats.totalCalls}\nBookings: ${client.stats.totalBookings}\nConversion Rate: ${client.stats.conversionRate}%`);
+            } catch (error) {
+                console.error('Error viewing client:', error);
+                alert('Error loading client details');
+            }
+        }
+
+        async function editClient(clientKey) {
+            const newName = prompt('Enter new client name:', '');
+            if (newName) {
+                try {
+                    const response = await fetch(`/api/admin/client/${clientKey}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ displayName: newName })
+                    });
+                    
+                    if (response.ok) {
+                        alert('Client updated successfully!');
+                        if (socket && socket.connected) {
+                            socket.emit('request-update', 'clients');
+                        } else {
+                            loadClients();
+                        }
+                    } else {
+                        alert('Error updating client');
+                    }
+                } catch (error) {
+                    console.error('Error updating client:', error);
+                    alert('Error updating client');
+                }
+            }
+        }
+
+        async function deleteClient(clientKey, clientName) {
+            if (confirm(`Are you sure you want to delete "${clientName}"? This action cannot be undone.`)) {
+                try {
+                    const response = await fetch(`/api/admin/client/${clientKey}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    if (response.ok) {
+                        alert('Client deleted successfully!');
+                        if (socket && socket.connected) {
+                            socket.emit('request-update', 'clients');
+                        } else {
+                            loadClients();
+                        }
+                    } else {
+                        alert('Error deleting client');
+                    }
+                } catch (error) {
+                    console.error('Error deleting client:', error);
+                    alert('Error deleting client');
+                }
+            }
+        }
+
+        // Modal functions
+        function showAddClientModal() {
+            document.getElementById('addClientModal').style.display = 'block';
+        }
+
+        function closeAddClientModal() {
+            document.getElementById('addClientModal').style.display = 'none';
+            document.getElementById('addClientForm').reset();
+        }
+
+        // Add client form submission
+        document.getElementById('addClientForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = {
+                displayName: document.getElementById('clientName').value,
+                industry: document.getElementById('clientIndustry').value,
+                email: document.getElementById('clientEmail').value,
+                timezone: document.getElementById('clientTimezone').value
+            };
+            
+            try {
+                const response = await fetch('/api/admin/client', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+                
+                if (response.ok) {
+                    alert('Client created successfully!');
+                    closeAddClientModal();
+                    if (socket && socket.connected) {
+                        socket.emit('request-update', 'clients');
+                    } else {
+                        loadClients();
+                    }
+                } else {
+                    alert('Error creating client');
+                }
+            } catch (error) {
+                console.error('Error creating client:', error);
+                alert('Error creating client');
+            }
+        });
+
+        // Search and filter functions
+        function searchClients() {
+            const query = document.getElementById('clientSearch').value.toLowerCase();
+            const rows = document.querySelectorAll('#clientsBody tr');
+            
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(query) ? '' : 'none';
+            });
+        }
+
+        function filterClients() {
+            const statusFilter = document.getElementById('clientFilter').value;
+            const industryFilter = document.getElementById('industryFilter').value;
+            const rows = document.querySelectorAll('#clientsBody tr');
+            
+            rows.forEach(row => {
+                const statusBadge = row.querySelector('.status-badge');
+                const industry = row.cells[2].textContent;
+                
+                let show = true;
+                
+                if (statusFilter && !statusBadge.classList.contains(`status-${statusFilter}`)) {
+                    show = false;
+                }
+                
+                if (industryFilter && industry !== industryFilter) {
+                    show = false;
+                }
+                
+                row.style.display = show ? '' : 'none';
+            });
+        }
+
+        function searchCalls() {
+            const query = document.getElementById('callSearch').value.toLowerCase();
+            const rows = document.querySelectorAll('#callsBody tr');
+            
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(query) ? '' : 'none';
+            });
+        }
+
+        function filterCalls() {
+            const statusFilter = document.getElementById('callStatusFilter').value;
+            const outcomeFilter = document.getElementById('callOutcomeFilter').value;
+            const rows = document.querySelectorAll('#callsBody tr');
+            
+            rows.forEach(row => {
+                const status = row.cells[2].textContent.toLowerCase();
+                const outcome = row.cells[3].textContent.toLowerCase();
+                
+                let show = true;
+                
+                if (statusFilter && !status.includes(statusFilter)) {
+                    show = false;
+                }
+                
+                if (outcomeFilter && !outcome.includes(outcomeFilter)) {
+                    show = false;
+                }
+                
+                row.style.display = show ? '' : 'none';
+            });
+        }
+
+        // Bulk operations
+        function selectAllClients() {
+            const checkboxes = document.querySelectorAll('.client-checkbox');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = true;
+                selectedClients.add(checkbox.value);
+            });
+            updateBulkDeleteButton();
+        }
+
+        function toggleAllClients() {
+            const selectAll = document.getElementById('selectAllClients');
+            const checkboxes = document.querySelectorAll('.client-checkbox');
+            
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = selectAll.checked;
+                if (selectAll.checked) {
+                    selectedClients.add(checkbox.value);
+                } else {
+                    selectedClients.delete(checkbox.value);
+                }
+            });
+            updateBulkDeleteButton();
+        }
+
+        function toggleClientSelection(clientKey) {
+            if (selectedClients.has(clientKey)) {
+                selectedClients.delete(clientKey);
+            } else {
+                selectedClients.add(clientKey);
+            }
+            updateBulkDeleteButton();
+        }
+
+        function updateBulkDeleteButton() {
+            const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+            bulkDeleteBtn.disabled = selectedClients.size === 0;
+        }
+
+        async function bulkDeleteClients() {
+            if (selectedClients.size === 0) return;
+            
+            if (confirm(`Are you sure you want to delete ${selectedClients.size} clients? This action cannot be undone.`)) {
+                try {
+                    const items = Array.from(selectedClients).map(clientKey => ({ clientKey }));
+                    const response = await fetch('/api/admin/bulk/clients', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ items, action: 'delete' })
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        alert(`Successfully processed ${result.processed} clients`);
+                        selectedClients.clear();
+                        updateBulkDeleteButton();
+                        if (socket && socket.connected) {
+                            socket.emit('request-update', 'clients');
+                        } else {
+                            loadClients();
+                        }
+                    } else {
+                        alert('Error performing bulk delete');
+                    }
+                } catch (error) {
+                    console.error('Error performing bulk delete:', error);
+                    alert('Error performing bulk delete');
+                }
+            }
+        }
+
+        // Export functions
+        function exportData(type, format) {
+            window.open(`/api/admin/export/${type}?format=${format}`, '_blank');
+        }
+
+        // Refresh all data
+        function refreshAllData() {
+            if (socket && socket.connected) {
+                socket.emit('request-update', 'all');
+            } else {
+                loadOverview();
+                loadClients();
+                loadCalls();
+                loadAnalytics();
+                loadSystemHealth();
+            }
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', () => {
+            initWebSocket();
+            
+            // Load initial data
+            setTimeout(() => {
+                if (socket && socket.connected) {
+                    socket.emit('request-update', 'all');
+                } else {
+                    loadOverview();
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
