@@ -101,51 +101,22 @@ CREATE TABLE IF NOT EXISTS call_recording_consent (
   FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE
 );
 
--- Create indexes for performance (only if tables exist)
-DO $$
-BEGIN
-    -- User accounts indexes
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'user_accounts') THEN
-        CREATE INDEX IF NOT EXISTS idx_user_accounts_email ON user_accounts(email);
-        CREATE INDEX IF NOT EXISTS idx_user_accounts_client_key ON user_accounts(client_key);
-    END IF;
-    
-    -- Sessions indexes
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'sessions') THEN
-        CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
-        CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
-        CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
-    END IF;
-    
-    -- Audit logs indexes
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'audit_logs') THEN
-        CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
-        CREATE INDEX IF NOT EXISTS idx_audit_logs_client_key ON audit_logs(client_key);
-        CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);
-    END IF;
-    
-    -- Consent records indexes
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'consent_records') THEN
-        CREATE INDEX IF NOT EXISTS idx_consent_records_user_id ON consent_records(user_id);
-        CREATE INDEX IF NOT EXISTS idx_consent_records_client_key ON consent_records(client_key);
-    END IF;
-    
-    -- IP filters indexes
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'ip_filters') THEN
-        CREATE INDEX IF NOT EXISTS idx_ip_filters_ip_address ON ip_filters(ip_address);
-    END IF;
-    
-    -- Data deletion requests indexes
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'data_deletion_requests') THEN
-        CREATE INDEX IF NOT EXISTS idx_data_deletion_requests_user_id ON data_deletion_requests(user_id);
-        CREATE INDEX IF NOT EXISTS idx_data_deletion_requests_status ON data_deletion_requests(status);
-    END IF;
-    
-    -- Call recording consent indexes
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'call_recording_consent') THEN
-        CREATE INDEX IF NOT EXISTS idx_call_recording_consent_phone ON call_recording_consent(phone);
-    END IF;
-END $$;
+-- Create indexes for performance
+-- These will only succeed if the tables exist (which they should after CREATE TABLE statements above)
+CREATE INDEX IF NOT EXISTS idx_user_accounts_email ON user_accounts(email);
+CREATE INDEX IF NOT EXISTS idx_user_accounts_client_key ON user_accounts(client_key);
+CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_client_key ON audit_logs(client_key);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_consent_records_user_id ON consent_records(user_id);
+CREATE INDEX IF NOT EXISTS idx_consent_records_client_key ON consent_records(client_key);
+CREATE INDEX IF NOT EXISTS idx_ip_filters_ip_address ON ip_filters(ip_address);
+CREATE INDEX IF NOT EXISTS idx_data_deletion_requests_user_id ON data_deletion_requests(user_id);
+CREATE INDEX IF NOT EXISTS idx_data_deletion_requests_status ON data_deletion_requests(status);
+CREATE INDEX IF NOT EXISTS idx_call_recording_consent_phone ON call_recording_consent(phone);
 
 -- Add trigger to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
