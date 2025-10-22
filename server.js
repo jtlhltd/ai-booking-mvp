@@ -5695,7 +5695,8 @@ app.use(leadsRouter);
 app.use(twilioWebhooks);
 
 // --- Vapi booking webhook: create GCal event + send confirmations
-app.post('/webhooks/vapi', async (req, res) => {
+// CONFLICTING WEBHOOK HANDLER - DISABLED TO ALLOW LOGISTICS WEBHOOK
+// app.post('/webhooks/vapi', async (req, res) => {
   try {
     const p = req.body || {};
 
@@ -5892,7 +5893,7 @@ app.post('/webhooks/vapi', async (req, res) => {
     console.error('[VAPI WEBHOOK ERROR]', err?.response?.data || err?.message || err);
     return res.status(500).json({ ok:false, error: String(err?.response?.data || err?.message || err) });
   }
-});
+// });
 
 app.use(vapiWebhooks);
 // Retry helper
