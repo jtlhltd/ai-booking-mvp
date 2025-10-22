@@ -5697,84 +5697,73 @@ app.use(twilioWebhooks);
 // --- Vapi booking webhook: create GCal event + send confirmations
 // CONFLICTING WEBHOOK HANDLER - DISABLED TO ALLOW LOGISTICS WEBHOOK
 // app.post('/webhooks/vapi', async (req, res) => {
+//   try {
+//     const p = req.body || {};
+//
+//     // Accept multiple payload shapes from Vapi
+//     const clientKey =
+//       p?.metadata?.clientKey || p?.clientKey || req.get('X-Client-Key') || null;
+//     const service = p?.metadata?.service || p?.service || '';
+//     const lead    = p?.customer || p?.lead || p?.metadata?.lead || {};
+//     const slot    = p?.booking?.slot || p?.metadata?.selectedOption || p?.selectedSlot || p?.slot;
+//
+//     if (!clientKey) return res.status(400).json({ ok:false, error:'missing clientKey' });
+//     if (!service)   return res.status(400).json({ ok:false, error:'missing service' });
+//     if (!lead?.phone) return res.status(400).json({ ok:false, error:'missing lead.phone' });
+//     if (!slot?.start) return res.status(400).json({ ok:false, error:'missing slot.start' });
+
+//     const client = await getFullClient(clientKey);
+//     if (!client) return res.status(404).json({ ok:false, error:'unknown tenant' });
+//
+//     if (!(GOOGLE_CLIENT_EMAIL && (GOOGLE_PRIVATE_KEY || GOOGLE_PRIVATE_KEY_B64))) {
+//       return res.status(400).json({ ok:false, error:'Google env missing' });
+//     }
+//
+//     // ... rest of booking webhook code commented out ...
+//   } catch (err) {
+//     console.error('[VAPI WEBHOOK ERROR]', err?.response?.data || err?.message || err);
+//     return res.status(500).json({ ok:false, error: String(err?.response?.data || err?.message || err) });
+//   }
+// });
+
+app.use(vapiWebhooks);
+
+// Retry helper
+
+// Helper functions
+
+// --- Bootstrap tenants from env (for free Render without disk) ---
+async function bootstrapClients() {
   try {
-    const p = req.body || {};
-
-    // Accept multiple payload shapes from Vapi
-    const clientKey =
-      p?.metadata?.clientKey || p?.clientKey || req.get('X-Client-Key') || null;
-    const service = p?.metadata?.service || p?.service || '';
-    const lead    = p?.customer || p?.lead || p?.metadata?.lead || {};
-    const slot    = p?.booking?.slot || p?.metadata?.selectedOption || p?.selectedSlot || p?.slot;
-
-    if (!clientKey) return res.status(400).json({ ok:false, error:'missing clientKey' });
-    if (!service)   return res.status(400).json({ ok:false, error:'missing service' });
-    if (!lead?.phone) return res.status(400).json({ ok:false, error:'missing lead.phone' });
-    if (!slot?.start) return res.status(400).json({ ok:false, error:'missing slot.start' });
-
-    const client = await getFullClient(clientKey);
-    if (!client) return res.status(404).json({ ok:false, error:'unknown tenant' });
-
-    if (!(GOOGLE_CLIENT_EMAIL && (GOOGLE_PRIVATE_KEY || GOOGLE_PRIVATE_KEY_B64))) {
-      return res.status(400).json({ ok:false, error:'Google env missing' });
+    const existing = await listFullClients();
+    if (existing.length > 0) return;
+    const raw = process.env.BOOTSTRAP_CLIENTS_JSON;
+    if (!raw) return;
+    let seed = JSON.parse(raw);
+    if (!Array.isArray(seed)) seed = [seed];
+    for (const c of seed) {
+      if (!c.clientKey || !c.booking?.timezone) continue;
+      await upsertFullClient(c);
     }
+    console.log(`Bootstrapped ${seed.length} client(s) into SQLite from BOOTSTRAP_CLIENTS_JSON`);
+  } catch (e) {
+    console.error('bootstrapClients error', e?.message || e);
+  }
+}
 
-    const tz = pickTimezone(client);
-    const calendarId = pickCalendarId(client);
+// Helper functions
 
-    const startISO = new Date(slot.start).toISOString();
-    const endISO = slot.end
-      ? new Date(slot.end).toISOString()
-      : new Date(new Date(slot.start).getTime() + (client?.booking?.defaultDurationMin || 30) * 60000).toISOString();
-
-    // Authorize
-    const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY, privateKeyB64: GOOGLE_PRIVATE_KEY_B64 });
-    await auth.authorize();
-
-    // Guard against conflicts
-    const busy = await freeBusy({ auth, calendarId, timeMinISO: startISO, timeMaxISO: endISO });
-    const conflict = busy.some(b => !(endISO <= b.start || startISO >= b.end));
-    if (conflict) {
-      return res.status(409).json({ ok:false, error:'slot_unavailable', busy });
-    }
-
-    // Create event (deterministic ID to prevent dupes) with retry logic
-    const { google } = await import('googleapis');
-    const cal = google.calendar({ version: 'v3', auth });
-    const summary = `${service} — ${lead.name || ''}`.trim();
-    const description = [
-      `Service: ${service}`,
-      `Lead: ${lead.name || ''}`,
-      lead.phone ? `Phone: ${lead.phone}` : null,
-      `Tenant: ${client?.clientKey || 'default'}`
-    ].filter(Boolean).join('\\n');
-
-    let event;
-    
-    // Helper: Retry Google Calendar API with exponential backoff
-    const retryGoogleCalendar = async (eventData, maxRetries = 3) => {
-      for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-          return (await cal.events.insert({
-            calendarId,
-            requestBody: eventData
-          })).data;
-        } catch (err) {
-          if (attempt === maxRetries) throw err;
-          
-          // Retry on rate limit (429) or server errors (5xx)
-          const shouldRetry = err?.code === 429 || (err?.code >= 500 && err?.code < 600);
-          if (!shouldRetry) throw err;
-          
-          const delay = 1000 * Math.pow(2, attempt - 1); // 1s, 2s, 4s
-          console.warn(`[GOOGLE CALENDAR] Retry attempt ${attempt}/${maxRetries} after ${delay}ms...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-        }
-      }
-    };
-    
-    try {
-      const rawKey = `${client?.clientKey || 'default'}|${service}|${startISO}|${lead.phone}`;
+// Helpers for hours/closures
+function asJson(val, fallback) {
+  if (val == null) return fallback;
+  if (typeof val === 'object') return val;
+  try { return JSON.parse(String(val)); } catch { return fallback; }
+}
+function hoursFor(client) {
+  return asJson(client?.booking?.hours, null)
+      || asJson(client?.hoursJson, null)
+      || { mon:['09:00-17:00'], tue:['09:00-17:00'], wed:['09:00-17:00'], thu:['09:00-17:00'], fri:['09:00-17:00'] };
+}
       const crypto = await import('crypto');
       const deterministicId = ('bk' + crypto.createHash('sha1').update(rawKey).digest('hex').slice(0, 20)).toLowerCase();
 
@@ -5895,7 +5884,6 @@ app.use(twilioWebhooks);
   }
 // });
 
-app.use(vapiWebhooks);
 // Retry helper
 async function withRetry(fn, { retries = 2, delayMs = 250 } = {}) {
   let lastErr;
