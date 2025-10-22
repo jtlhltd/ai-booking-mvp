@@ -240,12 +240,26 @@ app.get('/admin-hub', (req, res) => {
 app.get('/api/admin/business-stats', async (req, res) => {
   try {
     const clients = await listFullClients();
-    const activeClients = clients.filter(c => c.status === 'active').length;
-    const monthlyRevenue = activeClients * 500; // £500 per client per month
+    const activeClients = clients.filter(c => c.isEnabled).length;
     
-    // Get call and booking stats
-    const totalCalls = clients.reduce((sum, c) => sum + (c.callCount || 0), 0);
-    const totalBookings = clients.reduce((sum, c) => sum + (c.bookingCount || 0), 0);
+    // Calculate monthly revenue based on active clients (£500 per client per month)
+    const monthlyRevenue = activeClients * 500;
+    
+    // Get real call and appointment data
+    let totalCalls = 0;
+    let totalBookings = 0;
+    
+    for (const client of clients) {
+      const calls = await getCallsByTenant(client.clientKey, 1000);
+      const appointments = await query(`
+        SELECT COUNT(*) as count FROM appointments 
+        WHERE client_key = $1 AND created_at >= NOW() - INTERVAL '30 days'
+      `, [client.clientKey]);
+      
+      totalCalls += calls.length;
+      totalBookings += parseInt(appointments.rows[0]?.count || 0);
+    }
+    
     const conversionRate = totalCalls > 0 ? (totalBookings / totalCalls * 100).toFixed(1) : 0;
     
     res.json({
@@ -256,21 +270,78 @@ app.get('/api/admin/business-stats', async (req, res) => {
       conversionRate: `${conversionRate}%`
     });
   } catch (error) {
+    console.error('Error getting business stats:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
 app.get('/api/admin/recent-activity', async (req, res) => {
   try {
-    // Mock recent activity data
-    const activities = [
-      { type: 'new_lead', message: 'New lead imported for Client A', timestamp: new Date().toISOString() },
-      { type: 'call_completed', message: 'Call completed for Client B', timestamp: new Date(Date.now() - 300000).toISOString() },
-      { type: 'booking_made', message: 'Appointment booked for Client C', timestamp: new Date(Date.now() - 600000).toISOString() }
-    ];
+    const activities = [];
     
-    res.json(activities);
+    // Get recent leads
+    const recentLeads = await query(`
+      SELECT l.*, t.display_name as client_name 
+      FROM leads l 
+      JOIN tenants t ON l.client_key = t.client_key 
+      WHERE l.created_at >= NOW() - INTERVAL '24 hours'
+      ORDER BY l.created_at DESC 
+      LIMIT 10
+    `);
+    
+    for (const lead of recentLeads.rows) {
+      activities.push({
+        type: 'new_lead',
+        message: `New lead "${lead.name || 'Unknown'}" imported for ${lead.client_name}`,
+        timestamp: lead.created_at,
+        client: lead.client_name
+      });
+    }
+    
+    // Get recent calls
+    const recentCalls = await query(`
+      SELECT c.*, t.display_name as client_name 
+      FROM calls c 
+      JOIN tenants t ON c.client_key = t.client_key 
+      WHERE c.created_at >= NOW() - INTERVAL '24 hours'
+      ORDER BY c.created_at DESC 
+      LIMIT 10
+    `);
+    
+    for (const call of recentCalls.rows) {
+      activities.push({
+        type: 'call_completed',
+        message: `Call ${call.status} for ${call.client_name} (${call.outcome || 'No outcome'})`,
+        timestamp: call.created_at,
+        client: call.client_name
+      });
+    }
+    
+    // Get recent appointments
+    const recentAppointments = await query(`
+      SELECT a.*, t.display_name as client_name 
+      FROM appointments a 
+      JOIN tenants t ON a.client_key = t.client_key 
+      WHERE a.created_at >= NOW() - INTERVAL '24 hours'
+      ORDER BY a.created_at DESC 
+      LIMIT 10
+    `);
+    
+    for (const appointment of recentAppointments.rows) {
+      activities.push({
+        type: 'booking_made',
+        message: `Appointment booked for ${appointment.client_name}`,
+        timestamp: appointment.created_at,
+        client: appointment.client_name
+      });
+    }
+    
+    // Sort by timestamp and return most recent
+    activities.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
+    res.json(activities.slice(0, 20)); // Return top 20 most recent
   } catch (error) {
+    console.error('Error getting recent activity:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -278,19 +349,38 @@ app.get('/api/admin/recent-activity', async (req, res) => {
 app.get('/api/admin/clients', async (req, res) => {
   try {
     const clients = await listFullClients();
-    const clientData = clients.map(client => ({
-      name: client.displayName || client.clientKey,
-      email: client.email,
-      industry: client.industry || 'Not specified',
-      status: client.status || 'active',
-      leadCount: client.leadCount || 0,
-      callCount: client.callCount || 0,
-      conversionRate: client.callCount > 0 ? ((client.bookingCount || 0) / client.callCount * 100).toFixed(1) + '%' : '0%',
-      monthlyRevenue: client.status === 'active' ? 500 : 0
-    }));
+    const clientData = [];
+    
+    for (const client of clients) {
+      // Get real data for each client
+      const leads = await getLeadsByClient(client.clientKey, 1000);
+      const calls = await getCallsByTenant(client.clientKey, 1000);
+      const appointments = await query(`
+        SELECT COUNT(*) as count FROM appointments 
+        WHERE client_key = $1 AND created_at >= NOW() - INTERVAL '30 days'
+      `, [client.clientKey]);
+      
+      const leadCount = leads.length;
+      const callCount = calls.length;
+      const bookingCount = parseInt(appointments.rows[0]?.count || 0);
+      const conversionRate = callCount > 0 ? ((bookingCount / callCount) * 100).toFixed(1) + '%' : '0%';
+      
+      clientData.push({
+        name: client.displayName || client.clientKey,
+        email: client.email || 'Not provided',
+        industry: client.industry || 'Not specified',
+        status: client.isEnabled ? 'active' : 'inactive',
+        leadCount,
+        callCount,
+        conversionRate,
+        monthlyRevenue: client.isEnabled ? 500 : 0,
+        createdAt: client.createdAt
+      });
+    }
     
     res.json(clientData);
   } catch (error) {
+    console.error('Error getting clients:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -298,47 +388,175 @@ app.get('/api/admin/clients', async (req, res) => {
 app.get('/api/admin/calls', async (req, res) => {
   try {
     const clients = await listFullClients();
-    const totalCalls = clients.reduce((sum, c) => sum + (c.callCount || 0), 0);
-    const totalBookings = clients.reduce((sum, c) => sum + (c.bookingCount || 0), 0);
+    
+    // Get real call data
+    let totalCalls = 0;
+    let totalBookings = 0;
+    let totalDuration = 0;
+    const recentCalls = [];
+    
+    for (const client of clients) {
+      const calls = await getCallsByTenant(client.clientKey, 100);
+      totalCalls += calls.length;
+      
+      // Calculate bookings from appointments
+      const appointments = await query(`
+        SELECT COUNT(*) as count FROM appointments 
+        WHERE client_key = $1 AND created_at >= NOW() - INTERVAL '30 days'
+      `, [client.clientKey]);
+      totalBookings += parseInt(appointments.rows[0]?.count || 0);
+      
+      // Add to recent calls
+      for (const call of calls.slice(0, 5)) { // Last 5 calls per client
+        totalDuration += call.duration || 0;
+        recentCalls.push({
+          client: client.displayName || client.clientKey,
+          phone: call.lead_phone,
+          status: call.status,
+          outcome: call.outcome,
+          duration: call.duration ? `${Math.floor(call.duration / 60)}:${(call.duration % 60).toString().padStart(2, '0')}` : 'N/A',
+          timestamp: call.created_at
+        });
+      }
+    }
+    
+    // Calculate averages
+    const averageDuration = totalCalls > 0 ? Math.round(totalDuration / totalCalls) : 0;
+    const successRate = totalCalls > 0 ? (totalBookings / totalCalls * 100).toFixed(1) + '%' : '0%';
+    
+    // Get queue size (pending calls)
+    const queueSize = await query(`
+      SELECT COUNT(*) as count FROM call_queue 
+      WHERE status = 'pending' AND scheduled_for <= NOW() + INTERVAL '1 hour'
+    `);
     
     res.json({
-      liveCalls: 0, // Mock data
-      queueSize: 0, // Mock data
-      successRate: totalCalls > 0 ? (totalBookings / totalCalls * 100).toFixed(1) + '%' : '0%',
-      averageDuration: '2:30', // Mock data
-      recentCalls: [] // Mock data
+      liveCalls: 0, // Would need real-time tracking
+      queueSize: parseInt(queueSize.rows[0]?.count || 0),
+      successRate,
+      averageDuration: `${Math.floor(averageDuration / 60)}:${(averageDuration % 60).toString().padStart(2, '0')}`,
+      recentCalls: recentCalls.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).slice(0, 10)
     });
   } catch (error) {
+    console.error('Error getting calls data:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
 app.get('/api/admin/analytics', async (req, res) => {
   try {
+    const clients = await listFullClients();
+    
+    // Calculate conversion funnel
+    let totalLeads = 0;
+    let totalCalls = 0;
+    let totalBookings = 0;
+    
+    for (const client of clients) {
+      const leads = await getLeadsByClient(client.clientKey, 1000);
+      const calls = await getCallsByTenant(client.clientKey, 1000);
+      const appointments = await query(`
+        SELECT COUNT(*) as count FROM appointments 
+        WHERE client_key = $1 AND created_at >= NOW() - INTERVAL '30 days'
+      `, [client.clientKey]);
+      
+      totalLeads += leads.length;
+      totalCalls += calls.length;
+      totalBookings += parseInt(appointments.rows[0]?.count || 0);
+    }
+    
+    // Get peak hours from calls
+    const peakHoursData = await query(`
+      SELECT EXTRACT(HOUR FROM created_at) as hour, COUNT(*) as count
+      FROM calls 
+      WHERE created_at >= NOW() - INTERVAL '30 days'
+      GROUP BY EXTRACT(HOUR FROM created_at)
+      ORDER BY count DESC
+      LIMIT 5
+    `);
+    
+    const peakHours = peakHoursData.rows.map(row => {
+      const hour = parseInt(row.hour);
+      return `${hour.toString().padStart(2, '0')}:00`;
+    });
+    
+    // Get client performance data
+    const clientPerformance = [];
+    for (const client of clients) {
+      const leads = await getLeadsByClient(client.clientKey, 1000);
+      const calls = await getCallsByTenant(client.clientKey, 1000);
+      const appointments = await query(`
+        SELECT COUNT(*) as count FROM appointments 
+        WHERE client_key = $1 AND created_at >= NOW() - INTERVAL '30 days'
+      `, [client.clientKey]);
+      
+      const bookingCount = parseInt(appointments.rows[0]?.count || 0);
+      const conversionRate = calls.length > 0 ? (bookingCount / calls.length * 100).toFixed(1) : 0;
+      
+      clientPerformance.push({
+        name: client.displayName || client.clientKey,
+        leads: leads.length,
+        calls: calls.length,
+        bookings: bookingCount,
+        conversionRate: `${conversionRate}%`,
+        revenue: client.isEnabled ? 500 : 0
+      });
+    }
+    
     res.json({
       conversionFunnel: {
-        leads: 100,
-        calls: 80,
-        bookings: 25
+        leads: totalLeads,
+        calls: totalCalls,
+        bookings: totalBookings
       },
-      peakHours: ['9:00 AM', '2:00 PM', '4:00 PM'],
-      clientPerformance: []
+      peakHours: peakHours.length > 0 ? peakHours : ['9:00', '14:00', '16:00'],
+      clientPerformance: clientPerformance.sort((a, b) => b.bookings - a.bookings)
     });
   } catch (error) {
+    console.error('Error getting analytics:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
 app.get('/api/admin/system-health', async (req, res) => {
   try {
+    // Get system uptime (simplified)
+    const uptime = process.uptime();
+    const uptimeHours = Math.floor(uptime / 3600);
+    const uptimeMinutes = Math.floor((uptime % 3600) / 60);
+    const uptimeString = `${uptimeHours}h ${uptimeMinutes}m`;
+    
+    // Get error count from recent logs (simplified)
+    const errorCount = 0; // Would need proper error tracking
+    
+    // Get recent errors from database
+    const recentErrors = await query(`
+      SELECT * FROM quality_alerts 
+      WHERE created_at >= NOW() - INTERVAL '24 hours'
+      ORDER BY created_at DESC 
+      LIMIT 10
+    `);
+    
+    // Calculate system status
+    const status = recentErrors.rows.length > 5 ? 'warning' : 'healthy';
+    
+    // Get response time (simplified)
+    const responseTime = '120ms'; // Would need proper monitoring
+    
     res.json({
-      status: 'healthy',
-      uptime: '99.9%',
-      errorCount: 0,
-      responseTime: '120ms',
-      recentErrors: []
+      status,
+      uptime: uptimeString,
+      errorCount,
+      responseTime,
+      recentErrors: recentErrors.rows.map(error => ({
+        type: error.alert_type,
+        severity: error.severity,
+        message: error.message,
+        timestamp: error.created_at
+      }))
     });
   } catch (error) {
+    console.error('Error getting system health:', error);
     res.status(500).json({ error: error.message });
   }
 });
