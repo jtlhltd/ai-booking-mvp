@@ -6853,6 +6853,9 @@ app.post('/webhooks/twilio-inbound', express.urlencoded({ extended: false }), sm
   }
 }));
 
+// === End of book-slot function - closing brace added ===
+});
+
 // SMS endpoint for testing (simplified version of Twilio webhook)
 app.post('/sms', async (req, res) => {
   try {
