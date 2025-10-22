@@ -380,6 +380,61 @@ app.get('/api/admin/clients', async (req, res) => {
     const clients = await listFullClients();
     const clientData = [];
     
+    // If no clients exist, create some sample data for demonstration
+    if (clients.length === 0) {
+      console.log('No clients found, creating sample data...');
+      const sampleClients = [
+        { clientKey: 'demo-dental', displayName: 'Demo Dental Practice', industry: 'Healthcare' },
+        { clientKey: 'demo-law', displayName: 'Demo Law Firm', industry: 'Legal' },
+        { clientKey: 'demo-fitness', displayName: 'Demo Fitness Center', industry: 'Fitness' }
+      ];
+      
+      for (const sample of sampleClients) {
+        await upsertFullClient(sample);
+        
+        // Add some sample leads for each client
+        const sampleLeads = [
+          { name: 'John Smith', phone: '+447700900001', service: 'Consultation' },
+          { name: 'Sarah Johnson', phone: '+447700900002', service: 'Follow-up' },
+          { name: 'Mike Brown', phone: '+447700900003', service: 'Initial Contact' }
+        ];
+        
+        for (const lead of sampleLeads) {
+          await findOrCreateLead({
+            tenantKey: sample.clientKey,
+            phone: lead.phone,
+            name: lead.name,
+            service: lead.service,
+            source: 'Demo Import'
+          });
+        }
+        
+        // Add some sample calls
+        const sampleCalls = [
+          { phone: '+447700900001', status: 'completed', outcome: 'interested', duration: 180 },
+          { phone: '+447700900002', status: 'completed', outcome: 'not_interested', duration: 120 },
+          { phone: '+447700900003', status: 'completed', outcome: 'callback_requested', duration: 240 }
+        ];
+        
+        for (const call of sampleCalls) {
+          await upsertCall({
+            callId: `demo-${sample.clientKey}-${Date.now()}-${Math.random()}`,
+            clientKey: sample.clientKey,
+            leadPhone: call.phone,
+            status: call.status,
+            outcome: call.outcome,
+            duration: call.duration,
+            cost: 0.15,
+            metadata: { demo: true }
+          });
+        }
+      }
+      
+      // Re-fetch clients after creating samples
+      const updatedClients = await listFullClients();
+      clients.push(...updatedClients);
+    }
+    
     for (const client of clients) {
       try {
         // Get real data for each client
@@ -395,30 +450,37 @@ app.get('/api/admin/clients', async (req, res) => {
         const bookingCount = parseInt(appointments?.rows?.[0]?.count || 0);
         const conversionRate = callCount > 0 ? ((bookingCount / callCount) * 100).toFixed(1) : 0;
         
+        // Better fallback for client name
+        const clientName = client.displayName || client.clientKey || 'Unknown Client';
+        const clientEmail = client.email || `${client.clientKey}@example.com`;
+        
         clientData.push({
-          name: client.displayName || client.clientKey,
-          email: client.email || 'Not provided',
+          name: clientName,
+          email: clientEmail,
           industry: client.industry || 'Not specified',
           status: client.isEnabled ? 'active' : 'inactive',
           leadCount,
           callCount,
           conversionRate,
           monthlyRevenue: client.isEnabled ? 500 : 0,
-          createdAt: client.createdAt
+          createdAt: client.createdAt,
+          clientKey: client.clientKey
         });
       } catch (clientError) {
         console.error(`Error getting data for client ${client.clientKey}:`, clientError);
         // Add client with default values
+        const clientName = client.displayName || client.clientKey || 'Unknown Client';
         clientData.push({
-          name: client.displayName || client.clientKey,
-          email: client.email || 'Not provided',
+          name: clientName,
+          email: client.email || `${client.clientKey}@example.com`,
           industry: client.industry || 'Not specified',
           status: client.isEnabled ? 'active' : 'inactive',
           leadCount: 0,
           callCount: 0,
-          conversionRate: '0%',
+          conversionRate: 0,
           monthlyRevenue: client.isEnabled ? 500 : 0,
-          createdAt: client.createdAt
+          createdAt: client.createdAt,
+          clientKey: client.clientKey
         });
       }
     }
@@ -612,6 +674,120 @@ app.get('/api/admin/system-health', async (req, res) => {
       responseTime: 120,
       recentErrors: []
     });
+  }
+});
+
+// Client Management Endpoints
+app.get('/api/admin/client/:clientKey', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const client = await getFullClient(clientKey);
+    
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    // Get detailed stats for this client
+    const leads = await getLeadsByClient(clientKey, 1000);
+    const calls = await getCallsByTenant(clientKey, 1000);
+    const appointments = await query(`
+      SELECT COUNT(*) as count FROM appointments 
+      WHERE client_key = $1 AND created_at >= NOW() - INTERVAL '30 days'
+    `, [clientKey]);
+    
+    const recentCalls = calls.slice(0, 10).map(call => ({
+      phone: call.lead_phone,
+      status: call.status,
+      outcome: call.outcome,
+      duration: call.duration,
+      timestamp: call.created_at
+    }));
+    
+    res.json({
+      ...client,
+      stats: {
+        totalLeads: leads.length,
+        totalCalls: calls.length,
+        totalBookings: parseInt(appointments?.rows?.[0]?.count || 0),
+        conversionRate: calls.length > 0 ? ((parseInt(appointments?.rows?.[0]?.count || 0) / calls.length) * 100).toFixed(1) : 0
+      },
+      recentCalls
+    });
+  } catch (error) {
+    console.error('Error getting client details:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/admin/client/:clientKey', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const updates = req.body;
+    
+    const existingClient = await getFullClient(clientKey);
+    if (!existingClient) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    // Update client data
+    const updatedClient = {
+      ...existingClient,
+      ...updates,
+      clientKey // Ensure clientKey doesn't change
+    };
+    
+    await upsertFullClient(updatedClient);
+    
+    res.json({ success: true, message: 'Client updated successfully' });
+  } catch (error) {
+    console.error('Error updating client:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/admin/client/:clientKey', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    
+    const existingClient = await getFullClient(clientKey);
+    if (!existingClient) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+    
+    await deleteClient(clientKey);
+    
+    res.json({ success: true, message: 'Client deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting client:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/admin/client', async (req, res) => {
+  try {
+    const { displayName, industry, email, timezone } = req.body;
+    
+    if (!displayName) {
+      return res.status(400).json({ error: 'Client name is required' });
+    }
+    
+    const clientKey = displayName.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    
+    const newClient = {
+      clientKey,
+      displayName,
+      industry: industry || 'Not specified',
+      email: email || `${clientKey}@example.com`,
+      timezone: timezone || 'Europe/London',
+      isEnabled: true
+    };
+    
+    await upsertFullClient(newClient);
+    
+    res.json({ success: true, message: 'Client created successfully', clientKey });
+  } catch (error) {
+    console.error('Error creating client:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 

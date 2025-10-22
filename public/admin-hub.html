@@ -570,7 +570,7 @@
       <div class="table-card">
         <div class="table-header">
           <div class="table-title">All Clients</div>
-          <div class="btn btn-success" onclick="createNewClient()">Add Client</div>
+          <div class="btn btn-success" onclick="addNewClient()">Add Client</div>
         </div>
         <div class="loading" id="clientsLoading">
           <div class="spinner"></div>
@@ -919,8 +919,8 @@
         body.innerHTML = clients.map(client => `
           <tr>
             <td>
-              <strong>${client.businessName}</strong><br>
-              <small>${client.ownerEmail}</small>
+              <strong>${client.name}</strong><br>
+              <small>${client.email}</small>
             </td>
             <td>${client.industry}</td>
             <td><span class="status-badge status-${client.status}">${client.status}</span></td>
@@ -931,6 +931,7 @@
             <td>
               <button class="btn btn-primary" onclick="viewClient('${client.clientKey}')">View</button>
               <button class="btn btn-success" onclick="editClient('${client.clientKey}')">Edit</button>
+              <button class="btn btn-danger" onclick="deleteClient('${client.clientKey}', '${client.name}')">Delete</button>
             </td>
           </tr>
         `).join('');
@@ -938,6 +939,93 @@
       } catch (error) {
         console.error('Error loading clients:', error);
         loading.innerHTML = '<div class="spinner"></div>Error loading clients';
+      }
+    }
+    
+    // Client management functions
+    async function viewClient(clientKey) {
+      try {
+        const response = await fetch(`/api/admin/client/${clientKey}`);
+        const client = await response.json();
+        
+        // Show client details in a modal or alert for now
+        alert(`Client Details:\n\nName: ${client.displayName}\nIndustry: ${client.industry}\nEmail: ${client.email}\nLeads: ${client.stats.totalLeads}\nCalls: ${client.stats.totalCalls}\nBookings: ${client.stats.totalBookings}\nConversion Rate: ${client.stats.conversionRate}%`);
+      } catch (error) {
+        console.error('Error viewing client:', error);
+        alert('Error loading client details');
+      }
+    }
+    
+    async function editClient(clientKey) {
+      const newName = prompt('Enter new client name:', '');
+      if (newName) {
+        try {
+          const response = await fetch(`/api/admin/client/${clientKey}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ displayName: newName })
+          });
+          
+          if (response.ok) {
+            alert('Client updated successfully!');
+            loadClients(); // Refresh the list
+          } else {
+            alert('Error updating client');
+          }
+        } catch (error) {
+          console.error('Error updating client:', error);
+          alert('Error updating client');
+        }
+      }
+    }
+    
+    async function deleteClient(clientKey, clientName) {
+      if (confirm(`Are you sure you want to delete "${clientName}"? This action cannot be undone.`)) {
+        try {
+          const response = await fetch(`/api/admin/client/${clientKey}`, {
+            method: 'DELETE'
+          });
+          
+          if (response.ok) {
+            alert('Client deleted successfully!');
+            loadClients(); // Refresh the list
+          } else {
+            alert('Error deleting client');
+          }
+        } catch (error) {
+          console.error('Error deleting client:', error);
+          alert('Error deleting client');
+        }
+      }
+    }
+    
+    async function addNewClient() {
+      const name = prompt('Enter client name:', '');
+      if (name) {
+        const industry = prompt('Enter industry:', '');
+        const email = prompt('Enter email:', '');
+        
+        try {
+          const response = await fetch('/api/admin/client', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              displayName: name, 
+              industry: industry || 'Not specified',
+              email: email || ''
+            })
+          });
+          
+          if (response.ok) {
+            alert('Client created successfully!');
+            loadClients(); // Refresh the list
+          } else {
+            alert('Error creating client');
+          }
+        } catch (error) {
+          console.error('Error creating client:', error);
+          alert('Error creating client');
+        }
       }
     }
 
