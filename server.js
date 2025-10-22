@@ -7411,6 +7411,389 @@ app.get('/admin/cost-optimization/:tenantKey', async (req, res) => {
   }
 });
 
+// ============================================================================
+// ADMIN HUB API ENDPOINTS
+// ============================================================================
+
+// Admin Hub - Business Stats
+app.get('/api/admin/business-stats', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { 
+      getAnalyticsSummary,
+      getTotalCostsByTenant,
+      getCallsByTenant,
+      listFullClients
+    } = await import('./db.js');
+    
+    // Get all clients
+    const clients = await listFullClients();
+    const activeClients = clients.filter(c => c.status === 'active').length;
+    
+    // Calculate monthly revenue (assuming £500/month per client)
+    const monthlyRevenue = activeClients * 500;
+    
+    // Get total calls for all clients
+    let totalCalls = 0;
+    let totalBookings = 0;
+    
+    for (const client of clients) {
+      try {
+        const calls = await getCallsByTenant(client.clientKey, 1000);
+        totalCalls += calls.length;
+        totalBookings += calls.filter(c => c.outcome === 'booked').length;
+      } catch (error) {
+        console.error(`Error getting calls for ${client.clientKey}:`, error);
+      }
+    }
+    
+    const conversionRate = totalCalls > 0 ? Math.round((totalBookings / totalCalls) * 100) : 0;
+    
+    // Mock revenue trend data (replace with real data)
+    const revenueTrend = {
+      labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+      values: [0, 0, 0, 0, 0, monthlyRevenue]
+    };
+    
+    // Mock call outcomes data
+    const callOutcomes = {
+      labels: ['Booked', 'Not Interested', 'No Answer', 'Callback'],
+      values: [totalBookings, Math.floor(totalCalls * 0.3), Math.floor(totalCalls * 0.4), Math.floor(totalCalls * 0.1)]
+    };
+    
+    console.log('[ADMIN HUB BUSINESS STATS]', { 
+      activeClients,
+      monthlyRevenue,
+      totalCalls,
+      conversionRate,
+      requestedBy: req.ip 
+    });
+    
+    res.json({
+      ok: true,
+      activeClients,
+      monthlyRevenue,
+      totalCalls,
+      conversionRate,
+      revenueChange: 0, // Mock data
+      clientsChange: 0,  // Mock data
+      callsChange: 0,    // Mock data
+      conversionChange: 0, // Mock data
+      revenueTrend,
+      callOutcomes,
+      lastUpdated: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[ADMIN HUB BUSINESS STATS ERROR]', error);
+    res.status(500).json({ ok: false, error: String(error) });
+  }
+});
+
+// Admin Hub - Recent Activity
+app.get('/api/admin/recent-activity', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { getRecentActivity } = await import('./db.js');
+    
+    // Get recent activity (mock data for now)
+    const activities = [
+      {
+        timestamp: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+        clientName: 'Dental Practice',
+        action: 'New Lead',
+        details: 'John Smith (+447700900123)',
+        status: 'active'
+      },
+      {
+        timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+        clientName: 'Beauty Salon',
+        action: 'Call Completed',
+        details: 'Sarah Johnson - Booked appointment',
+        status: 'success'
+      },
+      {
+        timestamp: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+        clientName: 'Fitness Studio',
+        action: 'Lead Import',
+        details: '25 leads imported via CSV',
+        status: 'active'
+      }
+    ];
+    
+    console.log('[ADMIN HUB RECENT ACTIVITY]', { 
+      activityCount: activities.length,
+      requestedBy: req.ip 
+    });
+    
+    res.json(activities);
+  } catch (error) {
+    console.error('[ADMIN HUB RECENT ACTIVITY ERROR]', error);
+    res.status(500).json({ ok: false, error: String(error) });
+  }
+});
+
+// Admin Hub - All Clients
+app.get('/api/admin/clients', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { 
+      listFullClients,
+      getCallsByTenant,
+      getLeadsByTenant
+    } = await import('./db.js');
+    
+    const clients = await listFullClients();
+    const clientData = [];
+    
+    for (const client of clients) {
+      try {
+        const calls = await getCallsByTenant(client.clientKey, 1000);
+        const leads = await getLeadsByTenant(client.clientKey, 1000);
+        
+        const bookings = calls.filter(c => c.outcome === 'booked').length;
+        const conversionRate = calls.length > 0 ? Math.round((bookings / calls.length) * 100) : 0;
+        const monthlyRevenue = client.status === 'active' ? 500 : 0;
+        
+        clientData.push({
+          clientKey: client.clientKey,
+          businessName: client.displayName || client.businessName,
+          ownerEmail: client.ownerEmail,
+          industry: client.industry || 'Unknown',
+          status: client.status || 'active',
+          leadCount: leads.length,
+          callCount: calls.length,
+          conversionRate,
+          monthlyRevenue
+        });
+      } catch (error) {
+        console.error(`Error getting data for client ${client.clientKey}:`, error);
+        clientData.push({
+          clientKey: client.clientKey,
+          businessName: client.displayName || client.businessName,
+          ownerEmail: client.ownerEmail,
+          industry: client.industry || 'Unknown',
+          status: client.status || 'active',
+          leadCount: 0,
+          callCount: 0,
+          conversionRate: 0,
+          monthlyRevenue: 0
+        });
+      }
+    }
+    
+    console.log('[ADMIN HUB CLIENTS]', { 
+      clientCount: clientData.length,
+      requestedBy: req.ip 
+    });
+    
+    res.json(clientData);
+  } catch (error) {
+    console.error('[ADMIN HUB CLIENTS ERROR]', error);
+    res.status(500).json({ ok: false, error: String(error) });
+  }
+});
+
+// Admin Hub - Calls Data
+app.get('/api/admin/calls', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { 
+      getCallsByTenant,
+      listFullClients
+    } = await import('./db.js');
+    
+    const clients = await listFullClients();
+    let allCalls = [];
+    let liveCalls = 0;
+    let queue = 0;
+    let totalDuration = 0;
+    let successfulCalls = 0;
+    
+    for (const client of clients) {
+      try {
+        const calls = await getCallsByTenant(client.clientKey, 100);
+        calls.forEach(call => {
+          call.clientName = client.displayName || client.businessName;
+        });
+        allCalls = allCalls.concat(calls);
+        
+        // Count live calls and queue (mock data)
+        liveCalls += Math.floor(Math.random() * 3);
+        queue += Math.floor(Math.random() * 10);
+        
+        // Calculate metrics
+        totalDuration += calls.reduce((sum, call) => sum + (call.duration || 0), 0);
+        successfulCalls += calls.filter(c => c.outcome === 'booked').length;
+      } catch (error) {
+        console.error(`Error getting calls for client ${client.clientKey}:`, error);
+      }
+    }
+    
+    const avgDuration = allCalls.length > 0 ? Math.round(totalDuration / allCalls.length) : 0;
+    const successRate = allCalls.length > 0 ? Math.round((successfulCalls / allCalls.length) * 100) : 0;
+    
+    // Get recent calls (last 20)
+    const recentCalls = allCalls
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+      .slice(0, 20);
+    
+    console.log('[ADMIN HUB CALLS]', { 
+      totalCalls: allCalls.length,
+      liveCalls,
+      queue,
+      successRate,
+      requestedBy: req.ip 
+    });
+    
+    res.json({
+      liveCalls,
+      queue,
+      successRate,
+      avgDuration,
+      recentCalls
+    });
+  } catch (error) {
+    console.error('[ADMIN HUB CALLS ERROR]', error);
+    res.status(500).json({ ok: false, error: String(error) });
+  }
+});
+
+// Admin Hub - Analytics Data
+app.get('/api/admin/analytics', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { 
+      getCallsByTenant,
+      getLeadsByTenant,
+      listFullClients
+    } = await import('./db.js');
+    
+    const clients = await listFullClients();
+    const clientPerformance = [];
+    
+    for (const client of clients) {
+      try {
+        const calls = await getCallsByTenant(client.clientKey, 1000);
+        const leads = await getLeadsByTenant(client.clientKey, 1000);
+        
+        const bookings = calls.filter(c => c.outcome === 'booked').length;
+        const conversionRate = calls.length > 0 ? Math.round((bookings / calls.length) * 100) : 0;
+        const revenue = client.status === 'active' ? 500 : 0;
+        const roi = revenue > 0 ? Math.round(revenue / 100) : 0; // Mock ROI calculation
+        
+        clientPerformance.push({
+          businessName: client.displayName || client.businessName,
+          leads: leads.length,
+          calls: calls.length,
+          bookings,
+          conversionRate,
+          revenue,
+          roi
+        });
+      } catch (error) {
+        console.error(`Error getting analytics for client ${client.clientKey}:`, error);
+      }
+    }
+    
+    // Mock conversion funnel data
+    const conversionFunnel = {
+      labels: ['Leads', 'Called', 'Interested', 'Booked'],
+      values: [100, 80, 40, 20] // Mock data
+    };
+    
+    // Mock peak hours data
+    const peakHours = {
+      labels: ['9AM', '10AM', '11AM', '12PM', '1PM', '2PM', '3PM', '4PM', '5PM'],
+      values: [5, 8, 12, 15, 10, 18, 22, 16, 8] // Mock data
+    };
+    
+    console.log('[ADMIN HUB ANALYTICS]', { 
+      clientCount: clientPerformance.length,
+      requestedBy: req.ip 
+    });
+    
+    res.json({
+      clientPerformance,
+      conversionFunnel,
+      peakHours
+    });
+  } catch (error) {
+    console.error('[ADMIN HUB ANALYTICS ERROR]', error);
+    res.status(500).json({ ok: false, error: String(error) });
+  }
+});
+
+// Admin Hub - System Health
+app.get('/api/admin/system-health', async (req, res) => {
+  try {
+    // Check API key
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Mock system health data
+    const systemHealth = {
+      status: 'Healthy',
+      uptime: 99.9,
+      errorCount: 0,
+      responseTime: 120,
+      recentErrors: [
+        {
+          timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+          type: 'Database',
+          message: 'Connection timeout',
+          clientName: 'System',
+          status: 'resolved'
+        },
+        {
+          timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+          type: 'API',
+          message: 'Rate limit exceeded',
+          clientName: 'Dental Practice',
+          status: 'resolved'
+        }
+      ]
+    };
+    
+    console.log('[ADMIN HUB SYSTEM HEALTH]', { 
+      status: systemHealth.status,
+      uptime: systemHealth.uptime,
+      requestedBy: req.ip 
+    });
+    
+    res.json(systemHealth);
+  } catch (error) {
+    console.error('[ADMIN HUB SYSTEM HEALTH ERROR]', error);
+    res.status(500).json({ ok: false, error: String(error) });
+  }
+});
+
 // Admin endpoint to set budget limits
 app.post('/admin/budget-limits/:tenantKey', async (req, res) => {
   try {
@@ -11871,6 +12254,15 @@ app.get('/zapier-docs.html', (req, res) => {
 
 app.get('/zapier', (req, res) => {
   res.sendFile('public/zapier-docs.html', { root: '.' });
+});
+
+// Admin Hub page
+app.get('/admin-hub.html', (req, res) => {
+  res.sendFile('public/admin-hub.html', { root: '.' });
+});
+
+app.get('/admin-hub', (req, res) => {
+  res.sendFile('public/admin-hub.html', { root: '.' });
 });
 
 // Complete setup endpoint - adds missing columns to make system 100%
