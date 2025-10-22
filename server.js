@@ -111,7 +111,7 @@ function requireApiKey(req, res, next) {
   if (req.path === '/api/test' || req.path === '/api/test-linkedin' || req.path === '/api/uk-business-search' || req.path === '/api/decision-maker-contacts' || req.path === '/api/industry-categories' || req.path === '/test-sms-pipeline' || req.path === '/sms-test' || req.path === '/api/initiate-lead-capture' || req.path === '/api/signup') return next();
   if (req.path === '/uk-business-search' || req.path === '/booking-simple.html') return next();
   if (req.path.startsWith('/dashboard/') || req.path.startsWith('/settings/') || req.path.startsWith('/leads') || req.path === '/privacy.html' || req.path === '/privacy' || req.path === '/zapier-docs.html' || req.path === '/zapier') return next();
-  if (req.path === '/admin-hub.html' || req.path === '/admin-hub') return next();
+  if (req.path === '/admin-hub.html' || req.path === '/admin-hub' || req.path.startsWith('/api/admin/')) return next();
   if (!API_KEY) return res.status(500).json({ error: 'Server missing API_KEY' });
   const key = req.get('X-API-Key');
   if (key && key === API_KEY) return next();
