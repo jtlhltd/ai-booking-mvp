@@ -53,11 +53,7 @@ const normalizePhone = (s) => (s || '').trim().replace(/[^\d+]/g, '');
 
 // server.js — AI Booking MVP (SQLite tenants + env bootstrap + richer tenant awareness)
 import 'dotenv/config';
-import express from 'express';
-import cors from 'cors';
-import axios from 'axios';
-import { createServer } from 'http';
-import { Server as SocketIOServer } from 'socket.io';
+import bcrypt from 'bcrypt';
 import { generateUKBusinesses, getIndustryCategories, fuzzySearch } from './enhanced-business-search.js';
 import RealUKBusinessSearch from './real-uk-business-search.js';
 import BookingSystem from './booking-system.js';
@@ -527,11 +523,11 @@ app.get('/vapi-test-dashboard', (req, res) => {
 
 // Admin Hub routes
 app.get('/admin-hub.html', (req, res) => {
-  res.sendFile(path.join(process.cwd(), 'public', 'admin-hub-enhanced.html'));
+  res.sendFile(path.join(process.cwd(), 'public', 'admin-hub-enterprise.html'));
 });
 
 app.get('/admin-hub', (req, res) => {
-  res.sendFile(path.join(process.cwd(), 'public', 'admin-hub-enhanced.html'));
+  res.sendFile(path.join(process.cwd(), 'public', 'admin-hub-enterprise.html'));
 });
 
 // Admin API endpoints
@@ -687,23 +683,122 @@ app.get('/api/admin/clients', async (req, res) => {
     const clients = await listFullClients();
     const clientData = [];
     
-    // If no clients exist, create some sample data for demonstration
+    // If no clients exist, create comprehensive sample data for demonstration
     if (clients.length === 0) {
-      console.log('No clients found, creating sample data...');
+      console.log('No clients found, creating comprehensive sample data...');
       const sampleClients = [
-        { clientKey: 'demo-dental', displayName: 'Demo Dental Practice', industry: 'Healthcare' },
-        { clientKey: 'demo-law', displayName: 'Demo Law Firm', industry: 'Legal' },
-        { clientKey: 'demo-fitness', displayName: 'Demo Fitness Center', industry: 'Fitness' }
+        { 
+          clientKey: 'premium-dental-clinic', 
+          displayName: 'Premium Dental Clinic', 
+          industry: 'Healthcare',
+          email: 'admin@premiumdental.com',
+          timezone: 'Europe/London',
+          phone: '+44 20 7123 4567',
+          address: '123 Harley Street, London W1G 6BA',
+          website: 'https://premiumdental.com',
+          description: 'Premium dental services in central London'
+        },
+        { 
+          clientKey: 'thompson-law-firm', 
+          displayName: 'Thompson & Associates Law Firm', 
+          industry: 'Legal',
+          email: 'contact@thompsonlaw.co.uk',
+          timezone: 'Europe/London',
+          phone: '+44 20 7580 1234',
+          address: '456 Chancery Lane, London WC2A 1JA',
+          website: 'https://thompsonlaw.co.uk',
+          description: 'Leading commercial law firm specializing in corporate law'
+        },
+        { 
+          clientKey: 'elite-fitness-studio', 
+          displayName: 'Elite Fitness Studio', 
+          industry: 'Fitness',
+          email: 'info@elitefitness.co.uk',
+          timezone: 'Europe/London',
+          phone: '+44 20 8123 7890',
+          address: '789 King\'s Road, London SW3 4RD',
+          website: 'https://elitefitness.co.uk',
+          description: 'Premium fitness studio with personal training and group classes'
+        },
+        { 
+          clientKey: 'luxury-spa-retreat', 
+          displayName: 'Luxury Spa Retreat', 
+          industry: 'Wellness',
+          email: 'bookings@luxuryspa.com',
+          timezone: 'Europe/London',
+          phone: '+44 20 7234 5678',
+          address: '321 Mayfair, London W1K 6AB',
+          website: 'https://luxuryspa.com',
+          description: 'Exclusive spa retreat offering premium wellness treatments'
+        },
+        { 
+          clientKey: 'tech-startup-consulting', 
+          displayName: 'TechStart Consulting', 
+          industry: 'Technology',
+          email: 'hello@techstart.co.uk',
+          timezone: 'Europe/London',
+          phone: '+44 20 8345 6789',
+          address: '654 Silicon Roundabout, London EC1A 4HD',
+          website: 'https://techstart.co.uk',
+          description: 'Technology consulting for startups and scale-ups'
+        }
       ];
       
       for (const sample of sampleClients) {
         await upsertFullClient(sample);
         
-        // Add some sample leads for each client
+        // Add comprehensive sample leads for each client
         const sampleLeads = [
-          { name: 'John Smith', phone: '+447700900001', service: 'Consultation' },
-          { name: 'Sarah Johnson', phone: '+447700900002', service: 'Follow-up' },
-          { name: 'Mike Brown', phone: '+447700900003', service: 'Initial Contact' }
+          { 
+            name: 'Dr. Sarah Johnson', 
+            phone: '+447700900001', 
+            service: 'Dental Consultation',
+            email: 'sarah.johnson@email.com',
+            source: 'Website Contact Form',
+            status: 'new',
+            notes: 'Interested in cosmetic dentistry',
+            priority: 'high'
+          },
+          { 
+            name: 'Michael Chen', 
+            phone: '+447700900002', 
+            service: 'Legal Consultation',
+            email: 'michael.chen@email.com',
+            source: 'Referral',
+            status: 'contacted',
+            notes: 'Corporate law inquiry',
+            priority: 'medium'
+          },
+          { 
+            name: 'Emma Williams', 
+            phone: '+447700900003', 
+            service: 'Personal Training',
+            email: 'emma.williams@email.com',
+            source: 'Social Media',
+            status: 'qualified',
+            notes: 'Looking for weight loss program',
+            priority: 'high'
+          },
+          { 
+            name: 'James Thompson', 
+            phone: '+447700900004', 
+            service: 'Spa Treatment',
+            email: 'james.thompson@email.com',
+            source: 'Google Ads',
+            status: 'new',
+            notes: 'Couples massage booking',
+            priority: 'medium'
+          },
+          { 
+            name: 'Lisa Patel', 
+            phone: '+447700900005', 
+            service: 'Tech Consulting',
+            email: 'lisa.patel@email.com',
+            source: 'LinkedIn',
+            status: 'qualified',
+            notes: 'Startup needs technical guidance',
+            priority: 'high'
+          }
         ];
         
         for (const lead of sampleLeads) {
@@ -712,15 +807,66 @@ app.get('/api/admin/clients', async (req, res) => {
             phone: lead.phone,
             name: lead.name,
             service: lead.service,
-            source: 'Demo Import'
+            source: lead.source,
+            email: lead.email,
+            status: lead.status,
+            notes: lead.notes,
+            priority: lead.priority
           });
         }
         
-        // Add some sample calls
+        // Add comprehensive sample calls with realistic outcomes
         const sampleCalls = [
-          { phone: '+447700900001', status: 'completed', outcome: 'interested', duration: 180 },
-          { phone: '+447700900002', status: 'completed', outcome: 'not_interested', duration: 120 },
-          { phone: '+447700900003', status: 'completed', outcome: 'callback_requested', duration: 240 }
+          { 
+            phone: '+447700900001', 
+            status: 'completed', 
+            outcome: 'interested', 
+            duration: 420,
+            cost: 0.25,
+            transcript: 'Client expressed strong interest in cosmetic dentistry procedures. Scheduled follow-up consultation.',
+            quality_score: 8.5,
+            sentiment: 'positive'
+          },
+          { 
+            phone: '+447700900002', 
+            status: 'completed', 
+            outcome: 'callback_requested', 
+            duration: 180,
+            cost: 0.15,
+            transcript: 'Client needs time to review legal documents. Requested callback next week.',
+            quality_score: 7.2,
+            sentiment: 'neutral'
+          },
+          { 
+            phone: '+447700900003', 
+            status: 'completed', 
+            outcome: 'booked', 
+            duration: 600,
+            cost: 0.35,
+            transcript: 'Client booked 12-week personal training program. Payment processed.',
+            quality_score: 9.1,
+            sentiment: 'positive'
+          },
+          { 
+            phone: '+447700900004', 
+            status: 'completed', 
+            outcome: 'not_interested', 
+            duration: 120,
+            cost: 0.10,
+            transcript: 'Client decided to go with competitor. Price was main factor.',
+            quality_score: 6.8,
+            sentiment: 'negative'
+          },
+          { 
+            phone: '+447700900005', 
+            status: 'completed', 
+            outcome: 'interested', 
+            duration: 480,
+            cost: 0.28,
+            transcript: 'Client very interested in tech consulting services. Follow-up meeting scheduled.',
+            quality_score: 8.7,
+            sentiment: 'positive'
+          }
         ];
         
         for (const call of sampleCalls) {
@@ -731,9 +877,31 @@ app.get('/api/admin/clients', async (req, res) => {
             status: call.status,
             outcome: call.outcome,
             duration: call.duration,
-            cost: 0.15,
-            metadata: { demo: true }
+            cost: call.cost,
+            transcript: call.transcript,
+            quality_score: call.quality_score,
+            sentiment: call.sentiment,
+            metadata: { 
+              demo: true,
+              created_at: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString()
+            }
           });
+        }
+        
+        // Add sample appointments for successful calls
+        const successfulCalls = sampleCalls.filter(call => call.outcome === 'booked' || call.outcome === 'interested');
+        for (const call of successfulCalls) {
+          await query(`
+            INSERT INTO appointments (client_key, lead_phone, service, scheduled_for, status, notes, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, NOW())
+          `, [
+            sample.clientKey,
+            call.phone,
+            'Consultation',
+            new Date(Date.now() + Math.random() * 14 * 24 * 60 * 60 * 1000).toISOString(),
+            'scheduled',
+            `Follow-up appointment for ${call.outcome} lead`
+          ]);
         }
       }
       
@@ -1357,6 +1525,477 @@ app.post('/api/admin/bulk/:operation', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// Advanced Analytics and Reporting Endpoints
+app.get('/api/admin/analytics/advanced', async (req, res) => {
+  try {
+    const { period = '30d', clientKey } = req.query;
+    
+    // Calculate period dates
+    const endDate = new Date();
+    const startDate = new Date();
+    switch(period) {
+      case '7d':
+        startDate.setDate(endDate.getDate() - 7);
+        break;
+      case '30d':
+        startDate.setDate(endDate.getDate() - 30);
+        break;
+      case '90d':
+        startDate.setDate(endDate.getDate() - 90);
+        break;
+      case '1y':
+        startDate.setFullYear(endDate.getFullYear() - 1);
+        break;
+    }
+    
+    const analytics = {
+      overview: await getAnalyticsOverview(startDate, endDate, clientKey),
+      trends: await getAnalyticsTrends(startDate, endDate, clientKey),
+      performance: await getPerformanceMetrics(startDate, endDate, clientKey),
+      insights: await getAIInsights(startDate, endDate, clientKey),
+      forecasts: await getForecasts(startDate, endDate, clientKey)
+    };
+    
+    res.json(analytics);
+  } catch (error) {
+    console.error('Error getting advanced analytics:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper function for analytics overview
+async function getAnalyticsOverview(startDate, endDate, clientKey) {
+  const clients = clientKey ? [await getFullClient(clientKey)] : await listFullClients();
+  
+  let totalLeads = 0;
+  let totalCalls = 0;
+  let totalBookings = 0;
+  let totalRevenue = 0;
+  let totalCost = 0;
+  
+  for (const client of clients) {
+    if (!client) continue;
+    
+    const leads = await query(`
+      SELECT COUNT(*) as count FROM leads 
+      WHERE client_key = $1 AND created_at BETWEEN $2 AND $3
+    `, [client.clientKey, startDate.toISOString(), endDate.toISOString()]);
+    
+    const calls = await query(`
+      SELECT COUNT(*) as count, SUM(duration) as total_duration, SUM(cost) as total_cost
+      FROM calls 
+      WHERE client_key = $1 AND created_at BETWEEN $2 AND $3
+    `, [client.clientKey, startDate.toISOString(), endDate.toISOString()]);
+    
+    const appointments = await query(`
+      SELECT COUNT(*) as count FROM appointments 
+      WHERE client_key = $1 AND created_at BETWEEN $2 AND $3
+    `, [client.clientKey, startDate.toISOString(), endDate.toISOString()]);
+    
+    totalLeads += parseInt(leads.rows[0]?.count || 0);
+    totalCalls += parseInt(calls.rows[0]?.count || 0);
+    totalBookings += parseInt(appointments.rows[0]?.count || 0);
+    totalCost += parseFloat(calls.rows[0]?.total_cost || 0);
+  }
+  
+  totalRevenue = totalBookings * 500; // Assuming £500 per booking
+  
+  return {
+    totalLeads,
+    totalCalls,
+    totalBookings,
+    totalRevenue,
+    totalCost,
+    conversionRate: totalCalls > 0 ? (totalBookings / totalCalls * 100).toFixed(1) : 0,
+    costPerLead: totalLeads > 0 ? (totalCost / totalLeads).toFixed(2) : 0,
+    revenuePerCall: totalCalls > 0 ? (totalRevenue / totalCalls).toFixed(2) : 0,
+    roi: totalCost > 0 ? ((totalRevenue - totalCost) / totalCost * 100).toFixed(1) : 0
+  };
+}
+
+// Helper function for analytics trends
+async function getAnalyticsTrends(startDate, endDate, clientKey) {
+  const clients = clientKey ? [await getFullClient(clientKey)] : await listFullClients();
+  const trends = [];
+  
+  // Generate daily trends for the period
+  const days = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+  
+  for (let i = 0; i < days; i++) {
+    const date = new Date(startDate);
+    date.setDate(startDate.getDate() + i);
+    const nextDate = new Date(date);
+    nextDate.setDate(date.getDate() + 1);
+    
+    let dailyLeads = 0;
+    let dailyCalls = 0;
+    let dailyBookings = 0;
+    
+    for (const client of clients) {
+      if (!client) continue;
+      
+      const leads = await query(`
+        SELECT COUNT(*) as count FROM leads 
+        WHERE client_key = $1 AND created_at BETWEEN $2 AND $3
+      `, [client.clientKey, date.toISOString(), nextDate.toISOString()]);
+      
+      const calls = await query(`
+        SELECT COUNT(*) as count FROM calls 
+        WHERE client_key = $1 AND created_at BETWEEN $2 AND $3
+      `, [client.clientKey, date.toISOString(), nextDate.toISOString()]);
+      
+      const appointments = await query(`
+        SELECT COUNT(*) as count FROM appointments 
+        WHERE client_key = $1 AND created_at BETWEEN $2 AND $3
+      `, [client.clientKey, date.toISOString(), nextDate.toISOString()]);
+      
+      dailyLeads += parseInt(leads.rows[0]?.count || 0);
+      dailyCalls += parseInt(calls.rows[0]?.count || 0);
+      dailyBookings += parseInt(appointments.rows[0]?.count || 0);
+    }
+    
+    trends.push({
+      date: date.toISOString().split('T')[0],
+      leads: dailyLeads,
+      calls: dailyCalls,
+      bookings: dailyBookings,
+      conversionRate: dailyCalls > 0 ? (dailyBookings / dailyCalls * 100).toFixed(1) : 0
+    });
+  }
+  
+  return trends;
+}
+
+// Helper function for performance metrics
+async function getPerformanceMetrics(startDate, endDate, clientKey) {
+  const clients = clientKey ? [await getFullClient(clientKey)] : await listFullClients();
+  const metrics = [];
+  
+  for (const client of clients) {
+    if (!client) continue;
+    
+    const calls = await query(`
+      SELECT 
+        COUNT(*) as total_calls,
+        AVG(duration) as avg_duration,
+        AVG(quality_score) as avg_quality,
+        COUNT(CASE WHEN outcome = 'booked' THEN 1 END) as successful_calls,
+        COUNT(CASE WHEN outcome = 'interested' THEN 1 END) as interested_calls,
+        COUNT(CASE WHEN outcome = 'not_interested' THEN 1 END) as not_interested_calls
+      FROM calls 
+      WHERE client_key = $1 AND created_at BETWEEN $2 AND $3
+    `, [client.clientKey, startDate.toISOString(), endDate.toISOString()]);
+    
+    const appointments = await query(`
+      SELECT COUNT(*) as count FROM appointments 
+      WHERE client_key = $1 AND created_at BETWEEN $2 AND $3
+    `, [client.clientKey, startDate.toISOString(), endDate.toISOString()]);
+    
+    const callData = calls.rows[0];
+    const totalCalls = parseInt(callData?.total_calls || 0);
+    const bookings = parseInt(appointments.rows[0]?.count || 0);
+    
+    metrics.push({
+      clientName: client.displayName,
+      clientKey: client.clientKey,
+      totalCalls,
+      avgDuration: Math.round(parseFloat(callData?.avg_duration || 0)),
+      avgQuality: parseFloat(callData?.avg_quality || 0).toFixed(1),
+      successfulCalls: parseInt(callData?.successful_calls || 0),
+      interestedCalls: parseInt(callData?.interested_calls || 0),
+      notInterestedCalls: parseInt(callData?.not_interested_calls || 0),
+      bookings,
+      conversionRate: totalCalls > 0 ? (bookings / totalCalls * 100).toFixed(1) : 0,
+      successRate: totalCalls > 0 ? ((parseInt(callData?.successful_calls || 0) + parseInt(callData?.interested_calls || 0)) / totalCalls * 100).toFixed(1) : 0
+    });
+  }
+  
+  return metrics.sort((a, b) => b.conversionRate - a.conversionRate);
+}
+
+// Helper function for AI insights
+async function getAIInsights(startDate, endDate, clientKey) {
+  const clients = clientKey ? [await getFullClient(clientKey)] : await listFullClients();
+  const insights = [];
+  
+  for (const client of clients) {
+    if (!client) continue;
+    
+    // Analyze call patterns
+    const callPatterns = await query(`
+      SELECT 
+        EXTRACT(HOUR FROM created_at) as hour,
+        COUNT(*) as call_count,
+        AVG(duration) as avg_duration,
+        AVG(quality_score) as avg_quality
+      FROM calls 
+      WHERE client_key = $1 AND created_at BETWEEN $2 AND $3
+      GROUP BY EXTRACT(HOUR FROM created_at)
+      ORDER BY call_count DESC
+      LIMIT 5
+    `, [client.clientKey, startDate.toISOString(), endDate.toISOString()]);
+    
+    // Analyze sentiment trends
+    const sentimentAnalysis = await query(`
+      SELECT 
+        sentiment,
+        COUNT(*) as count,
+        AVG(quality_score) as avg_quality
+      FROM calls 
+      WHERE client_key = $1 AND created_at BETWEEN $2 AND $3 AND sentiment IS NOT NULL
+      GROUP BY sentiment
+    `, [client.clientKey, startDate.toISOString(), endDate.toISOString()]);
+    
+    // Generate insights
+    const peakHour = callPatterns.rows[0];
+    const positiveCalls = sentimentAnalysis.rows.find(r => r.sentiment === 'positive');
+    const negativeCalls = sentimentAnalysis.rows.find(r => r.sentiment === 'negative');
+    
+    if (peakHour) {
+      insights.push({
+        type: 'peak_hour',
+        clientName: client.displayName,
+        message: `Peak calling hour is ${peakHour.hour}:00 with ${peakHour.call_count} calls and ${parseFloat(peakHour.avg_quality).toFixed(1)} average quality score`,
+        priority: 'medium',
+        recommendation: `Consider scheduling more calls during ${peakHour.hour}:00 for better results`
+      });
+    }
+    
+    if (positiveCalls && negativeCalls) {
+      const positiveRatio = positiveCalls.count / (positiveCalls.count + negativeCalls.count);
+      if (positiveRatio < 0.6) {
+        insights.push({
+          type: 'sentiment',
+          clientName: client.displayName,
+          message: `Only ${(positiveRatio * 100).toFixed(1)}% of calls have positive sentiment`,
+          priority: 'high',
+          recommendation: 'Review call scripts and training to improve customer satisfaction'
+        });
+      }
+    }
+  }
+  
+  return insights;
+}
+
+// Helper function for forecasts
+async function getForecasts(startDate, endDate, clientKey) {
+  const clients = clientKey ? [await getFullClient(clientKey)] : await listFullClients();
+  const forecasts = [];
+  
+  for (const client of clients) {
+    if (!client) continue;
+    
+    // Calculate growth rates
+    const currentPeriodCalls = await query(`
+      SELECT COUNT(*) as count FROM calls 
+      WHERE client_key = $1 AND created_at BETWEEN $2 AND $3
+    `, [client.clientKey, startDate.toISOString(), endDate.toISOString()]);
+    
+    const previousPeriodStart = new Date(startDate);
+    const previousPeriodEnd = new Date(startDate);
+    previousPeriodStart.setDate(startDate.getDate() - (endDate - startDate) / (1000 * 60 * 60 * 24));
+    
+    const previousPeriodCalls = await query(`
+      SELECT COUNT(*) as count FROM calls 
+      WHERE client_key = $1 AND created_at BETWEEN $2 AND $3
+    `, [client.clientKey, previousPeriodStart.toISOString(), previousPeriodEnd.toISOString()]);
+    
+    const currentCalls = parseInt(currentPeriodCalls.rows[0]?.count || 0);
+    const previousCalls = parseInt(previousPeriodCalls.rows[0]?.count || 0);
+    const growthRate = previousCalls > 0 ? ((currentCalls - previousCalls) / previousCalls * 100).toFixed(1) : 0;
+    
+    // Forecast next period
+    const forecastCalls = Math.round(currentCalls * (1 + parseFloat(growthRate) / 100));
+    const forecastBookings = Math.round(forecastCalls * 0.15); // Assuming 15% conversion rate
+    const forecastRevenue = forecastBookings * 500;
+    
+    forecasts.push({
+      clientName: client.displayName,
+      clientKey: client.clientKey,
+      currentCalls,
+      previousCalls,
+      growthRate: parseFloat(growthRate),
+      forecastCalls,
+      forecastBookings,
+      forecastRevenue,
+      confidence: Math.min(95, Math.max(60, 100 - Math.abs(parseFloat(growthRate))))
+    });
+  }
+  
+  return forecasts;
+}
+
+// User Management Endpoints
+app.get('/api/admin/users', async (req, res) => {
+  try {
+    const users = await query(`
+      SELECT * FROM user_accounts 
+      ORDER BY created_at DESC
+    `);
+    
+    res.json(users.rows || []);
+  } catch (error) {
+    console.error('Error getting users:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/admin/users', async (req, res) => {
+  try {
+    const { username, email, role, password } = req.body;
+    
+    if (!username || !email || !role) {
+      return res.status(400).json({ error: 'Username, email, and role are required' });
+    }
+    
+    const hashedPassword = await bcrypt.hash(password || 'defaultpassword', 10);
+    
+    const result = await query(`
+      INSERT INTO user_accounts (username, email, role, password_hash, created_at)
+      VALUES ($1, $2, $3, $4, NOW())
+      RETURNING *
+    `, [username, email, role, hashedPassword]);
+    
+    res.json({ success: true, user: result.rows[0] });
+  } catch (error) {
+    console.error('Error creating user:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Audit Logging Endpoints
+app.get('/api/admin/audit-logs', async (req, res) => {
+  try {
+    const { limit = 100, offset = 0, action, userId } = req.query;
+    
+    let queryStr = `
+      SELECT al.*, ua.username 
+      FROM audit_logs al
+      LEFT JOIN user_accounts ua ON al.user_id = ua.id
+      WHERE 1=1
+    `;
+    const params = [];
+    let paramCount = 0;
+    
+    if (action) {
+      paramCount++;
+      queryStr += ` AND al.action = $${paramCount}`;
+      params.push(action);
+    }
+    
+    if (userId) {
+      paramCount++;
+      queryStr += ` AND al.user_id = $${paramCount}`;
+      params.push(userId);
+    }
+    
+    queryStr += ` ORDER BY al.created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
+    params.push(parseInt(limit), parseInt(offset));
+    
+    const logs = await query(queryStr, params);
+    
+    res.json({
+      logs: logs.rows || [],
+      total: logs.rows?.length || 0,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+  } catch (error) {
+    console.error('Error getting audit logs:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Notification and Alert Endpoints
+app.get('/api/admin/notifications', async (req, res) => {
+  try {
+    const notifications = await query(`
+      SELECT * FROM notifications 
+      WHERE is_read = false
+      ORDER BY created_at DESC
+      LIMIT 50
+    `);
+    
+    res.json(notifications.rows || []);
+  } catch (error) {
+    console.error('Error getting notifications:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/admin/notifications/:id/read', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    await query(`
+      UPDATE notifications 
+      SET is_read = true, read_at = NOW()
+      WHERE id = $1
+    `, [id]);
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error marking notification as read:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// System Monitoring Endpoints
+app.get('/api/admin/system/metrics', async (req, res) => {
+  try {
+    const metrics = {
+      memory: process.memoryUsage(),
+      uptime: process.uptime(),
+      cpu: process.cpuUsage(),
+      timestamp: new Date().toISOString()
+    };
+    
+    res.json(metrics);
+  } catch (error) {
+    console.error('Error getting system metrics:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/admin/system/health-check', async (req, res) => {
+  try {
+    const health = {
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      services: {
+        database: await checkDatabaseHealth(),
+        websocket: socket ? 'connected' : 'disconnected',
+        api: 'operational'
+      },
+      metrics: {
+        memoryUsage: process.memoryUsage(),
+        uptime: process.uptime(),
+        activeConnections: socket ? io.engine.clientsCount : 0
+      }
+    };
+    
+    res.json(health);
+  } catch (error) {
+    console.error('Error performing health check:', error);
+    res.status(500).json({ 
+      status: 'unhealthy',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Helper function to check database health
+async function checkDatabaseHealth() {
+  try {
+    await query('SELECT 1');
+    return 'healthy';
+  } catch (error) {
+    return 'unhealthy';
+  }
+}
 
 // Mock Lead Call Route (No API Key Required)
 app.get('/mock-call', async (req, res) => {
