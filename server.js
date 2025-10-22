@@ -66,6 +66,7 @@ import { nanoid } from 'nanoid';
 import express from 'express';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
+import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import twilio from 'twilio';
 import { createHash } from 'crypto';
