@@ -25,7 +25,7 @@ function extractLogisticsFields(transcript) {
 
   // International yes/no - Enhanced with more patterns
   let international = '';
-  if (/outside\s+the\s+uk.*\byes\b|\binternational\b.*\byes\b|export.*yes|send.*abroad.*yes/i.test(transcript)) international = 'Y';
+  if (/outside\s+the\s+uk.*\byes\b|\binternational\b.*\byes\b|export.*yes|send.*abroad.*yes|do\s+send\s+internationally|send\s+internationally/i.test(transcript)) international = 'Y';
   else if (/outside\s+the\s+uk.*\bno\b|\binternational\b.*\bno\b|only\s+uk|uk\s+only|domestic\s+only/i.test(transcript)) international = 'N';
 
   // Main couriers - Enhanced extraction
@@ -34,7 +34,7 @@ function extractLogisticsFields(transcript) {
 
   // Frequency - Enhanced patterns
   const frequencyMatch = text.match(/(\d+)\s*(?:per|times)\s*(day|week|month)|(daily|weekly|monthly)|\b(\d+)\s*(packages?|parcels?|items?)/i);
-  const frequency = frequencyMatch ? (frequencyMatch[1] ? `${frequencyMatch[1]} per ${frequencyMatch[2]}` : frequencyMatch[3] || frequencyMatch[4]) : pick(/(\b\d+\s*(?:per\s*)?(?:day|week|weekly|daily|month)\b|\b(daily|weekly|monthly)\b)/i);
+  const frequency = frequencyMatch ? (frequencyMatch[1] ? `${frequencyMatch[1]} per ${frequencyMatch[2]}` : frequencyMatch[3] || frequencyMatch[4]) : pick(/(\b\d+\s*(?:per\s*)?(?:day|week|weekly|daily|month)\b|\b(daily|weekly|monthly)\b)/i) || pick(/(about\s+)?(\d+)\s*(?:parcels?|packages?)/i)?.[2];
 
   // Main countries - Enhanced with more countries
   const countryWords = ['usa','united states','canada','germany','france','spain','italy','netherlands','ireland','australia','china','hong kong','japan','uae','dubai','saudi','india','poland','sweden','norway','denmark','belgium','portugal','greece','south africa','mexico','brazil','singapore','malaysia','thailand','south korea','taiwan','new zealand'];
@@ -56,7 +56,7 @@ function extractLogisticsFields(transcript) {
   const ukCourier = pick(/uk[^\n]{0,50}\b(ups|fedex|dhl|dpd|hermes|evri|royal\s*mail|parcelforce|yodel|apc|citylink|dx|interlink)\b/i) || pick(/\buk\s+courier[^\n]{0,50}\b(ups|fedex|dhl|dpd|hermes|evri|royal\s*mail|parcelforce|yodel|apc|citylink|dx|interlink)\b/i);
 
   // Standard rate up to kg - Enhanced
-  const standardRateUpToKg = pick(/standard\s+rate[^\n]{0,50}\b(\d+\s*kg?)/i) || pick(/rate.*up\s+to[^\n]{0,50}\b(\d+\s*kg?)/i);
+  const standardRateUpToKg = pick(/standard\s+rate[^\n]{0,50}\b(\d+\s*kg?)/i) || pick(/rate.*up\s+to[^\n]{0,50}\b(\d+\s*kg?)/i) || pick(/pay\s+£?(\d+(?:\.\d+)?)\s*up\s+to\s*(\d+\s*kg?)/i)?.[0];
 
   // Excluding fuel and VAT? - Enhanced
   const excludingFuelVat = /excluding\s+fuel|excl\.?\s+fuel|excluding\s+vat|plus\s+fuel|plus\s+vat|additional\s+fuel|additional\s+vat/i.test(transcript) ? 'Y' : (/including\s+fuel|including\s+vat|all\s+inclusive/i.test(transcript) ? 'N' : '');
