@@ -286,7 +286,8 @@ router.post('/webhooks/vapi', async (req, res) => {
         
         // Extract fields from structured output OR metadata/transcript
         const businessName = structuredOutput?.businessName || metadata.businessName || '';
-        const decisionMaker = structuredOutput?.decisionMaker || metadata.decisionMaker?.name || '';
+        // Don't use customer.name as decision maker - only use if explicitly stated in structured output or transcript
+        const decisionMaker = structuredOutput?.decisionMaker || (transcript.match(/decision\s+maker[^\n]{0,60}?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)/i)?.[1]) || '';
         const receptionistName = structuredOutput?.receptionistName || pickReceptionistName(transcript) || metadata.receptionistName || '';
         const callbackNeeded = structuredOutput?.callbackNeeded === 'Y' || /call\s*back|transfer|not\s*available|not\s*in|back\s*later|try\s*again/i.test(transcript) && !decisionMaker;
 

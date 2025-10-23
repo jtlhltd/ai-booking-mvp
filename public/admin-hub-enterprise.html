@@ -434,6 +434,49 @@
             margin-bottom: 20px;
             align-items: center;
             flex-wrap: wrap;
+            padding: 15px;
+            background: #f7fafc;
+            border-radius: 12px;
+            border: 2px solid #e2e8f0;
+        }
+        
+        .selection-info {
+            background: #667eea;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        
+        .dropdown-menu {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            margin-top: 5px;
+            min-width: 200px;
+            z-index: 1000;
+            overflow: hidden;
+        }
+        
+        .dropdown-menu a {
+            display: block;
+            padding: 12px 16px;
+            color: #2d3748;
+            text-decoration: none;
+            transition: background 0.2s;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .dropdown-menu a:last-child {
+            border-bottom: none;
+        }
+        
+        .dropdown-menu a:hover {
+            background: #f7fafc;
         }
 
         .checkbox-column {
@@ -821,8 +864,20 @@
             </div>
 
             <div class="bulk-actions">
+                <div class="selection-info" id="selectionInfo" style="display: none;">
+                    <span id="selectionCount">0</span> selected
+                </div>
                 <button class="btn btn-primary" onclick="selectAllClients()">Select All</button>
-                <button class="btn btn-danger" onclick="bulkDeleteClients()" disabled id="bulkDeleteBtn">Delete Selected</button>
+                <button class="btn btn-secondary" onclick="clearSelection()">Clear</button>
+                <div class="dropdown" style="position: relative;">
+                    <button class="btn btn-danger" id="bulkActionBtn" disabled>Bulk Actions ▼</button>
+                    <div class="dropdown-menu" id="bulkActionMenu" style="display: none;">
+                        <a href="#" onclick="bulkDeleteClients(); return false;">🗑️ Delete Selected</a>
+                        <a href="#" onclick="bulkExportSelected(); return false;">📥 Export Selected</a>
+                        <a href="#" onclick="bulkTagClients(); return false;">🏷️ Add Tag</a>
+                        <a href="#" onclick="bulkUpdateStatus(); return false;">✅ Update Status</a>
+                    </div>
+                </div>
                 <div class="export-actions">
                     <button class="btn btn-success" onclick="exportData('clients', 'csv')">📊 Export CSV</button>
                     <button class="btn btn-success" onclick="exportData('clients', 'json')">📄 Export JSON</button>
@@ -1914,8 +1969,65 @@
         }
 
         function updateBulkDeleteButton() {
-            const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
-            bulkDeleteBtn.disabled = selectedClients.size === 0;
+            const bulkActionBtn = document.getElementById('bulkActionBtn');
+            const selectionInfo = document.getElementById('selectionInfo');
+            const selectionCount = document.getElementById('selectionCount');
+            
+            bulkActionBtn.disabled = selectedClients.size === 0;
+            
+            if (selectedClients.size > 0) {
+                selectionInfo.style.display = 'block';
+                selectionCount.textContent = selectedClients.size;
+            } else {
+                selectionInfo.style.display = 'none';
+            }
+        }
+        
+        function clearSelection() {
+            selectedClients.clear();
+            document.querySelectorAll('.client-checkbox').forEach(cb => cb.checked = false);
+            updateBulkDeleteButton();
+        }
+        
+        // Toggle dropdown menu
+        document.addEventListener('click', function(event) {
+            const bulkActionBtn = document.getElementById('bulkActionBtn');
+            const bulkActionMenu = document.getElementById('bulkActionMenu');
+            
+            if (event.target === bulkActionBtn) {
+                bulkActionMenu.style.display = bulkActionMenu.style.display === 'none' ? 'block' : 'none';
+            } else if (!bulkActionMenu.contains(event.target)) {
+                bulkActionMenu.style.display = 'none';
+            }
+        });
+        
+        async function bulkExportSelected() {
+            if (selectedClients.size === 0) return;
+            
+            const clientKeys = Array.from(selectedClients);
+            const tag = clientKeys.join(',');
+            exportData('clients', 'csv', tag);
+            bulkActionMenu.style.display = 'none';
+        }
+        
+        async function bulkTagClients() {
+            if (selectedClients.size === 0) return;
+            
+            const tag = prompt('Enter tag to add to selected clients:');
+            if (tag) {
+                alert(`Tag "${tag}" would be added to ${selectedClients.size} clients (feature coming soon)`);
+            }
+            bulkActionMenu.style.display = 'none';
+        }
+        
+        async function bulkUpdateStatus() {
+            if (selectedClients.size === 0) return;
+            
+            const status = prompt('Enter new status (active/inactive):');
+            if (status) {
+                alert(`Status "${status}" would be updated for ${selectedClients.size} clients (feature coming soon)`);
+            }
+            bulkActionMenu.style.display = 'none';
         }
 
         async function bulkDeleteClients() {
