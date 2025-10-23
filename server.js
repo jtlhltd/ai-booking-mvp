@@ -2001,6 +2001,267 @@ async function checkDatabaseHealth() {
   }
 }
 
+// Workflow Automation Endpoints
+app.get('/api/admin/workflows', async (req, res) => {
+  try {
+    const workflows = await query(`
+      SELECT 
+        w.*,
+        COUNT(DISTINCT e.id) as execution_count,
+        MAX(e.executed_at) as last_executed
+      FROM workflows w
+      LEFT JOIN workflow_executions e ON w.id = e.workflow_id
+      GROUP BY w.id
+      ORDER BY w.created_at DESC
+    `);
+    
+    res.json(workflows.rows || []);
+  } catch (error) {
+    console.error('Error getting workflows:', error);
+    res.json([]);
+  }
+});
+
+app.post('/api/admin/workflows', async (req, res) => {
+  try {
+    const { name, trigger, actions, is_active } = req.body;
+    
+    const result = await query(`
+      INSERT INTO workflows (name, trigger_type, trigger_config, actions, is_active, created_at)
+      VALUES ($1, $2, $3, $4, $5, NOW())
+      RETURNING *
+    `, [name, trigger.type, JSON.stringify(trigger.config), JSON.stringify(actions), is_active !== false]);
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating workflow:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Smart Lead Scoring Endpoint
+app.get('/api/admin/leads/scoring', async (req, res) => {
+  try {
+    const leads = await query(`
+      SELECT 
+        l.*,
+        c.display_name as client_name,
+        c.industry,
+        (SELECT COUNT(*) FROM calls WHERE lead_phone = l.phone AND status = 'completed') as call_count,
+        (SELECT COUNT(*) FROM appointments WHERE lead_phone = l.phone AND status = 'confirmed') as appointment_count,
+        (SELECT MAX(created_at) FROM calls WHERE lead_phone = l.phone) as last_call_at
+      FROM leads l
+      JOIN tenants c ON l.client_key = c.client_key
+      WHERE l.status != 'converted'
+      ORDER BY l.created_at DESC
+      LIMIT 100
+    `);
+    
+    // Score each lead
+    const scoredLeads = leads.rows.map(lead => {
+      let score = 0;
+      
+      // Recency bonus
+      const daysSinceCreation = Math.floor((Date.now() - new Date(lead.created_at).getTime()) / (1000 * 60 * 60 * 24));
+      if (daysSinceCreation < 7) score += 20;
+      else if (daysSinceCreation < 30) score += 10;
+      
+      // Call engagement bonus
+      if (lead.call_count > 0) score += 15;
+      if (lead.appointment_count > 0) score += 25;
+      
+      // Industry bonus
+      const highValueIndustries = ['Healthcare', 'Legal', 'Real Estate', 'Finance'];
+      if (highValueIndustries.includes(lead.industry)) score += 15;
+      
+      // Email domain bonus
+      if (lead.email && lead.email.includes('.co.uk')) score += 10;
+      
+      return {
+        ...lead,
+        score,
+        priority: score >= 50 ? 'high' : score >= 30 ? 'medium' : 'low'
+      };
+    });
+    
+    res.json(scoredLeads.sort((a, b) => b.score - a.score));
+  } catch (error) {
+    console.error('Error getting lead scores:', error);
+    res.json([]);
+  }
+});
+
+// Automated Follow-up Recommendations
+app.get('/api/admin/followups/recommendations', async (req, res) => {
+  try {
+    const recommendations = await query(`
+      SELECT 
+        l.*,
+        c.display_name as client_name,
+        (SELECT COUNT(*) FROM calls WHERE lead_phone = l.phone AND status = 'completed') as call_count,
+        (SELECT MAX(created_at) FROM calls WHERE lead_phone = l.phone) as last_call_at,
+        (SELECT outcome FROM calls WHERE lead_phone = l.phone ORDER BY created_at DESC LIMIT 1) as last_outcome
+      FROM leads l
+      JOIN tenants c ON l.client_key = c.client_key
+      WHERE l.status IN ('new', 'contacted', 'follow_up')
+        AND (SELECT MAX(created_at) FROM calls WHERE lead_phone = l.phone) < NOW() - INTERVAL '3 days'
+      ORDER BY l.created_at DESC
+      LIMIT 50
+    `);
+    
+    const followups = recommendations.rows.map(lead => {
+      const daysSinceLastCall = lead.last_call_at 
+        ? Math.floor((Date.now() - new Date(lead.last_call_at).getTime()) / (1000 * 60 * 60 * 24))
+        : 999;
+      
+      let recommendation = 'Call';
+      let priority = 'medium';
+      
+      if (lead.last_outcome === 'interested') {
+        recommendation = 'Schedule Follow-up Call';
+        priority = 'high';
+      } else if (lead.last_outcome === 'callback_requested') {
+        recommendation = 'Callback - High Priority';
+        priority = 'high';
+      } else if (lead.call_count > 2) {
+        recommendation = 'Email Follow-up';
+        priority = 'low';
+      }
+      
+      return {
+        ...lead,
+        daysSinceLastCall,
+        recommendation,
+        priority
+      };
+    });
+    
+    res.json(followups);
+  } catch (error) {
+    console.error('Error getting follow-up recommendations:', error);
+    res.json([]);
+  }
+});
+
+// Predictive Analytics - Revenue Forecasting
+app.get('/api/admin/analytics/forecast', async (req, res) => {
+  try {
+    const { days = 30 } = req.query;
+    
+    // Get historical data
+    const historical = await query(`
+      SELECT 
+        DATE(created_at) as date,
+        COUNT(*) as appointments,
+        SUM(CASE WHEN status = 'confirmed' THEN 1 ELSE 0 END) as confirmed_appointments,
+        AVG(EXTRACT(EPOCH FROM (scheduled_for - created_at))/3600) as avg_hours_to_appointment
+      FROM appointments
+      WHERE created_at >= NOW() - INTERVAL '${parseInt(days) * 2} days'
+      GROUP BY DATE(created_at)
+      ORDER BY date DESC
+    `);
+    
+    // Simple forecasting algorithm
+    const data = historical.rows.reverse();
+    const avgDailyAppointments = data.reduce((sum, d) => sum + d.appointments, 0) / data.length;
+    const conversionRate = data.reduce((sum, d) => sum + (d.confirmed_appointments / d.appointments || 0), 0) / data.length;
+    
+    // Generate forecast
+    const forecast = [];
+    for (let i = 1; i <= parseInt(days); i++) {
+      const date = new Date();
+      date.setDate(date.getDate() + i);
+      
+      // Simple trend projection with some variance
+      const projected = avgDailyAppointments * (1 + Math.random() * 0.2 - 0.1);
+      const confirmed = projected * conversionRate;
+      
+      forecast.push({
+        date: date.toISOString().split('T')[0],
+        projectedAppointments: Math.round(projected),
+        projectedConfirmed: Math.round(confirmed),
+        projectedRevenue: Math.round(confirmed * 150), // Assume £150 per appointment
+        confidence: i < 7 ? 'high' : i < 14 ? 'medium' : 'low'
+      });
+    }
+    
+    res.json({
+      forecast,
+      currentAvg: Math.round(avgDailyAppointments),
+      conversionRate: Math.round(conversionRate * 100),
+      period: parseInt(days)
+    });
+  } catch (error) {
+    console.error('Error generating forecast:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Performance Benchmarks
+app.get('/api/admin/analytics/benchmarks', async (req, res) => {
+  try {
+    const benchmarks = await query(`
+      SELECT 
+        c.client_key,
+        c.display_name,
+        c.industry,
+        COUNT(DISTINCT l.id) as total_leads,
+        COUNT(DISTINCT a.id) as total_appointments,
+        COUNT(DISTINCT CASE WHEN a.status = 'confirmed' THEN a.id END) as confirmed_appointments,
+        COUNT(DISTINCT cl.id) as total_calls,
+        COUNT(DISTINCT CASE WHEN cl.outcome = 'booked' THEN cl.id END) as booked_calls,
+        AVG(cl.duration) as avg_call_duration,
+        SUM(cl.cost) as total_cost
+      FROM tenants c
+      LEFT JOIN leads l ON c.client_key = l.client_key
+      LEFT JOIN appointments a ON c.client_key = a.client_key
+      LEFT JOIN calls cl ON c.client_key = cl.client_key
+      GROUP BY c.client_key, c.display_name, c.industry
+    `);
+    
+    const benchmarked = benchmarks.rows.map(client => {
+      const conversionRate = client.total_leads > 0 
+        ? (client.total_appointments / client.total_leads * 100).toFixed(1)
+        : 0;
+      
+      const callSuccessRate = client.total_calls > 0
+        ? (client.booked_calls / client.total_calls * 100).toFixed(1)
+        : 0;
+      
+      const costPerAppointment = client.total_appointments > 0
+        ? (client.total_cost / client.total_appointments).toFixed(2)
+        : 0;
+      
+      // Benchmark against industry average
+      const industryBenchmarks = {
+        'Healthcare': { avgConversion: 25, avgCost: 12 },
+        'Dental': { avgConversion: 30, avgCost: 10 },
+        'Legal': { avgConversion: 20, avgCost: 15 },
+        'Real Estate': { avgConversion: 18, avgCost: 18 }
+      };
+      
+      const industryAvg = industryBenchmarks[client.industry] || { avgConversion: 22, avgCost: 13 };
+      
+      return {
+        ...client,
+        conversionRate: parseFloat(conversionRate),
+        callSuccessRate: parseFloat(callSuccessRate),
+        costPerAppointment: parseFloat(costPerAppointment),
+        industryAverage: industryAvg,
+        performance: {
+          vsAverage: parseFloat(conversionRate) > industryAvg.avgConversion ? 'above' : 'below',
+          score: parseFloat(conversionRate) / industryAvg.avgConversion * 100
+        }
+      };
+    });
+    
+    res.json(benchmarked);
+  } catch (error) {
+    console.error('Error getting benchmarks:', error);
+    res.json([]);
+  }
+});
+
 // Mock Lead Call Route (No API Key Required)
 app.get('/mock-call', async (req, res) => {
   try {
