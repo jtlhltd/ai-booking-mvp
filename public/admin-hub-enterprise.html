@@ -1564,15 +1564,8 @@
 
         // Client management functions
         async function viewClient(clientKey) {
-            try {
-                const response = await fetch(`/api/admin/client/${clientKey}`);
-                const client = await response.json();
-                
-                alert(`Client Details:\n\nName: ${client.displayName}\nIndustry: ${client.industry}\nEmail: ${client.email}\nPhone: ${client.phone || 'N/A'}\nAddress: ${client.address || 'N/A'}\nWebsite: ${client.website || 'N/A'}\nDescription: ${client.description || 'N/A'}\nLeads: ${client.stats.totalLeads}\nCalls: ${client.stats.totalCalls}\nBookings: ${client.stats.totalBookings}\nConversion Rate: ${client.stats.conversionRate}%`);
-            } catch (error) {
-                console.error('Error viewing client:', error);
-                alert('Error loading client details');
-            }
+            // Navigate to detailed client profile page
+            window.location.href = `/client-profile.html?client=${clientKey}`;
         }
 
         async function editClient(clientKey) {

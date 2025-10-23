@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Client Profile - Admin Hub</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f7fa;
+            color: #2d3748;
+        }
+
+        .header {
+            background: white;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 20px 30px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .header-content {
+            max-width: 1600px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+            padding: 8px 16px;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+
+        .back-btn:hover {
+            background: #f7fafc;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+        }
+
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+
+        .btn-secondary:hover {
+            background: #cbd5e0;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 30px;
+        }
+
+        .client-header {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .client-info {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .client-avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            color: white;
+            font-weight: 700;
+        }
+
+        .client-details h1 {
+            font-size: 1.8rem;
+            color: #2d3748;
+            margin-bottom: 8px;
+        }
+
+        .client-meta {
+            display: flex;
+            gap: 20px;
+            color: #718096;
+            font-size: 0.9rem;
+        }
+
+        .client-meta span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .stat-card {
+            text-align: center;
+            padding: 20px;
+            background: #f7fafc;
+            border-radius: 8px;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: #718096;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            font-weight: 600;
+            color: #718096;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab:hover {
+            color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .section {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            font-size: 1.3rem;
+            color: #2d3748;
+            font-weight: 600;
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .table th {
+            text-align: left;
+            padding: 12px;
+            background: #f7fafc;
+            font-weight: 600;
+            color: #4a5568;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .table td {
+            padding: 12px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .badge-success {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .badge-warning {
+            background: #feebc8;
+            color: #7c2d12;
+        }
+
+        .badge-danger {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+
+        .badge-info {
+            background: #bee3f8;
+            color: #2c5282;
+        }
+
+        .activity-item {
+            display: flex;
+            gap: 15px;
+            padding: 15px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .activity-item:last-child {
+            border-bottom: none;
+        }
+
+        .activity-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            flex-shrink: 0;
+        }
+
+        .activity-icon.call {
+            background: #c6f6d5;
+        }
+
+        .activity-icon.appointment {
+            background: #bee3f8;
+        }
+
+        .activity-icon.lead {
+            background: #feebc8;
+        }
+
+        .activity-content {
+            flex: 1;
+        }
+
+        .activity-title {
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 4px;
+        }
+
+        .activity-desc {
+            color: #718096;
+            font-size: 0.9rem;
+        }
+
+        .activity-time {
+            color: #a0aec0;
+            font-size: 0.85rem;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #718096;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #718096;
+        }
+
+        .empty-state-icon {
+            font-size: 4rem;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+
+            .client-info {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .client-meta {
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .stat-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .tabs {
+                overflow-x: auto;
+            }
+
+            .table {
+                font-size: 0.85rem;
+            }
+
+            .header-actions {
+                flex-direction: column;
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <a href="/admin-hub-enterprise.html" class="back-btn">
+                ← Back to Admin Hub
+            </a>
+            <div class="header-actions">
+                <button class="btn btn-secondary" onclick="editClient()">Edit Client</button>
+                <button class="btn btn-primary" onclick="viewSettings()">Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="client-header" id="clientHeader">
+            <div class="loading">Loading client data...</div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('overview')">Overview</button>
+            <button class="tab" onclick="switchTab('leads')">Leads</button>
+            <button class="tab" onclick="switchTab('calls')">Calls</button>
+            <button class="tab" onclick="switchTab('activity')">Activity</button>
+        </div>
+
+        <!-- Overview Tab -->
+        <div id="overview" class="tab-content active">
+            <div class="section">
+                <h3 class="section-title">Quick Stats</h3>
+                <div class="stat-grid" id="quickStats">
+                    <div class="stat-card">
+                        <div class="stat-value">-</div>
+                        <div class="stat-label">Total Leads</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">-</div>
+                        <div class="stat-label">Total Calls</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">-</div>
+                        <div class="stat-label">Bookings</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">-</div>
+                        <div class="stat-label">Conversion Rate</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h3 class="section-title">Recent Calls</h3>
+                <div id="recentCalls">
+                    <div class="loading">Loading calls...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Leads Tab -->
+        <div id="leads" class="tab-content">
+            <div class="section">
+                <div class="section-header">
+                    <h3 class="section-title">All Leads</h3>
+                    <button class="btn btn-primary" onclick="addLead()">Add Lead</button>
+                </div>
+                <div id="leadsTable">
+                    <div class="loading">Loading leads...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Calls Tab -->
+        <div id="calls" class="tab-content">
+            <div class="section">
+                <h3 class="section-title">Call History</h3>
+                <div id="callsTable">
+                    <div class="loading">Loading calls...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Activity Tab -->
+        <div id="activity" class="tab-content">
+            <div class="section">
+                <h3 class="section-title">Activity Timeline</h3>
+                <div id="activityTimeline">
+                    <div class="loading">Loading activity...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const clientKey = new URLSearchParams(window.location.search).get('client') || '';
+        
+        async function loadClientProfile() {
+            if (!clientKey) {
+                document.getElementById('clientHeader').innerHTML = '<div class="empty-state"><div class="empty-state-icon">❌</div><p>No client selected</p></div>';
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/client/${clientKey}`);
+                const data = await response.json();
+
+                // Render client header
+                const initials = data.displayName ? data.displayName.substring(0, 2).toUpperCase() : '??';
+                document.getElementById('clientHeader').innerHTML = `
+                    <div class="client-info">
+                        <div class="client-avatar">${initials}</div>
+                        <div class="client-details">
+                            <h1>${data.displayName || clientKey}</h1>
+                            <div class="client-meta">
+                                <span>📧 ${data.email || 'No email'}</span>
+                                <span>🔑 ${clientKey}</span>
+                                <span>${data.isEnabled ? '✅ Active' : '⏸️ Inactive'}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="stat-grid">
+                        <div class="stat-card">
+                            <div class="stat-value">${data.stats.totalLeads || 0}</div>
+                            <div class="stat-label">Total Leads</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">${data.stats.totalCalls || 0}</div>
+                            <div class="stat-label">Total Calls</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">${data.stats.totalBookings || 0}</div>
+                            <div class="stat-label">Bookings</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">${data.stats.conversionRate || 0}%</div>
+                            <div class="stat-label">Conversion Rate</div>
+                        </div>
+                    </div>
+                `;
+
+                // Load tabs data
+                await loadOverview(data);
+                await loadLeads();
+                await loadCalls();
+                await loadActivity();
+
+            } catch (error) {
+                console.error('Error loading client profile:', error);
+                document.getElementById('clientHeader').innerHTML = '<div class="empty-state"><div class="empty-state-icon">❌</div><p>Failed to load client data</p></div>';
+            }
+        }
+
+        async function loadOverview(data) {
+            document.getElementById('quickStats').innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-value">${data.stats.totalLeads || 0}</div>
+                    <div class="stat-label">Total Leads</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${data.stats.totalCalls || 0}</div>
+                    <div class="stat-label">Total Calls</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${data.stats.totalBookings || 0}</div>
+                    <div class="stat-label">Bookings</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${data.stats.conversionRate || 0}%</div>
+                    <div class="stat-label">Conversion Rate</div>
+                </div>
+            `;
+
+            if (data.recentCalls && data.recentCalls.length > 0) {
+                document.getElementById('recentCalls').innerHTML = `
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Phone</th>
+                                <th>Status</th>
+                                <th>Outcome</th>
+                                <th>Duration</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.recentCalls.map(call => `
+                                <tr>
+                                    <td>${call.phone}</td>
+                                    <td><span class="badge badge-${getBadgeClass(call.status)}">${call.status}</span></td>
+                                    <td>${call.outcome || '-'}</td>
+                                    <td>${call.duration || 0}s</td>
+                                    <td>${new Date(call.timestamp).toLocaleString()}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+            } else {
+                document.getElementById('recentCalls').innerHTML = '<div class="empty-state"><div class="empty-state-icon">📞</div><p>No calls yet</p></div>';
+            }
+        }
+
+        async function loadLeads() {
+            try {
+                const response = await fetch(`/api/admin/clients`);
+                const data = await response.json();
+                const client = data.find(c => c.clientKey === clientKey);
+                
+                if (client && client.leadCount > 0) {
+                    document.getElementById('leadsTable').innerHTML = `
+                        <p>Found ${client.leadCount} leads. <a href="/leads.html?client=${clientKey}">View all leads →</a></p>
+                    `;
+                } else {
+                    document.getElementById('leadsTable').innerHTML = '<div class="empty-state"><div class="empty-state-icon">👥</div><p>No leads yet</p></div>';
+                }
+            } catch (error) {
+                document.getElementById('leadsTable').innerHTML = '<div class="empty-state"><div class="empty-state-icon">❌</div><p>Failed to load leads</p></div>';
+            }
+        }
+
+        async function loadCalls() {
+            try {
+                const response = await fetch(`/api/admin/calls?client=${clientKey}`);
+                const data = await response.json();
+                
+                if (data && data.length > 0) {
+                    document.getElementById('callsTable').innerHTML = `
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Phone</th>
+                                    <th>Status</th>
+                                    <th>Outcome</th>
+                                    <th>Duration</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.slice(0, 20).map(call => `
+                                    <tr>
+                                        <td>${call.phone || '-'}</td>
+                                        <td><span class="badge badge-${getBadgeClass(call.status)}">${call.status}</span></td>
+                                        <td>${call.outcome || '-'}</td>
+                                        <td>${call.duration || 0}s</td>
+                                        <td>${new Date(call.created_at).toLocaleString()}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    `;
+                } else {
+                    document.getElementById('callsTable').innerHTML = '<div class="empty-state"><div class="empty-state-icon">📞</div><p>No calls yet</p></div>';
+                }
+            } catch (error) {
+                document.getElementById('callsTable').innerHTML = '<div class="empty-state"><div class="empty-state-icon">❌</div><p>Failed to load calls</p></div>';
+            }
+        }
+
+        async function loadActivity() {
+            // Combine calls, leads, and appointments into timeline
+            try {
+                const callsRes = await fetch(`/api/admin/calls?client=${clientKey}`);
+                const calls = await callsRes.json() || [];
+                
+                const activities = calls.slice(0, 20).map(call => ({
+                    type: 'call',
+                    icon: '📞',
+                    title: `Call to ${call.phone}`,
+                    desc: `Status: ${call.status} • Outcome: ${call.outcome || 'N/A'}`,
+                    time: call.created_at
+                }));
+
+                activities.sort((a, b) => new Date(b.time) - new Date(a.time));
+
+                if (activities.length > 0) {
+                    document.getElementById('activityTimeline').innerHTML = activities.map(activity => `
+                        <div class="activity-item">
+                            <div class="activity-icon ${activity.type}">${activity.icon}</div>
+                            <div class="activity-content">
+                                <div class="activity-title">${activity.title}</div>
+                                <div class="activity-desc">${activity.desc}</div>
+                            </div>
+                            <div class="activity-time">${new Date(activity.time).toLocaleString()}</div>
+                        </div>
+                    `).join('');
+                } else {
+                    document.getElementById('activityTimeline').innerHTML = '<div class="empty-state"><div class="empty-state-icon">📅</div><p>No activity yet</p></div>';
+                }
+            } catch (error) {
+                document.getElementById('activityTimeline').innerHTML = '<div class="empty-state"><div class="empty-state-icon">❌</div><p>Failed to load activity</p></div>';
+            }
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+        }
+
+        function getBadgeClass(status) {
+            if (status === 'completed' || status === 'booked') return 'success';
+            if (status === 'failed' || status === 'no_answer') return 'danger';
+            if (status === 'queued' || status === 'calling') return 'warning';
+            return 'info';
+        }
+
+        function editClient() {
+            alert('Edit client functionality coming soon!');
+        }
+
+        function viewSettings() {
+            window.location.href = `/settings.html?client=${clientKey}`;
+        }
+
+        function addLead() {
+            window.location.href = `/leads.html?client=${clientKey}`;
+        }
+
+        // Load data on page load
+        loadClientProfile();
+    </script>
+</body>
+</html>
+
