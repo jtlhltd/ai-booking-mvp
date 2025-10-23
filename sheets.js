@@ -29,7 +29,7 @@ export const LOGISTICS_HEADERS = [
   'Timestamp','Business Name','Decision Maker','Phone','Email','International (Y/N)',
   'Main Couriers','Frequency','Main Countries','Example Shipment (weight x dims)','Example Shipment Cost',
   'Domestic Frequency','UK Courier','Std Rate up to KG','Excl Fuel & VAT?','Single vs Multi-parcel',
-  'Receptionist Name','Callback Needed','Call ID','Recording URL','Transcript Snippet'
+  'Receptionist Name','Callback Needed','Call ID','Recording URI','Transcript Snippet'
 ];
 
 export async function ensureHeader(spreadsheetId) {
@@ -96,7 +96,7 @@ export async function appendLogistics(spreadsheetId, data) {
     'Receptionist Name': data.receptionistName || '',
     'Callback Needed': (data.callbackNeeded === true || data.callbackNeeded === 'TRUE') ? 'TRUE' : 'FALSE',
     'Call ID': data.callId || '',
-    'Recording URL': data.recordingUrl || '',
+    'Recording URI': data.recordingUrl || '',
     'Transcript Snippet': (data.transcriptSnippet || '').slice(0, 300)
   };
   
