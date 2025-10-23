@@ -7,6 +7,8 @@ import messagingService from '../lib/messaging-service.js';
 
 function extractLogisticsFields(transcript) {
   const text = (transcript || '').toLowerCase();
+  const transcriptOriginal = transcript || '';
+  
   const pick = (re) => {
     const m = text.match(re);
     return m ? (m[1] || m[0]).trim() : '';
@@ -16,43 +18,46 @@ function extractLogisticsFields(transcript) {
     return Array.from(new Set(matches));
   };
 
-  // Email
+  // Email - Enhanced extraction
   const email = pick(/([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})/i);
 
-  // International yes/no (look for clear affirmations around "outside the uk")
+  // International yes/no - Enhanced with more patterns
   let international = '';
-  if (/outside\s+the\s+uk.*\byes\b|\binternational\b.*\byes\b/i.test(transcript)) international = 'Y';
-  else if (/outside\s+the\s+uk.*\bno\b|\binternational\b.*\bno\b/i.test(transcript)) international = 'N';
+  if (/outside\s+the\s+uk.*\byes\b|\binternational\b.*\byes\b|export.*yes|send.*abroad.*yes/i.test(transcript)) international = 'Y';
+  else if (/outside\s+the\s+uk.*\bno\b|\binternational\b.*\bno\b|only\s+uk|uk\s+only|domestic\s+only/i.test(transcript)) international = 'N';
 
-  // Main couriers (UPS/FEDEX/DHL/DPD/Hermes/Royal Mail)
-  const knownCouriers = ['ups','fedex','dhl','dpd','hermes','evri','royal mail','parcel force','parcelforce'];
-  const mainCouriers = knownCouriers.filter(c => text.includes(c));
+  // Main couriers - Enhanced extraction
+  const knownCouriers = ['ups','fedex','dhl','dpd','hermes','evri','royal mail','parcel force','parcelforce','yodel','dpd','apc','citylink','dx','interlink','amazon logistics'];
+  const mainCouriers = knownCouriers.filter(c => text.includes(c)).map(c => c.charAt(0).toUpperCase() + c.slice(1));
 
-  // Frequency (weekly/daily + number)
-  const frequency = pick(/(\b\d+\s*(?:per\s*)?(?:day|week|weekly|daily)\b|\b(daily|weekly)\b)/i);
+  // Frequency - Enhanced patterns
+  const frequencyMatch = text.match(/(\d+)\s*(?:per|times)\s*(day|week|month)|(daily|weekly|monthly)|\b(\d+)\s*(packages?|parcels?|items?)/i);
+  const frequency = frequencyMatch ? (frequencyMatch[1] ? `${frequencyMatch[1]} per ${frequencyMatch[2]}` : frequencyMatch[3] || frequencyMatch[4]) : pick(/(\b\d+\s*(?:per\s*)?(?:day|week|weekly|daily|month)\b|\b(daily|weekly|monthly)\b)/i);
 
-  // Main countries (naive pick of common country names mentioned)
-  const countryWords = ['usa','united states','canada','germany','france','spain','italy','netherlands','ireland','australia','china','hong kong','japan','uae','dubai','saudi','india','poland','sweden','norway','denmark'];
-  const mainCountries = countryWords.filter(c => text.includes(c));
+  // Main countries - Enhanced with more countries
+  const countryWords = ['usa','united states','canada','germany','france','spain','italy','netherlands','ireland','australia','china','hong kong','japan','uae','dubai','saudi','india','poland','sweden','norway','denmark','belgium','portugal','greece','south africa','mexico','brazil','singapore','malaysia','thailand','south korea','taiwan','new zealand'];
+  const mainCountries = countryWords.filter(c => text.includes(c)).map(c => c.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '));
 
-  // Example shipment: weight/dimensions and cost
-  const weightDims = pick(/(\b\d+(?:\.\d+)?\s*(?:kg|kilograms)\b[^\n]{0,40}?(?:\b\d+\s*x\s*\d+\s*x\s*\d+\s*(?:cm|mm|in)?\b)?)/i);
-  const cost = pick(/(£\s?\d+(?:[\.,]\d{2})?|\$\s?\d+(?:[\.,]\d{2})?)/);
+  // Example shipment: weight/dimensions - Enhanced
+  const weightDims = pick(/(\b\d+(?:\.\d+)?\s*(?:kg|kilograms?|lbs?|pounds?)\b[^\n]{0,60}?(?:\b\d+\s*x\s*\d+\s*x\s*\d+\s*(?:cm|mm|in|inches?)?\b)?)/i) || text.match(/(\d+)\s*(?:x\s*)?(\d+)\s*(?:x\s*)?(\d+)\s*(?:cm|mm|inches?)/i)?.join(' x ');
 
-  // Domestic frequency
-  const domesticFrequency = pick(/(\b\d+\s*(?:per\s*)?(?:day|week)\b.*\buk\b|\b(daily|weekly)\b.*\buk\b)/i);
+  // Cost - Enhanced extraction
+  const cost = pick(/(£\s?\d+(?:[\.,]\d{2})?|\$\s?\d+(?:[\.,]\d{2})?|€\s?\d+(?:[\.,]\d{2})?)/) || pick(/(\d+)\s*(?:pounds?|dollars?|euros?)/i);
 
-  // UK courier (look for named courier near 'uk')
-  const ukCourier = pick(/uk[^\n]{0,50}\b(ups|fedex|dhl|dpd|hermes|evri|royal\s*mail|parcelforce)\b/i);
+  // Domestic frequency - Enhanced
+  const domesticFrequency = pick(/(\b\d+\s*(?:per\s*)?(?:day|week)\b.*\buk\b|\b(daily|weekly)\b.*\buk\b|\d+\s*uk.*per\s*(day|week))/i);
 
-  // Standard rate up to kg
-  const standardRateUpToKg = pick(/standard\s+rate[^\n]{0,40}\b(\d+\s*kg)\b/i);
+  // UK courier - Enhanced
+  const ukCourier = pick(/uk[^\n]{0,50}\b(ups|fedex|dhl|dpd|hermes|evri|royal\s*mail|parcelforce|yodel|apc|citylink|dx|interlink)\b/i) || pick(/\buk\s+courier[^\n]{0,50}\b(ups|fedex|dhl|dpd|hermes|evri|royal\s*mail|parcelforce|yodel|apc|citylink|dx|interlink)\b/i);
 
-  // Excluding fuel and VAT?
-  const excludingFuelVat = /excluding\s+fuel|excl\.?\s+fuel|vat/i.test(transcript) ? 'mentioned' : '';
+  // Standard rate up to kg - Enhanced
+  const standardRateUpToKg = pick(/standard\s+rate[^\n]{0,50}\b(\d+\s*kg?)/i) || pick(/rate.*up\s+to[^\n]{0,50}\b(\d+\s*kg?)/i);
 
-  // Single vs multi-parcel
-  const singleVsMulti = /single\s+parcels?/i.test(transcript) ? 'single' : (/multiple\s+parcels?|multi-?parcel/i.test(transcript) ? 'multiple' : '');
+  // Excluding fuel and VAT? - Enhanced
+  const excludingFuelVat = /excluding\s+fuel|excl\.?\s+fuel|excluding\s+vat|plus\s+fuel|plus\s+vat|additional\s+fuel|additional\s+vat/i.test(transcript) ? 'Y' : (/including\s+fuel|including\s+vat|all\s+inclusive/i.test(transcript) ? 'N' : '');
+
+  // Single vs multi-parcel - Enhanced
+  const singleVsMulti = /single\s+parcels?|one\s+parcel|individual\s+packages?/i.test(transcript) ? 'Single' : (/multiple\s+parcels?|multi-?parcel|bulk\s+shipments?|many\s+parcels?/i.test(transcript) ? 'Multiple' : '');
 
   return {
     email,
