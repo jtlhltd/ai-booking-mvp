@@ -478,6 +478,54 @@
         .dropdown-menu a:hover {
             background: #f7fafc;
         }
+        
+        .global-search-results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            margin-top: 5px;
+            max-height: 400px;
+            overflow-y: auto;
+            z-index: 1000;
+        }
+        
+        .search-result-item {
+            padding: 12px 16px;
+            border-bottom: 1px solid #e2e8f0;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .search-result-item:hover {
+            background: #f7fafc;
+        }
+        
+        .search-result-item:last-child {
+            border-bottom: none;
+        }
+        
+        .search-result-type {
+            font-size: 0.75rem;
+            color: #667eea;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+        
+        .search-result-title {
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 2px;
+        }
+        
+        .search-result-subtitle {
+            font-size: 0.85rem;
+            color: #718096;
+        }
 
         .checkbox-column {
             width: 50px;
@@ -779,7 +827,11 @@
                     LIVE
                 </span>
             </h1>
-            <div>
+            <div style="display: flex; gap: 15px; align-items: center;">
+                <div style="position: relative;">
+                    <input type="text" class="search-input" id="globalSearch" placeholder="🔍 Search everything..." style="min-width: 300px;" onkeyup="performGlobalSearch()">
+                    <div id="globalSearchResults" class="global-search-results" style="display: none;"></div>
+                </div>
                 <button class="btn btn-primary" onclick="refreshAllData()">
                     🔄 Refresh All
                 </button>
@@ -1997,6 +2049,82 @@
             document.getElementById('savedViews').value = '';
             filterClients();
         }
+        
+        async function performGlobalSearch() {
+            const query = document.getElementById('globalSearch').value.trim();
+            const resultsDiv = document.getElementById('globalSearchResults');
+            
+            if (query.length < 2) {
+                resultsDiv.style.display = 'none';
+                return;
+            }
+            
+            try {
+                // Search across clients, calls, and leads
+                const [clientsRes, callsRes] = await Promise.all([
+                    fetch('/api/admin/clients'),
+                    fetch('/api/admin/calls')
+                ]);
+                
+                const clients = await clientsRes.json();
+                const calls = await callsRes.json();
+                
+                const results = [];
+                
+                // Search clients
+                clients.forEach(client => {
+                    const searchText = `${client.name} ${client.email} ${client.clientKey}`.toLowerCase();
+                    if (searchText.includes(query.toLowerCase())) {
+                        results.push({
+                            type: 'Client',
+                            title: client.name,
+                            subtitle: client.email,
+                            action: () => window.location.href = `/client-profile.html?client=${client.clientKey}`
+                        });
+                    }
+                });
+                
+                // Search calls
+                calls.slice(0, 50).forEach(call => {
+                    const searchText = `${call.phone} ${call.outcome || ''} ${call.status}`.toLowerCase();
+                    if (searchText.includes(query.toLowerCase())) {
+                        results.push({
+                            type: 'Call',
+                            title: call.phone,
+                            subtitle: `${call.status} • ${call.outcome || 'No outcome'}`,
+                            action: () => showSection('calls')
+                        });
+                    }
+                });
+                
+                // Display results
+                if (results.length > 0) {
+                    resultsDiv.innerHTML = results.slice(0, 10).map(result => `
+                        <div class="search-result-item" onclick="${result.action.toString().replace(/\n/g, ' ')}; document.getElementById('globalSearchResults').style.display='none';">
+                            <div class="search-result-type">${result.type}</div>
+                            <div class="search-result-title">${result.title}</div>
+                            <div class="search-result-subtitle">${result.subtitle}</div>
+                        </div>
+                    `).join('');
+                    resultsDiv.style.display = 'block';
+                } else {
+                    resultsDiv.innerHTML = '<div class="search-result-item" style="cursor: default;"><div class="search-result-subtitle">No results found</div></div>';
+                    resultsDiv.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Global search error:', error);
+            }
+        }
+        
+        // Close search results when clicking outside
+        document.addEventListener('click', function(event) {
+            const globalSearch = document.getElementById('globalSearch');
+            const globalSearchResults = document.getElementById('globalSearchResults');
+            
+            if (!globalSearch.contains(event.target) && !globalSearchResults.contains(event.target)) {
+                globalSearchResults.style.display = 'none';
+            }
+        });
 
         function searchCalls() {
             const query = document.getElementById('callSearch').value.toLowerCase();
