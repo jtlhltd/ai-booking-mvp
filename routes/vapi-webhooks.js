@@ -244,6 +244,14 @@ router.post('/webhooks/vapi', async (req, res) => {
     // Prefer per-tenant configuration, fall back to env
     const logisticsSheetId = tenant?.vapi?.logisticsSheetId || tenant?.gsheet_id || process.env.LOGISTICS_SHEET_ID;
     
+    console.log('[LOGISTICS SHEET ID DEBUG]', {
+      'tenant?.vapi?.logisticsSheetId': tenant?.vapi?.logisticsSheetId,
+      'tenant?.gsheet_id': tenant?.gsheet_id,
+      'process.env.LOGISTICS_SHEET_ID': process.env.LOGISTICS_SHEET_ID,
+      'Final logisticsSheetId': logisticsSheetId,
+      'tenant': tenant ? Object.keys(tenant) : 'null'
+    });
+    
     // Check for structured output data from VAPI
     const structuredOutput = body.call?.structuredOutput || body.structuredOutput || body.structured_output;
     
