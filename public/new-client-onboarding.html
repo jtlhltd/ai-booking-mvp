@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Get Started - AI Lead Conversion</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .onboarding-card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #e2e8f0;
+            border-radius: 3px;
+            margin-bottom: 30px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            transition: width 0.3s ease;
+            width: 25%;
+        }
+
+        .step-indicator {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+
+        .step {
+            text-align: center;
+            flex: 1;
+        }
+
+        .step-number {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #e2e8f0;
+            color: #718096;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            margin: 0 auto 8px;
+            transition: all 0.3s;
+        }
+
+        .step.active .step-number {
+            background: #667eea;
+            color: white;
+        }
+
+        .step.completed .step-number {
+            background: #48bb78;
+            color: white;
+        }
+
+        .step-label {
+            font-size: 0.85rem;
+            color: #718096;
+        }
+
+        .step.active .step-label {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .step-content {
+            display: none;
+        }
+
+        .step-content.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .help-text {
+            font-size: 0.85rem;
+            color: #718096;
+            margin-top: 4px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 30px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 14px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+
+        .btn-secondary:hover {
+            background: #cbd5e0;
+        }
+
+        .success-screen {
+            text-align: center;
+            display: none;
+        }
+
+        .success-screen.active {
+            display: block;
+        }
+
+        .success-icon {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: #48bb78;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            margin: 0 auto 20px;
+        }
+
+        .credentials-box {
+            background: #f7fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: left;
+        }
+
+        .credential-item {
+            margin-bottom: 12px;
+        }
+
+        .credential-label {
+            font-weight: 600;
+            color: #4a5568;
+            margin-bottom: 4px;
+        }
+
+        .credential-value {
+            font-family: 'Courier New', monospace;
+            background: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+            word-break: break-all;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e2e8f0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            background: #fed7d7;
+            color: #742a2a;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .error-message.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Start Converting Leads</h1>
+            <p>Get your AI booking system running in 5 minutes</p>
+        </div>
+
+        <div class="onboarding-card">
+            <!-- Progress Bar -->
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+
+            <!-- Step Indicator -->
+            <div class="step-indicator">
+                <div class="step active" data-step="1">
+                    <div class="step-number">1</div>
+                    <div class="step-label">Business Info</div>
+                </div>
+                <div class="step" data-step="2">
+                    <div class="step-number">2</div>
+                    <div class="step-label">Services</div>
+                </div>
+                <div class="step" data-step="3">
+                    <div class="step-number">3</div>
+                    <div class="step-label">Calendar</div>
+                </div>
+                <div class="step" data-step="4">
+                    <div class="step-number">4</div>
+                    <div class="step-label">Complete</div>
+                </div>
+            </div>
+
+            <!-- Error Message -->
+            <div class="error-message" id="errorMessage"></div>
+
+            <!-- Loading Screen -->
+            <div class="loading" id="loadingScreen">
+                <div class="spinner"></div>
+                <p>Setting up your account...</p>
+            </div>
+
+            <!-- Step 1: Business Information -->
+            <div class="step-content active" id="step1">
+                <h2 style="margin-bottom: 24px;">Tell us about your business</h2>
+                
+                <div class="form-group">
+                    <label>Business Name *</label>
+                    <input type="text" id="businessName" placeholder="Acme Dental Clinic" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Industry *</label>
+                    <select id="industry" required>
+                        <option value="">Select your industry</option>
+                        <option value="Healthcare">Healthcare</option>
+                        <option value="Legal">Legal</option>
+                        <option value="Fitness">Fitness & Wellness</option>
+                        <option value="Beauty">Beauty & Salon</option>
+                        <option value="Home Services">Home Services</option>
+                        <option value="Financial">Financial Services</option>
+                        <option value="Real Estate">Real Estate</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Your Email *</label>
+                    <input type="email" id="email" placeholder="you@business.com" required>
+                    <div class="help-text">We'll send your credentials here</div>
+                </div>
+
+                <div class="form-group">
+                    <label>Phone Number *</label>
+                    <input type="tel" id="phone" placeholder="+44 7700 900000" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Website (optional)</label>
+                    <input type="url" id="website" placeholder="https://yourwebsite.com">
+                </div>
+
+                <div class="button-group">
+                    <button class="btn btn-primary" onclick="nextStep()">Continue →</button>
+                </div>
+            </div>
+
+            <!-- Step 2: Services -->
+            <div class="step-content" id="step2">
+                <h2 style="margin-bottom: 24px;">What services do you offer?</h2>
+                
+                <div class="form-group">
+                    <label>Primary Service *</label>
+                    <input type="text" id="primaryService" placeholder="e.g., Dental Consultation" required>
+                    <div class="help-text">The main service customers book</div>
+                </div>
+
+                <div class="form-group">
+                    <label>Service Duration *</label>
+                    <select id="duration" required>
+                        <option value="30">30 minutes</option>
+                        <option value="45">45 minutes</option>
+                        <option value="60" selected>1 hour</option>
+                        <option value="90">1.5 hours</option>
+                        <option value="120">2 hours</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Business Hours *</label>
+                    <select id="workingHours" required>
+                        <option value="9am-5pm Mon-Fri">9am-5pm Mon-Fri</option>
+                        <option value="9am-6pm Mon-Fri">9am-6pm Mon-Fri</option>
+                        <option value="9am-5pm Mon-Sat">9am-5pm Mon-Sat</option>
+                        <option value="10am-8pm Mon-Sat">10am-8pm Mon-Sat</option>
+                        <option value="24/7">24/7</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Timezone *</label>
+                    <select id="timezone" required>
+                        <option value="Europe/London" selected>Europe/London (GMT)</option>
+                        <option value="America/New_York">America/New_York (EST)</option>
+                        <option value="America/Los_Angeles">America/Los_Angeles (PST)</option>
+                        <option value="Australia/Sydney">Australia/Sydney (AEST)</option>
+                    </select>
+                </div>
+
+                <div class="button-group">
+                    <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
+                    <button class="btn btn-primary" onclick="nextStep()">Continue →</button>
+                </div>
+            </div>
+
+            <!-- Step 3: Calendar Setup -->
+            <div class="step-content" id="step3">
+                <h2 style="margin-bottom: 24px;">Final details</h2>
+                
+                <div class="form-group">
+                    <label>Monthly Lead Volume</label>
+                    <select id="monthlyLeads">
+                        <option value="0-50">0-50 leads</option>
+                        <option value="50-200" selected>50-200 leads</option>
+                        <option value="200-500">200-500 leads</option>
+                        <option value="500+">500+ leads</option>
+                    </select>
+                    <div class="help-text">How many leads do you receive per month?</div>
+                </div>
+
+                <div class="form-group">
+                    <label>Notes (optional)</label>
+                    <textarea id="notes" placeholder="Any special requirements or information..."></textarea>
+                </div>
+
+                <div class="button-group">
+                    <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
+                    <button class="btn btn-primary" onclick="submitOnboarding()">Complete Setup ✨</button>
+                </div>
+            </div>
+
+            <!-- Success Screen -->
+            <div class="success-screen" id="successScreen">
+                <div class="success-icon">✓</div>
+                <h2 style="margin-bottom: 12px;">Welcome aboard! 🎉</h2>
+                <p style="color: #718096; margin-bottom: 30px;">Your AI booking system is ready to go</p>
+
+                <div class="credentials-box">
+                    <div class="credential-item">
+                        <div class="credential-label">Client ID</div>
+                        <div class="credential-value" id="clientKey">Loading...</div>
+                    </div>
+                    <div class="credential-item">
+                        <div class="credential-label">Dashboard URL</div>
+                        <div class="credential-value" id="dashboardUrl">Loading...</div>
+                    </div>
+                </div>
+
+                <p style="color: #718096; margin: 20px 0;">Your full credentials have been sent to your email.</p>
+
+                <div class="button-group">
+                    <button class="btn btn-primary" onclick="goToDashboard()">Go to Dashboard →</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentStep = 1;
+        const totalSteps = 3;
+
+        function updateProgress() {
+            const progress = (currentStep / totalSteps) * 100;
+            document.getElementById('progressFill').style.width = progress + '%';
+        }
+
+        function updateStepIndicator() {
+            document.querySelectorAll('.step').forEach((step, index) => {
+                const stepNum = index + 1;
+                step.classList.remove('active', 'completed');
+                
+                if (stepNum < currentStep) {
+                    step.classList.add('completed');
+                } else if (stepNum === currentStep) {
+                    step.classList.add('active');
+                }
+            });
+        }
+
+        function showStep(step) {
+            document.querySelectorAll('.step-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(`step${step}`).classList.add('active');
+        }
+
+        function nextStep() {
+            if (currentStep < totalSteps) {
+                currentStep++;
+                showStep(currentStep);
+                updateProgress();
+                updateStepIndicator();
+            }
+        }
+
+        function prevStep() {
+            if (currentStep > 1) {
+                currentStep--;
+                showStep(currentStep);
+                updateProgress();
+                updateStepIndicator();
+            }
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.classList.add('active');
+            setTimeout(() => errorDiv.classList.remove('active'), 5000);
+        }
+
+        async function submitOnboarding() {
+            // Hide error messages
+            document.getElementById('errorMessage').classList.remove('active');
+            
+            // Validate required fields
+            const businessName = document.getElementById('businessName').value.trim();
+            const industry = document.getElementById('industry').value;
+            const email = document.getElementById('email').value.trim();
+            const phone = document.getElementById('phone').value.trim();
+            const primaryService = document.getElementById('primaryService').value.trim();
+
+            if (!businessName || !industry || !email || !phone || !primaryService) {
+                showError('Please fill in all required fields');
+                return;
+            }
+
+            // Show loading screen
+            document.getElementById('loadingScreen').classList.add('active');
+            document.getElementById('step3').classList.remove('active');
+
+            try {
+                const response = await fetch('/api/signup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        businessName,
+                        industry,
+                        email,
+                        phone,
+                        website: document.getElementById('website').value,
+                        primaryService,
+                        duration: document.getElementById('duration').value,
+                        workingHours: document.getElementById('workingHours').value,
+                        timezone: document.getElementById('timezone').value,
+                        monthlyLeads: document.getElementById('monthlyLeads').value,
+                        notes: document.getElementById('notes').value
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Show success screen
+                    document.getElementById('loadingScreen').classList.remove('active');
+                    document.getElementById('successScreen').classList.add('active');
+                    
+                    // Update step indicator
+                    document.querySelector('.step[data-step="4"]').classList.add('completed');
+                    updateProgress();
+                    
+                    // Display credentials
+                    document.getElementById('clientKey').textContent = data.clientKey || 'N/A';
+                    document.getElementById('dashboardUrl').textContent = 
+                        `${window.location.origin}/dashboard-v2.html?client=${data.clientKey}`;
+                } else {
+                    throw new Error(data.error || 'Failed to create account');
+                }
+            } catch (error) {
+                document.getElementById('loadingScreen').classList.remove('active');
+                document.getElementById('step3').classList.add('active');
+                showError(error.message || 'Something went wrong. Please try again.');
+            }
+        }
+
+        function goToDashboard() {
+            const clientKey = document.getElementById('clientKey').textContent;
+            window.location.href = `/dashboard-v2.html?client=${clientKey}`;
+        }
+
+        // Initialize
+        updateProgress();
+        updateStepIndicator();
+    </script>
+</body>
+</html>
+
