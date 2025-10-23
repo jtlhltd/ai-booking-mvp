@@ -7,7 +7,16 @@ async function getClient() {
 
   let creds;
   if (process.env.GOOGLE_SA_JSON_BASE64) {
-    creds = JSON.parse(Buffer.from(process.env.GOOGLE_SA_JSON_BASE64, 'base64').toString('utf8'));
+    try {
+      creds = JSON.parse(Buffer.from(process.env.GOOGLE_SA_JSON_BASE64, 'base64').toString('utf8'));
+      console.log('[GOOGLE AUTH] Loaded credentials from GOOGLE_SA_JSON_BASE64');
+    } catch (error) {
+      console.error('[GOOGLE AUTH ERROR] Failed to parse GOOGLE_SA_JSON_BASE64:', error.message);
+      throw new Error('Invalid GOOGLE_SA_JSON_BASE64 format');
+    }
+  } else {
+    console.error('[GOOGLE AUTH ERROR] GOOGLE_SA_JSON_BASE64 environment variable not set');
+    throw new Error('Google Service Account credentials not configured');
   }
 
   const auth = new google.auth.GoogleAuth({
