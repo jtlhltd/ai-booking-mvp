@@ -266,6 +266,14 @@ router.post('/webhooks/vapi', async (req, res) => {
             excludingFuelVat: structuredOutput.exclFuelVAT || '',
             singleVsMulti: structuredOutput.singleVsMultiParcel || ''
           };
+          
+          // Fill in gaps from transcript if structured output is incomplete
+          const transcriptExtracted = extractLogisticsFields(transcript);
+          Object.keys(extracted).forEach(key => {
+            if (!extracted[key] && transcriptExtracted[key]) {
+              extracted[key] = transcriptExtracted[key];
+            }
+          });
         } else {
           console.log('[LOGISTICS] Using transcript extraction (no structured output)');
           extracted = extractLogisticsFields(transcript);
