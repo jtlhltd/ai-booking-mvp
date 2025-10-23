@@ -92,7 +92,7 @@ export async function appendLogistics(spreadsheetId, data) {
     data.excludingFuelVat || '',
     data.singleVsMulti || '',
     data.receptionistName || '',
-    data.callbackNeeded ? 'TRUE' : 'FALSE',
+    (data.callbackNeeded === true || data.callbackNeeded === 'TRUE') ? 'TRUE' : 'FALSE',
     data.callId || '',
     data.recordingUrl || '',
     (data.transcriptSnippet || '').slice(0, 300)

@@ -290,7 +290,7 @@ router.post('/webhooks/vapi', async (req, res) => {
           excludingFuelVat: extracted.excludingFuelVat || '',
           singleVsMulti: extracted.singleVsMulti || '',
           receptionistName: receptionistName || '',
-          callbackNeeded: callbackNeeded,
+          callbackNeeded: callbackNeeded ? 'TRUE' : 'FALSE',
           callId: callId || '',
           recordingUrl: recordingUrl || '',
           transcriptSnippet: transcript.slice(0, 500) || ''
