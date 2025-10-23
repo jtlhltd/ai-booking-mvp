@@ -229,16 +229,43 @@ router.post('/webhooks/vapi', async (req, res) => {
       }
     }
 
-    // Logistics extraction (only if configured and we have transcript)
+    // Logistics extraction (only if configured and we have transcript or structured output)
     // Prefer per-tenant configuration, fall back to env
     const logisticsSheetId = tenant?.vapi?.logisticsSheetId || tenant?.gsheet_id || process.env.LOGISTICS_SHEET_ID;
-    if (logisticsSheetId && transcript && status === 'completed') {
+    
+    // Check for structured output data from VAPI
+    const structuredOutput = body.call?.structuredOutput || body.structuredOutput || body.structured_output;
+    
+    if (logisticsSheetId && (transcript || structuredOutput) && status === 'completed') {
       try {
-        const extracted = extractLogisticsFields(transcript);
-        const businessName = metadata.businessName || '';
-        const decisionMaker = metadata.decisionMaker?.name || '';
-        const receptionistName = pickReceptionistName(transcript) || metadata.receptionistName || '';
-        const callbackNeeded = /call\s*back|transfer|not\s*available|not\s*in|back\s*later|try\s*again/i.test(transcript) && !decisionMaker;
+        // Use structured output if available, otherwise fall back to transcript extraction
+        let extracted;
+        if (structuredOutput) {
+          console.log('[LOGISTICS] Using structured output data:', structuredOutput);
+          // Transform structured output to match our expected format
+          extracted = {
+            email: structuredOutput.email || '',
+            international: structuredOutput.internationalYN || '',
+            mainCouriers: [structuredOutput.courier1, structuredOutput.courier2, structuredOutput.courier3].filter(Boolean),
+            frequency: structuredOutput.frequency || '',
+            mainCountries: [structuredOutput.country1, structuredOutput.country2, structuredOutput.country3].filter(Boolean),
+            exampleShipment: structuredOutput.exampleShipment || '',
+            exampleShipmentCost: structuredOutput.exampleShipmentCost || '',
+            domesticFrequency: structuredOutput.domesticFrequency || '',
+            ukCourier: structuredOutput.ukCourier || '',
+            standardRateUpToKg: structuredOutput.standardRateUpToKg || '',
+            excludingFuelVat: structuredOutput.exclFuelVAT || '',
+            singleVsMulti: structuredOutput.singleVsMultiParcel || ''
+          };
+        } else {
+          console.log('[LOGISTICS] Using transcript extraction (no structured output)');
+          extracted = extractLogisticsFields(transcript);
+        }
+        
+        const businessName = structuredOutput?.businessName || metadata.businessName || '';
+        const decisionMaker = structuredOutput?.decisionMaker || metadata.decisionMaker?.name || '';
+        const receptionistName = structuredOutput?.receptionistName || pickReceptionistName(transcript) || metadata.receptionistName || '';
+        const callbackNeeded = structuredOutput?.callbackNeeded === 'Y' || /call\s*back|transfer|not\s*available|not\s*in|back\s*later|try\s*again/i.test(transcript) && !decisionMaker;
 
         await sheets.appendLogistics(logisticsSheetId, {
           businessName,
