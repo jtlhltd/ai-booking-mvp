@@ -46,7 +46,7 @@ export async function ensureLogisticsHeader(spreadsheetId) {
   const s = await getClient();
   await s.spreadsheets.values.update({
     spreadsheetId,
-    range: 'Sheet1!A1:T1',
+    range: 'Sheet1!A1:U1',
     valueInputOption: 'RAW',
     requestBody: { values: [LOGISTICS_HEADERS] }
   });
