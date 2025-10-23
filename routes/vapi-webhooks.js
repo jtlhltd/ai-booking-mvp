@@ -18,8 +18,10 @@ function extractLogisticsFields(transcript) {
     return Array.from(new Set(matches));
   };
 
-  // Email - Enhanced extraction
-  const email = pick(/([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})/i);
+  // Email - Enhanced extraction with multiple patterns
+  const email = pick(/([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})/i) || 
+                 pick(/(?:email|address|contact)\s*[:\-]?\s*([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})/i) ||
+                 pick(/([a-z0-9]+(?:\.[a-z0-9]+)*@(?:gmail|yahoo|hotmail|outlook|company|business)\.[a-z]{2,})/i);
 
   // International yes/no - Enhanced with more patterns
   let international = '';
@@ -38,8 +40,11 @@ function extractLogisticsFields(transcript) {
   const countryWords = ['usa','united states','canada','germany','france','spain','italy','netherlands','ireland','australia','china','hong kong','japan','uae','dubai','saudi','india','poland','sweden','norway','denmark','belgium','portugal','greece','south africa','mexico','brazil','singapore','malaysia','thailand','south korea','taiwan','new zealand'];
   const mainCountries = countryWords.filter(c => text.includes(c)).map(c => c.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '));
 
-  // Example shipment: weight/dimensions - Enhanced
-  const weightDims = pick(/(\b\d+(?:\.\d+)?\s*(?:kg|kilograms?|lbs?|pounds?)\b[^\n]{0,60}?(?:\b\d+\s*x\s*\d+\s*x\s*\d+\s*(?:cm|mm|in|inches?)?\b)?)/i) || text.match(/(\d+)\s*(?:x\s*)?(\d+)\s*(?:x\s*)?(\d+)\s*(?:cm|mm|inches?)/i)?.join(' x ');
+  // Example shipment: weight/dimensions - Enhanced with multiple patterns
+  const weightDims = pick(/(\b\d+(?:\.\d+)?\s*(?:kg|kilograms?|lbs?|pounds?)\b[^\n]{0,60}?(?:\b\d+\s*x\s*\d+\s*x\s*\d+\s*(?:cm|mm|in|inches?)?\b)?)/i) || 
+                      text.match(/(\d+)\s*(?:x\s*)?(\d+)\s*(?:x\s*)?(\d+)\s*(?:cm|mm|inches?)/i)?.join(' x ') ||
+                      pick(/(\d+)\s*(?:kg|kilograms?|lbs?|pounds?)/i) ||
+                      pick(/(?:weight|size)[^\n]{0,40}?(\d+[^\n]{0,30})/i);
 
   // Cost - Enhanced extraction
   const cost = pick(/(£\s?\d+(?:[\.,]\d{2})?|\$\s?\d+(?:[\.,]\d{2})?|€\s?\d+(?:[\.,]\d{2})?)/) || pick(/(\d+)\s*(?:pounds?|dollars?|euros?)/i);
