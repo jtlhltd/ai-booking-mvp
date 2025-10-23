@@ -241,8 +241,8 @@ router.post('/webhooks/vapi', async (req, res) => {
     }
 
     // Logistics extraction (only if configured and we have transcript or structured output)
-    // Prefer per-tenant configuration, fall back to env
-    const logisticsSheetId = tenant?.vapi?.logisticsSheetId || tenant?.gsheet_id || process.env.LOGISTICS_SHEET_ID;
+    // Prefer per-tenant configuration, fall back to env, then hardcoded test sheet
+    const logisticsSheetId = tenant?.vapi?.logisticsSheetId || tenant?.gsheet_id || process.env.LOGISTICS_SHEET_ID || '1Tnll3FXtNEERYdGHTOh4VtAn90FyG6INUIU46ZbsP6g';
     
     console.log('[LOGISTICS SHEET ID DEBUG]', {
       'tenant?.vapi?.logisticsSheetId': tenant?.vapi?.logisticsSheetId,
