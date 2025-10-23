@@ -11,12 +11,12 @@ async function makeTestCall() {
     const callData = {
       assistantId: ASSISTANT_ID,
       customer: {
-        number: '+447770090000', // Change this to your test number
+        number: '+441234567890', // Test number - replace with yours
         name: 'Test Business Owner'
       },
       metadata: {
         tenantKey: 'logistics_client',
-        leadPhone: '+447770090000', // Change this to your test number
+        leadPhone: '+441234567890', // Test number - replace with yours
         businessName: 'Test Logistics Company',
         decisionMaker: { name: 'Test Business Owner' },
         businessAddress: '123 Test Street, London',

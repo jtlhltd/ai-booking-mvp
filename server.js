@@ -933,6 +933,145 @@ app.get('/api/admin/system-health', async (req, res) => {
   }
 });
 
+// Appointment Reminder Management Endpoints
+app.get('/api/admin/reminders', async (req, res) => {
+  try {
+    const { clientKey, status, type } = req.query;
+    
+    let queryStr = `
+      SELECT ar.*, t.display_name as client_name
+      FROM appointment_reminders ar
+      LEFT JOIN tenants t ON ar.client_key = t.client_key
+      WHERE 1=1
+    `;
+    const params = [];
+    let paramCount = 0;
+    
+    if (clientKey) {
+      queryStr += ` AND ar.client_key = $${++paramCount}`;
+      params.push(clientKey);
+    }
+    
+    if (status) {
+      queryStr += ` AND ar.status = $${++paramCount}`;
+      params.push(status);
+    }
+    
+    if (type) {
+      queryStr += ` AND ar.reminder_type = $${++paramCount}`;
+      params.push(type);
+    }
+    
+    queryStr += ` ORDER BY ar.scheduled_for DESC LIMIT 100`;
+    
+    const reminders = await query(queryStr, params);
+    
+    res.json(reminders.rows.map(reminder => ({
+      id: reminder.id,
+      appointmentId: reminder.appointment_id,
+      clientKey: reminder.client_key,
+      clientName: reminder.client_name,
+      leadPhone: reminder.lead_phone,
+      appointmentTime: reminder.appointment_time,
+      reminderType: reminder.reminder_type,
+      scheduledFor: reminder.scheduled_for,
+      sentAt: reminder.sent_at,
+      status: reminder.status,
+      smsSid: reminder.sms_sid,
+      errorMessage: reminder.error_message,
+      createdAt: reminder.created_at
+    })));
+  } catch (error) {
+    console.error('Error getting reminders:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/admin/reminders/send', async (req, res) => {
+  try {
+    const { reminderId } = req.body;
+    
+    if (!reminderId) {
+      return res.status(400).json({ error: 'Reminder ID is required' });
+    }
+    
+    // Get reminder details
+    const reminder = await query(`
+      SELECT * FROM appointment_reminders WHERE id = $1
+    `, [reminderId]);
+    
+    if (!reminder.rows[0]) {
+      return res.status(404).json({ error: 'Reminder not found' });
+    }
+    
+    // Send the reminder
+    await sendReminderSMS(reminder.rows[0]);
+    
+    // Update status
+    await query(`
+      UPDATE appointment_reminders 
+      SET status = 'sent', sent_at = NOW()
+      WHERE id = $1
+    `, [reminderId]);
+    
+    res.json({ success: true, message: 'Reminder sent successfully' });
+  } catch (error) {
+    console.error('Error sending reminder:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/admin/reminders/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    await query(`
+      UPDATE appointment_reminders 
+      SET status = 'cancelled'
+      WHERE id = $1
+    `, [id]);
+    
+    res.json({ success: true, message: 'Reminder cancelled successfully' });
+  } catch (error) {
+    console.error('Error cancelling reminder:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/admin/reminders/stats', async (req, res) => {
+  try {
+    const stats = await query(`
+      SELECT 
+        COUNT(*) as total,
+        COUNT(CASE WHEN status = 'sent' THEN 1 END) as sent,
+        COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending,
+        COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed,
+        COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as cancelled,
+        COUNT(CASE WHEN reminder_type = 'confirmation' THEN 1 END) as confirmations,
+        COUNT(CASE WHEN reminder_type = '24hour' THEN 1 END) as reminders_24h,
+        COUNT(CASE WHEN reminder_type = '1hour' THEN 1 END) as reminders_1h
+      FROM appointment_reminders
+      WHERE created_at >= NOW() - INTERVAL '30 days'
+    `);
+    
+    const row = stats.rows[0];
+    res.json({
+      total: parseInt(row.total) || 0,
+      sent: parseInt(row.sent) || 0,
+      pending: parseInt(row.pending) || 0,
+      failed: parseInt(row.failed) || 0,
+      cancelled: parseInt(row.cancelled) || 0,
+      confirmations: parseInt(row.confirmations) || 0,
+      reminders24h: parseInt(row.reminders_24h) || 0,
+      reminders1h: parseInt(row.reminders_1h) || 0,
+      successRate: row.total > 0 ? ((parseInt(row.sent) / parseInt(row.total)) * 100).toFixed(1) : 0
+    });
+  } catch (error) {
+    console.error('Error getting reminder stats:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Client Management Endpoints
 app.get('/api/admin/client/:clientKey', async (req, res) => {
   try {
@@ -8327,6 +8466,197 @@ function renderTemplate(str, vars = {}) {
   } catch { return String(str || ''); }
 }
 
+// Appointment reminder system
+async function scheduleAppointmentReminders({ appointmentId, clientKey, leadPhone, appointmentTime, clientSettings }) {
+  try {
+    const settings = {
+      confirmation_enabled: true,
+      '24hour_enabled': true,
+      '1hour_enabled': true,
+      confirmation_template: "Hi! Your appointment is confirmed for {appointment_time}. We look forward to seeing you!",
+      '24hour_template': "Reminder: You have an appointment tomorrow at {appointment_time}. Reply STOP to opt out.",
+      '1hour_template': "Your appointment is in 1 hour at {appointment_time}. See you soon!",
+      ...clientSettings
+    };
+
+    const reminders = [];
+
+    // Immediate confirmation (if not already sent)
+    if (settings.confirmation_enabled) {
+      reminders.push({
+        appointment_id: appointmentId,
+        client_key: clientKey,
+        lead_phone: leadPhone,
+        appointment_time: appointmentTime,
+        reminder_type: 'confirmation',
+        scheduled_for: new Date(), // Send immediately
+        status: 'pending'
+      });
+    }
+
+    // 24-hour reminder
+    if (settings['24hour_enabled']) {
+      const reminder24h = new Date(appointmentTime.getTime() - 24 * 60 * 60 * 1000);
+      if (reminder24h > new Date()) { // Only schedule if it's in the future
+        reminders.push({
+          appointment_id: appointmentId,
+          client_key: clientKey,
+          lead_phone: leadPhone,
+          appointment_time: appointmentTime,
+          reminder_type: '24hour',
+          scheduled_for: reminder24h,
+          status: 'pending'
+        });
+      }
+    }
+
+    // 1-hour reminder
+    if (settings['1hour_enabled']) {
+      const reminder1h = new Date(appointmentTime.getTime() - 60 * 60 * 1000);
+      if (reminder1h > new Date()) { // Only schedule if it's in the future
+        reminders.push({
+          appointment_id: appointmentId,
+          client_key: clientKey,
+          lead_phone: leadPhone,
+          appointment_time: appointmentTime,
+          reminder_type: '1hour',
+          scheduled_for: reminder1h,
+          status: 'pending'
+        });
+      }
+    }
+
+    // Insert reminders into database
+    for (const reminder of reminders) {
+      await query(`
+        INSERT INTO appointment_reminders 
+        (appointment_id, client_key, lead_phone, appointment_time, reminder_type, scheduled_for, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `, [
+        reminder.appointment_id,
+        reminder.client_key,
+        reminder.lead_phone,
+        reminder.appointment_time,
+        reminder.reminder_type,
+        reminder.scheduled_for,
+        reminder.status
+      ]);
+    }
+
+    console.log(`Scheduled ${reminders.length} reminders for appointment ${appointmentId}`);
+  } catch (error) {
+    console.error('Failed to schedule reminders:', error);
+    throw error;
+  }
+}
+
+async function sendScheduledReminders() {
+  try {
+    // Get pending reminders that are due
+    const reminders = await query(`
+      SELECT * FROM appointment_reminders 
+      WHERE status = 'pending' 
+      AND scheduled_for <= NOW()
+      ORDER BY scheduled_for ASC
+      LIMIT 50
+    `);
+
+    for (const reminder of reminders.rows) {
+      try {
+        await sendReminderSMS(reminder);
+        
+        // Mark as sent
+        await query(`
+          UPDATE appointment_reminders 
+          SET status = 'sent', sent_at = NOW()
+          WHERE id = $1
+        `, [reminder.id]);
+        
+        console.log(`Sent ${reminder.reminder_type} reminder for appointment ${reminder.appointment_id}`);
+      } catch (error) {
+        console.error(`Failed to send reminder ${reminder.id}:`, error);
+        
+        // Mark as failed
+        await query(`
+          UPDATE appointment_reminders 
+          SET status = 'failed', error_message = $1
+          WHERE id = $2
+        `, [error.message, reminder.id]);
+      }
+    }
+  } catch (error) {
+    console.error('Failed to process scheduled reminders:', error);
+  }
+}
+
+async function sendReminderSMS(reminder) {
+  try {
+    // Get client settings
+    const client = await query(`
+      SELECT reminder_settings FROM tenants WHERE client_key = $1
+    `, [reminder.client_key]);
+    
+    const settings = client.rows[0]?.reminder_settings || {
+      confirmation_template: "Hi! Your appointment is confirmed for {appointment_time}. We look forward to seeing you!",
+      '24hour_template': "Reminder: You have an appointment tomorrow at {appointment_time}. Reply STOP to opt out.",
+      '1hour_template': "Your appointment is in 1 hour at {appointment_time}. See you soon!"
+    };
+
+    // Get SMS config for this client
+    const clientData = await query(`
+      SELECT * FROM tenants WHERE client_key = $1
+    `, [reminder.client_key]);
+    
+    if (!clientData.rows[0]) {
+      throw new Error('Client not found');
+    }
+
+    const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(clientData.rows[0]);
+    
+    if (!configured) {
+      throw new Error('SMS not configured for client');
+    }
+
+    // Format appointment time
+    const appointmentTime = new Date(reminder.appointment_time).toLocaleString('en-GB', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+
+    // Get template based on reminder type
+    const templateKey = `${reminder.reminder_type}_template`;
+    const template = settings[templateKey] || settings.confirmation_template;
+    
+    // Render template
+    const body = renderTemplate(template, {
+      appointment_time: appointmentTime,
+      lead_phone: reminder.lead_phone
+    });
+
+    // Send SMS
+    const payload = { to: reminder.lead_phone, body };
+    if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid;
+    else if (fromNumber) payload.from = fromNumber;
+    
+    const result = await smsClient.messages.create(payload);
+    
+    // Update with SMS SID
+    await query(`
+      UPDATE appointment_reminders 
+      SET sms_sid = $1
+      WHERE id = $2
+    `, [result.sid, reminder.id]);
+
+  } catch (error) {
+    console.error('Failed to send reminder SMS:', error);
+    throw error;
+  }
+}
+
 
 // === Clients (DB-backed)
 async function getClientFromHeader(req) {
@@ -9415,6 +9745,18 @@ try {
   console.error('confirm sms failed', e?.message || e);
 }
 
+// Schedule appointment reminders
+try {
+  await scheduleAppointmentReminders({
+    appointmentId: event.id,
+    clientKey: client?.clientKey || 'default',
+    leadPhone: lead.phone,
+    appointmentTime: new Date(startISO),
+    clientSettings: client?.reminder_settings || {}
+  });
+} catch (e) {
+  console.error('reminder scheduling failed', e?.message || e);
+}
 
 // Append to Google Sheets ledger (optional)
 try {
@@ -15706,6 +16048,15 @@ async function startServer() {
       console.log(`SMS-Email pipeline: ${smsEmailPipeline ? 'Available' : 'Not Available'}`);
       console.log(`WebSocket server: Real-time Admin Hub updates enabled`);
     });
+    
+    // Start appointment reminder processor (runs every 5 minutes)
+    setInterval(async () => {
+      try {
+        await sendScheduledReminders();
+      } catch (error) {
+        console.error('Reminder processor error:', error);
+      }
+    }, 5 * 60 * 1000); // 5 minutes
     
     // Set server timeout to 25 minutes to handle comprehensive searches
     server.timeout = 1500000; // 25 minutes
