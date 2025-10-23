@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="AI-powered lead conversion system. Automatically book appointments 24/7 with voice AI. Increase bookings by 300% with our automated calling service.">
+    <meta name="keywords" content="AI booking, automated calling, lead conversion, appointment booking, voice AI, Vapi AI">
+    <title>AI Lead Conversion | Automate Appointment Booking 24/7</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: #2d3748;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* Header */
+        header {
+            background: white;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 0;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 30px;
+            align-items: center;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: #4a5568;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: #667eea;
+        }
+
+        .btn-cta {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: transform 0.2s;
+        }
+
+        .btn-cta:hover {
+            transform: translateY(-2px);
+        }
+
+        /* Hero Section */
+        .hero {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 100px 0;
+            text-align: center;
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+
+        .hero p {
+            font-size: 1.3rem;
+            margin-bottom: 30px;
+            opacity: 0.95;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn-primary {
+            background: white;
+            color: #667eea;
+            padding: 16px 32px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 16px 32px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1.1rem;
+            border: 2px solid white;
+        }
+
+        /* Features Section */
+        .features {
+            padding: 80px 0;
+            background: white;
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+            color: #2d3748;
+        }
+
+        .section-subtitle {
+            text-align: center;
+            color: #718096;
+            font-size: 1.2rem;
+            margin-bottom: 60px;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 40px;
+        }
+
+        .feature-card {
+            text-align: center;
+            padding: 30px;
+        }
+
+        .feature-icon {
+            font-size: 3rem;
+            margin-bottom: 20px;
+        }
+
+        .feature-card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 12px;
+            color: #2d3748;
+        }
+
+        .feature-card p {
+            color: #718096;
+            line-height: 1.6;
+        }
+
+        /* Stats Section */
+        .stats {
+            background: #f7fafc;
+            padding: 60px 0;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 40px;
+            text-align: center;
+        }
+
+        .stat-item h3 {
+            font-size: 3rem;
+            color: #667eea;
+            margin-bottom: 8px;
+        }
+
+        .stat-item p {
+            color: #718096;
+            font-size: 1.1rem;
+        }
+
+        /* CTA Section */
+        .cta-section {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 80px 0;
+            text-align: center;
+        }
+
+        .cta-section h2 {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+        }
+
+        .cta-section p {
+            font-size: 1.2rem;
+            margin-bottom: 30px;
+            opacity: 0.95;
+        }
+
+        /* Footer */
+        footer {
+            background: #2d3748;
+            color: white;
+            padding: 40px 0;
+            text-align: center;
+        }
+
+        footer a {
+            color: white;
+            text-decoration: none;
+            margin: 0 15px;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+
+            .hero p {
+                font-size: 1.1rem;
+            }
+
+            .hero-buttons {
+                flex-direction: column;
+            }
+
+            .nav-links {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <nav class="container">
+            <div class="logo">🎯 AI Lead Converter</div>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#pricing">Pricing</a>
+                <a href="#how-it-works">How It Works</a>
+                <a href="/new-client-onboarding.html" class="btn-cta">Get Started</a>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <h1>Book Appointments Automatically<br>With AI Voice Calls</h1>
+            <p>Never miss a lead again. Our AI assistant calls your leads 24/7, qualifies them, and books appointments automatically.</p>
+            <div class="hero-buttons">
+                <a href="/new-client-onboarding.html" class="btn-primary">Start Free Trial</a>
+                <a href="#how-it-works" class="btn-secondary">See How It Works</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Stats Section -->
+    <section class="stats">
+        <div class="container">
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <h3>300%</h3>
+                    <p>Increase in bookings</p>
+                </div>
+                <div class="stat-item">
+                    <h3>24/7</h3>
+                    <p>Automated calling</p>
+                </div>
+                <div class="stat-item">
+                    <h3>5 min</h3>
+                    <p>Setup time</p>
+                </div>
+                <div class="stat-item">
+                    <h3>£0</h3>
+                    <p>Setup fees</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features" id="features">
+        <div class="container">
+            <h2 class="section-title">Everything You Need to Convert Leads</h2>
+            <p class="section-subtitle">Automated appointment booking powered by advanced AI</p>
+            
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🎤</div>
+                    <h3>AI Voice Assistant</h3>
+                    <p>Natural-sounding AI calls that handle complex conversations, qualify leads, and book appointments seamlessly.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">📅</div>
+                    <h3>Calendar Integration</h3>
+                    <p>Seamlessly sync with Google Calendar. Appointments are booked instantly and added to your calendar automatically.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">📱</div>
+                    <h3>SMS Confirmations</h3>
+                    <p>Automated SMS confirmations and reminders keep your customers informed and reduce no-shows.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3>Real-Time Analytics</h3>
+                    <p>Track conversions, call quality, and ROI with comprehensive dashboards and reports.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">🔒</div>
+                    <h3>GDPR Compliant</h3>
+                    <p>Full compliance with GDPR regulations. Consent management, data export, and deletion tools included.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3>Instant Setup</h3>
+                    <p>Get started in 5 minutes. Connect your calendar, upload leads, and start converting.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="features" id="how-it-works" style="background: #f7fafc;">
+        <div class="container">
+            <h2 class="section-title">How It Works</h2>
+            <p class="section-subtitle">Three simple steps to automated bookings</p>
+            
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">1️⃣</div>
+                    <h3>Sign Up</h3>
+                    <p>Create your account in 2 minutes. No credit card required.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">2️⃣</div>
+                    <h3>Connect Calendar</h3>
+                    <p>Sync your Google Calendar. Our AI will see your availability.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon">3️⃣</div>
+                    <h3>Import Leads</h3>
+                    <p>Upload your leads via CSV or Zapier. The AI starts calling immediately.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section">
+        <div class="container">
+            <h2>Ready to Start Converting Leads?</h2>
+            <p>Join businesses across industries using AI to increase bookings</p>
+            <a href="/new-client-onboarding.html" class="btn-primary" style="background: white; color: #667eea;">Get Started Free →</a>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 AI Lead Converter. All rights reserved.</p>
+            <div style="margin-top: 20px;">
+                <a href="/privacy.html">Privacy Policy</a>
+                <a href="/admin-hub-enterprise.html">Admin</a>
+                <a href="/discovery-dashboard.html">Features</a>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
+
