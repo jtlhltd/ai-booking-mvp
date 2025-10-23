@@ -596,7 +596,21 @@
             background: #f7fafc;
             padding: 20px;
             border-radius: 15px;
-            margin-bottom: 20px;
+        }
+        
+        .filter-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        
+        .filter-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
         }
 
         .filter-row {
@@ -828,6 +842,20 @@
         <!-- Clients Section -->
         <div id="clients" class="content-section">
             <div class="advanced-filters">
+                <div class="filter-header">
+                    <h3 style="margin: 0; color: #2d3748;">Filters</h3>
+                    <div class="filter-actions">
+                        <button class="btn btn-secondary" onclick="saveCurrentFilter()" style="font-size: 0.85rem; padding: 6px 12px;">💾 Save View</button>
+                        <select class="filter-select" id="savedViews" onchange="loadSavedView()" style="min-width: 150px;">
+                            <option value="">Quick Filters...</option>
+                            <option value="all-active">All Active</option>
+                            <option value="high-value">High Value (>$1000)</option>
+                            <option value="recent">Last 30 Days</option>
+                            <option value="low-conversion">Low Conversion (<10%)</option>
+                        </select>
+                        <button class="btn btn-secondary" onclick="clearAllFilters()" style="font-size: 0.85rem; padding: 6px 12px;">🔄 Clear All</button>
+                    </div>
+                </div>
                 <div class="filter-row">
                     <div class="filter-group">
                         <label class="filter-label">Search</label>
@@ -850,6 +878,15 @@
                             <option value="Fitness">Fitness</option>
                             <option value="Wellness">Wellness</option>
                             <option value="Technology">Technology</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label">Revenue Range</label>
+                        <select class="filter-select" id="revenueFilter" onchange="filterClients()">
+                            <option value="">All Revenue</option>
+                            <option value="0-500">$0 - $500</option>
+                            <option value="500-1000">$500 - $1,000</option>
+                            <option value="1000+">$1,000+</option>
                         </select>
                     </div>
                     <div class="filter-group">
@@ -1879,6 +1916,7 @@
         function filterClients() {
             const statusFilter = document.getElementById('clientFilter').value;
             const industryFilter = document.getElementById('industryFilter').value;
+            const revenueFilter = document.getElementById('revenueFilter').value;
             const dateFrom = document.getElementById('dateFrom').value;
             const dateTo = document.getElementById('dateTo').value;
             const rows = document.querySelectorAll('#clientsBody tr');
@@ -1886,6 +1924,8 @@
             rows.forEach(row => {
                 const statusBadge = row.querySelector('.status-badge');
                 const industry = row.cells[2].textContent;
+                const revenueText = row.cells[7].textContent; // Revenue column
+                const revenue = parseInt(revenueText.replace(/[£,\s]/g, '')) || 0;
                 
                 let show = true;
                 
@@ -1897,8 +1937,65 @@
                     show = false;
                 }
                 
+                if (revenueFilter) {
+                    if (revenueFilter === '0-500' && (revenue < 0 || revenue > 500)) show = false;
+                    if (revenueFilter === '500-1000' && (revenue < 500 || revenue > 1000)) show = false;
+                    if (revenueFilter === '1000+' && revenue < 1000) show = false;
+                }
+                
                 row.style.display = show ? '' : 'none';
             });
+        }
+        
+        function saveCurrentFilter() {
+            const filters = {
+                status: document.getElementById('clientFilter').value,
+                industry: document.getElementById('industryFilter').value,
+                revenue: document.getElementById('revenueFilter').value,
+                dateFrom: document.getElementById('dateFrom').value,
+                dateTo: document.getElementById('dateTo').value
+            };
+            
+            const name = prompt('Enter a name for this filter view:');
+            if (name) {
+                localStorage.setItem(`savedFilter_${name}`, JSON.stringify(filters));
+                alert(`Filter view "${name}" saved!`);
+            }
+        }
+        
+        function loadSavedView() {
+            const view = document.getElementById('savedViews').value;
+            
+            switch(view) {
+                case 'all-active':
+                    document.getElementById('clientFilter').value = 'active';
+                    break;
+                case 'high-value':
+                    document.getElementById('revenueFilter').value = '1000+';
+                    break;
+                case 'recent':
+                    const thirtyDaysAgo = new Date();
+                    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+                    document.getElementById('dateFrom').value = thirtyDaysAgo.toISOString().split('T')[0];
+                    break;
+                case 'low-conversion':
+                    // This would require custom logic to filter by conversion rate
+                    alert('Low conversion filter requires backend support');
+                    return;
+            }
+            
+            if (view) filterClients();
+        }
+        
+        function clearAllFilters() {
+            document.getElementById('clientSearch').value = '';
+            document.getElementById('clientFilter').value = '';
+            document.getElementById('industryFilter').value = '';
+            document.getElementById('revenueFilter').value = '';
+            document.getElementById('dateFrom').value = '';
+            document.getElementById('dateTo').value = '';
+            document.getElementById('savedViews').value = '';
+            filterClients();
         }
 
         function searchCalls() {
