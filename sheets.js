@@ -97,6 +97,10 @@ export async function appendLogistics(spreadsheetId, data) {
     data.recordingUrl || '',
     (data.transcriptSnippet || '').slice(0, 300)
   ];
+  
+  console.log('[SHEETS DEBUG] Row being written:', JSON.stringify(row, null, 2));
+  console.log('[SHEETS DEBUG] Headers:', LOGISTICS_HEADERS);
+  
   await s.spreadsheets.values.append({
     spreadsheetId,
     range: 'Sheet1!A:T',
