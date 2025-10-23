@@ -340,9 +340,17 @@ router.post('/webhooks/vapi', async (req, res) => {
         
         console.log('[LOGISTICS SHEET DATA] Writing to sheet:', JSON.stringify(sheetData, null, 2));
         
-        await sheets.appendLogistics(logisticsSheetId, sheetData);
-
-        console.log('[LOGISTICS SHEET APPEND] Success', { callId, phone: leadPhone });
+        try {
+          await sheets.appendLogistics(logisticsSheetId, sheetData);
+          console.log('[LOGISTICS SHEET APPEND] Success', { callId, phone: leadPhone });
+        } catch (sheetError) {
+          console.error('[LOGISTICS SHEET APPEND ERROR]', {
+            error: sheetError.message,
+            stack: sheetError.stack,
+            callId,
+            phone: leadPhone
+          });
+        }
 
         // Email fallback notification for callback queue (per-tenant if available)
         const callbackInbox = tenant?.vapi?.callbackInboxEmail || process.env.CALLBACK_INBOX_EMAIL;
