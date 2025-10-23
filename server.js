@@ -3331,6 +3331,185 @@ app.delete('/api/admin/custom-fields/:fieldId', async (req, res) => {
   }
 });
 
+// Call Recording & Playback Endpoints
+app.get('/api/admin/call-recordings', async (req, res) => {
+  try {
+    const { clientKey, leadPhone, callId } = req.query;
+    
+    let query = `
+      SELECT 
+        r.*,
+        c.display_name as client_name,
+        l.name as lead_name,
+        cl.duration as call_duration,
+        cl.outcome as call_outcome
+      FROM call_recordings r
+      LEFT JOIN tenants c ON r.client_key = c.client_key
+      LEFT JOIN leads l ON r.lead_phone = l.phone
+      LEFT JOIN calls cl ON r.call_id = cl.call_id
+      WHERE 1=1
+    `;
+    
+    const params = [];
+    let paramCount = 1;
+    
+    if (clientKey) {
+      query += ` AND r.client_key = $${paramCount++}`;
+      params.push(clientKey);
+    }
+    
+    if (leadPhone) {
+      query += ` AND r.lead_phone = $${paramCount++}`;
+      params.push(leadPhone);
+    }
+    
+    if (callId) {
+      query += ` AND r.call_id = $${paramCount++}`;
+      params.push(callId);
+    }
+    
+    query += ` ORDER BY r.created_at DESC`;
+    
+    const recordings = await query(query, params);
+    
+    res.json(recordings.rows || []);
+  } catch (error) {
+    console.error('Error getting call recordings:', error);
+    res.json([]);
+  }
+});
+
+app.post('/api/admin/call-recordings', async (req, res) => {
+  try {
+    const { callId, clientKey, leadPhone, recordingUrl, transcript, duration, metadata } = req.body;
+    
+    const result = await query(`
+      INSERT INTO call_recordings (
+        call_id, client_key, lead_phone, recording_url, transcript, 
+        duration, metadata, created_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+      RETURNING *
+    `, [
+      callId, clientKey, leadPhone, recordingUrl, transcript, 
+      duration, JSON.stringify(metadata || {})
+    ]);
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating call recording:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/admin/call-recordings/:recordingId/play', async (req, res) => {
+  try {
+    const { recordingId } = req.params;
+    
+    const result = await query(`
+      SELECT recording_url FROM call_recordings WHERE id = $1
+    `, [recordingId]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Recording not found' });
+    }
+    
+    // Redirect to the recording URL
+    res.redirect(result.rows[0].recording_url);
+  } catch (error) {
+    console.error('Error playing recording:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/admin/call-recordings/:recordingId/transcript', async (req, res) => {
+  try {
+    const { recordingId } = req.params;
+    
+    const result = await query(`
+      SELECT transcript FROM call_recordings WHERE id = $1
+    `, [recordingId]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Recording not found' });
+    }
+    
+    res.json({ transcript: result.rows[0].transcript });
+  } catch (error) {
+    console.error('Error getting transcript:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/admin/call-recordings/:recordingId', async (req, res) => {
+  try {
+    const { recordingId } = req.params;
+    
+    await query(`
+      DELETE FROM call_recordings WHERE id = $1
+    `, [recordingId]);
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting recording:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Call Analytics & Insights
+app.get('/api/admin/calls/insights', async (req, res) => {
+  try {
+    const { clientKey, days = 30 } = req.query;
+    
+    let query = `
+      SELECT 
+        cl.*,
+        cr.transcript,
+        cr.recording_url,
+        l.name as lead_name,
+        c.display_name as client_name
+      FROM calls cl
+      LEFT JOIN call_recordings cr ON cl.call_id = cr.call_id
+      LEFT JOIN leads l ON cl.lead_phone = l.phone
+      LEFT JOIN tenants c ON cl.client_key = c.client_key
+      WHERE cl.created_at >= NOW() - INTERVAL '${parseInt(days)} days'
+    `;
+    
+    const params = [];
+    if (clientKey) {
+      query += ` AND cl.client_key = $1`;
+      params.push(clientKey);
+    }
+    
+    query += ` ORDER BY cl.created_at DESC`;
+    
+    const calls = await query(query, params);
+    
+    // Analyze calls for insights
+    const insights = {
+      totalCalls: calls.rows.length,
+      totalDuration: calls.rows.reduce((sum, c) => sum + (c.duration || 0), 0),
+      avgDuration: calls.rows.length > 0 
+        ? Math.round(calls.rows.reduce((sum, c) => sum + (c.duration || 0), 0) / calls.rows.length)
+        : 0,
+      outcomes: calls.rows.reduce((acc, c) => {
+        acc[c.outcome] = (acc[c.outcome] || 0) + 1;
+        return acc;
+      }, {}),
+      recordings: calls.rows.filter(c => c.recording_url).length,
+      transcripts: calls.rows.filter(c => c.transcript).length
+    };
+    
+    res.json({
+      calls: calls.rows,
+      insights
+    });
+  } catch (error) {
+    console.error('Error getting call insights:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Mock Lead Call Route (No API Key Required)
 app.get('/mock-call', async (req, res) => {
   try {
