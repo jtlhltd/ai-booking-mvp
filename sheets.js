@@ -98,8 +98,14 @@ export async function appendLogistics(spreadsheetId, data) {
     (data.transcriptSnippet || '').slice(0, 300)
   ];
   
+  console.log('[SHEETS DEBUG] Raw data received:', JSON.stringify(data, null, 2));
   console.log('[SHEETS DEBUG] Row being written:', JSON.stringify(row, null, 2));
   console.log('[SHEETS DEBUG] Headers:', LOGISTICS_HEADERS);
+  
+  // Verify each column matches its header
+  for (let i = 0; i < LOGISTICS_HEADERS.length && i < row.length; i++) {
+    console.log(`[SHEETS DEBUG] Column ${i + 1} (${LOGISTICS_HEADERS[i]}): "${row[i]}"`);
+  }
   
   await s.spreadsheets.values.append({
     spreadsheetId,
