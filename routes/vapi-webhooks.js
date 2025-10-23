@@ -255,6 +255,17 @@ router.post('/webhooks/vapi', async (req, res) => {
       'Will update sheet': !!(logisticsSheetId && transcript && status === 'completed')
     });
     
+    // CRITICAL DEBUG: Log exact condition check
+    if (!logisticsSheetId) {
+      console.log('[LOGISTICS SKIP] No sheet ID configured');
+    }
+    if (!transcript) {
+      console.log('[LOGISTICS SKIP] No transcript available');
+    }
+    if (status !== 'completed') {
+      console.log('[LOGISTICS SKIP] Status is not completed:', status);
+    }
+    
     // Check for structured output data from VAPI
     const structuredOutput = body.call?.structuredOutput || body.structuredOutput || body.structured_output;
     
