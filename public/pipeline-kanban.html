@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sales Pipeline - Kanban Board</title>
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            color: #2d3748;
+            font-size: 1.8rem;
+            font-weight: 700;
+        }
+
+        .stats {
+            display: flex;
+            gap: 20px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .stat-card .label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .pipeline-board {
+            display: flex;
+            gap: 15px;
+            overflow-x: auto;
+            padding-bottom: 20px;
+        }
+
+        .stage-column {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            min-width: 300px;
+            max-width: 300px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .stage-header {
+            border-bottom: 3px solid;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .stage-header h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .stage-count {
+            background: rgba(0, 0, 0, 0.1);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .lead-card {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 10px;
+            cursor: move;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            border-left: 4px solid #e2e8f0;
+        }
+
+        .lead-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .lead-card.priority-high {
+            border-left-color: #ef4444;
+        }
+
+        .lead-card.priority-medium {
+            border-left-color: #f59e0b;
+        }
+
+        .lead-card.priority-low {
+            border-left-color: #10b981;
+        }
+
+        .lead-name {
+            font-weight: 600;
+            color: #1a202c;
+            margin-bottom: 5px;
+        }
+
+        .lead-info {
+            font-size: 0.85rem;
+            color: #718096;
+            margin-bottom: 5px;
+        }
+
+        .lead-score {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+
+        .drag-over {
+            background: rgba(102, 126, 234, 0.1);
+            border: 2px dashed #667eea;
+        }
+
+        .dragging {
+            opacity: 0.5;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: white;
+            font-size: 1.2rem;
+        }
+
+        .empty-stage {
+            text-align: center;
+            padding: 30px;
+            color: #a0aec0;
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 768px) {
+            .pipeline-board {
+                flex-direction: column;
+            }
+
+            .stage-column {
+                min-width: 100%;
+                max-width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 Sales Pipeline</h1>
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="value" id="totalLeads">0</div>
+                    <div class="label">Total Leads</div>
+                </div>
+                <div class="stat-card">
+                    <div class="value" id="conversionRate">0%</div>
+                    <div class="label">Conversion Rate</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="pipelineBoard" class="pipeline-board">
+            <div class="loading">Loading pipeline...</div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let pipelineData = null;
+
+        // Load pipeline data
+        async function loadPipeline() {
+            try {
+                const response = await fetch('/api/admin/pipeline');
+                pipelineData = await response.json();
+                renderPipeline();
+                
+                // Update stats
+                document.getElementById('totalLeads').textContent = pipelineData.totalLeads;
+                document.getElementById('conversionRate').textContent = pipelineData.conversionRate + '%';
+            } catch (error) {
+                console.error('Error loading pipeline:', error);
+                document.getElementById('pipelineBoard').innerHTML = '<div class="loading">Error loading pipeline</div>';
+            }
+        }
+
+        // Render pipeline board
+        function renderPipeline() {
+            const board = document.getElementById('pipelineBoard');
+            board.innerHTML = '';
+
+            pipelineData.stages.forEach(stage => {
+                const column = document.createElement('div');
+                column.className = 'stage-column';
+                column.style.borderTopColor = stage.color;
+                column.dataset.stageId = stage.id;
+                
+                column.innerHTML = `
+                    <div class="stage-header" style="border-color: ${stage.color}">
+                        <h3>${stage.name}</h3>
+                        <span class="stage-count">${stage.count}</span>
+                    </div>
+                    <div class="stage-content" data-stage="${stage.id}">
+                        ${stage.leads.length === 0 ? '<div class="empty-stage">No leads</div>' : ''}
+                    </div>
+                `;
+
+                // Add leads to column
+                const content = column.querySelector('.stage-content');
+                stage.leads.forEach(lead => {
+                    const card = createLeadCard(lead);
+                    content.appendChild(card);
+                });
+
+                // Make droppable
+                makeDroppable(column);
+
+                board.appendChild(column);
+            });
+        }
+
+        // Create lead card
+        function createLeadCard(lead) {
+            const card = document.createElement('div');
+            card.className = `lead-card priority-${lead.priority || 'medium'}`;
+            card.draggable = true;
+            card.dataset.leadId = lead.id;
+            
+            const clientName = lead.client_name || 'Unknown Client';
+            const industry = lead.industry || 'Unknown';
+            const callCount = lead.call_count || 0;
+            
+            card.innerHTML = `
+                <div class="lead-name">${lead.name || 'Unnamed Lead'}</div>
+                <div class="lead-info">📞 ${lead.phone}</div>
+                <div class="lead-info">🏢 ${clientName}</div>
+                <div class="lead-info">📈 ${callCount} calls</div>
+                <div class="lead-score">Score: ${lead.score || 0}</div>
+            `;
+
+            // Make draggable
+            makeDraggable(card);
+
+            return card;
+        }
+
+        // Make card draggable
+        function makeDraggable(card) {
+            card.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('text/plain', card.dataset.leadId);
+                card.classList.add('dragging');
+            });
+
+            card.addEventListener('dragend', (e) => {
+                card.classList.remove('dragging');
+            });
+        }
+
+        // Make column droppable
+        function makeDroppable(column) {
+            const stageContent = column.querySelector('.stage-content');
+            
+            stageContent.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                stageContent.classList.add('drag-over');
+            });
+
+            stageContent.addEventListener('dragleave', (e) => {
+                stageContent.classList.remove('drag-over');
+            });
+
+            stageContent.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                stageContent.classList.remove('drag-over');
+                
+                const leadId = e.dataTransfer.getData('text/plain');
+                const targetStage = column.dataset.stageId;
+                
+                // Update lead stage
+                await updateLeadStage(leadId, targetStage);
+            });
+        }
+
+        // Update lead stage
+        async function updateLeadStage(leadId, targetStage) {
+            try {
+                const response = await fetch(`/api/admin/pipeline/lead/${leadId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ stage: targetStage })
+                });
+
+                if (response.ok) {
+                    // Reload pipeline
+                    await loadPipeline();
+                }
+            } catch (error) {
+                console.error('Error updating lead stage:', error);
+            }
+        }
+
+        // Listen for real-time updates
+        socket.on('pipeline-update', (data) => {
+            console.log('Pipeline update:', data);
+            loadPipeline();
+        });
+
+        // Initial load
+        loadPipeline();
+
+        // Auto-refresh every 30 seconds
+        setInterval(loadPipeline, 30000);
+    </script>
+</body>
+</html>

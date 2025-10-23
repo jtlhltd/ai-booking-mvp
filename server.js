@@ -534,6 +534,10 @@ app.get('/admin-hub', (req, res) => {
   res.sendFile(path.join(process.cwd(), 'public', 'admin-hub-enterprise.html'));
 });
 
+app.get('/pipeline', (req, res) => {
+  res.sendFile(path.join(process.cwd(), 'public', 'pipeline-kanban.html'));
+});
+
 // Admin API endpoints
 app.get('/api/admin/business-stats', async (req, res) => {
   try {
@@ -2261,6 +2265,272 @@ app.get('/api/admin/analytics/benchmarks', async (req, res) => {
     res.json([]);
   }
 });
+
+// Visual Sales Pipeline/Kanban Board Endpoints
+app.get('/api/admin/pipeline', async (req, res) => {
+  try {
+    const { clientKey } = req.query;
+    
+    // Define pipeline stages
+    const stages = [
+      { id: 'new', name: 'New Leads', color: '#94a3b8', order: 1 },
+      { id: 'contacted', name: 'Contacted', color: '#60a5fa', order: 2 },
+      { id: 'qualified', name: 'Qualified', color: '#a78bfa', order: 3 },
+      { id: 'interested', name: 'Interested', color: '#fbbf24', order: 4 },
+      { id: 'booked', name: 'Booked', color: '#34d399', order: 5 },
+      { id: 'confirmed', name: 'Confirmed', color: '#10b981', order: 6 },
+      { id: 'converted', name: 'Converted', color: '#059669', order: 7 }
+    ];
+    
+    // Build query with optional client filter
+    let query = `
+      SELECT 
+        l.*,
+        c.display_name as client_name,
+        c.industry,
+        (SELECT COUNT(*) FROM calls WHERE lead_phone = l.phone AND status = 'completed') as call_count,
+        (SELECT MAX(created_at) FROM calls WHERE lead_phone = l.phone) as last_call_at,
+        (SELECT outcome FROM calls WHERE lead_phone = l.phone ORDER BY created_at DESC LIMIT 1) as last_outcome,
+        (SELECT status FROM appointments WHERE lead_phone = l.phone ORDER BY created_at DESC LIMIT 1) as appointment_status
+      FROM leads l
+      JOIN tenants c ON l.client_key = c.client_key
+      WHERE 1=1
+    `;
+    
+    const params = [];
+    if (clientKey) {
+      query += ` AND l.client_key = $1`;
+      params.push(clientKey);
+    }
+    
+    query += ` ORDER BY l.created_at DESC`;
+    
+    const leads = await query(query, params);
+    
+    // Score and categorize leads into stages
+    const leadsByStage = {};
+    stages.forEach(stage => {
+      leadsByStage[stage.id] = [];
+    });
+    
+    leads.rows.forEach(lead => {
+      let stage = 'new';
+      
+      // Advanced stage logic based on lead status and activity
+      if (lead.status === 'converted') {
+        stage = 'converted';
+      } else if (lead.appointment_status === 'confirmed') {
+        stage = 'confirmed';
+      } else if (lead.appointment_status === 'scheduled') {
+        stage = 'booked';
+      } else if (lead.last_outcome === 'interested' || lead.last_outcome === 'callback_requested') {
+        stage = 'interested';
+      } else if (lead.call_count > 0 && lead.last_outcome === 'not_interested') {
+        stage = 'qualified'; // Tried but didn't book
+      } else if (lead.call_count > 0) {
+        stage = 'contacted';
+      } else {
+        stage = 'new';
+      }
+      
+      // Calculate lead score
+      let score = 0;
+      const daysSinceCreation = Math.floor((Date.now() - new Date(lead.created_at).getTime()) / (1000 * 60 * 60 * 24));
+      if (daysSinceCreation < 7) score += 20;
+      if (lead.call_count > 0) score += 15;
+      if (lead.appointment_status) score += 25;
+      
+      leadsByStage[stage].push({
+        ...lead,
+        score,
+        stage
+      });
+    });
+    
+    // Calculate stage statistics
+    const stageStats = stages.map(stage => {
+      const leadsInStage = leadsByStage[stage.id];
+      const stageTotal = leads.reduce((sum, l) => sum + (l.rows ? l.rows.length : 0), 0);
+      
+      return {
+        ...stage,
+        count: leadsInStage.length,
+        totalLeads: stageTotal,
+        percentage: stageTotal > 0 ? Math.round((leadsInStage.length / stageTotal) * 100) : 0,
+        leads: leadsInStage,
+        avgScore: leadsInStage.length > 0 
+          ? Math.round(leadsInStage.reduce((sum, l) => sum + l.score, 0) / leadsInStage.length)
+          : 0
+      };
+    });
+    
+    res.json({
+      stages: stageStats,
+      totalLeads: leads.rows.length,
+      conversionRate: leads.rows.length > 0 
+        ? Math.round((leadsByStage['converted'].length / leads.rows.length) * 100)
+        : 0
+    });
+  } catch (error) {
+    console.error('Error getting pipeline:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update lead stage in pipeline
+app.put('/api/admin/pipeline/lead/:leadId', async (req, res) => {
+  try {
+    const { leadId } = req.params;
+    const { stage, notes } = req.body;
+    
+    // Update lead status
+    await query(`
+      UPDATE leads 
+      SET status = $1, notes = COALESCE($2, notes), updated_at = NOW()
+      WHERE id = $3
+    `, [stage, notes, leadId]);
+    
+    // Get updated lead
+    const result = await query(`
+      SELECT l.*, c.display_name as client_name
+      FROM leads l
+      JOIN tenants c ON l.client_key = c.client_key
+      WHERE l.id = $1
+    `, [leadId]);
+    
+    // Broadcast update to all connected clients
+    if (socket) {
+      socket.emit('pipeline-update', {
+        type: 'lead-moved',
+        lead: result.rows[0],
+        from: null,
+        to: stage
+      });
+    }
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating lead stage:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Bulk move leads between stages
+app.post('/api/admin/pipeline/bulk-move', async (req, res) => {
+  try {
+    const { leadIds, targetStage } = req.body;
+    
+    if (!Array.isArray(leadIds) || leadIds.length === 0) {
+      return res.status(400).json({ error: 'leadIds must be a non-empty array' });
+    }
+    
+    // Update multiple leads
+    const placeholders = leadIds.map((_, i) => `$${i + 2}`).join(',');
+    const result = await query(`
+      UPDATE leads 
+      SET status = $1, updated_at = NOW()
+      WHERE id IN (${placeholders})
+      RETURNING *
+    `, [targetStage, ...leadIds]);
+    
+    // Broadcast bulk update
+    if (socket) {
+      socket.emit('pipeline-update', {
+        type: 'bulk-move',
+        leadIds,
+        targetStage,
+        count: result.rows.length
+      });
+    }
+    
+    res.json({
+      success: true,
+      moved: result.rows.length,
+      leads: result.rows
+    });
+  } catch (error) {
+    console.error('Error bulk moving leads:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get pipeline analytics
+app.get('/api/admin/pipeline/analytics', async (req, res) => {
+  try {
+    const { clientKey, days = 30 } = req.query;
+    
+    let query = `
+      SELECT 
+        DATE(created_at) as date,
+        status,
+        COUNT(*) as count
+      FROM leads
+      WHERE created_at >= NOW() - INTERVAL '${parseInt(days)} days'
+    `;
+    
+    const params = [];
+    if (clientKey) {
+      query += ` AND client_key = $1`;
+      params.push(clientKey);
+    }
+    
+    query += ` GROUP BY DATE(created_at), status ORDER BY date DESC`;
+    
+    const analytics = await query(query, params);
+    
+    // Calculate stage conversion funnel
+    const funnel = analytics.rows.reduce((acc, row) => {
+      if (!acc[row.status]) {
+        acc[row.status] = 0;
+      }
+      acc[row.status] += parseInt(row.count);
+      return acc;
+    }, {});
+    
+    // Calculate conversion rates between stages
+    const conversionRates = [];
+    const stages = ['new', 'contacted', 'qualified', 'interested', 'booked', 'confirmed', 'converted'];
+    
+    for (let i = 0; i < stages.length - 1; i++) {
+      const currentStage = stages[i];
+      const nextStage = stages[i + 1];
+      const currentCount = funnel[currentStage] || 0;
+      const nextCount = funnel[nextStage] || 0;
+      
+      conversionRates.push({
+        from: currentStage,
+        to: nextStage,
+        count: currentCount,
+        converted: nextCount,
+        rate: currentCount > 0 ? Math.round((nextCount / currentCount) * 100) : 0
+      });
+    }
+    
+    res.json({
+      analytics: analytics.rows,
+      funnel,
+      conversionRates,
+      averageStageTime: calculateAverageStageTime(analytics.rows)
+    });
+  } catch (error) {
+    console.error('Error getting pipeline analytics:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper function to calculate average time in each stage
+function calculateAverageStageTime(analytics) {
+  // This would require tracking stage changes with timestamps
+  // For now, return mock data
+  return {
+    new: '2 days',
+    contacted: '5 days',
+    qualified: '3 days',
+    interested: '2 days',
+    booked: '1 day',
+    confirmed: '7 days'
+  };
+}
 
 // Mock Lead Call Route (No API Key Required)
 app.get('/mock-call', async (req, res) => {
