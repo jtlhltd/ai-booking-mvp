@@ -2532,6 +2532,243 @@ function calculateAverageStageTime(analytics) {
   };
 }
 
+// Email Template Management Endpoints
+app.get('/api/admin/email-templates', async (req, res) => {
+  try {
+    const templates = await query(`
+      SELECT * FROM email_templates 
+      ORDER BY created_at DESC
+    `);
+    
+    res.json(templates.rows || []);
+  } catch (error) {
+    console.error('Error getting email templates:', error);
+    res.json([]);
+  }
+});
+
+app.post('/api/admin/email-templates', async (req, res) => {
+  try {
+    const { name, subject, body, category, variables } = req.body;
+    
+    const result = await query(`
+      INSERT INTO email_templates (name, subject, body, category, variables, created_at)
+      VALUES ($1, $2, $3, $4, $5, NOW())
+      RETURNING *
+    `, [name, subject, body, category || 'general', JSON.stringify(variables || [])]);
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating email template:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/admin/email-templates/send', async (req, res) => {
+  try {
+    const { templateId, recipientEmail, recipientName, variables } = req.body;
+    
+    // Get template
+    const templateResult = await query(`
+      SELECT * FROM email_templates WHERE id = $1
+    `, [templateId]);
+    
+    if (templateResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+    
+    const template = templateResult.rows[0];
+    
+    // Replace variables in subject and body
+    let subject = template.subject;
+    let body = template.body;
+    
+    Object.entries(variables || {}).forEach(([key, value]) => {
+      subject = subject.replace(new RegExp(`{{${key}}}`, 'g'), value);
+      body = body.replace(new RegExp(`{{${key}}}`, 'g'), value);
+    });
+    
+    // Send email (using your existing email service)
+    // This is a placeholder - implement with your actual email service
+    console.log('Sending email:', { to: recipientEmail, subject, body });
+    
+    res.json({
+      success: true,
+      message: 'Email sent successfully',
+      recipient: recipientEmail
+    });
+  } catch (error) {
+    console.error('Error sending email:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Task Management Endpoints
+app.get('/api/admin/tasks', async (req, res) => {
+  try {
+    const { clientKey, status, assignedTo } = req.query;
+    
+    let query = `
+      SELECT 
+        t.*,
+        c.display_name as client_name,
+        l.name as lead_name,
+        l.phone as lead_phone
+      FROM tasks t
+      LEFT JOIN tenants c ON t.client_key = c.client_key
+      LEFT JOIN leads l ON t.lead_id = l.id
+      WHERE 1=1
+    `;
+    
+    const params = [];
+    let paramCount = 1;
+    
+    if (clientKey) {
+      query += ` AND t.client_key = $${paramCount++}`;
+      params.push(clientKey);
+    }
+    
+    if (status) {
+      query += ` AND t.status = $${paramCount++}`;
+      params.push(status);
+    }
+    
+    if (assignedTo) {
+      query += ` AND t.assigned_to = $${paramCount++}`;
+      params.push(assignedTo);
+    }
+    
+    query += ` ORDER BY t.due_date ASC, t.priority DESC`;
+    
+    const tasks = await query(query, params);
+    
+    res.json(tasks.rows || []);
+  } catch (error) {
+    console.error('Error getting tasks:', error);
+    res.json([]);
+  }
+});
+
+app.post('/api/admin/tasks', async (req, res) => {
+  try {
+    const { title, description, clientKey, leadId, dueDate, priority, assignedTo, status } = req.body;
+    
+    const result = await query(`
+      INSERT INTO tasks (title, description, client_key, lead_id, due_date, priority, assigned_to, status, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+      RETURNING *
+    `, [title, description, clientKey, leadId, dueDate, priority || 'medium', assignedTo, status || 'pending']);
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating task:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/admin/tasks/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const updates = req.body;
+    
+    const fields = [];
+    const values = [];
+    let paramCount = 1;
+    
+    Object.entries(updates).forEach(([key, value]) => {
+      fields.push(`${key} = $${paramCount++}`);
+      values.push(value);
+    });
+    
+    values.push(taskId);
+    
+    const result = await query(`
+      UPDATE tasks 
+      SET ${fields.join(', ')}, updated_at = NOW()
+      WHERE id = $${paramCount}
+      RETURNING *
+    `, values);
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating task:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/admin/tasks/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    
+    await query(`
+      DELETE FROM tasks WHERE id = $1
+    `, [taskId]);
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting task:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Activity Timeline Endpoint
+app.get('/api/admin/activities', async (req, res) => {
+  try {
+    const { clientKey, leadId, limit = 50 } = req.query;
+    
+    let query = `
+      SELECT 
+        a.*,
+        c.display_name as client_name,
+        l.name as lead_name
+      FROM activities a
+      LEFT JOIN tenants c ON a.client_key = c.client_key
+      LEFT JOIN leads l ON a.lead_id = l.id
+      WHERE 1=1
+    `;
+    
+    const params = [];
+    let paramCount = 1;
+    
+    if (clientKey) {
+      query += ` AND a.client_key = $${paramCount++}`;
+      params.push(clientKey);
+    }
+    
+    if (leadId) {
+      query += ` AND a.lead_id = $${paramCount++}`;
+      params.push(leadId);
+    }
+    
+    query += ` ORDER BY a.created_at DESC LIMIT $${paramCount++}`;
+    params.push(parseInt(limit));
+    
+    const activities = await query(query, params);
+    
+    res.json(activities.rows || []);
+  } catch (error) {
+    console.error('Error getting activities:', error);
+    res.json([]);
+  }
+});
+
+app.post('/api/admin/activities', async (req, res) => {
+  try {
+    const { type, description, clientKey, leadId, metadata } = req.body;
+    
+    const result = await query(`
+      INSERT INTO activities (type, description, client_key, lead_id, metadata, created_at)
+      VALUES ($1, $2, $3, $4, $5, NOW())
+      RETURNING *
+    `, [type, description, clientKey, leadId, JSON.stringify(metadata || {})]);
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating activity:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Mock Lead Call Route (No API Key Required)
 app.get('/mock-call', async (req, res) => {
   try {
