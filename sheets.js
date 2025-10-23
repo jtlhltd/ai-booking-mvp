@@ -74,33 +74,37 @@ export async function appendLead(spreadsheetId, lead) {
 export async function appendLogistics(spreadsheetId, data) {
   const s = await getClient();
   await ensureLogisticsHeader(spreadsheetId);
-  const row = [
-    new Date().toISOString(),
-    data.businessName || '',
-    data.decisionMaker || '',
-    data.phone || '',
-    data.email || '',
-    data.international || '',
-    (Array.isArray(data.mainCouriers) ? data.mainCouriers.join(', ') : (data.mainCouriers || '')),
-    data.frequency || '',
-    (Array.isArray(data.mainCountries) ? data.mainCountries.join(', ') : (data.mainCountries || '')),
-    data.exampleShipment || '',
-    data.exampleShipmentCost || '',
-    data.domesticFrequency || '',
-    data.ukCourier || '',
-    data.standardRateUpToKg || '',
-    data.excludingFuelVat || '',
-    data.singleVsMulti || '',
-    data.receptionistName || '',
-    (data.callbackNeeded === true || data.callbackNeeded === 'TRUE') ? 'TRUE' : 'FALSE',
-    data.callId || '',
-    data.recordingUrl || '',
-    (data.transcriptSnippet || '').slice(0, 300)
-  ];
   
-  console.log('[SHEETS DEBUG] Raw data received:', JSON.stringify(data, null, 2));
+  // Map data to exact column positions using an object
+  const columnData = {
+    'Timestamp': new Date().toISOString(),
+    'Business Name': data.businessName || '',
+    'Decision Maker': data.decisionMaker || '',
+    'Phone': data.phone || '',
+    'Email': data.email || '',
+    'International (Y/N)': data.international || '',
+    'Main Couriers': Array.isArray(data.mainCouriers) ? data.mainCouriers.join(', ') : (data.mainCouriers || ''),
+    'Frequency': data.frequency || '',
+    'Main Countries': Array.isArray(data.mainCountries) ? data.mainCountries.join(', ') : (data.mainCountries || ''),
+    'Example Shipment (weight x dims)': data.exampleShipment || '',
+    'Example Shipment Cost': data.exampleShipmentCost || '',
+    'Domestic Frequency': data.domesticFrequency || '',
+    'UK Courier': data.ukCourier || '',
+    'Std Rate up to KG': data.standardRateUpToKg || '',
+    'Excl Fuel & VAT?': data.excludingFuelVat || '',
+    'Single vs Multi-parcel': data.singleVsMulti || '',
+    'Receptionist Name': data.receptionistName || '',
+    'Callback Needed': (data.callbackNeeded === true || data.callbackNeeded === 'TRUE') ? 'TRUE' : 'FALSE',
+    'Call ID': data.callId || '',
+    'Recording URL': data.recordingUrl || '',
+    'Transcript Snippet': (data.transcriptSnippet || '').slice(0, 300)
+  };
+  
+  // Build row array in exact header order
+  const row = LOGISTICS_HEADERS.map(header => columnData[header] || '');
+  
+  console.log('[SHEETS DEBUG] Column mapping:', JSON.stringify(columnData, null, 2));
   console.log('[SHEETS DEBUG] Row being written:', JSON.stringify(row, null, 2));
-  console.log('[SHEETS DEBUG] Headers:', LOGISTICS_HEADERS);
   
   // Verify each column matches its header
   for (let i = 0; i < LOGISTICS_HEADERS.length && i < row.length; i++) {
