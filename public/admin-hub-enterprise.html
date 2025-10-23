@@ -1456,36 +1456,37 @@
 
         // Load data for specific section
         function loadSectionData(sectionName) {
+            // Always use API calls for reliability
+            switch(sectionName) {
+                case 'overview':
+                    loadOverview();
+                    break;
+                case 'clients':
+                    loadClients();
+                    break;
+                case 'calls':
+                    loadCalls();
+                    break;
+                case 'analytics':
+                    loadAnalytics();
+                    break;
+                case 'insights':
+                    loadAdvancedAnalytics();
+                    break;
+                case 'forecasts':
+                    loadAdvancedAnalytics();
+                    break;
+                case 'users':
+                    loadUsers();
+                    break;
+                case 'system':
+                    loadSystemHealth();
+                    break;
+            }
+            
+            // Also request real-time update if socket is connected
             if (socket && socket.connected) {
                 socket.emit('request-update', sectionName);
-            } else {
-                // Fallback to regular API calls
-                switch(sectionName) {
-                    case 'overview':
-                        loadOverview();
-                        break;
-                    case 'clients':
-                        loadClients();
-                        break;
-                    case 'calls':
-                        loadCalls();
-                        break;
-                    case 'analytics':
-                        loadAnalytics();
-                        break;
-                    case 'insights':
-                        loadAdvancedAnalytics();
-                        break;
-                    case 'forecasts':
-                        loadAdvancedAnalytics();
-                        break;
-                    case 'users':
-                        loadUsers();
-                        break;
-                    case 'system':
-                        loadSystemHealth();
-                        break;
-                }
             }
         }
 
