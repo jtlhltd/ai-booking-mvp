@@ -249,7 +249,10 @@ router.post('/webhooks/vapi', async (req, res) => {
       'tenant?.gsheet_id': tenant?.gsheet_id,
       'process.env.LOGISTICS_SHEET_ID': process.env.LOGISTICS_SHEET_ID,
       'Final logisticsSheetId': logisticsSheetId,
-      'tenant': tenant ? Object.keys(tenant) : 'null'
+      'Has transcript': !!transcript,
+      'Transcript length': transcript.length,
+      'Status': status,
+      'Will update sheet': !!(logisticsSheetId && transcript && status === 'completed')
     });
     
     // Check for structured output data from VAPI
