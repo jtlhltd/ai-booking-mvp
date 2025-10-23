@@ -585,32 +585,125 @@
                 flex-direction: column;
                 gap: 15px;
                 text-align: center;
+                padding: 15px 20px;
+            }
+            
+            .header h1 {
+                font-size: 1.5rem;
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .header > div {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                width: 100%;
+            }
+            
+            .header .btn {
+                width: 100%;
             }
             
             .nav-tabs {
-                flex-direction: column;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                padding: 4px;
+            }
+            
+            .nav-tab {
+                min-width: 100px;
+                padding: 12px 16px;
+                font-size: 0.9rem;
             }
             
             .search-bar {
                 flex-direction: column;
             }
             
+            .search-input,
+            .filter-select {
+                width: 100%;
+            }
+            
             .stats-grid {
                 grid-template-columns: 1fr;
+                gap: 15px;
+            }
+            
+            .stat-card {
+                padding: 20px;
+            }
+            
+            .stat-card h3 {
+                font-size: 2rem;
             }
             
             .data-table {
-                font-size: 0.9rem;
+                font-size: 0.85rem;
+                display: block;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
             }
             
             .data-table th,
             .data-table td {
-                padding: 12px 8px;
+                padding: 10px 6px;
+                white-space: nowrap;
             }
             
             .bulk-actions {
                 flex-direction: column;
                 align-items: stretch;
+                gap: 10px;
+            }
+            
+            .bulk-actions .btn {
+                width: 100%;
+            }
+            
+            .content-section {
+                padding: 15px;
+            }
+            
+            .modal-content {
+                width: 95%;
+                max-width: 95%;
+                padding: 20px;
+            }
+            
+            .filter-bar {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .filter-group {
+                width: 100%;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .header h1 {
+                font-size: 1.2rem;
+            }
+            
+            .nav-tab {
+                min-width: 80px;
+                padding: 10px 12px;
+                font-size: 0.8rem;
+            }
+            
+            .stat-card h3 {
+                font-size: 1.8rem;
+            }
+            
+            .data-table {
+                font-size: 0.75rem;
+            }
+            
+            .data-table th,
+            .data-table td {
+                padding: 8px 4px;
             }
         }
     </style>
