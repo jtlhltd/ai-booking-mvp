@@ -1021,13 +1021,43 @@ app.delete('/api/admin/client/:clientKey', async (req, res) => {
 
 app.post('/api/admin/client', async (req, res) => {
   try {
-    const { displayName, industry, email, timezone } = req.body;
+    const { 
+      businessName, 
+      industry, 
+      email, 
+      phone,
+      website,
+      primaryService,
+      duration,
+      timezone,
+      workingHours,
+      monthlyBudget
+    } = req.body;
+    
+    const displayName = businessName || req.body.displayName;
     
     if (!displayName) {
-      return res.status(400).json({ error: 'Client name is required' });
+      return res.status(400).json({ error: 'Business name is required' });
     }
     
-    const clientKey = displayName.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    // Generate client key
+    const clientKey = displayName.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    
+    // Build calendar config
+    const calendarConfig = {
+      booking: {
+        defaultDurationMin: parseInt(duration) || 30,
+        timezone: timezone || 'Europe/London',
+        businessHours: workingHours || '9am-5pm Mon-Fri'
+      },
+      services: primaryService ? {
+        [primaryService.toLowerCase().replace(/\s+/g, '_')]: {
+          name: primaryService,
+          duration: parseInt(duration) || 30,
+          price: null
+        }
+      } : {}
+    };
     
     const newClient = {
       clientKey,
@@ -1035,12 +1065,18 @@ app.post('/api/admin/client', async (req, res) => {
       industry: industry || 'Not specified',
       email: email || `${clientKey}@example.com`,
       timezone: timezone || 'Europe/London',
-      isEnabled: true
+      isEnabled: true,
+      calendar_json: JSON.stringify(calendarConfig)
     };
     
     await upsertFullClient(newClient);
     
-    res.json({ success: true, message: 'Client created successfully', clientKey });
+    res.json({ 
+      success: true, 
+      message: 'Client created successfully', 
+      clientKey,
+      ...newClient
+    });
     
     // Broadcast real-time update
     broadcastUpdate('clients', await getClientsData());
