@@ -266,32 +266,34 @@ router.post('/webhooks/vapi', async (req, res) => {
           extracted = extractLogisticsFields(transcript);
         }
         
+        // Extract fields from structured output OR metadata/transcript
         const businessName = structuredOutput?.businessName || metadata.businessName || '';
         const decisionMaker = structuredOutput?.decisionMaker || metadata.decisionMaker?.name || '';
         const receptionistName = structuredOutput?.receptionistName || pickReceptionistName(transcript) || metadata.receptionistName || '';
         const callbackNeeded = structuredOutput?.callbackNeeded === 'Y' || /call\s*back|transfer|not\s*available|not\s*in|back\s*later|try\s*again/i.test(transcript) && !decisionMaker;
 
+        // Map all fields properly according to headers
         const sheetData = {
-          businessName,
-          decisionMaker,
-          phone: leadPhone,
-          email: extracted.email,
-          international: extracted.international,
-          mainCouriers: extracted.mainCouriers,
-          frequency: extracted.frequency,
-          mainCountries: extracted.mainCountries,
-          exampleShipment: extracted.exampleShipment,
-          exampleShipmentCost: extracted.exampleShipmentCost,
-          domesticFrequency: extracted.domesticFrequency,
-          ukCourier: extracted.ukCourier,
-          standardRateUpToKg: extracted.standardRateUpToKg,
-          excludingFuelVat: extracted.excludingFuelVat,
-          singleVsMulti: extracted.singleVsMulti,
-          receptionistName,
-          callbackNeeded,
-          callId,
-          recordingUrl,
-          transcriptSnippet: transcript.slice(0, 500)
+          businessName: businessName || '',
+          decisionMaker: decisionMaker || '',
+          phone: leadPhone || '',
+          email: extracted.email || '',
+          international: extracted.international || '',
+          mainCouriers: Array.isArray(extracted.mainCouriers) ? extracted.mainCouriers.join(', ') : (extracted.mainCouriers || ''),
+          frequency: extracted.frequency || '',
+          mainCountries: Array.isArray(extracted.mainCountries) ? extracted.mainCountries.join(', ') : (extracted.mainCountries || ''),
+          exampleShipment: extracted.exampleShipment || '',
+          exampleShipmentCost: extracted.exampleShipmentCost || '',
+          domesticFrequency: extracted.domesticFrequency || '',
+          ukCourier: extracted.ukCourier || '',
+          standardRateUpToKg: extracted.standardRateUpToKg || '',
+          excludingFuelVat: extracted.excludingFuelVat || '',
+          singleVsMulti: extracted.singleVsMulti || '',
+          receptionistName: receptionistName || '',
+          callbackNeeded: callbackNeeded,
+          callId: callId || '',
+          recordingUrl: recordingUrl || '',
+          transcriptSnippet: transcript.slice(0, 500) || ''
         };
         
         console.log('[LOGISTICS SHEET DATA] Writing to sheet:', JSON.stringify(sheetData, null, 2));
