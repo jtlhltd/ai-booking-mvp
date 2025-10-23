@@ -351,7 +351,10 @@ router.post('/webhooks/vapi', async (req, res) => {
       error: e?.message || e,
       stack: e?.stack?.substring(0, 200)
     });
-    res.status(200).json({ ok: true });
+    // Don't send response if headers already sent
+    if (!res.headersSent) {
+      res.status(200).json({ ok: true });
+    }
   }
 });
 
