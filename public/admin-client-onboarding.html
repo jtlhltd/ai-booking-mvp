@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add New Client - Admin Hub</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f7fa;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 20px 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #2d3748;
+            font-size: 1.8rem;
+            margin-bottom: 4px;
+        }
+
+        .header p {
+            color: #718096;
+            font-size: 0.9rem;
+        }
+
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        .onboarding-card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #e2e8f0;
+            border-radius: 3px;
+            margin-bottom: 30px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            transition: width 0.3s ease;
+        }
+
+        .step-indicator {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+
+        .step {
+            text-align: center;
+            flex: 1;
+        }
+
+        .step-number {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #e2e8f0;
+            color: #718096;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            margin: 0 auto 8px;
+            transition: all 0.3s;
+        }
+
+        .step.active .step-number {
+            background: #667eea;
+            color: white;
+        }
+
+        .step.completed .step-number {
+            background: #48bb78;
+            color: white;
+        }
+
+        .step-label {
+            font-size: 0.85rem;
+            color: #718096;
+        }
+
+        .step.active .step-label {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .step-content {
+            display: none;
+        }
+
+        .step-content.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 30px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 14px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+
+        .btn-secondary:hover {
+            background: #cbd5e0;
+        }
+
+        .success-screen {
+            text-align: center;
+            display: none;
+        }
+
+        .success-screen.active {
+            display: block;
+        }
+
+        .success-icon {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: #48bb78;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            margin: 0 auto 20px;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e2e8f0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            background: #fed7d7;
+            color: #742a2a;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .error-message.active {
+            display: block;
+        }
+
+        .client-preview {
+            background: #f7fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .preview-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .preview-row:last-child {
+            border-bottom: none;
+        }
+
+        .preview-label {
+            font-weight: 600;
+            color: #4a5568;
+        }
+
+        .preview-value {
+            color: #2d3748;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/admin-hub-enterprise.html" class="back-btn">← Back to Admin Hub</a>
+
+        <div class="header">
+            <h1>Add New Client</h1>
+            <p>Create a new client account in your CRM</p>
+        </div>
+
+        <div class="onboarding-card">
+            <!-- Progress Bar -->
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill" style="width: 33%;"></div>
+            </div>
+
+            <!-- Step Indicator -->
+            <div class="step-indicator">
+                <div class="step active" data-step="1">
+                    <div class="step-number">1</div>
+                    <div class="step-label">Details</div>
+                </div>
+                <div class="step" data-step="2">
+                    <div class="step-number">2</div>
+                    <div class="step-label">Services</div>
+                </div>
+                <div class="step" data-step="3">
+                    <div class="step-number">3</div>
+                    <div class="step-label">Complete</div>
+                </div>
+            </div>
+
+            <!-- Error Message -->
+            <div class="error-message" id="errorMessage"></div>
+
+            <!-- Loading Screen -->
+            <div class="loading" id="loadingScreen">
+                <div class="spinner"></div>
+                <p>Creating client account...</p>
+            </div>
+
+            <!-- Step 1: Client Details -->
+            <div class="step-content active" id="step1">
+                <h2 style="margin-bottom: 24px;">Client Information</h2>
+                
+                <div class="form-group">
+                    <label>Business Name *</label>
+                    <input type="text" id="businessName" placeholder="Acme Dental Clinic" required>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Email *</label>
+                        <input type="email" id="email" placeholder="contact@business.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Phone *</label>
+                        <input type="tel" id="phone" placeholder="+44 7700 900000" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Industry *</label>
+                    <select id="industry" required>
+                        <option value="">Select industry</option>
+                        <option value="Healthcare">Healthcare</option>
+                        <option value="Legal">Legal</option>
+                        <option value="Fitness">Fitness & Wellness</option>
+                        <option value="Beauty">Beauty & Salon</option>
+                        <option value="Home Services">Home Services</option>
+                        <option value="Financial">Financial Services</option>
+                        <option value="Real Estate">Real Estate</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Website (optional)</label>
+                    <input type="url" id="website" placeholder="https://yourwebsite.com">
+                </div>
+
+                <div class="button-group">
+                    <button class="btn btn-primary" onclick="nextStep()">Continue →</button>
+                </div>
+            </div>
+
+            <!-- Step 2: Services & Configuration -->
+            <div class="step-content" id="step2">
+                <h2 style="margin-bottom: 24px;">Services & Configuration</h2>
+                
+                <div class="form-group">
+                    <label>Primary Service *</label>
+                    <input type="text" id="primaryService" placeholder="e.g., Dental Consultation" required>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Service Duration *</label>
+                        <select id="duration" required>
+                            <option value="30">30 minutes</option>
+                            <option value="45">45 minutes</option>
+                            <option value="60" selected>1 hour</option>
+                            <option value="90">1.5 hours</option>
+                            <option value="120">2 hours</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Timezone *</label>
+                        <select id="timezone" required>
+                            <option value="Europe/London" selected>Europe/London</option>
+                            <option value="America/New_York">America/New_York</option>
+                            <option value="America/Los_Angeles">America/Los_Angeles</option>
+                            <option value="Australia/Sydney">Australia/Sydney</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Business Hours</label>
+                    <select id="workingHours">
+                        <option value="9am-5pm Mon-Fri">9am-5pm Mon-Fri</option>
+                        <option value="9am-6pm Mon-Fri">9am-6pm Mon-Fri</option>
+                        <option value="9am-5pm Mon-Sat">9am-5pm Mon-Sat</option>
+                        <option value="10am-8pm Mon-Sat">10am-8pm Mon-Sat</option>
+                        <option value="24/7">24/7</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Monthly Budget (optional)</label>
+                    <input type="number" id="monthlyBudget" placeholder="500" min="0">
+                </div>
+
+                <div class="client-preview" id="clientPreview">
+                    <h3 style="margin-bottom: 16px;">Preview</h3>
+                    <div class="preview-row">
+                        <span class="preview-label">Business:</span>
+                        <span class="preview-value" id="previewName">-</span>
+                    </div>
+                    <div class="preview-row">
+                        <span class="preview-label">Industry:</span>
+                        <span class="preview-value" id="previewIndustry">-</span>
+                    </div>
+                    <div class="preview-row">
+                        <span class="preview-label">Service:</span>
+                        <span class="preview-value" id="previewService">-</span>
+                    </div>
+                    <div class="preview-row">
+                        <span class="preview-label">Status:</span>
+                        <span class="preview-value">Active</span>
+                    </div>
+                </div>
+
+                <div class="button-group">
+                    <button class="btn btn-secondary" onclick="prevStep()">← Back</button>
+                    <button class="btn btn-primary" onclick="submitClient()">Create Client ✓</button>
+                </div>
+            </div>
+
+            <!-- Success Screen -->
+            <div class="success-screen" id="successScreen">
+                <div class="success-icon">✓</div>
+                <h2 style="margin-bottom: 12px;">Client Created! 🎉</h2>
+                <p style="color: #718096; margin-bottom: 30px;">The new client has been added to your CRM</p>
+
+                <div class="client-preview">
+                    <div class="preview-row">
+                        <span class="preview-label">Client ID:</span>
+                        <span class="preview-value" id="clientKeyDisplay">-</span>
+                    </div>
+                    <div class="preview-row">
+                        <span class="preview-label">Email:</span>
+                        <span class="preview-value" id="emailDisplay">-</span>
+                    </div>
+                    <div class="preview-row">
+                        <span class="preview-label">Status:</span>
+                        <span class="preview-value">Active</span>
+                    </div>
+                </div>
+
+                <div class="button-group">
+                    <button class="btn btn-secondary" onclick="addAnother()">Add Another Client</button>
+                    <button class="btn btn-primary" onclick="goToAdminHub()">Back to Admin Hub</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentStep = 1;
+        const totalSteps = 2;
+
+        function updateProgress() {
+            const progress = (currentStep / totalSteps) * 100;
+            document.getElementById('progressFill').style.width = progress + '%';
+        }
+
+        function updateStepIndicator() {
+            document.querySelectorAll('.step').forEach((step, index) => {
+                const stepNum = index + 1;
+                step.classList.remove('active', 'completed');
+                
+                if (stepNum < currentStep) {
+                    step.classList.add('completed');
+                } else if (stepNum === currentStep) {
+                    step.classList.add('active');
+                }
+            });
+        }
+
+        function showStep(step) {
+            document.querySelectorAll('.step-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(`step${step}`).classList.add('active');
+            
+            if (step === 2) {
+                updatePreview();
+            }
+        }
+
+        function nextStep() {
+            if (currentStep < totalSteps) {
+                // Validate step 1
+                const businessName = document.getElementById('businessName').value.trim();
+                const email = document.getElementById('email').value.trim();
+                const phone = document.getElementById('phone').value.trim();
+                const industry = document.getElementById('industry').value;
+
+                if (!businessName || !email || !phone || !industry) {
+                    showError('Please fill in all required fields');
+                    return;
+                }
+
+                currentStep++;
+                showStep(currentStep);
+                updateProgress();
+                updateStepIndicator();
+            }
+        }
+
+        function prevStep() {
+            if (currentStep > 1) {
+                currentStep--;
+                showStep(currentStep);
+                updateProgress();
+                updateStepIndicator();
+            }
+        }
+
+        function updatePreview() {
+            document.getElementById('previewName').textContent = document.getElementById('businessName').value || '-';
+            document.getElementById('previewIndustry').textContent = document.getElementById('industry').value || '-';
+            document.getElementById('previewService').textContent = document.getElementById('primaryService').value || '-';
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.classList.add('active');
+            setTimeout(() => errorDiv.classList.remove('active'), 5000);
+        }
+
+        async function submitClient() {
+            // Hide error messages
+            document.getElementById('errorMessage').classList.remove('active');
+            
+            // Validate required fields
+            const businessName = document.getElementById('businessName').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const phone = document.getElementById('phone').value.trim();
+            const industry = document.getElementById('industry').value;
+            const primaryService = document.getElementById('primaryService').value.trim();
+
+            if (!businessName || !email || !phone || !industry || !primaryService) {
+                showError('Please fill in all required fields');
+                return;
+            }
+
+            // Show loading screen
+            document.getElementById('loadingScreen').classList.add('active');
+            document.getElementById('step2').classList.remove('active');
+
+            try {
+                const response = await fetch('/api/admin/client', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        businessName,
+                        email,
+                        phone,
+                        industry,
+                        website: document.getElementById('website').value,
+                        primaryService,
+                        duration: document.getElementById('duration').value,
+                        timezone: document.getElementById('timezone').value,
+                        workingHours: document.getElementById('workingHours').value,
+                        monthlyBudget: document.getElementById('monthlyBudget').value || null
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Show success screen
+                    document.getElementById('loadingScreen').classList.remove('active');
+                    document.getElementById('successScreen').classList.add('active');
+                    
+                    // Update step indicator
+                    document.querySelector('.step[data-step="3"]').classList.add('completed');
+                    updateProgress();
+                    
+                    // Display client info
+                    document.getElementById('clientKeyDisplay').textContent = data.clientKey || businessName.toLowerCase().replace(/\s+/g, '_');
+                    document.getElementById('emailDisplay').textContent = email;
+                } else {
+                    throw new Error(data.error || 'Failed to create client');
+                }
+            } catch (error) {
+                document.getElementById('loadingScreen').classList.remove('active');
+                document.getElementById('step2').classList.add('active');
+                showError(error.message || 'Something went wrong. Please try again.');
+            }
+        }
+
+        function goToAdminHub() {
+            window.location.href = '/admin-hub-enterprise.html';
+        }
+
+        function addAnother() {
+            // Reset form
+            document.getElementById('businessName').value = '';
+            document.getElementById('email').value = '';
+            document.getElementById('phone').value = '';
+            document.getElementById('industry').value = '';
+            document.getElementById('website').value = '';
+            document.getElementById('primaryService').value = '';
+            document.getElementById('duration').value = '60';
+            document.getElementById('timezone').value = 'Europe/London';
+            document.getElementById('workingHours').value = '9am-5pm Mon-Fri';
+            document.getElementById('monthlyBudget').value = '';
+            
+            // Go back to step 1
+            currentStep = 1;
+            showStep(1);
+            updateProgress();
+            updateStepIndicator();
+            document.getElementById('successScreen').classList.remove('active');
+        }
+
+        // Initialize
+        updateProgress();
+        updateStepIndicator();
+    </script>
+</body>
+</html>
+
