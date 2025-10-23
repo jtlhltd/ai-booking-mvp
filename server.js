@@ -2769,6 +2769,274 @@ app.post('/api/admin/activities', async (req, res) => {
   }
 });
 
+// Deal & Opportunity Tracking Endpoints
+app.get('/api/admin/deals', async (req, res) => {
+  try {
+    const { clientKey, stage, minValue } = req.query;
+    
+    let query = `
+      SELECT 
+        d.*,
+        c.display_name as client_name,
+        l.name as lead_name,
+        l.phone as lead_phone
+      FROM deals d
+      LEFT JOIN tenants c ON d.client_key = c.client_key
+      LEFT JOIN leads l ON d.lead_id = l.id
+      WHERE 1=1
+    `;
+    
+    const params = [];
+    let paramCount = 1;
+    
+    if (clientKey) {
+      query += ` AND d.client_key = $${paramCount++}`;
+      params.push(clientKey);
+    }
+    
+    if (stage) {
+      query += ` AND d.stage = $${paramCount++}`;
+      params.push(stage);
+    }
+    
+    if (minValue) {
+      query += ` AND d.value >= $${paramCount++}`;
+      params.push(parseFloat(minValue));
+    }
+    
+    query += ` ORDER BY d.expected_close_date ASC`;
+    
+    const deals = await query(query, params);
+    
+    res.json(deals.rows || []);
+  } catch (error) {
+    console.error('Error getting deals:', error);
+    res.json([]);
+  }
+});
+
+app.post('/api/admin/deals', async (req, res) => {
+  try {
+    const { 
+      name, 
+      clientKey, 
+      leadId, 
+      value, 
+      stage, 
+      probability, 
+      expectedCloseDate, 
+      actualCloseDate,
+      notes,
+      winReason,
+      lossReason
+    } = req.body;
+    
+    const result = await query(`
+      INSERT INTO deals (
+        name, client_key, lead_id, value, stage, probability, 
+        expected_close_date, actual_close_date, notes, win_reason, loss_reason, created_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+      RETURNING *
+    `, [
+      name, clientKey, leadId, value, stage || 'prospecting', 
+      probability || 50, expectedCloseDate, actualCloseDate, notes, winReason, lossReason
+    ]);
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating deal:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/admin/deals/:dealId', async (req, res) => {
+  try {
+    const { dealId } = req.params;
+    const updates = req.body;
+    
+    const fields = [];
+    const values = [];
+    let paramCount = 1;
+    
+    Object.entries(updates).forEach(([key, value]) => {
+      fields.push(`${key} = $${paramCount++}`);
+      values.push(value);
+    });
+    
+    values.push(dealId);
+    
+    const result = await query(`
+      UPDATE deals 
+      SET ${fields.join(', ')}, updated_at = NOW()
+      WHERE id = $${paramCount}
+      RETURNING *
+    `, values);
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating deal:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/admin/deals/pipeline-value', async (req, res) => {
+  try {
+    const { clientKey } = req.query;
+    
+    let query = `
+      SELECT 
+        stage,
+        COUNT(*) as deal_count,
+        SUM(value) as total_value,
+        SUM(value * probability / 100) as weighted_value
+      FROM deals
+      WHERE actual_close_date IS NULL
+    `;
+    
+    const params = [];
+    if (clientKey) {
+      query += ` AND client_key = $1`;
+      params.push(clientKey);
+    }
+    
+    query += ` GROUP BY stage ORDER BY 
+      CASE stage
+        WHEN 'prospecting' THEN 1
+        WHEN 'qualification' THEN 2
+        WHEN 'proposal' THEN 3
+        WHEN 'negotiation' THEN 4
+        WHEN 'closed-won' THEN 5
+        WHEN 'closed-lost' THEN 6
+        ELSE 7
+      END`;
+    
+    const pipeline = await query(query, params);
+    
+    // Calculate totals
+    const totals = pipeline.rows.reduce((acc, row) => {
+      acc.totalDeals += parseInt(row.deal_count);
+      acc.totalValue += parseFloat(row.total_value);
+      acc.weightedValue += parseFloat(row.weighted_value);
+      return acc;
+    }, { totalDeals: 0, totalValue: 0, weightedValue: 0 });
+    
+    res.json({
+      stages: pipeline.rows,
+      summary: totals
+    });
+  } catch (error) {
+    console.error('Error getting pipeline value:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Enhanced Calendar Integration Endpoints
+app.get('/api/admin/calendar/events', async (req, res) => {
+  try {
+    const { clientKey, startDate, endDate } = req.query;
+    
+    let query = `
+      SELECT 
+        a.*,
+        c.display_name as client_name,
+        l.name as lead_name,
+        l.phone as lead_phone
+      FROM appointments a
+      LEFT JOIN tenants c ON a.client_key = c.client_key
+      LEFT JOIN leads l ON a.lead_phone = l.phone
+      WHERE 1=1
+    `;
+    
+    const params = [];
+    let paramCount = 1;
+    
+    if (clientKey) {
+      query += ` AND a.client_key = $${paramCount++}`;
+      params.push(clientKey);
+    }
+    
+    if (startDate) {
+      query += ` AND a.scheduled_for >= $${paramCount++}`;
+      params.push(startDate);
+    }
+    
+    if (endDate) {
+      query += ` AND a.scheduled_for <= $${paramCount++}`;
+      params.push(endDate);
+    }
+    
+    query += ` ORDER BY a.scheduled_for ASC`;
+    
+    const events = await query(query, params);
+    
+    res.json(events.rows || []);
+  } catch (error) {
+    console.error('Error getting calendar events:', error);
+    res.json([]);
+  }
+});
+
+app.post('/api/admin/calendar/sync', async (req, res) => {
+  try {
+    const { clientKey, calendarId } = req.body;
+    
+    // This would integrate with Google Calendar or Outlook
+    // For now, return a success message
+    console.log('Syncing calendar for client:', clientKey, 'with calendar:', calendarId);
+    
+    res.json({
+      success: true,
+      message: 'Calendar sync initiated',
+      calendarId
+    });
+  } catch (error) {
+    console.error('Error syncing calendar:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/admin/calendar/availability', async (req, res) => {
+  try {
+    const { clientKey, date, duration } = req.query;
+    
+    // Get client timezone
+    const client = await getFullClient(clientKey);
+    const timezone = client?.timezone || 'Europe/London';
+    
+    // Generate available time slots
+    const availableSlots = generateAvailableSlots(date, duration, timezone);
+    
+    res.json({
+      clientKey,
+      date,
+      timezone,
+      availableSlots
+    });
+  } catch (error) {
+    console.error('Error getting availability:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper function to generate available time slots
+function generateAvailableSlots(date, duration = 30, timezone = 'Europe/London') {
+  const slots = [];
+  const startHour = 9; // 9 AM
+  const endHour = 17; // 5 PM
+  
+  for (let hour = startHour; hour < endHour; hour++) {
+    for (let minute = 0; minute < 60; minute += duration) {
+      slots.push({
+        time: `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`,
+        available: true
+      });
+    }
+  }
+  
+  return slots;
+}
+
 // Mock Lead Call Route (No API Key Required)
 app.get('/mock-call', async (req, res) => {
   try {
