@@ -944,14 +944,14 @@ app.get('/api/admin/client/:clientKey', async (req, res) => {
     }
     
     // Get detailed stats for this client
-    const leads = await getLeadsByClient(clientKey, 1000);
-    const calls = await getCallsByTenant(clientKey, 1000);
+    const leads = await getLeadsByClient(clientKey, 1000).catch(() => []);
+    const calls = await getCallsByTenant(clientKey, 1000).catch(() => []);
     const appointments = await query(`
       SELECT COUNT(*) as count FROM appointments 
       WHERE client_key = $1 AND created_at >= NOW() - INTERVAL '30 days'
-    `, [clientKey]);
+    `, [clientKey]).catch(() => ({ rows: [{ count: 0 }] }));
     
-    const recentCalls = calls.slice(0, 10).map(call => ({
+    const recentCalls = (calls || []).slice(0, 10).map(call => ({
       phone: call.lead_phone,
       status: call.status,
       outcome: call.outcome,
@@ -962,10 +962,10 @@ app.get('/api/admin/client/:clientKey', async (req, res) => {
     res.json({
       ...client,
       stats: {
-        totalLeads: leads.length,
-        totalCalls: calls.length,
+        totalLeads: (leads || []).length,
+        totalCalls: (calls || []).length,
         totalBookings: parseInt(appointments?.rows?.[0]?.count || 0),
-        conversionRate: calls.length > 0 ? ((parseInt(appointments?.rows?.[0]?.count || 0) / calls.length) * 100).toFixed(1) : 0
+        conversionRate: (calls || []).length > 0 ? ((parseInt(appointments?.rows?.[0]?.count || 0) / (calls || []).length) * 100).toFixed(1) : 0
       },
       recentCalls
     });
