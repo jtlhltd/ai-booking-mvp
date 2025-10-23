@@ -236,12 +236,16 @@ router.post('/webhooks/vapi', async (req, res) => {
     // Check for structured output data from VAPI
     const structuredOutput = body.call?.structuredOutput || body.structuredOutput || body.structured_output;
     
+    // Debug: Log what VAPI is sending
+    console.log('[LOGISTICS DEBUG] Structured output:', JSON.stringify(structuredOutput, null, 2));
+    console.log('[LOGISTICS DEBUG] Transcript length:', transcript.length);
+    
     if (logisticsSheetId && (transcript || structuredOutput) && status === 'completed') {
       try {
         // Use structured output if available, otherwise fall back to transcript extraction
         let extracted;
         if (structuredOutput) {
-          console.log('[LOGISTICS] Using structured output data:', structuredOutput);
+          console.log('[LOGISTICS] Using structured output data:', JSON.stringify(structuredOutput, null, 2));
           // Transform structured output to match our expected format
           extracted = {
             email: structuredOutput.email || '',
@@ -267,7 +271,7 @@ router.post('/webhooks/vapi', async (req, res) => {
         const receptionistName = structuredOutput?.receptionistName || pickReceptionistName(transcript) || metadata.receptionistName || '';
         const callbackNeeded = structuredOutput?.callbackNeeded === 'Y' || /call\s*back|transfer|not\s*available|not\s*in|back\s*later|try\s*again/i.test(transcript) && !decisionMaker;
 
-        await sheets.appendLogistics(logisticsSheetId, {
+        const sheetData = {
           businessName,
           decisionMaker,
           phone: leadPhone,
@@ -288,9 +292,13 @@ router.post('/webhooks/vapi', async (req, res) => {
           callId,
           recordingUrl,
           transcriptSnippet: transcript.slice(0, 500)
-        });
+        };
+        
+        console.log('[LOGISTICS SHEET DATA] Writing to sheet:', JSON.stringify(sheetData, null, 2));
+        
+        await sheets.appendLogistics(logisticsSheetId, sheetData);
 
-        console.log('[LOGISTICS SHEET APPEND]', { callId, phone: leadPhone });
+        console.log('[LOGISTICS SHEET APPEND] Success', { callId, phone: leadPhone });
 
         // Email fallback notification for callback queue (per-tenant if available)
         const callbackInbox = tenant?.vapi?.callbackInboxEmail || process.env.CALLBACK_INBOX_EMAIL;
