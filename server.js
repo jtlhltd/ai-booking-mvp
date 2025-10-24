@@ -3458,6 +3458,282 @@ app.get('/api/admin/calls/insights', async (req, res) => {
   }
 });
 
+// Lead Scoring Automation Endpoints
+app.get('/api/admin/leads/scoring', async (req, res) => {
+  try {
+    const { limit = 50, sortBy = 'score', order = 'desc' } = req.query;
+    
+    const leads = await query(`
+      SELECT 
+        l.*,
+        COUNT(c.id) as call_count,
+        AVG(c.duration) as avg_duration,
+        AVG(c.quality_score) as avg_quality,
+        COUNT(m.id) as sms_count,
+        l.score,
+        l.engagement_score,
+        l.conversion_probability,
+        l.score_factors,
+        l.last_score_update
+      FROM leads l
+      LEFT JOIN calls c ON l.id = c.lead_id
+      LEFT JOIN messages m ON l.id = m.lead_id AND m.direction = 'outbound'
+      GROUP BY l.id
+      ORDER BY ${sortBy} ${order.toUpperCase()}
+      LIMIT $1
+    `, [limit]);
+    
+    res.json(leads.rows.map(lead => ({
+      id: lead.id,
+      name: lead.name,
+      phone: lead.phone,
+      email: lead.email,
+      source: lead.source,
+      score: lead.score || 50,
+      engagementScore: lead.engagement_score || 0,
+      conversionProbability: lead.conversion_probability || 0,
+      scoreFactors: lead.score_factors || {},
+      lastScoreUpdate: lead.last_score_update,
+      callCount: parseInt(lead.call_count) || 0,
+      avgDuration: parseFloat(lead.avg_duration) || 0,
+      avgQuality: parseFloat(lead.avg_quality) || 0,
+      smsCount: parseInt(lead.sms_count) || 0,
+      createdAt: lead.created_at,
+      tags: lead.tags
+    })));
+  } catch (error) {
+    console.error('Error getting lead scoring data:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/admin/leads/:leadId/score', async (req, res) => {
+  try {
+    const { leadId } = req.params;
+    
+    const result = await query('SELECT calculate_lead_score($1)', [leadId]);
+    const newScore = result.rows[0].calculate_lead_score;
+    
+    res.json({ 
+      success: true, 
+      leadId: parseInt(leadId),
+      newScore,
+      message: 'Lead score updated successfully'
+    });
+  } catch (error) {
+    console.error('Error updating lead score:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/admin/leads/scoring/update-all', async (req, res) => {
+  try {
+    const result = await query('SELECT update_all_lead_scores()');
+    const updatedCount = result.rows[0].update_all_lead_scores;
+    
+    res.json({ 
+      success: true, 
+      updatedCount,
+      message: `Updated scores for ${updatedCount} leads`
+    });
+  } catch (error) {
+    console.error('Error updating all lead scores:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/admin/leads/scoring/rules', async (req, res) => {
+  try {
+    const rules = await query(`
+      SELECT * FROM lead_scoring_rules 
+      WHERE is_active = true 
+      ORDER BY priority ASC, id ASC
+    `);
+    
+    res.json(rules.rows.map(rule => ({
+      id: rule.id,
+      ruleName: rule.rule_name,
+      ruleType: rule.rule_type,
+      conditionField: rule.condition_field,
+      conditionOperator: rule.condition_operator,
+      conditionValue: rule.condition_value,
+      scoreAdjustment: rule.score_adjustment,
+      priority: rule.priority,
+      isActive: rule.is_active,
+      createdAt: rule.created_at
+    })));
+  } catch (error) {
+    console.error('Error getting scoring rules:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/admin/leads/scoring/rules', async (req, res) => {
+  try {
+    const { 
+      ruleName, 
+      ruleType, 
+      conditionField, 
+      conditionOperator, 
+      conditionValue, 
+      scoreAdjustment, 
+      priority = 0 
+    } = req.body;
+    
+    if (!ruleName || !ruleType || !conditionField || !conditionOperator || !conditionValue || scoreAdjustment === undefined) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    
+    const result = await query(`
+      INSERT INTO lead_scoring_rules 
+      (rule_name, rule_type, condition_field, condition_operator, condition_value, score_adjustment, priority)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *
+    `, [ruleName, ruleType, conditionField, conditionOperator, conditionValue, scoreAdjustment, priority]);
+    
+    res.json({ 
+      success: true, 
+      rule: result.rows[0],
+      message: 'Scoring rule created successfully'
+    });
+  } catch (error) {
+    console.error('Error creating scoring rule:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/admin/leads/scoring/rules/:ruleId', async (req, res) => {
+  try {
+    const { ruleId } = req.params;
+    const { 
+      ruleName, 
+      ruleType, 
+      conditionField, 
+      conditionOperator, 
+      conditionValue, 
+      scoreAdjustment, 
+      priority,
+      isActive 
+    } = req.body;
+    
+    const result = await query(`
+      UPDATE lead_scoring_rules 
+      SET 
+        rule_name = COALESCE($2, rule_name),
+        rule_type = COALESCE($3, rule_type),
+        condition_field = COALESCE($4, condition_field),
+        condition_operator = COALESCE($5, condition_operator),
+        condition_value = COALESCE($6, condition_value),
+        score_adjustment = COALESCE($7, score_adjustment),
+        priority = COALESCE($8, priority),
+        is_active = COALESCE($9, is_active),
+        updated_at = NOW()
+      WHERE id = $1
+      RETURNING *
+    `, [ruleId, ruleName, ruleType, conditionField, conditionOperator, conditionValue, scoreAdjustment, priority, isActive]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Scoring rule not found' });
+    }
+    
+    res.json({ 
+      success: true, 
+      rule: result.rows[0],
+      message: 'Scoring rule updated successfully'
+    });
+  } catch (error) {
+    console.error('Error updating scoring rule:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/admin/leads/scoring/rules/:ruleId', async (req, res) => {
+  try {
+    const { ruleId } = req.params;
+    
+    const result = await query(`
+      UPDATE lead_scoring_rules 
+      SET is_active = false, updated_at = NOW()
+      WHERE id = $1
+      RETURNING *
+    `, [ruleId]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Scoring rule not found' });
+    }
+    
+    res.json({ 
+      success: true, 
+      message: 'Scoring rule deactivated successfully'
+    });
+  } catch (error) {
+    console.error('Error deactivating scoring rule:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/admin/leads/scoring/history/:leadId', async (req, res) => {
+  try {
+    const { leadId } = req.params;
+    const { limit = 20 } = req.query;
+    
+    const history = await query(`
+      SELECT * FROM lead_scoring_history 
+      WHERE lead_id = $1 
+      ORDER BY created_at DESC 
+      LIMIT $2
+    `, [leadId, limit]);
+    
+    res.json(history.rows.map(record => ({
+      id: record.id,
+      leadId: record.lead_id,
+      oldScore: record.old_score,
+      newScore: record.new_score,
+      scoreChange: record.score_change,
+      scoringFactors: record.scoring_factors,
+      triggeredRules: record.triggered_rules,
+      createdAt: record.created_at
+    })));
+  } catch (error) {
+    console.error('Error getting scoring history:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/admin/leads/scoring/analytics', async (req, res) => {
+  try {
+    const analytics = await query(`
+      SELECT 
+        COUNT(*) as total_leads,
+        AVG(score) as avg_score,
+        AVG(engagement_score) as avg_engagement,
+        AVG(conversion_probability) as avg_conversion_prob,
+        COUNT(CASE WHEN score >= 80 THEN 1 END) as high_score_leads,
+        COUNT(CASE WHEN score BETWEEN 50 AND 79 THEN 1 END) as medium_score_leads,
+        COUNT(CASE WHEN score < 50 THEN 1 END) as low_score_leads,
+        COUNT(CASE WHEN engagement_score >= 70 THEN 1 END) as high_engagement_leads
+      FROM leads
+      WHERE created_at >= NOW() - INTERVAL '30 days'
+    `);
+    
+    const row = analytics.rows[0];
+    res.json({
+      totalLeads: parseInt(row.total_leads) || 0,
+      avgScore: parseFloat(row.avg_score) || 0,
+      avgEngagement: parseFloat(row.avg_engagement) || 0,
+      avgConversionProb: parseFloat(row.avg_conversion_prob) || 0,
+      highScoreLeads: parseInt(row.high_score_leads) || 0,
+      mediumScoreLeads: parseInt(row.medium_score_leads) || 0,
+      lowScoreLeads: parseInt(row.low_score_leads) || 0,
+      highEngagementLeads: parseInt(row.high_engagement_leads) || 0,
+      highScorePercentage: row.total_leads > 0 ? ((parseInt(row.high_score_leads) / parseInt(row.total_leads)) * 100).toFixed(1) : 0
+    });
+  } catch (error) {
+    console.error('Error getting scoring analytics:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Social Media Integration & Monitoring Endpoints
 app.get('/api/admin/social/profiles', async (req, res) => {
   try {

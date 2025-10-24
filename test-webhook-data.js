@@ -147,3 +147,4 @@ function simulateExtraction() {
 
 simulateExtraction();
 
+
