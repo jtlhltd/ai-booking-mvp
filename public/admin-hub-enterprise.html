@@ -248,6 +248,17 @@
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
         }
 
+        .btn-sm {
+            padding: 8px 16px;
+            font-size: 0.85rem;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
         .data-table {
             width: 100%;
             border-collapse: collapse;
@@ -848,6 +859,7 @@
             <div class="nav-tab active" onclick="showSection('overview')">📊 Overview</div>
             <div class="nav-tab" onclick="showSection('clients')">👥 Clients</div>
             <div class="nav-tab" onclick="showSection('calls')">📞 Calls</div>
+            <div class="nav-tab" onclick="showSection('reminders')">⏰ Reminders</div>
             <div class="nav-tab" onclick="showSection('analytics')">📈 Analytics</div>
             <div class="nav-tab" onclick="showSection('insights')">🧠 AI Insights</div>
             <div class="nav-tab" onclick="showSection('forecasts')">🔮 Forecasts</div>
@@ -1053,6 +1065,93 @@
                     </tr>
                 </thead>
                 <tbody id="callsBody"></tbody>
+            </table>
+        </div>
+
+        <!-- Reminders Section -->
+        <div id="reminders" class="content-section">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3 id="totalReminders">-</h3>
+                    <p>Total Reminders</p>
+                    <div class="trend" id="remindersTrend">↗️ +8%</div>
+                </div>
+                <div class="stat-card">
+                    <h3 id="sentReminders">-</h3>
+                    <p>Sent Successfully</p>
+                    <div class="trend" id="sentTrend">✅ 95%</div>
+                </div>
+                <div class="stat-card">
+                    <h3 id="pendingReminders">-</h3>
+                    <p>Pending</p>
+                    <div class="trend" id="pendingTrend">⏰ Active</div>
+                </div>
+                <div class="stat-card">
+                    <h3 id="failedReminders">-</h3>
+                    <p>Failed</p>
+                    <div class="trend" id="failedTrend">⚠️ 2%</div>
+                </div>
+            </div>
+
+            <div class="advanced-filters">
+                <div class="filter-row">
+                    <div class="filter-group">
+                        <label class="filter-label">Search</label>
+                        <input type="text" class="search-input" id="reminderSearch" placeholder="Search reminders..." onkeyup="searchReminders()">
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label">Status</label>
+                        <select class="filter-select" id="reminderStatusFilter" onchange="filterReminders()">
+                            <option value="">All Status</option>
+                            <option value="pending">Pending</option>
+                            <option value="sent">Sent</option>
+                            <option value="failed">Failed</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label">Type</label>
+                        <select class="filter-select" id="reminderTypeFilter" onchange="filterReminders()">
+                            <option value="">All Types</option>
+                            <option value="confirmation">Confirmation</option>
+                            <option value="24hour">24-Hour</option>
+                            <option value="1hour">1-Hour</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label">Client</label>
+                        <select class="filter-select" id="reminderClientFilter" onchange="filterReminders()">
+                            <option value="">All Clients</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="export-actions">
+                <button class="btn btn-success" onclick="exportData('reminders', 'csv')">📊 Export CSV</button>
+                <button class="btn btn-success" onclick="exportData('reminders', 'json')">📄 Export JSON</button>
+                <button class="btn btn-primary" onclick="sendPendingReminders()">📤 Send Pending</button>
+            </div>
+
+            <div class="loading" id="remindersLoading">
+                <div class="spinner"></div>
+                Loading reminders...
+            </div>
+
+            <table class="data-table" id="remindersTable" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>Client</th>
+                        <th>Phone</th>
+                        <th>Type</th>
+                        <th>Appointment Time</th>
+                        <th>Scheduled For</th>
+                        <th>Status</th>
+                        <th>Sent At</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="remindersBody"></tbody>
             </table>
         </div>
 
@@ -1704,6 +1803,9 @@
                 case 'calls':
                     loadCalls();
                     break;
+                case 'reminders':
+                    loadReminders();
+                    break;
                 case 'analytics':
                     loadAnalytics();
                     break;
@@ -1777,6 +1879,239 @@
             } catch (error) {
                 console.error('Error loading calls:', error);
             }
+        }
+
+        async function loadReminders() {
+            try {
+                const response = await fetch('/api/admin/reminders');
+                const data = await response.json();
+                updateRemindersTable(data);
+                
+                // Load stats
+                const statsResponse = await fetch('/api/admin/reminders/stats');
+                const stats = await statsResponse.json();
+                updateRemindersStats(stats);
+                
+                // Populate client filter
+                populateReminderClientFilter();
+            } catch (error) {
+                console.error('Error loading reminders:', error);
+            }
+        }
+
+        function updateRemindersStats(stats) {
+            document.getElementById('totalReminders').textContent = stats.total || 0;
+            document.getElementById('sentReminders').textContent = stats.sent || 0;
+            document.getElementById('pendingReminders').textContent = stats.pending || 0;
+            document.getElementById('failedReminders').textContent = stats.failed || 0;
+            
+            // Update trends
+            document.getElementById('sentTrend').textContent = `✅ ${stats.successRate}%`;
+            document.getElementById('pendingTrend').textContent = stats.pending > 0 ? '⏰ Active' : '✅ Complete';
+            document.getElementById('failedTrend').textContent = `⚠️ ${stats.failed} failed`;
+        }
+
+        function updateRemindersTable(reminders) {
+            const tbody = document.getElementById('remindersBody');
+            const table = document.getElementById('remindersTable');
+            const loading = document.getElementById('remindersLoading');
+            
+            if (reminders.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 40px; color: #718096;">No reminders found</td></tr>';
+            } else {
+                tbody.innerHTML = reminders.map(reminder => `
+                    <tr>
+                        <td>${reminder.clientName || reminder.clientKey}</td>
+                        <td>${reminder.leadPhone}</td>
+                        <td>
+                            <span class="status-badge ${getReminderTypeClass(reminder.reminderType)}">
+                                ${getReminderTypeLabel(reminder.reminderType)}
+                            </span>
+                        </td>
+                        <td>${formatDateTime(reminder.appointmentTime)}</td>
+                        <td>${formatDateTime(reminder.scheduledFor)}</td>
+                        <td>
+                            <span class="status-badge ${getReminderStatusClass(reminder.status)}">
+                                ${reminder.status}
+                            </span>
+                        </td>
+                        <td>${reminder.sentAt ? formatDateTime(reminder.sentAt) : '-'}</td>
+                        <td>
+                            <div class="action-buttons">
+                                ${reminder.status === 'pending' ? 
+                                    `<button class="btn btn-sm btn-primary" onclick="sendReminder(${reminder.id})">📤 Send</button>` : 
+                                    ''
+                                }
+                                ${reminder.status === 'pending' || reminder.status === 'failed' ? 
+                                    `<button class="btn btn-sm btn-danger" onclick="cancelReminder(${reminder.id})">❌ Cancel</button>` : 
+                                    ''
+                                }
+                                ${reminder.smsSid ? 
+                                    `<button class="btn btn-sm btn-success" onclick="viewSMS('${reminder.smsSid}')">📱 View SMS</button>` : 
+                                    ''
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+            }
+            
+            loading.style.display = 'none';
+            table.style.display = 'table';
+        }
+
+        function getReminderTypeClass(type) {
+            switch(type) {
+                case 'confirmation': return 'status-active';
+                case '24hour': return 'status-pending';
+                case '1hour': return 'status-pending';
+                default: return 'status-inactive';
+            }
+        }
+
+        function getReminderTypeLabel(type) {
+            switch(type) {
+                case 'confirmation': return 'Confirmation';
+                case '24hour': return '24-Hour';
+                case '1hour': return '1-Hour';
+                default: return type;
+            }
+        }
+
+        function getReminderStatusClass(status) {
+            switch(status) {
+                case 'sent': return 'status-active';
+                case 'pending': return 'status-pending';
+                case 'failed': return 'status-inactive';
+                case 'cancelled': return 'status-inactive';
+                default: return 'status-inactive';
+            }
+        }
+
+        async function sendReminder(reminderId) {
+            try {
+                const response = await fetch('/api/admin/reminders/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reminderId })
+                });
+                
+                if (response.ok) {
+                    showNotification('Reminder sent successfully!', 'success');
+                    loadReminders(); // Refresh data
+                } else {
+                    const error = await response.json();
+                    showNotification(`Failed to send reminder: ${error.error}`, 'error');
+                }
+            } catch (error) {
+                showNotification(`Error sending reminder: ${error.message}`, 'error');
+            }
+        }
+
+        async function cancelReminder(reminderId) {
+            if (!confirm('Are you sure you want to cancel this reminder?')) return;
+            
+            try {
+                const response = await fetch(`/api/admin/reminders/${reminderId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    showNotification('Reminder cancelled successfully!', 'success');
+                    loadReminders(); // Refresh data
+                } else {
+                    const error = await response.json();
+                    showNotification(`Failed to cancel reminder: ${error.error}`, 'error');
+                }
+            } catch (error) {
+                showNotification(`Error cancelling reminder: ${error.message}`, 'error');
+            }
+        }
+
+        async function sendPendingReminders() {
+            if (!confirm('Send all pending reminders now?')) return;
+            
+            try {
+                const response = await fetch('/api/admin/reminders/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reminderId: 'all' })
+                });
+                
+                if (response.ok) {
+                    showNotification('All pending reminders sent!', 'success');
+                    loadReminders(); // Refresh data
+                } else {
+                    const error = await response.json();
+                    showNotification(`Failed to send reminders: ${error.error}`, 'error');
+                }
+            } catch (error) {
+                showNotification(`Error sending reminders: ${error.message}`, 'error');
+            }
+        }
+
+        function searchReminders() {
+            const searchTerm = document.getElementById('reminderSearch').value.toLowerCase();
+            const rows = document.querySelectorAll('#remindersBody tr');
+            
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(searchTerm) ? '' : 'none';
+            });
+        }
+
+        function filterReminders() {
+            const statusFilter = document.getElementById('reminderStatusFilter').value;
+            const typeFilter = document.getElementById('reminderTypeFilter').value;
+            const clientFilter = document.getElementById('reminderClientFilter').value;
+            
+            const rows = document.querySelectorAll('#remindersBody tr');
+            
+            rows.forEach(row => {
+                const statusBadge = row.querySelector('.status-badge');
+                const typeBadge = row.cells[2].querySelector('.status-badge');
+                const clientName = row.cells[0].textContent;
+                
+                let show = true;
+                
+                if (statusFilter && statusBadge.textContent.toLowerCase() !== statusFilter.toLowerCase()) {
+                    show = false;
+                }
+                
+                if (typeFilter && typeBadge.textContent.toLowerCase() !== typeFilter.toLowerCase()) {
+                    show = false;
+                }
+                
+                if (clientFilter && !clientName.toLowerCase().includes(clientFilter.toLowerCase())) {
+                    show = false;
+                }
+                
+                row.style.display = show ? '' : 'none';
+            });
+        }
+
+        async function populateReminderClientFilter() {
+            try {
+                const response = await fetch('/api/admin/clients');
+                const clients = await response.json();
+                
+                const select = document.getElementById('reminderClientFilter');
+                select.innerHTML = '<option value="">All Clients</option>';
+                
+                clients.forEach(client => {
+                    const option = document.createElement('option');
+                    option.value = client.name;
+                    option.textContent = client.name;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error populating client filter:', error);
+            }
+        }
+
+        function viewSMS(smsSid) {
+            // Open Twilio console or show SMS details
+            window.open(`https://console.twilio.com/us1/monitor/logs/messages/${smsSid}`, '_blank');
         }
 
         async function loadAnalytics() {
