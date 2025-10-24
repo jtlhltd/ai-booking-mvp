@@ -1017,6 +1017,7 @@
             <div class="nav-tab" onclick="showSection('leads')">🎯 Lead Scoring</div>
             <div class="nav-tab" onclick="showSection('appointments')">📅 Appointments</div>
             <div class="nav-tab" onclick="showSection('followups')">🔄 Follow-ups</div>
+            <div class="nav-tab" onclick="showSection('reports')">📊 Reports</div>
             <div class="nav-tab" onclick="showSection('analytics')">📈 Analytics</div>
             <div class="nav-tab" onclick="showSection('insights')">🧠 AI Insights</div>
             <div class="nav-tab" onclick="showSection('forecasts')">🔮 Forecasts</div>
@@ -1722,6 +1723,269 @@
             </div>
         </div>
 
+        <!-- Reports Section -->
+        <div id="reports" class="content-section">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3 id="totalReports">-</h3>
+                    <p>Total Reports</p>
+                    <div class="trend" id="reportsTrend">📊 Created</div>
+                </div>
+                <div class="stat-card">
+                    <h3 id="scheduledReports">-</h3>
+                    <p>Scheduled Reports</p>
+                    <div class="trend" id="scheduledTrend">⏰ Auto</div>
+                </div>
+                <div class="stat-card">
+                    <h3 id="totalExecutions">-</h3>
+                    <p>Total Executions</p>
+                    <div class="trend" id="executionsTrend">⚡ Live</div>
+                </div>
+                <div class="stat-card">
+                    <h3 id="successRate">-</h3>
+                    <p>Success Rate</p>
+                    <div class="trend" id="successTrend">✅ 95%</div>
+                </div>
+            </div>
+
+            <div class="tabs-container">
+                <button class="tab-btn active" onclick="showReportTab('reports')">📋 Reports</button>
+                <button class="tab-btn" onclick="showReportTab('templates')">📝 Templates</button>
+                <button class="tab-btn" onclick="showReportTab('executions')">⚡ Executions</button>
+                <button class="tab-btn" onclick="showReportTab('builder')">🔧 Builder</button>
+                <button class="tab-btn" onclick="showReportTab('analytics')">📊 Analytics</button>
+            </div>
+
+            <!-- Reports Tab -->
+            <div id="reportReports" class="report-tab">
+                <div class="export-actions">
+                    <button class="btn btn-primary" onclick="createReport()">➕ New Report</button>
+                    <button class="btn btn-success" onclick="exportData('reports', 'csv')">📊 Export CSV</button>
+                    <button class="btn btn-warning" onclick="processScheduledReports()">🔄 Process Scheduled</button>
+                </div>
+
+                <div class="advanced-filters">
+                    <div class="filter-row">
+                        <div class="filter-group">
+                            <label class="filter-label">Search</label>
+                            <input type="text" class="search-input" id="reportSearch" placeholder="Search reports..." onkeyup="searchReports()">
+                        </div>
+                        <div class="filter-group">
+                            <label class="filter-label">Category</label>
+                            <select class="filter-select" id="reportCategoryFilter" onchange="filterReports()">
+                                <option value="">All Categories</option>
+                                <option value="leads">Leads</option>
+                                <option value="calls">Calls</option>
+                                <option value="appointments">Appointments</option>
+                                <option value="followups">Follow-ups</option>
+                                <option value="revenue">Revenue</option>
+                                <option value="clients">Clients</option>
+                                <option value="system">System</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label class="filter-label">Type</label>
+                            <select class="filter-select" id="reportTypeFilter" onchange="filterReports()">
+                                <option value="">All Types</option>
+                                <option value="dashboard">Dashboard</option>
+                                <option value="analytics">Analytics</option>
+                                <option value="performance">Performance</option>
+                                <option value="custom">Custom</option>
+                                <option value="scheduled">Scheduled</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="loading" id="reportsLoading">
+                    <div class="spinner"></div>
+                    Loading reports...
+                </div>
+
+                <table class="data-table" id="reportsTable" style="display: none;">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Category</th>
+                            <th>Type</th>
+                            <th>Executions</th>
+                            <th>Success Rate</th>
+                            <th>Scheduled</th>
+                            <th>Last Run</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reportsBody"></tbody>
+                </table>
+            </div>
+
+            <!-- Templates Tab -->
+            <div id="reportTemplates" class="report-tab" style="display: none;">
+                <div class="export-actions">
+                    <button class="btn btn-primary" onclick="createTemplate()">➕ New Template</button>
+                    <button class="btn btn-success" onclick="exportData('templates', 'csv')">📊 Export CSV</button>
+                </div>
+
+                <div class="loading" id="templatesLoading">
+                    <div class="spinner"></div>
+                    Loading templates...
+                </div>
+
+                <table class="data-table" id="templatesTable" style="display: none;">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Category</th>
+                            <th>Type</th>
+                            <th>Usage Count</th>
+                            <th>System</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="templatesBody"></tbody>
+                </table>
+            </div>
+
+            <!-- Executions Tab -->
+            <div id="reportExecutions" class="report-tab" style="display: none;">
+                <div class="advanced-filters">
+                    <div class="filter-row">
+                        <div class="filter-group">
+                            <label class="filter-label">Search</label>
+                            <input type="text" class="search-input" id="executionSearch" placeholder="Search executions..." onkeyup="searchExecutions()">
+                        </div>
+                        <div class="filter-group">
+                            <label class="filter-label">Status</label>
+                            <select class="filter-select" id="executionStatusFilter" onchange="filterExecutions()">
+                                <option value="">All Status</option>
+                                <option value="running">Running</option>
+                                <option value="completed">Completed</option>
+                                <option value="failed">Failed</option>
+                                <option value="cancelled">Cancelled</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label class="filter-label">Type</label>
+                            <select class="filter-select" id="executionTypeFilter" onchange="filterExecutions()">
+                                <option value="">All Types</option>
+                                <option value="manual">Manual</option>
+                                <option value="scheduled">Scheduled</option>
+                                <option value="api">API</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="loading" id="executionsLoading">
+                    <div class="spinner"></div>
+                    Loading executions...
+                </div>
+
+                <table class="data-table" id="executionsTable" style="display: none;">
+                    <thead>
+                        <tr>
+                            <th>Report</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Started</th>
+                            <th>Duration</th>
+                            <th>Records</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="executionsBody"></tbody>
+                </table>
+            </div>
+
+            <!-- Builder Tab -->
+            <div id="reportBuilder" class="report-tab" style="display: none;">
+                <div class="builder-container">
+                    <div class="builder-sidebar">
+                        <h3>📊 Data Sources</h3>
+                        <div class="data-source-list">
+                            <div class="data-source" draggable="true" data-source="leads">
+                                <span class="source-icon">👥</span>
+                                <span class="source-name">Leads</span>
+                            </div>
+                            <div class="data-source" draggable="true" data-source="calls">
+                                <span class="source-icon">📞</span>
+                                <span class="source-name">Calls</span>
+                            </div>
+                            <div class="data-source" draggable="true" data-source="appointments">
+                                <span class="source-icon">📅</span>
+                                <span class="source-name">Appointments</span>
+                            </div>
+                            <div class="data-source" draggable="true" data-source="followups">
+                                <span class="source-icon">🔄</span>
+                                <span class="source-name">Follow-ups</span>
+                            </div>
+                            <div class="data-source" draggable="true" data-source="revenue">
+                                <span class="source-icon">💰</span>
+                                <span class="source-name">Revenue</span>
+                            </div>
+                        </div>
+
+                        <h3>📈 Chart Types</h3>
+                        <div class="chart-type-list">
+                            <div class="chart-type" draggable="true" data-chart="bar">
+                                <span class="chart-icon">📊</span>
+                                <span class="chart-name">Bar Chart</span>
+                            </div>
+                            <div class="chart-type" draggable="true" data-chart="line">
+                                <span class="chart-icon">📈</span>
+                                <span class="chart-name">Line Chart</span>
+                            </div>
+                            <div class="chart-type" draggable="true" data-chart="pie">
+                                <span class="chart-icon">🥧</span>
+                                <span class="chart-name">Pie Chart</span>
+                            </div>
+                            <div class="chart-type" draggable="true" data-chart="funnel">
+                                <span class="chart-icon">🔻</span>
+                                <span class="chart-name">Funnel</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="builder-canvas">
+                        <div class="canvas-header">
+                            <h3>Report Builder</h3>
+                            <div class="canvas-actions">
+                                <button class="btn btn-primary" onclick="saveReport()">💾 Save Report</button>
+                                <button class="btn btn-success" onclick="previewReport()">👁️ Preview</button>
+                                <button class="btn btn-warning" onclick="executeReport()">▶️ Execute</button>
+                            </div>
+                        </div>
+                        <div class="canvas-area" id="reportCanvas">
+                            <div class="canvas-placeholder">
+                                <p>Drag data sources and chart types here to build your report</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analytics Tab -->
+            <div id="reportAnalytics" class="report-tab" style="display: none;">
+                <div class="chart-container">
+                    <div class="chart-title">Report Performance by Category</div>
+                    <canvas id="reportPerformanceChart" width="400" height="200"></canvas>
+                </div>
+
+                <div class="chart-container">
+                    <div class="chart-title">Execution Trends</div>
+                    <canvas id="reportExecutionTrendsChart" width="400" height="200"></canvas>
+                </div>
+
+                <div class="insights-panel">
+                    <h3>📊 Report Insights</h3>
+                    <div id="reportInsightsContent">
+                        <div class="loading">Loading insights...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Analytics Section -->
         <div id="analytics" class="content-section">
             <div class="tabs-container">
@@ -2381,6 +2645,9 @@
                     break;
                 case 'followups':
                     loadFollowups();
+                    break;
+                case 'reports':
+                    loadReports();
                     break;
                 case 'analytics':
                     loadAnalytics();
