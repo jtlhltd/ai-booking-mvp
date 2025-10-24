@@ -319,6 +319,100 @@
             font-size: 0.8rem;
         }
 
+        .chart-container {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .chart-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #2d3748;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .metric-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: #f7fafc;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .metric-label {
+            font-weight: 500;
+            color: #4a5568;
+        }
+
+        .metric-value {
+            font-weight: 700;
+            color: #2d3748;
+            font-size: 1.1rem;
+        }
+
+        .insights-panel, .recommendations-panel {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .insights-panel h3, .recommendations-panel h3 {
+            margin-bottom: 15px;
+            color: #2d3748;
+            font-size: 1.2rem;
+        }
+
+        .insight-item, .recommendation-item {
+            background: #f7fafc;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 4px solid #667eea;
+        }
+
+        .insight-item h4 {
+            margin-bottom: 8px;
+            color: #2d3748;
+            font-size: 1rem;
+        }
+
+        .insight-item p, .recommendation-item p {
+            margin: 5px 0;
+            color: #4a5568;
+            line-height: 1.5;
+        }
+
+        .appointment-tab {
+            display: none;
+        }
+
+        .appointment-tab.active {
+            display: block;
+        }
+
+        .lead-info {
+            line-height: 1.4;
+        }
+
+        .lead-info small {
+            color: #718096;
+            font-size: 0.8rem;
+        }
+
         .data-table {
             width: 100%;
             border-collapse: collapse;
@@ -921,6 +1015,7 @@
             <div class="nav-tab" onclick="showSection('calls')">📞 Calls</div>
             <div class="nav-tab" onclick="showSection('reminders')">⏰ Reminders</div>
             <div class="nav-tab" onclick="showSection('leads')">🎯 Lead Scoring</div>
+            <div class="nav-tab" onclick="showSection('appointments')">📅 Appointments</div>
             <div class="nav-tab" onclick="showSection('analytics')">📈 Analytics</div>
             <div class="nav-tab" onclick="showSection('insights')">🧠 AI Insights</div>
             <div class="nav-tab" onclick="showSection('forecasts')">🔮 Forecasts</div>
@@ -1307,6 +1402,164 @@
                 </thead>
                 <tbody id="leadsBody"></tbody>
             </table>
+        </div>
+
+        <!-- Appointments Section -->
+        <div id="appointments" class="content-section">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3 id="totalAppointments">-</h3>
+                    <p>Total Appointments</p>
+                    <div class="trend" id="appointmentsTrend">📅 Active</div>
+                </div>
+                <div class="stat-card">
+                    <h3 id="completedAppointments">-</h3>
+                    <p>Completed</p>
+                    <div class="trend" id="completedTrend">✅ 85%</div>
+                </div>
+                <div class="stat-card">
+                    <h3 id="noShowRate">-</h3>
+                    <p>No-Show Rate</p>
+                    <div class="trend" id="noShowTrend">⚠️ 12%</div>
+                </div>
+                <div class="stat-card">
+                    <h3 id="totalRevenue">-</h3>
+                    <p>Total Revenue</p>
+                    <div class="trend" id="revenueTrend">💰 £2,450</div>
+                </div>
+            </div>
+
+            <div class="tabs-container">
+                <button class="tab-btn active" onclick="showAppointmentTab('overview')">📊 Overview</button>
+                <button class="tab-btn" onclick="showAppointmentTab('funnel')">🔄 Funnel</button>
+                <button class="tab-btn" onclick="showAppointmentTab('insights')">💡 Insights</button>
+                <button class="tab-btn" onclick="showAppointmentTab('list')">📋 List</button>
+            </div>
+
+            <!-- Appointment Overview Tab -->
+            <div id="appointmentOverview" class="appointment-tab">
+                <div class="chart-container">
+                    <div class="chart-title">Hourly Distribution</div>
+                    <canvas id="hourlyChart" width="400" height="200"></canvas>
+                </div>
+
+                <div class="chart-container">
+                    <div class="chart-title">Daily Distribution</div>
+                    <canvas id="dailyChart" width="400" height="200"></canvas>
+                </div>
+
+                <div class="chart-container">
+                    <div class="chart-title">Performance Metrics</div>
+                    <div id="performanceMetrics" class="metrics-grid">
+                        <div class="metric-item">
+                            <span class="metric-label">Peak Hours (9-17)</span>
+                            <span class="metric-value" id="peakHourCount">-</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Off-Peak Hours</span>
+                            <span class="metric-value" id="offPeakCount">-</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Weekend Appointments</span>
+                            <span class="metric-value" id="weekendCount">-</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Avg Duration</span>
+                            <span class="metric-value" id="avgDuration">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Appointment Funnel Tab -->
+            <div id="appointmentFunnel" class="appointment-tab" style="display: none;">
+                <div class="chart-container">
+                    <div class="chart-title">Conversion Funnel</div>
+                    <canvas id="funnelChart" width="400" height="300"></canvas>
+                </div>
+
+                <div class="chart-container">
+                    <div class="chart-title">Daily Funnel Trends</div>
+                    <canvas id="funnelTrendsChart" width="400" height="200"></canvas>
+                </div>
+            </div>
+
+            <!-- Appointment Insights Tab -->
+            <div id="appointmentInsights" class="appointment-tab" style="display: none;">
+                <div class="insights-panel">
+                    <h3>🎯 AI-Powered Insights</h3>
+                    <div id="insightsContent">
+                        <div class="loading">Loading insights...</div>
+                    </div>
+                </div>
+
+                <div class="recommendations-panel">
+                    <h3>💡 Recommendations</h3>
+                    <div id="recommendationsContent">
+                        <div class="loading">Loading recommendations...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Appointment List Tab -->
+            <div id="appointmentList" class="appointment-tab" style="display: none;">
+                <div class="advanced-filters">
+                    <div class="filter-row">
+                        <div class="filter-group">
+                            <label class="filter-label">Search</label>
+                            <input type="text" class="search-input" id="appointmentSearch" placeholder="Search appointments..." onkeyup="searchAppointments()">
+                        </div>
+                        <div class="filter-group">
+                            <label class="filter-label">Status</label>
+                            <select class="filter-select" id="appointmentStatusFilter" onchange="filterAppointments()">
+                                <option value="">All Status</option>
+                                <option value="scheduled">Scheduled</option>
+                                <option value="confirmed">Confirmed</option>
+                                <option value="completed">Completed</option>
+                                <option value="no_show">No Show</option>
+                                <option value="cancelled">Cancelled</option>
+                                <option value="rescheduled">Rescheduled</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label class="filter-label">Date Range</label>
+                            <input type="date" class="filter-select" id="appointmentDateFrom" onchange="filterAppointments()">
+                        </div>
+                        <div class="filter-group">
+                            <label class="filter-label">To</label>
+                            <input type="date" class="filter-select" id="appointmentDateTo" onchange="filterAppointments()">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="export-actions">
+                    <button class="btn btn-success" onclick="exportData('appointments', 'csv')">📊 Export CSV</button>
+                    <button class="btn btn-success" onclick="exportData('appointments', 'json')">📄 Export JSON</button>
+                    <button class="btn btn-primary" onclick="updateFunnel()">🔄 Update Funnel</button>
+                </div>
+
+                <div class="loading" id="appointmentsLoading">
+                    <div class="spinner"></div>
+                    Loading appointments...
+                </div>
+
+                <table class="data-table" id="appointmentsTable" style="display: none;">
+                    <thead>
+                        <tr>
+                            <th>Client</th>
+                            <th>Lead</th>
+                            <th>Appointment Time</th>
+                            <th>Duration</th>
+                            <th>Status</th>
+                            <th>Outcome</th>
+                            <th>Revenue</th>
+                            <th>Service</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="appointmentsBody"></tbody>
+                </table>
+            </div>
         </div>
 
         <!-- Analytics Section -->
@@ -1963,6 +2216,9 @@
                 case 'leads':
                     loadLeads();
                     break;
+                case 'appointments':
+                    loadAppointments();
+                    break;
                 case 'analytics':
                     loadAnalytics();
                     break;
@@ -2527,6 +2783,326 @@
             
             // Re-append sorted rows
             rows.forEach(row => tbody.appendChild(row));
+        }
+
+        async function loadAppointments() {
+            try {
+                const response = await fetch('/api/admin/appointments/analytics');
+                const data = await response.json();
+                updateAppointmentStats(data.metrics);
+                updateAppointmentCharts(data);
+                loadAppointmentInsights();
+            } catch (error) {
+                console.error('Error loading appointments:', error);
+            }
+        }
+
+        function updateAppointmentStats(metrics) {
+            document.getElementById('totalAppointments').textContent = metrics.totalAppointments || 0;
+            document.getElementById('completedAppointments').textContent = metrics.completedAppointments || 0;
+            document.getElementById('noShowRate').textContent = (metrics.noShowRate || 0).toFixed(1) + '%';
+            document.getElementById('totalRevenue').textContent = '£' + (metrics.totalRevenue || 0).toFixed(0);
+            
+            // Update trends
+            document.getElementById('completedTrend').textContent = `✅ ${(metrics.completionRate || 0).toFixed(1)}%`;
+            document.getElementById('noShowTrend').textContent = `⚠️ ${(metrics.noShowRate || 0).toFixed(1)}%`;
+            document.getElementById('revenueTrend').textContent = `💰 £${(metrics.totalRevenue || 0).toFixed(0)}`;
+            
+            // Update performance metrics
+            document.getElementById('peakHourCount').textContent = metrics.peakHourAppointments || 0;
+            document.getElementById('offPeakCount').textContent = metrics.offPeakAppointments || 0;
+            document.getElementById('weekendCount').textContent = metrics.weekendAppointments || 0;
+            document.getElementById('avgDuration').textContent = (metrics.avgDuration || 0).toFixed(0) + ' min';
+        }
+
+        function updateAppointmentCharts(data) {
+            // Hourly Distribution Chart
+            const hourlyCtx = document.getElementById('hourlyChart').getContext('2d');
+            new Chart(hourlyCtx, {
+                type: 'bar',
+                data: {
+                    labels: data.hourlyDistribution.map(h => h.hour + ':00'),
+                    datasets: [{
+                        label: 'Total Appointments',
+                        data: data.hourlyDistribution.map(h => h.totalAppointments),
+                        backgroundColor: 'rgba(102, 126, 234, 0.6)',
+                        borderColor: 'rgba(102, 126, 234, 1)',
+                        borderWidth: 1
+                    }, {
+                        label: 'Completed',
+                        data: data.hourlyDistribution.map(h => h.completed),
+                        backgroundColor: 'rgba(72, 187, 120, 0.6)',
+                        borderColor: 'rgba(72, 187, 120, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+
+            // Daily Distribution Chart
+            const dailyCtx = document.getElementById('dailyChart').getContext('2d');
+            new Chart(dailyCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: data.dailyDistribution.map(d => d.dayName),
+                    datasets: [{
+                        data: data.dailyDistribution.map(d => d.totalAppointments),
+                        backgroundColor: [
+                            'rgba(102, 126, 234, 0.8)',
+                            'rgba(72, 187, 120, 0.8)',
+                            'rgba(237, 137, 54, 0.8)',
+                            'rgba(245, 101, 101, 0.8)',
+                            'rgba(147, 51, 234, 0.8)',
+                            'rgba(34, 197, 94, 0.8)',
+                            'rgba(251, 146, 60, 0.8)'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'bottom' }
+                    }
+                }
+            });
+
+            // Funnel Chart
+            const funnelCtx = document.getElementById('funnelChart').getContext('2d');
+            const funnelData = data.funnel.length > 0 ? data.funnel[0] : {
+                leadsGenerated: 0,
+                callsMade: 0,
+                appointmentsScheduled: 0,
+                appointmentsConfirmed: 0,
+                appointmentsCompleted: 0
+            };
+            
+            new Chart(funnelCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Leads', 'Calls', 'Scheduled', 'Confirmed', 'Completed'],
+                    datasets: [{
+                        label: 'Conversion Funnel',
+                        data: [
+                            funnelData.leadsGenerated,
+                            funnelData.callsMade,
+                            funnelData.appointmentsScheduled,
+                            funnelData.appointmentsConfirmed,
+                            funnelData.appointmentsCompleted
+                        ],
+                        backgroundColor: [
+                            'rgba(102, 126, 234, 0.8)',
+                            'rgba(72, 187, 120, 0.8)',
+                            'rgba(237, 137, 54, 0.8)',
+                            'rgba(245, 101, 101, 0.8)',
+                            'rgba(147, 51, 234, 0.8)'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        async function loadAppointmentInsights() {
+            try {
+                const response = await fetch('/api/admin/appointments/insights');
+                const insights = await response.json();
+                
+                // Update insights content
+                const insightsContent = document.getElementById('insightsContent');
+                insightsContent.innerHTML = `
+                    <div class="insight-item">
+                        <h4>📊 Performance Summary</h4>
+                        <p>No-show rate: <strong>${insights.avgNoShowRate.toFixed(1)}%</strong> 
+                        (Industry benchmark: ${insights.industryBenchmark}%)</p>
+                        <p>Performance vs benchmark: <strong>${insights.performanceVsBenchmark > 0 ? '+' : ''}${insights.performanceVsBenchmark.toFixed(1)}%</strong></p>
+                    </div>
+                    <div class="insight-item">
+                        <h4>⏰ Best Performing Times</h4>
+                        <p>Best hour: <strong>${insights.bestHour || 'N/A'}:00</strong></p>
+                        <p>Best day: <strong>${insights.bestDay !== null ? ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][insights.bestDay] : 'N/A'}</strong></p>
+                    </div>
+                    <div class="insight-item">
+                        <h4>⚠️ Areas for Improvement</h4>
+                        <p>Worst hour: <strong>${insights.worstHour || 'N/A'}:00</strong></p>
+                        <p>Worst day: <strong>${insights.worstDay !== null ? ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][insights.worstDay] : 'N/A'}</strong></p>
+                    </div>
+                `;
+                
+                // Update recommendations
+                const recommendationsContent = document.getElementById('recommendationsContent');
+                recommendationsContent.innerHTML = insights.recommendations.map(rec => `
+                    <div class="recommendation-item">
+                        <p>💡 ${rec}</p>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading appointment insights:', error);
+            }
+        }
+
+        async function loadAppointmentList() {
+            try {
+                const response = await fetch('/api/admin/appointments/list');
+                const appointments = await response.json();
+                updateAppointmentsTable(appointments);
+            } catch (error) {
+                console.error('Error loading appointment list:', error);
+            }
+        }
+
+        function updateAppointmentsTable(appointments) {
+            const tbody = document.getElementById('appointmentsBody');
+            const table = document.getElementById('appointmentsTable');
+            const loading = document.getElementById('appointmentsLoading');
+            
+            if (appointments.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 40px; color: #718096;">No appointments found</td></tr>';
+            } else {
+                tbody.innerHTML = appointments.map(apt => `
+                    <tr>
+                        <td>${apt.clientName || apt.clientKey}</td>
+                        <td>
+                            <div class="lead-info">
+                                <strong>${apt.leadName || 'Unknown'}</strong>
+                                ${apt.leadPhone ? `<br><small>${apt.leadPhone}</small>` : ''}
+                            </div>
+                        </td>
+                        <td>${formatDateTime(apt.appointmentTime)}</td>
+                        <td>${apt.durationMinutes} min</td>
+                        <td>
+                            <span class="status-badge ${getAppointmentStatusClass(apt.status)}">
+                                ${apt.status}
+                            </span>
+                        </td>
+                        <td>${apt.outcome || '-'}</td>
+                        <td>£${apt.revenue.toFixed(2)}</td>
+                        <td>${apt.serviceType || '-'}</td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="btn btn-sm btn-primary" onclick="viewAppointmentDetails('${apt.appointmentId}')">👁️ View</button>
+                                <button class="btn btn-sm btn-warning" onclick="editAppointment('${apt.appointmentId}')">✏️ Edit</button>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+            }
+            
+            loading.style.display = 'none';
+            table.style.display = 'table';
+        }
+
+        function getAppointmentStatusClass(status) {
+            switch(status) {
+                case 'completed': return 'status-active';
+                case 'confirmed': return 'status-active';
+                case 'scheduled': return 'status-pending';
+                case 'no_show': return 'status-inactive';
+                case 'cancelled': return 'status-inactive';
+                case 'rescheduled': return 'status-pending';
+                default: return 'status-inactive';
+            }
+        }
+
+        function showAppointmentTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.appointment-tab').forEach(tab => {
+                tab.style.display = 'none';
+            });
+            
+            // Remove active class from all buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById('appointment' + tabName.charAt(0).toUpperCase() + tabName.slice(1)).style.display = 'block';
+            
+            // Add active class to clicked button
+            event.target.classList.add('active');
+            
+            // Load data for specific tab
+            if (tabName === 'list') {
+                loadAppointmentList();
+            }
+        }
+
+        function searchAppointments() {
+            const searchTerm = document.getElementById('appointmentSearch').value.toLowerCase();
+            const rows = document.querySelectorAll('#appointmentsBody tr');
+            
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(searchTerm) ? '' : 'none';
+            });
+        }
+
+        function filterAppointments() {
+            const statusFilter = document.getElementById('appointmentStatusFilter').value;
+            const dateFrom = document.getElementById('appointmentDateFrom').value;
+            const dateTo = document.getElementById('appointmentDateTo').value;
+            
+            const rows = document.querySelectorAll('#appointmentsBody tr');
+            
+            rows.forEach(row => {
+                const statusBadge = row.querySelector('.status-badge');
+                const appointmentTime = row.cells[2].textContent;
+                
+                let show = true;
+                
+                if (statusFilter && statusBadge.textContent.toLowerCase() !== statusFilter.toLowerCase()) {
+                    show = false;
+                }
+                
+                if (dateFrom && new Date(appointmentTime) < new Date(dateFrom)) {
+                    show = false;
+                }
+                
+                if (dateTo && new Date(appointmentTime) > new Date(dateTo)) {
+                    show = false;
+                }
+                
+                row.style.display = show ? '' : 'none';
+            });
+        }
+
+        async function updateFunnel() {
+            try {
+                const response = await fetch('/api/admin/appointments/analytics/update-funnel', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ date: new Date().toISOString().split('T')[0] })
+                });
+                
+                if (response.ok) {
+                    showNotification('Funnel data updated successfully!', 'success');
+                    loadAppointments(); // Refresh data
+                } else {
+                    const error = await response.json();
+                    showNotification(`Failed to update funnel: ${error.error}`, 'error');
+                }
+            } catch (error) {
+                showNotification(`Error updating funnel: ${error.message}`, 'error');
+            }
+        }
+
+        function viewAppointmentDetails(appointmentId) {
+            // Open appointment details modal or navigate to details page
+            showNotification(`Viewing appointment ${appointmentId}`, 'info');
+        }
+
+        function editAppointment(appointmentId) {
+            // Open appointment edit modal
+            showNotification(`Editing appointment ${appointmentId}`, 'info');
         }
 
         async function loadAnalytics() {
