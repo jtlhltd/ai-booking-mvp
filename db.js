@@ -737,7 +737,7 @@ async function safeQuery(text, params = []) {
   }
 }
 
-export { DB_PATH };
+export { DB_PATH, query };
 
 // ---------------------- Helpers used by server/libs ----------------------
 function toJson(val) {
