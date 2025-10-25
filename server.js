@@ -68,6 +68,7 @@ import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
+import compression from 'compression';
 import twilio from 'twilio';
 import { createHash } from 'crypto';
 import { performanceMiddleware, getPerformanceMonitor } from './lib/performance-monitor.js';
@@ -435,6 +436,7 @@ app.use((req, res, next) => {
 });
 
 // Middleware for parsing JSON bodies (must be before routes that need it)
+app.use(compression()); // Compress responses for better performance
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -8976,9 +8978,6 @@ async function optimizeDatabaseConnections() {
   }
 }
 
-// Response compression middleware
-import compression from 'compression';
-
 // Add compression middleware
 app.use(compression({
   level: 6,
@@ -10690,6 +10689,11 @@ app.use(twilioWebhooks);
 //     return res.status(500).json({ ok:false, error: String(err?.response?.data || err?.message || err) });
 //   }
 // });
+
+// Add caching middleware to frequently accessed endpoints
+app.use('/api/stats', cacheMiddleware({ ttl: 60000 })); // 1 minute cache
+app.use('/api/analytics', cacheMiddleware({ ttl: 300000 })); // 5 minute cache
+app.use('/api/clients/:clientKey', cacheMiddleware({ ttl: 180000 })); // 3 minute cache
 
 app.use(vapiWebhooks);
 
@@ -13691,7 +13695,12 @@ app.get('/health', async (req, res) => {
         heapUsed: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`,
         heapTotal: `${Math.round(process.memoryUsage().heapTotal / 1024 / 1024)}MB`
       },
-      version: process.env.npm_package_version || '1.0.0'
+      version: process.env.npm_package_version || '1.0.0',
+      apiKey: {
+        isSet: !!process.env.API_KEY,
+        length: process.env.API_KEY ? process.env.API_KEY.length : 0,
+        preview: process.env.API_KEY ? process.env.API_KEY.substring(0, 8) + '...' : 'NOT SET'
+      }
     };
     
     // Check database connectivity and health
