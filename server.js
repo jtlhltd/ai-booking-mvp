@@ -13679,17 +13679,6 @@ app.post('/admin/fix-tenants', async (req, res) => {
   }
 });
 
-// Debug endpoint to check API key
-app.get('/debug-api-key', (req, res) => {
-  res.json({
-    apiKeySet: !!process.env.API_KEY,
-    apiKeyLength: process.env.API_KEY ? process.env.API_KEY.length : 0,
-    apiKeyPreview: process.env.API_KEY ? process.env.API_KEY.substring(0, 8) + '...' : 'NOT SET',
-    receivedKey: req.get('X-API-Key') ? req.get('X-API-Key').substring(0, 8) + '...' : 'NOT PROVIDED',
-    keysMatch: req.get('X-API-Key') === process.env.API_KEY
-  });
-});
-
 // Health check endpoint
 app.get('/health', async (req, res) => {
   try {
