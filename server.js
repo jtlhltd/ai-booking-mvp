@@ -13679,66 +13679,6 @@ app.post('/admin/fix-tenants', async (req, res) => {
   }
 });
 
-// Simple test endpoint for client creation debugging
-app.post('/api/test-client-creation', async (req, res) => {
-  try {
-    // Check API key
-    const apiKey = req.get('X-API-Key');
-    if (apiKey !== process.env.API_KEY) {
-      return res.status(401).json({ ok: false, error: 'Unauthorized' });
-    }
-
-    const clientData = req.body;
-    console.log('[TEST CLIENT CREATION]', { 
-      bodyExists: !!clientData,
-      bodyKeys: clientData ? Object.keys(clientData) : 'no body'
-    });
-    
-    if (!clientData || !clientData.basic) {
-      return res.status(400).json({ ok: false, error: 'Missing basic client data' });
-    }
-
-    // Generate client key
-    const clientKey = clientData.basic.clientName
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '_')
-      .replace(/_+/g, '_')
-      .trim();
-
-    console.log('[TEST CLIENT CREATION] Generated clientKey:', clientKey);
-
-    // Test database operation
-    const testConfig = {
-      clientKey,
-      displayName: clientData.basic.clientName,
-      industry: clientData.basic.industry,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-
-    console.log('[TEST CLIENT CREATION] About to save to database...');
-    await upsertFullClient(testConfig);
-    console.log('[TEST CLIENT CREATION] Database save successful');
-
-    res.json({
-      ok: true,
-      clientKey,
-      message: 'Test client creation successful',
-      testConfig
-    });
-
-  } catch (error) {
-    console.error('[TEST CLIENT CREATION ERROR]', error);
-    res.status(500).json({ 
-      ok: false, 
-      error: 'Test client creation failed',
-      details: error.message,
-      stack: error.stack
-    });
-  }
-});
-
 // Health check endpoint
 app.get('/health', async (req, res) => {
   try {
