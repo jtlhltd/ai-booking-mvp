@@ -13695,12 +13695,7 @@ app.get('/health', async (req, res) => {
         heapUsed: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`,
         heapTotal: `${Math.round(process.memoryUsage().heapTotal / 1024 / 1024)}MB`
       },
-      version: process.env.npm_package_version || '1.0.0',
-      apiKey: {
-        isSet: !!process.env.API_KEY,
-        length: process.env.API_KEY ? process.env.API_KEY.length : 0,
-        preview: process.env.API_KEY ? process.env.API_KEY.substring(0, 8) + '...' : 'NOT SET'
-      }
+      version: process.env.npm_package_version || '1.0.0'
     };
     
     // Check database connectivity and health
