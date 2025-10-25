@@ -7583,7 +7583,7 @@ app.post('/api/create-client', async (req, res) => {
     // Save client to database
     await upsertFullClient(clientConfig);
 
-    // Generate branded dashboard
+    // Generate branded dashboard (optional - skip on Render)
     try {
       const fs = await import('fs');
       const path = await import('path');
@@ -7591,23 +7591,34 @@ app.post('/api/create-client', async (req, res) => {
       const templatePath = path.join(process.cwd(), 'public', 'client-dashboard-template.html');
       console.log('[FILE DEBUG]', { templatePath, exists: fs.existsSync(templatePath) });
       
-      const dashboardTemplate = fs.readFileSync(templatePath, 'utf8');
+      if (fs.existsSync(templatePath)) {
+        const dashboardTemplate = fs.readFileSync(templatePath, 'utf8');
 
-    const brandedDashboard = dashboardTemplate
-      .replace(/Client Company/g, clientData.basic.clientName)
-      .replace(/"#667eea"/g, `"${primaryColor}"`)
-      .replace(/"#764ba2"/g, `"${secondaryColor}"`)
-      .replace(/YOUR_API_KEY_HERE/g, process.env.API_KEY);
-    const clientDir = path.join(process.cwd(), 'clients', clientKey);
-    
-    if (!fs.existsSync(clientDir)) {
-      fs.mkdirSync(clientDir, { recursive: true });
-    }
+        const brandedDashboard = dashboardTemplate
+          .replace(/Client Company/g, clientData.basic.clientName)
+          .replace(/"#667eea"/g, `"${primaryColor}"`)
+          .replace(/"#764ba2"/g, `"${secondaryColor}"`)
+          .replace(/YOUR_API_KEY_HERE/g, process.env.API_KEY);
+        
+        const clientDir = path.join(process.cwd(), 'clients', clientKey);
+        
+        // Only try to create files if we have write access
+        try {
+          if (!fs.existsSync(clientDir)) {
+            fs.mkdirSync(clientDir, { recursive: true });
+          }
 
-    fs.writeFileSync(
-      path.join(clientDir, 'dashboard.html'),
-      brandedDashboard
-    );
+          fs.writeFileSync(
+            path.join(clientDir, 'dashboard.html'),
+            brandedDashboard
+          );
+          console.log('[FILES CREATED]', { clientDir, dashboardFile: path.join(clientDir, 'dashboard.html') });
+        } catch (writeError) {
+          console.log('[FILE WRITE SKIPPED]', { error: writeError.message, reason: 'No write access on Render' });
+        }
+      } else {
+        console.log('[TEMPLATE NOT FOUND]', { templatePath });
+      }
 
     // Create onboarding checklist
     const checklistContent = `# ${clientData.basic.clientName} - Onboarding Checklist
@@ -7654,12 +7665,18 @@ app.post('/api/create-client', async (req, res) => {
 - \`clients/${clientKey}/checklist.md\` - This checklist
 `;
 
-      fs.writeFileSync(
-        path.join(clientDir, 'checklist.md'),
-        checklistContent
-      );
-      
-      console.log('[FILES CREATED]', { clientDir, dashboardFile: path.join(clientDir, 'dashboard.html'), checklistFile: path.join(clientDir, 'checklist.md') });
+          fs.writeFileSync(
+            path.join(clientDir, 'checklist.md'),
+            checklistContent
+          );
+          
+          console.log('[FILES CREATED]', { clientDir, dashboardFile: path.join(clientDir, 'dashboard.html'), checklistFile: path.join(clientDir, 'checklist.md') });
+        } catch (writeError) {
+          console.log('[FILE WRITE SKIPPED]', { error: writeError.message, reason: 'No write access on Render' });
+        }
+      } else {
+        console.log('[TEMPLATE NOT FOUND]', { templatePath });
+      }
     } catch (fileError) {
       console.error('[FILE ERROR]', { error: fileError.message, stack: fileError.stack });
       // Don't fail the entire request if file creation fails
