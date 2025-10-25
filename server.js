@@ -17488,9 +17488,18 @@ async function startServer() {
           try {
             const { report } = await generateWeeklyReport(client.clientKey);
             
-            // TODO: Email report to client
-            // For now, just log it
-            console.log(`[WEEKLY REPORT] Generated for ${client.clientKey || client.displayName}:`, {
+            // Email report to client if email is configured
+            if (client.contact?.email) {
+              try {
+                const { sendWeeklySummary } = await import('./lib/email-alerts.js');
+                await sendWeeklySummary(client, report.summary);
+                console.log(`[WEEKLY REPORT] ✅ Emailed to ${client.contact.email}`);
+              } catch (emailError) {
+                console.error(`[WEEKLY REPORT] Email failed for ${client.clientKey}:`, emailError.message);
+              }
+            }
+            
+            console.log(`[WEEKLY REPORT] ✅ Generated for ${client.clientKey || client.displayName}:`, {
               calls: report.summary.total_calls,
               appointments: report.summary.appointments_booked,
               conversionRate: report.summary.conversion_rate_percent + '%'
