@@ -3,6 +3,7 @@ import { Pool } from 'pg';
 import path from 'path';
 import fs from 'fs';
 import Database from 'better-sqlite3';
+import { getCache } from './lib/cache.js';
 
 const dbType = (process.env.DB_TYPE || '').toLowerCase();
 let pool = null;
@@ -657,20 +658,83 @@ export async function init() {
   }
 }
 
-export async function query(text, params = []) {
-  if (pool) return pool.query(text, params);
-  if (sqlite) {
-    const q = text.replace(/\$\d+/g, '?');  // $1 -> ?
-    const stmt = sqlite.prepare(q);
-    if (/^\s*select/i.test(text)) {
-      const rows = stmt.all(...params);
-      return { rows };
-    } else {
-      const info = stmt.run(...params);
-      return { rows: [], rowCount: info.changes, lastID: info.lastInsertRowid };
+// Enhanced database operations with comprehensive error handling
+import { 
+  DatabaseError, 
+  ValidationError, 
+  ConflictError, 
+  NotFoundError,
+  ErrorFactory 
+} from './lib/errors.js';
+import { getRetryManager } from './lib/retry-logic.js';
+
+// Core query function with caching
+async function query(text, params = []) {
+  const cache = getCache();
+  const cacheKey = `query:${text}:${JSON.stringify(params)}`;
+  
+  // For SELECT queries, check cache first
+  if (text.trim().toUpperCase().startsWith('SELECT')) {
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      console.log('[DB CACHE] Serving cached query result');
+      return cached;
     }
   }
-  throw new Error('DB not initialized');
+  
+  let result;
+  if (dbType === 'postgres' && pool) {
+    result = await pool.query(text, params);
+  } else if (sqlite) {
+    const stmt = sqlite.prepare(text);
+    if (text.trim().toUpperCase().startsWith('SELECT')) {
+      result = { rows: stmt.all(...params) };
+    } else {
+      result = stmt.run(...params);
+    }
+  } else {
+    // JSON fallback
+    const jsonDb = new JsonFileDatabase('./data');
+    const stmt = jsonDb.prepare(text);
+    if (text.trim().toUpperCase().startsWith('SELECT')) {
+      result = { rows: stmt.all(...params) };
+    } else {
+      result = stmt.run(...params);
+    }
+  }
+  
+  // Cache SELECT results for 5 minutes
+  if (text.trim().toUpperCase().startsWith('SELECT') && result.rows) {
+    cache.set(cacheKey, result, 300000); // 5 minutes
+    console.log('[DB CACHE] Cached query result');
+  }
+  
+  return result;
+}
+
+// Wrap database operations with error handling
+async function safeQuery(text, params = []) {
+  const retryManager = getRetryManager({
+    maxRetries: 3,
+    baseDelay: 1000,
+    retryCondition: (error) => {
+      // Retry on connection errors and timeouts
+      return error.code === 'ECONNREFUSED' || 
+             error.code === 'ETIMEDOUT' ||
+             error.code === 'ENOTFOUND' ||
+             (error.status >= 500 && error.status < 600);
+    }
+  });
+
+  try {
+    return await retryManager.execute(
+      () => query(text, params),
+      { operation: 'database_query', query: text.substring(0, 100) }
+    );
+  } catch (error) {
+    // Convert database errors to application errors
+    throw ErrorFactory.fromDatabaseError(error, 'query');
+  }
 }
 
 export { DB_PATH };

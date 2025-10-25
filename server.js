@@ -7630,6 +7630,25 @@ app.post('/api/create-client', async (req, res) => {
       industry: clientData.basic.industry 
     });
 
+    // Log audit event
+    try {
+      const { logAudit } = await import('./lib/security.js');
+      await logAudit({
+        clientKey,
+        action: 'client_created',
+        details: {
+          clientName: clientData.basic.clientName,
+          industry: clientData.basic.industry,
+          contactEmail: clientData.basic.email
+        },
+        ip: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+    } catch (auditError) {
+      console.error('[AUDIT LOG ERROR]', auditError);
+      // Don't fail the main operation if audit logging fails
+    }
+
     res.json({
       ok: true,
       clientKey,

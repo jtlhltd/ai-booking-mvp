@@ -889,12 +889,29 @@
     document.addEventListener('DOMContentLoaded', init);
 
     async function init() {
-      // Get client key from URL
-      const pathParts = window.location.pathname.split('/');
-      state.clientKey = pathParts[pathParts.length - 1];
+      // Get client key from URL parameters or path
+      const urlParams = new URLSearchParams(window.location.search);
+      state.clientKey = urlParams.get('clientKey') || window.location.pathname.split('/').pop();
+      
+      // If still no clientKey, try to get it from the path after dashboard-v2.html
+      if (!state.clientKey || state.clientKey === 'dashboard-v2.html') {
+        const pathParts = window.location.pathname.split('/');
+        const dashboardIndex = pathParts.findIndex(part => part.includes('dashboard'));
+        if (dashboardIndex !== -1 && pathParts[dashboardIndex + 1]) {
+          state.clientKey = pathParts[dashboardIndex + 1];
+        }
+      }
 
       // Update badge
       document.getElementById('client-badge').textContent = state.clientKey;
+      
+      // Debug logging
+      console.log('[DASHBOARD INIT]', {
+        url: window.location.href,
+        pathname: window.location.pathname,
+        search: window.location.search,
+        clientKey: state.clientKey
+      });
 
       // Set up event listeners
       document.getElementById('dateRange').addEventListener('change', (e) => {
@@ -932,9 +949,17 @@
 
     async function loadDashboard() {
       try {
+        console.log('[LOAD DASHBOARD]', {
+          clientKey: state.clientKey,
+          dateRange: state.dateRange,
+          apiUrl: `/api/stats?clientKey=${state.clientKey}&range=${state.dateRange}`
+        });
+        
         // Fetch real stats from API
         const response = await fetch(`/api/stats?clientKey=${state.clientKey}&range=${state.dateRange}`);
         const data = await response.json();
+        
+        console.log('[API RESPONSE]', data);
 
         // Update stats
         updateStats(data);

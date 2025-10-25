@@ -318,50 +318,76 @@ export async function requestLogging(req, res, next) {
   }
 }
 
-// Error handling middleware
+// Enhanced error handling middleware
 export async function errorHandler(error, req, res, next) {
   try {
-    console.error('[ERROR HANDLER]', {
-      error: error.message,
-      stack: error.stack,
-      url: req.url,
+    // Import error handling utilities
+    const { formatErrorResponse, logError, AppError } = await import('../lib/errors.js');
+    
+    // Log the error with full context
+    const logData = logError(error, req, {
+      endpoint: req.path,
       method: req.method,
-      clientKey: req.clientKey || 'victory_dental',
-      ip: req.ip,
-      timestamp: new Date().toISOString()
+      userAgent: req.get('User-Agent'),
+      referer: req.get('Referer')
     });
     
-    // Log security event for errors
+    // Log security event for errors (with error handling)
     if (req.clientKey) {
-      const { logSecurityEvent } = await import('../db.js');
-      await logSecurityEvent({
-        clientKey: req.clientKey,
-        eventType: 'server_error',
-        eventSeverity: 'error',
-        eventData: {
-          error: error.message,
-          url: req.url,
-          method: req.method
-        },
-        ipAddress: req.ip,
-        userAgent: req.get('User-Agent')
-      });
+      try {
+        const { logSecurityEvent } = await import('../db.js');
+        await logSecurityEvent({
+          clientKey: req.clientKey,
+          eventType: 'server_error',
+          eventSeverity: error.statusCode >= 500 ? 'error' : 'warning',
+          eventData: {
+            error: error.message,
+            code: error.code,
+            url: req.url,
+            method: req.method,
+            statusCode: error.statusCode || 500
+          },
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent')
+        });
+      } catch (logError) {
+        console.error('[SECURITY LOG ERROR]', logError.message);
+        // Continue without failing the error handler
+      }
     }
     
-    // Don't expose internal errors to client
-    const statusCode = error.statusCode || error.status || 500;
-    const message = statusCode === 500 ? 'Internal server error' : error.message;
+    // Determine if this is an operational error
+    const isOperational = error.isOperational !== undefined ? error.isOperational : error.statusCode < 500;
     
-    res.status(statusCode).json({
-      error: message,
-      code: error.code || 'INTERNAL_ERROR',
+    // Don't expose internal errors to client in production
+    const isDevelopment = process.env.NODE_ENV === 'development';
+    const shouldExposeError = isDevelopment || isOperational;
+    
+    // Format error response
+    const errorResponse = formatErrorResponse(error, shouldExposeError ? req : null);
+    
+    // Set appropriate status code
+    const statusCode = error.statusCode || error.status || 500;
+    res.status(statusCode).json(errorResponse);
+    
+  } catch (handlerError) {
+    console.error('[ERROR HANDLER FAILED]', {
+      originalError: error.message,
+      handlerError: handlerError.message,
+      stack: handlerError.stack,
+      url: req.url,
+      method: req.method,
       timestamp: new Date().toISOString()
     });
-  } catch (handlerError) {
-    console.error('[ERROR HANDLER FAILED]', handlerError);
+    
+    // Fallback error response
     res.status(500).json({
-      error: 'Internal server error',
-      code: 'HANDLER_ERROR'
+      error: {
+        message: 'Internal server error',
+        code: 'HANDLER_ERROR',
+        timestamp: new Date().toISOString(),
+        statusCode: 500
+      }
     });
   }
 }
