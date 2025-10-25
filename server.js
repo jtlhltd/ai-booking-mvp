@@ -7619,64 +7619,6 @@ app.post('/api/create-client', async (req, res) => {
       } else {
         console.log('[TEMPLATE NOT FOUND]', { templatePath });
       }
-
-    // Create onboarding checklist
-    const checklistContent = `# ${clientData.basic.clientName} - Onboarding Checklist
-
-**Client Key:** ${clientKey}
-**Industry:** ${clientData.basic.industry}
-**Created:** ${new Date().toLocaleDateString()}
-
-## Client Information
-- **Company:** ${clientData.basic.clientName}
-- **Contact:** ${clientData.basic.contactName} (${clientData.basic.contactTitle || 'N/A'})
-- **Email:** ${clientData.basic.email}
-- **Phone:** ${clientData.basic.phone || 'N/A'}
-- **Website:** ${clientData.basic.website || 'N/A'}
-
-## Branding
-- **Primary Color:** ${primaryColor}
-- **Secondary Color:** ${secondaryColor}
-- **Logo Emoji:** ${clientData.branding?.logoEmoji || '🚀'}
-- **Timezone:** ${clientData.branding?.timezone || 'Europe/London'}
-
-## Business Hours
-- **Hours:** ${clientData.operations?.businessStart || '09:00'} - ${clientData.operations?.businessEnd || '17:00'}
-- **Days:** ${(clientData.operations?.businessDays || [1,2,3,4,5]).map(d => ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][d-1]).join(', ')}
-- **Appointment Duration:** ${clientData.operations?.appointmentDuration || 60} minutes
-- **Advance Booking:** ${clientData.operations?.advanceBooking || 7} days
-
-## Communication
-- **SMS Number:** ${clientData.communication?.smsFromNumber}
-- **Welcome Message:** ${clientData.communication?.welcomeMessage}
-- **Reminder Hours:** ${clientData.communication?.reminderHours || 24} hours before
-- **Max Retries:** ${clientData.communication?.maxRetries || 3}
-
-## Next Steps
-1. Review configuration
-2. Setup SMS numbers in Twilio
-3. Configure VAPI assistant
-4. Test system end-to-end
-5. Schedule client training
-6. Go live
-
-## Files Generated
-- \`clients/${clientKey}/dashboard.html\` - Branded client dashboard
-- \`clients/${clientKey}/checklist.md\` - This checklist
-`;
-
-          fs.writeFileSync(
-            path.join(clientDir, 'checklist.md'),
-            checklistContent
-          );
-          
-          console.log('[FILES CREATED]', { clientDir, dashboardFile: path.join(clientDir, 'dashboard.html'), checklistFile: path.join(clientDir, 'checklist.md') });
-        } catch (writeError) {
-          console.log('[FILE WRITE SKIPPED]', { error: writeError.message, reason: 'No write access on Render' });
-        }
-      } else {
-        console.log('[TEMPLATE NOT FOUND]', { templatePath });
-      }
     } catch (fileError) {
       console.error('[FILE ERROR]', { error: fileError.message, stack: fileError.stack });
       // Don't fail the entire request if file creation fails
