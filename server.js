@@ -13972,6 +13972,75 @@ app.get('/api/stats', cacheMiddleware({ ttl: 60000 }), async (req, res) => {
   }
 });
 
+// White-label branding endpoints
+app.get('/api/branding/:clientKey', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const client = await getFullClient(clientKey);
+    
+    if (!client) {
+      return res.status(404).json({ ok: false, error: 'Client not found' });
+    }
+    
+    const { getClientBranding } = await import('./lib/whitelabel.js');
+    const branding = getClientBranding(client);
+    
+    res.json({ ok: true, branding });
+  } catch (error) {
+    console.error('[BRANDING GET ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.put('/api/branding/:clientKey', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const brandingData = req.body;
+    
+    // Validate branding
+    const { validateBranding } = await import('./lib/whitelabel.js');
+    const validation = validateBranding(brandingData);
+    
+    if (!validation.valid) {
+      return res.status(400).json({ 
+        ok: false, 
+        error: 'Invalid branding configuration',
+        details: validation.errors 
+      });
+    }
+    
+    // Get client and update
+    const client = await getFullClient(clientKey);
+    
+    if (!client) {
+      return res.status(404).json({ ok: false, error: 'Client not found' });
+    }
+    
+    // Merge branding with existing
+    const updatedClient = {
+      ...client,
+      branding: {
+        ...(client.branding || {}),
+        ...brandingData
+      },
+      updatedAt: new Date().toISOString()
+    };
+    
+    await upsertFullClient(updatedClient);
+    
+    console.log(`[BRANDING] Updated branding for ${clientKey}`);
+    
+    res.json({ 
+      ok: true, 
+      branding: updatedClient.branding,
+      warnings: validation.warnings
+    });
+  } catch (error) {
+    console.error('[BRANDING UPDATE ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 // Lead scoring endpoint
 app.post('/api/analytics/score-leads', async (req, res) => {
   try {
