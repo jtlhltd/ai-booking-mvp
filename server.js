@@ -7544,8 +7544,8 @@ app.post('/api/create-client', async (req, res) => {
         maxRetries: parseInt(clientData.communication?.maxRetries) || 3
       },
       vapi: {
-        assistantId: VAPI_ASSISTANT_ID,
-        phoneNumberId: VAPI_PHONE_NUMBER_ID,
+        assistantId: process.env.VAPI_ASSISTANT_ID || '',
+        phoneNumberId: process.env.VAPI_PHONE_NUMBER_ID || '',
         maxDurationSeconds: 10
       },
       calendar: {
