@@ -3,9 +3,11 @@ import * as store from '../store.js';
 import * as sheets from '../sheets.js';
 import { analyzeCall } from '../lib/call-quality-analysis.js';
 import messagingService from '../lib/messaging-service.js';
-// Lightweight first-pass extractor for logistics script fields
+import { extractLogisticsFields } from '../lib/logistics-extractor.js';
 
-function extractLogisticsFields(transcript) {
+// OLD FUNCTION REMOVED - Now using lib/logistics-extractor.js
+
+function extractLogisticsFields_OLD_DO_NOT_USE(transcript) {
   const text = (transcript || '').toLowerCase();
   const transcriptOriginal = transcript || '';
   
