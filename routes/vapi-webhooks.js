@@ -199,7 +199,9 @@ router.post('/webhooks/vapi', async (req, res) => {
     console.log('[LOGISTICS DEBUG] Transcript length:', transcript.length);
     console.log('[LOGISTICS DEBUG] Extraction will run:', status === 'completed' && !!(transcript || structuredOutput));
     
-    if (logisticsSheetId && (transcript || structuredOutput) && status === 'completed') {
+    // Extract on any webhook event that has transcript data (not just 'completed')
+    // This ensures we capture data even if VAPI doesn't send a final 'completed' event
+    if (logisticsSheetId && (transcript || structuredOutput) && transcript.length > 100) {
       try {
         // Use structured output if available, otherwise fall back to transcript extraction
         let extracted;
