@@ -9,6 +9,9 @@ const router = express.Router();
 
 // Enhanced VAPI webhook handler with comprehensive call tracking
 router.post('/webhooks/vapi', async (req, res) => {
+  console.log('[VAPI WEBHOOK] ==================== NEW WEBHOOK RECEIVED ====================');
+  console.log('[VAPI WEBHOOK] Timestamp:', new Date().toISOString());
+  
   try {
     console.log('[VAPI WEBHOOK DEBUG] Raw body:', JSON.stringify(req.body, null, 2));
     console.log('[VAPI WEBHOOK DEBUG] Raw body type:', typeof req.body);
