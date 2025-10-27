@@ -122,7 +122,7 @@ export async function appendLogistics(spreadsheetId, data) {
   
   await s.spreadsheets.values.append({
     spreadsheetId,
-    range: 'Sheet1!A:T',
+    range: 'Sheet1!A:U',  // Fixed: Should be A:U (21 columns), not A:T (20 columns)
     valueInputOption: 'RAW',
     insertDataOption: 'INSERT_ROWS',
     requestBody: { values: [row] }
