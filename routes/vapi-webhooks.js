@@ -194,8 +194,10 @@ router.post('/webhooks/vapi', async (req, res) => {
     const structuredOutput = body.call?.structuredOutput || body.structuredOutput || body.structured_output;
     
     // Debug: Log what VAPI is sending
+    console.log('[LOGISTICS DEBUG] Status received:', status);
     console.log('[LOGISTICS DEBUG] Structured output:', JSON.stringify(structuredOutput, null, 2));
     console.log('[LOGISTICS DEBUG] Transcript length:', transcript.length);
+    console.log('[LOGISTICS DEBUG] Extraction will run:', status === 'completed' && !!(transcript || structuredOutput));
     
     if (logisticsSheetId && (transcript || structuredOutput) && status === 'completed') {
       try {
