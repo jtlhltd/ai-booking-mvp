@@ -206,9 +206,11 @@ router.post('/webhooks/vapi', async (req, res) => {
     console.log('[LOGISTICS DEBUG] Structured output:', JSON.stringify(structuredOutput, null, 2));
     console.log('[LOGISTICS DEBUG] Transcript length:', transcript.length);
     console.log('[LOGISTICS DEBUG] Extraction will run:', status === 'completed' && !!(transcript || structuredOutput));
+    console.log('[LOGISTICS DEBUG] GOOGLE_SA_JSON_BASE64 configured:', !!process.env.GOOGLE_SA_JSON_BASE64);
     
     // Extract ONLY when call is completed to prevent duplicates
     if (logisticsSheetId && (transcript || structuredOutput) && status === 'completed') {
+      console.log('[LOGISTICS] STARTING EXTRACTION...');
       try {
         // Use structured output if available, otherwise fall back to transcript extraction
         let extracted;
@@ -276,15 +278,18 @@ router.post('/webhooks/vapi', async (req, res) => {
         console.log('[LOGISTICS SHEET DATA] Writing to sheet:', JSON.stringify(sheetData, null, 2));
         
         try {
+          console.log('[LOGISTICS SHEET] Attempting to append to sheet:', logisticsSheetId);
           await sheets.appendLogistics(logisticsSheetId, sheetData);
-          console.log('[LOGISTICS SHEET APPEND] Success', { callId, phone: leadPhone });
+          console.log('[LOGISTICS SHEET APPEND] ✅ SUCCESS', { callId, phone: leadPhone });
         } catch (sheetError) {
-          console.error('[LOGISTICS SHEET APPEND ERROR]', {
+          console.error('[LOGISTICS SHEET APPEND ERROR] ❌ FAILED', {
             error: sheetError.message,
+            errorName: sheetError.name,
             stack: sheetError.stack,
             callId,
             phone: leadPhone
           });
+          throw sheetError; // Re-throw to catch it in outer handler
         }
 
         // Email fallback notification for callback queue (per-tenant if available)
