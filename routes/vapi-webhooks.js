@@ -41,16 +41,19 @@ router.post('/webhooks/vapi', async (req, res) => {
       hasTranscript: !!transcript,
       transcriptLength: transcript.length,
       hasRecording: !!recordingUrl,
-      metadata: Object.keys(metadata).length > 0 ? metadata : 'none'
+      metadata: Object.keys(metadata).length > 0 ? metadata : 'none',
+      allBodyKeys: Object.keys(body)
     });
 
-    // Extract tenant and lead information
-    const tenantKey = metadata.tenantKey || metadata.clientKey;
-    const leadPhone = metadata.leadPhone || body.customer?.number;
+    // For logistics calls, we can extract without tenant metadata
+    // Just get phone from wherever it might be
+    const tenantKey = metadata.tenantKey || metadata.clientKey || 'logistics_client';
+    const leadPhone = metadata.leadPhone || body.customer?.number || body.phone || '';
     
-    if (!tenantKey || !leadPhone) {
-      console.log('[VAPI WEBHOOK SKIP]', { reason: 'missing_tenant_or_phone', tenantKey: !!tenantKey, leadPhone: !!leadPhone });
-      return res.status(200).json({ ok: true });
+    // Skip only if absolutely no data at all
+    if (!transcript && !status) {
+      console.log('[VAPI WEBHOOK SKIP]', { reason: 'no_transcript_or_status', tenantKey: !!tenantKey, leadPhone: !!leadPhone });
+      return;
     }
 
     // Load tenant config (per-client settings)
