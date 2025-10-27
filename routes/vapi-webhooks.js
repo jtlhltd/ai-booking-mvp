@@ -11,6 +11,8 @@ const router = express.Router();
 router.post('/webhooks/vapi', async (req, res) => {
   try {
     console.log('[VAPI WEBHOOK DEBUG] Raw body:', JSON.stringify(req.body, null, 2));
+    console.log('[VAPI WEBHOOK DEBUG] Raw body type:', typeof req.body);
+    console.log('[VAPI WEBHOOK DEBUG] Body keys:', Object.keys(req.body || {}));
     console.log('[VAPI WEBHOOK DEBUG] Headers:', JSON.stringify(req.headers, null, 2));
     
     const body = req.body || {};
