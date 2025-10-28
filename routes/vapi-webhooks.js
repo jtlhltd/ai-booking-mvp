@@ -184,18 +184,15 @@ router.post('/webhooks/vapi', async (req, res) => {
       'Has transcript': !!transcript,
       'Transcript length': transcript.length,
       'Status': status,
-      'Will update sheet': !!(logisticsSheetId && transcript && status === 'completed')
+      'Will update sheet': !!(logisticsSheetId && transcript && transcript.length > 100)
     });
     
     // CRITICAL DEBUG: Log exact condition check
     if (!logisticsSheetId) {
       console.log('[LOGISTICS SKIP] No sheet ID configured');
     }
-    if (!transcript) {
-      console.log('[LOGISTICS SKIP] No transcript available');
-    }
-    if (status !== 'completed') {
-      console.log('[LOGISTICS SKIP] Status is not completed:', status);
+    if (!transcript || transcript.length <= 100) {
+      console.log('[LOGISTICS SKIP] No meaningful transcript available:', { hasTranscript: !!transcript, length: transcript?.length });
     }
     
     // Check for structured output data from VAPI
@@ -205,11 +202,15 @@ router.post('/webhooks/vapi', async (req, res) => {
     console.log('[LOGISTICS DEBUG] Status received:', status);
     console.log('[LOGISTICS DEBUG] Structured output:', JSON.stringify(structuredOutput, null, 2));
     console.log('[LOGISTICS DEBUG] Transcript length:', transcript.length);
-    console.log('[LOGISTICS DEBUG] Extraction will run:', status === 'completed' && !!(transcript || structuredOutput));
+    console.log('[LOGISTICS DEBUG] Extract if transcript exists and has content:', !!(transcript && transcript.length > 100));
     console.log('[LOGISTICS DEBUG] GOOGLE_SA_JSON_BASE64 configured:', !!process.env.GOOGLE_SA_JSON_BASE64);
     
-    // Extract ONLY when call is completed to prevent duplicates
-    if (logisticsSheetId && (transcript || structuredOutput) && status === 'completed') {
+    // Extract when we have a meaningful transcript (length > 100 chars) to prevent false positives
+    // Track extracted call IDs to prevent duplicates
+    const hasTranscript = transcript && transcript.length > 100;
+    const hasStructuredData = structuredOutput && Object.keys(structuredOutput).length > 0;
+    
+    if (logisticsSheetId && (hasTranscript || hasStructuredData)) {
       console.log('[LOGISTICS] STARTING EXTRACTION...');
       try {
         // Use structured output if available, otherwise fall back to transcript extraction
