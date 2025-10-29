@@ -191,7 +191,7 @@ router.post('/webhooks/vapi', async (req, res) => {
     if (!logisticsSheetId) {
       console.log('[LOGISTICS SKIP] No sheet ID configured');
     }
-    if (!transcript || transcript.length <= 100) {
+    if (!transcript || transcript.length < 50) {
       console.log('[LOGISTICS SKIP] No meaningful transcript available:', { hasTranscript: !!transcript, length: transcript?.length });
     }
     
@@ -202,13 +202,21 @@ router.post('/webhooks/vapi', async (req, res) => {
     console.log('[LOGISTICS DEBUG] Status received:', status);
     console.log('[LOGISTICS DEBUG] Structured output:', JSON.stringify(structuredOutput, null, 2));
     console.log('[LOGISTICS DEBUG] Transcript length:', transcript.length);
-    console.log('[LOGISTICS DEBUG] Extract if transcript exists and has content:', !!(transcript && transcript.length > 100));
+    console.log('[LOGISTICS DEBUG] Extract if transcript exists and has content:', !!(transcript && transcript.length >= 50));
     console.log('[LOGISTICS DEBUG] GOOGLE_SA_JSON_BASE64 configured:', !!process.env.GOOGLE_SA_JSON_BASE64);
     
-    // Extract when we have a meaningful transcript (length > 100 chars) to prevent false positives
+    // Extract when we have a transcript (minimum 50 chars to avoid noise from connection-only webhooks)
     // Track extracted call IDs to prevent duplicates
-    const hasTranscript = transcript && transcript.length > 100;
+    const hasTranscript = transcript && transcript.length >= 50;
     const hasStructuredData = structuredOutput && Object.keys(structuredOutput).length > 0;
+    
+    console.log('[LOGISTICS CONDITION CHECK]', {
+      logisticsSheetId: !!logisticsSheetId,
+      hasTranscript,
+      transcriptLength: transcript?.length || 0,
+      hasStructuredData,
+      willExtract: !!(logisticsSheetId && (hasTranscript || hasStructuredData))
+    });
     
     if (logisticsSheetId && (hasTranscript || hasStructuredData)) {
       console.log('[LOGISTICS] STARTING EXTRACTION...');
