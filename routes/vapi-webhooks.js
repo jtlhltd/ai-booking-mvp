@@ -31,7 +31,18 @@ router.post('/webhooks/vapi', async (req, res) => {
     const metadata = body.call?.metadata || body.metadata || {};
     
     // Extract transcript and recording (NEW)
-    const transcript = body.call?.transcript || body.transcript || body.summary || '';
+    // Capture transcript from multiple possible VAPI payload shapes
+    // Prefer explicit transcript fields, then fall back to end-of-call report or messages aggregation
+    let transcript = body.call?.transcript || body.transcript || body.summary || '';
+    const eocrTranscript = body.endOfCallReport?.transcript || body.call?.endOfCallReport?.transcript || body.end_of_call_report?.transcript;
+    if (!transcript && eocrTranscript) transcript = eocrTranscript;
+    if (!transcript && Array.isArray(body.messages)) {
+      const msgText = body.messages
+        .map(m => (m?.content || m?.text || m?.message || ''))
+        .filter(Boolean)
+        .join(' ');
+      if (msgText && msgText.length > transcript?.length) transcript = msgText;
+    }
     const recordingUrl = body.call?.recordingUrl || body.recordingUrl || body.recording_url || '';
     const vapiMetrics = body.call?.metrics || body.metrics || {};
     
@@ -202,6 +213,13 @@ router.post('/webhooks/vapi', async (req, res) => {
     console.log('[LOGISTICS DEBUG] Status received:', status);
     console.log('[LOGISTICS DEBUG] Structured output:', JSON.stringify(structuredOutput, null, 2));
     console.log('[LOGISTICS DEBUG] Transcript length:', transcript.length);
+    console.log('[LOGISTICS DEBUG] Transcript present sources:', {
+      call_transcript: !!(body.call?.transcript),
+      body_transcript: !!(body.transcript),
+      body_summary: !!(body.summary),
+      eocr_transcript: !!eocrTranscript,
+      messages_aggregated: Array.isArray(body.messages)
+    });
     console.log('[LOGISTICS DEBUG] Extract if transcript exists and has content:', !!(transcript && transcript.length >= 50));
     console.log('[LOGISTICS DEBUG] GOOGLE_SA_JSON_BASE64 configured:', !!process.env.GOOGLE_SA_JSON_BASE64);
     
