@@ -19,6 +19,23 @@ router.post('/webhooks/vapi', async (req, res) => {
     console.log('[VAPI WEBHOOK DEBUG] Headers:', JSON.stringify(req.headers, null, 2));
     
     const body = req.body || {};
+    // Support VAPI "message" envelope (chat/preview and some assistants)
+    const message = body.message || null;
+    if (message && typeof message === 'object') {
+      // Normalize common fields onto body so downstream logic works unchanged
+      body.call = body.call || message.call || {};
+      if (!body.status && message.type) body.status = message.type;
+      if (!body.transcript && (message.transcript || message.data?.transcript || message.report?.transcript)) {
+        body.transcript = message.transcript || message.data?.transcript || message.report?.transcript;
+      }
+      if (!body.structuredOutput && (message.structuredOutput || message.data?.structuredOutput)) {
+        body.structuredOutput = message.structuredOutput || message.data?.structuredOutput;
+      }
+      if (!body.recordingUrl && (message.recordingUrl || message.data?.recordingUrl)) {
+        body.recordingUrl = message.recordingUrl || message.data?.recordingUrl;
+      }
+      if (!body.metadata && message.metadata) body.metadata = message.metadata;
+    }
     
     // Always return 200 to prevent VAPI from retrying
     res.status(200).json({ ok: true, received: true });
