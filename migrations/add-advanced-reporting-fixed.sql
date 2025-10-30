@@ -54,10 +54,12 @@ CREATE TABLE IF NOT EXISTS report_templates (
     description TEXT,
     template_type TEXT NOT NULL CHECK (template_type IN ('standard', 'custom', 'system')),
     config JSONB NOT NULL DEFAULT '{}'::jsonb,
-    is_public BOOLEAN DEFAULT false,
     created_by TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Ensure is_public column exists on report_templates for older installs
+ALTER TABLE report_templates ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT false;
 
 -- Create report_metrics table
 CREATE TABLE IF NOT EXISTS report_metrics (
