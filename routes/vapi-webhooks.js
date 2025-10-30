@@ -7,6 +7,18 @@ import { extractLogisticsFields } from '../lib/logistics-extractor.js';
 
 const router = express.Router();
 
+// In-memory deduplication of processed call IDs (best-effort, survives process lifetime)
+const processedCallIds = new Set();
+function markProcessed(callId) {
+  if (!callId) return;
+  processedCallIds.add(callId);
+  // Keep memory bounded
+  if (processedCallIds.size > 500) {
+    const first = processedCallIds.values().next().value;
+    processedCallIds.delete(first);
+  }
+}
+
 // Enhanced VAPI webhook handler with comprehensive call tracking
 router.post('/webhooks/vapi', async (req, res) => {
   console.log('[VAPI WEBHOOK] ==================== NEW WEBHOOK RECEIVED ====================');
@@ -40,7 +52,7 @@ router.post('/webhooks/vapi', async (req, res) => {
     // Always return 200 to prevent VAPI from retrying
     res.status(200).json({ ok: true, received: true });
     
-    const callId = body.call?.id || body.id;
+    const callId = body.call?.id || body.id || body.message?.call?.id;
     const status = body.call?.status || body.status;
     const outcome = body.call?.outcome || body.outcome;
     const duration = body.call?.duration || body.duration;
@@ -75,6 +87,12 @@ router.post('/webhooks/vapi', async (req, res) => {
       metadata: Object.keys(metadata).length > 0 ? metadata : 'none',
       allBodyKeys: Object.keys(body)
     });
+
+    // Best-effort dedupe to avoid duplicate sheet rows on retried webhooks
+    if (callId && processedCallIds.has(callId)) {
+      console.log('[VAPI WEBHOOK] Duplicate callId detected, skipping downstream processing:', callId);
+      return;
+    }
 
     // For logistics calls, we can extract without tenant metadata
     // Just get phone from wherever it might be
@@ -325,6 +343,8 @@ router.post('/webhooks/vapi', async (req, res) => {
           console.log('[LOGISTICS SHEET] Attempting to append to sheet:', logisticsSheetId);
           await sheets.appendLogistics(logisticsSheetId, sheetData);
           console.log('[LOGISTICS SHEET APPEND] ✅ SUCCESS', { callId, phone: leadPhone });
+          // Mark as processed to avoid duplicate rows on retries
+          markProcessed(callId);
         } catch (sheetError) {
           console.error('[LOGISTICS SHEET APPEND ERROR] ❌ FAILED', {
             error: sheetError.message,
