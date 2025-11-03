@@ -155,8 +155,48 @@ router.post('/webhooks/vapi', async (req, res) => {
     if (body.toolCalls && body.toolCalls.length > 0) {
       console.log('[VAPI WEBHOOK] Processing tool calls:', body.toolCalls.length);
       
+      // Import function handlers
+      const { handleVapiFunctionCall } = await import('../lib/vapi-function-handlers.js');
+      
       for (const toolCall of body.toolCalls) {
         try {
+          const functionName = toolCall.function.name;
+          const functionArgs = JSON.parse(toolCall.function.arguments || '{}');
+          
+          // Handle new receptionist functions
+          if ([
+            'lookup_customer',
+            'lookup_appointment',
+            'get_upcoming_appointments',
+            'reschedule_appointment',
+            'cancel_appointment',
+            'get_business_info',
+            'get_business_hours',
+            'get_services',
+            'answer_question',
+            'take_message'
+          ].includes(functionName)) {
+            
+            const result = await handleVapiFunctionCall({
+              functionName,
+              arguments: functionArgs,
+              metadata: {
+                clientKey: tenantKey,
+                callId: callId,
+                leadPhone: leadPhone,
+                ...metadata
+              }
+            });
+            
+            console.log('[VAPI WEBHOOK] Function result:', {
+              function: functionName,
+              success: result.success
+            });
+            
+            continue;
+          }
+          
+          // Legacy functions (keep existing logic)
           if (toolCall.function.name === 'access_google_sheet') {
             const args = JSON.parse(toolCall.function.arguments);
             const { action, data } = args;

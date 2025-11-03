@@ -92,6 +92,9 @@ import cron from 'node-cron';
 import leadsRouter from './routes/leads.js';
 import twilioWebhooks from './routes/twilio-webhooks.js';
 import vapiWebhooks from './routes/vapi-webhooks.js';
+import twilioVoiceWebhooks from './routes/twilio-voice-webhooks.js';
+import appointmentsRouter from './routes/appointments.js';
+import receptionistRouter from './routes/receptionist.js';
 import * as store from './store.js';
 import * as sheets from './sheets.js';
 import messagingService from './lib/messaging-service.js';
@@ -407,7 +410,7 @@ app.use(performanceMiddleware(performanceMonitor));
 function requireApiKey(req, res, next) {
   // Skip API key check for public routes
   if (req.method === 'GET' && (req.path === '/health' || req.path === '/gcal/ping' || req.path === '/healthz' || req.path === '/setup-my-client' || req.path === '/clear-my-leads' || req.path === '/check-db' || req.path === '/lead-import.html' || req.path === '/complete-setup' || req.path === '/test-booking-calendar')) return next();
-  if (req.path.startsWith('/webhooks/twilio-status') || req.path.startsWith('/webhooks/twilio-inbound') || req.path.startsWith('/webhooks/twilio/sms-inbound') || req.path.startsWith('/webhooks/vapi') || req.path === '/webhook/sms-reply' || req.path === '/webhooks/sms') return next();
+  if (req.path.startsWith('/webhooks/twilio-status') || req.path.startsWith('/webhooks/twilio-inbound') || req.path.startsWith('/webhooks/twilio/sms-inbound') || req.path.startsWith('/webhooks/twilio-voice') || req.path.startsWith('/webhooks/vapi') || req.path === '/webhook/sms-reply' || req.path === '/webhooks/sms') return next();
   if (req.path === '/api/test' || req.path === '/api/test-linkedin' || req.path === '/api/uk-business-search' || req.path === '/api/decision-maker-contacts' || req.path === '/api/industry-categories' || req.path === '/test-sms-pipeline' || req.path === '/sms-test' || req.path === '/api/initiate-lead-capture' || req.path === '/api/signup') return next();
   if (req.path === '/uk-business-search' || req.path === '/booking-simple.html') return next();
   if (req.path.startsWith('/dashboard/') || req.path.startsWith('/settings/') || req.path.startsWith('/leads') || req.path === '/privacy.html' || req.path === '/privacy' || req.path === '/zapier-docs.html' || req.path === '/zapier') return next();
@@ -10635,6 +10638,9 @@ app.post('/api/leads', async (req, res) => {
 // Mounted minimal lead intake + STOP webhook
 app.use(leadsRouter);
 app.use(twilioWebhooks);
+app.use(twilioVoiceWebhooks);
+app.use(appointmentsRouter);
+app.use(receptionistRouter);
 
 // --- Vapi booking webhook: create GCal event + send confirmations
 // CONFLICTING WEBHOOK HANDLER - DISABLED TO ALLOW LOGISTICS WEBHOOK
