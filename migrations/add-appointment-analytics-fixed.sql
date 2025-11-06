@@ -64,8 +64,28 @@ CREATE INDEX IF NOT EXISTS idx_appointment_funnel_client_date ON appointment_fun
 CREATE INDEX IF NOT EXISTS idx_appointment_performance_client_date ON appointment_performance(client_key, metric_date);
 
 -- Insert some sample appointment analytics data
-INSERT INTO appointment_analytics (appointment_id, client_key, lead_id, appointment_time, duration_minutes, status, outcome, revenue, service_type, booking_source) VALUES
-('apt_001', 'test_beauty_salon', 1, NOW() - INTERVAL '1 day', 30, 'completed', 'booked', 150.00, 'consultation', 'phone'),
-('apt_002', 'test_beauty_salon', 2, NOW() - INTERVAL '2 days', 45, 'completed', 'interested', 200.00, 'treatment', 'website'),
-('apt_003', 'test_beauty_salon', 3, NOW() - INTERVAL '3 days', 30, 'no_show', 'callback_requested', 0.00, 'consultation', 'phone')
-ON CONFLICT DO NOTHING;
+-- Insert sample data only if leads exist (skip if they don't)
+DO $$
+BEGIN
+    -- Only insert if at least one lead exists
+    IF EXISTS (SELECT 1 FROM leads LIMIT 1) THEN
+        INSERT INTO appointment_analytics (appointment_id, client_key, lead_id, appointment_time, duration_minutes, status, outcome, revenue, service_type, booking_source) 
+        SELECT 
+            'apt_001', 
+            'test_beauty_salon', 
+            (SELECT id FROM leads LIMIT 1), 
+            NOW() - INTERVAL '1 day', 
+            30, 
+            'completed', 
+            'booked', 
+            150.00, 
+            'consultation', 
+            'phone'
+        WHERE NOT EXISTS (SELECT 1 FROM appointment_analytics WHERE appointment_id = 'apt_001')
+        ON CONFLICT DO NOTHING;
+    END IF;
+EXCEPTION
+    WHEN OTHERS THEN
+        -- If insert fails for any reason, just log and continue
+        RAISE NOTICE 'Could not insert appointment analytics sample data: %', SQLERRM;
+END $$;
