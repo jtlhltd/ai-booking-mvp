@@ -98,6 +98,7 @@ import receptionistRouter from './routes/receptionist.js';
 import * as store from './store.js';
 import * as sheets from './sheets.js';
 import messagingService from './lib/messaging-service.js';
+import { AIInsightsEngine, LeadScoringEngine } from './lib/ai-insights.js';
 // Real API integration - dynamic imports will be used in endpoints
 
 
@@ -13975,6 +13976,179 @@ app.get('/api/stats', cacheMiddleware({ ttl: 60000 }), async (req, res) => {
       error: 'Failed to fetch stats',
       details: error.message 
     });
+  }
+});
+
+// AI Insights endpoints
+app.get('/api/insights/:clientKey', cacheMiddleware({ ttl: 300000 }), async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const days = parseInt(req.query.days) || 30;
+    
+    // Verify client exists
+    const client = await getFullClient(clientKey);
+    if (!client) {
+      return res.status(404).json({ ok: false, error: 'Client not found' });
+    }
+    
+    // Generate insights from database
+    const insightsEngine = new AIInsightsEngine();
+    const insights = await insightsEngine.generateInsightsFromDB(clientKey, days);
+    
+    // Get client data for summary
+    const clientData = await insightsEngine.fetchClientData(clientKey, days);
+    
+    res.json({
+      ok: true,
+      clientKey,
+      period: `Last ${days} days`,
+      generatedAt: new Date().toISOString(),
+      insights,
+      summary: {
+        totalCalls: clientData.calls,
+        totalBookings: clientData.bookings,
+        conversionRate: clientData.calls > 0 ? ((clientData.bookings / clientData.calls) * 100).toFixed(1) + '%' : '0%',
+        avgCallDuration: Math.round(clientData.avgCallDuration) + 's',
+        totalCost: '£' + clientData.totalCost.toFixed(2)
+      }
+    });
+  } catch (error) {
+    console.error('[AI INSIGHTS ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Lead Scoring endpoints
+app.post('/api/leads/score', async (req, res) => {
+  try {
+    const { lead, clientKey } = req.body;
+    
+    if (!lead || !clientKey) {
+      return res.status(400).json({ ok: false, error: 'lead and clientKey are required' });
+    }
+    
+    const scoringEngine = new LeadScoringEngine();
+    const score = await scoringEngine.scoreLeadWithHistory(lead, clientKey);
+    
+    res.json({
+      ok: true,
+      lead: {
+        ...lead,
+        score
+      },
+      score,
+      scoreCategory: score >= 80 ? 'high' : score >= 60 ? 'medium' : score >= 40 ? 'low' : 'very_low'
+    });
+  } catch (error) {
+    console.error('[LEAD SCORING ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post('/api/leads/prioritize', async (req, res) => {
+  try {
+    const { leads, clientKey } = req.body;
+    
+    if (!leads || !Array.isArray(leads) || !clientKey) {
+      return res.status(400).json({ ok: false, error: 'leads (array) and clientKey are required' });
+    }
+    
+    const scoringEngine = new LeadScoringEngine();
+    const prioritized = await scoringEngine.prioritizeLeadsWithHistory(leads, clientKey);
+    
+    res.json({
+      ok: true,
+      leads: prioritized,
+      total: prioritized.length,
+      highPriority: prioritized.filter(l => l.score >= 80).length,
+      mediumPriority: prioritized.filter(l => l.score >= 60 && l.score < 80).length,
+      lowPriority: prioritized.filter(l => l.score < 60).length
+    });
+  } catch (error) {
+    console.error('[LEAD PRIORITIZATION ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// CRM Integration endpoints
+app.post('/api/crm/hubspot/sync', async (req, res) => {
+  try {
+    const { clientKey, hubspotApiKey } = req.body;
+    
+    if (!clientKey || !hubspotApiKey) {
+      return res.status(400).json({ ok: false, error: 'clientKey and hubspotApiKey are required' });
+    }
+    
+    // TODO: Implement HubSpot sync
+    // This would sync leads, calls, and appointments to HubSpot
+    
+    res.json({
+      ok: true,
+      message: 'HubSpot sync initiated',
+      status: 'pending',
+      note: 'CRM integration is in development. This endpoint will sync leads, calls, and appointments to HubSpot.'
+    });
+  } catch (error) {
+    console.error('[HUBSPOT SYNC ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post('/api/crm/salesforce/sync', async (req, res) => {
+  try {
+    const { clientKey, salesforceCredentials } = req.body;
+    
+    if (!clientKey || !salesforceCredentials) {
+      return res.status(400).json({ ok: false, error: 'clientKey and salesforceCredentials are required' });
+    }
+    
+    // TODO: Implement Salesforce sync
+    // This would sync leads, calls, and appointments to Salesforce
+    
+    res.json({
+      ok: true,
+      message: 'Salesforce sync initiated',
+      status: 'pending',
+      note: 'CRM integration is in development. This endpoint will sync leads, calls, and appointments to Salesforce.'
+    });
+  } catch (error) {
+    console.error('[SALESFORCE SYNC ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.get('/api/crm/integrations/:clientKey', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    
+    // Get client CRM integration settings
+    const client = await getFullClient(clientKey);
+    if (!client) {
+      return res.status(404).json({ ok: false, error: 'Client not found' });
+    }
+    
+    // TODO: Store CRM integration settings in database
+    const integrations = {
+      hubspot: {
+        enabled: false,
+        connected: false,
+        lastSync: null
+      },
+      salesforce: {
+        enabled: false,
+        connected: false,
+        lastSync: null
+      }
+    };
+    
+    res.json({
+      ok: true,
+      clientKey,
+      integrations
+    });
+  } catch (error) {
+    console.error('[CRM INTEGRATIONS ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
   }
 });
 
