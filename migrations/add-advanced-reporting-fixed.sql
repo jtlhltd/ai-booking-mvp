@@ -85,10 +85,34 @@ CREATE INDEX IF NOT EXISTS idx_report_metrics_report_id ON report_metrics(report
 CREATE INDEX IF NOT EXISTS idx_report_metrics_name ON report_metrics(metric_name);
 
 -- Insert some default report templates
-INSERT INTO report_templates (name, description, template_type, config, is_public) VALUES
-('Lead Performance Dashboard', 'Comprehensive lead analytics and conversion metrics', 'standard', '{"data_sources": ["leads", "calls"], "metrics": ["total_leads", "conversion_rate", "call_success_rate"], "chart_type": "dashboard"}', true),
-('Call Quality Report', 'Call performance and quality metrics', 'standard', '{"data_sources": ["calls"], "metrics": ["call_duration", "success_rate", "quality_score"], "chart_type": "line"}', true),
-('Revenue Analytics', 'Revenue tracking and forecasting', 'standard', '{"data_sources": ["appointments", "revenue"], "metrics": ["total_revenue", "avg_booking_value", "revenue_trend"], "chart_type": "bar"}', true),
-('Client Performance Summary', 'Overall client performance metrics', 'standard', '{"data_sources": ["clients", "leads", "calls"], "metrics": ["active_clients", "total_leads", "conversion_rate"], "chart_type": "summary"}', true),
-('System Performance', 'System health and performance metrics', 'system', '{"data_sources": ["system_metrics"], "metrics": ["uptime", "response_time", "error_rate"], "chart_type": "gauge"}', true)
-ON CONFLICT DO NOTHING;
+-- Handle both cases: with and without category column
+DO $$
+BEGIN
+    -- Check if category column exists
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'report_templates' AND column_name = 'category'
+    ) THEN
+        -- Table has category column, insert with category
+        INSERT INTO report_templates (name, description, template_type, category, config, is_public) VALUES
+        ('Lead Performance Dashboard', 'Comprehensive lead analytics and conversion metrics', 'standard', 'leads', '{"data_sources": ["leads", "calls"], "metrics": ["total_leads", "conversion_rate", "call_success_rate"], "chart_type": "dashboard"}', true),
+        ('Call Quality Report', 'Call performance and quality metrics', 'standard', 'calls', '{"data_sources": ["calls"], "metrics": ["call_duration", "success_rate", "quality_score"], "chart_type": "line"}', true),
+        ('Revenue Analytics', 'Revenue tracking and forecasting', 'standard', 'revenue', '{"data_sources": ["appointments", "revenue"], "metrics": ["total_revenue", "avg_booking_value", "revenue_trend"], "chart_type": "bar"}', true),
+        ('Client Performance Summary', 'Overall client performance metrics', 'standard', 'clients', '{"data_sources": ["clients", "leads", "calls"], "metrics": ["active_clients", "total_leads", "conversion_rate"], "chart_type": "summary"}', true),
+        ('System Performance', 'System health and performance metrics', 'system', 'system', '{"data_sources": ["system_metrics"], "metrics": ["uptime", "response_time", "error_rate"], "chart_type": "gauge"}', true)
+        ON CONFLICT DO NOTHING;
+    ELSE
+        -- Table doesn't have category column, insert without it
+        INSERT INTO report_templates (name, description, template_type, config, is_public) VALUES
+        ('Lead Performance Dashboard', 'Comprehensive lead analytics and conversion metrics', 'standard', '{"data_sources": ["leads", "calls"], "metrics": ["total_leads", "conversion_rate", "call_success_rate"], "chart_type": "dashboard"}', true),
+        ('Call Quality Report', 'Call performance and quality metrics', 'standard', '{"data_sources": ["calls"], "metrics": ["call_duration", "success_rate", "quality_score"], "chart_type": "line"}', true),
+        ('Revenue Analytics', 'Revenue tracking and forecasting', 'standard', '{"data_sources": ["appointments", "revenue"], "metrics": ["total_revenue", "avg_booking_value", "revenue_trend"], "chart_type": "bar"}', true),
+        ('Client Performance Summary', 'Overall client performance metrics', 'standard', '{"data_sources": ["clients", "leads", "calls"], "metrics": ["active_clients", "total_leads", "conversion_rate"], "chart_type": "summary"}', true),
+        ('System Performance', 'System health and performance metrics', 'system', '{"data_sources": ["system_metrics"], "metrics": ["uptime", "response_time", "error_rate"], "chart_type": "gauge"}', true)
+        ON CONFLICT DO NOTHING;
+    END IF;
+EXCEPTION
+    WHEN OTHERS THEN
+        -- If insert fails for any reason, just log and continue
+        RAISE NOTICE 'Could not insert report templates: %', SQLERRM;
+END $$;
