@@ -114,3 +114,6 @@ COMMENT ON TABLE messages IS 'Voicemail and messages taken when staff unavailabl
 COMMENT ON TABLE business_info IS 'Business information (hours, services, location) for FAQ answering';
 COMMENT ON TABLE business_faqs IS 'Frequently asked questions for AI assistant';
 
+
+
+
