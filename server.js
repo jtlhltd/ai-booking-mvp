@@ -11209,7 +11209,18 @@ app.post('/webhooks/twilio-status', express.urlencoded({ extended: false }), asy
 
 // Twilio inbound STOP/START to toggle consent + YES => trigger Vapi call
 const VAPI_URL = 'https://api.vapi.ai';
-const VAPI_PRIVATE_KEY     = process.env.VAPI_PRIVATE_KEY || '';
+const resolveVapiKey = () =>
+  process.env.VAPI_PRIVATE_KEY ||
+  process.env.VAPI_PUBLIC_KEY ||
+  process.env.VAPI_API_KEY ||
+  '';
+const resolveVapiAssistantId = (client) =>
+  client?.vapiAssistantId || process.env.VAPI_ASSISTANT_ID || '';
+const resolveVapiPhoneNumberId = (client) =>
+  client?.vapiPhoneNumberId || process.env.VAPI_PHONE_NUMBER_ID || '';
+
+// Backwards compatibility for modules that still reference the old constants.
+const VAPI_PRIVATE_KEY     = resolveVapiKey();
 const VAPI_ASSISTANT_ID    = process.env.VAPI_ASSISTANT_ID || '';
 const VAPI_PHONE_NUMBER_ID = process.env.VAPI_PHONE_NUMBER_ID || '';
 
@@ -11868,12 +11879,13 @@ app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
     if (!phone) return res.status(400).json({ error: 'Missing phone' });
     const e164 = normalizePhoneE164(phone);
     if (!e164) return res.status(400).json({ error: 'phone must be E.164 (+447...)' });
-    if (!VAPI_PRIVATE_KEY) {
+    const vapiKey = resolveVapiKey();
+    if (!vapiKey) {
       return res.status(500).json({ error: 'Missing VAPI_PRIVATE_KEY' });
     }
 
-    const assistantId = client?.vapiAssistantId || VAPI_ASSISTANT_ID;
-    const phoneNumberId = client?.vapiPhoneNumberId || VAPI_PHONE_NUMBER_ID;
+    const assistantId = resolveVapiAssistantId(client);
+    const phoneNumberId = resolveVapiPhoneNumberId(client);
 
     const payload = {
       assistantId,
@@ -11902,7 +11914,7 @@ app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
 
     const resp = await fetch(`${VAPI_URL}/call`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`, 'Content-Type': 'application/json' },
+      headers: { 'Authorization': `Bearer ${vapiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
 
@@ -14066,6 +14078,493 @@ app.post('/api/leads/prioritize', async (req, res) => {
     });
   } catch (error) {
     console.error('[LEAD PRIORITIZATION ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ROI Calculator for Client Acquisition
+app.post('/api/roi-calculator/save', async (req, res) => {
+  try {
+    const { email, results } = req.body;
+    
+    if (!email || !results) {
+      return res.status(400).json({ ok: false, error: 'email and results are required' });
+    }
+    
+    // Save to database (create a table for ROI calculator leads if it doesn't exist)
+    try {
+      const { query } = await import('./db.js');
+      
+      // Create table if it doesn't exist
+      await query(`
+        CREATE TABLE IF NOT EXISTS roi_calculator_leads (
+          id SERIAL PRIMARY KEY,
+          email VARCHAR(255) NOT NULL,
+          industry VARCHAR(50),
+          leads_per_month INTEGER,
+          current_conversion DECIMAL(5,2),
+          improved_conversion DECIMAL(5,2),
+          avg_value DECIMAL(10,2),
+          hours_spent DECIMAL(5,2),
+          current_bookings INTEGER,
+          potential_bookings INTEGER,
+          extra_bookings INTEGER,
+          current_revenue DECIMAL(10,2),
+          potential_revenue DECIMAL(10,2),
+          revenue_lost DECIMAL(10,2),
+          time_value DECIMAL(10,2),
+          total_value DECIMAL(10,2),
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      
+      // Insert lead
+      await query(`
+        INSERT INTO roi_calculator_leads (
+          email, industry, leads_per_month, current_conversion, improved_conversion,
+          avg_value, hours_spent, current_bookings, potential_bookings, extra_bookings,
+          current_revenue, potential_revenue, revenue_lost, time_value, total_value
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      `, [
+        email,
+        results.industry,
+        results.leadsPerMonth,
+        results.currentConversion,
+        results.improvedConversion,
+        results.avgValue,
+        results.hoursSpent,
+        results.currentBookings,
+        results.potentialBookings,
+        results.extraBookings,
+        results.currentRevenue,
+        results.potentialRevenue,
+        results.revenueLost,
+        results.timeValue,
+        results.totalValue
+      ]);
+      
+      console.log(`[ROI CALCULATOR] Lead captured: ${email} - Revenue lost: £${results.revenueLost}`);
+      
+      // TODO: Send email with detailed report
+      // TODO: Add to email sequence
+      
+    } catch (dbError) {
+      console.error('[ROI CALCULATOR] Database error:', dbError);
+      // Don't fail the request if DB fails - still return success
+    }
+    
+    res.json({
+      ok: true,
+      message: 'Results saved successfully',
+      emailSent: false // TODO: Set to true when email is sent
+    });
+  } catch (error) {
+    console.error('[ROI CALCULATOR SAVE ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Get ROI calculator leads (admin endpoint)
+app.get('/api/admin/roi-calculator/leads', async (req, res) => {
+  try {
+    const { query } = await import('./db.js');
+    const { limit = 100 } = req.query;
+    
+    const result = await query(`
+      SELECT * FROM roi_calculator_leads
+      ORDER BY created_at DESC
+      LIMIT $1
+    `, [limit]);
+    
+    res.json({
+      ok: true,
+      leads: result.rows
+    });
+  } catch (error) {
+    console.error('[ROI CALCULATOR LEADS ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Outreach Prospects API
+app.get('/api/outreach/prospects', async (req, res) => {
+  try {
+    const { query } = await import('./db.js');
+    const { status, channel, industry, limit = 100, offset = 0 } = req.query;
+    
+    let sql = 'SELECT * FROM outreach_prospects WHERE 1=1';
+    const params = [];
+    let paramCount = 1;
+    
+    if (status) {
+      sql += ` AND status = $${paramCount++}`;
+      params.push(status);
+    }
+    
+    if (channel) {
+      sql += ` AND channel = $${paramCount++}`;
+      params.push(channel);
+    }
+    
+    if (industry) {
+      sql += ` AND industry = $${paramCount++}`;
+      params.push(industry);
+    }
+    
+    sql += ` ORDER BY created_at DESC LIMIT $${paramCount++} OFFSET $${paramCount++}`;
+    params.push(parseInt(limit), parseInt(offset));
+    
+    const result = await query(sql, params);
+    
+    // Get total count
+    let countSql = 'SELECT COUNT(*) as total FROM outreach_prospects WHERE 1=1';
+    const countParams = [];
+    paramCount = 1;
+    
+    if (status) {
+      countSql += ` AND status = $${paramCount++}`;
+      countParams.push(status);
+    }
+    if (channel) {
+      countSql += ` AND channel = $${paramCount++}`;
+      countParams.push(channel);
+    }
+    if (industry) {
+      countSql += ` AND industry = $${paramCount++}`;
+      countParams.push(industry);
+    }
+    
+    const countResult = await query(countSql, countParams);
+    const total = parseInt(countResult.rows[0]?.total || 0);
+    
+    res.json({
+      ok: true,
+      prospects: result.rows,
+      total,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+  } catch (error) {
+    console.error('[OUTREACH PROSPECTS ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post('/api/outreach/prospects', async (req, res) => {
+  try {
+    const { query } = await import('./db.js');
+    const {
+      name,
+      businessName,
+      email,
+      phone,
+      linkedinUrl,
+      website,
+      industry,
+      location,
+      channel,
+      templateUsed,
+      leadSource,
+      tags,
+      notes
+    } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ ok: false, error: 'email is required' });
+    }
+    
+    // Check if prospect already exists
+    const existing = await query('SELECT id FROM outreach_prospects WHERE email = $1', [email]);
+    
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ ok: false, error: 'Prospect with this email already exists' });
+    }
+    
+    const result = await query(`
+      INSERT INTO outreach_prospects (
+        name, business_name, email, phone, linkedin_url, website, industry, location,
+        channel, template_used, lead_source, tags, notes
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      RETURNING *
+    `, [
+      name, businessName, email, phone, linkedinUrl, website, industry, location,
+      channel, templateUsed, leadSource, tags || [], notes
+    ]);
+    
+    res.json({
+      ok: true,
+      prospect: result.rows[0]
+    });
+  } catch (error) {
+    console.error('[OUTREACH CREATE PROSPECT ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.put('/api/outreach/prospects/:id', async (req, res) => {
+  try {
+    const { query } = await import('./db.js');
+    const { id } = req.params;
+    const updates = req.body;
+    
+    const allowedFields = [
+      'name', 'business_name', 'email', 'phone', 'linkedin_url', 'website',
+      'industry', 'location', 'status', 'channel', 'template_used',
+      'contact_number', 'last_contacted_at', 'response_date', 'follow_up_date',
+      'outcome', 'tags', 'notes', 'lead_source', 'metadata'
+    ];
+    
+    const updateFields = [];
+    const params = [];
+    let paramCount = 1;
+    
+    const fieldMap = {
+      'name': 'name',
+      'businessName': 'business_name',
+      'business_name': 'business_name',
+      'email': 'email',
+      'phone': 'phone',
+      'linkedinUrl': 'linkedin_url',
+      'linkedin_url': 'linkedin_url',
+      'website': 'website',
+      'industry': 'industry',
+      'location': 'location',
+      'status': 'status',
+      'channel': 'channel',
+      'templateUsed': 'template_used',
+      'template_used': 'template_used',
+      'contact_number': 'contact_number',
+      'contactNumber': 'contact_number',
+      'last_contacted_at': 'last_contacted_at',
+      'lastContactedAt': 'last_contacted_at',
+      'response_date': 'response_date',
+      'responseDate': 'response_date',
+      'follow_up_date': 'follow_up_date',
+      'followUpDate': 'follow_up_date',
+      'outcome': 'outcome',
+      'tags': 'tags',
+      'notes': 'notes',
+      'lead_source': 'lead_source',
+      'leadSource': 'lead_source',
+      'metadata': 'metadata'
+    };
+
+    for (const field of allowedFields) {
+      if (updates[field] !== undefined) {
+        const dbField = fieldMap[field] || field;
+        updateFields.push(`${dbField} = $${paramCount++}`);
+        params.push(updates[field]);
+      }
+    }
+    
+    if (updateFields.length === 0) {
+      return res.status(400).json({ ok: false, error: 'No valid fields to update' });
+    }
+    
+    params.push(id);
+    
+    const result = await query(`
+      UPDATE outreach_prospects
+      SET ${updateFields.join(', ')}, updated_at = NOW()
+      WHERE id = $${paramCount}
+      RETURNING *
+    `, params);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ ok: false, error: 'Prospect not found' });
+    }
+    
+    res.json({
+      ok: true,
+      prospect: result.rows[0]
+    });
+  } catch (error) {
+    console.error('[OUTREACH UPDATE PROSPECT ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post('/api/outreach/prospects/import', async (req, res) => {
+  try {
+    const { query } = await import('./db.js');
+    const { prospects } = req.body; // Array of prospect objects
+    
+    if (!Array.isArray(prospects) || prospects.length === 0) {
+      return res.status(400).json({ ok: false, error: 'prospects array is required' });
+    }
+    
+    const imported = [];
+    const errors = [];
+    
+    for (const prospect of prospects) {
+      try {
+        // Check if exists
+        const existing = await query('SELECT id FROM outreach_prospects WHERE email = $1', [prospect.email]);
+        
+        if (existing.rows.length > 0) {
+          errors.push({ email: prospect.email, error: 'Already exists' });
+          continue;
+        }
+        
+        const result = await query(`
+          INSERT INTO outreach_prospects (
+            name, business_name, email, phone, linkedin_url, website, industry, location,
+            channel, template_used, lead_source, tags, notes
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          RETURNING id, email
+        `, [
+          prospect.name,
+          prospect.businessName || prospect.business_name,
+          prospect.email,
+          prospect.phone,
+          prospect.linkedinUrl || prospect.linkedin_url,
+          prospect.website,
+          prospect.industry,
+          prospect.location,
+          prospect.channel || 'email',
+          prospect.templateUsed || prospect.template_used,
+          prospect.leadSource || prospect.lead_source,
+          prospect.tags || [],
+          prospect.notes
+        ]);
+        
+        imported.push(result.rows[0]);
+      } catch (error) {
+        errors.push({ email: prospect.email, error: error.message });
+      }
+    }
+    
+    res.json({
+      ok: true,
+      imported: imported.length,
+      errors: errors.length,
+      importedProspects: imported,
+      errorDetails: errors
+    });
+  } catch (error) {
+    console.error('[OUTREACH IMPORT ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post('/api/outreach/personalize-email', async (req, res) => {
+  try {
+    const { template, subjectTemplate, prospects } = req.body;
+    
+    if (!template || !subjectTemplate || !prospects || !Array.isArray(prospects)) {
+      return res.status(400).json({ ok: false, error: 'template, subjectTemplate, and prospects array are required' });
+    }
+    
+    const personalized = prospects.map(prospect => {
+      let personalizedSubject = subjectTemplate;
+      let personalizedBody = template;
+      
+      // Replace placeholders
+      const replacements = {
+        '{name}': prospect.name || 'there',
+        '{businessName}': prospect.businessName || prospect.business_name || 'your business',
+        '{location}': prospect.location || 'your area',
+        '{industry}': prospect.industry || 'business',
+        '{phone}': prospect.phone || '',
+        '{website}': prospect.website || ''
+      };
+      
+      for (const [key, value] of Object.entries(replacements)) {
+        personalizedSubject = personalizedSubject.replace(new RegExp(key.replace(/[{}]/g, '\\$&'), 'g'), value);
+        personalizedBody = personalizedBody.replace(new RegExp(key.replace(/[{}]/g, '\\$&'), 'g'), value);
+      }
+      
+      return {
+        prospect,
+        subject: personalizedSubject,
+        body: personalizedBody,
+        to: prospect.email
+      };
+    });
+    
+    res.json({
+      ok: true,
+      personalized,
+      count: personalized.length
+    });
+  } catch (error) {
+    console.error('[EMAIL PERSONALIZATION ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.get('/api/outreach/analytics', async (req, res) => {
+  try {
+    const { query } = await import('./db.js');
+    const { days = 30 } = req.query;
+    
+    const sinceDate = new Date();
+    sinceDate.setDate(sinceDate.getDate() - parseInt(days));
+    
+    // Get status breakdown
+    const statusBreakdown = await query(`
+      SELECT status, COUNT(*) as count
+      FROM outreach_prospects
+      WHERE created_at >= $1
+      GROUP BY status
+    `, [sinceDate.toISOString()]);
+    
+    // Get channel breakdown
+    const channelBreakdown = await query(`
+      SELECT channel, COUNT(*) as count
+      FROM outreach_prospects
+      WHERE created_at >= $1
+      GROUP BY channel
+    `, [sinceDate.toISOString()]);
+    
+    // Get industry breakdown
+    const industryBreakdown = await query(`
+      SELECT industry, COUNT(*) as count
+      FROM outreach_prospects
+      WHERE created_at >= $1
+      AND industry IS NOT NULL
+      GROUP BY industry
+      ORDER BY count DESC
+      LIMIT 10
+    `, [sinceDate.toISOString()]);
+    
+    // Get conversion funnel
+    const total = await query('SELECT COUNT(*) as count FROM outreach_prospects WHERE created_at >= $1', [sinceDate.toISOString()]);
+    const contacted = await query('SELECT COUNT(*) as count FROM outreach_prospects WHERE status != \'new\' AND created_at >= $1', [sinceDate.toISOString()]);
+    const replied = await query('SELECT COUNT(*) as count FROM outreach_prospects WHERE status = \'replied\' AND created_at >= $1', [sinceDate.toISOString()]);
+    const demoBooked = await query('SELECT COUNT(*) as count FROM outreach_prospects WHERE status = \'demo_booked\' AND created_at >= $1', [sinceDate.toISOString()]);
+    const clients = await query('SELECT COUNT(*) as count FROM outreach_prospects WHERE status = \'client\' AND created_at >= $1', [sinceDate.toISOString()]);
+    
+    // Get response rates by channel
+    const responseRates = await query(`
+      SELECT 
+        channel,
+        COUNT(*) as total,
+        COUNT(*) FILTER (WHERE status IN ('replied', 'demo_booked', 'client')) as responded,
+        ROUND(COUNT(*) FILTER (WHERE status IN ('replied', 'demo_booked', 'client'))::numeric / NULLIF(COUNT(*), 0)::numeric * 100, 2) as response_rate
+      FROM outreach_prospects
+      WHERE created_at >= $1
+      AND channel IS NOT NULL
+      GROUP BY channel
+    `, [sinceDate.toISOString()]);
+    
+    res.json({
+      ok: true,
+      period: `Last ${days} days`,
+      funnel: {
+        total: parseInt(total.rows[0]?.count || 0),
+        contacted: parseInt(contacted.rows[0]?.count || 0),
+        replied: parseInt(replied.rows[0]?.count || 0),
+        demoBooked: parseInt(demoBooked.rows[0]?.count || 0),
+        clients: parseInt(clients.rows[0]?.count || 0)
+      },
+      statusBreakdown: statusBreakdown.rows,
+      channelBreakdown: channelBreakdown.rows,
+      industryBreakdown: industryBreakdown.rows,
+      responseRates: responseRates.rows
+    });
+  } catch (error) {
+    console.error('[OUTREACH ANALYTICS ERROR]', error);
     res.status(500).json({ ok: false, error: error.message });
   }
 });
@@ -16345,6 +16844,13 @@ app.post('/admin/vapi/personalized-assistant', async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     
+    const vapiKey = process.env.VAPI_PRIVATE_KEY || process.env.VAPI_PUBLIC_KEY || process.env.VAPI_API_KEY;
+    if (!vapiKey) {
+      return res.status(500).json({
+        error: 'VAPI API key not configured. Set VAPI_PRIVATE_KEY or VAPI_PUBLIC_KEY in your environment.'
+      });
+    }
+    
     const { business, industry, region } = req.body;
     
     if (!business || !industry) {
@@ -16424,16 +16930,35 @@ app.post('/admin/vapi/personalized-assistant', async (req, res) => {
 function generatePersonalizedScript(business, industry, region) {
   const businessName = business.name;
   const decisionMaker = business.decisionMaker?.name || 'there';
-  const location = business.address || '';
-  const website = business.website ? `I noticed you have a website at ${business.website}` : '';
+  const location = business.address || business.city || business.region || '';
+  const regionHint = region || business.region || location;
+  const website = business.website ? `I noticed on ${business.website} that` : '';
+  
+  const services = Array.isArray(business.services)
+    ? business.services
+    : typeof business.services === 'string'
+      ? business.services.split(',').map(s => s.trim()).filter(Boolean)
+      : [];
+  const servicesSummary = services.length
+    ? services.slice(0, 2).join(' & ')
+    : null;
+  const primaryService = services.length ? services[0] : 'appointments';
+  const bookingLink = business.bookingLink || business.bookingUrl || null;
   
   // Industry-specific personalization
   const industryContext = getIndustryContext(industry);
   
   // Regional personalization
-  const regionalContext = getRegionalContext(region || location);
+  const regionalContext = getRegionalContext(regionHint || location);
+
+  const introWebsiteLine = website
+    ? `${website} you offer ${servicesSummary || primaryService}. `
+    : '';
+  const serviceHook = servicesSummary
+    ? ` enquiries for ${servicesSummary}`
+    : ` new enquiries`;
   
-  const firstMessage = `Hi ${decisionMaker}, this is Sarah from AI Booking Solutions. I'm calling because we've helped ${industryContext.examplePractice} in ${regionalContext.city} improve their appointment booking systems. ${website} Do you have 90 seconds to hear how this could work for ${businessName}?`;
+  const firstMessage = `Hi ${decisionMaker}, this is Sarah from AI Booking Solutions. We've helped ${industryContext.examplePractice} in ${regionalContext.city} capture more ${industryContext.metric} automatically. ${introWebsiteLine}Do you have 90 seconds to see how this could handle ${serviceHook} at ${businessName}?`;
   
   const systemMessage = `You are Sarah, calling ${decisionMaker} at ${businessName} in ${regionalContext.city}.
 
@@ -16443,6 +16968,8 @@ BUSINESS CONTEXT:
 - Decision Maker: ${decisionMaker}
 - Industry: ${industry}
 - Website: ${business.website || 'Not available'}
+- Services: ${servicesSummary || primaryService}
+- Booking Link: ${bookingLink || 'Not configured'}
 
 INDUSTRY-SPECIFIC INSIGHTS:
 ${industryContext.insights}
@@ -16457,15 +16984,17 @@ PERSONALIZATION RULES:
 - Use ${industryContext.language} appropriate for ${industry}
 - Reference ${industryContext.painPoints} as pain points
 - Use ${regionalContext.examples} as local examples
+- Highlight services such as ${servicesSummary || primaryService}
+- Offer to text the booking link if interest is shown${bookingLink ? ` (link: ${bookingLink})` : ''}
 
 CONVERSATION FLOW:
 1. RAPPORT: "Hi ${decisionMaker}, this is Sarah from AI Booking Solutions"
-2. CONTEXT: "I'm calling because we've helped ${industryContext.examplePractice} in ${regionalContext.city} increase bookings by 300%"
-3. PERSONAL: "${website} Do you have 90 seconds to hear how this could work for ${businessName}?"
+2. CONTEXT: "We've helped ${industryContext.examplePractice} in ${regionalContext.city} increase ${industryContext.metric} by 300%"
+3. PERSONAL: "${servicesSummary ? `I noticed you focus on ${servicesSummary}. ` : ''}Do you have 90 seconds to hear how this could work for ${businessName}?"
 4. QUALIFY: "Are you the owner or manager of ${businessName}?"
-5. PAIN: "What's your biggest challenge with patient scheduling at ${businessName}?"
-6. VALUE: "We help practices like ${businessName} increase bookings by 300%"
-7. CLOSE: "Would you be available for a 15-minute demo to see how this could work for ${businessName}?"
+5. PAIN: "What's your biggest challenge with ${industryContext.metric} at ${businessName}?"
+6. VALUE: "We help practices like ${businessName} increase ${industryContext.metric} by 300%"
+7. CLOSE: "Would you be available for a 15-minute demo to see how this could work for ${businessName}?${bookingLink ? ` I can also text over the booking link (${bookingLink}) if that's easier.` : ''}"
 
 OBJECTION HANDLING:
 - Too expensive: "What's the cost of losing patients at ${businessName}? Our service pays for itself with 2-3 extra bookings per month"
@@ -16494,28 +17023,145 @@ RULES:
 
 // Get industry-specific context
 function getIndustryContext(industry) {
+  const normalized = String(industry || '').toLowerCase().replace(/\s+/g, '_');
+  
   const contexts = {
-    'dentist': {
+    dentist: {
       examplePractice: 'Birmingham Dental Care',
       language: 'professional medical',
-      painPoints: 'missed calls, no-shows, scheduling conflicts',
-      insights: 'Dental practices typically lose 4-5 patients monthly from missed calls. Most practices see 15-20 extra bookings per month with our system.'
+      painPoints: 'missed calls, no-shows, scheduling gaps, treatment plan follow-ups',
+      insights: 'Dental practices typically lose 4-5 patients monthly from missed calls. Most practices see 15-20 extra bookings per month with our system.',
+      metric: 'dental appointments'
     },
-    'lawyer': {
+    dental_practice: null,
+    dental: null,
+    orthodontics: {
+      examplePractice: 'Leeds Orthodontic Studio',
+      language: 'professional medical',
+      painPoints: 'consult requests left waiting, financing questions, treatment plan follow-up',
+      insights: 'Orthodontic teams often juggle new consults with existing patients. Automating follow-up adds 10-15 new starts per month.',
+      metric: 'consultations and treatment starts'
+    },
+    lawyer: {
       examplePractice: 'Manchester Legal Associates',
       language: 'professional legal',
-      painPoints: 'missed consultations, scheduling conflicts, client communication',
-      insights: 'Law firms typically lose 3-4 consultations monthly from missed calls. Most firms see 12-18 extra consultations per month with our system.'
+      painPoints: 'missed consultations, case intake, client communication',
+      insights: 'Law firms typically lose 3-4 consultations monthly from missed calls. Most firms see 12-18 extra consultations per month with our system.',
+      metric: 'consultations'
     },
-    'beauty_salon': {
+    legal: null,
+    law_firm: null,
+    beauty_salon: {
       examplePractice: 'London Beauty Studio',
       language: 'friendly professional',
       painPoints: 'missed appointments, no-shows, last-minute cancellations',
-      insights: 'Beauty salons typically lose 6-8 appointments monthly from missed calls. Most salons see 20-25 extra bookings per month with our system.'
+      insights: 'Beauty salons typically lose 6-8 appointments monthly from missed calls. Most salons see 20-25 extra bookings per month with our system.',
+      metric: 'beauty appointments'
+    },
+    salon: null,
+    spa: {
+      examplePractice: 'Brighton Wellness Spa',
+      language: 'friendly professional',
+      painPoints: 'packages not upsold, missed voicemails, therapists double-booked',
+      insights: 'Spas recover 15-20 lost bookings per month once follow-up is automated.',
+      metric: 'treatments and packages'
+    },
+    veterinary: {
+      examplePractice: 'Northside Veterinary Clinic',
+      language: 'warm clinical',
+      painPoints: 'emergency enquiries, follow-ups, surgery scheduling',
+      insights: 'Vets often miss urgent calls after hours. Our system rebooks 10-15 pet appointments monthly.',
+      metric: 'pet appointments'
+    },
+    vet: null,
+    fitness: {
+      examplePractice: 'Total Performance PT Studio',
+      language: 'energetic professional',
+      painPoints: 'trial sign-ups, intro calls, class bookings, no-shows',
+      insights: 'Studios see 20-30% more trial conversions when leads get a fast callback.',
+      metric: 'fitness consultations and sessions'
+    },
+    gym: null,
+    personal_training: null,
+    physiotherapy: {
+      examplePractice: 'Manchester Physio Clinic',
+      language: 'professional clinical',
+      painPoints: 'treatment plan adherence, initial assessments, cancellations',
+      insights: 'Physio clinics recover 8-12 treatment bookings monthly with persistent follow-up.',
+      metric: 'treatment sessions'
+    },
+    chiropractic: {
+      examplePractice: 'Bristol Chiropractic Centre',
+      language: 'professional clinical',
+      painPoints: 'initial consults, care plan enrolments, missed voicemails',
+      insights: 'Chiropractors close 12-15 extra care plans each month when every lead is called back within 5 minutes.',
+      metric: 'consults and care plans'
+    },
+    accountant: {
+      examplePractice: 'Leeds Tax Advisors',
+      language: 'trusted advisor',
+      painPoints: 'tax season enquiries, consultation scheduling, document collection',
+      insights: 'Accountancy firms convert 10-12 extra consultations per month by tightening follow-up during busy seasons.',
+      metric: 'consultations'
+    },
+    accounting: null,
+    finance: {
+      examplePractice: 'City Financial Planning',
+      language: 'trusted advisor',
+      painPoints: 'initial discovery calls, onboarding paperwork, follow-ups',
+      insights: 'Financial planners close 3-5 additional clients monthly when no new enquiry waits longer than 5 minutes.',
+      metric: 'financial consultations'
+    },
+    medspa: {
+      examplePractice: 'Chelsea Aesthetics',
+      language: 'luxury professional',
+      painPoints: 'cosmetic consults, treatment upsells, membership plans',
+      insights: 'Medspas add 12-18 high-ticket procedures monthly when leads get immediate callbacks.',
+      metric: 'aesthetic consultations'
+    },
+    tattoo: {
+      examplePractice: 'Ink Lab London',
+      language: 'creative professional',
+      painPoints: 'design consultations, deposit collection, scheduling',
+      insights: 'Studios recover 10+ bookings per month by chasing enquiries automatically.',
+      metric: 'tattoo consultations'
     }
   };
   
-  return contexts[industry] || contexts['dentist'];
+  const normalizedKey = (() => {
+    if (contexts[normalized]) return normalized;
+    if (normalized.includes('dent')) return 'dentist';
+    if (normalized.includes('law')) return 'lawyer';
+    if (normalized.includes('beauty') || normalized.includes('salon')) return 'beauty_salon';
+    if (normalized.includes('vet')) return 'veterinary';
+    if (normalized.includes('fit') || normalized.includes('gym') || normalized.includes('pt')) return 'fitness';
+    if (normalized.includes('physio')) return 'physiotherapy';
+    if (normalized.includes('chiro')) return 'chiropractic';
+    if (normalized.includes('account')) return 'accountant';
+    if (normalized.includes('finance')) return 'finance';
+    if (normalized.includes('spa')) return 'spa';
+    if (normalized.includes('tattoo') || normalized.includes('ink')) return 'tattoo';
+    return 'dentist';
+  })();
+  
+  const selected = contexts[normalizedKey];
+  if (selected) {
+    return {
+      examplePractice: selected.examplePractice,
+      language: selected.language,
+      painPoints: selected.painPoints,
+      insights: selected.insights,
+      metric: selected.metric || 'appointments'
+    };
+  }
+  
+  return {
+    examplePractice: 'Local Practice',
+    language: 'professional and friendly',
+    painPoints: 'missed calls, slow follow-up, manual scheduling',
+    insights: 'Businesses typically lose 5-10 opportunities monthly from slow follow-up. Most see 25% more bookings with our system.',
+    metric: 'appointments'
+  };
 }
 
 // Get regional context
