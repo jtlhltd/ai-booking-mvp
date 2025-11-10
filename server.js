@@ -11900,7 +11900,7 @@ app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
       assistantId,
       phoneNumberId,
       customer: { number: e164, numberE164CheckEnabled: true },
-      maxDurationSeconds: 5, // Cut off after 5 seconds for testing to save costs
+      maxDurationSeconds: Math.max(10, client?.vapiMaxDurationSeconds || 15),
       assistantOverrides: {
         variableValues: {
           ClientKey: clientKey,
