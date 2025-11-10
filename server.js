@@ -10593,7 +10593,6 @@ app.post('/api/leads', async (req, res) => {
     const phoneIn = String(lead.phone || body.phone || '').trim();
     const source  = String(body.source || 'unknown');
 
-    if (!service) return res.status(400).json({ ok:false, error:'Missing service' });
     if (!name || !phoneIn) return res.status(400).json({ ok:false, error:'Missing lead.name or lead.phone' });
 
     const regionHint = (body.region || client?.booking?.country || client?.default_country || client?.country || 'GB');
@@ -10604,7 +10603,12 @@ app.post('/api/leads', async (req, res) => {
     const rows = await readJson(LEADS_PATH, []);
     const id = 'lead_' + nanoid(8);
     const saved = {
-      id, tenantId: client.clientKey || client.id, name, phone, source, service,
+      id,
+      tenantId: client.clientKey || client.id,
+      name,
+      phone,
+      source,
+      service: service || 'unspecified',
       status: 'new', createdAt: now, updatedAt: now
     };
     rows.push(saved);
@@ -10913,7 +10917,11 @@ function hoursFor(client) {
       || { mon:['09:00-17:00'], tue:['09:00-17:00'], wed:['09:00-17:00'], thu:['09:00-17:00'], fri:['09:00-17:00'] };
 }
 const closedDatesFor    = (c) => asJson(c?.closedDates, [])     || asJson(c?.closedDatesJson, []);
-const servicesFor       = (c) => asJson(c?.services, [])        || asJson(c?.servicesJson, []);
+const ensureServicesFor = (c) => asJson(c?.services, [])        || asJson(c?.servicesJson, []);
+const servicesFor       = (typeof globalThis !== 'undefined' && globalThis.servicesFor)
+  ? globalThis.servicesFor
+  : ensureServicesFor;
+if (typeof globalThis !== 'undefined') globalThis.servicesFor = servicesFor;
 const attendeeEmailsFor = (c) => asJson(c?.attendeeEmails, [])  || asJson(c?.attendeeEmailsJson, []);
 
 // === Availability === (respects hours/closures/min notice/max advance + per-service duration)
