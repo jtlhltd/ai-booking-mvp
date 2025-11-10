@@ -11921,7 +11921,12 @@ app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
       }
     };
 
-    const resp = await fetch(`${VAPI_URL}/call`, {
+    const vapiUrl =
+      (typeof VAPI_URL !== 'undefined' && VAPI_URL)
+        ? VAPI_URL
+        : 'https://api.vapi.ai';
+
+    const resp = await fetch(`${vapiUrl}/call`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${vapiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
