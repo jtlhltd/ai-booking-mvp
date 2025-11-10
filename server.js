@@ -11900,7 +11900,11 @@ app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
       assistantId,
       phoneNumberId,
       customer: { number: e164, numberE164CheckEnabled: true },
-      maxDurationSeconds: Math.max(10, client?.vapiMaxDurationSeconds || 15),
+      maxDurationSeconds: (() => {
+        const configured = Number(client?.vapiMaxDurationSeconds);
+        if (Number.isFinite(configured) && configured >= 10) return configured;
+        return 12; // keep as low as Vapi allows while staying above their minimum
+      })(),
       assistantOverrides: {
         variableValues: {
           ClientKey: clientKey,
