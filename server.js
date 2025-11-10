@@ -10726,7 +10726,10 @@ app.post('/api/calendar/find-slots', async (req, res) => {
     const tz = pickTimezone(client);
     const calendarId = pickCalendarId(client);
 
-    const services = servicesFor(client);
+    const services =
+      (typeof servicesFor === 'function')
+        ? servicesFor(client)
+        : (asJson(client?.services, []) || asJson(client?.servicesJson, []));
     let requestedService = req.body?.service;
     if (requestedService && typeof requestedService === 'object') {
       requestedService =
@@ -10924,7 +10927,10 @@ app.post('/api/calendar/find-slots', async (req, res) => {
     const tz = pickTimezone(client);
     const calendarId = pickCalendarId(client);
 
-    const services = servicesFor(client);
+    const services =
+      (typeof servicesFor === 'function')
+        ? servicesFor(client)
+        : (asJson(client?.services, []) || asJson(client?.servicesJson, []));
     const requestedService = req.body?.service;
     const svc = services.find(s => s.id === requestedService);
     const durationMin = (svc?.durationMin) || req.body?.durationMin || client?.booking?.defaultDurationMin || 30;
