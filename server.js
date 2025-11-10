@@ -10917,14 +10917,29 @@ function hoursFor(client) {
       || { mon:['09:00-17:00'], tue:['09:00-17:00'], wed:['09:00-17:00'], thu:['09:00-17:00'], fri:['09:00-17:00'] };
 }
 const closedDatesFor    = (c) => asJson(c?.closedDates, [])     || asJson(c?.closedDatesJson, []);
-function resolveServices(client) {
+
+function normalizeServicesList(client) {
   const raw = client?.services ?? client?.servicesJson ?? [];
   if (Array.isArray(raw)) return raw;
   try { return JSON.parse(String(raw)); }
   catch { return []; }
 }
-const servicesFor       = resolveServices;
-if (typeof globalThis !== 'undefined') globalThis.servicesFor = servicesFor;
+
+if (typeof globalThis !== 'undefined') {
+  if (typeof globalThis.ensureServicesFor !== 'function') {
+    globalThis.ensureServicesFor = normalizeServicesList;
+  }
+  if (typeof globalThis.servicesFor !== 'function') {
+    globalThis.servicesFor = normalizeServicesList;
+  }
+}
+
+const servicesFor = (client) => {
+  if (typeof globalThis !== 'undefined' && typeof globalThis.servicesFor === 'function') {
+    return globalThis.servicesFor(client);
+  }
+  return normalizeServicesList(client);
+};
 const attendeeEmailsFor = (c) => asJson(c?.attendeeEmails, [])  || asJson(c?.attendeeEmailsJson, []);
 
 // === Availability === (respects hours/closures/min notice/max advance + per-service duration)
