@@ -11984,7 +11984,10 @@ app.post('/api/calendar/check-book', async (req, res) => {
     const tz = pickTimezone(client);
     const calendarId = pickCalendarId(client);
 
-    const services = servicesFor(client);
+    const services =
+      (typeof servicesFor === 'function')
+        ? servicesFor(client)
+        : ensureServicesFor(client);
     const requestedService = req.body?.service;
     const svc = services.find(s => s.id === requestedService);
     const dur = (typeof req.body?.durationMin === 'number' && req.body.durationMin > 0)
