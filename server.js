@@ -12003,7 +12003,6 @@ app.post('/api/calendar/check-book', async (req, res) => {
     const calendarId = pickCalendarId(client);
 
     const services = servicesFor(client);
-    const services = servicesFor(client);
     const requestedService = req.body?.service;
     const svc = services.find(s => s.id === requestedService);
     const dur = (typeof req.body?.durationMin === 'number' && req.body.durationMin > 0)
