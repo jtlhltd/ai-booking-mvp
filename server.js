@@ -10727,7 +10727,14 @@ app.post('/api/calendar/find-slots', async (req, res) => {
     const calendarId = pickCalendarId(client);
 
     const services = servicesFor(client);
-    const requestedService = req.body?.service;
+    let requestedService = req.body?.service;
+    if (requestedService && typeof requestedService === 'object') {
+      requestedService =
+        requestedService.id ||
+        requestedService.name ||
+        requestedService.label ||
+        '';
+    }
     const svc = services.find(s => s.id === requestedService);
     const durationMin = (svc?.durationMin) || req.body?.durationMin || client?.booking?.defaultDurationMin || 30;
     const bufferMin = (svc?.bufferMin) || 0;
@@ -11903,6 +11910,10 @@ app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
       maxDurationSeconds: (() => {
         const configured = Number(client?.vapiMaxDurationSeconds);
         if (Number.isFinite(configured) && configured >= 10) return configured;
+
+        const toolDuration = Number(req.body?.maxDurationSeconds);
+        if (Number.isFinite(toolDuration) && toolDuration >= 10) return toolDuration;
+
         return 12; // keep as low as Vapi allows while staying above their minimum
       })(),
       assistantOverrides: {
