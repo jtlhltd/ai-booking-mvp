@@ -10917,10 +10917,13 @@ function hoursFor(client) {
       || { mon:['09:00-17:00'], tue:['09:00-17:00'], wed:['09:00-17:00'], thu:['09:00-17:00'], fri:['09:00-17:00'] };
 }
 const closedDatesFor    = (c) => asJson(c?.closedDates, [])     || asJson(c?.closedDatesJson, []);
-const ensureServicesFor = (c) => asJson(c?.services, [])        || asJson(c?.servicesJson, []);
-const servicesFor       = (typeof globalThis !== 'undefined' && globalThis.servicesFor)
-  ? globalThis.servicesFor
-  : ensureServicesFor;
+function resolveServices(client) {
+  const raw = client?.services ?? client?.servicesJson ?? [];
+  if (Array.isArray(raw)) return raw;
+  try { return JSON.parse(String(raw)); }
+  catch { return []; }
+}
+const servicesFor       = resolveServices;
 if (typeof globalThis !== 'undefined') globalThis.servicesFor = servicesFor;
 const attendeeEmailsFor = (c) => asJson(c?.attendeeEmails, [])  || asJson(c?.attendeeEmailsJson, []);
 
