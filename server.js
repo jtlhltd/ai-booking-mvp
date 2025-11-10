@@ -11879,13 +11879,22 @@ app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
     if (!phone) return res.status(400).json({ error: 'Missing phone' });
     const e164 = normalizePhoneE164(phone);
     if (!e164) return res.status(400).json({ error: 'phone must be E.164 (+447...)' });
-    const vapiKey = resolveVapiKey();
+    const vapiKey =
+      (typeof resolveVapiKey === 'function'
+        ? resolveVapiKey()
+        : (process.env.VAPI_PRIVATE_KEY || process.env.VAPI_PUBLIC_KEY || process.env.VAPI_API_KEY || ''));
     if (!vapiKey) {
       return res.status(500).json({ error: 'Missing VAPI_PRIVATE_KEY' });
     }
 
-    const assistantId = resolveVapiAssistantId(client);
-    const phoneNumberId = resolveVapiPhoneNumberId(client);
+    const assistantId =
+      (typeof resolveVapiAssistantId === 'function'
+        ? resolveVapiAssistantId(client)
+        : (client?.vapiAssistantId || process.env.VAPI_ASSISTANT_ID || ''));
+    const phoneNumberId =
+      (typeof resolveVapiPhoneNumberId === 'function'
+        ? resolveVapiPhoneNumberId(client)
+        : (client?.vapiPhoneNumberId || process.env.VAPI_PHONE_NUMBER_ID || ''));
 
     const payload = {
       assistantId,
