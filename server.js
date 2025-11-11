@@ -10918,27 +10918,11 @@ function hoursFor(client) {
 }
 const closedDatesFor    = (c) => asJson(c?.closedDates, [])     || asJson(c?.closedDatesJson, []);
 
-function normalizeServicesList(client) {
+const servicesFor = (client) => {
   const raw = client?.services ?? client?.servicesJson ?? [];
   if (Array.isArray(raw)) return raw;
   try { return JSON.parse(String(raw)); }
   catch { return []; }
-}
-
-if (typeof globalThis !== 'undefined') {
-  if (typeof globalThis.ensureServicesFor !== 'function') {
-    globalThis.ensureServicesFor = normalizeServicesList;
-  }
-  if (typeof globalThis.servicesFor !== 'function') {
-    globalThis.servicesFor = normalizeServicesList;
-  }
-}
-
-const servicesFor = (client) => {
-  if (typeof globalThis !== 'undefined' && typeof globalThis.servicesFor === 'function') {
-    return globalThis.servicesFor(client);
-  }
-  return normalizeServicesList(client);
 };
 const attendeeEmailsFor = (c) => asJson(c?.attendeeEmails, [])  || asJson(c?.attendeeEmailsJson, []);
 
