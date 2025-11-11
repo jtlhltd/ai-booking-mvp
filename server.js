@@ -12072,6 +12072,9 @@ app.post('/api/calendar/check-book', async (req, res) => {
       return null;
     };
 
+    const preferenceRaw = req.body?.startPref || req.body?.preferredStart || req.body?.requestedStart;
+    const parsedFromPreference = parseStartPreference(preferenceRaw, tz);
+
     const startHints = [
       req.body?.slot?.start,
       req.body?.slot?.startTime,
@@ -12088,9 +12091,6 @@ app.post('/api/calendar/check-book', async (req, res) => {
       req.body?.selectedSlot?.startTime,
       req.body?.selectedSlot?.startISO,
       req.body?.selectedSlot?.startIso,
-      req.body?.startPref,
-      req.body?.preferredStart,
-      req.body?.requestedStart,
       req.body?.start,
       req.body?.startTime,
       req.body?.startISO
@@ -12105,19 +12105,29 @@ app.post('/api/calendar/check-book', async (req, res) => {
       }
     }
 
-    if (!startDate) {
-      const pref = req.body?.startPref || req.body?.preferredStart || req.body?.requestedStart;
-      const parsedPref = parseStartPreference(pref, tz);
-      if (parsedPref) {
-        startDate = parsedPref;
-      }
+    if (parsedFromPreference) {
+      startDate = parsedFromPreference;
     }
 
     if (startDate) {
-      const now = Date.now();
-      if (startDate.getTime() < now) {
-        startDate = new Date(now + 5 * 60000);
+      const reference = DateTime.now().setZone(tz);
+      let dt = DateTime.fromJSDate(startDate).setZone(tz);
+      if (dt < reference) {
+        const diffDays = reference.diff(dt, 'days').days;
+        if (diffDays > 7) {
+          while (dt < reference) {
+            dt = dt.plus({ years: 1 });
+          }
+        } else {
+          while (dt < reference) {
+            dt = dt.plus({ days: 1 });
+          }
+        }
       }
+      if (dt < reference) {
+        dt = reference.plus({ minutes: 5 });
+      }
+      startDate = dt.toJSDate();
     }
 
     if (process.env.LOG_BOOKING_DEBUG === 'true') {
