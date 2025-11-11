@@ -12027,10 +12027,19 @@ app.post('/api/calendar/check-book', async (req, res) => {
         } catch (e) {
           const code = e?.response?.status || 500;
           const data = e?.response?.data || e?.message || String(e);
-          return res.status(code).json({ ok:false, error:'gcal_insert_failed', details: data });
+          // If Google credentials are missing/invalid, skip calendar insert but continue
+          const grantError = typeof data === 'string' && data.includes('invalid_grant');
+          if (!grantError) {
+            return res.status(code).json({ ok:false, error:'gcal_insert_failed', details: data });
+          }
+          console.warn('[GCAL] Skipping insert due to invalid credentials', data);
+          google = { skipped: true, error: 'invalid_grant' };
+          event = null;
         }
 
-        google = { id: event.id, htmlLink: event.htmlLink, status: event.status };
+        if (event) {
+          google = { id: event.id, htmlLink: event.htmlLink, status: event.status };
+        }
       }
     } catch (err) {
       console.error(JSON.stringify({ evt: 'gcal.error', rid: req.id, error: String(err) }));
@@ -12053,7 +12062,7 @@ app.post('/api/calendar/check-book', async (req, res) => {
         const payload = { to: lead.phone, body };
         if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid;
         else payload.from = fromNumber;
-        const resp = await withRetry(() => smsClient.messages.create(payload), { retries: 2, delayMs: 300 });
+        const resp = await smsClient.messages.create(payload);
         sms = { id: resp.sid, to: lead.phone };
       } catch (err) {
         console.error(JSON.stringify({ evt: 'sms.error', rid: req.id, error: String(err) }));
