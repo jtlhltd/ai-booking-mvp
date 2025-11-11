@@ -9857,6 +9857,10 @@ function renderTemplate(str, vars = {}) {
 
 // Appointment reminder system
 async function scheduleAppointmentReminders({ appointmentId, clientKey, leadPhone, appointmentTime, clientSettings }) {
+  if (typeof query === 'undefined') {
+    console.warn('[REMINDER] scheduleAppointmentReminders: query helper unavailable, skipping');
+    return;
+  }
   try {
     const settings = {
       confirmation_enabled: true,
@@ -9940,6 +9944,10 @@ async function scheduleAppointmentReminders({ appointmentId, clientKey, leadPhon
 }
 
 async function sendScheduledReminders() {
+  if (typeof query === 'undefined') {
+    console.warn('[REMINDER] sendScheduledReminders: query helper unavailable, skipping');
+    return;
+  }
   try {
     // Get pending reminders that are due
     const reminders = await query(`
@@ -9979,6 +9987,10 @@ async function sendScheduledReminders() {
 }
 
 async function sendReminderSMS(reminder) {
+  if (typeof query === 'undefined') {
+    console.warn('[REMINDER] sendReminderSMS: query helper unavailable, skipping');
+    return;
+  }
   try {
     // Get client settings
     const client = await query(`
