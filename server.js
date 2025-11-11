@@ -55,21 +55,22 @@ function parseStartPreference(preference, timeZone) {
   if (!preference || typeof preference !== 'string' || !timeZone) return null;
   try {
     const reference = DateTime.now().setZone(timeZone);
-    const results = chrono.parse(preference, reference.toJSDate(), {
-      forwardDate: true,
-      timezone: reference.offset
+    const parsedResults = chrono.parse(preference, reference.toJSDate(), {
+      forwardDate: true
     });
-    if (!results.length || !results[0].start) return null;
-    const { start } = results[0];
-    let dt = DateTime.fromJSDate(start.date()).setZone(timeZone);
-    if (!start.isCertain('hour')) {
-      dt = dt.set({ hour: 14, minute: 0, second: 0 });
+    const first = parsedResults[0];
+    const parsedDate =
+      first?.start?.date?.() ??
+      chrono.parseDate(preference, reference.toJSDate(), { forwardDate: true });
+    if (!parsedDate) return null;
+    let dt = DateTime.fromJSDate(parsedDate, { zone: timeZone }).setZone(timeZone);
+    if (Number.isNaN(dt.valueOf()) || !dt.isValid) return null;
+    dt = dt.set({ second: 0, millisecond: 0 });
+    if (!first?.start?.isCertain('hour')) {
+      dt = dt.set({ hour: 14, minute: 0 });
     }
-    if (!start.isCertain('minute')) {
-      dt = dt.set({ minute: 0 });
-    }
-    if (!start.isCertain('second')) {
-      dt = dt.set({ second: 0 });
+    if (!first?.start?.isCertain('minute')) {
+      dt = dt.set({ minute: dt.minute || 0 });
     }
     if (dt <= reference) {
       dt = dt.plus({ days: 1 });
@@ -12072,8 +12073,15 @@ app.post('/api/calendar/check-book', async (req, res) => {
       return null;
     };
 
+    const wantsDebug = process.env.LOG_BOOKING_DEBUG === 'true' || req.body?.debug === true || req.get('X-Debug-Booking') === 'true';
+    const debugInfo = wantsDebug ? {} : null;
+
     const preferenceRaw = req.body?.startPref || req.body?.preferredStart || req.body?.requestedStart;
     const parsedFromPreference = parseStartPreference(preferenceRaw, tz);
+    if (debugInfo) {
+      debugInfo.preferenceRaw = preferenceRaw ?? null;
+      debugInfo.parsedFromPreference = parsedFromPreference ? new Date(parsedFromPreference).toISOString() : null;
+    }
 
     const startHints = [
       req.body?.slot?.start,
@@ -12095,6 +12103,9 @@ app.post('/api/calendar/check-book', async (req, res) => {
       req.body?.startTime,
       req.body?.startISO
     ].filter(Boolean);
+    if (debugInfo) {
+      debugInfo.startHints = startHints;
+    }
 
     let startDate = null;
     for (const hint of startHints) {
@@ -12112,20 +12123,37 @@ app.post('/api/calendar/check-book', async (req, res) => {
     if (startDate) {
       const reference = DateTime.now().setZone(tz);
       let dt = DateTime.fromJSDate(startDate).setZone(tz);
+      if (debugInfo) {
+        debugInfo.reference = reference.toISO();
+        debugInfo.initialResolved = dt.toISO();
+      }
       if (dt < reference) {
-        const diffDays = reference.diff(dt, 'days').days;
-        if (diffDays > 7) {
-          while (dt < reference) {
-            dt = dt.plus({ years: 1 });
-          }
+        const sameYear = dt.set({ year: reference.year });
+        if (sameYear >= reference) {
+          dt = sameYear;
         } else {
-          while (dt < reference) {
-            dt = dt.plus({ days: 1 });
+          const nextYear = sameYear.plus({ years: 1 });
+          if (nextYear >= reference) {
+            dt = nextYear;
+          } else {
+            let rolled = dt;
+            const maxIterations = 366;
+            let count = 0;
+            while (rolled < reference && count < maxIterations) {
+              rolled = rolled.plus({ days: 1 });
+              count += 1;
+            }
+            if (rolled >= reference) {
+              dt = rolled;
+            }
           }
         }
       }
       if (dt < reference) {
         dt = reference.plus({ minutes: 5 });
+      }
+      if (debugInfo) {
+        debugInfo.afterAdjustment = dt.toISO();
       }
       startDate = dt.toJSDate();
     }
@@ -12232,6 +12260,10 @@ app.post('/api/calendar/check-book', async (req, res) => {
     await writeJson(CALLS_PATH, calls);
 
     const responseBody = { slot: { start: startISO, end: endISO, timezone: tz }, google, sms, tenant: client?.clientKey || 'default' };
+    if (debugInfo) {
+      debugInfo.finalStart = startISO;
+      responseBody.debug = debugInfo;
+    }
     setCachedIdem(idemKey, 200, responseBody);
     return res.json(responseBody);
   } catch (e) {
