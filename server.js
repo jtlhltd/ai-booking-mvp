@@ -12022,8 +12022,9 @@ app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
 
 // Booking (auto-book + branded SMS)
 app.post('/api/calendar/check-book', async (req, res) => {
-  const idemKey = deriveIdemKey(req);
-  const cached = getCachedIdem(idemKey);
+  const headerIdemKey = req.get('Idempotency-Key');
+  const idemKey = headerIdemKey || null;
+  const cached = idemKey ? getCachedIdem(idemKey) : null;
   if (cached) return res.status(cached.status).json(cached.body);
 
   try {
@@ -12281,7 +12282,7 @@ app.post('/api/calendar/check-book', async (req, res) => {
   } catch (e) {
     const status = 500;
     const body = { error: String(e) };
-    setCachedIdem(deriveIdemKey(req), status, body);
+    setCachedIdem(idemKey, status, body);
     return res.status(status).json(body);
   }
 });
