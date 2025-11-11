@@ -10592,6 +10592,8 @@ app.post('/api/leads', async (req, res) => {
     const name    = String(lead.name || body.name || '').trim();
     const phoneIn = String(lead.phone || body.phone || '').trim();
     const source  = String(body.source || 'unknown');
+    const autoNudgeRequested = body.autoNudge === true;
+    const suppressNudge = body.autoNudge === false || body.skipNudge === true || body.suppressNudge === true;
 
     if (!name || !phoneIn) return res.status(400).json({ ok:false, error:'Missing lead.name or lead.phone' });
 
@@ -10615,19 +10617,23 @@ app.post('/api/leads', async (req, res) => {
     await writeJson(LEADS_PATH, rows);
 
     // --- Auto-nudge SMS (minimal, tenant-aware) ---
-    try {
-      const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
-      if (configured) {
-        const brand = client?.displayName || client?.clientKey || 'Our Clinic';
-        const templ = client?.smsTemplates?.nudge || `Hi {{name}} — it’s {{brand}}. Ready to book your appointment? Reply YES to continue.`;
-        const msgBody = renderTemplate(templ, { name, brand });
-        const payload = { to: phone, body: msgBody };
-        if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid; else if (fromNumber) payload.from = fromNumber;
-        const resp = await smsClient.messages.create(payload);
-        console.log('[LEAD AUTO-NUDGE SENT]', { to: phone, tenant: client?.clientKey || null, sid: resp?.sid || null });
+    const shouldAutoNudge = autoNudgeRequested && !suppressNudge;
+
+    if (shouldAutoNudge) {
+      try {
+        const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
+        if (configured) {
+          const brand = client?.displayName || client?.clientKey || 'Our Clinic';
+          const templ = client?.smsTemplates?.nudge || `Hi {{name}} — it’s {{brand}}. Ready to book your appointment? Reply YES to continue.`;
+          const msgBody = renderTemplate(templ, { name, brand });
+          const payload = { to: phone, body: msgBody };
+          if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid; else if (fromNumber) payload.from = fromNumber;
+          const resp = await smsClient.messages.create(payload);
+          console.log('[LEAD AUTO-NUDGE SENT]', { to: phone, tenant: client?.clientKey || null, sid: resp?.sid || null });
+        }
+      } catch (e) {
+        console.log('[AUTO-NUDGE SMS ERROR]', e?.message || String(e));
       }
-    } catch (e) {
-      console.log('[AUTO-NUDGE SMS ERROR]', e?.message || String(e));
     }
 
     return res.status(201).json({ ok:true, lead: saved, override: true });
@@ -11997,11 +12003,66 @@ app.post('/api/calendar/check-book', async (req, res) => {
     lead.phone = normalizePhoneE164(lead.phone);
     if (!lead.phone) return res.status(400).json({ error: 'lead.phone must be E.164' });
 
-    // Default: book tomorrow ~14:00 in tenant TZ
-    const base = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    base.setHours(14, 0, 0, 0);
-    const startISO = base.toISOString();
-    const endISO = new Date(base.getTime() + dur * 60 * 1000).toISOString();
+    const startHints = [
+      req.body?.slot?.start,
+      req.body?.slot?.startTime,
+      req.body?.start,
+      req.body?.startTime,
+      req.body?.startISO,
+      req.body?.preferredStart,
+      req.body?.slotStart,
+    ].filter(Boolean);
+
+    let startDate = null;
+    for (const hint of startHints) {
+      if (hint == null) continue;
+      if (typeof hint === 'number') {
+        const asDate = new Date(hint);
+        if (!Number.isNaN(asDate.getTime())) {
+          startDate = asDate;
+          break;
+        }
+      } else if (typeof hint === 'string') {
+        const trimmed = hint.trim();
+        if (!trimmed) continue;
+        const isoLike = trimmed.endsWith('Z') || /[+-]\d{2}:?\d{2}$/.test(trimmed);
+        if (isoLike) {
+          const asDate = new Date(trimmed);
+          if (!Number.isNaN(asDate.getTime())) {
+            startDate = asDate;
+            break;
+          }
+        } else {
+          // treat as time in tenant timezone (e.g. '2025-11-12T17:00')
+          const candidate = new Date(trimmed);
+          if (!Number.isNaN(candidate.getTime())) {
+            startDate = candidate;
+            break;
+          }
+        }
+      } else if (hint instanceof Date && !Number.isNaN(hint.getTime())) {
+        startDate = hint;
+        break;
+      }
+    }
+
+    if (startDate) {
+      // ensure we don't book in the past; snap to at least now
+      const now = Date.now();
+      if (startDate.getTime() < now) {
+        startDate = new Date(now + 5 * 60000);
+      }
+    }
+
+    // Default: book tomorrow ~14:00 in tenant TZ if no start provided
+    if (!startDate) {
+      const base = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      base.setHours(14, 0, 0, 0);
+      startDate = base;
+    }
+
+    const startISO = new Date(startDate).toISOString();
+    const endISO = new Date(startDate.getTime() + dur * 60 * 1000).toISOString();
 
     let google = { skipped: true };
     try {
