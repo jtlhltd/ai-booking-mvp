@@ -12068,6 +12068,19 @@ app.post('/api/calendar/check-book', async (req, res) => {
     const startHints = [
       req.body?.slot?.start,
       req.body?.slot?.startTime,
+      req.body?.slot?.startISO,
+      req.body?.slot?.startIso,
+      req.body?.slot?.startDateTime,
+      req.body?.slot?.startDate,
+      req.body?.slot?.isoStart,
+      req.body?.slot?.slotStart,
+      req.body?.slot?.requestedStart,
+      req.body?.slot?.scheduledStart,
+      req.body?.slotStart,
+      req.body?.selectedSlot?.start,
+      req.body?.selectedSlot?.startTime,
+      req.body?.selectedSlot?.startISO,
+      req.body?.selectedSlot?.startIso,
       req.body?.start,
       req.body?.startTime,
       req.body?.startISO,
@@ -12090,6 +12103,15 @@ app.post('/api/calendar/check-book', async (req, res) => {
       if (startDate.getTime() < now) {
         startDate = new Date(now + 5 * 60000);
       }
+    }
+
+    if (process.env.LOG_BOOKING_DEBUG === 'true') {
+      console.log('[BOOKING][check-book] start resolution', {
+        tenant: client?.clientKey || null,
+        hints: startHints,
+        parsedStart: startDate ? startDate.toISOString() : null,
+        timezone: tz
+      });
     }
 
     // Default: book tomorrow ~14:00 in tenant TZ if no start provided
