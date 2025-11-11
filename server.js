@@ -51,6 +51,36 @@ const normalizePhone = (s) => (s || '').trim().replace(/[^\d+]/g, '');
   return null;
 }
 
+function parseStartPreference(preference, timeZone) {
+  if (!preference || typeof preference !== 'string' || !timeZone) return null;
+  try {
+    const reference = DateTime.now().setZone(timeZone);
+    const results = chrono.parse(preference, reference.toJSDate(), {
+      forwardDate: true,
+      timezone: reference.offset
+    });
+    if (!results.length || !results[0].start) return null;
+    const { start } = results[0];
+    let dt = DateTime.fromJSDate(start.date()).setZone(timeZone);
+    if (!start.isCertain('hour')) {
+      dt = dt.set({ hour: 14, minute: 0, second: 0 });
+    }
+    if (!start.isCertain('minute')) {
+      dt = dt.set({ minute: 0 });
+    }
+    if (!start.isCertain('second')) {
+      dt = dt.set({ second: 0 });
+    }
+    if (dt <= reference) {
+      dt = dt.plus({ days: 1 });
+    }
+    return dt.toJSDate();
+  } catch (err) {
+    console.error('[startPref.parse.error]', err);
+    return null;
+  }
+}
+
 // server.js — AI Booking MVP (SQLite tenants + env bootstrap + richer tenant awareness)
 import 'dotenv/config';
 import bcrypt from 'bcrypt';
@@ -63,6 +93,8 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { nanoid } from 'nanoid';
+import { DateTime } from 'luxon';
+import * as chrono from 'chrono-node';
 import express from 'express';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
@@ -12056,11 +12088,12 @@ app.post('/api/calendar/check-book', async (req, res) => {
       req.body?.selectedSlot?.startTime,
       req.body?.selectedSlot?.startISO,
       req.body?.selectedSlot?.startIso,
+      req.body?.startPref,
+      req.body?.preferredStart,
+      req.body?.requestedStart,
       req.body?.start,
       req.body?.startTime,
-      req.body?.startISO,
-      req.body?.preferredStart,
-      req.body?.slotStart,
+      req.body?.startISO
     ].filter(Boolean);
 
     let startDate = null;
@@ -12072,8 +12105,15 @@ app.post('/api/calendar/check-book', async (req, res) => {
       }
     }
 
+    if (!startDate) {
+      const pref = req.body?.startPref || req.body?.preferredStart || req.body?.requestedStart;
+      const parsedPref = parseStartPreference(pref, tz);
+      if (parsedPref) {
+        startDate = parsedPref;
+      }
+    }
+
     if (startDate) {
-      // ensure we don't book in the past; snap to at least now
       const now = Date.now();
       if (startDate.getTime() < now) {
         startDate = new Date(now + 5 * 60000);
