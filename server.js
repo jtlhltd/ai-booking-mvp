@@ -12003,33 +12003,6 @@ app.post('/api/calendar/check-book', async (req, res) => {
     lead.phone = normalizePhoneE164(lead.phone);
     if (!lead.phone) return res.status(400).json({ error: 'lead.phone must be E.164' });
 
-    const parseTimeZoneOffset = (date, timeZone) => {
-      const dtf = new Intl.DateTimeFormat('en-US', {
-        timeZone,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false,
-      });
-      const parts = dtf.formatToParts(date);
-      const res = {};
-      for (const { type, value } of parts) {
-        if (type !== 'literal') res[type] = value;
-      }
-      const utcTime = Date.UTC(
-        Number(res.year),
-        Number(res.month) - 1,
-        Number(res.day),
-        Number(res.hour),
-        Number(res.minute),
-        Number(res.second || 0),
-      );
-      return (utcTime - date.getTime()) / 60000;
-    };
-
     const parseInTimezone = (value, timeZone) => {
       if (value == null) return null;
       if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
@@ -12047,17 +12020,8 @@ app.post('/api/calendar/check-book', async (req, res) => {
         }
         const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?$/);
         if (isoMatch) {
-          const [, year, month, day, hour, minute, second] = isoMatch;
-          const baseUtc = Date.UTC(
-            Number(year),
-            Number(month) - 1,
-            Number(day),
-            Number(hour),
-            Number(minute),
-            Number(second || 0),
-          );
-          const offsetMin = parseTimeZoneOffset(new Date(baseUtc), timeZone);
-          return new Date(baseUtc - offsetMin * 60000);
+          const maybeDate = new Date(`${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}T${isoMatch[4]}:${isoMatch[5]}:${isoMatch[6] || '00'} ${timeZone}`);
+          if (!Number.isNaN(maybeDate.getTime())) return maybeDate;
         }
         const parsed = Date.parse(trimmed);
         if (!Number.isNaN(parsed)) return new Date(parsed);
