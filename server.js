@@ -11238,7 +11238,10 @@ app.post('/api/notify/send', async (req, res) => {
     const { smsClient, messagingServiceSid, fromNumber, configured } = smsConfig(client);
     if (!configured) return res.status(400).json({ ok:false, error:'SMS not configured (no fromNumber or messagingServiceSid)' });
 
-    const payload = { to, body: message };
+    const normalizedTo = normalizePhoneE164(to);
+    if (!normalizedTo) return res.status(400).json({ ok:false, error:'Invalid recipient phone number (must be E.164)' });
+
+    const payload = { to: normalizedTo, body: message };
     if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid;
     else if (fromNumber) payload.from = fromNumber;
 
@@ -12140,18 +12143,19 @@ app.post('/api/calendar/check-book', async (req, res) => {
         debugInfo.reference = reference.toISO();
         debugInfo.initialResolved = dt.toISO();
       }
+      const minFuture = reference.plus({ minutes: 15 });
       if (dt < reference) {
         let rolled = dt;
         const maxIterations = 104; // ~2 years of weekly rolls
         let count = 0;
-        while (rolled < reference && count < maxIterations) {
+        while (rolled < minFuture && count < maxIterations) {
           rolled = rolled.plus({ weeks: 1 });
           count += 1;
         }
         dt = rolled;
       }
-      if (dt < reference) {
-        dt = reference.plus({ minutes: 5 });
+      if (dt < minFuture) {
+        dt = minFuture;
       }
       if (debugInfo) {
         debugInfo.afterAdjustment = dt.toISO();
