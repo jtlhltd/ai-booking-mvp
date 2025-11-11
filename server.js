@@ -12003,6 +12003,68 @@ app.post('/api/calendar/check-book', async (req, res) => {
     lead.phone = normalizePhoneE164(lead.phone);
     if (!lead.phone) return res.status(400).json({ error: 'lead.phone must be E.164' });
 
+    const parseTimeZoneOffset = (date, timeZone) => {
+      const dtf = new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      });
+      const parts = dtf.formatToParts(date);
+      const res = {};
+      for (const { type, value } of parts) {
+        if (type !== 'literal') res[type] = value;
+      }
+      const utcTime = Date.UTC(
+        Number(res.year),
+        Number(res.month) - 1,
+        Number(res.day),
+        Number(res.hour),
+        Number(res.minute),
+        Number(res.second || 0),
+      );
+      return (utcTime - date.getTime()) / 60000;
+    };
+
+    const parseInTimezone = (value, timeZone) => {
+      if (value == null) return null;
+      if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        const d = new Date(value);
+        return Number.isNaN(d.getTime()) ? null : d;
+      }
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) return null;
+        const hasZone = trimmed.endsWith('Z') || /[+-]\d{2}:?\d{2}$/.test(trimmed);
+        if (hasZone) {
+          const zoned = new Date(trimmed);
+          return Number.isNaN(zoned.getTime()) ? null : zoned;
+        }
+        const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?$/);
+        if (isoMatch) {
+          const [, year, month, day, hour, minute, second] = isoMatch;
+          const baseUtc = Date.UTC(
+            Number(year),
+            Number(month) - 1,
+            Number(day),
+            Number(hour),
+            Number(minute),
+            Number(second || 0),
+          );
+          const offsetMin = parseTimeZoneOffset(new Date(baseUtc), timeZone);
+          return new Date(baseUtc - offsetMin * 60000);
+        }
+        const parsed = Date.parse(trimmed);
+        if (!Number.isNaN(parsed)) return new Date(parsed);
+      }
+      return null;
+    };
+
     const startHints = [
       req.body?.slot?.start,
       req.body?.slot?.startTime,
@@ -12015,33 +12077,9 @@ app.post('/api/calendar/check-book', async (req, res) => {
 
     let startDate = null;
     for (const hint of startHints) {
-      if (hint == null) continue;
-      if (typeof hint === 'number') {
-        const asDate = new Date(hint);
-        if (!Number.isNaN(asDate.getTime())) {
-          startDate = asDate;
-          break;
-        }
-      } else if (typeof hint === 'string') {
-        const trimmed = hint.trim();
-        if (!trimmed) continue;
-        const isoLike = trimmed.endsWith('Z') || /[+-]\d{2}:?\d{2}$/.test(trimmed);
-        if (isoLike) {
-          const asDate = new Date(trimmed);
-          if (!Number.isNaN(asDate.getTime())) {
-            startDate = asDate;
-            break;
-          }
-        } else {
-          // treat as time in tenant timezone (e.g. '2025-11-12T17:00')
-          const candidate = new Date(trimmed);
-          if (!Number.isNaN(candidate.getTime())) {
-            startDate = candidate;
-            break;
-          }
-        }
-      } else if (hint instanceof Date && !Number.isNaN(hint.getTime())) {
-        startDate = hint;
+      const parsed = parseInTimezone(hint, tz);
+      if (parsed) {
+        startDate = parsed;
         break;
       }
     }
