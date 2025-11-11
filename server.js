@@ -12141,26 +12141,14 @@ app.post('/api/calendar/check-book', async (req, res) => {
         debugInfo.initialResolved = dt.toISO();
       }
       if (dt < reference) {
-        const sameYear = dt.set({ year: reference.year });
-        if (sameYear >= reference) {
-          dt = sameYear;
-        } else {
-          const nextYear = sameYear.plus({ years: 1 });
-          if (nextYear >= reference) {
-            dt = nextYear;
-          } else {
-            let rolled = dt;
-            const maxIterations = 366;
-            let count = 0;
-            while (rolled < reference && count < maxIterations) {
-              rolled = rolled.plus({ days: 1 });
-              count += 1;
-            }
-            if (rolled >= reference) {
-              dt = rolled;
-            }
-          }
+        let rolled = dt;
+        const maxIterations = 104; // ~2 years of weekly rolls
+        let count = 0;
+        while (rolled < reference && count < maxIterations) {
+          rolled = rolled.plus({ weeks: 1 });
+          count += 1;
         }
+        dt = rolled;
       }
       if (dt < reference) {
         dt = reference.plus({ minutes: 5 });
