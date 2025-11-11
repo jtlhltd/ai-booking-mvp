@@ -12020,7 +12020,11 @@ app.post('/api/calendar/check-book', async (req, res) => {
 
         let event;
         try {
-          event = await withRetry(() => insertEvent({
+          const maybeRetry =
+            typeof withRetry === 'function'
+              ? withRetry
+              : async (fn) => fn();
+          event = await maybeRetry(() => insertEvent({
             auth, calendarId, summary, description,
             startIso: startISO, endIso: endISO, timezone: tz
           }), { retries: 2, delayMs: 300 });
