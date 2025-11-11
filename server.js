@@ -12020,8 +12020,19 @@ app.post('/api/calendar/check-book', async (req, res) => {
         }
         const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?$/);
         if (isoMatch) {
-          const maybeDate = new Date(`${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}T${isoMatch[4]}:${isoMatch[5]}:${isoMatch[6] || '00'} ${timeZone}`);
-          if (!Number.isNaN(maybeDate.getTime())) return maybeDate;
+          const [, year, month, day, hour, minute, second] = isoMatch;
+          const [tzHour, tzMinute] = (client?.booking?.timezoneOffset ?? '00:00').split(':').map(Number);
+          const baseUtc = Date.UTC(
+            Number(year),
+            Number(month) - 1,
+            Number(day),
+            Number(hour) - (Number.isFinite(tzHour) ? tzHour : 0),
+            Number(minute) - (Number.isFinite(tzMinute) ? tzMinute : 0),
+            Number(second || 0)
+          );
+          if (!Number.isNaN(baseUtc)) {
+            return new Date(baseUtc);
+          }
         }
         const parsed = Date.parse(trimmed);
         if (!Number.isNaN(parsed)) return new Date(parsed);
