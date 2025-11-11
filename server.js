@@ -10730,10 +10730,11 @@ app.post('/api/calendar/find-slots', async (req, res) => {
     const tz = pickTimezone(client);
     const calendarId = pickCalendarId(client);
 
-    const services =
-      (typeof servicesFor === 'function')
-        ? servicesFor(client)
-        : (asJson(client?.services, []) || asJson(client?.servicesJson, []));
+    let services = client?.services ?? client?.servicesJson ?? [];
+    if (!Array.isArray(services)) {
+      try { services = JSON.parse(String(services)); }
+      catch { services = []; }
+    }
     let requestedService = req.body?.service;
     if (requestedService && typeof requestedService === 'object') {
       requestedService =
@@ -10918,12 +10919,6 @@ function hoursFor(client) {
 }
 const closedDatesFor    = (c) => asJson(c?.closedDates, [])     || asJson(c?.closedDatesJson, []);
 
-const servicesFor = (client) => {
-  const raw = client?.services ?? client?.servicesJson ?? [];
-  if (Array.isArray(raw)) return raw;
-  try { return JSON.parse(String(raw)); }
-  catch { return []; }
-};
 const attendeeEmailsFor = (c) => asJson(c?.attendeeEmails, [])  || asJson(c?.attendeeEmailsJson, []);
 
 // === Availability === (respects hours/closures/min notice/max advance + per-service duration)
@@ -11986,7 +11981,11 @@ app.post('/api/calendar/check-book', async (req, res) => {
     const tz = pickTimezone(client);
     const calendarId = pickCalendarId(client);
 
-    const services = servicesFor(client);
+    let services = client?.services ?? client?.servicesJson ?? [];
+    if (!Array.isArray(services)) {
+      try { services = JSON.parse(String(services)); }
+      catch { services = []; }
+    }
     const requestedService = req.body?.service;
     const svc = services.find(s => s.id === requestedService);
     const dur = (typeof req.body?.durationMin === 'number' && req.body.durationMin > 0)
