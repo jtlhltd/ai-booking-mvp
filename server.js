@@ -108,7 +108,7 @@ import { performanceMiddleware, getPerformanceMonitor } from './lib/performance-
 import { cacheMiddleware, getCache } from './lib/cache.js';
 
 import { makeJwtAuth, insertEvent, freeBusy } from './gcal.js';
-import { init as initDb,  upsertFullClient, getFullClient, listFullClients, deleteClient, DB_PATH } from './db.js'; // SQLite-backed tenants
+import { init as initDb,  upsertFullClient, getFullClient, listFullClients, deleteClient, DB_PATH, query } from './db.js'; // SQLite-backed tenants
 import { 
   authenticateApiKey, 
   rateLimitMiddleware, 
