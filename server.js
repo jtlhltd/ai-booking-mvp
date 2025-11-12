@@ -12145,16 +12145,26 @@ app.post('/api/calendar/check-book', async (req, res) => {
       }
       const minFuture = reference.plus({ minutes: 15 });
       if (dt < reference) {
-        let rolled = dt;
-        const maxIterations = 104; // ~2 years of weekly rolls
-        let count = 0;
-        while (rolled < minFuture && count < maxIterations) {
-          rolled = rolled.plus({ weeks: 1 });
-          count += 1;
+        const daysBehind = reference.diff(dt, 'days').days;
+        if (debugInfo) {
+          debugInfo.daysBehind = Number.isFinite(daysBehind) ? daysBehind : null;
         }
-        dt = rolled;
-      }
-      if (dt < minFuture) {
+        if (Number.isFinite(daysBehind) && daysBehind > 6) {
+          const weeksToAdd = Math.ceil(daysBehind / 7);
+          if (debugInfo) {
+            debugInfo.weeksToAdd = weeksToAdd;
+          }
+          if (weeksToAdd > 0) {
+            dt = dt.plus({ weeks: weeksToAdd });
+          }
+        }
+        while (dt < minFuture && daysBehind > 6) {
+          dt = dt.plus({ weeks: 1 });
+        }
+        if (dt < minFuture) {
+          dt = minFuture;
+        }
+      } else if (dt < minFuture) {
         dt = minFuture;
       }
       if (debugInfo) {
