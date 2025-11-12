@@ -12289,6 +12289,48 @@ app.post('/api/calendar/check-book', async (req, res) => {
   }
 });
 
+// Tenant-aware current time helper for Vapi (returns now in tenant timezone & UTC)
+app.get('/api/time/now', async (req, res) => {
+  try {
+    const client = await getClientFromHeader(req);
+    if (!client) return res.status(400).json({ ok: false, error: 'Unknown tenant' });
+
+    const tz = pickTimezone(client);
+    const nowTenant = DateTime.now().setZone(tz);
+    const nowUtc = nowTenant.toUTC();
+
+    return res.json({
+      ok: true,
+      tenant: client?.clientKey || null,
+      timezone: tz,
+      now: {
+        iso: nowTenant.toISO(),
+        isoUtc: nowUtc.toISO(),
+        epochMs: nowTenant.toMillis(),
+        epochSeconds: Math.floor(nowTenant.toSeconds()),
+        formatted: {
+          long: nowTenant.toFormat('cccc, dd LLLL yyyy HH:mm'),
+          date: nowTenant.toFormat('yyyy-LL-dd'),
+          time: nowTenant.toFormat('HH:mm'),
+          spoken: nowTenant.toFormat("cccc 'at' h:mma")
+        },
+        components: {
+          year: nowTenant.year,
+          month: nowTenant.month,
+          day: nowTenant.day,
+          weekday: nowTenant.weekday,
+          hour: nowTenant.hour,
+          minute: nowTenant.minute,
+          second: nowTenant.second
+        }
+      }
+    });
+  } catch (e) {
+    console.error('[time.now] error', e?.message || e);
+    return res.status(500).json({ ok: false, error: 'time_now_failed' });
+  }
+});
+
 // Diagnostic endpoint for tenant resolution
 app.get('/admin/tenant-resolve', async (req, res) => {
   try {
