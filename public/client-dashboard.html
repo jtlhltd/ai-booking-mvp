@@ -645,7 +645,9 @@
         // Get client from URL parameter or default
         function getClientFromURL() {
             const urlParams = new URLSearchParams(window.location.search);
-            return urlParams.get('client') || 'victory_dental';
+            const rawClient = urlParams.get('client') || 'victory_dental';
+            // Support both snake_case and kebab-case identifiers (e.g. demo_client vs demo-client)
+            return rawClient.replace(/-/g, '_');
         }
         
         function applyClientTheme(clientKey) {
