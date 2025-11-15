@@ -186,9 +186,22 @@
             border-left: 4px solid var(--client-color, #667eea);
         }
         
+        .lead-header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+        
+        .lead-name {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #1b1d33;
+        }
+        
         .lead-phone {
-            font-weight: bold;
-            color: #333;
+            font-size: 0.9rem;
+            color: #6f7288;
         }
         
         .lead-status {
@@ -198,12 +211,11 @@
         }
         
         .lead-score {
-            float: right;
             background: var(--client-color, #667eea);
             color: white;
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 0.8rem;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 0.85rem;
         }
         
         .loading {
@@ -252,6 +264,41 @@
             color: #5d3700;
         }
         
+        .highlight-grid {
+            display: none;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .highlight-card {
+            background: rgba(92, 106, 196, 0.08);
+            border: 1px solid rgba(92, 106, 196, 0.2);
+            border-radius: 14px;
+            padding: 18px;
+            color: #2c2f48;
+        }
+        
+        .highlight-label {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: #6c6f93;
+            margin-bottom: 6px;
+        }
+        
+        .highlight-value {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: var(--client-color, #3A4A9F);
+        }
+        
+        .highlight-subtext {
+            margin-top: 4px;
+            font-size: 0.9rem;
+            color: #6c6f93;
+        }
+        
         .refresh-btn {
             position: fixed;
             bottom: 30px;
@@ -291,6 +338,82 @@
             font-size: 1rem;
             cursor: pointer;
             margin: 0 10px;
+        }
+        
+        .activity-log {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .activity-item {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            padding: 15px;
+            background: #f5f7ff;
+            border-radius: 12px;
+            border: 1px solid rgba(92,106,196,0.15);
+            gap: 10px;
+        }
+        
+        .activity-meta {
+            font-size: 0.85rem;
+            color: #636682;
+        }
+        
+        .activity-status {
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .activity-status.success {
+            background: #e6f4ea;
+            color: #1b5e20;
+        }
+        
+        .activity-status.pending {
+            background: #fff3cd;
+            color: #8a6d3b;
+        }
+        
+        .activity-status.info {
+            background: #e3f2fd;
+            color: #0d47a1;
+        }
+        
+        .service-mix {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .service-row {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        
+        .service-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.95rem;
+            color: #394067;
+        }
+        
+        .service-bar {
+            height: 10px;
+            border-radius: 999px;
+            background: #e5e9ff;
+            overflow: hidden;
+        }
+        
+        .service-bar-fill {
+            height: 100%;
+            border-radius: 999px;
+            background: var(--client-color, #5C6AC4);
         }
         
         /* Quality Metrics Styles */
@@ -542,6 +665,8 @@
             <div class="demo-banner" id="demoBanner">
                 <strong>Demo environment:</strong> This sandbox called Demo Booking Partner shows exactly how the AI follows up, books, and logs appointments before we plug in your branding.
             </div>
+            
+            <div class="highlight-grid" id="highlightGrid"></div>
         </div>
         
         <div class="dashboard">
@@ -614,6 +739,22 @@
                 <h3>📈 Performance</h3>
                 <div id="performance-metrics">
                     <div class="loading">Loading performance data...</div>
+                </div>
+            </div>
+            
+            <!-- Service Mix -->
+            <div class="card">
+                <h3>🧩 Service Mix</h3>
+                <div id="service-mix">
+                    <div class="loading">Preparing service mix...</div>
+                </div>
+            </div>
+            
+            <!-- Activity Feed -->
+            <div class="card" style="grid-column: 1 / -1;">
+                <h3>🗓️ Latest Conversations</h3>
+                <div id="recent-calls" class="activity-log">
+                    <div class="loading">Pulling call feed...</div>
                 </div>
             </div>
         </div>
@@ -770,6 +911,46 @@
                 document.getElementById('configTimezone').textContent = config.timezone;
                 document.getElementById('configHours').textContent = config.businessHours;
                 
+                // Highlights
+                const highlightGrid = document.getElementById('highlightGrid');
+                if (highlightGrid) {
+                    if (clientData.highlights) {
+                        const hl = clientData.highlights;
+                        const cards = [
+                            {
+                                label: 'Avg Response',
+                                value: hl.responseTime,
+                                sub: 'Speed from lead to first dial'
+                            },
+                            {
+                                label: 'Bookings This Week',
+                                value: hl.bookingsThisWeek,
+                                sub: hl.bookingsNotes || 'Last confirmed today'
+                            },
+                            {
+                                label: 'Pipeline Value',
+                                value: hl.pipelineValue,
+                                sub: hl.pipelineNotes || 'Qualified across 3 services'
+                            },
+                            {
+                                label: 'Show Rate',
+                                value: hl.showRate,
+                                sub: hl.showNotes || 'No cancellations this week'
+                            }
+                        ];
+                        highlightGrid.style.display = 'grid';
+                        highlightGrid.innerHTML = cards.map(card => `
+                            <div class="highlight-card">
+                                <div class="highlight-label">${card.label}</div>
+                                <div class="highlight-value">${card.value}</div>
+                                <div class="highlight-subtext">${card.sub}</div>
+                            </div>
+                        `).join('');
+                    } else {
+                        highlightGrid.style.display = 'none';
+                    }
+                }
+                
                 // Update client metrics
                 document.getElementById('client-metrics').innerHTML = `
                     <div class="metric">
@@ -847,13 +1028,66 @@
                 `;
                 
                 // Update leads
-                document.getElementById('leads-list').innerHTML = clientData.leads.map(lead => `
+                const leads = Array.isArray(clientData.leads) ? clientData.leads : [];
+                document.getElementById('leads-list').innerHTML = leads.map(lead => `
                     <div class="lead-item">
-                        <div class="lead-phone">${lead.phone}</div>
-                        <div class="lead-status">Status: ${lead.status} • Last: ${lead.lastMessage}</div>
-                        <div class="lead-score">Score: ${lead.score}</div>
+                        <div class="lead-header-row">
+                            <div>
+                                <div class="lead-name">${lead.name || lead.phone}</div>
+                                <div class="lead-phone">${lead.phone}</div>
+                            </div>
+                            <div class="lead-score">${lead.score}</div>
+                        </div>
+                        <div class="lead-status">${lead.status} • ${lead.service || 'General Inquiry'}</div>
+                        <div class="lead-status">Last activity: ${lead.lastMessage}</div>
                     </div>
                 `).join('') || '<div class="loading">No leads yet</div>';
+                
+                // Service mix
+                const serviceMixEl = document.getElementById('service-mix');
+                if (serviceMixEl) {
+                    if (Array.isArray(clientData.serviceMix) && clientData.serviceMix.length) {
+                        serviceMixEl.innerHTML = clientData.serviceMix.map(service => `
+                            <div class="service-row">
+                                <div class="service-header">
+                                    <span>${service.name}</span>
+                                    <span>${service.percent}%</span>
+                                </div>
+                                <div class="service-bar">
+                                    <div class="service-bar-fill" style="width: ${service.percent}%"></div>
+                                </div>
+                                <div class="service-header" style="font-size: 0.8rem; color: #8b8ea8;">
+                                    <span>${service.notes || ''}</span>
+                                    <span>${service.bookings || 0} bookings</span>
+                                </div>
+                            </div>
+                        `).join('');
+                    } else {
+                        serviceMixEl.innerHTML = '<div class="loading">Connect services to see distribution</div>';
+                    }
+                }
+                
+                // Recent calls/activity
+                const recentCallsEl = document.getElementById('recent-calls');
+                if (recentCallsEl) {
+                    if (Array.isArray(clientData.recentCalls) && clientData.recentCalls.length) {
+                        recentCallsEl.innerHTML = clientData.recentCalls.map(call => `
+                            <div class="activity-item">
+                                <div>
+                                    <div class="lead-name">${call.name}</div>
+                                    <div class="activity-meta">${call.service} • ${call.channel}</div>
+                                    <div class="activity-meta">${call.summary}</div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <div class="activity-status ${call.statusClass || 'info'}">${call.status}</div>
+                                    <div class="activity-meta">${call.timeAgo}</div>
+                                </div>
+                            </div>
+                        `).join('');
+                    } else {
+                        recentCallsEl.innerHTML = '<div class="loading">Waiting for first conversations...</div>';
+                    }
+                }
                 
             } catch (error) {
                 console.error('Failed to load client data:', error);
@@ -901,39 +1135,90 @@
                     leads: []
                 },
                 'demo_client': {
-                    totalLeads: 24,
-                    totalCalls: 21,
-                    last24hLeads: 6,
-                    conversionRate: 62,
-                    successRate: 95,
-                    avgLeadScore: 86,
-                    highPriorityLeads: 7,
-                    mediumPriorityLeads: 11,
-                    lowPriorityLeads: 6,
+                    totalLeads: 30,
+                    totalCalls: 26,
+                    last24hLeads: 7,
+                    conversionRate: 60,
+                    successRate: 93,
+                    avgLeadScore: 87,
+                    highPriorityLeads: 9,
+                    mediumPriorityLeads: 14,
+                    lowPriorityLeads: 7,
+                    highlights: {
+                        responseTime: '2m 58s',
+                        bookingsThisWeek: 18,
+                        bookingsNotes: '6 new bookings today',
+                        pipelineValue: '£32.4k',
+                        pipelineNotes: '18 qualified leads pending contracts',
+                        showRate: '0 no-shows',
+                        showNotes: 'Auto-reminders keep attendance at 100%'
+                    },
+                    serviceMix: [
+                        { name: 'Lead Follow-Up', percent: 35, bookings: 6, notes: 'Speed-to-lead flows' },
+                        { name: 'Appointment Booking', percent: 45, bookings: 8, notes: 'AI calendar concierge' },
+                        { name: 'Calendar Integration', percent: 20, bookings: 4, notes: 'Multi-calendar sync' }
+                    ],
+                    recentCalls: [
+                        {
+                            name: 'Sarah Patel',
+                            service: 'Lead Follow-Up',
+                            channel: 'AI phone call',
+                            summary: 'Confirmed consultation for Tuesday 2:30pm',
+                            status: 'Booked',
+                            statusClass: 'success',
+                            timeAgo: '2 min ago'
+                        },
+                        {
+                            name: 'Marcus Flynn',
+                            service: 'Appointment Booking',
+                            channel: 'AI SMS → call',
+                            summary: 'Requested reschedule; AI sent new slot options',
+                            status: 'Awaiting reply',
+                            statusClass: 'pending',
+                            timeAgo: '9 min ago'
+                        },
+                        {
+                            name: 'Laura Chen',
+                            service: 'Calendar Integration',
+                            channel: 'Webhook sync',
+                            summary: 'Synced with Google Calendar + sent prep email',
+                            status: 'Synced',
+                            statusClass: 'info',
+                            timeAgo: '25 min ago'
+                        }
+                    ],
                     leads: [
                         {
+                            name: 'Jordan Hale',
                             phone: '+44 7700 900451',
-                            status: 'booked',
-                            lastMessage: 'Confirmed AI Strategy Session',
-                            score: 94
+                            status: 'Booked • 3pm AI Strategy Session',
+                            lastMessage: 'Confirmed via AI call + calendar invite',
+                            score: 94,
+                            service: 'Lead Follow-Up'
                         },
                         {
+                            name: 'Priya Desai',
                             phone: '+44 7700 900512',
-                            status: 'follow-up',
-                            lastMessage: 'Requested afternoon slot',
-                            score: 82
+                            status: 'Follow-up • wants afternoon slot',
+                            lastMessage: 'AI sent 2-time options + SMS nudge',
+                            score: 82,
+                            service: 'Appointment Booking'
                         },
                         {
+                            name: 'Lewis Grant',
                             phone: '+44 7700 900623',
-                            status: 'engaged',
-                            lastMessage: 'Sent calendar invite',
-                            score: 88
+                            status: 'Engaged • asked pricing question',
+                            lastMessage: 'AI emailed case study + queued callback',
+                            score: 88,
+                            service: 'Calendar Integration'
                         },
                         {
+                            name: 'Emily Carr',
                             phone: '+44 7700 900734',
-                            status: 'left voicemail',
-                            lastMessage: 'AI left personalised reminder',
-                            score: 71
+                            status: 'Left voicemail • auto SMS sent',
+                            lastMessage: 'AI reminder scheduled for 9am tomorrow',
+                            score: 71,
+                            service: 'Lead Follow-Up'
                         }
                     ]
                 }
