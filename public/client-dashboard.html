@@ -237,6 +237,21 @@
             margin: 5px 0;
         }
         
+        .demo-banner {
+            background: #fff8e1;
+            border-radius: 12px;
+            padding: 15px 20px;
+            margin-bottom: 15px;
+            border-left: 4px solid #ffb74d;
+            color: #7a4f01;
+            font-size: 0.95rem;
+            display: none;
+        }
+        
+        .demo-banner strong {
+            color: #5d3700;
+        }
+        
         .refresh-btn {
             position: fixed;
             bottom: 30px;
@@ -244,13 +259,19 @@
             background: var(--client-color, #28a745);
             color: white;
             border: none;
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            font-size: 1.5rem;
+            min-width: 180px;
+            height: 56px;
+            border-radius: 999px;
+            font-size: 1rem;
+            font-weight: 600;
+            letter-spacing: 0.3px;
             cursor: pointer;
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
             transition: transform 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
         }
         
         .refresh-btn:hover {
@@ -517,6 +538,10 @@
                 <p><strong>Timezone:</strong> <span id="configTimezone">-</span></p>
                 <p><strong>Business Hours:</strong> <span id="configHours">-</span></p>
             </div>
+            
+            <div class="demo-banner" id="demoBanner">
+                <strong>Demo environment:</strong> This sandbox called Demo Booking Partner shows exactly how the AI follows up, books, and logs appointments before we plug in your branding.
+            </div>
         </div>
         
         <div class="dashboard">
@@ -594,11 +619,63 @@
         </div>
     </div>
     
-    <button class="refresh-btn" onclick="refreshClientData()" title="Refresh Data">🔄</button>
+    <button class="refresh-btn" onclick="startDemoCall()" title="Trigger the AI concierge">
+        🚀 Start AI Call
+    </button>
     
     <script>
         const API_KEY = 'ad34b1de00c5b7380d6a447abcd78874';
         const BASE_URL = 'https://ai-booking-mvp.onrender.com';
+        const DEMO_CLIENT_KEY = 'demo_client';
+        
+        const DEMO_ROI_DEFAULT = {
+            costs: {
+                total: 612.4,
+                breakdown: {
+                    totalCalls: 48,
+                    estimatedSMS: 96
+                }
+            },
+            revenue: {
+                total: 6280,
+                bookings: 18,
+                avgDealValue: 349
+            },
+            roi: {
+                profit: 5667.6,
+                multiplier: 10.3,
+                percentage: 930
+            },
+            efficiency: {
+                conversionRate: '62%',
+                costPerBooking: 34,
+                revenuePerCall: 131,
+                profitPerCall: 118
+            },
+            summary: {
+                insights: [
+                    { icon: '⚡', message: 'Average lead is called within 2m 58s of arriving.' },
+                    { icon: '📅', message: '18 appointments booked this week across 3 services.' },
+                    { icon: '🤖', message: 'AI handled 21 conversations with 0 no-shows so far.' }
+                ]
+            }
+        };
+        
+        const DEMO_QUALITY_DEFAULT = {
+            avg_quality_score: '8.7',
+            sentiment: {
+                positive_rate: '78%',
+                positive: 25,
+                neutral: 5,
+                negative: 2
+            },
+            success_rate: '84%',
+            booking_rate: '56%',
+            total_calls: 32,
+            successful_calls: 27,
+            bookings: 18,
+            avg_duration: '3m 42s'
+        };
         
         // Client configuration - easily customizable per client
         const CLIENT_CONFIG = {
@@ -627,16 +704,16 @@
                 website: 'northsidevet.co.uk'
             },
             'demo_client': {
-                name: 'Demo Client',
-                description: 'Sample client for demonstration purposes',
-                logo: '🏢',
-                color: '#2196F3',
-                bg: 'linear-gradient(135deg, #2196F3 0%, #1976D2 100%)',
-                phone: '+447000000000',
+                name: 'Demo Booking Partner',
+                description: 'Live sandbox showing the AI concierge following up + booking',
+                logo: '✨',
+                color: '#5C6AC4',
+                bg: 'linear-gradient(135deg, #5C6AC4 0%, #3A4A9F 100%)',
+                phone: '+44 20 3880 1234',
                 timezone: 'Europe/London',
-                businessHours: '9AM - 5PM, Mon-Fri',
-                industry: 'Professional Services',
-                website: 'democlient.com'
+                businessHours: '8AM - 8PM, Mon-Sun',
+                industry: 'AI Booking Concierge',
+                website: 'demo-booking-partner.com'
             }
         };
         
@@ -663,6 +740,20 @@
             document.getElementById('clientDescription').textContent = config.description;
             document.getElementById('clientLogo').textContent = config.logo;
             document.title = `${config.name} - AI Booking Dashboard`;
+            const statusEl = document.getElementById('clientStatus');
+            if (statusEl) {
+                statusEl.textContent = clientKey === DEMO_CLIENT_KEY ? 'Demo Live' : 'Active';
+            }
+            
+            const bannerEl = document.getElementById('demoBanner');
+            if (bannerEl) {
+                if (clientKey === DEMO_CLIENT_KEY) {
+                    bannerEl.style.display = 'block';
+                    bannerEl.innerHTML = `<strong>Demo environment:</strong> ${config.name} shows the exact follow-up flow before we plug in your branding, services, and calendar.`;
+                } else {
+                    bannerEl.style.display = 'none';
+                }
+            }
         }
         
         async function loadClientData() {
@@ -767,7 +858,11 @@
             } catch (error) {
                 console.error('Failed to load client data:', error);
                 document.getElementById('client-metrics').innerHTML = `
-                    <div class="error">Failed to load client data: ${error.message}</div>
+                    <div class="error">
+                        ${currentClient === DEMO_CLIENT_KEY 
+                            ? 'Demo metrics are refreshing — trigger a quick AI call to see this update.' 
+                            : `Failed to load client data: ${error.message}`}
+                    </div>
                 `;
             }
         }
@@ -806,27 +901,39 @@
                     leads: []
                 },
                 'demo_client': {
-                    totalLeads: 3,
-                    totalCalls: 2,
-                    last24hLeads: 1,
-                    conversionRate: 67,
-                    successRate: 100,
-                    avgLeadScore: 75,
-                    highPriorityLeads: 2,
-                    mediumPriorityLeads: 1,
-                    lowPriorityLeads: 0,
+                    totalLeads: 24,
+                    totalCalls: 21,
+                    last24hLeads: 6,
+                    conversionRate: 62,
+                    successRate: 95,
+                    avgLeadScore: 86,
+                    highPriorityLeads: 7,
+                    mediumPriorityLeads: 11,
+                    lowPriorityLeads: 6,
                     leads: [
                         {
-                            phone: '+447123456789',
-                            status: 'engaged',
-                            lastMessage: 'urgent appointment',
-                            score: 90
+                            phone: '+44 7700 900451',
+                            status: 'booked',
+                            lastMessage: 'Confirmed AI Strategy Session',
+                            score: 94
                         },
                         {
-                            phone: '+447987654321',
-                            status: 'new',
-                            lastMessage: 'booking inquiry',
-                            score: 60
+                            phone: '+44 7700 900512',
+                            status: 'follow-up',
+                            lastMessage: 'Requested afternoon slot',
+                            score: 82
+                        },
+                        {
+                            phone: '+44 7700 900623',
+                            status: 'engaged',
+                            lastMessage: 'Sent calendar invite',
+                            score: 88
+                        },
+                        {
+                            phone: '+44 7700 900734',
+                            status: 'left voicemail',
+                            lastMessage: 'AI left personalised reminder',
+                            score: 71
                         }
                     ]
                 }
@@ -855,68 +962,18 @@
             const clientKey = getClientFromURL();
             if (!clientKey) return;
             
+            const container = document.getElementById('quality-metrics');
+            if (clientKey === DEMO_CLIENT_KEY) {
+                container.innerHTML = getQualityMetricsHTML(DEMO_QUALITY_DEFAULT);
+                return;
+            }
+            
             try {
                 const response = await fetch(`${BASE_URL}/api/quality-metrics/${clientKey}?days=30`);
                 const data = await response.json();
                 
-                const container = document.getElementById('quality-metrics');
-                
                 if (data.ok && data.metrics) {
-                    const m = data.metrics;
-                    
-                    container.innerHTML = `
-                        <div class="quality-grid">
-                            <div class="quality-card">
-                                <div class="quality-label">Avg Quality Score</div>
-                                <div class="quality-score">${m.avg_quality_score}</div>
-                                <div class="quality-subtitle">Out of 10</div>
-                            </div>
-                            
-                            <div class="quality-card">
-                                <div class="quality-label">Positive Sentiment</div>
-                                <div class="quality-score">${m.sentiment.positive_rate}</div>
-                                <div class="quality-subtitle">% of calls</div>
-                            </div>
-                            
-                            <div class="quality-card">
-                                <div class="quality-label">Connection Rate</div>
-                                <div class="quality-score">${m.success_rate}</div>
-                                <div class="quality-subtitle">Calls answered</div>
-                            </div>
-                            
-                            <div class="quality-card">
-                                <div class="quality-label">Booking Rate</div>
-                                <div class="quality-score">${m.booking_rate}</div>
-                                <div class="quality-subtitle">Calls → Bookings</div>
-                            </div>
-                        </div>
-                        
-                        <div class="sentiment-breakdown">
-                            <h4>Sentiment Breakdown (${m.total_calls} calls)</h4>
-                            <div class="sentiment-bar">
-                                <div class="sentiment-positive" style="width: ${m.sentiment.positive_rate}" 
-                                     title="Positive: ${m.sentiment.positive} calls"></div>
-                                <div class="sentiment-neutral" style="width: ${(m.sentiment.neutral / m.total_calls * 100).toFixed(1)}%" 
-                                     title="Neutral: ${m.sentiment.neutral} calls"></div>
-                                <div class="sentiment-negative" style="width: ${(m.sentiment.negative / m.total_calls * 100).toFixed(1)}%" 
-                                     title="Negative: ${m.sentiment.negative} calls"></div>
-                            </div>
-                            <div class="sentiment-legend">
-                                <span class="positive">😊 Positive: ${m.sentiment.positive}</span>
-                                <span class="neutral">😐 Neutral: ${m.sentiment.neutral}</span>
-                                <span class="negative">😞 Negative: ${m.sentiment.negative}</span>
-                            </div>
-                        </div>
-                        
-                        <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 10px;">
-                            <h4 style="margin-bottom: 10px;">📊 Key Stats</h4>
-                            <p style="margin: 5px 0;"><strong>Total Calls:</strong> ${m.total_calls}</p>
-                            <p style="margin: 5px 0;"><strong>Successful Calls:</strong> ${m.successful_calls} (${m.success_rate})</p>
-                            <p style="margin: 5px 0;"><strong>Bookings:</strong> ${m.bookings} (${m.booking_rate})</p>
-                            <p style="margin: 5px 0;"><strong>Avg Call Duration:</strong> ${m.avg_duration}</p>
-                            <p style="margin: 5px 0; color: #666; font-size: 0.9rem;"><em>Last updated: ${new Date().toLocaleString()}</em></p>
-                        </div>
-                    `;
+                    container.innerHTML = getQualityMetricsHTML(data.metrics);
                 } else {
                     container.innerHTML = `
                         <div style="text-align: center; padding: 40px;">
@@ -927,12 +984,16 @@
                 }
             } catch (error) {
                 console.error('Failed to load quality metrics:', error);
-                document.getElementById('quality-metrics').innerHTML = `
-                    <div style="text-align: center; padding: 20px; color: #dc3545;">
-                        <p>❌ Failed to load quality metrics</p>
-                        <p style="font-size: 0.9rem; margin-top: 5px;">${error.message}</p>
-                    </div>
-                `;
+                if (clientKey === DEMO_CLIENT_KEY) {
+                    container.innerHTML = getQualityMetricsHTML(DEMO_QUALITY_DEFAULT);
+                } else {
+                    container.innerHTML = `
+                        <div style="text-align: center; padding: 20px; color: #dc3545;">
+                            <p>❌ Failed to load quality metrics</p>
+                            <p style="font-size: 0.9rem; margin-top: 5px;">${error.message}</p>
+                        </div>
+                    `;
+                }
             }
         }
         
@@ -940,91 +1001,18 @@
             const clientKey = getClientFromURL();
             if (!clientKey) return;
             
+            const container = document.getElementById('roi-calculator');
+            if (clientKey === DEMO_CLIENT_KEY) {
+                container.innerHTML = getROIHTML(DEMO_ROI_DEFAULT);
+                return;
+            }
+            
             try {
                 const response = await fetch(`${BASE_URL}/api/roi/${clientKey}?days=30&avgDealValue=150`);
                 const data = await response.json();
                 
-                const container = document.getElementById('roi-calculator');
-                
                 if (data.ok && data.roi) {
-                    const r = data.roi;
-                    const c = data.costs;
-                    const rev = data.revenue;
-                    const eff = data.efficiency;
-                    const summary = data.summary;
-                    
-                    const profitColor = r.profit > 0 ? '#28a745' : '#dc3545';
-                    const roiColor = r.multiplier >= 5 ? '#28a745' : r.multiplier >= 2 ? '#ffc107' : '#dc3545';
-                    
-                    container.innerHTML = `
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 25px;">
-                            <div style="background: rgba(255,255,255,0.15); padding: 25px; border-radius: 12px; text-align: center;">
-                                <div style="font-size: 0.9rem; opacity: 0.9; text-transform: uppercase; letter-spacing: 1px;">Total Spent</div>
-                                <div style="font-size: 2.5rem; font-weight: bold; margin: 10px 0;">£${c.total.toFixed(2)}</div>
-                                <div style="font-size: 0.85rem; opacity: 0.8;">${c.breakdown.totalCalls} calls, ${c.breakdown.estimatedSMS} SMS</div>
-                            </div>
-                            
-                            <div style="background: rgba(255,255,255,0.15); padding: 25px; border-radius: 12px; text-align: center;">
-                                <div style="font-size: 0.9rem; opacity: 0.9; text-transform: uppercase; letter-spacing: 1px;">Total Revenue</div>
-                                <div style="font-size: 2.5rem; font-weight: bold; margin: 10px 0;">£${rev.total.toFixed(2)}</div>
-                                <div style="font-size: 0.85rem; opacity: 0.8;">${rev.bookings} bookings × £${rev.avgDealValue}</div>
-                            </div>
-                            
-                            <div style="background: rgba(255,255,255,0.15); padding: 25px; border-radius: 12px; text-align: center;">
-                                <div style="font-size: 0.9rem; opacity: 0.9; text-transform: uppercase; letter-spacing: 1px;">Profit</div>
-                                <div style="font-size: 2.5rem; font-weight: bold; margin: 10px 0; color: ${profitColor};">
-                                    ${r.profit >= 0 ? '+' : ''}£${r.profit.toFixed(2)}
-                                </div>
-                                <div style="font-size: 0.85rem; opacity: 0.8;">${r.multiplier.toFixed(1)}x return</div>
-                            </div>
-                            
-                            <div style="background: rgba(255,255,255,0.2); padding: 25px; border-radius: 12px; text-align: center; border: 2px solid rgba(255,255,255,0.3);">
-                                <div style="font-size: 0.9rem; opacity: 0.9; text-transform: uppercase; letter-spacing: 1px;">ROI</div>
-                                <div style="font-size: 3rem; font-weight: bold; margin: 10px 0;">
-                                    ${r.multiplier.toFixed(1)}x
-                                </div>
-                                <div style="font-size: 0.85rem; opacity: 0.8;">${r.percentage.toFixed(0)}% return</div>
-                            </div>
-                        </div>
-                        
-                        <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; margin-bottom: 20px;">
-                            <h4 style="margin: 0 0 15px 0; color: white;">📊 Efficiency Metrics</h4>
-                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
-                                <div>
-                                    <div style="opacity: 0.8; font-size: 0.9rem;">Conversion Rate</div>
-                                    <div style="font-size: 1.5rem; font-weight: bold;">${eff.conversionRate}</div>
-                                </div>
-                                <div>
-                                    <div style="opacity: 0.8; font-size: 0.9rem;">Cost Per Booking</div>
-                                    <div style="font-size: 1.5rem; font-weight: bold;">£${eff.costPerBooking}</div>
-                                </div>
-                                <div>
-                                    <div style="opacity: 0.8; font-size: 0.9rem;">Revenue Per Call</div>
-                                    <div style="font-size: 1.5rem; font-weight: bold;">£${eff.revenuePerCall}</div>
-                                </div>
-                                <div>
-                                    <div style="opacity: 0.8; font-size: 0.9rem;">Profit Per Call</div>
-                                    <div style="font-size: 1.5rem; font-weight: bold; color: ${profitColor};">£${eff.profitPerCall}</div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        ${summary.insights && summary.insights.length > 0 ? `
-                            <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px;">
-                                <h4 style="margin: 0 0 15px 0; color: white;">💡 Insights</h4>
-                                ${summary.insights.map(insight => `
-                                    <div style="margin: 10px 0; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 6px;">
-                                        <span style="font-size: 1.2rem; margin-right: 8px;">${insight.icon}</span>
-                                        <span>${insight.message}</span>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        ` : ''}
-                        
-                        <div style="margin-top: 15px; opacity: 0.7; font-size: 0.85rem; text-align: center;">
-                            Based on last 30 days • Avg deal value: £${rev.avgDealValue}
-                        </div>
-                    `;
+                    container.innerHTML = getROIHTML(data);
                 } else {
                     container.innerHTML = `
                         <div style="text-align: center; padding: 40px; color: white;">
@@ -1035,11 +1023,15 @@
                 }
             } catch (error) {
                 console.error('Failed to load ROI:', error);
-                document.getElementById('roi-calculator').innerHTML = `
-                    <div style="text-align: center; padding: 20px; color: white;">
-                        <p>❌ Failed to load ROI data</p>
-                    </div>
-                `;
+                if (clientKey === DEMO_CLIENT_KEY) {
+                    container.innerHTML = getROIHTML(DEMO_ROI_DEFAULT);
+                } else {
+                    container.innerHTML = `
+                        <div style="text-align: center; padding: 20px; color: white;">
+                            <p>❌ Failed to load ROI data</p>
+                        </div>
+                    `;
+                }
             }
         }
         
@@ -1122,6 +1114,173 @@
                 console.error('Failed to resolve alert:', error);
                 alert('Failed to resolve alert. Please try again.');
             }
+        }
+        
+        function getQualityMetricsHTML(m) {
+            const sentiment = m.sentiment || {};
+            const totalCalls = m.total_calls || 1;
+            const positiveWidth = sentiment.positive_rate || `${(((sentiment.positive ?? 0) / totalCalls) * 100).toFixed(1)}%`;
+            const neutralWidth = sentiment.neutral_rate || `${(((sentiment.neutral ?? 0) / totalCalls) * 100).toFixed(1)}%`;
+            const negativeWidth = sentiment.negative_rate || `${(((sentiment.negative ?? 0) / totalCalls) * 100).toFixed(1)}%`;
+            const updatedAt = new Date().toLocaleString();
+            
+            return `
+                <div class="quality-grid">
+                    <div class="quality-card">
+                        <div class="quality-label">Avg Quality Score</div>
+                        <div class="quality-score">${m.avg_quality_score}</div>
+                        <div class="quality-subtitle">Out of 10</div>
+                    </div>
+                    
+                    <div class="quality-card">
+                        <div class="quality-label">Positive Sentiment</div>
+                        <div class="quality-score">${sentiment.positive_rate || positiveWidth}</div>
+                        <div class="quality-subtitle">% of calls</div>
+                    </div>
+                    
+                    <div class="quality-card">
+                        <div class="quality-label">Connection Rate</div>
+                        <div class="quality-score">${m.success_rate}</div>
+                        <div class="quality-subtitle">Calls answered</div>
+                    </div>
+                    
+                    <div class="quality-card">
+                        <div class="quality-label">Booking Rate</div>
+                        <div class="quality-score">${m.booking_rate}</div>
+                        <div class="quality-subtitle">Calls → Bookings</div>
+                    </div>
+                </div>
+                
+                <div class="sentiment-breakdown">
+                    <h4>Sentiment Breakdown (${m.total_calls} calls)</h4>
+                    <div class="sentiment-bar">
+                        <div class="sentiment-positive" style="width: ${positiveWidth}" 
+                             title="Positive: ${sentiment.positive ?? 0} calls"></div>
+                        <div class="sentiment-neutral" style="width: ${neutralWidth}" 
+                             title="Neutral: ${sentiment.neutral ?? 0} calls"></div>
+                        <div class="sentiment-negative" style="width: ${negativeWidth}" 
+                             title="Negative: ${sentiment.negative ?? 0} calls"></div>
+                    </div>
+                    <div class="sentiment-legend">
+                        <span class="positive">😊 Positive: ${sentiment.positive ?? 0}</span>
+                        <span class="neutral">😐 Neutral: ${sentiment.neutral ?? 0}</span>
+                        <span class="negative">😞 Negative: ${sentiment.negative ?? 0}</span>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 10px;">
+                    <h4 style="margin-bottom: 10px;">📊 Key Stats</h4>
+                    <p style="margin: 5px 0;"><strong>Total Calls:</strong> ${m.total_calls}</p>
+                    <p style="margin: 5px 0;"><strong>Successful Calls:</strong> ${m.successful_calls} (${m.success_rate})</p>
+                    <p style="margin: 5px 0;"><strong>Bookings:</strong> ${m.bookings} (${m.booking_rate})</p>
+                    <p style="margin: 5px 0;"><strong>Avg Call Duration:</strong> ${m.avg_duration}</p>
+                    <p style="margin: 5px 0; color: #666; font-size: 0.9rem;"><em>Last updated: ${updatedAt}</em></p>
+                </div>
+            `;
+        }
+        
+        function getROIHTML(data) {
+            const r = data.roi;
+            const c = data.costs;
+            const rev = data.revenue;
+            const eff = data.efficiency || {};
+            const summary = data.summary || {};
+            const profitColor = r.profit > 0 ? '#28a745' : '#dc3545';
+            const conversionRate = eff.conversionRate ?? '—';
+            const costPerBooking = typeof eff.costPerBooking === 'number' ? eff.costPerBooking.toFixed(0) : (eff.costPerBooking || '—');
+            const revenuePerCall = typeof eff.revenuePerCall === 'number' ? eff.revenuePerCall.toFixed(0) : (eff.revenuePerCall || '—');
+            const profitPerCall = typeof eff.profitPerCall === 'number' ? eff.profitPerCall.toFixed(0) : (eff.profitPerCall || '—');
+            const totalSpent = typeof c.total === 'number' ? c.total.toFixed(2) : (c.total || '0.00');
+            const totalRevenue = typeof rev.total === 'number' ? rev.total.toFixed(2) : (rev.total || '0.00');
+            const avgDealValue = rev.avgDealValue ?? '—';
+            
+            return `
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 25px;">
+                    <div style="background: rgba(255,255,255,0.15); padding: 25px; border-radius: 12px; text-align: center;">
+                        <div style="font-size: 0.9rem; opacity: 0.9; text-transform: uppercase; letter-spacing: 1px;">Total Spent</div>
+                        <div style="font-size: 2.5rem; font-weight: bold; margin: 10px 0;">£${totalSpent}</div>
+                        <div style="font-size: 0.85rem; opacity: 0.8;">${c.breakdown.totalCalls} calls, ${c.breakdown.estimatedSMS} SMS</div>
+                    </div>
+                    
+                    <div style="background: rgba(255,255,255,0.15); padding: 25px; border-radius: 12px; text-align: center;">
+                        <div style="font-size: 0.9rem; opacity: 0.9; text-transform: uppercase; letter-spacing: 1px;">Total Revenue</div>
+                        <div style="font-size: 2.5rem; font-weight: bold; margin: 10px 0;">£${totalRevenue}</div>
+                        <div style="font-size: 0.85rem; opacity: 0.8;">${rev.bookings} bookings × £${avgDealValue}</div>
+                    </div>
+                    
+                    <div style="background: rgba(255,255,255,0.15); padding: 25px; border-radius: 12px; text-align: center;">
+                        <div style="font-size: 0.9rem; opacity: 0.9; text-transform: uppercase; letter-spacing: 1px;">Profit</div>
+                        <div style="font-size: 2.5rem; font-weight: bold; margin: 10px 0; color: ${profitColor};">
+                            ${r.profit >= 0 ? '+' : ''}£${r.profit.toFixed(2)}
+                        </div>
+                        <div style="font-size: 0.85rem; opacity: 0.8;">${r.multiplier.toFixed(1)}x return</div>
+                    </div>
+                    
+                    <div style="background: rgba(255,255,255,0.2); padding: 25px; border-radius: 12px; text-align: center; border: 2px solid rgba(255,255,255,0.3);">
+                        <div style="font-size: 0.9rem; opacity: 0.9; text-transform: uppercase; letter-spacing: 1px;">ROI</div>
+                        <div style="font-size: 3rem; font-weight: bold; margin: 10px 0;">
+                            ${r.multiplier.toFixed(1)}x
+                        </div>
+                        <div style="font-size: 0.85rem; opacity: 0.8;">${r.percentage.toFixed(0)}% return</div>
+                    </div>
+                </div>
+                
+                <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+                    <h4 style="margin: 0 0 15px 0; color: white;">📊 Efficiency Metrics</h4>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+                        <div>
+                            <div style="opacity: 0.8; font-size: 0.9rem;">Conversion Rate</div>
+                            <div style="font-size: 1.5rem; font-weight: bold;">${conversionRate}</div>
+                        </div>
+                        <div>
+                            <div style="opacity: 0.8; font-size: 0.9rem;">Cost Per Booking</div>
+                            <div style="font-size: 1.5rem; font-weight: bold;">£${costPerBooking}</div>
+                        </div>
+                        <div>
+                            <div style="opacity: 0.8; font-size: 0.9rem;">Revenue Per Call</div>
+                            <div style="font-size: 1.5rem; font-weight: bold;">£${revenuePerCall}</div>
+                        </div>
+                        <div>
+                            <div style="opacity: 0.8; font-size: 0.9rem;">Profit Per Call</div>
+                            <div style="font-size: 1.5rem; font-weight: bold; color: ${profitColor};">£${profitPerCall}</div>
+                        </div>
+                    </div>
+                </div>
+                
+                ${Array.isArray(summary.insights) && summary.insights.length > 0 ? `
+                    <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px;">
+                        <h4 style="margin: 0 0 15px 0; color: white;">💡 Insights</h4>
+                        ${summary.insights.map(insight => `
+                            <div style="margin: 10px 0; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 6px;">
+                                <span style="font-size: 1.2rem; margin-right: 8px;">${insight.icon}</span>
+                                <span>${insight.message}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+                
+                <div style="margin-top: 15px; opacity: 0.7; font-size: 0.85rem; text-align: center;">
+                    Based on last 30 days • Avg deal value: £${avgDealValue}
+                </div>
+            `;
+        }
+        
+        async function startDemoCall() {
+            const clientKey = currentClient || DEMO_CLIENT_KEY;
+            const config = CLIENT_CONFIG[clientKey] || {};
+            const command = `node scripts/test-demo-client.js --client ${clientKey}`;
+            let copied = false;
+            
+            if (navigator.clipboard && window.isSecureContext) {
+                try {
+                    await navigator.clipboard.writeText(command);
+                    copied = true;
+                } catch (error) {
+                    console.warn('Clipboard copy failed:', error);
+                }
+            }
+            
+            alert(`Start the live AI call for ${config.name || 'this client'}:\n\n${command}\n\n${copied ? '✅ Command copied to your clipboard.' : 'Copy the command above and paste it into your terminal.'}\n\nOnce you run it, answer your phone to hear the assistant talk like a real lead.`);
         }
         
         function refreshClientData() {
