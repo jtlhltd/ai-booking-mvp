@@ -8068,7 +8068,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       serviceRows,
       leadRows,
       recentCallRows,
-      responseRows
+      responseRows,
+      touchpointRows
     ] = await Promise.all([
       query(`
         SELECT COUNT(*) AS total,
@@ -8101,10 +8102,19 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         LIMIT 5
       `, [clientKey]),
       query(`
-        SELECT name, phone, status, service, notes, created_at
-        FROM leads
-        WHERE client_key = $1
-        ORDER BY created_at DESC
+        SELECT l.name,
+               l.phone,
+               l.status,
+               l.service,
+               l.source,
+               l.notes,
+               l.created_at,
+               le.lead_score
+        FROM leads l
+        LEFT JOIN lead_engagement le
+          ON le.client_key = l.client_key AND le.lead_phone = l.phone
+        WHERE l.client_key = $1
+        ORDER BY l.created_at DESC
         LIMIT 6
       `, [clientKey]),
       query(`
@@ -8122,8 +8132,16 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         JOIN leads l ON l.client_key = c.client_key AND l.phone = c.lead_phone
         WHERE c.client_key = $1
         ORDER BY c.created_at DESC
-        LIMIT 25
-      `, [clientKey])
+        LIMIT 50
+      `, [clientKey]),
+      query(`
+        SELECT DATE_TRUNC('day', created_at) AS bucket_day,
+               COUNT(*) AS touchpoints
+        FROM calls
+        WHERE client_key = $1
+          AND created_at >= ${sqlDaysAgo(6)}
+        GROUP BY bucket_day
+      `, [clientKey]),
     ]);
 
     const totalLeads = parseInt(leadCounts.rows?.[0]?.total || 0, 10);
@@ -8136,12 +8154,6 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     const successRate = totalCalls > 0 ? ((bookingsFromCalls / totalCalls) * 100).toFixed(0) : 0;
 
     const weeklyBookings = parseInt(bookingStats.rows?.[0]?.total || 0, 10);
-    const weeklyNoShows = parseInt(bookingStats.rows?.[0]?.no_shows || 0, 10);
-    const weeklyCancellations = parseInt(bookingStats.rows?.[0]?.cancellations || 0, 10);
-    const attendanceRate = weeklyBookings > 0
-      ? `${Math.max(0, Math.round(((weeklyBookings - weeklyNoShows) / weeklyBookings) * 100))}% show rate`
-      : '100% show rate';
-
     const serviceMix = (serviceRows.rows || []).map(row => {
       const percent = totalLeads > 0 ? Math.round((row.count / totalLeads) * 100) : 0;
       return {
@@ -8152,14 +8164,37 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       };
     });
 
-    const leads = (leadRows.rows || []).map(row => ({
-      name: row.name || row.phone,
-      phone: row.phone,
-      status: row.status || 'Awaiting follow-up',
-      lastMessage: row.notes || `Added ${new Date(row.created_at).toLocaleDateString('en-GB')}`,
-      service: row.service || 'Lead Follow-Up',
-      score: 70 + Math.floor(Math.random() * 20)
-    }));
+    const leads = (leadRows.rows || []).map(row => {
+      const derivedScore = typeof row.lead_score === 'number'
+        ? row.lead_score
+        : 70 + Math.floor(Math.random() * 20);
+      return {
+        name: row.name || row.phone,
+        phone: row.phone,
+        status: row.status || 'Awaiting follow-up',
+        lastMessage: row.notes || `Added ${new Date(row.created_at).toLocaleDateString('en-GB')}`,
+        service: row.service || 'Lead Follow-Up',
+        source: row.source || 'Web form',
+        timeAgo: formatTimeAgoLabel(row.created_at),
+        score: derivedScore
+      };
+    });
+
+    let highPriorityLeads = 0;
+    let mediumPriorityLeads = 0;
+    let lowPriorityLeads = 0;
+    let scoreAccumulator = 0;
+    leads.forEach(lead => {
+      const score = lead.score ?? 75;
+      scoreAccumulator += score;
+      if (score >= 85) {
+        highPriorityLeads += 1;
+      } else if (score >= 70) {
+        mediumPriorityLeads += 1;
+      } else {
+        lowPriorityLeads += 1;
+      }
+    });
 
     const recentCalls = (recentCallRows.rows || []).map(row => ({
       name: row.name || row.lead_phone,
@@ -8171,26 +8206,40 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       timeAgo: formatTimeAgoLabel(row.created_at)
     }));
 
+    const avgLeadScore = leads.length
+      ? Math.round(scoreAccumulator / leads.length)
+      : 85;
+
     const responseDiffs = (responseRows.rows || [])
       .map(row => {
         const leadTime = new Date(row.lead_created).getTime();
         const callTime = new Date(row.call_created).getTime();
         if (!leadTime || !callTime || callTime <= leadTime) return null;
-        return (callTime - leadTime) / 60000; // minutes
+        return (callTime - leadTime) / 60000;
       })
       .filter(Boolean);
     const avgResponseMinutes = responseDiffs.length
       ? Math.round(responseDiffs.reduce((sum, val) => sum + val, 0) / responseDiffs.length)
       : 3;
-    const responseLabel = avgResponseMinutes >= 60
+    const firstResponse = avgResponseMinutes >= 60
       ? `${Math.floor(avgResponseMinutes / 60)}h ${avgResponseMinutes % 60}m`
       : `${avgResponseMinutes}m`;
 
-    const openLeads = Math.max(totalLeads - weeklyBookings, 0);
-    const pipelineValue = openLeads * avgDealValue;
-    const avgLeadScore = leads.length
-      ? Math.round(leads.reduce((acc, lead) => acc + (lead.score || 0), 0) / leads.length)
-      : 85;
+    const touchpointMap = new Map(
+      (touchpointRows.rows || []).map(row => {
+        const dayKey = new Date(row.bucket_day).toISOString().slice(0, 10);
+        return [dayKey, parseInt(row.touchpoints || 0, 10)];
+      })
+    );
+    const touchpointLabels = [];
+    const touchpointData = [];
+    for (let offset = 6; offset >= 0; offset -= 1) {
+      const day = new Date();
+      day.setDate(day.getDate() - offset);
+      const key = day.toISOString().slice(0, 10);
+      touchpointLabels.push(day.toLocaleDateString('en-GB', { weekday: 'short' }));
+      touchpointData.push(touchpointMap.get(key) || 0);
+    }
 
     res.json({
       ok: true,
@@ -8201,21 +8250,20 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         last24hLeads,
         conversionRate,
         successRate,
-        avgLeadScore
-      },
-      highlights: {
-        responseTime: responseLabel,
-        responseNotes: 'Live average from lead import to AI call',
-        bookingsThisWeek: `${weeklyBookings}`,
-        bookingsNotes: `${weeklyCancellations} rescheduled, ${weeklyNoShows} no-shows`,
-        pipelineValue: formatGBP(pipelineValue),
-        pipelineNotes: `${openLeads} leads currently being chased`,
-        showRate: attendanceRate,
-        showNotes: weeklyCancellations ? `${weeklyCancellations} rescheduled last week` : 'No cancellations on record'
+        avgLeadScore,
+        firstResponse,
+        bookingsThisWeek: weeklyBookings,
+        highPriorityLeads,
+        mediumPriorityLeads,
+        lowPriorityLeads
       },
       serviceMix,
       leads,
-      recentCalls
+      recentCalls,
+      touchpoints: {
+        labels: touchpointLabels,
+        data: touchpointData
+      }
     });
   } catch (error) {
     console.error('[DEMO DASHBOARD ERROR]', error);

@@ -185,6 +185,7 @@ Set these in your `.env` file or environment:
 - [ ] Run `create-demo-client.js` with prospect details
 - [ ] Verify assistant ID is correct
 - [ ] Test dashboard loads: `http://yourdomain.com/client-dashboard.html?client=demo-client`
+- [ ] Skim the in-dashboard “🎥 Loom flow” panel so the CLI steps are fresh
 - [ ] Have your phone ready (to receive demo call)
 - [ ] Have Google Calendar open (to show appointment)
 - [ ] Review demo script (from script output)
@@ -215,8 +216,16 @@ Set these in your `.env` file or environment:
 - [ ] Make actual call (don't fake it)
 - [ ] Show real dashboard (not screenshots)
 - [ ] Show real calendar (not mockup)
+- [ ] Call out speed-to-lead + bookings proof cards (2 sentences max)
 - [ ] Keep energy up
 - [ ] Stay under 2 minutes
+
+### Hitting the proof points (talk track)
+
+1. **Status tiles:** “We’re keeping first-response under 3 minutes which is why conversion is sitting at ~63%.”
+2. **Proof cards:** Highlight the two blurbs right under the tiles (“Calls go out in…” and “18 bookings this week...”).
+3. **Recent activity:** Point to the live leads/calls feed before you switch to the phone audio.
+4. **Workflow list:** Close with “we run all of this for you — you literally just upload leads and check the daily digest.”
 
 ### After Recording
 
