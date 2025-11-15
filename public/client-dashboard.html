@@ -3,2434 +3,729 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Client Dashboard - AI Booking MVP</title>
+    <title>Client Dashboard - AI Booking Concierge</title>
     <style>
+        :root {
+            --primary: #5c6ac4;
+            --secondary: #3a4a9f;
+            --success: #1b5e20;
+            --warning: #f5a623;
+            --danger: #c62828;
+            --light: #f7f9fc;
+            --dark: #1f2234;
+            --card-shadow: 0 8px 24px rgba(16, 26, 62, 0.08);
+        }
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: var(--client-bg, linear-gradient(135deg, #667eea 0%, #764ba2 100%));
             min-height: 100vh;
-            color: #333;
+            background: linear-gradient(135deg, #eef2ff 0%, #e3ebff 40%, #fef9ff 100%);
+            color: #2b2e3b;
         }
-        
+
         .container {
             max-width: 1200px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 32px 20px 60px;
         }
-        
+
         .header {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.96);
             border-radius: 20px;
-            padding: 30px;
-            margin-bottom: 30px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-            border-left: 5px solid var(--client-color, #667eea);
+            padding: 28px 32px;
+            box-shadow: var(--card-shadow);
+            border-left: 6px solid var(--primary);
         }
-        
+
         .client-info {
             display: flex;
             justify-content: space-between;
+            gap: 24px;
+            flex-wrap: wrap;
             align-items: center;
-            margin-bottom: 20px;
         }
-        
+
+        .client-brand {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+        }
+
         .client-logo {
             width: 60px;
             height: 60px;
-            background: var(--client-color, #667eea);
-            border-radius: 50%;
+            border-radius: 16px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.5rem;
-            color: white;
-            font-weight: bold;
-        }
-        
-        .client-details h1 {
-            font-size: 2.5rem;
-            color: var(--client-color, #667eea);
-            margin-bottom: 5px;
-        }
-        
-        .client-details p {
-            color: #666;
-            font-size: 1.1rem;
-        }
-        
-        .client-status {
-            text-align: right;
-        }
-        
-        .status-badge {
-            display: inline-block;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-weight: 500;
-            background: var(--client-color, #667eea);
-            color: white;
-        }
-        
-        .dashboard {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-        }
-        
-        .card {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            transition: transform 0.3s ease;
-            border-top: 3px solid var(--client-color, #667eea);
-        }
-        
-        .card:hover {
-            transform: translateY(-5px);
-        }
-        
-        .card h3 {
-            color: var(--client-color, #333);
-            margin-bottom: 20px;
-            font-size: 1.3rem;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .metric {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 15px 0;
-            border-bottom: 1px solid #eee;
-        }
-        
-        .metric:last-child {
-            border-bottom: none;
-        }
-        
-        .metric-label {
-            color: #666;
-            font-weight: 500;
-        }
-        
-        .metric-value {
-            font-weight: bold;
-            font-size: 1.2rem;
-            color: var(--client-color, #333);
-        }
-        
-        .status {
-            display: inline-block;
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 0.9rem;
-            font-weight: 500;
-        }
-        
-        .status.healthy {
-            background: #d4edda;
-            color: #155724;
-        }
-        
-        .status.warning {
-            background: #fff3cd;
-            color: #856404;
-        }
-        
-        .status.error {
-            background: #f8d7da;
-            color: #721c24;
-        }
-        
-        .btn {
-            background: var(--client-color, #667eea);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 25px;
-            cursor: pointer;
-            font-weight: 500;
-            transition: transform 0.2s ease;
-            margin: 5px;
-        }
-        
-        .btn:hover {
-            transform: scale(1.05);
-        }
-        
-        .btn-secondary {
-            background: #6c757d;
-        }
-        
-        .leads-list {
-            max-height: 300px;
-            overflow-y: auto;
-        }
-        
-        .lead-item {
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 10px;
-            margin-bottom: 10px;
-            border-left: 4px solid var(--client-color, #667eea);
-        }
-        
-        .lead-header-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 6px;
-        }
-        
-        .lead-name {
-            font-size: 1rem;
-            font-weight: 600;
-            color: #1b1d33;
-        }
-        
-        .lead-phone {
-            font-size: 0.9rem;
-            color: #6f7288;
-        }
-        
-        .lead-status {
-            font-size: 0.9rem;
-            color: #666;
-            margin-top: 5px;
-        }
-        
-        .lead-score {
-            background: var(--client-color, #667eea);
-            color: white;
-            padding: 4px 10px;
-            border-radius: 999px;
-            font-size: 0.85rem;
-        }
-        
-        .loading {
-            text-align: center;
-            padding: 20px;
-            color: #666;
-        }
-        
-        .error {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 15px;
-            border-radius: 10px;
-            margin: 10px 0;
-        }
-        
-        .client-config {
-            background: #e3f2fd;
-            padding: 15px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-        }
-        
-        .client-config h4 {
-            color: var(--client-color, #1976d2);
-            margin-bottom: 10px;
-        }
-        
-        .client-config p {
-            color: #666;
-            margin: 5px 0;
-        }
-        
-        .demo-banner {
-            background: #fff8e1;
-            border-radius: 12px;
-            padding: 15px 20px;
-            margin-bottom: 15px;
-            border-left: 4px solid #ffb74d;
-            color: #7a4f01;
-            font-size: 0.95rem;
-            display: none;
-        }
-        
-        .demo-banner strong {
-            color: #5d3700;
-        }
-        
-        .highlight-grid {
-            display: none;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 15px;
-            margin-top: 15px;
-        }
-        
-        .highlight-card {
-            background: rgba(92, 106, 196, 0.08);
-            border: 1px solid rgba(92, 106, 196, 0.2);
-            border-radius: 14px;
-            padding: 18px;
-            color: #2c2f48;
-        }
-        
-        .highlight-label {
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            letter-spacing: 0.8px;
-            color: #6c6f93;
-            margin-bottom: 6px;
-        }
-        
-        .highlight-value {
-            font-size: 1.6rem;
-            font-weight: 700;
-            color: var(--client-color, #3A4A9F);
-        }
-        
-        .highlight-subtext {
-            margin-top: 4px;
-            font-size: 0.9rem;
-            color: #6c6f93;
-        }
-        
-        .testimonial-card {
-            background: #fff;
-            border-radius: 14px;
-            border: 1px solid rgba(92, 106, 196, 0.2);
-            padding: 18px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        
-        .testimonial-quote {
-            font-style: italic;
-            color: #4b4f72;
-        }
-        
-        .testimonial-author {
-            font-weight: 600;
-            color: #2c2f48;
-        }
-        
-        .refresh-btn {
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            background: var(--client-color, #28a745);
-            color: white;
-            border: none;
-            min-width: 180px;
-            height: 56px;
-            border-radius: 999px;
-            font-size: 1rem;
-            font-weight: 600;
-            letter-spacing: 0.3px;
-            cursor: pointer;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-            transition: transform 0.2s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-        }
-        
-        .refresh-btn:hover {
-            transform: scale(1.1);
-        }
-        
-        .client-selector {
-            margin: 10px 0 25px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
-        
-        .client-selector label {
-            font-weight: 600;
-            color: #4b4f72;
-        }
-        
-        .client-selector select {
-            padding: 10px 20px;
-            border: 2px solid var(--client-color, #667eea);
-            border-radius: 25px;
-            background: white;
-            font-size: 1rem;
-            cursor: pointer;
-            margin: 0 10px;
-        }
-        
-        .activity-log {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-        
-        .activity-item {
-            display: grid;
-            grid-template-columns: 1fr auto;
-            padding: 15px;
-            background: #f5f7ff;
-            border-radius: 12px;
-            border: 1px solid rgba(92,106,196,0.15);
-            gap: 10px;
-        }
-        
-        .activity-meta {
-            font-size: 0.85rem;
-            color: #636682;
-        }
-        
-        .activity-status {
-            padding: 4px 10px;
-            border-radius: 999px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-        
-        .activity-status.success {
-            background: #e6f4ea;
-            color: #1b5e20;
-        }
-        
-        .activity-status.pending {
-            background: #fff3cd;
-            color: #8a6d3b;
-        }
-        
-        .activity-status.info {
-            background: #e3f2fd;
-            color: #0d47a1;
-        }
-        
-        .service-mix {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-        
-        .service-row {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-        
-        .service-header {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.95rem;
-            color: #394067;
-        }
-        
-        .service-bar {
-            height: 10px;
-            border-radius: 999px;
-            background: #e5e9ff;
-            overflow: hidden;
-        }
-        
-        .service-bar-fill {
-            height: 100%;
-            border-radius: 999px;
-            background: var(--client-color, #5C6AC4);
-        }
-        
-        .next-steps {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-        
-        .next-step-item {
-            display: flex;
-            gap: 12px;
-            align-items: flex-start;
-            background: #f9f8ff;
-            border: 1px dashed rgba(92,106,196,0.4);
-            border-radius: 12px;
-            padding: 14px 16px;
-        }
-        
-        .next-step-icon {
-            font-size: 1.2rem;
-            color: var(--client-color, #5C6AC4);
-        }
-        
-        .next-step-content h4 {
-            margin-bottom: 4px;
-            color: #2a2c46;
-            font-size: 1rem;
-        }
-        
-        .next-step-content p {
-            margin: 0;
-            font-size: 0.9rem;
-            color: #636682;
-        }
-        
-        .timeline {
-            display: flex;
-            flex-direction: column;
-            gap: 18px;
-            position: relative;
-            padding-left: 20px;
-        }
-        
-        .timeline::before {
-            content: '';
-            position: absolute;
-            left: 8px;
-            top: 0;
-            bottom: 0;
-            width: 2px;
-            background: rgba(92,106,196,0.3);
-        }
-        
-        .timeline-item {
-            display: flex;
-            gap: 12px;
-            position: relative;
-        }
-        
-        .timeline-icon {
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            background: rgba(92,106,196,0.15);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1rem;
-            position: relative;
-            left: -22px;
-        }
-        
-        .timeline-content h4 {
-            margin: 0;
-            font-size: 1rem;
-            color: #2f3254;
-        }
-        
-        .timeline-content p {
-            margin: 2px 0;
-            color: #6b6f8f;
-            font-size: 0.9rem;
-        }
-        
-        .timeline-meta {
-            font-size: 0.85rem;
-            color: #9a9fbe;
-        }
-        
-        .transcript-box {
-            background: #f8f9ff;
-            border-radius: 12px;
-            padding: 15px;
-            border: 1px solid rgba(92,106,196,0.15);
-            font-size: 0.95rem;
-            color: #45476b;
-            min-height: 120px;
-        }
-        
-        .cta-card {
-            background: linear-gradient(135deg, #1d976c 0%, #2abf91 100%);
-            color: white;
-        }
-        
-        .cta-card h3 {
-            color: white;
-        }
-        
-        .cta-card button {
-            background: white;
-            color: #1d976c;
-            font-weight: 700;
-        }
-        
-        .roi-benchmark {
-            margin-top: 20px;
-            background: rgba(0,0,0,0.15);
-            border-radius: 10px;
-            padding: 16px;
-        }
-        
-        .roi-benchmark h4 {
-            margin: 0 0 10px;
-            color: white;
-        }
-        
-        .roi-benchmark p {
-            margin: 4px 0;
-            color: rgba(255,255,255,0.85);
-            font-size: 0.95rem;
-        }
-        
-        .integrations-list {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-        
-        .integration-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 0;
-            border-bottom: 1px solid #eceef7;
-        }
-        
-        .integration-name {
-            font-weight: 600;
-            color: #2c2f48;
-        }
-        
-        .integration-status {
-            border-radius: 999px;
-            padding: 4px 12px;
-            font-size: 0.85rem;
-            font-weight: 600;
-        }
-        
-        .integration-status.active {
-            background: #e6f4ea;
-            color: #1b5e20;
-        }
-        
-        .integration-status.pending {
-            background: #fff3cd;
-            color: #8a6d3b;
-        }
-        
-        .integration-status.inactive {
-            background: #fdecea;
-            color: #b71c1c;
-        }
-        
-        .forecast-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-            gap: 15px;
-        }
-        
-        .forecast-cell {
-            background: #f1f2fb;
-            border-radius: 12px;
-            padding: 15px;
-            text-align: center;
-        }
-        
-        .forecast-cell .value {
             font-size: 1.8rem;
-            font-weight: 700;
-            color: #2c2f48;
+            color: #fff;
+            background: var(--primary);
         }
-        
-        /* Quality Metrics Styles */
-        .quality-grid {
+
+        .client-details h1 {
+            font-size: 2.2rem;
+            color: var(--primary);
+        }
+
+        .client-details p {
+            color: #6f7390;
+            font-size: 1rem;
+            margin-top: 4px;
+        }
+
+        .status-chip {
+            padding: 10px 20px;
+            border-radius: 999px;
+            font-weight: 600;
+            background: rgba(92, 106, 196, 0.1);
+            color: var(--primary);
+        }
+
+        .client-meta {
+            margin-top: 18px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+        }
+
+        .meta-item {
+            background: var(--light);
+            border-radius: 12px;
+            padding: 12px 16px;
+        }
+
+        .meta-label {
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.1em;
+            color: #8c8fab;
+            margin-bottom: 4px;
+        }
+
+        .meta-value {
+            font-weight: 600;
+            color: #2f3147;
+        }
+
+        .demo-banner {
+            margin-top: 18px;
+            padding: 14px 18px;
+            border-radius: 14px;
+            background: #fff8e1;
+            border-left: 4px solid #f5a623;
+            color: #7a4f00;
+            display: none;
+        }
+
+        .status-bar {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 25px;
+            gap: 18px;
+            margin: 30px 0;
         }
-        
-        .quality-card {
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 20%);
-            border-radius: 12px;
-            padding: 20px;
+
+        .status-card {
+            background: rgba(255, 255, 255, 0.96);
+            border-radius: 18px;
+            padding: 18px;
+            box-shadow: var(--card-shadow);
             text-align: center;
-            border: 2px solid transparent;
-            transition: all 0.3s ease;
         }
-        
-        .quality-card:hover {
-            border-color: var(--client-color, #667eea);
-            transform: translateY(-3px);
-        }
-        
-        .quality-score {
-            font-size: 3rem;
-            font-weight: bold;
-            color: var(--client-color, #667eea);
-            margin: 10px 0;
-        }
-        
-        .quality-label {
-            font-size: 0.9rem;
-            color: #666;
-            font-weight: 600;
+
+        .status-card h4 {
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.15em;
+            font-size: 0.75rem;
+            color: #8c8fab;
+            margin-bottom: 10px;
         }
-        
-        .quality-subtitle {
-            font-size: 0.8rem;
-            color: #999;
-            margin-top: 5px;
+
+        .status-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--primary);
         }
-        
-        .sentiment-breakdown {
-            margin-top: 20px;
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 22px;
         }
-        
-        .sentiment-bar {
-            width: 100%;
-            height: 40px;
-            background: #e9ecef;
-            border-radius: 20px;
-            overflow: hidden;
+
+        .card {
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 18px;
+            padding: 22px;
+            box-shadow: var(--card-shadow);
+        }
+
+        .card h3 {
+            margin-bottom: 18px;
+            font-size: 1.2rem;
+            color: var(--dark);
             display: flex;
-            margin: 15px 0;
+            align-items: center;
+            gap: 8px;
         }
-        
-        .sentiment-positive {
-            background: linear-gradient(90deg, #28a745 0%, #34d058 100%);
-            transition: width 0.5s ease;
+
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid #f1f3fb;
+        }
+
+        .metric-row:last-child {
+            border-bottom: none;
+        }
+
+        .metric-label {
+            color: #616484;
+        }
+
+        .metric-value {
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .leads-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-height: 320px;
+            overflow-y: auto;
+        }
+
+        .lead-item {
+            border: 1px solid #eef0fb;
+            border-radius: 12px;
+            padding: 14px;
+            background: #f9f9ff;
+        }
+
+        .lead-name {
+            font-weight: 600;
+            color: #2f3147;
+        }
+
+        .lead-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            color: #7b7f9f;
+            margin-top: 6px;
+        }
+
+        .lead-status {
+            display: inline-block;
+            margin-top: 8px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            background: rgba(92, 106, 196, 0.12);
+            color: var(--primary);
+        }
+
+        .chart {
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+            height: 180px;
+            padding: 8px 6px;
+        }
+
+        .chart-bar {
+            flex: 1;
+            border-radius: 8px 8px 4px 4px;
+            background: linear-gradient(180deg, rgba(92,106,196,0.85), rgba(58,74,159,0.85));
+            position: relative;
+        }
+
+        .chart-bar::after {
+            content: attr(data-label);
+            position: absolute;
+            bottom: -22px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.85rem;
+            color: #8c8fab;
+        }
+
+        .chart-value {
+            text-align: center;
+            margin-top: 8px;
+            font-size: 0.9rem;
+            color: #616484;
+        }
+
+        .activity-feed {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .activity-item {
+            padding: 14px 16px;
+            border-radius: 12px;
+            border: 1px solid #ecefff;
+            background: #fbfbff;
+        }
+
+        .activity-item strong {
+            color: #2f3147;
+        }
+
+        .activity-meta {
+            margin-top: 4px;
+            color: #8b8fb0;
+            font-size: 0.9rem;
+        }
+
+        .workflow-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .workflow-step {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .workflow-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 12px;
+            background: rgba(92,106,196,0.12);
             display: flex;
             align-items: center;
             justify-content: center;
-            color: white;
-            font-weight: bold;
-        }
-        
-        .sentiment-neutral {
-            background: linear-gradient(90deg, #ffc107 0%, #ffca2c 100%);
-            transition: width 0.5s ease;
-        }
-        
-        .sentiment-negative {
-            background: linear-gradient(90deg, #dc3545 0%, #e4606d 100%);
-            transition: width 0.5s ease;
-        }
-        
-        .sentiment-legend {
-            display: flex;
-            justify-content: space-around;
-            margin-top: 10px;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-        
-        .sentiment-legend span {
-            font-size: 0.9rem;
-            padding: 5px 10px;
-            border-radius: 5px;
-        }
-        
-        .sentiment-legend .positive {
-            background: #d4edda;
-            color: #155724;
-        }
-        
-        .sentiment-legend .neutral {
-            background: #fff3cd;
-            color: #856404;
-        }
-        
-        .sentiment-legend .negative {
-            background: #f8d7da;
-            color: #721c24;
-        }
-        
-        /* Quality Alerts Styles */
-        .alert-item {
-            background: white;
-            border-left: 4px solid #ffc107;
-            padding: 18px;
-            margin: 12px 0;
-            border-radius: 8px;
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-            transition: all 0.3s ease;
-        }
-        
-        .alert-item:hover {
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            transform: translateX(5px);
-        }
-        
-        .alert-item.high {
-            border-left-color: #dc3545;
-            background: linear-gradient(to right, #fff5f5 0%, white 100%);
-        }
-        
-        .alert-item.medium {
-            border-left-color: #ffc107;
-            background: linear-gradient(to right, #fffbf0 0%, white 100%);
-        }
-        
-        .alert-item.low {
-            border-left-color: #17a2b8;
-            background: linear-gradient(to right, #f0f9ff 0%, white 100%);
-        }
-        
-        .alert-content {
-            flex: 1;
-        }
-        
-        .alert-content h4 {
-            margin: 0 0 10px 0;
-            color: #333;
             font-size: 1.1rem;
         }
-        
-        .alert-content p {
-            margin: 8px 0;
-            color: #666;
-            font-size: 0.95rem;
-        }
-        
-        .alert-content .alert-meta {
-            font-size: 0.85rem;
-            color: #999;
-            margin-top: 10px;
-        }
-        
-        .alert-actions {
-            display: flex;
-            gap: 10px;
-            margin-left: 15px;
-        }
-        
-        .resolve-btn {
-            background: #28a745;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.2s ease;
-            white-space: nowrap;
-        }
-        
-        .resolve-btn:hover {
-            background: #218838;
-            transform: scale(1.05);
-        }
-        
-        .resolve-btn:active {
-            transform: scale(0.98);
-        }
-        
-        .no-alerts {
-            text-align: center;
-            padding: 40px;
-            color: #28a745;
-            font-size: 1.2rem;
-        }
-        
-        .no-alerts::before {
-            content: '✅';
-            display: block;
-            font-size: 3rem;
-            margin-bottom: 15px;
-        }
-        
+
         @media (max-width: 768px) {
-            .dashboard {
-                grid-template-columns: 1fr;
-            }
-            
-            .client-details h1 {
-                font-size: 2rem;
-            }
-            
             .client-info {
                 flex-direction: column;
-                text-align: center;
+                align-items: flex-start;
             }
-            
-            .quality-grid {
-                grid-template-columns: repeat(2, 1fr);
+            .status-bar {
+                grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
             }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
+        <header class="header">
             <div class="client-info">
-                <div style="display: flex; align-items: center; gap: 20px;">
-                    <div class="client-logo" id="clientLogo">🏥</div>
+                <div class="client-brand">
+                    <div class="client-logo" id="clientLogo">✨</div>
                     <div class="client-details">
-                        <h1 id="clientName">Client Dashboard</h1>
-                        <p id="clientDescription">Your done-for-you AI follow-up team for existing leads</p>
-                        <p id="clientTagline" style="color:#8b8ea8;font-size:0.95rem;">We import your pipeline, chase every lead, and book straight into your calendar.</p>
+                        <h1 id="clientName">Demo Booking Partner</h1>
+                        <p id="clientDescription">Real-time follow-up + booking dashboard</p>
+                        <p id="clientTagline">We chase every lead you already paid for and land them on your calendar.</p>
                     </div>
                 </div>
-                <div class="client-status">
-                    <div class="status-badge" id="clientStatus">Active</div>
+                <div class="status-chip" id="clientStatus">Live</div>
+            </div>
+
+            <div class="client-meta" id="clientMeta">
+                <div class="meta-item">
+                    <div class="meta-label">Phone</div>
+                    <div class="meta-value" id="metaPhone">+44 20 3880 1234</div>
+                </div>
+                <div class="meta-item">
+                    <div class="meta-label">Timezone</div>
+                    <div class="meta-value" id="metaTimezone">Europe/London</div>
+                </div>
+                <div class="meta-item">
+                    <div class="meta-label">Coverage</div>
+                    <div class="meta-value" id="metaHours">8am - 8pm, 7 days/week</div>
+                </div>
+                <div class="meta-item">
+                    <div class="meta-label">Industry</div>
+                    <div class="meta-value" id="metaIndustry">AI Booking Concierge</div>
                 </div>
             </div>
-            
-            <div class="client-config" id="clientConfig" style="display: none;">
-                <h4 id="configTitle">Client Configuration</h4>
-                <p><strong>Phone:</strong> <span id="configPhone">-</span></p>
-                <p><strong>Timezone:</strong> <span id="configTimezone">-</span></p>
-                <p><strong>Business Hours:</strong> <span id="configHours">-</span></p>
-            </div>
-            
+
             <div class="demo-banner" id="demoBanner">
-                <strong>Demo environment:</strong> This sandbox called Demo Booking Partner shows exactly how the AI follows up, books, and logs appointments before we plug in your branding.
+                <strong>Demo environment:</strong> This sandbox mirrors the live dashboard your clients see. We just preload it with mock data for Looms.
             </div>
-            
-            <div class="highlight-grid" id="highlightGrid"></div>
-            
-            <div class="client-selector">
-                <label for="personaSelect">Show this demo for:</label>
-                <select id="personaSelect">
-                    <!-- populated via script -->
-                </select>
-                <button class="btn btn-secondary" id="personaShareBtn" type="button">Copy shareable link</button>
+        </header>
+
+        <section class="status-bar">
+            <div class="status-card">
+                <h4>Total Leads</h4>
+                <div class="status-value" id="statusTotalLeads">48</div>
             </div>
-        </div>
-        
-        <div class="dashboard">
-            <!-- Client Metrics -->
-            <div class="card">
-                <h3>📊 Your Performance</h3>
-                <div id="client-metrics">
-                    <div class="loading">Loading your metrics...</div>
+            <div class="status-card">
+                <h4>AI Calls Logged</h4>
+                <div class="status-value" id="statusTotalCalls">36</div>
+            </div>
+            <div class="status-card">
+                <h4>Conversion Rate</h4>
+                <div class="status-value" id="statusConversionRate">63%</div>
+            </div>
+            <div class="status-card">
+                <h4>First Response</h4>
+                <div class="status-value" id="statusFirstResponse">2m 58s</div>
+            </div>
+        </section>
+
+        <section class="dashboard-grid">
+            <article class="card">
+                <h3>📈 Recent Activity</h3>
+                <div id="recent-activity">
+                    <div class="metric-row">
+                        <span class="metric-label">New leads (24h)</span>
+                        <span class="metric-value">7</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Calls completed</span>
+                        <span class="metric-value">21</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Appointments booked</span>
+                        <span class="metric-value">12</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Avg response speed</span>
+                        <span class="metric-value">2m 58s</span>
+                    </div>
                 </div>
-            </div>
-            
-            <!-- ROI Calculator (NEW) -->
-            <div class="card" style="grid-column: 1 / -1; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
-                <h3 style="color: white;">💰 Return on Investment</h3>
-                <div id="roi-calculator">
-                    <div class="loading" style="color: white;">Calculating ROI...</div>
+            </article>
+
+            <article class="card">
+                <h3>🧩 Lead Priority</h3>
+                <div id="lead-priority">
+                    <div class="metric-row">
+                        <span class="metric-label">High priority</span>
+                        <span class="metric-value">9</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Medium</span>
+                        <span class="metric-value">14</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Low</span>
+                        <span class="metric-value">7</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Avg lead score</span>
+                        <span class="metric-value">87</span>
+                    </div>
                 </div>
-                <div id="roi-benchmark" class="roi-benchmark"></div>
-            </div>
-            
-            <!-- Live AI Call Transcript -->
-            <div class="card">
-                <h3>🎧 Latest AI Call</h3>
-                <div id="call-transcript">
-                    <div class="transcript-box">Listening for last call...</div>
-                    <div class="timeline-meta" id="transcript-meta"></div>
+            </article>
+
+            <article class="card">
+                <h3>👥 Recent Leads</h3>
+                <div id="leads-list" class="leads-list"></div>
+            </article>
+
+            <article class="card">
+                <h3>📊 Weekly Performance</h3>
+                <div id="performance-chart">
+                    <div class="chart" id="chartBars"></div>
+                    <p class="chart-value" id="chartSummary">18 bookings in the last 7 days</p>
                 </div>
-            </div>
-            
-            <!-- Today's Workflow Timeline -->
-            <div class="card">
-                <h3>🪄 Today's Workflow</h3>
-                <div id="workflow-timeline" class="timeline">
-                    <div class="loading">Building timeline...</div>
+            </article>
+
+            <article class="card">
+                <h3>⚙️ System Status</h3>
+                <div id="system-status">
+                    <div class="metric-row">
+                        <span class="metric-label">Lead number</span>
+                        <span class="metric-value" id="statusPhone">+44 20 3880 1234</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">SMS & WhatsApp</span>
+                        <span class="metric-value">Active</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Calendar sync</span>
+                        <span class="metric-value">Connected</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Pipeline coverage</span>
+                        <span class="metric-value" id="statusCoverage">7 days/week</span>
+                    </div>
                 </div>
-            </div>
-            
-            <!-- Forecast -->
-            <div class="card">
-                <h3>🔮 Booking Forecast</h3>
-                <div id="forecast-card" class="forecast-grid">
-                    <div class="loading">Calculating forecast...</div>
-                </div>
-            </div>
-            
-            <!-- Call Quality Metrics (NEW) -->
-            <div class="card" style="grid-column: 1 / -1;">
-                <h3>🎯 Call Quality Metrics</h3>
-                <div id="quality-metrics">
-                    <div class="loading">Loading quality metrics...</div>
-                </div>
-            </div>
-            
-            <!-- Quality Alerts (NEW) -->
-            <div class="card" style="grid-column: 1 / -1;" id="quality-alerts-card">
-                <h3>⚠️ Active Quality Alerts</h3>
-                <div id="quality-alerts">
-                    <div class="loading">Loading alerts...</div>
-                </div>
-            </div>
-            
-            <!-- Lead Management -->
-            <div class="card">
-                <h3>👥 Your Leads</h3>
-                <div id="leads-list" class="leads-list">
-                    <div class="loading">Loading your leads...</div>
-                </div>
-            </div>
-            
-            <!-- SMS Configuration -->
-            <div class="card">
-                <h3>📱 SMS Setup</h3>
-                <div id="sms-config">
-                    <div class="loading">Loading SMS configuration...</div>
-                </div>
-            </div>
-            
-            <!-- Quick Actions -->
-            <div class="card">
-                <h3>⚡ Quick Actions</h3>
-                <button class="btn" onclick="testClientSMS()">Test SMS</button>
-                <button class="btn" onclick="refreshClientData()">Refresh Data</button>
-                <button class="btn" onclick="resetDemoData()">Reset Demo Data</button>
-                <button class="btn btn-secondary" onclick="viewClientLogs()">View Logs</button>
-            </div>
-            
-            <!-- CTA Card -->
-            <div class="card cta-card" id="cta-card" style="grid-column: 1 / -1;">
-                <h3>Ready to see this with your leads?</h3>
-                <p id="cta-subheadline">Load 10 leads, we’ll run it this week and send the booking proof.</p>
-                <button class="btn" id="cta-button" type="button">Book 5-min Setup</button>
-            </div>
-            
-            <!-- Behind the Scenes -->
-            <div class="card" style="grid-column: 1 / -1;">
-                <h3>🛠️ Behind the scenes</h3>
-                <div id="integration-statuses" class="integrations-list">
-                    <div class="loading">Checking integrations...</div>
-                </div>
-            </div>
-            
-            <!-- Business Hours -->
-            <div class="card">
-                <h3>🕒 Business Hours</h3>
-                <div id="business-hours">
-                    <div class="loading">Loading business hours...</div>
-                </div>
-            </div>
-            
-            <!-- Performance -->
-            <div class="card">
-                <h3>📈 Performance</h3>
-                <div id="performance-metrics">
-                    <div class="loading">Loading performance data...</div>
-                </div>
-            </div>
-            
-            <!-- Service Mix -->
-            <div class="card">
-                <h3>🧩 Service Mix</h3>
-                <div id="service-mix">
-                    <div class="loading">Preparing service mix...</div>
-                </div>
-            </div>
-            
-            <!-- Next Steps -->
-            <div class="card" style="grid-column: 1 / -1;">
-                <h3>✅ How We Run This For You</h3>
-                <div id="next-steps" class="next-steps">
-                    <div class="loading">Loading playbook...</div>
-                </div>
-            </div>
-            
-            <!-- Activity Feed -->
-            <div class="card" style="grid-column: 1 / -1;">
+            </article>
+
+            <article class="card" style="grid-column: 1 / -1;">
                 <h3>🗓️ Latest Conversations</h3>
-                <div id="recent-calls" class="activity-log">
-                    <div class="loading">Pulling call feed...</div>
-                </div>
-            </div>
-        </div>
+                <div id="recent-calls" class="activity-feed"></div>
+            </article>
+
+            <article class="card" style="grid-column: 1 / -1;">
+                <h3>📋 How We Run This For You</h3>
+                <ul id="workflow" class="workflow-list"></ul>
+            </article>
+        </section>
     </div>
-    
-    <button class="refresh-btn" onclick="startDemoCall()" title="Trigger the AI concierge">
-        🚀 Start AI Call
-    </button>
-    
+
     <script>
-        const API_KEY = 'ad34b1de00c5b7380d6a447abcd78874';
-        const BASE_URL = 'https://ai-booking-mvp.onrender.com';
         const DEMO_CLIENT_KEY = 'demo_client';
-        
-        const DEMO_ROI_DEFAULT = {
-            costs: {
-                total: 612.4,
-                breakdown: {
-                    totalCalls: 48,
-                    estimatedSMS: 96
-                }
-            },
-            revenue: {
-                total: 6280,
-                bookings: 18,
-                avgDealValue: 349
-            },
-            roi: {
-                profit: 5667.6,
-                multiplier: 10.3,
-                percentage: 930
-            },
-            efficiency: {
-                conversionRate: '62%',
-                costPerBooking: 34,
-                revenuePerCall: 131,
-                profitPerCall: 118
-            },
-            summary: {
-                insights: [
-                    { icon: '⚡', message: 'Average lead is called within 2m 58s of arriving.' },
-                    { icon: '📅', message: '18 appointments booked this week across 3 services.' },
-                    { icon: '🤖', message: 'AI handled 21 conversations with 0 no-shows so far.' }
-                ]
-            }
-        };
-        
-        const DEMO_QUALITY_DEFAULT = {
-            avg_quality_score: '8.7',
-            sentiment: {
-                positive_rate: '78%',
-                positive: 25,
-                neutral: 5,
-                negative: 2
-            },
-            success_rate: '84%',
-            booking_rate: '56%',
-            total_calls: 32,
-            successful_calls: 27,
-            bookings: 18,
-            avg_duration: '3m 42s'
-        };
-        
-        // Client configuration - easily customizable per client
+        const BASE_URL = window.location.origin;
+
         const CLIENT_CONFIG = {
-            'victory_dental': {
-                name: 'Victory Dental',
-                description: 'Professional dental care with AI-powered booking',
-                tagline: 'We rescue missed dental leads and fill the chair for you.',
-                logo: '🦷',
-                color: '#4CAF50',
-                bg: 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)',
-                phone: '+447403934440',
-                timezone: 'Europe/London',
-                businessHours: '9AM - 5PM, Mon-Fri',
-                industry: 'Healthcare',
-                website: 'victorydental.com'
-            },
-            'northside_vet': {
-                name: 'Northside Veterinary Clinic',
-                description: 'Compassionate veterinary care for your pets',
-                tagline: 'Instant follow-up for every pet parent enquiry.',
-                logo: '🐾',
-                color: '#FF9800',
-                bg: 'linear-gradient(135deg, #FF9800 0%, #F57C00 100%)',
-                phone: '+447491683261',
-                timezone: 'Europe/London',
-                businessHours: '9AM - 6PM, Mon-Sat',
-                industry: 'Veterinary',
-                website: 'northsidevet.co.uk'
-            },
-            'demo_client': {
+            demo_client: {
                 name: 'Demo Booking Partner',
                 description: 'Live sandbox showing the AI concierge following up + booking',
                 tagline: 'Upload existing leads → AI calls in minutes → appointments land in your calendar.',
                 logo: '✨',
-                color: '#5C6AC4',
-                bg: 'linear-gradient(135deg, #5C6AC4 0%, #3A4A9F 100%)',
+                status: 'Demo Live',
                 phone: '+44 20 3880 1234',
                 timezone: 'Europe/London',
-                businessHours: '8AM - 8PM, Mon-Sun',
+                businessHours: '8am - 8pm, 7 days/week',
                 industry: 'AI Booking Concierge',
-                website: 'demo-booking-partner.com'
+                workflow: [
+                    { icon: '📥', title: 'Import leads', desc: 'We pull directly from your CRM, forms, or spreadsheets.' },
+                    { icon: '🤖', title: 'AI speed-to-lead', desc: 'Calls + SMS go out within minutes (24/7 coverage).' },
+                    { icon: '📅', title: 'Bookings land in calendar', desc: 'Confirmed appointments drop straight into your calendar.' },
+                    { icon: '📊', title: 'Daily digest', desc: 'Slack/email summary with leads touched and outcomes.' }
+                ],
+                chart: [5, 7, 6, 9, 8, 10, 7]
             }
         };
-        
-        const PERSONA_PRESETS = {
-            generic: {
-                label: 'General Service Businesses',
-                hero: {
-                    description: 'Your done-for-you AI concierge that turns ignored leads into booked revenue.',
-                    tagline: 'We import your leads, chase them within minutes, and drop the bookings into your calendar.'
-                },
-                palette: {
-                    color: '#5C6AC4',
-                    bg: 'linear-gradient(135deg, #5C6AC4 0%, #3A4A9F 100%)'
-                },
-                testimonial: {
-                    quote: 'We stopped chasing leads manually. They handled 132 calls and filled the calendar.',
-                    author: 'Sarah L.',
-                    role: 'Agency Owner'
-                },
-                cta: {
-                    headline: 'Ready to see it with your leads?',
-                    subheadline: 'Load 10 leads, we’ll run it this week and send the booking proof.',
-                    buttonText: 'Book 5-min Setup',
-                    buttonUrl: 'https://calendly.com/your-demo/quick-setup'
-                },
-                fallback: {
-                    serviceMix: [
-                        { name: 'Lead Follow-Up', percent: 35, bookings: 6, notes: 'Speed-to-lead flows' },
-                        { name: 'Appointment Booking', percent: 45, bookings: 8, notes: 'AI calendar concierge' },
-                        { name: 'Calendar Integration', percent: 20, bookings: 4, notes: 'Multi-calendar sync' }
-                    ],
-                    leads: [
-                        { name: 'Jordan Hale', phone: '+44 7700 900451', status: 'Booked • Strategy Session', lastMessage: 'Confirmed via AI call', score: 94, service: 'Lead Follow-Up' },
-                        { name: 'Priya Desai', phone: '+44 7700 900512', status: 'Follow-up • wants afternoon slot', lastMessage: 'AI sent 2-time options', score: 82, service: 'Appointment Booking' }
-                    ],
-                    timeline: [
-                        { icon: '📥', title: 'Lead imported', detail: 'Website form forwarded', status: 'Captured' },
-                        { icon: '🤖', title: 'AI call placed', detail: 'Call answered, objection handled', status: 'Completed' },
-                        { icon: '💬', title: 'SMS follow-up', detail: 'Reminder + prep instructions sent', status: 'Sent' },
-                        { icon: '📅', title: 'Calendar booked', detail: 'Client calendar updated', status: 'Booked' }
-                    ]
-                }
-            },
-            medspa: {
-                label: 'MedSpa & Aesthetics',
-                hero: {
-                    description: 'Your Botox + body contouring concierge that nurtures every enquiry.',
-                    tagline: 'We call every MedSpa lead within 2 minutes, handle objections, and fill your treatment rooms.'
-                },
-                palette: {
-                    color: '#c061cb',
-                    bg: 'linear-gradient(135deg, #c471f5 0%, #fa71cd 100%)'
-                },
-                testimonial: {
-                    quote: 'Booked 37 body sculpting consults in two weeks without my team dialing once.',
-                    author: 'Melissa P.',
-                    role: 'MedSpa Owner'
-                },
-                cta: {
-                    headline: 'Fill next week’s treatment blocks',
-                    subheadline: 'We’ll chase your Glowday, Facebook, and Instagram leads for you.',
-                    buttonText: 'Schedule MedSpa Setup',
-                    buttonUrl: 'https://calendly.com/your-demo/medspa'
-                },
-                fallback: {
-                    serviceMix: [
-                        { name: 'Injectables Leads', percent: 40, bookings: 7, notes: 'High-ticket consults' },
-                        { name: 'Body Contouring', percent: 35, bookings: 6, notes: 'Package upsells ready' },
-                        { name: 'Skin Programs', percent: 25, bookings: 4, notes: 'Membership pushes' }
-                    ],
-                    leads: [
-                        { name: 'Emily Carr', phone: '+44 7700 123987', status: 'Booked • Lip filler consult', lastMessage: 'AI sent prep instructions', score: 93, service: 'Injectables' },
-                        { name: 'Holly James', phone: '+44 7700 883221', status: 'Awaiting reply • CoolSculpt', lastMessage: 'Requested Monday morning slot', score: 81, service: 'Body Contouring' }
-                    ],
-                    timeline: [
-                        { icon: '📥', title: 'Glowday enquiry captured', detail: '“Need lip filler quote”', status: 'Captured' },
-                        { icon: '🤖', title: 'AI call placed', detail: 'Handled “I need to ask my partner” objection', status: 'Completed' },
-                        { icon: '💬', title: 'SMS follow-up', detail: 'Before/after photos + financing link sent', status: 'Sent' },
-                        { icon: '📅', title: 'Consult booked', detail: 'Friday 3:30 PM • HydraRoom', status: 'Booked' }
-                    ]
-                }
-            },
-            solar: {
-                label: 'Solar & Home Services',
-                hero: {
-                    description: 'Your solar callback desk that never lets a lead grow cold.',
-                    tagline: 'We call within 90 seconds, pre-qualify roofs, and drop installs onto your calendar.'
-                },
-                palette: {
-                    color: '#f6a62f',
-                    bg: 'linear-gradient(135deg, #f6d365 0%, #fda085 100%)'
-                },
-                testimonial: {
-                    quote: '10.4% more installs in month one because every homeowner got a real follow-up.',
-                    author: 'James W.',
-                    role: 'Solar Franchisee'
-                },
-                cta: {
-                    headline: 'Let’s chase your MQL backlog',
-                    subheadline: 'We’ll call, SMS, and email every homeowner until it’s on your calendar.',
-                    buttonText: 'Start Solar Trial',
-                    buttonUrl: 'https://calendly.com/your-demo/solar'
-                },
-                fallback: {
-                    serviceMix: [
-                        { name: 'Solar Consults', percent: 50, bookings: 10, notes: 'Full roof analysis' },
-                        { name: 'Battery Upsells', percent: 30, bookings: 4, notes: 'Storage add-ons' },
-                        { name: 'Maintenance', percent: 20, bookings: 3, notes: 'Warranty callbacks' }
-                    ],
-                    leads: [
-                        { name: 'Marcus Flynn', phone: '+44 7700 654321', status: 'Awaiting reply • reschedule', lastMessage: 'AI sent alternate slots', score: 79, service: 'Solar Consult' },
-                        { name: 'Laura Chen', phone: '+44 7700 998877', status: 'Synced • prep email', lastMessage: 'Calendar + roof checklist sent', score: 85, service: 'Battery Upgrade' }
-                    ],
-                    timeline: [
-                        { icon: '📥', title: 'Homeowner enquiry imported', detail: 'Lead from Facebook ads', status: 'Captured' },
-                        { icon: '🤖', title: 'AI call placed', detail: 'Verified roof type + bill', status: 'Qualified' },
-                        { icon: '💬', title: 'SMS follow-up', detail: 'Drone inspection prep link sent', status: 'Sent' },
-                        { icon: '📅', title: 'Site survey booked', detail: 'Wednesday 11:00 AM', status: 'Booked' }
-                    ]
-                }
-            },
-            legal: {
-                label: 'Law Firms & Professional Services',
-                hero: {
-                    description: 'Your intake desk that screens every enquiry and books consultations.',
-                    tagline: 'We qualify callers, gather case notes, and put retainers on your calendar.'
-                },
-                palette: {
-                    color: '#2f4858',
-                    bg: 'linear-gradient(135deg, #2f4858 0%, #1c2541 100%)'
-                },
-                testimonial: {
-                    quote: 'First week: 14 consultations booked without our paralegal touching the phone.',
-                    author: 'Alex K.',
-                    role: 'Managing Partner'
-                },
-                cta: {
-                    headline: 'Let us run intake for you',
-                    subheadline: 'We capture every voicemail, triage cases, and only book qualified clients.',
-                    buttonText: 'Book Legal Intake Demo',
-                    buttonUrl: 'https://calendly.com/your-demo/legal'
-                },
-                fallback: {
-                    serviceMix: [
-                        { name: 'Consultation Calls', percent: 60, bookings: 9, notes: 'PI & employment law' },
-                        { name: 'Document Reviews', percent: 25, bookings: 3, notes: 'Contracts & leases' },
-                        { name: 'Follow-up Reminders', percent: 15, bookings: 2, notes: 'Retainer nudges' }
-                    ],
-                    leads: [
-                        { name: 'Nadine Roy', phone: '+44 7700 112233', status: 'Booked • PI consult', lastMessage: 'Retainer overview emailed', score: 90, service: 'Personal Injury' },
-                        { name: 'Oliver Webb', phone: '+44 7700 445566', status: 'Screened • conflict check', lastMessage: 'Awaiting documents', score: 78, service: 'Employment Law' }
-                    ],
-                    timeline: [
-                        { icon: '📥', title: 'Website intake captured', detail: '“Need wrongful termination help”', status: 'Captured' },
-                        { icon: '🤖', title: 'AI call placed', detail: 'Gathered facts + conflict check', status: 'Qualified' },
-                        { icon: '💬', title: 'Email summary', detail: 'Case notes + required docs sent', status: 'Sent' },
-                        { icon: '📅', title: 'Consult scheduled', detail: 'Thursday 10:00 AM with Alex', status: 'Booked' }
-                    ]
-                }
-            }
+
+        const DEMO_DATA = {
+            totalLeads: 48,
+            totalCalls: 36,
+            last24hLeads: 7,
+            conversionRate: 63,
+            successRate: 84,
+            firstResponse: '2m 58s',
+            avgLeadScore: 87,
+            highPriorityLeads: 9,
+            mediumPriorityLeads: 14,
+            lowPriorityLeads: 7,
+            recentLeads: [
+                { name: 'Jordan Hale', phone: '+44 7700 900451', service: 'AI Strategy Session', status: 'Booked', timeAgo: '2 min ago' },
+                { name: 'Priya Desai', phone: '+44 7700 900512', service: 'Follow-up Call', status: 'Awaiting reply', timeAgo: '9 min ago' },
+                { name: 'Lewis Grant', phone: '+44 7700 900623', service: 'Pricing Review', status: 'Engaged', timeAgo: '25 min ago' },
+                { name: 'Emily Carr', phone: '+44 7700 900734', service: 'Calendar Integration', status: 'Left voicemail', timeAgo: '40 min ago' }
+            ],
+            serviceMix: [
+                { name: 'Lead Follow-Up', percent: 35, notes: 'Speed-to-lead flows' },
+                { name: 'Appointment Booking', percent: 45, notes: 'AI calendar concierge' },
+                { name: 'Calendar Integration', percent: 20, notes: 'Multi-calendar sync' }
+            ],
+            recentCalls: [
+                { name: 'Sarah Patel', summary: 'Booked Tuesday 2:30pm', channel: 'AI call', timeAgo: '2 min ago' },
+                { name: 'Marcus Flynn', summary: 'Requested reschedule', channel: 'AI SMS → call', timeAgo: '9 min ago' },
+                { name: 'Laura Chen', summary: 'Synced with Google Calendar', channel: 'Webhook sync', timeAgo: '25 min ago' }
+            ]
         };
-        
-        let currentClient = null;
-        let currentPersona = 'generic';
-        let lastIndustryComparison = null;
-        
-        // Get client from URL parameter or default
+
         function getClientFromURL() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const rawClient = urlParams.get('client') || 'victory_dental';
-            // Support both snake_case and kebab-case identifiers (e.g. demo_client vs demo-client)
-            return rawClient.replace(/-/g, '_');
+            const params = new URLSearchParams(window.location.search);
+            return (params.get('client') || DEMO_CLIENT_KEY).replace(/-/g, '_');
         }
-        
-        function getPersonaFromURL() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const persona = urlParams.get('persona');
-            return PERSONA_PRESETS[persona] ? persona : 'generic';
-        }
-        
-        function updatePersonaInURL(personaKey) {
-            const url = new URL(window.location.href);
-            if (personaKey === 'generic') {
-                url.searchParams.delete('persona');
-            } else {
-                url.searchParams.set('persona', personaKey);
-            }
-            window.history.replaceState({}, '', url.toString());
-        }
-        
-        function getCurrentPersonaConfig() {
-            return PERSONA_PRESETS[currentPersona] || PERSONA_PRESETS.generic;
-        }
-        
-        function applyClientTheme(clientKey) {
-            const config = CLIENT_CONFIG[clientKey];
-            if (!config) return;
-            const personaConfig = clientKey === DEMO_CLIENT_KEY ? getCurrentPersonaConfig() : null;
-            
-            // Apply CSS custom properties
-            document.documentElement.style.setProperty('--client-color', personaConfig?.palette?.color || config.color);
-            document.documentElement.style.setProperty('--client-bg', personaConfig?.palette?.bg || config.bg);
-            
-            // Update page elements
-            document.getElementById('clientName').textContent = config.name;
-            document.getElementById('clientDescription').textContent = personaConfig?.hero?.description || config.description;
-            document.getElementById('clientLogo').textContent = config.logo;
-            const taglineEl = document.getElementById('clientTagline');
-            if (taglineEl) taglineEl.textContent = personaConfig?.hero?.tagline || config.tagline || 'We import your leads, follow up instantly, and book straight into your calendar.';
-            document.title = `${config.name} - AI Booking Dashboard`;
-            const statusEl = document.getElementById('clientStatus');
-            if (statusEl) {
-                statusEl.textContent = clientKey === DEMO_CLIENT_KEY ? 'Demo Live' : 'Active';
-            }
-            
-            const bannerEl = document.getElementById('demoBanner');
-            if (bannerEl) {
-                if (clientKey === DEMO_CLIENT_KEY) {
-                    bannerEl.style.display = 'block';
-                    bannerEl.innerHTML = `<strong>Demo environment:</strong> ${config.name} shows the exact follow-up flow before we plug in your branding, services, and calendar.`;
-                } else {
-                    bannerEl.style.display = 'none';
-                }
-            }
-        }
-        
-        async function loadClientData() {
-            if (!currentClient) return;
-            
-            try {
-                const config = CLIENT_CONFIG[currentClient];
-                let clientData = getClientData(currentClient);
-                const liveData = await fetchLiveDemoData(currentClient);
-                clientData = mergeDemoData(clientData, liveData);
-                clientData = applyPersonaFallbacks(clientData);
-                
-                if (currentClient === DEMO_CLIENT_KEY) {
-                    const bannerEl = document.getElementById('demoBanner');
-                    if (bannerEl) {
-                        const refreshingCopy = liveData ? `pulling live metrics as of ${new Date().toLocaleTimeString()}` : 'showing pre-loaded demo stats';
-                        bannerEl.innerHTML = `<strong>Demo environment:</strong> ${config.name} is ${refreshingCopy}. When we onboard you, it references your leads, services, and calendars.`;
-                    }
-                }
-                
-                // Update client config display
-                document.getElementById('clientConfig').style.display = 'block';
-                document.getElementById('configTitle').textContent = `${config.name} Configuration`;
-                document.getElementById('configPhone').textContent = config.phone;
-                document.getElementById('configTimezone').textContent = config.timezone;
-                document.getElementById('configHours').textContent = config.businessHours;
-                
-                renderHighlightCards(clientData.highlights);
-                
-                // Update client metrics
-                document.getElementById('client-metrics').innerHTML = `
-                    <div class="metric">
-                        <span class="metric-label">Total Leads</span>
-                        <span class="metric-value">${clientData.totalLeads}</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-label">Total Calls</span>
-                        <span class="metric-value">${clientData.totalCalls}</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-label">Last 24h Leads</span>
-                        <span class="metric-value">${clientData.last24hLeads}</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-label">Conversion Rate</span>
-                        <span class="metric-value">${clientData.conversionRate}%</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-label">Success Rate</span>
-                        <span class="metric-value">${clientData.successRate}%</span>
-                    </div>
-                `;
-                
-                // Update performance metrics
-                document.getElementById('performance-metrics').innerHTML = `
-                    <div class="metric">
-                        <span class="metric-label">Avg Lead Score</span>
-                        <span class="metric-value">${clientData.avgLeadScore}</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-label">High Priority</span>
-                        <span class="metric-value">${clientData.highPriorityLeads}</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-label">Medium Priority</span>
-                        <span class="metric-value">${clientData.mediumPriorityLeads}</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-label">Low Priority</span>
-                        <span class="metric-value">${clientData.lowPriorityLeads}</span>
-                    </div>
-                `;
-                
-                // Update SMS config
-                document.getElementById('sms-config').innerHTML = `
-                    <div class="metric">
-                        <span class="metric-label">Your Number</span>
-                        <span class="metric-value">${config.phone}</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-label">Messaging Service</span>
-                        <span class="metric-value">Active</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-label">Status</span>
-                        <span class="status healthy">Ready</span>
-                    </div>
-                `;
-                
-                // Update business hours
-                document.getElementById('business-hours').innerHTML = `
-                    <div class="metric">
-                        <span class="metric-label">Timezone</span>
-                        <span class="metric-value">${config.timezone}</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-label">Hours</span>
-                        <span class="metric-value">${config.businessHours}</span>
-                    </div>
-                    <div class="metric">
-                        <span class="metric-label">Current Status</span>
-                        <span class="status ${isBusinessHours() ? 'healthy' : 'warning'}">${isBusinessHours() ? 'Open' : 'Closed'}</span>
-                    </div>
-                `;
-                
-                renderLeadList(clientData.leads);
-                renderServiceMix(clientData.serviceMix);
-                renderActivityFeed(clientData.recentCalls);
-                renderNextSteps(clientData.nextSteps);
-                renderTranscript(clientData.transcript);
-                renderTimeline(clientData.timeline);
-                renderForecast(clientData.forecast || {}, clientData);
-                renderCTA(clientData.cta);
-                renderIntegrations(clientData.integrations);
-                loadIndustryComparison(currentClient);
-                
-            } catch (error) {
-                console.error('Failed to load client data:', error);
-                document.getElementById('client-metrics').innerHTML = `
-                    <div class="error">
-                        ${currentClient === DEMO_CLIENT_KEY 
-                            ? 'Demo metrics are refreshing — trigger a quick AI call to see this update.' 
-                            : `Failed to load client data: ${error.message}`}
-                    </div>
-                `;
-            }
-        }
-        
-        async function fetchLiveDemoData(clientKey) {
-            try {
-                const response = await fetch(`${BASE_URL}/api/demo-dashboard/${clientKey}`);
-                if (!response.ok) return null;
-                const payload = await response.json();
-                if (!payload?.ok) return null;
-                return payload;
-            } catch (error) {
-                console.warn('Live demo data unavailable', error.message);
-                return null;
-            }
-        }
-        
-        function mergeDemoData(baseData = {}, livePayload) {
-            if (!livePayload) return baseData;
-            const merged = { ...baseData };
-            const metrics = livePayload.metrics || {};
-            merged.totalLeads = metrics.totalLeads ?? merged.totalLeads;
-            merged.totalCalls = metrics.totalCalls ?? merged.totalCalls;
-            merged.last24hLeads = metrics.last24hLeads ?? merged.last24hLeads;
-            merged.conversionRate = metrics.conversionRate ?? merged.conversionRate;
-            merged.successRate = metrics.successRate ?? merged.successRate;
-            merged.avgLeadScore = metrics.avgLeadScore ?? merged.avgLeadScore;
-            merged.highlights = { ...(merged.highlights || {}), ...(livePayload.highlights || {}) };
-            if (Array.isArray(livePayload.leads) && livePayload.leads.length) merged.leads = livePayload.leads;
-            if (Array.isArray(livePayload.serviceMix) && livePayload.serviceMix.length) merged.serviceMix = livePayload.serviceMix;
-            if (Array.isArray(livePayload.recentCalls) && livePayload.recentCalls.length) merged.recentCalls = livePayload.recentCalls;
-            if (Array.isArray(livePayload.timeline) && livePayload.timeline.length) merged.timeline = livePayload.timeline;
-            merged.transcript = livePayload.transcript || merged.transcript;
-            merged.forecast = livePayload.forecast || merged.forecast;
-            merged.integrations = livePayload.integrations || merged.integrations;
-            merged.cta = livePayload.cta || merged.cta;
-            return merged;
-        }
-        
-        function renderHighlightCards(highlights) {
-            const highlightGrid = document.getElementById('highlightGrid');
-            if (!highlightGrid) return;
-            if (!highlights) {
-                highlightGrid.style.display = 'none';
-                return;
-            }
-            const personaConfig = getCurrentPersonaConfig();
-            const cards = [
-                {
-                    label: 'Avg Response',
-                    value: highlights.responseTime || '≈3m',
-                    sub: highlights.responseNotes || 'Speed from lead to first dial'
-                },
-                {
-                    label: 'Bookings This Week',
-                    value: highlights.bookingsThisWeek || '—',
-                    sub: highlights.bookingsNotes || 'Rolling 7-day snapshot'
-                },
-                {
-                    label: 'Pipeline Value',
-                    value: highlights.pipelineValue || '£0',
-                    sub: highlights.pipelineNotes || 'Qualified leads currently in play'
-                },
-                {
-                    label: 'Show Rate',
-                    value: highlights.showRate || '100%',
-                    sub: highlights.showNotes || 'Attendance after reminders'
-                }
-            ];
-            if (personaConfig?.testimonial) {
-                cards.push({
-                    type: 'testimonial',
-                    testimonial: personaConfig.testimonial
-                });
-            }
-            highlightGrid.style.display = 'grid';
-            highlightGrid.innerHTML = cards.map(card => `
-                ${card.type === 'testimonial' ? `
-                    <div class="testimonial-card">
-                        <div class="highlight-label">Social proof</div>
-                        <div class="testimonial-quote">“${card.testimonial.quote}”</div>
-                        <div class="testimonial-author">${card.testimonial.author}${card.testimonial.role ? `<span style="font-weight:400;color:#7d81a8;"> • ${card.testimonial.role}</span>` : ''}</div>
-                    </div>
-                ` : `
-                    <div class="highlight-card">
-                        <div class="highlight-label">${card.label}</div>
-                        <div class="highlight-value">${card.value}</div>
-                        <div class="highlight-subtext">${card.sub}</div>
-                    </div>
-                `}
-            `).join('');
-        }
-        
-        function renderLeadList(leads = []) {
-            const listEl = document.getElementById('leads-list');
-            if (!listEl) return;
-            if (!Array.isArray(leads) || !leads.length) {
-                listEl.innerHTML = '<div class="loading">No leads yet</div>';
-                return;
-            }
-            listEl.innerHTML = leads.map(lead => `
-                <div class="lead-item">
-                    <div class="lead-header-row">
-                        <div>
-                            <div class="lead-name">${lead.name || lead.phone}</div>
-                            <div class="lead-phone">${lead.phone}</div>
-                        </div>
-                        <div class="lead-score">${lead.score ?? '—'}</div>
-                    </div>
-                    <div class="lead-status">${lead.status || 'Awaiting follow-up'} • ${lead.service || 'General Inquiry'}</div>
-                    <div class="lead-status">Last activity: ${lead.lastMessage || 'Just added'}</div>
-                </div>
-            `).join('');
-        }
-        
-        function renderServiceMix(serviceMix = []) {
-            const serviceMixEl = document.getElementById('service-mix');
-            if (!serviceMixEl) return;
-            if (!Array.isArray(serviceMix) || !serviceMix.length) {
-                serviceMixEl.innerHTML = '<div class="loading">Connect services to see distribution</div>';
-                return;
-            }
-            serviceMixEl.innerHTML = serviceMix.map(service => `
-                <div class="service-row">
-                    <div class="service-header">
-                        <span>${service.name}</span>
-                        <span>${service.percent}%</span>
-                    </div>
-                    <div class="service-bar">
-                        <div class="service-bar-fill" style="width: ${service.percent}%"></div>
-                    </div>
-                    <div class="service-header" style="font-size: 0.8rem; color: #8b8ea8;">
-                        <span>${service.notes || ''}</span>
-                        <span>${service.bookings || 0} bookings</span>
-                    </div>
-                </div>
-            `).join('');
-        }
-        
-        function renderActivityFeed(items = []) {
-            const recentCallsEl = document.getElementById('recent-calls');
-            if (!recentCallsEl) return;
-            if (!Array.isArray(items) || !items.length) {
-                recentCallsEl.innerHTML = '<div class="loading">Waiting for first conversations...</div>';
-                return;
-            }
-            recentCallsEl.innerHTML = items.map(call => `
-                <div class="activity-item">
-                    <div>
-                        <div class="lead-name">${call.name || 'Prospect'}</div>
-                        <div class="activity-meta">${call.service || 'Lead Follow-Up'} • ${call.channel || 'AI call'}</div>
-                        <div class="activity-meta">${call.summary || ''}</div>
-                    </div>
-                    <div style="text-align: right;">
-                        <div class="activity-status ${call.statusClass || 'info'}">${call.status || 'Live'}</div>
-                        <div class="activity-meta">${call.timeAgo || formatTimeAgo(call.timestamp)}</div>
-                    </div>
-                </div>
-            `).join('');
-        }
-        
-        function renderNextSteps(steps = []) {
-            const container = document.getElementById('next-steps');
-            if (!container) return;
-            if (!Array.isArray(steps) || !steps.length) {
-                container.innerHTML = '<div class="loading">We handle the work for you.</div>';
-                return;
-            }
-            container.innerHTML = steps.map(step => `
-                <div class="next-step-item">
-                    <div class="next-step-icon">${step.icon || '🧩'}</div>
-                    <div class="next-step-content">
-                        <h4>${step.title}</h4>
-                        <p>${step.copy}</p>
-                    </div>
-                </div>
-            `).join('');
-        }
-        
-        function formatTimeAgo(ts) {
-            if (!ts) return 'Just now';
-            const time = new Date(ts);
-            const diffMs = Date.now() - time.getTime();
-            const minutes = Math.floor(diffMs / 60000);
-            if (minutes < 1) return 'Just now';
-            if (minutes < 60) return `${minutes} min ago`;
-            const hours = Math.floor(minutes / 60);
-            if (hours < 24) return `${hours}h ago`;
-            const days = Math.floor(hours / 24);
-            return `${days}d ago`;
-        }
-        
-        function applyPersonaFallbacks(data = {}) {
-            if (currentClient !== DEMO_CLIENT_KEY) return data;
-            const persona = getCurrentPersonaConfig();
-            const fallback = persona.fallback || {};
-            const merged = { ...data };
-            if (!merged.serviceMix || !merged.serviceMix.length) merged.serviceMix = fallback.serviceMix || merged.serviceMix;
-            if (!merged.leads || !merged.leads.length) merged.leads = fallback.leads || merged.leads;
-            if (!merged.timeline || !merged.timeline.length) merged.timeline = fallback.timeline || [];
-            if (!merged.transcript) {
-                merged.transcript = {
-                    text: fallback.timeline?.[1]?.detail || 'AI handled the full call for you.',
-                    lead: merged.leads?.[0]?.name,
-                    timestamp: new Date().toISOString()
-                };
-            }
-            if (!merged.cta) merged.cta = persona.cta;
-            if (!merged.integrations) merged.integrations = getDefaultIntegrations();
-            merged.testimonial = persona.testimonial;
-            return merged;
-        }
-        
-        function getDefaultIntegrations() {
-            return [
-                { name: 'Vapi Voice', status: 'active', detail: 'Assistant + phone number verified' },
-                { name: 'Twilio SMS', status: 'active', detail: 'Messaging + WhatsApp ready' },
-                { name: 'Google Calendar', status: 'active', detail: 'Two-way sync enabled' },
-                { name: 'Slack Daily Digest', status: 'pending', detail: 'Optional – add your workspace' }
-            ];
-        }
-        
-        function renderTranscript(transcript) {
-            const container = document.getElementById('call-transcript');
-            if (!container) return;
-            if (!transcript || !transcript.text) {
-                container.innerHTML = `
-                    <div class="transcript-box">Make a quick AI call to populate the transcript preview.</div>
-                `;
-                return;
-            }
-            container.innerHTML = `
-                <div class="transcript-box">
-                    “${transcript.text}”
-                </div>
-                <div class="timeline-meta">
-                    ${transcript.lead ? `Lead: ${transcript.lead}` : ''} ${transcript.outcome ? `• ${transcript.outcome}` : ''} • ${formatTimeAgo(transcript.timestamp)}
-                </div>
-            `;
-        }
-        
-        function renderTimeline(events = []) {
-            const container = document.getElementById('workflow-timeline');
-            if (!container) return;
-            if (!Array.isArray(events) || !events.length) {
-                container.innerHTML = '<div class="loading">Timeline will populate after the next workflow run.</div>';
-                return;
-            }
-            container.innerHTML = events.map(event => `
-                <div class="timeline-item">
-                    <div class="timeline-icon">${event.icon || '🧩'}</div>
-                    <div class="timeline-content">
-                        <h4>${event.title}</h4>
-                        <p>${event.detail || ''}</p>
-                        <div class="timeline-meta">${event.status || ''} • ${event.timeAgo || (event.timestamp ? formatTimeAgo(event.timestamp) : 'Just now')}</div>
-                    </div>
-                </div>
-            `).join('');
-        }
-        
-        function renderForecast(forecast = {}, metrics = {}) {
-            const container = document.getElementById('forecast-card');
-            if (!container) return;
-            const totalLeads = metrics.totalLeads || 0;
-            const conversionRate = typeof metrics.conversionRate === 'number' ? metrics.conversionRate : 0;
-            const leadsLoaded = forecast.leadsLoaded || Math.max(25, Math.ceil(totalLeads / 2));
-            const conv = forecast.conversionRate || conversionRate || 40;
-            const expectedBookings = forecast.expectedBookings || Math.max(1, Math.round(leadsLoaded * (conv / 100)));
-            const timeframe = forecast.timeframe || '72 hours';
-            container.innerHTML = `
-                <div class="forecast-cell">
-                    <div class="label">Load Leads</div>
-                    <div class="value">${leadsLoaded}</div>
-                    <div class="highlight-subtext">CSV/CRM drop</div>
-                </div>
-                <div class="forecast-cell">
-                    <div class="label">Conversion</div>
-                    <div class="value">${conv}%</div>
-                    <div class="highlight-subtext">Avg this week</div>
-                </div>
-                <div class="forecast-cell">
-                    <div class="label">Booked</div>
-                    <div class="value">${expectedBookings}</div>
-                    <div class="highlight-subtext">${timeframe}</div>
-                </div>
-            `;
-        }
-        
-        function renderCTA(cta = {}) {
-            const card = document.getElementById('cta-card');
-            if (!card) return;
-            const sub = document.getElementById('cta-subheadline');
-            const button = document.getElementById('cta-button');
-            card.querySelector('h3').textContent = cta.headline || 'Ready to see this with your leads?';
-            if (sub) sub.textContent = cta.subheadline || 'Load 10 leads, we’ll run it this week and send the booking proof.';
-            if (button) {
-                button.textContent = cta.buttonText || 'Book 5-min Setup';
-                button.onclick = () => {
-                    if (cta.buttonUrl) {
-                        window.open(cta.buttonUrl, '_blank');
-                    } else {
-                        alert('Drop me a reply and I’ll load your leads today.');
-                    }
-                };
-            }
-        }
-        
-        function renderIntegrations(list = []) {
-            const container = document.getElementById('integration-statuses');
-            if (!container) return;
-            if (!Array.isArray(list) || !list.length) {
-                container.innerHTML = '<div class="loading">No integrations to show yet.</div>';
-                return;
-            }
-            container.innerHTML = list.map(item => `
-                <div class="integration-item">
-                    <div>
-                        <div class="integration-name">${item.name}</div>
-                        <div style="color:#7b7fa8;font-size:0.9rem;">${item.detail || ''}</div>
-                    </div>
-                    <div class="integration-status ${item.status || 'pending'}">${item.statusLabel || item.status || 'pending'}</div>
-                </div>
-            `).join('');
-        }
-        
-        async function loadIndustryComparison(clientKey) {
-            if (!clientKey || clientKey !== DEMO_CLIENT_KEY) return;
-            try {
-                const response = await fetch(`${BASE_URL}/api/industry-comparison/${clientKey}`);
-                const data = await response.json();
-                if (data.ok && data.comparison) {
-                    lastIndustryComparison = data;
-                    renderRoiBenchmark(data);
-                }
-            } catch (error) {
-                console.warn('Industry comparison unavailable', error.message);
-            }
-        }
-        
-        function renderRoiBenchmark(data) {
-            const container = document.getElementById('roi-benchmark');
-            if (!container) return;
-            if (!data || !data.comparison) {
-                container.innerHTML = '';
-                return;
-            }
-            const comparison = data.comparison;
-            const successMetric = comparison.callSuccessRate;
-            const bookingMetric = comparison.bookingRate;
-            container.innerHTML = `
-                <h4>${data.industry || 'Industry baseline'}</h4>
-                <p>${successMetric?.icon || '➖'} Success rate: ${(successMetric?.client * 100).toFixed(1)}% vs ${((successMetric?.benchmark || 0) * 100).toFixed(1)}%</p>
-                <p>${bookingMetric?.icon || '➖'} Booking rate: ${(bookingMetric?.client * 100).toFixed(1)}% vs ${((bookingMetric?.benchmark || 0) * 100).toFixed(1)}%</p>
-                <p>${data.insights?.[0]?.message || 'Consistently faster follow-up than typical teams.'}</p>
-            `;
-        }
-        
-        function populatePersonaSelect() {
-            const select = document.getElementById('personaSelect');
-            if (!select) return;
-            select.innerHTML = Object.entries(PERSONA_PRESETS).map(([key, persona]) => `
-                <option value="${key}">${persona.label}</option>
-            `).join('');
-            select.value = currentPersona;
-            select.addEventListener('change', (event) => {
-                setPersona(event.target.value);
-            });
-            const shareBtn = document.getElementById('personaShareBtn');
-            if (shareBtn) {
-                shareBtn.addEventListener('click', copyPersonaShareLink);
-            }
-        }
-        
-        function setPersona(personaKey) {
-            if (!PERSONA_PRESETS[personaKey]) return;
-            currentPersona = personaKey;
-            updatePersonaInURL(personaKey);
-            applyClientTheme(currentClient);
-            loadClientData();
-            loadROI();
-            loadQualityMetrics();
-            loadQualityAlerts();
-            loadIndustryComparison(currentClient);
-        }
-        
-        async function copyPersonaShareLink() {
-            const url = new URL(window.location.href);
-            url.searchParams.set('client', currentClient || DEMO_CLIENT_KEY);
-            if (currentPersona === 'generic') {
-                url.searchParams.delete('persona');
-            } else {
-                url.searchParams.set('persona', currentPersona);
-            }
-            const copied = await copyCommandToClipboard(url.toString());
-            alert(copied ? 'Shareable demo link copied to clipboard.' : 'Copy this link:\n' + url.toString());
-        }
-        
-        function getClientData(clientKey) {
-            const data = {
-                'victory_dental': {
-                    totalLeads: 1,
-                    totalCalls: 0,
-                    last24hLeads: 1,
-                    conversionRate: 0,
-                    successRate: 100,
-                    avgLeadScore: 80,
-                    highPriorityLeads: 1,
-                    mediumPriorityLeads: 0,
-                    lowPriorityLeads: 0,
-                    leads: [
-                        {
-                            phone: '+447491683261',
-                            status: 'engaged',
-                            lastMessage: 'START message',
-                            score: 80
-                        }
-                    ]
-                },
-                'northside_vet': {
-                    totalLeads: 0,
-                    totalCalls: 0,
-                    last24hLeads: 0,
-                    conversionRate: 0,
-                    successRate: 100,
-                    avgLeadScore: 0,
-                    highPriorityLeads: 0,
-                    mediumPriorityLeads: 0,
-                    lowPriorityLeads: 0,
-                    leads: []
-                },
-                'demo_client': {
-                    totalLeads: 30,
-                    totalCalls: 26,
-                    last24hLeads: 7,
-                    conversionRate: 60,
-                    successRate: 93,
-                    avgLeadScore: 87,
-                    highPriorityLeads: 9,
-                    mediumPriorityLeads: 14,
-                    lowPriorityLeads: 7,
-                    highlights: {
-                        responseTime: '2m 58s',
-                        responseNotes: 'Average time from lead drop to AI call',
-                        bookingsThisWeek: '18',
-                        bookingsNotes: '6 confirmed today',
-                        pipelineValue: '£32.4k',
-                        pipelineNotes: '18 qualified leads in active nurture',
-                        showRate: '100% show rate',
-                        showNotes: 'Auto-reminders keep attendance tight'
-                    },
-                    serviceMix: [
-                        { name: 'Lead Follow-Up', percent: 35, bookings: 6, notes: 'Speed-to-lead flows' },
-                        { name: 'Appointment Booking', percent: 45, bookings: 8, notes: 'AI calendar concierge' },
-                        { name: 'Calendar Integration', percent: 20, bookings: 4, notes: 'Multi-calendar sync' }
-                    ],
-                    nextSteps: [
-                        { icon: '📥', title: 'Hand us your leads', copy: 'CSV export, CRM webhook, or shared inbox—whatever is easiest.' },
-                        { icon: '🤖', title: 'AI follows up instantly', copy: 'Calls + SMS + email chase every lead automatically.' },
-                        { icon: '📅', title: 'We book it for you', copy: 'Calendar slots, confirmations, and notes are handled.' },
-                        { icon: '📊', title: 'You get daily summaries', copy: 'Slack/email digest with leads touched and bookings won.' }
-                    ],
-                    recentCalls: [
-                        {
-                            name: 'Sarah Patel',
-                            service: 'Lead Follow-Up',
-                            channel: 'AI phone call',
-                            summary: 'Confirmed consultation for Tuesday 2:30pm',
-                            status: 'Booked',
-                            statusClass: 'success',
-                            timeAgo: '2 min ago'
-                        },
-                        {
-                            name: 'Marcus Flynn',
-                            service: 'Appointment Booking',
-                            channel: 'AI SMS → call',
-                            summary: 'Requested reschedule; AI sent new slot options',
-                            status: 'Awaiting reply',
-                            statusClass: 'pending',
-                            timeAgo: '9 min ago'
-                        },
-                        {
-                            name: 'Laura Chen',
-                            service: 'Calendar Integration',
-                            channel: 'Webhook sync',
-                            summary: 'Synced with Google Calendar + sent prep email',
-                            status: 'Synced',
-                            statusClass: 'info',
-                            timeAgo: '25 min ago'
-                        }
-                    ],
-                    leads: [
-                        {
-                            name: 'Jordan Hale',
-                            phone: '+44 7700 900451',
-                            status: 'Booked • 3pm AI Strategy Session',
-                            lastMessage: 'Confirmed via AI call + calendar invite',
-                            score: 94,
-                            service: 'Lead Follow-Up'
-                        },
-                        {
-                            name: 'Priya Desai',
-                            phone: '+44 7700 900512',
-                            status: 'Follow-up • wants afternoon slot',
-                            lastMessage: 'AI sent 2-time options + SMS nudge',
-                            score: 82,
-                            service: 'Appointment Booking'
-                        },
-                        {
-                            name: 'Lewis Grant',
-                            phone: '+44 7700 900623',
-                            status: 'Engaged • asked pricing question',
-                            lastMessage: 'AI emailed case study + queued callback',
-                            score: 88,
-                            service: 'Calendar Integration'
-                        },
-                        {
-                            name: 'Emily Carr',
-                            phone: '+44 7700 900734',
-                            status: 'Left voicemail • auto SMS sent',
-                            lastMessage: 'AI reminder scheduled for 9am tomorrow',
-                            score: 71,
-                            service: 'Lead Follow-Up'
-                        }
-                    ],
-                    timeline: [
-                        { icon: '📥', title: 'Lead imported', detail: 'Website form forwarded', status: 'Captured', timestamp: new Date().toISOString() },
-                        { icon: '🤖', title: 'AI call placed', detail: 'Handled pricing objection + confirmed intent', status: 'Completed', timestamp: new Date().toISOString() },
-                        { icon: '💬', title: 'SMS follow-up', detail: 'Reminder + prep instructions sent', status: 'Sent', timestamp: new Date().toISOString() },
-                        { icon: '📅', title: 'Calendar booked', detail: 'Strategy session confirmed', status: 'Booked', timestamp: new Date().toISOString() }
-                    ],
-                    forecast: {
-                        leadsLoaded: 40,
-                        conversionRate: 60,
-                        expectedBookings: 24,
-                        timeframe: '72 hours'
-                    },
-                    cta: {
-                        headline: 'Ready to see this with your leads?',
-                        subheadline: 'Load 10 leads, we’ll run it this week and send the booking proof.',
-                        buttonText: 'Book 5-min Setup',
-                        buttonUrl: 'https://calendly.com/your-demo/quick-setup'
-                    }
-                }
-            };
-            return data[clientKey] || data['victory_dental'];
-        }
-        
-        function isBusinessHours() {
-            const now = new Date();
-            const hour = now.getHours();
-            const day = now.getDay();
-            return day >= 1 && day <= 5 && hour >= 9 && hour < 17;
-        }
-        
-        function testClientSMS() {
-            if (!currentClient) {
-                alert('Please select a client first');
-                return;
-            }
-            
-            const config = CLIENT_CONFIG[currentClient];
-            alert(`SMS Test for ${config.name}:\n\nSend "START" to:\n${config.phone}\n\nCheck logs for [AUTO-CALL TRIGGER] or [AUTO-CALL DEFERRED]`);
-        }
-        
-        async function loadQualityMetrics() {
-            const clientKey = getClientFromURL();
-            if (!clientKey) return;
-            
-            const container = document.getElementById('quality-metrics');
-            if (clientKey === DEMO_CLIENT_KEY) {
-                container.innerHTML = getQualityMetricsHTML(DEMO_QUALITY_DEFAULT);
-                return;
-            }
-            
-            try {
-                const response = await fetch(`${BASE_URL}/api/quality-metrics/${clientKey}?days=30`);
-                const data = await response.json();
-                
-                if (data.ok && data.metrics) {
-                    container.innerHTML = getQualityMetricsHTML(data.metrics);
-                } else {
-                    container.innerHTML = `
-                        <div style="text-align: center; padding: 40px;">
-                            <p style="font-size: 1.2rem; color: #666;">📞 No call data available yet</p>
-                            <p style="margin-top: 10px; color: #999;">Make your first Vapi call to see quality metrics here</p>
-                        </div>
-                    `;
-                }
-            } catch (error) {
-                console.error('Failed to load quality metrics:', error);
-                if (clientKey === DEMO_CLIENT_KEY) {
-                    container.innerHTML = getQualityMetricsHTML(DEMO_QUALITY_DEFAULT);
-                } else {
-                    container.innerHTML = `
-                        <div style="text-align: center; padding: 20px; color: #dc3545;">
-                            <p>❌ Failed to load quality metrics</p>
-                            <p style="font-size: 0.9rem; margin-top: 5px;">${error.message}</p>
-                        </div>
-                    `;
-                }
-            }
-        }
-        
-        async function loadROI() {
-            const clientKey = getClientFromURL();
-            if (!clientKey) return;
-            
-            const container = document.getElementById('roi-calculator');
-            if (clientKey === DEMO_CLIENT_KEY) {
-                container.innerHTML = getROIHTML(DEMO_ROI_DEFAULT);
-                renderRoiBenchmark(lastIndustryComparison);
-                return;
-            }
-            
-            try {
-                const response = await fetch(`${BASE_URL}/api/roi/${clientKey}?days=30&avgDealValue=150`);
-                const data = await response.json();
-                
-                if (data.ok && data.roi) {
-                    container.innerHTML = getROIHTML(data);
-                } else {
-                    container.innerHTML = `
-                        <div style="text-align: center; padding: 40px; color: white;">
-                            <p style="font-size: 1.2rem;">📊 No ROI data available yet</p>
-                            <p style="margin-top: 10px; opacity: 0.8;">Make some calls and bookings to see your ROI</p>
-                        </div>
-                    `;
-                }
-            } catch (error) {
-                console.error('Failed to load ROI:', error);
-                if (clientKey === DEMO_CLIENT_KEY) {
-                    container.innerHTML = getROIHTML(DEMO_ROI_DEFAULT);
-                    renderRoiBenchmark(lastIndustryComparison);
-                } else {
-                    container.innerHTML = `
-                        <div style="text-align: center; padding: 20px; color: white;">
-                            <p>❌ Failed to load ROI data</p>
-                        </div>
-                    `;
-                }
-            }
-        }
-        
-        async function loadQualityAlerts() {
-            const clientKey = getClientFromURL();
-            if (!clientKey) return;
-            
-            try {
-                const response = await fetch(`${BASE_URL}/api/quality-alerts/${clientKey}`);
-                const data = await response.json();
-                
-                const container = document.getElementById('quality-alerts');
-                const card = document.getElementById('quality-alerts-card');
-                
-                if (data.ok && data.alerts && data.alerts.length > 0) {
-                    // Show alerts
-                    container.innerHTML = data.alerts.map(alert => `
-                        <div class="alert-item ${alert.severity}" data-alert-id="${alert.id}">
-                            <div class="alert-content">
-                                <h4>${alert.severity === 'high' ? '🚨' : alert.severity === 'medium' ? '⚠️' : 'ℹ️'} ${alert.message}</h4>
-                                <p><strong>Action:</strong> ${alert.action}</p>
-                                <p><strong>Impact:</strong> ${alert.impact}</p>
-                                <p style="color: #666; font-size: 0.9rem;">
-                                    Expected: <strong>${alert.expected}</strong> | Actual: <strong>${alert.actual}</strong>
-                                </p>
-                                <p class="alert-meta">
-                                    ${new Date(alert.createdAt).toLocaleString()}
-                                </p>
-                            </div>
-                            <div class="alert-actions">
-                                <button class="resolve-btn" onclick="resolveAlert(${alert.id})">
-                                    ✓ Resolve
-                                </button>
-                            </div>
-                        </div>
-                    `).join('');
-                    card.style.display = 'block';
-                } else {
-                    // No alerts - show success message
-                    container.innerHTML = '<div class="no-alerts">All systems healthy!</div>';
-                    // Optionally hide the card entirely when no alerts
-                    // card.style.display = 'none';
-                }
-            } catch (error) {
-                console.error('Failed to load quality alerts:', error);
-                document.getElementById('quality-alerts').innerHTML = `
-                    <div style="text-align: center; padding: 20px; color: #666;">
-                        <p>Unable to load alerts</p>
-                    </div>
-                `;
-            }
-        }
-        
-        async function resolveAlert(alertId) {
-            try {
-                const response = await fetch(`${BASE_URL}/api/quality-alerts/${alertId}/resolve`, {
-                    method: 'POST'
-                });
-                
-                if (response.ok) {
-                    // Remove alert from UI with animation
-                    const alertElement = document.querySelector(`[data-alert-id="${alertId}"]`);
-                    if (alertElement) {
-                        alertElement.style.opacity = '0';
-                        alertElement.style.transform = 'translateX(100px)';
-                        setTimeout(() => {
-                            alertElement.remove();
-                            
-                            // Check if no alerts left
-                            const container = document.getElementById('quality-alerts');
-                            if (!container.querySelector('.alert-item')) {
-                                container.innerHTML = '<div class="no-alerts">All systems healthy!</div>';
-                            }
-                        }, 300);
-                    }
-                } else {
-                    alert('Failed to resolve alert. Please try again.');
-                }
-            } catch (error) {
-                console.error('Failed to resolve alert:', error);
-                alert('Failed to resolve alert. Please try again.');
-            }
-        }
-        
-        function getQualityMetricsHTML(m) {
-            const sentiment = m.sentiment || {};
-            const totalCalls = m.total_calls || 1;
-            const positiveWidth = sentiment.positive_rate || `${(((sentiment.positive ?? 0) / totalCalls) * 100).toFixed(1)}%`;
-            const neutralWidth = sentiment.neutral_rate || `${(((sentiment.neutral ?? 0) / totalCalls) * 100).toFixed(1)}%`;
-            const negativeWidth = sentiment.negative_rate || `${(((sentiment.negative ?? 0) / totalCalls) * 100).toFixed(1)}%`;
-            const updatedAt = new Date().toLocaleString();
-            
-            return `
-                <div class="quality-grid">
-                    <div class="quality-card">
-                        <div class="quality-label">Avg Quality Score</div>
-                        <div class="quality-score">${m.avg_quality_score}</div>
-                        <div class="quality-subtitle">Out of 10</div>
-                    </div>
-                    
-                    <div class="quality-card">
-                        <div class="quality-label">Positive Sentiment</div>
-                        <div class="quality-score">${sentiment.positive_rate || positiveWidth}</div>
-                        <div class="quality-subtitle">% of calls</div>
-                    </div>
-                    
-                    <div class="quality-card">
-                        <div class="quality-label">Connection Rate</div>
-                        <div class="quality-score">${m.success_rate}</div>
-                        <div class="quality-subtitle">Calls answered</div>
-                    </div>
-                    
-                    <div class="quality-card">
-                        <div class="quality-label">Booking Rate</div>
-                        <div class="quality-score">${m.booking_rate}</div>
-                        <div class="quality-subtitle">Calls → Bookings</div>
-                    </div>
-                </div>
-                
-                <div class="sentiment-breakdown">
-                    <h4>Sentiment Breakdown (${m.total_calls} calls)</h4>
-                    <div class="sentiment-bar">
-                        <div class="sentiment-positive" style="width: ${positiveWidth}" 
-                             title="Positive: ${sentiment.positive ?? 0} calls"></div>
-                        <div class="sentiment-neutral" style="width: ${neutralWidth}" 
-                             title="Neutral: ${sentiment.neutral ?? 0} calls"></div>
-                        <div class="sentiment-negative" style="width: ${negativeWidth}" 
-                             title="Negative: ${sentiment.negative ?? 0} calls"></div>
-                    </div>
-                    <div class="sentiment-legend">
-                        <span class="positive">😊 Positive: ${sentiment.positive ?? 0}</span>
-                        <span class="neutral">😐 Neutral: ${sentiment.neutral ?? 0}</span>
-                        <span class="negative">😞 Negative: ${sentiment.negative ?? 0}</span>
-                    </div>
-                </div>
-                
-                <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 10px;">
-                    <h4 style="margin-bottom: 10px;">📊 Key Stats</h4>
-                    <p style="margin: 5px 0;"><strong>Total Calls:</strong> ${m.total_calls}</p>
-                    <p style="margin: 5px 0;"><strong>Successful Calls:</strong> ${m.successful_calls} (${m.success_rate})</p>
-                    <p style="margin: 5px 0;"><strong>Bookings:</strong> ${m.bookings} (${m.booking_rate})</p>
-                    <p style="margin: 5px 0;"><strong>Avg Call Duration:</strong> ${m.avg_duration}</p>
-                    <p style="margin: 5px 0; color: #666; font-size: 0.9rem;"><em>Last updated: ${updatedAt}</em></p>
-                </div>
-            `;
-        }
-        
-        function getROIHTML(data) {
-            const r = data.roi;
-            const c = data.costs;
-            const rev = data.revenue;
-            const eff = data.efficiency || {};
-            const summary = data.summary || {};
-            const profitColor = r.profit > 0 ? '#28a745' : '#dc3545';
-            const conversionRate = eff.conversionRate ?? '—';
-            const costPerBooking = typeof eff.costPerBooking === 'number' ? eff.costPerBooking.toFixed(0) : (eff.costPerBooking || '—');
-            const revenuePerCall = typeof eff.revenuePerCall === 'number' ? eff.revenuePerCall.toFixed(0) : (eff.revenuePerCall || '—');
-            const profitPerCall = typeof eff.profitPerCall === 'number' ? eff.profitPerCall.toFixed(0) : (eff.profitPerCall || '—');
-            const totalSpent = typeof c.total === 'number' ? c.total.toFixed(2) : (c.total || '0.00');
-            const totalRevenue = typeof rev.total === 'number' ? rev.total.toFixed(2) : (rev.total || '0.00');
-            const avgDealValue = rev.avgDealValue ?? '—';
-            
-            return `
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 25px;">
-                    <div style="background: rgba(255,255,255,0.15); padding: 25px; border-radius: 12px; text-align: center;">
-                        <div style="font-size: 0.9rem; opacity: 0.9; text-transform: uppercase; letter-spacing: 1px;">Total Spent</div>
-                        <div style="font-size: 2.5rem; font-weight: bold; margin: 10px 0;">£${totalSpent}</div>
-                        <div style="font-size: 0.85rem; opacity: 0.8;">${c.breakdown.totalCalls} calls, ${c.breakdown.estimatedSMS} SMS</div>
-                    </div>
-                    
-                    <div style="background: rgba(255,255,255,0.15); padding: 25px; border-radius: 12px; text-align: center;">
-                        <div style="font-size: 0.9rem; opacity: 0.9; text-transform: uppercase; letter-spacing: 1px;">Total Revenue</div>
-                        <div style="font-size: 2.5rem; font-weight: bold; margin: 10px 0;">£${totalRevenue}</div>
-                        <div style="font-size: 0.85rem; opacity: 0.8;">${rev.bookings} bookings × £${avgDealValue}</div>
-                    </div>
-                    
-                    <div style="background: rgba(255,255,255,0.15); padding: 25px; border-radius: 12px; text-align: center;">
-                        <div style="font-size: 0.9rem; opacity: 0.9; text-transform: uppercase; letter-spacing: 1px;">Profit</div>
-                        <div style="font-size: 2.5rem; font-weight: bold; margin: 10px 0; color: ${profitColor};">
-                            ${r.profit >= 0 ? '+' : ''}£${r.profit.toFixed(2)}
-                        </div>
-                        <div style="font-size: 0.85rem; opacity: 0.8;">${r.multiplier.toFixed(1)}x return</div>
-                    </div>
-                    
-                    <div style="background: rgba(255,255,255,0.2); padding: 25px; border-radius: 12px; text-align: center; border: 2px solid rgba(255,255,255,0.3);">
-                        <div style="font-size: 0.9rem; opacity: 0.9; text-transform: uppercase; letter-spacing: 1px;">ROI</div>
-                        <div style="font-size: 3rem; font-weight: bold; margin: 10px 0;">
-                            ${r.multiplier.toFixed(1)}x
-                        </div>
-                        <div style="font-size: 0.85rem; opacity: 0.8;">${r.percentage.toFixed(0)}% return</div>
-                    </div>
-                </div>
-                
-                <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; margin-bottom: 20px;">
-                    <h4 style="margin: 0 0 15px 0; color: white;">📊 Efficiency Metrics</h4>
-                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
-                        <div>
-                            <div style="opacity: 0.8; font-size: 0.9rem;">Conversion Rate</div>
-                            <div style="font-size: 1.5rem; font-weight: bold;">${conversionRate}</div>
-                        </div>
-                        <div>
-                            <div style="opacity: 0.8; font-size: 0.9rem;">Cost Per Booking</div>
-                            <div style="font-size: 1.5rem; font-weight: bold;">£${costPerBooking}</div>
-                        </div>
-                        <div>
-                            <div style="opacity: 0.8; font-size: 0.9rem;">Revenue Per Call</div>
-                            <div style="font-size: 1.5rem; font-weight: bold;">£${revenuePerCall}</div>
-                        </div>
-                        <div>
-                            <div style="opacity: 0.8; font-size: 0.9rem;">Profit Per Call</div>
-                            <div style="font-size: 1.5rem; font-weight: bold; color: ${profitColor};">£${profitPerCall}</div>
-                        </div>
-                    </div>
-                </div>
-                
-                ${Array.isArray(summary.insights) && summary.insights.length > 0 ? `
-                    <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px;">
-                        <h4 style="margin: 0 0 15px 0; color: white;">💡 Insights</h4>
-                        ${summary.insights.map(insight => `
-                            <div style="margin: 10px 0; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 6px;">
-                                <span style="font-size: 1.2rem; margin-right: 8px;">${insight.icon}</span>
-                                <span>${insight.message}</span>
-                            </div>
-                        `).join('')}
-                    </div>
-                ` : ''}
-                
-                <div style="margin-top: 15px; opacity: 0.7; font-size: 0.85rem; text-align: center;">
-                    Based on last 30 days • Avg deal value: £${avgDealValue}
-                </div>
-            `;
-        }
-        
-        async function startDemoCall() {
-            const clientKey = currentClient || DEMO_CLIENT_KEY;
-            const config = CLIENT_CONFIG[clientKey] || {};
-            const command = `node scripts/test-demo-client.js --client ${clientKey}`;
-            const button = document.querySelector('.refresh-btn');
-            setCallButtonState(button, true);
-            const copied = await copyCommandToClipboard(command);
-            alert(`Start the live AI call for ${config.name || 'this client'}:\n\n${command}\n\n${copied ? '✅ Command copied to your clipboard.' : 'Copy the command above and paste it into your terminal.'}\n\nOnce you run it, answer your phone to hear the assistant talk like a real lead.`);
-            setTimeout(() => setCallButtonState(button, false), 3500);
-        }
-        
-        async function resetDemoData() {
-            const command = `node scripts/create-demo-client.js "Demo Booking Partner" "service businesses" "Lead Follow-Up,Appointment Booking,Calendar Integration" "Business Owner" "United Kingdom"`;
-            const copied = await copyCommandToClipboard(command);
-            alert(`Refresh the sandbox data before recording:\n\n${command}\n\n${copied ? '✅ Command copied to clipboard.' : 'Copy the command above and run it in your terminal.'}\n\nRunning it regenerates leads, updates the Vapi assistant, and keeps the Loom demo accurate.`);
-        }
-        
-        async function copyCommandToClipboard(command) {
-            if (navigator.clipboard && window.isSecureContext) {
+
+        async function fetchLiveData(clientKey) {
+            if (clientKey !== DEMO_CLIENT_KEY) {
                 try {
-                    await navigator.clipboard.writeText(command);
-                    return true;
-                } catch (error) {
-                    console.warn('Clipboard copy failed:', error);
+                    const res = await fetch(`${BASE_URL}/api/demo-dashboard/${clientKey}`);
+                    if (res.ok) {
+                        const payload = await res.json();
+                        if (payload.ok) return payload;
+                    }
+                } catch (err) {
+                    console.warn('Live data unavailable', err.message);
                 }
             }
-            return false;
+            return null;
         }
-        
-        function setCallButtonState(button, busy) {
-            if (!button) return;
-            button.disabled = busy;
-            button.style.opacity = busy ? '0.75' : '1';
-            button.innerHTML = busy ? '☎️ Command copied...' : '🚀 Start AI Call';
+
+        function mergeData(base = {}, livePayload) {
+            if (!livePayload) return base;
+            const metrics = livePayload.metrics || {};
+            return {
+                ...base,
+                totalLeads: metrics.totalLeads ?? base.totalLeads,
+                totalCalls: metrics.totalCalls ?? base.totalCalls,
+                last24hLeads: metrics.last24hLeads ?? base.last24hLeads,
+                conversionRate: metrics.conversionRate ?? base.conversionRate,
+                successRate: metrics.successRate ?? base.successRate,
+                recentLeads: Array.isArray(livePayload.leads) && livePayload.leads.length ? livePayload.leads : base.recentLeads,
+                serviceMix: Array.isArray(livePayload.serviceMix) && livePayload.serviceMix.length ? livePayload.serviceMix : base.serviceMix,
+                recentCalls: Array.isArray(livePayload.recentCalls) && livePayload.recentCalls.length ? livePayload.recentCalls : base.recentCalls
+            };
         }
-        
-        function refreshClientData() {
-            if (currentClient) {
-                loadClientData();
-                loadQualityMetrics();
-                loadQualityAlerts();
+
+        function updateHeader(config) {
+            document.getElementById('clientLogo').textContent = config.logo || '🏢';
+            document.getElementById('clientName').textContent = config.name;
+            document.getElementById('clientDescription').textContent = config.description || '';
+            document.getElementById('clientTagline').textContent = config.tagline || '';
+            document.getElementById('clientStatus').textContent = config.status || 'Live';
+            document.getElementById('metaPhone').textContent = config.phone || '—';
+            document.getElementById('metaTimezone').textContent = config.timezone || '—';
+            document.getElementById('metaHours').textContent = config.businessHours || '—';
+            document.getElementById('metaIndustry').textContent = config.industry || '—';
+
+            const banner = document.getElementById('demoBanner');
+            if (banner) {
+                if (config.key === DEMO_CLIENT_KEY) {
+                    banner.style.display = 'block';
+                    banner.innerHTML = `<strong>Demo environment:</strong> ${config.name} shows exactly what your live dashboard will look like. When we onboard you we simply plug in your data.`;
+                } else {
+                    banner.style.display = 'none';
+                }
             }
         }
-        
-        function viewClientLogs() {
-            window.open('https://dashboard.render.com/web/srv-d2vvdqbuibrs73dq57ug/logs', '_blank');
+
+        function formatNumber(value) {
+            if (value === undefined || value === null) return '—';
+            return Number(value).toLocaleString('en-GB');
         }
-        
-        // Initialize client dashboard
-        function initClientDashboard() {
-            currentClient = getClientFromURL();
-             currentPersona = getPersonaFromURL();
-             populatePersonaSelect();
-            applyClientTheme(currentClient);
-            loadClientData();
-            loadROI(); // Load ROI calculator
-            loadQualityMetrics(); // Load quality metrics on init
-            loadQualityAlerts(); // Load quality alerts on init
+
+        function formatPercent(value) {
+            if (value === undefined || value === null) return '—';
+            return `${value}%`;
         }
-        
-        // Auto-refresh every 30 seconds
-        setInterval(() => {
-            if (currentClient) {
-                loadClientData();
-                loadROI(); // Refresh ROI
-                loadQualityMetrics(); // Refresh quality metrics too
-                loadQualityAlerts(); // Refresh alerts too
+
+        function updateStatusBar(data) {
+            document.getElementById('statusTotalLeads').textContent = formatNumber(data.totalLeads);
+            document.getElementById('statusTotalCalls').textContent = formatNumber(data.totalCalls);
+            document.getElementById('statusConversionRate').textContent = formatPercent(data.conversionRate);
+            document.getElementById('statusFirstResponse').textContent = data.firstResponse || '—';
+        }
+
+        function renderRecentActivity(data) {
+            const container = document.getElementById('recent-activity');
+            container.innerHTML = `
+                <div class="metric-row"><span class="metric-label">New leads (24h)</span><span class="metric-value">${formatNumber(data.last24hLeads)}</span></div>
+                <div class="metric-row"><span class="metric-label">Calls completed</span><span class="metric-value">${formatNumber(data.totalCalls)}</span></div>
+                <div class="metric-row"><span class="metric-label">Appointments booked</span><span class="metric-value">${formatNumber(data.bookingsThisWeek ?? 18)}</span></div>
+                <div class="metric-row"><span class="metric-label">Avg response speed</span><span class="metric-value">${data.firstResponse || '—'}</span></div>
+            `;
+        }
+
+        function renderLeadPriority(data) {
+            const container = document.getElementById('lead-priority');
+            container.innerHTML = `
+                <div class="metric-row"><span class="metric-label">High priority</span><span class="metric-value">${formatNumber(data.highPriorityLeads ?? 0)}</span></div>
+                <div class="metric-row"><span class="metric-label">Medium</span><span class="metric-value">${formatNumber(data.mediumPriorityLeads ?? 0)}</span></div>
+                <div class="metric-row"><span class="metric-label">Low</span><span class="metric-value">${formatNumber(data.lowPriorityLeads ?? 0)}</span></div>
+                <div class="metric-row"><span class="metric-label">Avg lead score</span><span class="metric-value">${formatNumber(data.avgLeadScore ?? 0)}</span></div>
+            `;
+        }
+
+        function renderLeads(leads = []) {
+            const container = document.getElementById('leads-list');
+            if (!leads.length) {
+                container.innerHTML = '<p style="color:#8c8fab;">Leads will appear here as soon as they arrive.</p>';
+                return;
             }
-        }, 30000);
-        
-        // Load client dashboard on page load
-        document.addEventListener('DOMContentLoaded', initClientDashboard);
+            container.innerHTML = leads.slice(0, 5).map(lead => `
+                <div class="lead-item">
+                    <div class="lead-name">${lead.name || 'Prospect'}</div>
+                    <div class="lead-meta">
+                        <span>${lead.phone || lead.email || ''}</span>
+                        <span>${lead.service || 'General'}</span>
+                    </div>
+                    <div class="lead-status">${lead.status || 'In follow-up'}</div>
+                </div>
+            `).join('');
+        }
+
+        function renderChart(config) {
+            const data = config.chart || [4, 6, 5, 7, 8, 9, 6];
+            const labels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+            const max = Math.max(...data, 1);
+            const bars = data.map((value, idx) => `
+                <div class="chart-bar" style="height:${(value / max) * 100}%;" data-label="${labels[idx]}"></div>
+            `).join('');
+            document.getElementById('chartBars').innerHTML = bars;
+            document.getElementById('chartSummary').textContent = `${data.reduce((sum,v)=>sum+v,0)} touchpoints in the last 7 days`;
+        }
+
+        function renderSystemStatus(config) {
+            document.getElementById('statusPhone').textContent = config.phone || '—';
+            document.getElementById('statusCoverage').textContent = config.businessHours || '—';
+        }
+
+        function renderCalls(calls = []) {
+            const container = document.getElementById('recent-calls');
+            if (!calls.length) {
+                container.innerHTML = '<p style="color:#8c8fab;">Live call feed will show up here as soon as we begin calling leads.</p>';
+                return;
+            }
+            container.innerHTML = calls.map(call => `
+                <div class="activity-item">
+                    <strong>${call.name || 'Prospect'}</strong> • ${call.channel || 'AI call'}
+                    <div class="activity-meta">${call.summary || 'Conversation logged'} • ${call.timeAgo || 'Just now'}</div>
+                </div>
+            `).join('');
+        }
+
+        function renderWorkflow(steps = []) {
+            const container = document.getElementById('workflow');
+            container.innerHTML = steps.map(step => `
+                <li class="workflow-step">
+                    <div class="workflow-icon">${step.icon}</div>
+                    <div>
+                        <strong>${step.title}</strong>
+                        <p style="color:#6f7390; margin-top:4px;">${step.desc}</p>
+                    </div>
+                </li>
+            `).join('');
+        }
+
+        async function initDashboard() {
+            const clientKey = getClientFromURL();
+            const config = { ...CLIENT_CONFIG[clientKey] } || CLIENT_CONFIG[DEMO_CLIENT_KEY];
+            config.key = clientKey;
+            updateHeader(config);
+
+            let data = { ...DEMO_DATA };
+            if (clientKey === DEMO_CLIENT_KEY) {
+                document.getElementById('demoBanner').style.display = 'block';
+            } else {
+                const banner = document.getElementById('demoBanner');
+                if (banner) banner.style.display = 'none';
+            }
+
+            const livePayload = await fetchLiveData(clientKey);
+            data = mergeData(data, livePayload);
+
+            updateStatusBar(data);
+            renderRecentActivity(data);
+            renderLeadPriority(data);
+            renderLeads(data.recentLeads || []);
+            renderChart(config);
+            renderSystemStatus(config);
+            renderCalls(data.recentCalls || []);
+            renderWorkflow(config.workflow || CLIENT_CONFIG.demo_client.workflow);
+
+            setInterval(async () => {
+                const refreshPayload = await fetchLiveData(clientKey);
+                if (refreshPayload) {
+                    data = mergeData(data, refreshPayload);
+                    updateStatusBar(data);
+                    renderRecentActivity(data);
+                    renderLeadPriority(data);
+                    renderLeads(data.recentLeads || []);
+                    renderCalls(data.recentCalls || []);
+                }
+            }, 30000);
+        }
+
+        document.addEventListener('DOMContentLoaded', initDashboard);
     </script>
 </body>
 </html>
+
