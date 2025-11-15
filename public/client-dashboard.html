@@ -416,6 +416,42 @@
             background: var(--client-color, #5C6AC4);
         }
         
+        .next-steps {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .next-step-item {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+            background: #f9f8ff;
+            border: 1px dashed rgba(92,106,196,0.4);
+            border-radius: 12px;
+            padding: 14px 16px;
+        }
+        
+        .next-step-icon {
+            font-size: 1.2rem;
+            color: var(--client-color, #5C6AC4);
+        }
+        
+        .next-step-content h4 {
+            margin-bottom: 4px;
+            color: #2a2c46;
+            font-size: 1rem;
+        }
+        
+        .next-step-content p {
+            margin: 0;
+            font-size: 0.9rem;
+            color: #636682;
+        }
+        
         /* Quality Metrics Styles */
         .quality-grid {
             display: grid;
@@ -647,7 +683,8 @@
                     <div class="client-logo" id="clientLogo">🏥</div>
                     <div class="client-details">
                         <h1 id="clientName">Client Dashboard</h1>
-                        <p id="clientDescription">AI-powered booking system for your business</p>
+                        <p id="clientDescription">Your done-for-you AI follow-up team for existing leads</p>
+                        <p id="clientTagline" style="color:#8b8ea8;font-size:0.95rem;">We import your pipeline, chase every lead, and book straight into your calendar.</p>
                     </div>
                 </div>
                 <div class="client-status">
@@ -723,6 +760,7 @@
                 <h3>⚡ Quick Actions</h3>
                 <button class="btn" onclick="testClientSMS()">Test SMS</button>
                 <button class="btn" onclick="refreshClientData()">Refresh Data</button>
+                <button class="btn" onclick="resetDemoData()">Reset Demo Data</button>
                 <button class="btn btn-secondary" onclick="viewClientLogs()">View Logs</button>
             </div>
             
@@ -747,6 +785,14 @@
                 <h3>🧩 Service Mix</h3>
                 <div id="service-mix">
                     <div class="loading">Preparing service mix...</div>
+                </div>
+            </div>
+            
+            <!-- Next Steps -->
+            <div class="card" style="grid-column: 1 / -1;">
+                <h3>✅ How We Run This For You</h3>
+                <div id="next-steps" class="next-steps">
+                    <div class="loading">Loading playbook...</div>
                 </div>
             </div>
             
@@ -823,6 +869,7 @@
             'victory_dental': {
                 name: 'Victory Dental',
                 description: 'Professional dental care with AI-powered booking',
+                tagline: 'We rescue missed dental leads and fill the chair for you.',
                 logo: '🦷',
                 color: '#4CAF50',
                 bg: 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)',
@@ -835,6 +882,7 @@
             'northside_vet': {
                 name: 'Northside Veterinary Clinic',
                 description: 'Compassionate veterinary care for your pets',
+                tagline: 'Instant follow-up for every pet parent enquiry.',
                 logo: '🐾',
                 color: '#FF9800',
                 bg: 'linear-gradient(135deg, #FF9800 0%, #F57C00 100%)',
@@ -847,6 +895,7 @@
             'demo_client': {
                 name: 'Demo Booking Partner',
                 description: 'Live sandbox showing the AI concierge following up + booking',
+                tagline: 'Upload existing leads → AI calls in minutes → appointments land in your calendar.',
                 logo: '✨',
                 color: '#5C6AC4',
                 bg: 'linear-gradient(135deg, #5C6AC4 0%, #3A4A9F 100%)',
@@ -880,6 +929,8 @@
             document.getElementById('clientName').textContent = config.name;
             document.getElementById('clientDescription').textContent = config.description;
             document.getElementById('clientLogo').textContent = config.logo;
+            const taglineEl = document.getElementById('clientTagline');
+            if (taglineEl) taglineEl.textContent = config.tagline || 'We import your leads, follow up instantly, and book straight into your calendar.';
             document.title = `${config.name} - AI Booking Dashboard`;
             const statusEl = document.getElementById('clientStatus');
             if (statusEl) {
@@ -902,7 +953,16 @@
             
             try {
                 const config = CLIENT_CONFIG[currentClient];
-                const clientData = getClientData(currentClient);
+                let clientData = getClientData(currentClient);
+                const liveData = await fetchLiveDemoData(currentClient);
+                clientData = mergeDemoData(clientData, liveData);
+                
+                if (liveData?.highlights && currentClient === DEMO_CLIENT_KEY) {
+                    const bannerEl = document.getElementById('demoBanner');
+                    if (bannerEl) {
+                        bannerEl.innerHTML = `<strong>Demo environment:</strong> ${config.name} is pulling live metrics from your actual lead + call logs (${new Date().toLocaleTimeString()}).`;
+                    }
+                }
                 
                 // Update client config display
                 document.getElementById('clientConfig').style.display = 'block';
@@ -911,45 +971,7 @@
                 document.getElementById('configTimezone').textContent = config.timezone;
                 document.getElementById('configHours').textContent = config.businessHours;
                 
-                // Highlights
-                const highlightGrid = document.getElementById('highlightGrid');
-                if (highlightGrid) {
-                    if (clientData.highlights) {
-                        const hl = clientData.highlights;
-                        const cards = [
-                            {
-                                label: 'Avg Response',
-                                value: hl.responseTime,
-                                sub: 'Speed from lead to first dial'
-                            },
-                            {
-                                label: 'Bookings This Week',
-                                value: hl.bookingsThisWeek,
-                                sub: hl.bookingsNotes || 'Last confirmed today'
-                            },
-                            {
-                                label: 'Pipeline Value',
-                                value: hl.pipelineValue,
-                                sub: hl.pipelineNotes || 'Qualified across 3 services'
-                            },
-                            {
-                                label: 'Show Rate',
-                                value: hl.showRate,
-                                sub: hl.showNotes || 'No cancellations this week'
-                            }
-                        ];
-                        highlightGrid.style.display = 'grid';
-                        highlightGrid.innerHTML = cards.map(card => `
-                            <div class="highlight-card">
-                                <div class="highlight-label">${card.label}</div>
-                                <div class="highlight-value">${card.value}</div>
-                                <div class="highlight-subtext">${card.sub}</div>
-                            </div>
-                        `).join('');
-                    } else {
-                        highlightGrid.style.display = 'none';
-                    }
-                }
+                renderHighlightCards(clientData.highlights);
                 
                 // Update client metrics
                 document.getElementById('client-metrics').innerHTML = `
@@ -1027,67 +1049,10 @@
                     </div>
                 `;
                 
-                // Update leads
-                const leads = Array.isArray(clientData.leads) ? clientData.leads : [];
-                document.getElementById('leads-list').innerHTML = leads.map(lead => `
-                    <div class="lead-item">
-                        <div class="lead-header-row">
-                            <div>
-                                <div class="lead-name">${lead.name || lead.phone}</div>
-                                <div class="lead-phone">${lead.phone}</div>
-                            </div>
-                            <div class="lead-score">${lead.score}</div>
-                        </div>
-                        <div class="lead-status">${lead.status} • ${lead.service || 'General Inquiry'}</div>
-                        <div class="lead-status">Last activity: ${lead.lastMessage}</div>
-                    </div>
-                `).join('') || '<div class="loading">No leads yet</div>';
-                
-                // Service mix
-                const serviceMixEl = document.getElementById('service-mix');
-                if (serviceMixEl) {
-                    if (Array.isArray(clientData.serviceMix) && clientData.serviceMix.length) {
-                        serviceMixEl.innerHTML = clientData.serviceMix.map(service => `
-                            <div class="service-row">
-                                <div class="service-header">
-                                    <span>${service.name}</span>
-                                    <span>${service.percent}%</span>
-                                </div>
-                                <div class="service-bar">
-                                    <div class="service-bar-fill" style="width: ${service.percent}%"></div>
-                                </div>
-                                <div class="service-header" style="font-size: 0.8rem; color: #8b8ea8;">
-                                    <span>${service.notes || ''}</span>
-                                    <span>${service.bookings || 0} bookings</span>
-                                </div>
-                            </div>
-                        `).join('');
-                    } else {
-                        serviceMixEl.innerHTML = '<div class="loading">Connect services to see distribution</div>';
-                    }
-                }
-                
-                // Recent calls/activity
-                const recentCallsEl = document.getElementById('recent-calls');
-                if (recentCallsEl) {
-                    if (Array.isArray(clientData.recentCalls) && clientData.recentCalls.length) {
-                        recentCallsEl.innerHTML = clientData.recentCalls.map(call => `
-                            <div class="activity-item">
-                                <div>
-                                    <div class="lead-name">${call.name}</div>
-                                    <div class="activity-meta">${call.service} • ${call.channel}</div>
-                                    <div class="activity-meta">${call.summary}</div>
-                                </div>
-                                <div style="text-align: right;">
-                                    <div class="activity-status ${call.statusClass || 'info'}">${call.status}</div>
-                                    <div class="activity-meta">${call.timeAgo}</div>
-                                </div>
-                            </div>
-                        `).join('');
-                    } else {
-                        recentCallsEl.innerHTML = '<div class="loading">Waiting for first conversations...</div>';
-                    }
-                }
+                renderLeadList(clientData.leads);
+                renderServiceMix(clientData.serviceMix);
+                renderActivityFeed(clientData.recentCalls);
+                renderNextSteps(clientData.nextSteps);
                 
             } catch (error) {
                 console.error('Failed to load client data:', error);
@@ -1099,6 +1064,174 @@
                     </div>
                 `;
             }
+        }
+        
+        async function fetchLiveDemoData(clientKey) {
+            try {
+                const response = await fetch(`${BASE_URL}/api/demo-dashboard/${clientKey}`);
+                if (!response.ok) return null;
+                const payload = await response.json();
+                if (!payload?.ok) return null;
+                return payload;
+            } catch (error) {
+                console.warn('Live demo data unavailable', error.message);
+                return null;
+            }
+        }
+        
+        function mergeDemoData(baseData = {}, livePayload) {
+            if (!livePayload) return baseData;
+            const merged = { ...baseData };
+            const metrics = livePayload.metrics || {};
+            merged.totalLeads = metrics.totalLeads ?? merged.totalLeads;
+            merged.totalCalls = metrics.totalCalls ?? merged.totalCalls;
+            merged.last24hLeads = metrics.last24hLeads ?? merged.last24hLeads;
+            merged.conversionRate = metrics.conversionRate ?? merged.conversionRate;
+            merged.successRate = metrics.successRate ?? merged.successRate;
+            merged.avgLeadScore = metrics.avgLeadScore ?? merged.avgLeadScore;
+            merged.highlights = { ...(merged.highlights || {}), ...(livePayload.highlights || {}) };
+            if (Array.isArray(livePayload.leads) && livePayload.leads.length) merged.leads = livePayload.leads;
+            if (Array.isArray(livePayload.serviceMix) && livePayload.serviceMix.length) merged.serviceMix = livePayload.serviceMix;
+            if (Array.isArray(livePayload.recentCalls) && livePayload.recentCalls.length) merged.recentCalls = livePayload.recentCalls;
+            return merged;
+        }
+        
+        function renderHighlightCards(highlights) {
+            const highlightGrid = document.getElementById('highlightGrid');
+            if (!highlightGrid) return;
+            if (!highlights) {
+                highlightGrid.style.display = 'none';
+                return;
+            }
+            const cards = [
+                {
+                    label: 'Avg Response',
+                    value: highlights.responseTime || '≈3m',
+                    sub: highlights.responseNotes || 'Speed from lead to first dial'
+                },
+                {
+                    label: 'Bookings This Week',
+                    value: highlights.bookingsThisWeek || '—',
+                    sub: highlights.bookingsNotes || 'Rolling 7-day snapshot'
+                },
+                {
+                    label: 'Pipeline Value',
+                    value: highlights.pipelineValue || '£0',
+                    sub: highlights.pipelineNotes || 'Qualified leads currently in play'
+                },
+                {
+                    label: 'Show Rate',
+                    value: highlights.showRate || '100%',
+                    sub: highlights.showNotes || 'Attendance after reminders'
+                }
+            ];
+            highlightGrid.style.display = 'grid';
+            highlightGrid.innerHTML = cards.map(card => `
+                <div class="highlight-card">
+                    <div class="highlight-label">${card.label}</div>
+                    <div class="highlight-value">${card.value}</div>
+                    <div class="highlight-subtext">${card.sub}</div>
+                </div>
+            `).join('');
+        }
+        
+        function renderLeadList(leads = []) {
+            const listEl = document.getElementById('leads-list');
+            if (!listEl) return;
+            if (!Array.isArray(leads) || !leads.length) {
+                listEl.innerHTML = '<div class="loading">No leads yet</div>';
+                return;
+            }
+            listEl.innerHTML = leads.map(lead => `
+                <div class="lead-item">
+                    <div class="lead-header-row">
+                        <div>
+                            <div class="lead-name">${lead.name || lead.phone}</div>
+                            <div class="lead-phone">${lead.phone}</div>
+                        </div>
+                        <div class="lead-score">${lead.score ?? '—'}</div>
+                    </div>
+                    <div class="lead-status">${lead.status || 'Awaiting follow-up'} • ${lead.service || 'General Inquiry'}</div>
+                    <div class="lead-status">Last activity: ${lead.lastMessage || 'Just added'}</div>
+                </div>
+            `).join('');
+        }
+        
+        function renderServiceMix(serviceMix = []) {
+            const serviceMixEl = document.getElementById('service-mix');
+            if (!serviceMixEl) return;
+            if (!Array.isArray(serviceMix) || !serviceMix.length) {
+                serviceMixEl.innerHTML = '<div class="loading">Connect services to see distribution</div>';
+                return;
+            }
+            serviceMixEl.innerHTML = serviceMix.map(service => `
+                <div class="service-row">
+                    <div class="service-header">
+                        <span>${service.name}</span>
+                        <span>${service.percent}%</span>
+                    </div>
+                    <div class="service-bar">
+                        <div class="service-bar-fill" style="width: ${service.percent}%"></div>
+                    </div>
+                    <div class="service-header" style="font-size: 0.8rem; color: #8b8ea8;">
+                        <span>${service.notes || ''}</span>
+                        <span>${service.bookings || 0} bookings</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function renderActivityFeed(items = []) {
+            const recentCallsEl = document.getElementById('recent-calls');
+            if (!recentCallsEl) return;
+            if (!Array.isArray(items) || !items.length) {
+                recentCallsEl.innerHTML = '<div class="loading">Waiting for first conversations...</div>';
+                return;
+            }
+            recentCallsEl.innerHTML = items.map(call => `
+                <div class="activity-item">
+                    <div>
+                        <div class="lead-name">${call.name || 'Prospect'}</div>
+                        <div class="activity-meta">${call.service || 'Lead Follow-Up'} • ${call.channel || 'AI call'}</div>
+                        <div class="activity-meta">${call.summary || ''}</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div class="activity-status ${call.statusClass || 'info'}">${call.status || 'Live'}</div>
+                        <div class="activity-meta">${call.timeAgo || formatTimeAgo(call.timestamp)}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function renderNextSteps(steps = []) {
+            const container = document.getElementById('next-steps');
+            if (!container) return;
+            if (!Array.isArray(steps) || !steps.length) {
+                container.innerHTML = '<div class="loading">We handle the work for you.</div>';
+                return;
+            }
+            container.innerHTML = steps.map(step => `
+                <div class="next-step-item">
+                    <div class="next-step-icon">${step.icon || '🧩'}</div>
+                    <div class="next-step-content">
+                        <h4>${step.title}</h4>
+                        <p>${step.copy}</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function formatTimeAgo(ts) {
+            if (!ts) return 'Just now';
+            const time = new Date(ts);
+            const diffMs = Date.now() - time.getTime();
+            const minutes = Math.floor(diffMs / 60000);
+            if (minutes < 1) return 'Just now';
+            if (minutes < 60) return `${minutes} min ago`;
+            const hours = Math.floor(minutes / 60);
+            if (hours < 24) return `${hours}h ago`;
+            const days = Math.floor(hours / 24);
+            return `${days}d ago`;
         }
         
         function getClientData(clientKey) {
@@ -1146,17 +1279,24 @@
                     lowPriorityLeads: 7,
                     highlights: {
                         responseTime: '2m 58s',
-                        bookingsThisWeek: 18,
-                        bookingsNotes: '6 new bookings today',
+                        responseNotes: 'Average time from lead drop to AI call',
+                        bookingsThisWeek: '18',
+                        bookingsNotes: '6 confirmed today',
                         pipelineValue: '£32.4k',
-                        pipelineNotes: '18 qualified leads pending contracts',
-                        showRate: '0 no-shows',
-                        showNotes: 'Auto-reminders keep attendance at 100%'
+                        pipelineNotes: '18 qualified leads in active nurture',
+                        showRate: '100% show rate',
+                        showNotes: 'Auto-reminders keep attendance tight'
                     },
                     serviceMix: [
                         { name: 'Lead Follow-Up', percent: 35, bookings: 6, notes: 'Speed-to-lead flows' },
                         { name: 'Appointment Booking', percent: 45, bookings: 8, notes: 'AI calendar concierge' },
                         { name: 'Calendar Integration', percent: 20, bookings: 4, notes: 'Multi-calendar sync' }
+                    ],
+                    nextSteps: [
+                        { icon: '📥', title: 'Hand us your leads', copy: 'CSV export, CRM webhook, or shared inbox—whatever is easiest.' },
+                        { icon: '🤖', title: 'AI follows up instantly', copy: 'Calls + SMS + email chase every lead automatically.' },
+                        { icon: '📅', title: 'We book it for you', copy: 'Calendar slots, confirmations, and notes are handled.' },
+                        { icon: '📊', title: 'You get daily summaries', copy: 'Slack/email digest with leads touched and bookings won.' }
                     ],
                     recentCalls: [
                         {
@@ -1554,18 +1694,36 @@
             const clientKey = currentClient || DEMO_CLIENT_KEY;
             const config = CLIENT_CONFIG[clientKey] || {};
             const command = `node scripts/test-demo-client.js --client ${clientKey}`;
-            let copied = false;
-            
+            const button = document.querySelector('.refresh-btn');
+            setCallButtonState(button, true);
+            const copied = await copyCommandToClipboard(command);
+            alert(`Start the live AI call for ${config.name || 'this client'}:\n\n${command}\n\n${copied ? '✅ Command copied to your clipboard.' : 'Copy the command above and paste it into your terminal.'}\n\nOnce you run it, answer your phone to hear the assistant talk like a real lead.`);
+            setTimeout(() => setCallButtonState(button, false), 3500);
+        }
+        
+        async function resetDemoData() {
+            const command = `node scripts/create-demo-client.js "Demo Booking Partner" "service businesses" "Lead Follow-Up,Appointment Booking,Calendar Integration" "Business Owner" "United Kingdom"`;
+            const copied = await copyCommandToClipboard(command);
+            alert(`Refresh the sandbox data before recording:\n\n${command}\n\n${copied ? '✅ Command copied to clipboard.' : 'Copy the command above and run it in your terminal.'}\n\nRunning it regenerates leads, updates the Vapi assistant, and keeps the Loom demo accurate.`);
+        }
+        
+        async function copyCommandToClipboard(command) {
             if (navigator.clipboard && window.isSecureContext) {
                 try {
                     await navigator.clipboard.writeText(command);
-                    copied = true;
+                    return true;
                 } catch (error) {
                     console.warn('Clipboard copy failed:', error);
                 }
             }
-            
-            alert(`Start the live AI call for ${config.name || 'this client'}:\n\n${command}\n\n${copied ? '✅ Command copied to your clipboard.' : 'Copy the command above and paste it into your terminal.'}\n\nOnce you run it, answer your phone to hear the assistant talk like a real lead.`);
+            return false;
+        }
+        
+        function setCallButtonState(button, busy) {
+            if (!button) return;
+            button.disabled = busy;
+            button.style.opacity = busy ? '0.75' : '1';
+            button.innerHTML = busy ? '☎️ Command copied...' : '🚀 Start AI Call';
         }
         
         function refreshClientData() {

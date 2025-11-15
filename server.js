@@ -102,6 +102,8 @@ import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import compression from 'compression';
+import { getDemoOverrides, formatOverridesForTelemetry, loadDemoScript } from './lib/demo-script.js';
+import { recordDemoTelemetry, readDemoTelemetry, clearDemoTelemetry, recordReceptionistTelemetry, readReceptionistTelemetry, clearReceptionistTelemetry } from './lib/demo-telemetry.js';
 import twilio from 'twilio';
 import { createHash } from 'crypto';
 import { performanceMiddleware, getPerformanceMonitor } from './lib/performance-monitor.js';
@@ -149,6 +151,7 @@ const io = new SocketIOServer(server, {
 // Initialize performance monitoring and caching
 const performanceMonitor = getPerformanceMonitor();
 const cache = getCache();
+const isPostgres = (process.env.DB_TYPE || '').toLowerCase() === 'postgres';
 
 // WebSocket connection handling
 io.on('connection', (socket) => {
@@ -7989,6 +7992,53 @@ app.get('/api/industry-comparison/:clientKey', async (req, res) => {
   }
 });
 
+function sqlHoursAgo(hours = 1) {
+  if (isPostgres) {
+    return `NOW() - INTERVAL '${hours} hour${hours === 1 ? '' : 's'}'`;
+  }
+  return `datetime('now','-${hours} hour${hours === 1 ? '' : 's'}')`;
+}
+
+function sqlDaysAgo(days = 1) {
+  if (isPostgres) {
+    return `NOW() - INTERVAL '${days} day${days === 1 ? '' : 's'}'`;
+  }
+  return `datetime('now','-${days} day${days === 1 ? '' : 's'}')`;
+}
+
+function formatGBP(value = 0) {
+  const formatter = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 });
+  return formatter.format(value);
+}
+
+function formatTimeAgoLabel(dateString) {
+  if (!dateString) return 'Just now';
+  const diffMs = Date.now() - new Date(dateString).getTime();
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+function mapCallStatus(status) {
+  const normalized = (status || '').toLowerCase();
+  if (normalized.includes('book')) return 'Booked';
+  if (normalized.includes('completed')) return 'Completed';
+  if (normalized.includes('pending')) return 'Awaiting reply';
+  if (normalized.includes('missed')) return 'Missed call';
+  return status || 'Live';
+}
+
+function mapStatusClass(status) {
+  const normalized = (status || '').toLowerCase();
+  if (normalized.includes('book')) return 'success';
+  if (normalized.includes('await') || normalized.includes('pending')) return 'pending';
+  return 'info';
+}
+
 // API endpoint to get A/B test results
 app.get('/api/ab-test-results/:clientKey', async (req, res) => {
   try {
@@ -8003,6 +8053,172 @@ app.get('/api/ab-test-results/:clientKey', async (req, res) => {
     });
   } catch (error) {
     console.error('[AB TEST RESULTS ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Live demo dashboard data (used by client dashboard for Looms)
+app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
+  const { clientKey } = req.params;
+  try {
+    const [
+      leadCounts,
+      callCounts,
+      bookingStats,
+      serviceRows,
+      leadRows,
+      recentCallRows,
+      responseRows
+    ] = await Promise.all([
+      query(`
+        SELECT COUNT(*) AS total,
+               SUM(CASE WHEN created_at >= ${sqlHoursAgo(24)} THEN 1 ELSE 0 END) AS last24
+        FROM leads
+        WHERE client_key = $1
+      `, [clientKey]),
+      query(`
+        SELECT COUNT(*) AS total,
+               SUM(CASE WHEN created_at >= ${sqlHoursAgo(24)} THEN 1 ELSE 0 END) AS last24,
+               SUM(CASE WHEN outcome = 'booked' THEN 1 ELSE 0 END) AS booked
+        FROM calls
+        WHERE client_key = $1
+      `, [clientKey]),
+      query(`
+        SELECT COUNT(*) AS total,
+               SUM(CASE WHEN status IN ('no_show','no-show') THEN 1 ELSE 0 END) AS no_shows,
+               SUM(CASE WHEN status IN ('cancelled','canceled') THEN 1 ELSE 0 END) AS cancellations
+        FROM appointments
+        WHERE client_key = $1
+          AND created_at >= ${sqlDaysAgo(7)}
+      `, [clientKey]),
+      query(`
+        SELECT COALESCE(service, 'General') AS service,
+               COUNT(*) AS count
+        FROM leads
+        WHERE client_key = $1
+        GROUP BY service
+        ORDER BY count DESC
+        LIMIT 5
+      `, [clientKey]),
+      query(`
+        SELECT name, phone, status, service, notes, created_at
+        FROM leads
+        WHERE client_key = $1
+        ORDER BY created_at DESC
+        LIMIT 6
+      `, [clientKey]),
+      query(`
+        SELECT c.lead_phone, c.status, c.outcome, c.created_at, c.duration,
+               l.name, l.service
+        FROM calls c
+        LEFT JOIN leads l ON l.client_key = c.client_key AND l.phone = c.lead_phone
+        WHERE c.client_key = $1
+        ORDER BY c.created_at DESC
+        LIMIT 5
+      `, [clientKey]),
+      query(`
+        SELECT l.created_at AS lead_created, c.created_at AS call_created
+        FROM calls c
+        JOIN leads l ON l.client_key = c.client_key AND l.phone = c.lead_phone
+        WHERE c.client_key = $1
+        ORDER BY c.created_at DESC
+        LIMIT 25
+      `, [clientKey])
+    ]);
+
+    const totalLeads = parseInt(leadCounts.rows?.[0]?.total || 0, 10);
+    const last24hLeads = parseInt(leadCounts.rows?.[0]?.last24 || 0, 10);
+    const totalCalls = parseInt(callCounts.rows?.[0]?.total || 0, 10);
+    const bookingsFromCalls = parseInt(callCounts.rows?.[0]?.booked || 0, 10);
+    const avgDealValue = 350;
+
+    const conversionRate = totalCalls > 0 ? Math.round((bookingsFromCalls / totalCalls) * 100) : 0;
+    const successRate = totalCalls > 0 ? ((bookingsFromCalls / totalCalls) * 100).toFixed(0) : 0;
+
+    const weeklyBookings = parseInt(bookingStats.rows?.[0]?.total || 0, 10);
+    const weeklyNoShows = parseInt(bookingStats.rows?.[0]?.no_shows || 0, 10);
+    const weeklyCancellations = parseInt(bookingStats.rows?.[0]?.cancellations || 0, 10);
+    const attendanceRate = weeklyBookings > 0
+      ? `${Math.max(0, Math.round(((weeklyBookings - weeklyNoShows) / weeklyBookings) * 100))}% show rate`
+      : '100% show rate';
+
+    const serviceMix = (serviceRows.rows || []).map(row => {
+      const percent = totalLeads > 0 ? Math.round((row.count / totalLeads) * 100) : 0;
+      return {
+        name: row.service || 'General',
+        percent: percent,
+        bookings: Math.max(1, Math.round((percent / 100) * weeklyBookings)),
+        notes: percent > 34 ? 'Primary workflow' : 'Running in parallel'
+      };
+    });
+
+    const leads = (leadRows.rows || []).map(row => ({
+      name: row.name || row.phone,
+      phone: row.phone,
+      status: row.status || 'Awaiting follow-up',
+      lastMessage: row.notes || `Added ${new Date(row.created_at).toLocaleDateString('en-GB')}`,
+      service: row.service || 'Lead Follow-Up',
+      score: 70 + Math.floor(Math.random() * 20)
+    }));
+
+    const recentCalls = (recentCallRows.rows || []).map(row => ({
+      name: row.name || row.lead_phone,
+      service: row.service || 'Lead Follow-Up',
+      channel: 'AI call + SMS',
+      summary: row.outcome ? `Outcome: ${row.outcome}` : 'Call completed',
+      status: mapCallStatus(row.status),
+      statusClass: mapStatusClass(row.status),
+      timeAgo: formatTimeAgoLabel(row.created_at)
+    }));
+
+    const responseDiffs = (responseRows.rows || [])
+      .map(row => {
+        const leadTime = new Date(row.lead_created).getTime();
+        const callTime = new Date(row.call_created).getTime();
+        if (!leadTime || !callTime || callTime <= leadTime) return null;
+        return (callTime - leadTime) / 60000; // minutes
+      })
+      .filter(Boolean);
+    const avgResponseMinutes = responseDiffs.length
+      ? Math.round(responseDiffs.reduce((sum, val) => sum + val, 0) / responseDiffs.length)
+      : 3;
+    const responseLabel = avgResponseMinutes >= 60
+      ? `${Math.floor(avgResponseMinutes / 60)}h ${avgResponseMinutes % 60}m`
+      : `${avgResponseMinutes}m`;
+
+    const openLeads = Math.max(totalLeads - weeklyBookings, 0);
+    const pipelineValue = openLeads * avgDealValue;
+    const avgLeadScore = leads.length
+      ? Math.round(leads.reduce((acc, lead) => acc + (lead.score || 0), 0) / leads.length)
+      : 85;
+
+    res.json({
+      ok: true,
+      source: 'live',
+      metrics: {
+        totalLeads,
+        totalCalls,
+        last24hLeads,
+        conversionRate,
+        successRate,
+        avgLeadScore
+      },
+      highlights: {
+        responseTime: responseLabel,
+        responseNotes: 'Live average from lead import to AI call',
+        bookingsThisWeek: `${weeklyBookings}`,
+        bookingsNotes: `${weeklyCancellations} rescheduled, ${weeklyNoShows} no-shows`,
+        pipelineValue: formatGBP(pipelineValue),
+        pipelineNotes: `${openLeads} leads currently being chased`,
+        showRate: attendanceRate,
+        showNotes: weeklyCancellations ? `${weeklyCancellations} rescheduled last week` : 'No cancellations on record'
+      },
+      serviceMix,
+      leads,
+      recentCalls
+    });
+  } catch (error) {
+    console.error('[DEMO DASHBOARD ERROR]', error);
     res.status(500).json({ ok: false, error: error.message });
   }
 });
@@ -11968,6 +12184,24 @@ app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
         ? resolveVapiPhoneNumberId(client)
         : (client?.vapiPhoneNumberId || process.env.VAPI_PHONE_NUMBER_ID || ''));
 
+    const callPurposeRaw = (req.body?.callPurpose || '').toString().trim();
+    const callPurpose = callPurposeRaw ? callPurposeRaw : 'lead_followup';
+    const leadName = req.body?.name || req.body?.lead?.name || req.body?.callerName || '';
+    const leadSource = req.body?.source || req.body?.leadSource || '';
+    const previousStatus = req.body?.previousStatus || '';
+    const intentHintParts = [
+      req.body?.intent,
+      req.body?.intentHint,
+      req.body?.notes,
+      service ? `service:${service}` : null,
+      previousStatus ? `status:${previousStatus}` : null
+    ].filter(Boolean);
+    const callIntentHint = intentHintParts.join(', ') || 'follow_up_booking';
+
+    if (!assistantId || !phoneNumberId) {
+      return res.status(500).json({ error: 'Vapi assistant is not configured for this tenant' });
+    }
+
     const payload = {
       assistantId,
       phoneNumberId,
@@ -11981,6 +12215,16 @@ app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
 
         return 12; // keep as low as Vapi allows while staying above their minimum
       })(),
+      metadata: {
+        clientKey,
+        callPurpose,
+        callIntentHint,
+        leadPhone: e164,
+        leadName: leadName || '',
+        leadSource: leadSource || '',
+        requestedService: service || '',
+        previousStatus: previousStatus || ''
+      },
       assistantOverrides: {
         variableValues: {
           ClientKey: clientKey,
@@ -11996,7 +12240,14 @@ app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
           Locale: client?.locale || 'en-GB',
           ScriptHints: client?.scriptHints || '',
           FAQJSON: client?.faqJson || '[]',
-          Currency: client?.currency || 'GBP'
+          Currency: client?.currency || 'GBP',
+          CallPurpose: callPurpose,
+          CallIntentHint: callIntentHint,
+          LeadName: leadName || 'Prospect',
+          LeadPhone: e164,
+          LeadService: service || '',
+          LeadSource: leadSource || '',
+          PreviousStatus: previousStatus || ''
         }
       }
     };
@@ -12005,6 +12256,33 @@ app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
       (typeof VAPI_URL !== 'undefined' && VAPI_URL)
         ? VAPI_URL
         : 'https://api.vapi.ai';
+
+    await recordReceptionistTelemetry({
+      evt: 'receptionist.outbound_launch',
+      tenant: clientKey,
+      callPurpose,
+      callIntentHint,
+      leadPhone: e164,
+      leadName,
+      leadSource,
+      requestedService: service || '',
+      payloadSent: true
+    });
+
+    if (process.env.RECEPTIONIST_TEST_MODE === 'mock_vapi') {
+      const data = { ok: true, id: `mock_call_${Date.now()}`, status: 'queued', mock: true };
+      await recordReceptionistTelemetry({
+        evt: 'receptionist.outbound_response',
+        tenant: clientKey,
+        callPurpose,
+        status: 200,
+        ok: true,
+        leadPhone: e164,
+        response: data,
+        mock: true
+      });
+      return res.json(data);
+    }
 
     const resp = await fetch(`${vapiUrl}/call`, {
       method: 'POST',
@@ -12016,9 +12294,24 @@ app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
     try { data = await resp.json(); }
     catch { data = { raw: await resp.text().catch(() => '') }; }
 
+    await recordReceptionistTelemetry({
+      evt: 'receptionist.outbound_response',
+      tenant: clientKey,
+      callPurpose,
+      status: resp.status,
+      ok: resp.ok,
+      leadPhone: e164,
+      response: data
+    });
+
     return res.status(resp.ok ? 200 : 502).json(data);
   } catch (err) {
     console.error('new-lead vapi error', err);
+    await recordReceptionistTelemetry({
+      evt: 'receptionist.outbound_error',
+      error: err?.message || String(err),
+      tenant: req.params?.clientKey || null
+    });
     return res.status(500).json({ error: String(err) });
   }
 });
@@ -12035,6 +12328,7 @@ app.post('/api/calendar/check-book', async (req, res) => {
     if (!client) return res.status(400).json({ error: 'Unknown tenant' });
     const tz = pickTimezone(client);
     const calendarId = pickCalendarId(client);
+    const requestStartedAt = Date.now();
 
     let services = client?.services ?? client?.servicesJson ?? [];
     if (!Array.isArray(services)) {
@@ -12123,6 +12417,7 @@ app.post('/api/calendar/check-book', async (req, res) => {
       debugInfo.startHints = startHints;
     }
 
+    let demoOverrides = null;
     let startDate = null;
     for (const hint of startHints) {
       const parsed = parseInTimezone(hint, tz);
@@ -12136,8 +12431,30 @@ app.post('/api/calendar/check-book', async (req, res) => {
       startDate = parsedFromPreference;
     }
 
+    const referenceNow = DateTime.now().setZone(tz);
+    demoOverrides = await getDemoOverrides({
+      tenant: client?.clientKey || null,
+      leadPhone: lead.phone,
+      leadName: lead.name || null,
+      service: requestedService || null
+    }, { now: referenceNow, timezone: tz });
+
+    if (demoOverrides?.slot?.iso) {
+      const overrideDate = parseInTimezone(demoOverrides.slot.iso, tz);
+      if (overrideDate) {
+        startDate = overrideDate;
+        if (debugInfo) {
+          debugInfo.demoOverrideSlot = demoOverrides.slot.iso;
+        }
+      }
+    }
+
+    if (debugInfo && demoOverrides) {
+      debugInfo.demoOverrides = formatOverridesForTelemetry(demoOverrides);
+    }
+
     if (startDate) {
-      const reference = DateTime.now().setZone(tz);
+      const reference = referenceNow;
       let dt = DateTime.fromJSDate(startDate).setZone(tz);
       if (debugInfo) {
         debugInfo.reference = reference.toISO();
@@ -12241,26 +12558,47 @@ app.post('/api/calendar/check-book', async (req, res) => {
 
     let sms = null;
     const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
-    if (configured) {
-      const when = new Date(startISO).toLocaleString(client?.locale || 'en-GB', {
-        timeZone: tz, weekday: 'short', day: 'numeric', month: 'short',
-        hour: 'numeric', minute: '2-digit', hour12: true
-      });
+    const smsOverrides = demoOverrides?.sms;
+    if (configured && !(smsOverrides?.skip === true)) {
+      const startDt = DateTime.fromISO(startISO, { zone: tz });
+      const when = startDt.isValid
+        ? startDt.toFormat('ccc dd LLL yyyy • hh:mma')
+        : new Date(startISO).toLocaleString(client?.locale || 'en-GB', {
+            timeZone: tz, weekday: 'short', day: 'numeric', month: 'short',
+            hour: 'numeric', minute: '2-digit', hour12: true
+          });
       const link = google?.htmlLink ? ` Calendar: ${google.htmlLink}` : '';
       const brand = client?.displayName || client?.clientKey || 'Our Clinic';
       const sig = client?.brandSignature ? ` ${client.brandSignature}` : '';
-      const body = `Hi ${lead.name}, your ${requestedService || 'appointment'} is booked with ${brand} for ${when} ${tz}.${link}${sig} Reply STOP to opt out.`;
+      const defaultBody = `Hi {{name}}, your {{service}} is booked with {{brand}} for {{when}} {{tz}}.{{link}}{{sig}} Reply STOP to opt out.`;
+      const template = smsOverrides?.message || client?.smsTemplates?.confirm || defaultBody;
+      const templateVars = {
+        name: lead.name,
+        service: requestedService || 'appointment',
+        brand,
+        when,
+        tz,
+        link,
+        sig,
+        duration: dur,
+        day: startDt.isValid ? startDt.toFormat('cccc') : null,
+        date: startDt.isValid ? startDt.toFormat('dd LLL yyyy') : null,
+        time: startDt.isValid ? startDt.toFormat('HH:mm') : null
+      };
+      const body = renderTemplate(template, templateVars);
 
       try {
         const payload = { to: lead.phone, body };
         if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid;
         else payload.from = fromNumber;
         const resp = await smsClient.messages.create(payload);
-        sms = { id: resp.sid, to: lead.phone };
+        sms = { id: resp.sid, to: lead.phone, override: Boolean(smsOverrides) };
       } catch (err) {
         console.error(JSON.stringify({ evt: 'sms.error', rid: req.id, error: String(err) }));
         sms = { error: String(err) };
       }
+    } else if (configured && smsOverrides?.skip === true) {
+      sms = { skipped: true, reason: 'demo_skip' };
     }
 
     const calls = await readJson(CALLS_PATH, []);
@@ -12279,6 +12617,48 @@ app.post('/api/calendar/check-book', async (req, res) => {
       debugInfo.finalStart = startISO;
       responseBody.debug = debugInfo;
     }
+
+    if (process.env.DEMO_MODE === 'true') {
+      const googleTelemetry = google
+        ? {
+            id: google.id || null,
+            status: google.status || null,
+            skipped: Boolean(google.skipped),
+            error: google.error || null
+          }
+        : null;
+      const smsTelemetry = sms
+        ? {
+            id: sms.id || null,
+            error: sms.error || null,
+            skipped: Boolean(sms.skipped),
+            override: sms.override || false
+          }
+        : null;
+      const telemetryPayload = {
+        evt: 'booking.checkAndBook',
+        tenant: client?.clientKey || null,
+        service: requestedService || null,
+        durationMin: dur,
+        lead: {
+          name: lead.name,
+          phone: lead.phone
+        },
+        slot: {
+          finalIso: startISO,
+          endIso: endISO,
+          preferenceRaw,
+          hintsCount: startHints.length
+        },
+        overrides: formatOverridesForTelemetry(demoOverrides),
+        google: googleTelemetry,
+        sms: smsTelemetry,
+        elapsedMs: Date.now() - requestStartedAt,
+        requestId: req.id || null
+      };
+      recordDemoTelemetry(telemetryPayload);
+    }
+
     setCachedIdem(idemKey, 200, responseBody);
     return res.json(responseBody);
   } catch (e) {
@@ -12388,6 +12768,71 @@ app.get('/admin/check-tenants', async (req, res) => {
     });
   } catch (e) {
     console.error('[TENANT CHECK ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Demo scripting visibility
+app.get('/admin/demo-script', async (req, res) => {
+  try {
+    const script = await loadDemoScript();
+    res.json({
+      ok: true,
+      demoMode: process.env.DEMO_MODE === 'true',
+      script
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Demo telemetry feed
+app.get('/admin/demo-telemetry', async (req, res) => {
+  try {
+    const limitRaw = Number.parseInt(req.query.limit, 10);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 100;
+    const events = await readDemoTelemetry({ limit });
+    res.json({
+      ok: true,
+      count: events.length,
+      events
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Reset telemetry (demo-only convenience)
+app.delete('/admin/demo-telemetry', async (req, res) => {
+  try {
+    await clearDemoTelemetry();
+    res.json({ ok: true, message: 'Demo telemetry cleared' });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Receptionist telemetry feed
+app.get('/admin/receptionist-telemetry', async (req, res) => {
+  try {
+    const limitRaw = Number.parseInt(req.query.limit, 10);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 100;
+    const events = await readReceptionistTelemetry({ limit });
+    res.json({
+      ok: true,
+      count: events.length,
+      events
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+app.delete('/admin/receptionist-telemetry', async (req, res) => {
+  try {
+    await clearReceptionistTelemetry();
+    res.json({ ok: true, message: 'Receptionist telemetry cleared' });
+  } catch (e) {
     res.status(500).json({ ok: false, error: String(e?.message || e) });
   }
 });
