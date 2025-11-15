@@ -14,6 +14,18 @@
             --light: #f7f9fc;
             --dark: #1f2234;
             --card-shadow: 0 8px 24px rgba(16, 26, 62, 0.08);
+            --surface: #ffffff;
+            --text: #2b2e3b;
+            --muted: #6f7390;
+        }
+
+        body[data-theme="dark"] {
+            --surface: #181b2a;
+            --text: #eef0ff;
+            --muted: #b1b6d4;
+            --light: #1f2335;
+            background: radial-gradient(circle at top, #1f2640, #0f1324);
+            color: var(--text);
         }
 
         * {
@@ -23,24 +35,27 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             min-height: 100vh;
             background: linear-gradient(135deg, #eef2ff 0%, #e3ebff 40%, #fef9ff 100%);
             color: #2b2e3b;
+            line-height: 1.5;
+            font-feature-settings: 'cv02', 'cv03', 'cv04';
         }
 
         .container {
             max-width: 1200px;
             margin: 0 auto;
-            padding: 32px 20px 60px;
+            padding: 40px 20px 72px;
         }
 
         .header {
-            background: rgba(255, 255, 255, 0.96);
+            background: var(--surface);
             border-radius: 20px;
             padding: 28px 32px;
             box-shadow: var(--card-shadow);
             border-left: 6px solid var(--primary);
+            border: 1px solid rgba(92,106,196,0.15);
         }
 
         .client-info {
@@ -70,12 +85,13 @@
         }
 
         .client-details h1 {
-            font-size: 2.2rem;
+            font-size: 2.3rem;
             color: var(--primary);
+            margin-bottom: 6px;
         }
 
         .client-details p {
-            color: #6f7390;
+            color: var(--muted);
             font-size: 1rem;
             margin-top: 4px;
         }
@@ -86,6 +102,11 @@
             font-weight: 600;
             background: rgba(92, 106, 196, 0.1);
             color: var(--primary);
+        }
+
+        body[data-theme="dark"] .status-chip {
+            background: rgba(92,106,196,0.3);
+            color: #d5d9ff;
         }
 
         .client-meta {
@@ -127,7 +148,7 @@
         .status-bar {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 18px;
+            gap: 22px;
             margin: 30px 0;
         }
 
@@ -137,6 +158,9 @@
             padding: 18px;
             box-shadow: var(--card-shadow);
             text-align: center;
+            border: 1px solid rgba(92,106,196,0.1);
+            position: relative;
+            overflow: hidden;
         }
 
         .status-card h4 {
@@ -153,6 +177,12 @@
             color: var(--primary);
         }
 
+        .status-hint {
+            margin-top: 6px;
+            font-size: 0.85rem;
+            color: #8c8fab;
+        }
+
         .dashboard-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -160,19 +190,28 @@
         }
 
         .card {
-            background: rgba(255, 255, 255, 0.98);
+            background: var(--surface);
             border-radius: 18px;
             padding: 22px;
             box-shadow: var(--card-shadow);
+            border: 1px solid rgba(92,106,196,0.08);
+            transition: transform 0.25s ease, box-shadow 0.25s ease;
         }
 
         .card h3 {
             margin-bottom: 18px;
             font-size: 1.2rem;
-            color: var(--dark);
+            color: var(--text);
             display: flex;
             align-items: center;
             gap: 8px;
+        }
+
+        .card-subtitle {
+            margin-top: -10px;
+            margin-bottom: 16px;
+            font-size: 0.92rem;
+            color: #7a7da0;
         }
 
         .metric-row {
@@ -187,7 +226,7 @@
         }
 
         .metric-label {
-            color: #616484;
+            color: var(--muted);
         }
 
         .metric-value {
@@ -208,6 +247,13 @@
             border-radius: 12px;
             padding: 14px;
             background: #f9f9ff;
+            cursor: pointer;
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+
+        .lead-item:hover {
+            transform: translateY(-2px);
+            border-color: rgba(92,106,196,0.5);
         }
 
         .lead-name {
@@ -233,6 +279,119 @@
             letter-spacing: 0.06em;
             background: rgba(92, 106, 196, 0.12);
             color: var(--primary);
+        }
+        .theme-toggle {
+            border: 1px solid rgba(92,106,196,0.3);
+            background: transparent;
+            color: var(--primary);
+            padding: 8px 14px;
+            border-radius: 999px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.2s ease;
+        }
+
+        .theme-toggle:hover {
+            background: rgba(92,106,196,0.1);
+        }
+
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(7, 11, 30, 0.55);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            backdrop-filter: blur(6px);
+        }
+
+        .modal-backdrop.open {
+            display: flex;
+        }
+
+        .lead-modal {
+            background: var(--surface);
+            border-radius: 20px;
+            padding: 24px 28px;
+            width: min(480px, 90%);
+            box-shadow: 0 30px 60px rgba(11, 14, 32, 0.35);
+            border: 1px solid rgba(92,106,196,0.2);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .modal-header h4 {
+            margin: 0;
+            font-size: 1.2rem;
+            color: var(--text);
+        }
+
+        .modal-close {
+            border: none;
+            background: transparent;
+            font-size: 1.4rem;
+            cursor: pointer;
+            color: var(--muted);
+        }
+
+        .modal-body p {
+            margin: 6px 0;
+            color: var(--muted);
+        }
+
+        .mix-list {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .mix-item {
+            border: 1px solid rgba(92,106,196,0.12);
+            border-radius: 12px;
+            padding: 12px 14px;
+        }
+
+        .mix-header {
+            display: flex;
+            justify-content: space-between;
+            font-weight: 600;
+            color: #2f3147;
+            margin-bottom: 6px;
+        }
+
+        .mix-bar {
+            height: 10px;
+            border-radius: 999px;
+            background: #eef0ff;
+            overflow: hidden;
+            margin-bottom: 6px;
+        }
+
+        .mix-bar-fill {
+            height: 100%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+        }
+
+        .mix-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            color: #7a7fa4;
+        }
+
+        .mix-tag {
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            background: rgba(27, 94, 32, 0.12);
+            color: var(--success);
         }
 
         .chart {
@@ -338,7 +497,10 @@
                         <p id="clientTagline">We chase every lead you already paid for and land them on your calendar.</p>
                     </div>
                 </div>
-                <div class="status-chip" id="clientStatus">Live</div>
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <button class="theme-toggle" id="themeToggle" type="button">Dark mode</button>
+                    <div class="status-chip" id="clientStatus">Live</div>
+                </div>
             </div>
 
             <div class="client-meta" id="clientMeta">
@@ -366,27 +528,32 @@
         </header>
 
         <section class="status-bar">
-            <div class="status-card">
+            <div class="status-card" title="Total leads loaded for this tenant">
                 <h4>Total Leads</h4>
                 <div class="status-value" id="statusTotalLeads">48</div>
+                <p class="status-hint" id="statusHintLeads">Last 24h: 7 new</p>
             </div>
-            <div class="status-card">
+            <div class="status-card" title="AI outbound + inbound conversations logged">
                 <h4>AI Calls Logged</h4>
                 <div class="status-value" id="statusTotalCalls">36</div>
+                <p class="status-hint" id="statusHintCalls">Booked: 12 this week</p>
             </div>
-            <div class="status-card">
+            <div class="status-card" title="Lead-to-booked conversion from AI follow-up">
                 <h4>Conversion Rate</h4>
                 <div class="status-value" id="statusConversionRate">63%</div>
+                <p class="status-hint" id="statusHintConversion">Win rate: 84%</p>
             </div>
-            <div class="status-card">
+            <div class="status-card" title="Average time from lead drop to first AI touch">
                 <h4>First Response</h4>
                 <div class="status-value" id="statusFirstResponse">2m 58s</div>
+                <p class="status-hint" id="statusHintResponse">Goal: under 5 min</p>
             </div>
         </section>
 
         <section class="dashboard-grid">
             <article class="card">
                 <h3>📈 Recent Activity</h3>
+                <p class="card-subtitle">Rolling 24h snapshot of AI follow-up.</p>
                 <div id="recent-activity">
                     <div class="metric-row">
                         <span class="metric-label">New leads (24h)</span>
@@ -409,6 +576,7 @@
 
             <article class="card">
                 <h3>🧩 Lead Priority</h3>
+                <p class="card-subtitle">Automatic scoring from recent touchpoints.</p>
                 <div id="lead-priority">
                     <div class="metric-row">
                         <span class="metric-label">High priority</span>
@@ -431,11 +599,19 @@
 
             <article class="card">
                 <h3>👥 Recent Leads</h3>
+                <p class="card-subtitle">Latest leads routed to the concierge.</p>
                 <div id="leads-list" class="leads-list"></div>
             </article>
 
             <article class="card">
+                <h3>🧮 Service Mix</h3>
+                <p class="card-subtitle">Where the concierge spends its time.</p>
+                <div id="service-mix" class="mix-list"></div>
+            </article>
+
+            <article class="card">
                 <h3>📊 Weekly Performance</h3>
+                <p class="card-subtitle">Touchpoints generated over the last 7 days.</p>
                 <div id="performance-chart">
                     <div class="chart" id="chartBars"></div>
                     <p class="chart-value" id="chartSummary">18 bookings in the last 7 days</p>
@@ -444,6 +620,7 @@
 
             <article class="card">
                 <h3>⚙️ System Status</h3>
+                <p class="card-subtitle">Live configuration connected to your channels.</p>
                 <div id="system-status">
                     <div class="metric-row">
                         <span class="metric-label">Lead number</span>
@@ -466,19 +643,38 @@
 
             <article class="card" style="grid-column: 1 / -1;">
                 <h3>🗓️ Latest Conversations</h3>
+                <p class="card-subtitle">Newest AI-led calls and follow-ups.</p>
                 <div id="recent-calls" class="activity-feed"></div>
             </article>
 
             <article class="card" style="grid-column: 1 / -1;">
                 <h3>📋 How We Run This For You</h3>
+                <p class="card-subtitle">Done-for-you workflow the concierge follows every day.</p>
                 <ul id="workflow" class="workflow-list"></ul>
             </article>
         </section>
     </div>
 
+    <div class="modal-backdrop" id="leadModal">
+        <div class="lead-modal">
+            <div class="modal-header">
+                <h4 id="modalLeadName">Lead Name</h4>
+                <button class="modal-close" id="modalCloseBtn" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p><strong>Service:</strong> <span id="modalLeadService">—</span></p>
+                <p><strong>Source:</strong> <span id="modalLeadSource">—</span></p>
+                <p><strong>Status:</strong> <span id="modalLeadStatus">—</span></p>
+                <p><strong>Last message:</strong></p>
+                <p id="modalLeadNotes">—</p>
+            </div>
+        </div>
+    </div>
+
     <script>
         const DEMO_CLIENT_KEY = 'demo_client';
         const BASE_URL = window.location.origin;
+        const THEME_KEY = 'dashboard_theme';
 
         const CLIENT_CONFIG = {
             demo_client: {
@@ -518,11 +714,11 @@
                 data: [5, 7, 6, 9, 8, 10, 7]
             },
             recentLeads: [
-                { name: 'Jordan Hale', phone: '+44 7700 900451', service: 'AI Strategy Session', status: 'Booked • calendar invite sent', source: 'Facebook Lead Ad', timeAgo: '2 min ago' },
-                { name: 'Priya Desai', phone: '+44 7700 900512', service: 'Follow-up Call', status: 'Awaiting reply • wants afternoon slot', source: 'Website form', timeAgo: '9 min ago' },
-                { name: 'Lewis Grant', phone: '+44 7700 900623', service: 'Pricing Review', status: 'Engaged • asked for case study', source: 'Referral', timeAgo: '25 min ago' },
-                { name: 'Emily Carr', phone: '+44 7700 900734', service: 'Calendar Integration', status: 'Left voicemail • SMS reminder queued', source: 'CRM import', timeAgo: '40 min ago' },
-                { name: 'Tom Osei', phone: '+44 7700 900845', service: 'AI Concierge Setup', status: 'Nurture • waiting on partner approval', source: 'Google Ads', timeAgo: '58 min ago' }
+                { name: 'Jordan Hale', phone: '+44 7700 900451', service: 'AI Strategy Session', status: 'Booked • calendar invite sent', source: 'Facebook Lead Ad', timeAgo: '2 min ago', lastMessage: '“Got the confirmation, see you Tuesday.”' },
+                { name: 'Priya Desai', phone: '+44 7700 900512', service: 'Follow-up Call', status: 'Awaiting reply • wants afternoon slot', source: 'Website form', timeAgo: '9 min ago', lastMessage: 'Asked for 4-6pm slot; AI sent options.' },
+                { name: 'Lewis Grant', phone: '+44 7700 900623', service: 'Pricing Review', status: 'Engaged • asked for case study', source: 'Referral', timeAgo: '25 min ago', lastMessage: 'Shared case study + queued callback tomorrow.' },
+                { name: 'Emily Carr', phone: '+44 7700 900734', service: 'Calendar Integration', status: 'Left voicemail • SMS reminder queued', source: 'CRM import', timeAgo: '40 min ago', lastMessage: 'Voicemail dropped, SMS reminder scheduled at 9am.' },
+                { name: 'Tom Osei', phone: '+44 7700 900845', service: 'AI Concierge Setup', status: 'Nurture • waiting on partner approval', source: 'Google Ads', timeAgo: '58 min ago', lastMessage: 'Sent partner-friendly explainer PDF.' }
             ],
             serviceMix: [
                 { name: 'Lead Follow-Up', percent: 35, notes: 'Speed-to-lead flows' },
@@ -541,6 +737,8 @@
             const params = new URLSearchParams(window.location.search);
             return (params.get('client') || DEMO_CLIENT_KEY).replace(/-/g, '_');
         }
+
+        let currentLeads = [];
 
         async function fetchLiveData(clientKey) {
             if (clientKey !== DEMO_CLIENT_KEY) {
@@ -616,10 +814,26 @@
         }
 
         function updateStatusBar(data) {
-            document.getElementById('statusTotalLeads').textContent = formatNumber(data.totalLeads);
-            document.getElementById('statusTotalCalls').textContent = formatNumber(data.totalCalls);
-            document.getElementById('statusConversionRate').textContent = formatPercent(data.conversionRate);
-            document.getElementById('statusFirstResponse').textContent = data.firstResponse || '—';
+            const totalLeads = formatNumber(data.totalLeads);
+            const totalCalls = formatNumber(data.totalCalls);
+            const conversion = formatPercent(data.conversionRate);
+            const firstResponse = data.firstResponse || '—';
+
+            document.getElementById('statusTotalLeads').textContent = totalLeads;
+            document.getElementById('statusTotalCalls').textContent = totalCalls;
+            document.getElementById('statusConversionRate').textContent = conversion;
+            document.getElementById('statusFirstResponse').textContent = firstResponse;
+
+            const last24 = formatNumber(data.last24hLeads ?? 0);
+            const bookings = formatNumber(data.bookingsThisWeek ?? 0);
+            const winRate = formatPercent(data.successRate ?? 0);
+
+            document.getElementById('statusHintLeads').textContent = `Last 24h: ${last24} new`;
+            document.getElementById('statusHintCalls').textContent = `${bookings} bookings locked in`;
+            document.getElementById('statusHintConversion').textContent = `Win rate: ${winRate}`;
+            document.getElementById('statusHintResponse').textContent = firstResponse === '—'
+                ? 'Goal: under 5 min'
+                : `Current: ${firstResponse}`;
         }
 
         function renderRecentActivity(data) {
@@ -644,12 +858,15 @@
 
         function renderLeads(leads = []) {
             const container = document.getElementById('leads-list');
+            if (!container) return;
             if (!leads.length) {
                 container.innerHTML = '<p style="color:#8c8fab;">Leads will appear here as soon as they arrive.</p>';
+                currentLeads = [];
                 return;
             }
-            container.innerHTML = leads.slice(0, 5).map(lead => `
-                <div class="lead-item">
+            currentLeads = leads.slice(0, 5);
+            container.innerHTML = currentLeads.map((lead, index) => `
+                <div class="lead-item" data-lead-index="${index}" role="button" tabindex="0">
                     <div class="lead-name">${lead.name || 'Prospect'}</div>
                     <div class="lead-meta">
                         <span>${lead.phone || lead.email || ''}</span>
@@ -658,6 +875,38 @@
                     <div class="lead-status">${lead.status || 'In follow-up'}</div>
                 </div>
             `).join('');
+            attachLeadModalEvents();
+        }
+
+        function renderServiceMix(mix = []) {
+            const container = document.getElementById('service-mix');
+            if (!container) return;
+            if (!Array.isArray(mix) || !mix.length) {
+                container.innerHTML = '<p style="color:#8c8fab;">Connect services to see distribution.</p>';
+                return;
+            }
+            const topPercent = Math.max(...mix.map(item => item.percent || 0), 0);
+            container.innerHTML = mix.map(service => {
+                const percent = Math.max(0, Math.min(100, service.percent || 0));
+                const tag = percent === topPercent && percent > 0
+                    ? '<span class="mix-tag">Top workflow</span>'
+                    : '';
+                return `
+                    <div class="mix-item">
+                        <div class="mix-header">
+                            <span>${service.name || 'Service'}</span>
+                            <span>${percent}%</span>
+                        </div>
+                        <div class="mix-bar" role="presentation">
+                            <div class="mix-bar-fill" style="width:${percent}%;"></div>
+                        </div>
+                        <div class="mix-meta">
+                            <span>${service.notes || 'Running in parallel'}</span>
+                            <span>${tag}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
         }
 
         function renderChart(config, data) {
@@ -708,11 +957,39 @@
             `).join('');
         }
 
+        function attachLeadModalEvents() {
+            document.querySelectorAll('.lead-item').forEach(item => {
+                item.addEventListener('click', () => openLeadModal(item.dataset.leadIndex));
+                item.addEventListener('keypress', (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        openLeadModal(item.dataset.leadIndex);
+                    }
+                });
+            });
+        }
+
+        function openLeadModal(index) {
+            const lead = currentLeads[Number(index)];
+            if (!lead) return;
+            document.getElementById('modalLeadName').textContent = lead.name || lead.phone || 'Lead';
+            document.getElementById('modalLeadService').textContent = lead.service || 'General';
+            document.getElementById('modalLeadSource').textContent = lead.source || 'Unknown';
+            document.getElementById('modalLeadStatus').textContent = lead.status || 'In follow-up';
+            document.getElementById('modalLeadNotes').textContent = lead.lastMessage || lead.notes || 'No notes yet.';
+            document.getElementById('leadModal').classList.add('open');
+        }
+
+        function closeLeadModal() {
+            document.getElementById('leadModal').classList.remove('open');
+        }
+
         async function initDashboard() {
             const clientKey = getClientFromURL();
             const config = { ...CLIENT_CONFIG[clientKey] } || CLIENT_CONFIG[DEMO_CLIENT_KEY];
             config.key = clientKey;
             updateHeader(config);
+            initThemeToggle();
+            initModalControls();
 
             let data = { ...DEMO_DATA };
             if (clientKey === DEMO_CLIENT_KEY) {
@@ -729,6 +1006,7 @@
             renderRecentActivity(data);
             renderLeadPriority(data);
             renderLeads(data.recentLeads || []);
+            renderServiceMix(data.serviceMix || []);
             renderChart(config, data);
             renderSystemStatus(config);
             renderCalls(data.recentCalls || []);
@@ -742,6 +1020,7 @@
                     renderRecentActivity(data);
                     renderLeadPriority(data);
                     renderLeads(data.recentLeads || []);
+                    renderServiceMix(data.serviceMix || []);
                     renderCalls(data.recentCalls || []);
                     renderChart(config, data);
                 }
@@ -749,6 +1028,42 @@
         }
 
         document.addEventListener('DOMContentLoaded', initDashboard);
+
+        function initThemeToggle() {
+            const toggle = document.getElementById('themeToggle');
+            if (!toggle) return;
+            const saved = localStorage.getItem(THEME_KEY) || 'light';
+            applyTheme(saved);
+            toggle.textContent = saved === 'dark' ? 'Light mode' : 'Dark mode';
+            toggle.addEventListener('click', () => {
+                const nextMode = document.body.dataset.theme === 'dark' ? 'light' : 'dark';
+                applyTheme(nextMode);
+                toggle.textContent = nextMode === 'dark' ? 'Light mode' : 'Dark mode';
+                localStorage.setItem(THEME_KEY, nextMode);
+            });
+        }
+
+        function applyTheme(mode) {
+            if (mode === 'dark') {
+                document.body.dataset.theme = 'dark';
+            } else {
+                document.body.dataset.theme = '';
+            }
+        }
+
+        function initModalControls() {
+            const backdrop = document.getElementById('leadModal');
+            const closeBtn = document.getElementById('modalCloseBtn');
+            if (closeBtn) closeBtn.addEventListener('click', closeLeadModal);
+            if (backdrop) {
+                backdrop.addEventListener('click', (event) => {
+                    if (event.target === backdrop) closeLeadModal();
+                });
+            }
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') closeLeadModal();
+            });
+        }
     </script>
 </body>
 </html>
