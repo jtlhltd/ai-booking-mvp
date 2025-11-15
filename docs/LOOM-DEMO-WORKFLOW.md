@@ -205,6 +205,8 @@ Set these in your `.env` file or environment:
 3. Wait ~10 seconds for the assistant + dashboard stats to update.
 4. Refresh the dashboard tab; you should see new leads, calls, and highlights.
 5. When you record the Loom, hit **Start AI Call** so the call button copies the `scripts/test-demo-client.js` command and run it live.
+6. Use the **“Show this demo for”** dropdown to match the prospect’s industry (MedSpa, Solar, Legal, etc.). That updates the copy, testimonial, and service mix instantly.
+7. If you want to send the dashboard link, click **Copy shareable link** so they land on the same persona preset.
 
 ### During Recording
 
@@ -215,6 +217,7 @@ Set these in your `.env` file or environment:
 - [ ] Show real calendar (not mockup)
 - [ ] Keep energy up
 - [ ] Stay under 2 minutes
+- [ ] Point out the CTA card (“Load 10 leads this week…”) so prospects know the next step
 
 ### After Recording
 

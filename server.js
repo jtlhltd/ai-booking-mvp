@@ -8039,6 +8039,35 @@ function mapStatusClass(status) {
   return 'info';
 }
 
+function buildIntegrationStatuses() {
+  return [
+    {
+      name: 'Vapi Voice',
+      status: process.env.VAPI_PRIVATE_KEY ? 'active' : 'inactive',
+      statusLabel: process.env.VAPI_PRIVATE_KEY ? 'active' : 'needs key',
+      detail: process.env.VAPI_PRIVATE_KEY ? 'Assistant + phone number connected' : 'Add Vapi key to enable calling'
+    },
+    {
+      name: 'Twilio SMS',
+      status: (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) ? 'active' : 'pending',
+      statusLabel: (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) ? 'active' : 'connect',
+      detail: 'Two-way SMS + WhatsApp follow-ups'
+    },
+    {
+      name: 'Google Calendar',
+      status: process.env.GOOGLE_CLIENT_EMAIL ? 'active' : 'pending',
+      statusLabel: process.env.GOOGLE_CLIENT_EMAIL ? 'active' : 'connect',
+      detail: 'Auto-booking + reminders'
+    },
+    {
+      name: 'Slack Daily Digest',
+      status: process.env.SLACK_WEBHOOK_URL ? 'active' : 'pending',
+      statusLabel: process.env.SLACK_WEBHOOK_URL ? 'active' : 'optional',
+      detail: process.env.SLACK_WEBHOOK_URL ? 'Sending daily booking summaries' : 'Add Slack webhook for daily summaries'
+    }
+  ];
+}
+
 // API endpoint to get A/B test results
 app.get('/api/ab-test-results/:clientKey', async (req, res) => {
   try {
@@ -8068,7 +8097,10 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       serviceRows,
       leadRows,
       recentCallRows,
-      responseRows
+      responseRows,
+      messageRows,
+      appointmentRows,
+      transcriptRows
     ] = await Promise.all([
       query(`
         SELECT COUNT(*) AS total,
@@ -8123,6 +8155,30 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         WHERE c.client_key = $1
         ORDER BY c.created_at DESC
         LIMIT 25
+      `, [clientKey]),
+      query(`
+        SELECT body, created_at
+        FROM messages
+        WHERE client_key = $1
+        ORDER BY created_at DESC
+        LIMIT 1
+      `, [clientKey]),
+      query(`
+        SELECT start_iso, created_at, status
+        FROM appointments
+        WHERE client_key = $1
+        ORDER BY created_at DESC
+        LIMIT 1
+      `, [clientKey]),
+      query(`
+        SELECT c.transcript, c.created_at, c.lead_phone, c.outcome, l.name
+        FROM calls c
+        LEFT JOIN leads l ON l.client_key = c.client_key AND l.phone = c.lead_phone
+        WHERE c.client_key = $1
+          AND c.transcript IS NOT NULL
+          AND c.transcript <> ''
+        ORDER BY c.created_at DESC
+        LIMIT 1
       `, [clientKey])
     ]);
 
@@ -8188,9 +8244,81 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
 
     const openLeads = Math.max(totalLeads - weeklyBookings, 0);
     const pipelineValue = openLeads * avgDealValue;
+    const forecastLeads = totalLeads > 0 ? Math.min(80, totalLeads + 20) : 40;
     const avgLeadScore = leads.length
       ? Math.round(leads.reduce((acc, lead) => acc + (lead.score || 0), 0) / leads.length)
       : 85;
+
+    const latestMessage = messageRows.rows?.[0];
+    const latestAppointment = appointmentRows.rows?.[0];
+    const transcriptRow = transcriptRows.rows?.[0];
+
+    const timeline = [];
+    if (leadRows.rows?.[0]) {
+      const lead = leadRows.rows[0];
+      timeline.push({
+        icon: '📥',
+        title: 'Lead imported',
+        detail: lead.name ? `Form: ${lead.name}` : 'Lead captured',
+        status: 'Captured',
+        timestamp: lead.created_at,
+        timeAgo: formatTimeAgoLabel(lead.created_at)
+      });
+    }
+    if (recentCallRows.rows?.[0]) {
+      const call = recentCallRows.rows[0];
+      timeline.push({
+        icon: '🤖',
+        title: 'AI call placed',
+        detail: call.summary || `Outcome: ${call.outcome || 'Call completed'}`,
+        status: mapCallStatus(call.status),
+        timestamp: call.created_at,
+        timeAgo: formatTimeAgoLabel(call.created_at)
+      });
+    }
+    if (latestMessage) {
+      timeline.push({
+        icon: '💬',
+        title: 'SMS follow-up',
+        detail: latestMessage.body?.slice(0, 80) || 'Reminder sent',
+        status: 'Sent',
+        timestamp: latestMessage.created_at,
+        timeAgo: formatTimeAgoLabel(latestMessage.created_at)
+      });
+    }
+    if (latestAppointment) {
+      timeline.push({
+        icon: '📅',
+        title: 'Calendar booked',
+        detail: latestAppointment.start_iso ? `Slot: ${new Date(latestAppointment.start_iso).toLocaleString()}` : 'New booking added',
+        status: latestAppointment.status || 'Booked',
+        timestamp: latestAppointment.created_at,
+        timeAgo: formatTimeAgoLabel(latestAppointment.created_at)
+      });
+    }
+
+    const transcript = transcriptRow?.transcript ? {
+      text: transcriptRow.transcript.trim().slice(0, 320),
+      lead: transcriptRow.name || transcriptRow.lead_phone,
+      outcome: transcriptRow.outcome,
+      timestamp: transcriptRow.created_at
+    } : null;
+
+    const forecast = {
+      leadsLoaded: forecastLeads,
+      conversionRate,
+      expectedBookings: Math.max(1, Math.round(forecastLeads * ((conversionRate || 40) / 100))),
+      timeframe: '72 hours'
+    };
+
+    const integrations = buildIntegrationStatuses();
+
+    const cta = {
+      headline: 'Ready to see this with your leads?',
+      subheadline: 'Load 10 leads, we’ll run it this week and send the booking proof.',
+      buttonText: 'Book 5-min Setup',
+      buttonUrl: process.env.DEMO_CTA_URL || 'https://calendly.com/your-demo/quick-setup'
+    };
 
     res.json({
       ok: true,
@@ -8215,7 +8343,12 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       },
       serviceMix,
       leads,
-      recentCalls
+      recentCalls,
+      timeline,
+      transcript,
+      forecast,
+      integrations,
+      cta
     });
   } catch (error) {
     console.error('[DEMO DASHBOARD ERROR]', error);

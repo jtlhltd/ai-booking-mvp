@@ -299,6 +299,26 @@
             color: #6c6f93;
         }
         
+        .testimonial-card {
+            background: #fff;
+            border-radius: 14px;
+            border: 1px solid rgba(92, 106, 196, 0.2);
+            padding: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .testimonial-quote {
+            font-style: italic;
+            color: #4b4f72;
+        }
+        
+        .testimonial-author {
+            font-weight: 600;
+            color: #2c2f48;
+        }
+        
         .refresh-btn {
             position: fixed;
             bottom: 30px;
@@ -326,8 +346,16 @@
         }
         
         .client-selector {
-            margin-bottom: 20px;
-            text-align: center;
+            margin: 10px 0 25px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        
+        .client-selector label {
+            font-weight: 600;
+            color: #4b4f72;
         }
         
         .client-selector select {
@@ -450,6 +478,163 @@
             margin: 0;
             font-size: 0.9rem;
             color: #636682;
+        }
+        
+        .timeline {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            position: relative;
+            padding-left: 20px;
+        }
+        
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 8px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: rgba(92,106,196,0.3);
+        }
+        
+        .timeline-item {
+            display: flex;
+            gap: 12px;
+            position: relative;
+        }
+        
+        .timeline-icon {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: rgba(92,106,196,0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            position: relative;
+            left: -22px;
+        }
+        
+        .timeline-content h4 {
+            margin: 0;
+            font-size: 1rem;
+            color: #2f3254;
+        }
+        
+        .timeline-content p {
+            margin: 2px 0;
+            color: #6b6f8f;
+            font-size: 0.9rem;
+        }
+        
+        .timeline-meta {
+            font-size: 0.85rem;
+            color: #9a9fbe;
+        }
+        
+        .transcript-box {
+            background: #f8f9ff;
+            border-radius: 12px;
+            padding: 15px;
+            border: 1px solid rgba(92,106,196,0.15);
+            font-size: 0.95rem;
+            color: #45476b;
+            min-height: 120px;
+        }
+        
+        .cta-card {
+            background: linear-gradient(135deg, #1d976c 0%, #2abf91 100%);
+            color: white;
+        }
+        
+        .cta-card h3 {
+            color: white;
+        }
+        
+        .cta-card button {
+            background: white;
+            color: #1d976c;
+            font-weight: 700;
+        }
+        
+        .roi-benchmark {
+            margin-top: 20px;
+            background: rgba(0,0,0,0.15);
+            border-radius: 10px;
+            padding: 16px;
+        }
+        
+        .roi-benchmark h4 {
+            margin: 0 0 10px;
+            color: white;
+        }
+        
+        .roi-benchmark p {
+            margin: 4px 0;
+            color: rgba(255,255,255,0.85);
+            font-size: 0.95rem;
+        }
+        
+        .integrations-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .integration-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #eceef7;
+        }
+        
+        .integration-name {
+            font-weight: 600;
+            color: #2c2f48;
+        }
+        
+        .integration-status {
+            border-radius: 999px;
+            padding: 4px 12px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        
+        .integration-status.active {
+            background: #e6f4ea;
+            color: #1b5e20;
+        }
+        
+        .integration-status.pending {
+            background: #fff3cd;
+            color: #8a6d3b;
+        }
+        
+        .integration-status.inactive {
+            background: #fdecea;
+            color: #b71c1c;
+        }
+        
+        .forecast-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 15px;
+        }
+        
+        .forecast-cell {
+            background: #f1f2fb;
+            border-radius: 12px;
+            padding: 15px;
+            text-align: center;
+        }
+        
+        .forecast-cell .value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #2c2f48;
         }
         
         /* Quality Metrics Styles */
@@ -704,6 +889,14 @@
             </div>
             
             <div class="highlight-grid" id="highlightGrid"></div>
+            
+            <div class="client-selector">
+                <label for="personaSelect">Show this demo for:</label>
+                <select id="personaSelect">
+                    <!-- populated via script -->
+                </select>
+                <button class="btn btn-secondary" id="personaShareBtn" type="button">Copy shareable link</button>
+            </div>
         </div>
         
         <div class="dashboard">
@@ -720,6 +913,32 @@
                 <h3 style="color: white;">💰 Return on Investment</h3>
                 <div id="roi-calculator">
                     <div class="loading" style="color: white;">Calculating ROI...</div>
+                </div>
+                <div id="roi-benchmark" class="roi-benchmark"></div>
+            </div>
+            
+            <!-- Live AI Call Transcript -->
+            <div class="card">
+                <h3>🎧 Latest AI Call</h3>
+                <div id="call-transcript">
+                    <div class="transcript-box">Listening for last call...</div>
+                    <div class="timeline-meta" id="transcript-meta"></div>
+                </div>
+            </div>
+            
+            <!-- Today's Workflow Timeline -->
+            <div class="card">
+                <h3>🪄 Today's Workflow</h3>
+                <div id="workflow-timeline" class="timeline">
+                    <div class="loading">Building timeline...</div>
+                </div>
+            </div>
+            
+            <!-- Forecast -->
+            <div class="card">
+                <h3>🔮 Booking Forecast</h3>
+                <div id="forecast-card" class="forecast-grid">
+                    <div class="loading">Calculating forecast...</div>
                 </div>
             </div>
             
@@ -762,6 +981,21 @@
                 <button class="btn" onclick="refreshClientData()">Refresh Data</button>
                 <button class="btn" onclick="resetDemoData()">Reset Demo Data</button>
                 <button class="btn btn-secondary" onclick="viewClientLogs()">View Logs</button>
+            </div>
+            
+            <!-- CTA Card -->
+            <div class="card cta-card" id="cta-card" style="grid-column: 1 / -1;">
+                <h3>Ready to see this with your leads?</h3>
+                <p id="cta-subheadline">Load 10 leads, we’ll run it this week and send the booking proof.</p>
+                <button class="btn" id="cta-button" type="button">Book 5-min Setup</button>
+            </div>
+            
+            <!-- Behind the Scenes -->
+            <div class="card" style="grid-column: 1 / -1;">
+                <h3>🛠️ Behind the scenes</h3>
+                <div id="integration-statuses" class="integrations-list">
+                    <div class="loading">Checking integrations...</div>
+                </div>
             </div>
             
             <!-- Business Hours -->
@@ -907,7 +1141,168 @@
             }
         };
         
+        const PERSONA_PRESETS = {
+            generic: {
+                label: 'General Service Businesses',
+                hero: {
+                    description: 'Your done-for-you AI concierge that turns ignored leads into booked revenue.',
+                    tagline: 'We import your leads, chase them within minutes, and drop the bookings into your calendar.'
+                },
+                palette: {
+                    color: '#5C6AC4',
+                    bg: 'linear-gradient(135deg, #5C6AC4 0%, #3A4A9F 100%)'
+                },
+                testimonial: {
+                    quote: 'We stopped chasing leads manually. They handled 132 calls and filled the calendar.',
+                    author: 'Sarah L.',
+                    role: 'Agency Owner'
+                },
+                cta: {
+                    headline: 'Ready to see it with your leads?',
+                    subheadline: 'Load 10 leads, we’ll run it this week and send the booking proof.',
+                    buttonText: 'Book 5-min Setup',
+                    buttonUrl: 'https://calendly.com/your-demo/quick-setup'
+                },
+                fallback: {
+                    serviceMix: [
+                        { name: 'Lead Follow-Up', percent: 35, bookings: 6, notes: 'Speed-to-lead flows' },
+                        { name: 'Appointment Booking', percent: 45, bookings: 8, notes: 'AI calendar concierge' },
+                        { name: 'Calendar Integration', percent: 20, bookings: 4, notes: 'Multi-calendar sync' }
+                    ],
+                    leads: [
+                        { name: 'Jordan Hale', phone: '+44 7700 900451', status: 'Booked • Strategy Session', lastMessage: 'Confirmed via AI call', score: 94, service: 'Lead Follow-Up' },
+                        { name: 'Priya Desai', phone: '+44 7700 900512', status: 'Follow-up • wants afternoon slot', lastMessage: 'AI sent 2-time options', score: 82, service: 'Appointment Booking' }
+                    ],
+                    timeline: [
+                        { icon: '📥', title: 'Lead imported', detail: 'Website form forwarded', status: 'Captured' },
+                        { icon: '🤖', title: 'AI call placed', detail: 'Call answered, objection handled', status: 'Completed' },
+                        { icon: '💬', title: 'SMS follow-up', detail: 'Reminder + prep instructions sent', status: 'Sent' },
+                        { icon: '📅', title: 'Calendar booked', detail: 'Client calendar updated', status: 'Booked' }
+                    ]
+                }
+            },
+            medspa: {
+                label: 'MedSpa & Aesthetics',
+                hero: {
+                    description: 'Your Botox + body contouring concierge that nurtures every enquiry.',
+                    tagline: 'We call every MedSpa lead within 2 minutes, handle objections, and fill your treatment rooms.'
+                },
+                palette: {
+                    color: '#c061cb',
+                    bg: 'linear-gradient(135deg, #c471f5 0%, #fa71cd 100%)'
+                },
+                testimonial: {
+                    quote: 'Booked 37 body sculpting consults in two weeks without my team dialing once.',
+                    author: 'Melissa P.',
+                    role: 'MedSpa Owner'
+                },
+                cta: {
+                    headline: 'Fill next week’s treatment blocks',
+                    subheadline: 'We’ll chase your Glowday, Facebook, and Instagram leads for you.',
+                    buttonText: 'Schedule MedSpa Setup',
+                    buttonUrl: 'https://calendly.com/your-demo/medspa'
+                },
+                fallback: {
+                    serviceMix: [
+                        { name: 'Injectables Leads', percent: 40, bookings: 7, notes: 'High-ticket consults' },
+                        { name: 'Body Contouring', percent: 35, bookings: 6, notes: 'Package upsells ready' },
+                        { name: 'Skin Programs', percent: 25, bookings: 4, notes: 'Membership pushes' }
+                    ],
+                    leads: [
+                        { name: 'Emily Carr', phone: '+44 7700 123987', status: 'Booked • Lip filler consult', lastMessage: 'AI sent prep instructions', score: 93, service: 'Injectables' },
+                        { name: 'Holly James', phone: '+44 7700 883221', status: 'Awaiting reply • CoolSculpt', lastMessage: 'Requested Monday morning slot', score: 81, service: 'Body Contouring' }
+                    ],
+                    timeline: [
+                        { icon: '📥', title: 'Glowday enquiry captured', detail: '“Need lip filler quote”', status: 'Captured' },
+                        { icon: '🤖', title: 'AI call placed', detail: 'Handled “I need to ask my partner” objection', status: 'Completed' },
+                        { icon: '💬', title: 'SMS follow-up', detail: 'Before/after photos + financing link sent', status: 'Sent' },
+                        { icon: '📅', title: 'Consult booked', detail: 'Friday 3:30 PM • HydraRoom', status: 'Booked' }
+                    ]
+                }
+            },
+            solar: {
+                label: 'Solar & Home Services',
+                hero: {
+                    description: 'Your solar callback desk that never lets a lead grow cold.',
+                    tagline: 'We call within 90 seconds, pre-qualify roofs, and drop installs onto your calendar.'
+                },
+                palette: {
+                    color: '#f6a62f',
+                    bg: 'linear-gradient(135deg, #f6d365 0%, #fda085 100%)'
+                },
+                testimonial: {
+                    quote: '10.4% more installs in month one because every homeowner got a real follow-up.',
+                    author: 'James W.',
+                    role: 'Solar Franchisee'
+                },
+                cta: {
+                    headline: 'Let’s chase your MQL backlog',
+                    subheadline: 'We’ll call, SMS, and email every homeowner until it’s on your calendar.',
+                    buttonText: 'Start Solar Trial',
+                    buttonUrl: 'https://calendly.com/your-demo/solar'
+                },
+                fallback: {
+                    serviceMix: [
+                        { name: 'Solar Consults', percent: 50, bookings: 10, notes: 'Full roof analysis' },
+                        { name: 'Battery Upsells', percent: 30, bookings: 4, notes: 'Storage add-ons' },
+                        { name: 'Maintenance', percent: 20, bookings: 3, notes: 'Warranty callbacks' }
+                    ],
+                    leads: [
+                        { name: 'Marcus Flynn', phone: '+44 7700 654321', status: 'Awaiting reply • reschedule', lastMessage: 'AI sent alternate slots', score: 79, service: 'Solar Consult' },
+                        { name: 'Laura Chen', phone: '+44 7700 998877', status: 'Synced • prep email', lastMessage: 'Calendar + roof checklist sent', score: 85, service: 'Battery Upgrade' }
+                    ],
+                    timeline: [
+                        { icon: '📥', title: 'Homeowner enquiry imported', detail: 'Lead from Facebook ads', status: 'Captured' },
+                        { icon: '🤖', title: 'AI call placed', detail: 'Verified roof type + bill', status: 'Qualified' },
+                        { icon: '💬', title: 'SMS follow-up', detail: 'Drone inspection prep link sent', status: 'Sent' },
+                        { icon: '📅', title: 'Site survey booked', detail: 'Wednesday 11:00 AM', status: 'Booked' }
+                    ]
+                }
+            },
+            legal: {
+                label: 'Law Firms & Professional Services',
+                hero: {
+                    description: 'Your intake desk that screens every enquiry and books consultations.',
+                    tagline: 'We qualify callers, gather case notes, and put retainers on your calendar.'
+                },
+                palette: {
+                    color: '#2f4858',
+                    bg: 'linear-gradient(135deg, #2f4858 0%, #1c2541 100%)'
+                },
+                testimonial: {
+                    quote: 'First week: 14 consultations booked without our paralegal touching the phone.',
+                    author: 'Alex K.',
+                    role: 'Managing Partner'
+                },
+                cta: {
+                    headline: 'Let us run intake for you',
+                    subheadline: 'We capture every voicemail, triage cases, and only book qualified clients.',
+                    buttonText: 'Book Legal Intake Demo',
+                    buttonUrl: 'https://calendly.com/your-demo/legal'
+                },
+                fallback: {
+                    serviceMix: [
+                        { name: 'Consultation Calls', percent: 60, bookings: 9, notes: 'PI & employment law' },
+                        { name: 'Document Reviews', percent: 25, bookings: 3, notes: 'Contracts & leases' },
+                        { name: 'Follow-up Reminders', percent: 15, bookings: 2, notes: 'Retainer nudges' }
+                    ],
+                    leads: [
+                        { name: 'Nadine Roy', phone: '+44 7700 112233', status: 'Booked • PI consult', lastMessage: 'Retainer overview emailed', score: 90, service: 'Personal Injury' },
+                        { name: 'Oliver Webb', phone: '+44 7700 445566', status: 'Screened • conflict check', lastMessage: 'Awaiting documents', score: 78, service: 'Employment Law' }
+                    ],
+                    timeline: [
+                        { icon: '📥', title: 'Website intake captured', detail: '“Need wrongful termination help”', status: 'Captured' },
+                        { icon: '🤖', title: 'AI call placed', detail: 'Gathered facts + conflict check', status: 'Qualified' },
+                        { icon: '💬', title: 'Email summary', detail: 'Case notes + required docs sent', status: 'Sent' },
+                        { icon: '📅', title: 'Consult scheduled', detail: 'Thursday 10:00 AM with Alex', status: 'Booked' }
+                    ]
+                }
+            }
+        };
+        
         let currentClient = null;
+        let currentPersona = 'generic';
+        let lastIndustryComparison = null;
         
         // Get client from URL parameter or default
         function getClientFromURL() {
@@ -917,20 +1312,41 @@
             return rawClient.replace(/-/g, '_');
         }
         
+        function getPersonaFromURL() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const persona = urlParams.get('persona');
+            return PERSONA_PRESETS[persona] ? persona : 'generic';
+        }
+        
+        function updatePersonaInURL(personaKey) {
+            const url = new URL(window.location.href);
+            if (personaKey === 'generic') {
+                url.searchParams.delete('persona');
+            } else {
+                url.searchParams.set('persona', personaKey);
+            }
+            window.history.replaceState({}, '', url.toString());
+        }
+        
+        function getCurrentPersonaConfig() {
+            return PERSONA_PRESETS[currentPersona] || PERSONA_PRESETS.generic;
+        }
+        
         function applyClientTheme(clientKey) {
             const config = CLIENT_CONFIG[clientKey];
             if (!config) return;
+            const personaConfig = clientKey === DEMO_CLIENT_KEY ? getCurrentPersonaConfig() : null;
             
             // Apply CSS custom properties
-            document.documentElement.style.setProperty('--client-color', config.color);
-            document.documentElement.style.setProperty('--client-bg', config.bg);
+            document.documentElement.style.setProperty('--client-color', personaConfig?.palette?.color || config.color);
+            document.documentElement.style.setProperty('--client-bg', personaConfig?.palette?.bg || config.bg);
             
             // Update page elements
             document.getElementById('clientName').textContent = config.name;
-            document.getElementById('clientDescription').textContent = config.description;
+            document.getElementById('clientDescription').textContent = personaConfig?.hero?.description || config.description;
             document.getElementById('clientLogo').textContent = config.logo;
             const taglineEl = document.getElementById('clientTagline');
-            if (taglineEl) taglineEl.textContent = config.tagline || 'We import your leads, follow up instantly, and book straight into your calendar.';
+            if (taglineEl) taglineEl.textContent = personaConfig?.hero?.tagline || config.tagline || 'We import your leads, follow up instantly, and book straight into your calendar.';
             document.title = `${config.name} - AI Booking Dashboard`;
             const statusEl = document.getElementById('clientStatus');
             if (statusEl) {
@@ -956,11 +1372,13 @@
                 let clientData = getClientData(currentClient);
                 const liveData = await fetchLiveDemoData(currentClient);
                 clientData = mergeDemoData(clientData, liveData);
+                clientData = applyPersonaFallbacks(clientData);
                 
-                if (liveData?.highlights && currentClient === DEMO_CLIENT_KEY) {
+                if (currentClient === DEMO_CLIENT_KEY) {
                     const bannerEl = document.getElementById('demoBanner');
                     if (bannerEl) {
-                        bannerEl.innerHTML = `<strong>Demo environment:</strong> ${config.name} is pulling live metrics from your actual lead + call logs (${new Date().toLocaleTimeString()}).`;
+                        const refreshingCopy = liveData ? `pulling live metrics as of ${new Date().toLocaleTimeString()}` : 'showing pre-loaded demo stats';
+                        bannerEl.innerHTML = `<strong>Demo environment:</strong> ${config.name} is ${refreshingCopy}. When we onboard you, it references your leads, services, and calendars.`;
                     }
                 }
                 
@@ -1053,6 +1471,12 @@
                 renderServiceMix(clientData.serviceMix);
                 renderActivityFeed(clientData.recentCalls);
                 renderNextSteps(clientData.nextSteps);
+                renderTranscript(clientData.transcript);
+                renderTimeline(clientData.timeline);
+                renderForecast(clientData.forecast || {}, clientData);
+                renderCTA(clientData.cta);
+                renderIntegrations(clientData.integrations);
+                loadIndustryComparison(currentClient);
                 
             } catch (error) {
                 console.error('Failed to load client data:', error);
@@ -1093,6 +1517,11 @@
             if (Array.isArray(livePayload.leads) && livePayload.leads.length) merged.leads = livePayload.leads;
             if (Array.isArray(livePayload.serviceMix) && livePayload.serviceMix.length) merged.serviceMix = livePayload.serviceMix;
             if (Array.isArray(livePayload.recentCalls) && livePayload.recentCalls.length) merged.recentCalls = livePayload.recentCalls;
+            if (Array.isArray(livePayload.timeline) && livePayload.timeline.length) merged.timeline = livePayload.timeline;
+            merged.transcript = livePayload.transcript || merged.transcript;
+            merged.forecast = livePayload.forecast || merged.forecast;
+            merged.integrations = livePayload.integrations || merged.integrations;
+            merged.cta = livePayload.cta || merged.cta;
             return merged;
         }
         
@@ -1103,6 +1532,7 @@
                 highlightGrid.style.display = 'none';
                 return;
             }
+            const personaConfig = getCurrentPersonaConfig();
             const cards = [
                 {
                     label: 'Avg Response',
@@ -1125,13 +1555,27 @@
                     sub: highlights.showNotes || 'Attendance after reminders'
                 }
             ];
+            if (personaConfig?.testimonial) {
+                cards.push({
+                    type: 'testimonial',
+                    testimonial: personaConfig.testimonial
+                });
+            }
             highlightGrid.style.display = 'grid';
             highlightGrid.innerHTML = cards.map(card => `
-                <div class="highlight-card">
-                    <div class="highlight-label">${card.label}</div>
-                    <div class="highlight-value">${card.value}</div>
-                    <div class="highlight-subtext">${card.sub}</div>
-                </div>
+                ${card.type === 'testimonial' ? `
+                    <div class="testimonial-card">
+                        <div class="highlight-label">Social proof</div>
+                        <div class="testimonial-quote">“${card.testimonial.quote}”</div>
+                        <div class="testimonial-author">${card.testimonial.author}${card.testimonial.role ? `<span style="font-weight:400;color:#7d81a8;"> • ${card.testimonial.role}</span>` : ''}</div>
+                    </div>
+                ` : `
+                    <div class="highlight-card">
+                        <div class="highlight-label">${card.label}</div>
+                        <div class="highlight-value">${card.value}</div>
+                        <div class="highlight-subtext">${card.sub}</div>
+                    </div>
+                `}
             `).join('');
         }
         
@@ -1232,6 +1676,211 @@
             if (hours < 24) return `${hours}h ago`;
             const days = Math.floor(hours / 24);
             return `${days}d ago`;
+        }
+        
+        function applyPersonaFallbacks(data = {}) {
+            if (currentClient !== DEMO_CLIENT_KEY) return data;
+            const persona = getCurrentPersonaConfig();
+            const fallback = persona.fallback || {};
+            const merged = { ...data };
+            if (!merged.serviceMix || !merged.serviceMix.length) merged.serviceMix = fallback.serviceMix || merged.serviceMix;
+            if (!merged.leads || !merged.leads.length) merged.leads = fallback.leads || merged.leads;
+            if (!merged.timeline || !merged.timeline.length) merged.timeline = fallback.timeline || [];
+            if (!merged.transcript) {
+                merged.transcript = {
+                    text: fallback.timeline?.[1]?.detail || 'AI handled the full call for you.',
+                    lead: merged.leads?.[0]?.name,
+                    timestamp: new Date().toISOString()
+                };
+            }
+            if (!merged.cta) merged.cta = persona.cta;
+            if (!merged.integrations) merged.integrations = getDefaultIntegrations();
+            merged.testimonial = persona.testimonial;
+            return merged;
+        }
+        
+        function getDefaultIntegrations() {
+            return [
+                { name: 'Vapi Voice', status: 'active', detail: 'Assistant + phone number verified' },
+                { name: 'Twilio SMS', status: 'active', detail: 'Messaging + WhatsApp ready' },
+                { name: 'Google Calendar', status: 'active', detail: 'Two-way sync enabled' },
+                { name: 'Slack Daily Digest', status: 'pending', detail: 'Optional – add your workspace' }
+            ];
+        }
+        
+        function renderTranscript(transcript) {
+            const container = document.getElementById('call-transcript');
+            if (!container) return;
+            if (!transcript || !transcript.text) {
+                container.innerHTML = `
+                    <div class="transcript-box">Make a quick AI call to populate the transcript preview.</div>
+                `;
+                return;
+            }
+            container.innerHTML = `
+                <div class="transcript-box">
+                    “${transcript.text}”
+                </div>
+                <div class="timeline-meta">
+                    ${transcript.lead ? `Lead: ${transcript.lead}` : ''} ${transcript.outcome ? `• ${transcript.outcome}` : ''} • ${formatTimeAgo(transcript.timestamp)}
+                </div>
+            `;
+        }
+        
+        function renderTimeline(events = []) {
+            const container = document.getElementById('workflow-timeline');
+            if (!container) return;
+            if (!Array.isArray(events) || !events.length) {
+                container.innerHTML = '<div class="loading">Timeline will populate after the next workflow run.</div>';
+                return;
+            }
+            container.innerHTML = events.map(event => `
+                <div class="timeline-item">
+                    <div class="timeline-icon">${event.icon || '🧩'}</div>
+                    <div class="timeline-content">
+                        <h4>${event.title}</h4>
+                        <p>${event.detail || ''}</p>
+                        <div class="timeline-meta">${event.status || ''} • ${event.timeAgo || (event.timestamp ? formatTimeAgo(event.timestamp) : 'Just now')}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function renderForecast(forecast = {}, metrics = {}) {
+            const container = document.getElementById('forecast-card');
+            if (!container) return;
+            const totalLeads = metrics.totalLeads || 0;
+            const conversionRate = typeof metrics.conversionRate === 'number' ? metrics.conversionRate : 0;
+            const leadsLoaded = forecast.leadsLoaded || Math.max(25, Math.ceil(totalLeads / 2));
+            const conv = forecast.conversionRate || conversionRate || 40;
+            const expectedBookings = forecast.expectedBookings || Math.max(1, Math.round(leadsLoaded * (conv / 100)));
+            const timeframe = forecast.timeframe || '72 hours';
+            container.innerHTML = `
+                <div class="forecast-cell">
+                    <div class="label">Load Leads</div>
+                    <div class="value">${leadsLoaded}</div>
+                    <div class="highlight-subtext">CSV/CRM drop</div>
+                </div>
+                <div class="forecast-cell">
+                    <div class="label">Conversion</div>
+                    <div class="value">${conv}%</div>
+                    <div class="highlight-subtext">Avg this week</div>
+                </div>
+                <div class="forecast-cell">
+                    <div class="label">Booked</div>
+                    <div class="value">${expectedBookings}</div>
+                    <div class="highlight-subtext">${timeframe}</div>
+                </div>
+            `;
+        }
+        
+        function renderCTA(cta = {}) {
+            const card = document.getElementById('cta-card');
+            if (!card) return;
+            const sub = document.getElementById('cta-subheadline');
+            const button = document.getElementById('cta-button');
+            card.querySelector('h3').textContent = cta.headline || 'Ready to see this with your leads?';
+            if (sub) sub.textContent = cta.subheadline || 'Load 10 leads, we’ll run it this week and send the booking proof.';
+            if (button) {
+                button.textContent = cta.buttonText || 'Book 5-min Setup';
+                button.onclick = () => {
+                    if (cta.buttonUrl) {
+                        window.open(cta.buttonUrl, '_blank');
+                    } else {
+                        alert('Drop me a reply and I’ll load your leads today.');
+                    }
+                };
+            }
+        }
+        
+        function renderIntegrations(list = []) {
+            const container = document.getElementById('integration-statuses');
+            if (!container) return;
+            if (!Array.isArray(list) || !list.length) {
+                container.innerHTML = '<div class="loading">No integrations to show yet.</div>';
+                return;
+            }
+            container.innerHTML = list.map(item => `
+                <div class="integration-item">
+                    <div>
+                        <div class="integration-name">${item.name}</div>
+                        <div style="color:#7b7fa8;font-size:0.9rem;">${item.detail || ''}</div>
+                    </div>
+                    <div class="integration-status ${item.status || 'pending'}">${item.statusLabel || item.status || 'pending'}</div>
+                </div>
+            `).join('');
+        }
+        
+        async function loadIndustryComparison(clientKey) {
+            if (!clientKey || clientKey !== DEMO_CLIENT_KEY) return;
+            try {
+                const response = await fetch(`${BASE_URL}/api/industry-comparison/${clientKey}`);
+                const data = await response.json();
+                if (data.ok && data.comparison) {
+                    lastIndustryComparison = data;
+                    renderRoiBenchmark(data);
+                }
+            } catch (error) {
+                console.warn('Industry comparison unavailable', error.message);
+            }
+        }
+        
+        function renderRoiBenchmark(data) {
+            const container = document.getElementById('roi-benchmark');
+            if (!container) return;
+            if (!data || !data.comparison) {
+                container.innerHTML = '';
+                return;
+            }
+            const comparison = data.comparison;
+            const successMetric = comparison.callSuccessRate;
+            const bookingMetric = comparison.bookingRate;
+            container.innerHTML = `
+                <h4>${data.industry || 'Industry baseline'}</h4>
+                <p>${successMetric?.icon || '➖'} Success rate: ${(successMetric?.client * 100).toFixed(1)}% vs ${((successMetric?.benchmark || 0) * 100).toFixed(1)}%</p>
+                <p>${bookingMetric?.icon || '➖'} Booking rate: ${(bookingMetric?.client * 100).toFixed(1)}% vs ${((bookingMetric?.benchmark || 0) * 100).toFixed(1)}%</p>
+                <p>${data.insights?.[0]?.message || 'Consistently faster follow-up than typical teams.'}</p>
+            `;
+        }
+        
+        function populatePersonaSelect() {
+            const select = document.getElementById('personaSelect');
+            if (!select) return;
+            select.innerHTML = Object.entries(PERSONA_PRESETS).map(([key, persona]) => `
+                <option value="${key}">${persona.label}</option>
+            `).join('');
+            select.value = currentPersona;
+            select.addEventListener('change', (event) => {
+                setPersona(event.target.value);
+            });
+            const shareBtn = document.getElementById('personaShareBtn');
+            if (shareBtn) {
+                shareBtn.addEventListener('click', copyPersonaShareLink);
+            }
+        }
+        
+        function setPersona(personaKey) {
+            if (!PERSONA_PRESETS[personaKey]) return;
+            currentPersona = personaKey;
+            updatePersonaInURL(personaKey);
+            applyClientTheme(currentClient);
+            loadClientData();
+            loadROI();
+            loadQualityMetrics();
+            loadQualityAlerts();
+            loadIndustryComparison(currentClient);
+        }
+        
+        async function copyPersonaShareLink() {
+            const url = new URL(window.location.href);
+            url.searchParams.set('client', currentClient || DEMO_CLIENT_KEY);
+            if (currentPersona === 'generic') {
+                url.searchParams.delete('persona');
+            } else {
+                url.searchParams.set('persona', currentPersona);
+            }
+            const copied = await copyCommandToClipboard(url.toString());
+            alert(copied ? 'Shareable demo link copied to clipboard.' : 'Copy this link:\n' + url.toString());
         }
         
         function getClientData(clientKey) {
@@ -1360,7 +2009,25 @@
                             score: 71,
                             service: 'Lead Follow-Up'
                         }
-                    ]
+                    ],
+                    timeline: [
+                        { icon: '📥', title: 'Lead imported', detail: 'Website form forwarded', status: 'Captured', timestamp: new Date().toISOString() },
+                        { icon: '🤖', title: 'AI call placed', detail: 'Handled pricing objection + confirmed intent', status: 'Completed', timestamp: new Date().toISOString() },
+                        { icon: '💬', title: 'SMS follow-up', detail: 'Reminder + prep instructions sent', status: 'Sent', timestamp: new Date().toISOString() },
+                        { icon: '📅', title: 'Calendar booked', detail: 'Strategy session confirmed', status: 'Booked', timestamp: new Date().toISOString() }
+                    ],
+                    forecast: {
+                        leadsLoaded: 40,
+                        conversionRate: 60,
+                        expectedBookings: 24,
+                        timeframe: '72 hours'
+                    },
+                    cta: {
+                        headline: 'Ready to see this with your leads?',
+                        subheadline: 'Load 10 leads, we’ll run it this week and send the booking proof.',
+                        buttonText: 'Book 5-min Setup',
+                        buttonUrl: 'https://calendly.com/your-demo/quick-setup'
+                    }
                 }
             };
             return data[clientKey] || data['victory_dental'];
@@ -1429,6 +2096,7 @@
             const container = document.getElementById('roi-calculator');
             if (clientKey === DEMO_CLIENT_KEY) {
                 container.innerHTML = getROIHTML(DEMO_ROI_DEFAULT);
+                renderRoiBenchmark(lastIndustryComparison);
                 return;
             }
             
@@ -1450,6 +2118,7 @@
                 console.error('Failed to load ROI:', error);
                 if (clientKey === DEMO_CLIENT_KEY) {
                     container.innerHTML = getROIHTML(DEMO_ROI_DEFAULT);
+                    renderRoiBenchmark(lastIndustryComparison);
                 } else {
                     container.innerHTML = `
                         <div style="text-align: center; padding: 20px; color: white;">
@@ -1741,6 +2410,8 @@
         // Initialize client dashboard
         function initClientDashboard() {
             currentClient = getClientFromURL();
+             currentPersona = getPersonaFromURL();
+             populatePersonaSelect();
             applyClientTheme(currentClient);
             loadClientData();
             loadROI(); // Load ROI calculator
