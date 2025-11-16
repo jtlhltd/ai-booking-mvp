@@ -19983,8 +19983,6 @@ async function startServer() {
     });
     console.log('✅ Database health monitoring scheduled (runs every 5 minutes)');
     
-    // Start weekly report generation (runs every Monday at 9am)
-    const { generateWeeklyReport } = await import('./lib/analytics-tracker.js');
     // Weekly report generation (every Monday at 9 AM)
     cron.schedule('0 9 * * 1', async () => {
       console.log('[CRON] 📊 Generating weekly reports...');
@@ -19997,49 +19995,6 @@ async function startServer() {
       }
     });
     console.log('✅ Weekly report generation scheduled (runs every Monday at 9 AM)');
-    
-    // Legacy weekly report (keeping for backwards compatibility)
-    const legacyWeeklyReport = async () => {
-      try {
-        const clients = await listFullClients();
-        let generated = 0;
-        
-        for (const client of clients) {
-          if (!client.isEnabled) continue;
-          
-          try {
-            const { generateWeeklyReport: generateReport } = await import('./lib/weekly-report.js');
-            const report = await generateReport(client.clientKey);
-            
-            // Email report to client if email is configured
-            if (client.contact?.email) {
-              try {
-                const { sendWeeklySummary } = await import('./lib/email-alerts.js');
-                await sendWeeklySummary(client, report.summary);
-                console.log(`[WEEKLY REPORT] ✅ Emailed to ${client.contact.email}`);
-              } catch (emailError) {
-                console.error(`[WEEKLY REPORT] Email failed for ${client.clientKey}:`, emailError.message);
-              }
-            }
-            
-            console.log(`[WEEKLY REPORT] ✅ Generated for ${client.clientKey || client.displayName}:`, {
-              calls: report.summary.total_calls,
-              appointments: report.summary.appointments_booked,
-              conversionRate: report.summary.conversion_rate_percent + '%'
-            });
-            
-            generated++;
-          } catch (clientError) {
-            console.error(`[WEEKLY REPORT] Failed for ${client.clientKey}:`, clientError.message);
-          }
-        }
-        
-        console.log(`[CRON] ✅ Generated ${generated} weekly reports`);
-      } catch (error) {
-        console.error('[CRON ERROR] Weekly report failed:', error);
-      }
-    });
-    console.log('✅ Weekly report cron job scheduled (runs every Monday 9am)');
     
   } catch (error) {
     console.error('❌ Failed to start server:', error);
