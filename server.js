@@ -8571,6 +8571,81 @@ app.get('/api/calls/:callId/transcript', async (req, res) => {
   }
 });
 
+app.get('/api/leads/:leadId/timeline', async (req, res) => {
+  try {
+    const { leadId } = req.params;
+    
+    const leadResult = await query(`
+      SELECT id, name, phone, created_at, source
+      FROM leads
+      WHERE id = $1 OR phone = $1
+      ORDER BY created_at DESC
+      LIMIT 1
+    `, [leadId]);
+    
+    if (!leadResult.rows || !leadResult.rows.length) {
+      return res.status(404).json({ ok: false, error: 'Lead not found' });
+    }
+    
+    const lead = leadResult.rows[0];
+    
+    const callsResult = await query(`
+      SELECT status, outcome, created_at, duration
+      FROM calls
+      WHERE lead_phone = $1
+      ORDER BY created_at ASC
+    `, [lead.phone]);
+    
+    const appointmentsResult = await query(`
+      SELECT start_iso, end_iso, status, created_at
+      FROM appointments
+      WHERE lead_id = $1
+      ORDER BY created_at ASC
+    `, [lead.id]);
+    
+    const timeline = [];
+    
+    timeline.push({
+      event: 'Lead received',
+      icon: '📥',
+      detail: `Added via ${lead.source || 'import'}`,
+      time: lead.created_at
+    });
+    
+    (callsResult.rows || []).forEach((call, idx) => {
+      timeline.push({
+        event: idx === 0 ? 'AI call initiated' : `Follow-up call ${idx + 1}`,
+        icon: '📞',
+        detail: call.outcome ? `Outcome: ${call.outcome}` : 'Call completed',
+        time: call.created_at
+      });
+    });
+    
+    (appointmentsResult.rows || []).forEach((appt, idx) => {
+      const startDate = new Date(appt.start_iso);
+      timeline.push({
+        event: idx === 0 ? 'Appointment booked' : 'Appointment updated',
+        icon: '📅',
+        detail: `Booked for ${startDate.toLocaleString('en-GB')}`,
+        time: appt.created_at
+      });
+    });
+    
+    timeline.sort((a, b) => new Date(a.time) - new Date(b.time));
+    
+    res.json({
+      ok: true,
+      timeline: timeline.map(item => ({
+        ...item,
+        time: new Date(item.time).toISOString()
+      }))
+    });
+  } catch (error) {
+    console.error('[TIMELINE ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 app.get('/api/export/:type', async (req, res) => {
   try {
     const { type } = req.params;
