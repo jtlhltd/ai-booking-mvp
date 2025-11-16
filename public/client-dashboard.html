@@ -2184,80 +2184,148 @@
             if (modal) modal.classList.remove('open');
         }
 
-        function renderActiveIndicator(data) {
+        async function renderActiveIndicator(data) {
             const titleEl = document.getElementById('activeTitle');
             const subtitleEl = document.getElementById('activeSubtitle');
             if (!titleEl || !subtitleEl) return;
 
-            const activeCalls = Math.floor((data.totalCalls || 0) * 0.1) || 0;
-            const activeFollowups = Math.floor((data.totalLeads || 0) * 0.3) || 0;
-            
-            if (activeCalls > 0 || activeFollowups > 0) {
-                titleEl.textContent = `Your concierge is active`;
-                subtitleEl.textContent = `Currently calling ${activeCalls} lead${activeCalls !== 1 ? 's' : ''}, following up with ${activeFollowups}`;
-            } else {
-                titleEl.textContent = `Your concierge is monitoring`;
-                subtitleEl.textContent = `Ready to handle leads as they come in`;
-            }
-        }
-
-        function renderCallQuality(data) {
-            const container = document.getElementById('call-quality');
-            if (!container) return;
-
-            const totalCalls = data.totalCalls || 0;
-            const bookings = data.bookingsThisWeek || 0;
-            const avgDuration = Math.floor((totalCalls * 2.5) + Math.random() * 1.5);
-            const successRate = totalCalls > 0 ? Math.round((bookings / totalCalls) * 100) : 0;
-            const bestHour = '2-4pm';
-
-            container.innerHTML = `
-                <div class="quality-metric">
-                    <div class="quality-label">Avg Duration</div>
-                    <div class="quality-value">${avgDuration}m</div>
-                    <div class="quality-badge">per call</div>
-                </div>
-                <div class="quality-metric">
-                    <div class="quality-label">Success Rate</div>
-                    <div class="quality-value">${successRate}%</div>
-                    <div class="quality-badge">bookings</div>
-                </div>
-                <div class="quality-metric">
-                    <div class="quality-label">Best Time</div>
-                    <div class="quality-value">${bestHour}</div>
-                    <div class="quality-badge">to call</div>
-                </div>
-            `;
-        }
-
-        function renderRetryQueue(data) {
-            const container = document.getElementById('retry-queue');
-            if (!container) return;
-
-            const totalCalls = data.totalCalls || 0;
-            const failedCalls = Math.floor(totalCalls * 0.15);
-            
-            if (failedCalls === 0) {
-                container.innerHTML = '<p style="color:#8c8fab;">No retries needed - all calls successful!</p>';
+            if (currentClient === DEMO_CLIENT_KEY) {
+                const activeCalls = Math.floor((data.totalCalls || 0) * 0.1) || 0;
+                const activeFollowups = Math.floor((data.totalLeads || 0) * 0.3) || 0;
+                
+                if (activeCalls > 0 || activeFollowups > 0) {
+                    titleEl.textContent = `Your concierge is active`;
+                    subtitleEl.textContent = `Currently calling ${activeCalls} lead${activeCalls !== 1 ? 's' : ''}, following up with ${activeFollowups}`;
+                } else {
+                    titleEl.textContent = `Your concierge is monitoring`;
+                    subtitleEl.textContent = `Ready to handle leads as they come in`;
+                }
                 return;
             }
 
-            const retryLeads = currentLeads.slice(0, Math.min(failedCalls, 3)).map((lead, idx) => ({
-                name: lead.name || 'Prospect',
-                phone: lead.phone,
-                attempts: 2 + idx,
-                nextRetry: idx === 0 ? 'Today, 2pm' : idx === 1 ? 'Today, 4pm' : 'Tomorrow, 10am'
-            }));
+            try {
+                const response = await fetch(`${BASE_URL}/api/active-indicator/${currentClient}`);
+                const payload = await response.json();
+                if (response.ok && payload?.ok) {
+                    titleEl.textContent = payload.title;
+                    subtitleEl.textContent = payload.subtitle;
+                }
+            } catch (error) {
+                console.error('Failed to load active indicator', error);
+            }
+        }
 
-            container.innerHTML = retryLeads.map(lead => `
-                <div class="retry-item">
-                    <div>
-                        <div class="retry-name">${lead.name}</div>
-                        <div class="retry-meta">Attempt ${lead.attempts} • ${lead.phone || ''}</div>
+        async function renderCallQuality(data) {
+            const container = document.getElementById('call-quality');
+            if (!container) return;
+
+            if (currentClient === DEMO_CLIENT_KEY) {
+                const totalCalls = data.totalCalls || 0;
+                const bookings = data.bookingsThisWeek || 0;
+                const avgDuration = Math.floor((totalCalls * 2.5) + Math.random() * 1.5);
+                const successRate = totalCalls > 0 ? Math.round((bookings / totalCalls) * 100) : 0;
+                const bestHour = '2-4pm';
+
+                container.innerHTML = `
+                    <div class="quality-metric">
+                        <div class="quality-label">Avg Duration</div>
+                        <div class="quality-value">${avgDuration}m</div>
+                        <div class="quality-badge">per call</div>
                     </div>
-                    <div class="retry-status">Retrying ${lead.nextRetry}</div>
-                </div>
-            `).join('');
+                    <div class="quality-metric">
+                        <div class="quality-label">Success Rate</div>
+                        <div class="quality-value">${successRate}%</div>
+                        <div class="quality-badge">bookings</div>
+                    </div>
+                    <div class="quality-metric">
+                        <div class="quality-label">Best Time</div>
+                        <div class="quality-value">${bestHour}</div>
+                        <div class="quality-badge">to call</div>
+                    </div>
+                `;
+                return;
+            }
+
+            try {
+                const response = await fetch(`${BASE_URL}/api/call-quality/${currentClient}`);
+                const payload = await response.json();
+                if (response.ok && payload?.ok) {
+                    container.innerHTML = `
+                        <div class="quality-metric">
+                            <div class="quality-label">Avg Duration</div>
+                            <div class="quality-value">${payload.avgDuration || 0}m</div>
+                            <div class="quality-badge">per call</div>
+                        </div>
+                        <div class="quality-metric">
+                            <div class="quality-label">Success Rate</div>
+                            <div class="quality-value">${payload.successRate || 0}%</div>
+                            <div class="quality-badge">bookings</div>
+                        </div>
+                        <div class="quality-metric">
+                            <div class="quality-label">Best Time</div>
+                            <div class="quality-value">${payload.bestTime || '2-4pm'}</div>
+                            <div class="quality-badge">to call</div>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Failed to load call quality', error);
+            }
+        }
+
+        async function renderRetryQueue(data) {
+            const container = document.getElementById('retry-queue');
+            if (!container) return;
+
+            if (currentClient === DEMO_CLIENT_KEY) {
+                const totalCalls = data.totalCalls || 0;
+                const failedCalls = Math.floor(totalCalls * 0.15);
+                
+                if (failedCalls === 0) {
+                    container.innerHTML = '<p style="color:#8c8fab;">No retries needed - all calls successful!</p>';
+                    return;
+                }
+
+                const retryLeads = currentLeads.slice(0, Math.min(failedCalls, 3)).map((lead, idx) => ({
+                    name: lead.name || 'Prospect',
+                    phone: lead.phone,
+                    attempts: 2 + idx,
+                    nextRetry: idx === 0 ? 'Today, 2pm' : idx === 1 ? 'Today, 4pm' : 'Tomorrow, 10am'
+                }));
+
+                container.innerHTML = retryLeads.map(lead => `
+                    <div class="retry-item">
+                        <div>
+                            <div class="retry-name">${lead.name}</div>
+                            <div class="retry-meta">Attempt ${lead.attempts} • ${lead.phone || ''}</div>
+                        </div>
+                        <div class="retry-status">Retrying ${lead.nextRetry}</div>
+                    </div>
+                `).join('');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${BASE_URL}/api/retry-queue/${currentClient}`);
+                const payload = await response.json();
+                if (response.ok && payload?.ok) {
+                    if (!payload.retries || payload.retries.length === 0) {
+                        container.innerHTML = '<p style="color:#8c8fab;">No retries needed - all calls successful!</p>';
+                        return;
+                    }
+                    container.innerHTML = payload.retries.map(lead => `
+                        <div class="retry-item">
+                            <div>
+                                <div class="retry-name">${lead.name}</div>
+                                <div class="retry-meta">Attempt ${lead.attempts}/${lead.maxAttempts} • ${lead.phone || ''}</div>
+                            </div>
+                            <div class="retry-status">Retrying ${lead.nextRetry}</div>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Failed to load retry queue', error);
+            }
         }
 
         async function viewLeadTimeline(leadId, name) {
@@ -2319,95 +2387,188 @@
             if (modal) modal.classList.remove('open');
         }
 
-        function renderNextActions(data) {
+        async function renderNextActions(data) {
             const container = document.getElementById('next-actions');
             if (!container) return;
 
-            const totalLeads = data.totalLeads || 0;
-            const highPriority = data.highPriorityLeads || 0;
-            const actions = [];
+            if (currentClient === DEMO_CLIENT_KEY) {
+                const totalLeads = data.totalLeads || 0;
+                const highPriority = data.highPriorityLeads || 0;
+                const actions = [];
 
-            if (highPriority > 0) {
-                actions.push({ icon: '📞', title: `Call ${highPriority} high-priority leads`, time: 'Today, 2-4pm' });
-            }
-            if (totalLeads > highPriority) {
-                actions.push({ icon: '💬', title: `Follow up with ${totalLeads - highPriority} medium-priority leads`, time: 'Today, 4-6pm' });
-            }
-            actions.push({ icon: '📧', title: 'Send appointment reminders', time: 'Tomorrow, 9am' });
-            actions.push({ icon: '🔄', title: 'Retry 3 failed calls', time: 'Tomorrow, 2pm' });
+                if (highPriority > 0) {
+                    actions.push({ icon: '📞', title: `Call ${highPriority} high-priority leads`, time: 'Today, 2-4pm' });
+                }
+                if (totalLeads > highPriority) {
+                    actions.push({ icon: '💬', title: `Follow up with ${totalLeads - highPriority} medium-priority leads`, time: 'Today, 4-6pm' });
+                }
+                actions.push({ icon: '📧', title: 'Send appointment reminders', time: 'Tomorrow, 9am' });
+                actions.push({ icon: '🔄', title: 'Retry 3 failed calls', time: 'Tomorrow, 2pm' });
 
-            if (!actions.length) {
-                container.innerHTML = '<p style="color:#8c8fab;">No scheduled actions - all caught up!</p>';
+                if (!actions.length) {
+                    container.innerHTML = '<p style="color:#8c8fab;">No scheduled actions - all caught up!</p>';
+                    return;
+                }
+
+                container.innerHTML = actions.map(action => `
+                    <div class="action-item">
+                        <div class="action-icon">${action.icon}</div>
+                        <div class="action-content">
+                            <div class="action-title">${action.title}</div>
+                            <div class="action-time">${action.time}</div>
+                        </div>
+                    </div>
+                `).join('');
                 return;
             }
 
-            container.innerHTML = actions.map(action => `
-                <div class="action-item">
-                    <div class="action-icon">${action.icon}</div>
-                    <div class="action-content">
-                        <div class="action-title">${action.title}</div>
-                        <div class="action-time">${action.time}</div>
-                    </div>
-                </div>
-            `).join('');
+            try {
+                const response = await fetch(`${BASE_URL}/api/next-actions/${currentClient}`);
+                const payload = await response.json();
+                if (response.ok && payload?.ok) {
+                    if (!payload.actions || payload.actions.length === 0) {
+                        container.innerHTML = '<p style="color:#8c8fab;">No scheduled actions - all caught up!</p>';
+                        return;
+                    }
+                    container.innerHTML = payload.actions.map(action => `
+                        <div class="action-item">
+                            <div class="action-icon">${action.icon}</div>
+                            <div class="action-content">
+                                <div class="action-title">${action.title}</div>
+                                <div class="action-time">${action.time}</div>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Failed to load next actions', error);
+            }
         }
 
-        function renderCallRecordings(calls = []) {
+        async function renderCallRecordings(calls = []) {
             const container = document.getElementById('call-recordings');
             if (!container) return;
 
-            if (!calls.length) {
-                container.innerHTML = '<p style="color:#8c8fab;">Call recordings will appear here after calls are made.</p>';
+            if (currentClient === DEMO_CLIENT_KEY) {
+                if (!calls.length) {
+                    container.innerHTML = '<p style="color:#8c8fab;">Call recordings will appear here after calls are made.</p>';
+                    return;
+                }
+
+                container.innerHTML = calls.slice(0, 3).map((call, index) => `
+                    <div class="recording-item">
+                        <div class="recording-controls">
+                            <button class="play-btn" onclick="playRecording('${call.id || index}', '${call.name || 'Prospect'}')" title="Play recording">▶</button>
+                        </div>
+                        <div class="recording-info">
+                            <div class="recording-name">${call.name || 'Prospect'}</div>
+                            <div class="recording-meta">${call.summary || 'Call completed'} • ${call.timeAgo || formatTimeAgo(call.created_at || '')} • ${Math.floor(Math.random() * 3 + 2)} min</div>
+                        </div>
+                    </div>
+                `).join('');
                 return;
             }
 
-            container.innerHTML = calls.slice(0, 3).map((call, index) => `
-                <div class="recording-item">
-                    <div class="recording-controls">
-                        <button class="play-btn" onclick="playRecording('${call.id || index}', '${call.name || 'Prospect'}')" title="Play recording">▶</button>
-                    </div>
-                    <div class="recording-info">
-                        <div class="recording-name">${call.name || 'Prospect'}</div>
-                        <div class="recording-meta">${call.summary || 'Call completed'} • ${call.timeAgo || formatTimeAgo(call.created_at || '')} • ${Math.floor(Math.random() * 3 + 2)} min</div>
-                    </div>
-                </div>
-            `).join('');
+            try {
+                const response = await fetch(`${BASE_URL}/api/call-recordings/${currentClient}`);
+                const payload = await response.json();
+                if (response.ok && payload?.ok) {
+                    if (!payload.recordings || payload.recordings.length === 0) {
+                        container.innerHTML = '<p style="color:#8c8fab;">Call recordings will appear here after calls are made.</p>';
+                        return;
+                    }
+                    container.innerHTML = payload.recordings.map(recording => {
+                        const durationMin = Math.floor((recording.duration || 0) / 60);
+                        const durationSec = (recording.duration || 0) % 60;
+                        return `
+                            <div class="recording-item">
+                                <div class="recording-controls">
+                                    <button class="play-btn" onclick="playRecording('${recording.id}', '${recording.name}', '${recording.recordingUrl || ''}')" title="Play recording">▶</button>
+                                </div>
+                                <div class="recording-info">
+                                    <div class="recording-name">${recording.name}</div>
+                                    <div class="recording-meta">${recording.outcome || 'Call completed'} • ${recording.timeAgo || 'Recently'} • ${durationMin}:${String(durationSec).padStart(2, '0')}</div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            } catch (error) {
+                console.error('Failed to load call recordings', error);
+            }
         }
 
-        function playRecording(callId, name) {
+        function playRecording(callId, name, recordingUrl) {
             if (currentClient === DEMO_CLIENT_KEY) {
                 showToast('Recording Playback', `Demo recording for ${name} would play here`, 'info');
                 return;
             }
-            showToast('Playing Recording', `Loading call recording for ${name}...`, 'info');
+            
+            if (recordingUrl) {
+                window.open(recordingUrl, '_blank');
+                showToast('Playing Recording', `Opening recording for ${name}...`, 'info');
+            } else {
+                showToast('Recording Unavailable', `Recording URL not found for ${name}`, 'warning');
+            }
         }
 
-        function renderCalendarDetails(data) {
+        async function renderCalendarDetails(data) {
             const container = document.getElementById('calendar-details');
             if (!container) return;
 
-            const lastSync = new Date(Date.now() - 5 * 60 * 1000);
-            const conflictsResolved = Math.floor((data.bookingsThisWeek || 0) * 0.1);
-            const appointmentsBooked = data.bookingsThisWeek || 0;
+            if (currentClient === DEMO_CLIENT_KEY) {
+                const lastSync = new Date(Date.now() - 5 * 60 * 1000);
+                const conflictsResolved = Math.floor((data.bookingsThisWeek || 0) * 0.1);
+                const appointmentsBooked = data.bookingsThisWeek || 0;
 
-            container.innerHTML = `
-                <div class="calendar-detail-item">
-                    <span class="calendar-detail-label">Last sync</span>
-                    <span class="calendar-detail-value success">${formatTimeAgo(lastSync.toISOString())}</span>
-                </div>
-                <div class="calendar-detail-item">
-                    <span class="calendar-detail-label">Conflicts resolved</span>
-                    <span class="calendar-detail-value">${conflictsResolved} this week</span>
-                </div>
-                <div class="calendar-detail-item">
-                    <span class="calendar-detail-label">Appointments booked</span>
-                    <span class="calendar-detail-value success">${appointmentsBooked} this week</span>
-                </div>
-                <div class="calendar-detail-item">
-                    <span class="calendar-detail-label">Calendar status</span>
-                    <span class="calendar-detail-value success">✓ Synced and active</span>
-                </div>
-            `;
+                container.innerHTML = `
+                    <div class="calendar-detail-item">
+                        <span class="calendar-detail-label">Last sync</span>
+                        <span class="calendar-detail-value success">${formatTimeAgo(lastSync.toISOString())}</span>
+                    </div>
+                    <div class="calendar-detail-item">
+                        <span class="calendar-detail-label">Conflicts resolved</span>
+                        <span class="calendar-detail-value">${conflictsResolved} this week</span>
+                    </div>
+                    <div class="calendar-detail-item">
+                        <span class="calendar-detail-label">Appointments booked</span>
+                        <span class="calendar-detail-value success">${appointmentsBooked} this week</span>
+                    </div>
+                    <div class="calendar-detail-item">
+                        <span class="calendar-detail-label">Calendar status</span>
+                        <span class="calendar-detail-value success">✓ Synced and active</span>
+                    </div>
+                `;
+                return;
+            }
+
+            try {
+                const response = await fetch(`${BASE_URL}/api/calendar-sync/${currentClient}`);
+                const payload = await response.json();
+                if (response.ok && payload?.ok) {
+                    const lastSyncTime = formatTimeAgo(payload.lastSync);
+                    container.innerHTML = `
+                        <div class="calendar-detail-item">
+                            <span class="calendar-detail-label">Last sync</span>
+                            <span class="calendar-detail-value ${payload.connected ? 'success' : 'warning'}">${lastSyncTime}</span>
+                        </div>
+                        <div class="calendar-detail-item">
+                            <span class="calendar-detail-label">Conflicts resolved</span>
+                            <span class="calendar-detail-value">${payload.conflictsResolved || 0} this week</span>
+                        </div>
+                        <div class="calendar-detail-item">
+                            <span class="calendar-detail-label">Appointments booked</span>
+                            <span class="calendar-detail-value success">${payload.appointmentsBooked || 0} this week</span>
+                        </div>
+                        <div class="calendar-detail-item">
+                            <span class="calendar-detail-label">Calendar status</span>
+                            <span class="calendar-detail-value ${payload.connected ? 'success' : 'warning'}">${payload.connected ? '✓ Synced and active' : '⚠ Not connected'}</span>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Failed to load calendar details', error);
+            }
         }
 
         async function exportData(type) {
@@ -2531,7 +2692,7 @@
             updateStatusBar(dashboardData);
             renderRecentActivity(dashboardData);
             renderROI(dashboardData.roi || DEMO_DATA.roi);
-            renderActiveIndicator(dashboardData);
+            await renderActiveIndicator(dashboardData);
             renderLeadJourney(dashboardData);
             renderBeforeAfter(dashboardData);
             renderLeadPriority(dashboardData);
@@ -2541,12 +2702,12 @@
             renderChart(config, dashboardData);
             renderForecast(dashboardData);
             renderSystemStatus(config);
-            renderCallQuality(dashboardData);
-            renderRetryQueue(dashboardData);
-            renderNextActions(dashboardData);
-            renderCalendarDetails(dashboardData);
+            await renderCallQuality(dashboardData);
+            await renderRetryQueue(dashboardData);
+            await renderNextActions(dashboardData);
+            await renderCalendarDetails(dashboardData);
             renderCalls(dashboardData.recentCalls || []);
-            renderCallRecordings(dashboardData.recentCalls || []);
+            await renderCallRecordings(dashboardData.recentCalls || []);
             renderWorkflow(config.workflow || CLIENT_CONFIG.demo_client.workflow);
             loadIntegrationHealth(currentClient);
 
@@ -2559,7 +2720,7 @@
                     updateStatusBar(dashboardData);
                     renderRecentActivity(dashboardData);
                     renderROI(dashboardData.roi || DEMO_DATA.roi);
-                    renderActiveIndicator(dashboardData);
+                    await renderActiveIndicator(dashboardData);
                     renderLeadJourney(dashboardData);
                     renderBeforeAfter(dashboardData);
                     renderLeadPriority(dashboardData);
@@ -2567,11 +2728,11 @@
                     renderServiceMix(dashboardData.serviceMix || []);
                     renderAppointments(dashboardData.appointments || []);
                     renderCalls(dashboardData.recentCalls || []);
-                    renderCallRecordings(dashboardData.recentCalls || []);
-                    renderCallQuality(dashboardData);
-                    renderRetryQueue(dashboardData);
-                    renderNextActions(dashboardData);
-                    renderCalendarDetails(dashboardData);
+                    await renderCallRecordings(dashboardData.recentCalls || []);
+                    await renderCallQuality(dashboardData);
+                    await renderRetryQueue(dashboardData);
+                    await renderNextActions(dashboardData);
+                    await renderCalendarDetails(dashboardData);
                     renderChart(config, dashboardData);
                     renderForecast(dashboardData);
                 }

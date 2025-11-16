@@ -1,0 +1,40 @@
+{
+  "meta": {
+    "version": 1,
+    "description": "Demo scripting overrides for Loom recordings. Match scenarios to force deterministic behaviour when demo mode is enabled.",
+    "lastUpdated": "2025-11-12T00:00:00Z"
+  },
+  "defaults": {
+    "overrides": {
+      "slot": null,
+      "sms": null
+    }
+  },
+  "scenarios": [
+    {
+      "id": "oak-spa-primary",
+      "match": {
+        "tenant": "test_client",
+        "leadPhone": "+447491683261",
+        "service": "Swedish Massage"
+      },
+      "overrides": {
+        "slot": {
+          "weekday": "friday",
+          "time": "16:00",
+          "weekOffset": 1
+        },
+        "sms": {
+          "message": "Booking confirmed: {{service}}, {{day}} {{date}} at {{time}} ({{duration}} mins) at Oak Spa, Manchester. Please give 24h notice for cancellations.",
+          "skip": false
+        }
+      }
+    }
+  ]
+}
+
+
+
+
+
+

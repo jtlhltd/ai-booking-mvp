@@ -686,7 +686,13 @@ async function query(text, params = []) {
   if (dbType === 'postgres' && pool) {
     result = await pool.query(text, params);
   } else if (sqlite) {
-    const stmt = sqlite.prepare(text);
+    // Convert PostgreSQL-style placeholders ($1, $2, etc.) to SQLite-style (?)
+    let sqliteText = text;
+    if (text.includes('$1')) {
+      // Replace $1, $2, etc. with ?
+      sqliteText = text.replace(/\$\d+/g, '?');
+    }
+    const stmt = sqlite.prepare(sqliteText);
     if (text.trim().toUpperCase().startsWith('SELECT')) {
       result = { rows: stmt.all(...params) };
     } else {

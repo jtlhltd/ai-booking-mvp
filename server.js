@@ -119,7 +119,10 @@ import {
   validateAndSanitizeInput,
   securityHeaders,
   requestLogging,
-  errorHandler
+  errorHandler,
+  twilioWebhookVerification,
+  auditLog,
+  validateInput
 } from './middleware/security.js';
 // await initDb(); // Moved to server startup
 import { google } from 'googleapis';
@@ -507,6 +510,7 @@ app.set('trust proxy', 1);
 app.use(securityHeaders);
 app.use(requestLogging);
 app.use(validateAndSanitizeInput());
+app.use(auditLog);
 
 // Serve static files from public directory
 app.use(express.static('public'));
@@ -8714,6 +8718,352 @@ app.get('/api/export/:type', async (req, res) => {
   }
 });
 
+// API endpoint for dashboard call quality metrics (simplified)
+app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix: 'call-quality:' }), async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const result = await query(`
+      SELECT 
+        EXTRACT(HOUR FROM created_at)::INTEGER AS hour_of_day,
+        COUNT(CASE WHEN outcome = 'booked' THEN 1 END) AS bookings
+      FROM calls
+      WHERE client_key = $1
+        AND created_at >= NOW() - INTERVAL '7 days'
+      GROUP BY EXTRACT(HOUR FROM created_at)
+      ORDER BY bookings DESC
+      LIMIT 1
+    `, [clientKey]);
+
+    const allCalls = await query(`
+      SELECT 
+        AVG(duration)::INTEGER AS avg_duration,
+        COUNT(*) AS total_calls,
+        COUNT(CASE WHEN outcome = 'booked' THEN 1 END) AS bookings
+      FROM calls
+      WHERE client_key = $1
+        AND created_at >= NOW() - INTERVAL '7 days'
+    `, [clientKey]);
+
+    const stats = allCalls.rows?.[0] || {};
+    const bestHour = result.rows?.[0]?.hour_of_day || 14;
+    const bestHourEnd = bestHour + 2;
+
+    res.json({
+      ok: true,
+      avgDuration: stats.avg_duration || 0,
+      successRate: stats.total_calls > 0 ? Math.round((stats.bookings / stats.total_calls) * 100) : 0,
+      bestTime: `${bestHour}:00-${bestHourEnd}:00`
+    });
+  } catch (error) {
+    console.error('[CALL QUALITY ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// API endpoint for retry queue
+app.get('/api/retry-queue/:clientKey', cacheMiddleware({ ttl: 30000, keyPrefix: 'retry-queue:' }), async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const result = await query(`
+      SELECT 
+        rq.id,
+        rq.lead_phone,
+        rq.retry_type,
+        rq.retry_reason,
+        rq.scheduled_for,
+        rq.retry_attempt,
+        rq.max_retries,
+        rq.status,
+        l.name
+      FROM retry_queue rq
+      LEFT JOIN leads l ON l.client_key = rq.client_key AND l.phone = rq.lead_phone
+      WHERE rq.client_key = $1
+        AND rq.status = 'pending'
+        AND rq.scheduled_for <= NOW() + INTERVAL '24 hours'
+      ORDER BY rq.scheduled_for ASC
+      LIMIT 10
+    `, [clientKey]);
+
+    const retries = (result.rows || []).map(row => ({
+      id: row.id,
+      name: row.name || 'Prospect',
+      phone: row.lead_phone,
+      attempts: row.retry_attempt,
+      maxAttempts: row.max_retries,
+      reason: row.retry_reason || 'Call failed',
+      scheduledFor: row.scheduled_for,
+      nextRetry: new Date(row.scheduled_for).toLocaleString('en-GB', {
+        weekday: 'short',
+        hour: 'numeric',
+        minute: '2-digit'
+      })
+    }));
+
+    res.json({
+      ok: true,
+      retries
+    });
+  } catch (error) {
+    console.error('[RETRY QUEUE ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// API endpoint for next actions queue
+app.get('/api/next-actions/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix: 'next-actions:' }), async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    
+    const highPriorityLeads = await query(`
+      SELECT COUNT(*) AS count
+      FROM leads l
+      JOIN lead_engagement le ON le.client_key = l.client_key AND le.lead_phone = l.phone
+      WHERE l.client_key = $1
+        AND l.status = 'new'
+        AND le.lead_score >= 85
+    `, [clientKey]);
+
+    const mediumPriorityLeads = await query(`
+      SELECT COUNT(*) AS count
+      FROM leads l
+      JOIN lead_engagement le ON le.client_key = l.client_key AND le.lead_phone = l.phone
+      WHERE l.client_key = $1
+        AND l.status = 'new'
+        AND le.lead_score >= 70 AND le.lead_score < 85
+    `, [clientKey]);
+
+    const scheduledCalls = await query(`
+      SELECT COUNT(*) AS count
+      FROM call_queue
+      WHERE client_key = $1
+        AND status = 'pending'
+        AND scheduled_for >= NOW()
+        AND scheduled_for <= NOW() + INTERVAL '24 hours'
+    `, [clientKey]);
+
+    const retries = await query(`
+      SELECT COUNT(*) AS count
+      FROM retry_queue
+      WHERE client_key = $1
+        AND status = 'pending'
+        AND scheduled_for >= NOW()
+        AND scheduled_for <= NOW() + INTERVAL '24 hours'
+    `, [clientKey]);
+
+    const actions = [];
+    const highCount = parseInt(highPriorityLeads.rows?.[0]?.count || 0, 10);
+    const mediumCount = parseInt(mediumPriorityLeads.rows?.[0]?.count || 0, 10);
+    const scheduledCount = parseInt(scheduledCalls.rows?.[0]?.count || 0, 10);
+    const retryCount = parseInt(retries.rows?.[0]?.count || 0, 10);
+
+    if (highCount > 0) {
+      actions.push({
+        icon: '📞',
+        title: `Call ${highCount} high-priority lead${highCount !== 1 ? 's' : ''}`,
+        time: 'Today, 2-4pm',
+        priority: 'high'
+      });
+    }
+
+    if (mediumCount > 0) {
+      actions.push({
+        icon: '💬',
+        title: `Follow up with ${mediumCount} medium-priority lead${mediumCount !== 1 ? 's' : ''}`,
+        time: 'Today, 4-6pm',
+        priority: 'medium'
+      });
+    }
+
+    if (scheduledCount > 0) {
+      actions.push({
+        icon: '📧',
+        title: 'Send appointment reminders',
+        time: 'Tomorrow, 9am',
+        priority: 'medium'
+      });
+    }
+
+    if (retryCount > 0) {
+      actions.push({
+        icon: '🔄',
+        title: `Retry ${retryCount} failed call${retryCount !== 1 ? 's' : ''}`,
+        time: 'Tomorrow, 2pm',
+        priority: 'low'
+      });
+    }
+
+    res.json({
+      ok: true,
+      actions
+    });
+  } catch (error) {
+    console.error('[NEXT ACTIONS ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// API endpoint for call recordings
+app.get('/api/call-recordings/:clientKey', cacheMiddleware({ ttl: 120000, keyPrefix: 'recordings:' }), async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const limit = parseInt(req.query.limit) || 5;
+    
+    const result = await query(`
+      SELECT 
+        c.id,
+        c.call_id,
+        c.lead_phone,
+        c.recording_url,
+        c.duration,
+        c.outcome,
+        c.created_at,
+        l.name
+      FROM calls c
+      LEFT JOIN leads l ON l.client_key = c.client_key AND l.phone = c.lead_phone
+      WHERE c.client_key = $1
+        AND c.recording_url IS NOT NULL
+        AND c.recording_url != ''
+      ORDER BY c.created_at DESC
+      LIMIT $2
+    `, [clientKey, limit]);
+
+    const recordings = (result.rows || []).map(row => ({
+      id: row.id,
+      callId: row.call_id,
+      name: row.name || 'Prospect',
+      phone: row.lead_phone,
+      recordingUrl: row.recording_url,
+      duration: row.duration || 0,
+      outcome: row.outcome || 'completed',
+      createdAt: row.created_at,
+      timeAgo: formatTimeAgoLabel(row.created_at)
+    }));
+
+    res.json({
+      ok: true,
+      recordings
+    });
+  } catch (error) {
+    console.error('[CALL RECORDINGS ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// API endpoint for calendar sync details
+app.get('/api/calendar-sync/:clientKey', cacheMiddleware({ ttl: 300000, keyPrefix: 'calendar-sync:' }), async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    
+    const tenantResult = await query(`
+      SELECT calendar_json
+      FROM tenants
+      WHERE client_key = $1
+    `, [clientKey]);
+
+    const calendarConfig = tenantResult.rows?.[0]?.calendar_json || {};
+    const isConnected = !!(calendarConfig.service_account_email || calendarConfig.access_token);
+
+    const recentAppointments = await query(`
+      SELECT COUNT(*) AS count
+      FROM appointments
+      WHERE client_key = $1
+        AND created_at >= NOW() - INTERVAL '7 days'
+    `, [clientKey]);
+
+    const conflicts = await query(`
+      SELECT COUNT(*) AS count
+      FROM appointments
+      WHERE client_key = $1
+        AND status = 'conflict'
+        AND created_at >= NOW() - INTERVAL '7 days'
+    `, [clientKey]);
+
+    const lastSync = await query(`
+      SELECT MAX(created_at) AS last_sync
+      FROM appointments
+      WHERE client_key = $1
+    `, [clientKey]);
+
+    res.json({
+      ok: true,
+      connected: isConnected,
+      lastSync: lastSync.rows?.[0]?.last_sync || new Date().toISOString(),
+      appointmentsBooked: parseInt(recentAppointments.rows?.[0]?.count || 0, 10),
+      conflictsResolved: parseInt(conflicts.rows?.[0]?.count || 0, 10),
+      status: isConnected ? 'synced' : 'disconnected',
+      calendarType: calendarConfig.type || 'google'
+    });
+  } catch (error) {
+    console.error('[CALENDAR SYNC ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// API endpoint for active work indicator
+app.get('/api/active-indicator/:clientKey', cacheMiddleware({ ttl: 10000, keyPrefix: 'active-indicator:' }), async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    
+    const activeCalls = await query(`
+      SELECT COUNT(*) AS count
+      FROM calls
+      WHERE client_key = $1
+        AND status IN ('ringing', 'in-progress')
+        AND created_at >= NOW() - INTERVAL '5 minutes'
+    `, [clientKey]);
+
+    const pendingFollowups = await query(`
+      SELECT COUNT(*) AS count
+      FROM leads l
+      WHERE l.client_key = $1
+        AND l.status = 'new'
+        AND l.created_at >= NOW() - INTERVAL '24 hours'
+    `, [clientKey]);
+
+    const scheduledCalls = await query(`
+      SELECT COUNT(*) AS count
+      FROM call_queue
+      WHERE client_key = $1
+        AND status = 'pending'
+        AND scheduled_for >= NOW()
+        AND scheduled_for <= NOW() + INTERVAL '1 hour'
+    `, [clientKey]);
+
+    const activeCount = parseInt(activeCalls.rows?.[0]?.count || 0, 10);
+    const followupCount = parseInt(pendingFollowups.rows?.[0]?.count || 0, 10);
+    const scheduledCount = parseInt(scheduledCalls.rows?.[0]?.count || 0, 10);
+
+    let title = 'Your concierge is monitoring';
+    let subtitle = 'Ready to handle leads as they come in';
+
+    if (activeCount > 0 || scheduledCount > 0) {
+      title = 'Your concierge is active';
+      if (activeCount > 0 && followupCount > 0) {
+        subtitle = `Currently calling ${activeCount} lead${activeCount !== 1 ? 's' : ''}, following up with ${followupCount}`;
+      } else if (activeCount > 0) {
+        subtitle = `Currently calling ${activeCount} lead${activeCount !== 1 ? 's' : ''}`;
+      } else if (scheduledCount > 0) {
+        subtitle = `${scheduledCount} call${scheduledCount !== 1 ? 's' : ''} scheduled in the next hour`;
+      }
+    } else if (followupCount > 0) {
+      title = 'Your concierge is active';
+      subtitle = `Following up with ${followupCount} lead${followupCount !== 1 ? 's' : ''}`;
+    }
+
+    res.json({
+      ok: true,
+      title,
+      subtitle,
+      activeCalls: activeCount,
+      pendingFollowups: followupCount,
+      scheduledCalls: scheduledCount
+    });
+  } catch (error) {
+    console.error('[ACTIVE INDICATOR ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 // API endpoint to get call quality metrics
 app.get('/api/quality-metrics/:clientKey', async (req, res) => {
   try {
@@ -11960,14 +12310,7 @@ app.post('/api/notify/send', async (req, res) => {
     return res.status(500).json({ ok:false, error: msg });
   }
 });
-app.post('/webhooks/twilio-status', express.urlencoded({ extended: false }), async (req, res) => {
-  // Verify Twilio signature for security
-  const { twilioWebhookVerification } = await import('./lib/security.js');
-  const verified = await new Promise((resolve) => {
-    twilioWebhookVerification(req, res, () => resolve(true));
-  });
-  
-  if (!verified) return; // Response already sent by verification middleware
+app.post('/webhooks/twilio-status', express.urlencoded({ extended: false }), twilioWebhookVerification, async (req, res) => {
   
   const rows = await readJson(SMS_STATUS_PATH, []);
   const log = {
@@ -12003,14 +12346,7 @@ const VAPI_PRIVATE_KEY     = resolveVapiKey();
 const VAPI_ASSISTANT_ID    = process.env.VAPI_ASSISTANT_ID || '';
 const VAPI_PHONE_NUMBER_ID = process.env.VAPI_PHONE_NUMBER_ID || '';
 
-app.post('/webhooks/twilio-inbound', express.urlencoded({ extended: false }), smsRateLimit, safeAsync(async (req, res) => {
-  // Verify Twilio signature for security
-  const { twilioWebhookVerification } = await import('./lib/security.js');
-  const verified = await new Promise((resolve) => {
-    twilioWebhookVerification(req, res, () => resolve(true));
-  });
-  
-  if (!verified) return; // Response already sent by verification middleware
+app.post('/webhooks/twilio-inbound', express.urlencoded({ extended: false }), twilioWebhookVerification, smsRateLimit, safeAsync(async (req, res) => {
   
   try {
     const rawFrom = (req.body.From || '').toString();
@@ -19649,8 +19985,21 @@ async function startServer() {
     
     // Start weekly report generation (runs every Monday at 9am)
     const { generateWeeklyReport } = await import('./lib/analytics-tracker.js');
+    // Weekly report generation (every Monday at 9 AM)
     cron.schedule('0 9 * * 1', async () => {
       console.log('[CRON] 📊 Generating weekly reports...');
+      try {
+        const { generateAndSendAllWeeklyReports } = await import('./lib/weekly-report.js');
+        const result = await generateAndSendAllWeeklyReports();
+        console.log(`[CRON] ✅ Weekly reports completed: ${result.generated} generated, ${result.sent} sent`);
+      } catch (error) {
+        console.error('[CRON ERROR] Weekly report generation failed:', error);
+      }
+    });
+    console.log('✅ Weekly report generation scheduled (runs every Monday at 9 AM)');
+    
+    // Legacy weekly report (keeping for backwards compatibility)
+    const legacyWeeklyReport = async () => {
       try {
         const clients = await listFullClients();
         let generated = 0;
@@ -19659,7 +20008,8 @@ async function startServer() {
           if (!client.isEnabled) continue;
           
           try {
-            const { report } = await generateWeeklyReport(client.clientKey);
+            const { generateWeeklyReport: generateReport } = await import('./lib/weekly-report.js');
+            const report = await generateReport(client.clientKey);
             
             // Email report to client if email is configured
             if (client.contact?.email) {

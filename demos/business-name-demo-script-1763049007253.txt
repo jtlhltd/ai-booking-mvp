@@ -1,0 +1,53 @@
+Assistant ID: b19a474b-49f3-474d-adb2-4aacc6ad37e7
+Dashboard URL: https://ai-booking-mvp.onrender.com/client-dashboard.html?client=demo-client
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DEMO SCRIPT FOR BUSINESS NAME
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[0:00-0:10] PERSONAL OPENING
+"Hi [Prospect Name], I saw Business Name is a industry in [location]. 
+I made a quick 2-minute demo showing exactly how we convert your leads 
+into appointments."
+
+[0:10-0:20] THE PROBLEM
+"Most industry businesses lose 70% of their leads because they can't 
+follow up fast enough. Watch this..."
+
+[0:20-0:30] SHOW DASHBOARD
+[Screen share dashboard]
+"Here's your dashboard. When you upload leads, they appear here.
+Right now I've got 5 test leads."
+
+[0:30-1:00] THE MAGIC - AI CALLING
+"Within 5 minutes, the AI calls them. Watch this..."
+[Make call to your number]
+[You answer as lead]
+[AI books appointment naturally]
+"See how natural that was? It just booked an appointment."
+
+[1:00-1:15] SHOW RESULT
+[Show calendar]
+"And it just appeared in your calendar. The lead got a confirmation text. 
+All automatic."
+
+[1:15-1:30] SHOW METRICS
+[Show dashboard metrics]
+"5 leads, 3 calls, 2 appointments booked. That's a 40% conversion rate. 
+Most businesses get 10-20%."
+
+[1:30-2:00] CLOSE
+"I've already set this up for Business Name. Want to test it with 10 of 
+your actual leads this week? Takes 5 minutes to set up. Just reply if 
+interested."
+
+[2:00] END
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NOTES:
+- Business: Business Name
+- Industry: industry
+- Services: Service1, Service2
+- Replace [Prospect Name] and [location] with actual prospect details
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

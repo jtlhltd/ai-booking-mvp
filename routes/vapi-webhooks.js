@@ -4,6 +4,7 @@ import * as sheets from '../sheets.js';
 import { analyzeCall } from '../lib/call-quality-analysis.js';
 import messagingService from '../lib/messaging-service.js';
 import { extractLogisticsFields } from '../lib/logistics-extractor.js';
+import { recordReceptionistTelemetry } from '../lib/demo-telemetry.js';
 
 const router = express.Router();
 
@@ -151,6 +152,21 @@ router.post('/webhooks/vapi', async (req, res) => {
       analyzedAt: analysis.analyzedAt
     });
 
+    await recordReceptionistTelemetry({
+      evt: 'receptionist.call_webhook',
+      tenant: tenantKey,
+      callId,
+      callPurpose: metadata.callPurpose || metadata.CallPurpose || null,
+      intentHints: metadata.intentHints || metadata.IntentHints || [],
+      status,
+      outcome,
+      duration,
+      cost,
+      toolCallCount: Array.isArray(body.toolCalls) ? body.toolCalls.length : 0,
+      qualityScore: analysis.qualityScore,
+      sentiment: analysis.sentiment
+    });
+
     // Handle tool calls from VAPI assistant
     if (body.toolCalls && body.toolCalls.length > 0) {
       console.log('[VAPI WEBHOOK] Processing tool calls:', body.toolCalls.length);
@@ -189,6 +205,15 @@ router.post('/webhooks/vapi', async (req, res) => {
             });
             
             console.log('[VAPI WEBHOOK] Function result:', {
+              function: functionName,
+              success: result.success
+            });
+
+            await recordReceptionistTelemetry({
+              evt: 'receptionist.tool_call',
+              tenant: tenantKey,
+              callId,
+              callPurpose: metadata.callPurpose || metadata.CallPurpose || null,
               function: functionName,
               success: result.success
             });

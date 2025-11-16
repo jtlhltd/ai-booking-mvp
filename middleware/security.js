@@ -405,3 +405,168 @@ export async function cleanupRateLimitRecords() {
 
 // Run cleanup every hour
 setInterval(cleanupRateLimitRecords, 60 * 60 * 1000);
+
+// Twilio webhook verification middleware
+export function twilioWebhookVerification(req, res, next) {
+  try {
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    
+    if (!authToken) {
+      console.warn('[TWILIO AUTH] TWILIO_AUTH_TOKEN not set, skipping verification');
+      return next();
+    }
+
+    const signature = req.get('X-Twilio-Signature');
+    const url = req.protocol + '://' + req.get('host') + req.originalUrl;
+    const params = req.body || {};
+
+    // Import Twilio's validator
+    import('twilio').then(({ default: twilio }) => {
+      const validator = twilio.webhook(authToken);
+      
+      if (signature && validator(url, params, signature)) {
+        next();
+      } else {
+        console.error('[TWILIO AUTH] Invalid signature:', {
+          url,
+          hasSignature: !!signature,
+          timestamp: new Date().toISOString()
+        });
+        res.status(403).json({ 
+          error: 'Invalid webhook signature',
+          code: 'INVALID_SIGNATURE'
+        });
+      }
+    }).catch((error) => {
+      console.error('[TWILIO AUTH ERROR]', error);
+      // Allow request if verification fails (graceful degradation)
+      next();
+    });
+  } catch (error) {
+    console.error('[TWILIO WEBHOOK VERIFICATION ERROR]', error);
+    // Graceful degradation - allow request if verification fails
+    next();
+  }
+}
+
+// Audit logging middleware
+export async function auditLog(req, res, next) {
+  try {
+    const { logSecurityEvent } = await import('../db.js');
+    const clientKey = req.clientKey || req.params.clientKey || req.query.clientKey || 'unknown';
+    
+    // Log sensitive operations
+    const sensitiveEndpoints = [
+      '/api/leads/import',
+      '/api/clients',
+      '/webhooks/vapi',
+      '/api/leads',
+      '/api/appointments'
+    ];
+    
+    const isSensitive = sensitiveEndpoints.some(endpoint => req.path.includes(endpoint));
+    
+    if (isSensitive) {
+      await logSecurityEvent({
+        clientKey,
+        eventType: 'api_access',
+        eventSeverity: 'info',
+        eventData: {
+          method: req.method,
+          path: req.path,
+          hasApiKey: !!req.apiKey,
+          ipAddress: req.ip
+        },
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent')
+      }).catch(err => {
+        console.error('[AUDIT LOG ERROR]', err);
+        // Don't fail request if audit logging fails
+      });
+    }
+    
+    next();
+  } catch (error) {
+    console.error('[AUDIT LOG MIDDLEWARE ERROR]', error);
+    // Don't block request if audit logging fails
+    next();
+  }
+}
+
+// Enhanced input validation schemas
+export const validationSchemas = {
+  lead: {
+    name: { type: 'string', maxLength: 200, required: false },
+    phone: { type: 'string', pattern: /^\+?\d{7,15}$/, required: true },
+    service: { type: 'string', maxLength: 100, required: false },
+    source: { type: 'string', maxLength: 100, required: false },
+    email: { type: 'string', pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, required: false }
+  },
+  appointment: {
+    lead_phone: { type: 'string', pattern: /^\+?\d{7,15}$/, required: true },
+    start_iso: { type: 'string', required: true },
+    service: { type: 'string', maxLength: 100, required: false }
+  },
+  client: {
+    display_name: { type: 'string', maxLength: 200, required: true },
+    timezone: { type: 'string', maxLength: 50, required: false },
+    email: { type: 'string', pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, required: false }
+  }
+};
+
+// Enhanced validation middleware with schemas
+export function validateInput(schemaName) {
+  return (req, res, next) => {
+    try {
+      const schema = validationSchemas[schemaName];
+      if (!schema) {
+        return res.status(400).json({ 
+          error: 'Invalid validation schema',
+          code: 'INVALID_SCHEMA'
+        });
+      }
+
+      const data = req.body || {};
+      const errors = [];
+
+      for (const [field, rules] of Object.entries(schema)) {
+        const value = data[field];
+        
+        if (rules.required && (value === undefined || value === null || value === '')) {
+          errors.push({ field, message: `${field} is required` });
+          continue;
+        }
+
+        if (value !== undefined && value !== null && value !== '') {
+          if (rules.type && typeof value !== rules.type) {
+            errors.push({ field, message: `${field} must be ${rules.type}` });
+          }
+          
+          if (rules.maxLength && value.length > rules.maxLength) {
+            errors.push({ field, message: `${field} must be less than ${rules.maxLength} characters` });
+          }
+          
+          if (rules.pattern && !rules.pattern.test(value)) {
+            errors.push({ field, message: `${field} format is invalid` });
+          }
+        }
+      }
+
+      if (errors.length > 0) {
+        return res.status(400).json({
+          error: 'Validation failed',
+          code: 'VALIDATION_ERROR',
+          errors
+        });
+      }
+
+      next();
+    } catch (error) {
+      console.error('[VALIDATION ERROR]', error);
+      res.status(400).json({ 
+        error: 'Validation error',
+        code: 'VALIDATION_ERROR'
+      });
+    }
+  };
+}

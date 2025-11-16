@@ -3,6 +3,8 @@
 
 import express from 'express';
 import { routeInboundCall, createVapiInboundCall, logInboundCall } from '../lib/inbound-call-router.js';
+import { normalizePhoneE164 } from '../lib/utils.js';
+import { recordReceptionistTelemetry } from '../lib/demo-telemetry.js';
 import twilio from 'twilio';
 
 // Initialize Twilio client for voicemail processing
@@ -63,9 +65,11 @@ router.post('/webhooks/twilio-voice-inbound', validateTwilioRequest, express.url
 
   try {
     const callSid = req.body.CallSid;
-    const fromPhone = req.body.From; // Caller's number
-    const toPhone = req.body.To; // Your Twilio number
+    const fromPhoneRaw = req.body.From; // Caller's number
+    const toPhoneRaw = req.body.To; // Your Twilio number
     const callStatus = req.body.CallStatus; // 'ringing', 'in-progress', etc.
+    const fromPhone = normalizePhoneE164(fromPhoneRaw) || fromPhoneRaw;
+    const toPhone = normalizePhoneE164(toPhoneRaw) || toPhoneRaw;
 
     // Immediately respond to Twilio (don't wait for Vapi)
     // We'll connect the call to Vapi using TwiML or by creating Vapi call
@@ -99,7 +103,8 @@ router.post('/webhooks/twilio-voice-inbound', validateTwilioRequest, express.url
 
     // Create Vapi call to handle the conversation
     try {
-      const vapiResult = await createVapiInboundCall(routingResult.vapiConfig);
+      const mockMode = process.env.RECEPTIONIST_TEST_MODE === 'mock_vapi';
+      const vapiResult = await createVapiInboundCall(routingResult.vapiConfig, { mock: mockMode });
 
       // Log the call
       await logInboundCall({
@@ -110,25 +115,36 @@ router.post('/webhooks/twilio-voice-inbound', validateTwilioRequest, express.url
         vapiCallId: vapiResult.callId,
         status: 'routed_to_vapi'
       });
+      await recordReceptionistTelemetry({
+        evt: 'receptionist.twilio_inbound',
+        tenant: routingResult.client.key,
+        callSid,
+        callId: vapiResult.callId,
+        callPurpose: routingResult.callContext?.callPurpose || 'inbound_reception',
+        intentHints: routingResult.callContext?.intentHints || [],
+        callerPhone: fromPhone,
+        toPhone,
+        status: 'routed_to_vapi'
+      });
 
       // Option 1: Return TwiML to connect call to Vapi
       // Vapi needs the call to be forwarded to their number
       // Check Vapi docs for the correct number to forward to
-      const vapiPhoneNumber = process.env.VAPI_FORWARD_NUMBER || '+1234567890'; // Set in env
+      const vapiPhoneNumber = process.env.VAPI_FORWARD_NUMBER;
+      if (vapiPhoneNumber) {
+        return res.send(`
+          <?xml version="1.0" encoding="UTF-8"?>
+          <Response>
+            <Say voice="alice">Connecting you now.</Say>
+            <Dial>
+              <Number>${vapiPhoneNumber}</Number>
+            </Dial>
+          </Response>
+        `);
+      }
 
-      return res.send(`
-        <?xml version="1.0" encoding="UTF-8"?>
-        <Response>
-          <Say voice="alice">Connecting you now.</Say>
-          <Dial>
-            <Number>${vapiPhoneNumber}</Number>
-          </Dial>
-        </Response>
-      `);
-
-      // Option 2: If Vapi supports webhook-based connection, return empty TwiML
-      // and let Vapi handle the call connection
-      // return res.send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
+      // If no forward number is configured, let Vapi complete the connection itself.
+      return res.send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
 
     } catch (vapiError) {
       console.error('[TWILIO VOICE INBOUND] Vapi error:', vapiError);
@@ -199,6 +215,15 @@ router.post('/webhooks/twilio-voice-status', validateTwilioRequest, express.urle
           completed_at = CASE WHEN $1 IN ('completed', 'no-answer', 'busy', 'failed', 'canceled') THEN NOW() ELSE completed_at END
       WHERE call_sid = $3
     `, [callStatus, duration, callSid]);
+
+    await recordReceptionistTelemetry({
+      evt: 'receptionist.twilio_status',
+      callSid,
+      status: callStatus,
+      duration,
+      fromPhone,
+      toPhone
+    });
 
     res.status(200).send('OK');
   } catch (error) {
@@ -365,9 +390,25 @@ router.post('/webhooks/twilio-voice-recording', validateTwilioRequest, express.u
     });
 
     console.log('[TWILIO VOICE RECORDING] ✅ Voicemail processed successfully');
+    await recordReceptionistTelemetry({
+      evt: 'receptionist.voicemail',
+      callSid,
+      tenant: clientKey,
+      fromPhone,
+      toPhone,
+      recordingUrl,
+      transcriptionAvailable: Boolean(transcriptionText),
+      urgency,
+      messageId
+    });
 
   } catch (error) {
     console.error('[TWILIO VOICE RECORDING] Error processing voicemail:', error);
+    await recordReceptionistTelemetry({
+      evt: 'receptionist.voicemail_error',
+      callSid,
+      error: error?.message || String(error)
+    });
   }
 });
 
