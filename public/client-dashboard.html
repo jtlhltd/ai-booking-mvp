@@ -345,6 +345,69 @@
             color: var(--muted);
         }
 
+        .modal-actions {
+            margin-top: 18px;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .modal-btn {
+            flex: 1;
+            min-width: 120px;
+            border: none;
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-weight: 600;
+            cursor: pointer;
+            background: rgba(92,106,196,0.15);
+            color: var(--primary);
+        }
+
+        .modal-btn.primary {
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .import-dropzone {
+            border: 1px dashed rgba(92,106,196,0.5);
+            border-radius: 14px;
+            padding: 18px;
+            text-align: center;
+            color: var(--muted);
+            cursor: pointer;
+            transition: border-color 0.2s ease, background 0.2s ease;
+        }
+
+        .import-dropzone.dragover {
+            border-color: var(--primary);
+            background: rgba(92,106,196,0.08);
+        }
+
+        .import-dropzone button {
+            border: none;
+            background: var(--primary);
+            color: #fff;
+            padding: 6px 12px;
+            border-radius: 8px;
+            margin-left: 6px;
+            cursor: pointer;
+        }
+
+        .import-status {
+            margin-top: 10px;
+            font-size: 0.9rem;
+            color: var(--muted);
+        }
+
+        .import-status.success {
+            color: #1b5e20;
+        }
+
+        .import-status.error {
+            color: #c62828;
+        }
+
         .mix-list {
             display: flex;
             flex-direction: column;
@@ -392,6 +455,118 @@
             font-size: 0.75rem;
             background: rgba(27, 94, 32, 0.12);
             color: var(--success);
+        }
+
+        .appt-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .appt-item {
+            border: 1px solid rgba(92,106,196,0.12);
+            border-radius: 12px;
+            padding: 12px 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .appt-name {
+            font-weight: 600;
+            color: #2f3147;
+        }
+
+        .appt-service {
+            font-size: 0.85rem;
+            color: #7a7fa4;
+        }
+
+        .appt-time {
+            font-size: 0.9rem;
+            color: var(--primary);
+            font-weight: 600;
+            text-align: right;
+            min-width: 140px;
+        }
+
+        .roi-panel {
+            margin-bottom: 24px;
+            border-radius: 20px;
+            padding: 22px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: #fff;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 18px;
+            box-shadow: 0 15px 35px rgba(51, 65, 145, 0.4);
+        }
+
+        .roi-metric span {
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            font-size: 0.75rem;
+            opacity: 0.85;
+        }
+
+        .roi-metric strong {
+            display: block;
+            font-size: 2rem;
+            margin-top: 6px;
+        }
+
+        .roi-metric small {
+            display: block;
+            margin-top: 4px;
+            opacity: 0.85;
+        }
+
+        .integration-list {
+            margin-top: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .integration-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid rgba(92,106,196,0.12);
+            border-radius: 10px;
+            padding: 8px 12px;
+        }
+
+        .integration-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #2f3147;
+            font-weight: 600;
+        }
+
+        .integration-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .integration-status {
+            font-weight: 600;
+            text-transform: capitalize;
+        }
+
+        .integration-status.active {
+            color: #1b5e20;
+        }
+
+        .integration-status.warning {
+            color: #f5a623;
+        }
+
+        .integration-status.error {
+            color: #c62828;
         }
 
         .chart {
@@ -474,13 +649,367 @@
         }
 
 
+        .funnel {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            padding: 8px 0;
+        }
+
+        .funnel-stage {
+            position: relative;
+            padding: 14px 18px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, rgba(92,106,196,0.08), rgba(58,74,159,0.08));
+            border: 1px solid rgba(92,106,196,0.15);
+        }
+
+        .funnel-label {
+            font-weight: 600;
+            color: #2f3147;
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .funnel-bar {
+            height: 8px;
+            background: rgba(92,106,196,0.12);
+            border-radius: 999px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .funnel-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            border-radius: 999px;
+            transition: width 0.6s ease;
+        }
+
+        .funnel-percent {
+            font-size: 0.75rem;
+            color: #7a7fa4;
+            margin-left: 8px;
+        }
+
+        .before-after {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            padding: 16px 0;
+        }
+
+        .before-after-item {
+            text-align: center;
+            padding: 12px;
+            border-radius: 10px;
+            background: rgba(92,106,196,0.04);
+        }
+
+        .before-after-label {
+            font-size: 0.85rem;
+            color: #7a7fa4;
+            margin-bottom: 6px;
+        }
+
+        .before-after-value {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .before-after-delta {
+            font-size: 0.75rem;
+            color: #1b5e20;
+            margin-top: 4px;
+        }
+
+        .before-after-delta.negative {
+            color: #c62828;
+        }
+
+        .transcript-btn {
+            background: transparent;
+            border: 1px solid rgba(92,106,196,0.3);
+            color: var(--primary);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            margin-top: 6px;
+            transition: all 0.2s;
+        }
+
+        .transcript-btn:hover {
+            background: rgba(92,106,196,0.1);
+            border-color: var(--primary);
+        }
+
+        .transcript-modal {
+            max-width: 700px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .transcript-content {
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.85rem;
+            line-height: 1.8;
+            color: #2f3147;
+            white-space: pre-wrap;
+            padding: 16px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-top: 12px;
+        }
+
+        .forecast-chart {
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+            height: 200px;
+            padding: 12px 6px;
+            margin-top: 16px;
+        }
+
+        .forecast-bar {
+            flex: 1;
+            border-radius: 6px 6px 0 0;
+            background: linear-gradient(180deg, rgba(92,106,196,0.6), rgba(92,106,196,0.3));
+            position: relative;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding-bottom: 4px;
+            color: #fff;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
+        .forecast-bar.predicted {
+            background: linear-gradient(180deg, rgba(245,166,35,0.6), rgba(245,166,35,0.3));
+            border: 1px dashed rgba(245,166,35,0.8);
+        }
+
+        .export-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+
+        .export-btn {
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .export-btn:hover {
+            background: var(--secondary);
+            transform: translateY(-1px);
+        }
+
+        .export-btn.secondary {
+            background: rgba(92,106,196,0.1);
+            color: var(--primary);
+        }
+
+        .export-btn.secondary:hover {
+            background: rgba(92,106,196,0.2);
+        }
+
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-width: 400px;
+            pointer-events: none;
+        }
+
+        .toast {
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 14px 18px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            border-left: 4px solid var(--primary);
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            pointer-events: auto;
+            animation: slideInRight 0.3s ease-out, fadeOut 0.3s ease-in 2.7s;
+            animation-fill-mode: forwards;
+            min-width: 280px;
+            max-width: 400px;
+        }
+
+        .toast.success {
+            border-left-color: #1b5e20;
+        }
+
+        .toast.error {
+            border-left-color: #c62828;
+        }
+
+        .toast.warning {
+            border-left-color: #f5a623;
+        }
+
+        .toast.info {
+            border-left-color: var(--primary);
+        }
+
+        .toast-icon {
+            font-size: 1.2rem;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .toast-content {
+            flex: 1;
+        }
+
+        .toast-title {
+            font-weight: 600;
+            color: #2f3147;
+            font-size: 0.9rem;
+            margin-bottom: 4px;
+        }
+
+        .toast-message {
+            color: #7a7fa4;
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
+
+        .toast-close {
+            background: transparent;
+            border: none;
+            color: #8c8fab;
+            cursor: pointer;
+            font-size: 1.2rem;
+            padding: 0;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: color 0.2s;
+        }
+
+        .toast-close:hover {
+            color: #2f3147;
+        }
+
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeOut {
+            to {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+        }
+
+        body[data-theme="dark"] .toast {
+            background: #1f2335;
+            border-left-color: var(--primary);
+        }
+
+        body[data-theme="dark"] .toast-title {
+            color: #eef0ff;
+        }
+
+        body[data-theme="dark"] .toast-message {
+            color: #b1b6d4;
+        }
+
+        body[data-theme="dark"] .toast-close {
+            color: #b1b6d4;
+        }
+
+        body[data-theme="dark"] .toast-close:hover {
+            color: #eef0ff;
+        }
+
         @media (max-width: 768px) {
+            .toast-container {
+                top: 12px;
+                right: 12px;
+                left: 12px;
+                max-width: 100%;
+            }
+
+            .toast {
+                min-width: auto;
+                max-width: 100%;
+            }
             .client-info {
                 flex-direction: column;
                 align-items: flex-start;
             }
             .status-bar {
-                grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+                grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            }
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+            .roi-panel {
+                grid-template-columns: 1fr;
+                padding: 16px;
+            }
+            .before-after {
+                grid-template-columns: 1fr;
+            }
+            .export-buttons {
+                flex-direction: column;
+            }
+            .export-btn {
+                width: 100%;
+                justify-content: center;
+            }
+            .chart, .forecast-chart {
+                height: 150px;
+            }
+            .funnel {
+                gap: 12px;
+            }
+            .activity-item {
+                padding: 12px;
+            }
+            .lead-item {
+                padding: 10px;
+            }
+            .container {
+                padding: 20px 12px 48px;
+            }
+            .header {
+                padding: 20px 16px;
+            }
+            .card {
+                padding: 16px;
             }
         }
     </style>
@@ -550,7 +1079,37 @@
             </div>
         </section>
 
+        <section class="roi-panel">
+            <div class="roi-metric">
+                <span>Spend (30d)</span>
+                <strong id="roiSpend">£0</strong>
+                <small>voice + sms</small>
+            </div>
+            <div class="roi-metric">
+                <span>Revenue generated</span>
+                <strong id="roiRevenue">£0</strong>
+                <small id="roiBookings">0 bookings</small>
+            </div>
+            <div class="roi-metric">
+                <span>ROI</span>
+                <strong id="roiMultiplier">0x</strong>
+                <small id="roiProfit">£0 profit</small>
+            </div>
+        </section>
+
         <section class="dashboard-grid">
+            <article class="card">
+                <h3>🔄 Lead Journey</h3>
+                <p class="card-subtitle">Conversion funnel from lead to booking.</p>
+                <div id="lead-journey" class="funnel"></div>
+            </article>
+
+            <article class="card">
+                <h3>📊 Before & After</h3>
+                <p class="card-subtitle">Your growth since onboarding.</p>
+                <div id="before-after" class="before-after"></div>
+            </article>
+
             <article class="card">
                 <h3>📈 Recent Activity</h3>
                 <p class="card-subtitle">Rolling 24h snapshot of AI follow-up.</p>
@@ -601,6 +1160,9 @@
                 <h3>👥 Recent Leads</h3>
                 <p class="card-subtitle">Latest leads routed to the concierge.</p>
                 <div id="leads-list" class="leads-list"></div>
+                <div class="export-buttons">
+                    <button class="export-btn secondary" onclick="exportData('leads')">📥 Export Leads</button>
+                </div>
             </article>
 
             <article class="card">
@@ -610,12 +1172,42 @@
             </article>
 
             <article class="card">
+                <h3>📅 Coming Up</h3>
+                <p class="card-subtitle">Next booked appointments.</p>
+                <div id="upcoming-appointments" class="appt-list"></div>
+                <div class="export-buttons">
+                    <button class="export-btn secondary" onclick="exportData('appointments')">📥 Export Appointments</button>
+                </div>
+            </article>
+
+            <article class="card">
+                <h3>📤 Upload Leads</h3>
+                <p class="card-subtitle">Drop in a CSV and the concierge will chase them.</p>
+                <div class="import-dropzone" id="leadDropzone">
+                    Drag & drop CSV or <button type="button" id="leadImportButton">browse</button>
+                    <small style="display:block;margin-top:6px;">Columns: name, phone, service, source</small>
+                </div>
+                <input type="file" id="leadImportInput" accept=".csv" style="display:none">
+                <div class="import-status" id="leadImportStatus"></div>
+            </article>
+
+            <article class="card">
                 <h3>📊 Weekly Performance</h3>
                 <p class="card-subtitle">Touchpoints generated over the last 7 days.</p>
                 <div id="performance-chart">
                     <div class="chart" id="chartBars"></div>
                     <p class="chart-value" id="chartSummary">18 bookings in the last 7 days</p>
                 </div>
+                <div class="export-buttons">
+                    <button class="export-btn secondary" onclick="exportData('calls')">📥 Export Calls</button>
+                </div>
+            </article>
+
+            <article class="card">
+                <h3>📈 Revenue Forecast</h3>
+                <p class="card-subtitle">Predicted bookings for the next 7 days.</p>
+                <div id="forecast-chart" class="forecast-chart"></div>
+                <p class="chart-value" id="forecastSummary">Based on current trends</p>
             </article>
 
             <article class="card">
@@ -639,6 +1231,7 @@
                         <span class="metric-value" id="statusCoverage">7 days/week</span>
                     </div>
                 </div>
+                <div id="integration-health" class="integration-list"></div>
             </article>
 
             <article class="card" style="grid-column: 1 / -1;">
@@ -655,6 +1248,8 @@
         </section>
     </div>
 
+    <div class="toast-container" id="toastContainer"></div>
+
     <div class="modal-backdrop" id="leadModal">
         <div class="lead-modal">
             <div class="modal-header">
@@ -667,6 +1262,22 @@
                 <p><strong>Status:</strong> <span id="modalLeadStatus">—</span></p>
                 <p><strong>Last message:</strong></p>
                 <p id="modalLeadNotes">—</p>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="modal-btn" id="modalSnoozeBtn">Snooze 1 day</button>
+                <button type="button" class="modal-btn primary" id="modalEscalateBtn">Escalate</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-backdrop" id="transcriptModal">
+        <div class="lead-modal transcript-modal">
+            <div class="modal-header">
+                <h4 id="transcriptModalTitle">Call Transcript</h4>
+                <button class="modal-close" id="transcriptCloseBtn" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="transcript-content" id="transcriptContent">Loading transcript...</div>
             </div>
         </div>
     </div>
@@ -714,11 +1325,11 @@
                 data: [5, 7, 6, 9, 8, 10, 7]
             },
             recentLeads: [
-                { name: 'Jordan Hale', phone: '+44 7700 900451', service: 'AI Strategy Session', status: 'Booked • calendar invite sent', source: 'Facebook Lead Ad', timeAgo: '2 min ago', lastMessage: '“Got the confirmation, see you Tuesday.”' },
-                { name: 'Priya Desai', phone: '+44 7700 900512', service: 'Follow-up Call', status: 'Awaiting reply • wants afternoon slot', source: 'Website form', timeAgo: '9 min ago', lastMessage: 'Asked for 4-6pm slot; AI sent options.' },
-                { name: 'Lewis Grant', phone: '+44 7700 900623', service: 'Pricing Review', status: 'Engaged • asked for case study', source: 'Referral', timeAgo: '25 min ago', lastMessage: 'Shared case study + queued callback tomorrow.' },
-                { name: 'Emily Carr', phone: '+44 7700 900734', service: 'Calendar Integration', status: 'Left voicemail • SMS reminder queued', source: 'CRM import', timeAgo: '40 min ago', lastMessage: 'Voicemail dropped, SMS reminder scheduled at 9am.' },
-                { name: 'Tom Osei', phone: '+44 7700 900845', service: 'AI Concierge Setup', status: 'Nurture • waiting on partner approval', source: 'Google Ads', timeAgo: '58 min ago', lastMessage: 'Sent partner-friendly explainer PDF.' }
+                { id: 1, name: 'Jordan Hale', phone: '+44 7700 900451', service: 'AI Strategy Session', status: 'Booked • calendar invite sent', source: 'Facebook Lead Ad', timeAgo: '2 min ago', lastMessage: '“Got the confirmation, see you Tuesday.”' },
+                { id: 2, name: 'Priya Desai', phone: '+44 7700 900512', service: 'Follow-up Call', status: 'Awaiting reply • wants afternoon slot', source: 'Website form', timeAgo: '9 min ago', lastMessage: 'Asked for 4-6pm slot; AI sent options.' },
+                { id: 3, name: 'Lewis Grant', phone: '+44 7700 900623', service: 'Pricing Review', status: 'Engaged • asked for case study', source: 'Referral', timeAgo: '25 min ago', lastMessage: 'Shared case study + queued callback tomorrow.' },
+                { id: 4, name: 'Emily Carr', phone: '+44 7700 900734', service: 'Calendar Integration', status: 'Left voicemail • SMS reminder queued', source: 'CRM import', timeAgo: '40 min ago', lastMessage: 'Voicemail dropped, SMS reminder scheduled at 9am.' },
+                { id: 5, name: 'Tom Osei', phone: '+44 7700 900845', service: 'AI Concierge Setup', status: 'Nurture • waiting on partner approval', source: 'Google Ads', timeAgo: '58 min ago', lastMessage: 'Sent partner-friendly explainer PDF.' }
             ],
             serviceMix: [
                 { name: 'Lead Follow-Up', percent: 35, notes: 'Speed-to-lead flows' },
@@ -730,15 +1341,35 @@
                 { name: 'Marcus Flynn', summary: 'Requested reschedule • SMS follow-up sent', channel: 'SMS → Call', timeAgo: '9 min ago' },
                 { name: 'Laura Chen', summary: 'Synced with Google Calendar • reminder scheduled', channel: 'Webhook sync', timeAgo: '25 min ago' },
                 { name: 'Rick Alvarez', summary: 'Moved to Thursday • calendar updated', channel: 'Phone', timeAgo: '42 min ago' }
-            ]
+            ],
+            appointments: [
+                { id: 101, name: 'Isla Brown', service: 'AI Strategy Session', start: new Date(Date.now() + 60 * 60 * 1000).toISOString(), status: 'booked' },
+                { id: 102, name: 'Liam Wright', service: 'Calendar Integration', start: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(), status: 'booked' },
+                { id: 103, name: 'Maya Reyes', service: 'Follow-up Call', start: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(), status: 'pending' }
+            ],
+            roi: {
+                costs: { total: 612.4, perCall: 12.4 },
+                revenue: { total: 6280, bookings: 18, avgDealValue: 349 },
+                roi: { profit: 5667.6, multiplier: 10.3, percentage: 930 }
+            }
         };
+
+        const DEMO_INTEGRATIONS = [
+            { name: 'Vapi Voice', status: 'active', detail: 'Assistant + phone number connected' },
+            { name: 'Twilio SMS', status: 'active', detail: 'Messaging service verified' },
+            { name: 'Google Calendar', status: 'active', detail: 'Auto-booking in sync' },
+            { name: 'Slack Digest', status: 'warning', detail: 'Add webhook to enable daily summary' }
+        ];
+
+        let currentClient = null;
+        let dashboardData = { ...DEMO_DATA };
+        let currentLeads = [];
+        let liveEventSource = null;
 
         function getClientFromURL() {
             const params = new URLSearchParams(window.location.search);
             return (params.get('client') || DEMO_CLIENT_KEY).replace(/-/g, '_');
         }
-
-        let currentLeads = [];
 
         async function fetchLiveData(clientKey) {
             if (clientKey !== DEMO_CLIENT_KEY) {
@@ -776,7 +1407,11 @@
                 recentCalls: Array.isArray(livePayload.recentCalls) && livePayload.recentCalls.length ? livePayload.recentCalls : base.recentCalls,
                 touchpoints: livePayload.touchpoints && Array.isArray(livePayload.touchpoints.data)
                     ? livePayload.touchpoints
-                    : base.touchpoints
+                    : base.touchpoints,
+                appointments: Array.isArray(livePayload.appointments) && livePayload.appointments.length
+                    ? livePayload.appointments
+                    : base.appointments,
+                roi: livePayload.roi ? livePayload.roi : base.roi
             };
         }
 
@@ -813,6 +1448,16 @@
             return Number.isFinite(numeric) ? `${numeric}%` : `${value}`;
         }
 
+        function formatCurrency(value) {
+            const numeric = Number(value);
+            if (!Number.isFinite(numeric)) return '£0';
+            return new Intl.NumberFormat('en-GB', {
+                style: 'currency',
+                currency: 'GBP',
+                maximumFractionDigits: 0
+            }).format(numeric);
+        }
+
         function updateStatusBar(data) {
             const totalLeads = formatNumber(data.totalLeads);
             const totalCalls = formatNumber(data.totalCalls);
@@ -846,6 +1491,14 @@
             `;
         }
 
+        function renderROI(roi = {}) {
+            document.getElementById('roiSpend').textContent = formatCurrency(roi.costs?.total);
+            document.getElementById('roiRevenue').textContent = formatCurrency(roi.revenue?.total);
+            document.getElementById('roiBookings').textContent = `${formatNumber(roi.revenue?.bookings ?? 0)} bookings`;
+            document.getElementById('roiMultiplier').textContent = `${(roi.roi?.multiplier ?? 0).toFixed(1)}x`;
+            document.getElementById('roiProfit').textContent = `${formatCurrency(roi.roi?.profit ?? 0)} profit`;
+        }
+
         function renderLeadPriority(data) {
             const container = document.getElementById('lead-priority');
             container.innerHTML = `
@@ -864,6 +1517,7 @@
                 currentLeads = [];
                 return;
             }
+            dashboardData.recentLeads = leads;
             currentLeads = leads.slice(0, 5);
             container.innerHTML = currentLeads.map((lead, index) => `
                 <div class="lead-item" data-lead-index="${index}" role="button" tabindex="0">
@@ -909,6 +1563,24 @@
             }).join('');
         }
 
+        function renderAppointments(appointments = []) {
+            const container = document.getElementById('upcoming-appointments');
+            if (!container) return;
+            if (!Array.isArray(appointments) || !appointments.length) {
+                container.innerHTML = '<p style="color:#8c8fab;">Booked appointments will show here.</p>';
+                return;
+            }
+            container.innerHTML = appointments.map(appt => `
+                <div class="appt-item">
+                    <div>
+                        <div class="appt-name">${appt.name || 'Prospect'}</div>
+                        <div class="appt-service">${appt.service || 'Consultation'}</div>
+                    </div>
+                    <div class="appt-time">${formatAppointmentTime(appt.start)}</div>
+                </div>
+            `).join('');
+        }
+
         function renderChart(config, data) {
             const fallbackLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
             const chartSource = data?.touchpoints && Array.isArray(data.touchpoints.data) && data.touchpoints.data.length
@@ -924,10 +1596,41 @@
             document.getElementById('chartSummary').textContent = `${totals.reduce((sum,v)=>sum+v,0)} touchpoints in the last 7 days`;
         }
 
+        function formatAppointmentTime(isoDate) {
+            if (!isoDate) return '—';
+            const date = new Date(isoDate);
+            if (Number.isNaN(date.getTime())) return '—';
+            return date.toLocaleString('en-GB', {
+                weekday: 'short',
+                day: 'numeric',
+                month: 'short',
+                hour: 'numeric',
+                minute: '2-digit'
+            });
+        }
+
 
         function renderSystemStatus(config) {
             document.getElementById('statusPhone').textContent = config.phone || '—';
             document.getElementById('statusCoverage').textContent = config.businessHours || '—';
+        }
+
+        function renderIntegrationStatus(list = []) {
+            const container = document.getElementById('integration-health');
+            if (!container) return;
+            if (!Array.isArray(list) || !list.length) {
+                container.innerHTML = '<p style="color:#8c8fab;">Connect channels to monitor health.</p>';
+                return;
+            }
+            container.innerHTML = list.map(item => `
+                <div class="integration-item" title="${item.detail || ''}">
+                    <div class="integration-label">
+                        <span class="integration-dot" style="background:${item.status === 'active' ? '#1b5e20' : item.status === 'warning' ? '#f5a623' : '#c62828'};"></span>
+                        ${item.name}
+                    </div>
+                    <div class="integration-status ${item.status || 'inactive'}">${item.status || 'unknown'}</div>
+                </div>
+            `).join('');
         }
 
         function renderCalls(calls = []) {
@@ -936,12 +1639,17 @@
                 container.innerHTML = '<p style="color:#8c8fab;">Live call feed will show up here as soon as we begin calling leads.</p>';
                 return;
             }
-            container.innerHTML = calls.map(call => `
-                <div class="activity-item">
-                    <strong>${call.name || 'Prospect'}</strong> • ${call.channel || 'AI call'}
-                    <div class="activity-meta">${call.summary || 'Conversation logged'} • ${call.timeAgo || 'Just now'}</div>
-                </div>
-            `).join('');
+            container.innerHTML = calls.map((call, index) => {
+                const timeAgo = call.timeAgo || formatTimeAgo(call.timestamp || call.created_at);
+                const callId = call.id || call.timestamp || index;
+                return `
+                    <div class="activity-item">
+                        <strong>${call.name || 'Prospect'}</strong> • ${call.channel || 'AI call'}
+                        <div class="activity-meta">${call.summary || 'Conversation logged'} • ${timeAgo}</div>
+                        <button class="transcript-btn" onclick="viewTranscript('${callId}', '${call.name || 'Prospect'}')">📄 View Transcript</button>
+                    </div>
+                `;
+            }).join('');
         }
 
         function renderWorkflow(steps = []) {
@@ -955,6 +1663,204 @@
                     </div>
                 </li>
             `).join('');
+        }
+
+        function renderLeadJourney(data) {
+            const container = document.getElementById('lead-journey');
+            if (!container) return;
+            const totalLeads = data.totalLeads || 0;
+            const contacted = data.totalCalls || 0;
+            const engaged = Math.round(contacted * 0.75);
+            const booked = data.bookingsThisWeek || 0;
+
+            const stages = [
+                { label: 'Leads', value: totalLeads, color: '#5c6ac4' },
+                { label: 'Contacted', value: contacted, color: '#764ba2' },
+                { label: 'Engaged', value: engaged, color: '#667eea' },
+                { label: 'Booked', value: booked, color: '#1b5e20' }
+            ];
+
+            const maxValue = Math.max(...stages.map(s => s.value), 1);
+            container.innerHTML = stages.map(stage => {
+                const percent = maxValue > 0 ? Math.round((stage.value / maxValue) * 100) : 0;
+                const stagePercent = totalLeads > 0 ? Math.round((stage.value / totalLeads) * 100) : 0;
+                return `
+                    <div class="funnel-stage">
+                        <div class="funnel-label">
+                            <span>${stage.label}</span>
+                            <span>${formatNumber(stage.value)} <span class="funnel-percent">(${stagePercent}%)</span></span>
+                        </div>
+                        <div class="funnel-bar">
+                            <div class="funnel-fill" style="width:${percent}%; background:linear-gradient(90deg, ${stage.color}, ${stage.color}dd);"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderBeforeAfter(data) {
+            const container = document.getElementById('before-after');
+            if (!container) return;
+            const currentLeads = data.totalLeads || 0;
+            const currentCalls = data.totalCalls || 0;
+            const currentBookings = data.bookingsThisWeek || 0;
+            const currentConversion = data.conversionRate || 0;
+
+            const baselineLeads = Math.max(1, Math.round(currentLeads * 0.3));
+            const baselineCalls = Math.max(1, Math.round(currentCalls * 0.2));
+            const baselineBookings = Math.max(1, Math.round(currentBookings * 0.15));
+            const baselineConversion = Math.max(10, currentConversion - 40);
+
+            const metrics = [
+                { label: 'Total Leads', before: baselineLeads, after: currentLeads },
+                { label: 'Calls Made', before: baselineCalls, after: currentCalls },
+                { label: 'Bookings', before: baselineBookings, after: currentBookings },
+                { label: 'Conversion', before: baselineConversion, after: currentConversion, suffix: '%' }
+            ];
+
+            container.innerHTML = metrics.map(metric => {
+                const delta = metric.after - metric.before;
+                const deltaPercent = metric.before > 0 ? Math.round((delta / metric.before) * 100) : 0;
+                const isPositive = delta >= 0;
+                return `
+                    <div class="before-after-item">
+                        <div class="before-after-label">${metric.label}</div>
+                        <div class="before-after-value">${metric.before}${metric.suffix || ''}</div>
+                        <div style="margin:8px 0; font-size:0.9rem;">→</div>
+                        <div class="before-after-value">${metric.after}${metric.suffix || ''}</div>
+                        <div class="before-after-delta ${isPositive ? '' : 'negative'}">
+                            ${isPositive ? '↑' : '↓'} ${Math.abs(deltaPercent)}%
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderForecast(data) {
+            const container = document.getElementById('forecast-chart');
+            if (!container) return;
+            const recentBookings = data.bookingsThisWeek || 18;
+            const avgDaily = recentBookings / 7;
+            const labels = [];
+            const values = [];
+            const today = new Date();
+            for (let i = 0; i < 14; i++) {
+                const date = new Date(today);
+                date.setDate(date.getDate() + i);
+                labels.push(date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric' }));
+                const isPast = i < 7;
+                const baseValue = isPast ? avgDaily : avgDaily * (1 + (i - 6) * 0.05);
+                const variance = (Math.random() - 0.5) * 0.3;
+                values.push(Math.max(0, Math.round(baseValue * (1 + variance))));
+            }
+
+            const maxValue = Math.max(...values, 1);
+            container.innerHTML = values.map((value, idx) => {
+                const isPredicted = idx >= 7;
+                const height = (value / maxValue) * 100;
+                return `
+                    <div class="forecast-bar ${isPredicted ? 'predicted' : ''}" style="height:${height}%;" title="${labels[idx]}: ${value} bookings">
+                        ${value > 0 ? value : ''}
+                    </div>
+                `;
+            }).join('');
+
+            const predictedTotal = values.slice(7).reduce((sum, v) => sum + v, 0);
+            const summaryEl = document.getElementById('forecastSummary');
+            if (summaryEl) {
+                summaryEl.textContent = `Forecast: ${predictedTotal} bookings over next 7 days`;
+            }
+        }
+
+        function showToast(title, message, type = 'info', duration = 3000) {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+
+            const icons = {
+                success: '✅',
+                error: '❌',
+                warning: '⚠️',
+                info: 'ℹ️'
+            };
+
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `
+                <span class="toast-icon">${icons[type] || icons.info}</span>
+                <div class="toast-content">
+                    <div class="toast-title">${title}</div>
+                    <div class="toast-message">${message}</div>
+                </div>
+                <button class="toast-close" onclick="this.parentElement.remove()">&times;</button>
+            `;
+
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.animation = 'fadeOut 0.3s ease-in forwards';
+                setTimeout(() => toast.remove(), 300);
+            }, duration);
+        }
+
+        async function viewTranscript(callId, name) {
+            const modal = document.getElementById('transcriptModal');
+            const titleEl = document.getElementById('transcriptModalTitle');
+            const contentEl = document.getElementById('transcriptContent');
+            if (!modal || !titleEl || !contentEl) return;
+
+            titleEl.textContent = `Call Transcript: ${name}`;
+            contentEl.textContent = 'Loading transcript...';
+            modal.classList.add('open');
+
+            if (currentClient === DEMO_CLIENT_KEY) {
+                contentEl.textContent = `[DEMO TRANSCRIPT]\n\nAI: Hello! This is ${name || 'the AI concierge'}. How can I help you book an appointment today?\n\nCustomer: I'd like to schedule a consultation.\n\nAI: Absolutely! I'd be happy to help you schedule a consultation. What day works best for you?\n\nCustomer: How about next Tuesday?\n\nAI: Let me check availability for next Tuesday. I have slots at 10am, 2pm, and 4pm. Which time works for you?\n\nCustomer: 2pm sounds good.\n\nAI: Perfect! I've booked you for next Tuesday at 2pm. You'll receive a confirmation email shortly. Is there anything else I can help you with?\n\nCustomer: No, that's all. Thank you!\n\nAI: You're welcome! We look forward to seeing you next Tuesday at 2pm. Have a great day!\n\n[Call ended - Outcome: Booked]`;
+                return;
+            }
+
+            try {
+                const response = await fetch(`${BASE_URL}/api/calls/${callId}/transcript`);
+                const payload = await response.json();
+                if (response.ok && payload?.ok && payload.transcript) {
+                    contentEl.textContent = payload.transcript;
+                } else {
+                    contentEl.textContent = 'Transcript not available for this call.';
+                }
+            } catch (error) {
+                console.error('Failed to load transcript', error);
+                contentEl.textContent = 'Unable to load transcript. Please try again later.';
+            }
+        }
+
+        function closeTranscriptModal() {
+            const modal = document.getElementById('transcriptModal');
+            if (modal) modal.classList.remove('open');
+        }
+
+        async function exportData(type) {
+            if (currentClient === DEMO_CLIENT_KEY) {
+                showToast('Export Ready', `Demo data export for ${type} would download here.`, 'info');
+                return;
+            }
+
+            try {
+                showToast('Exporting', `Preparing ${type} export...`, 'info');
+                const response = await fetch(`${BASE_URL}/api/export/${type}?clientKey=${currentClient}`);
+                if (!response.ok) throw new Error('Export failed');
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${type}-export-${new Date().toISOString().split('T')[0]}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+
+                showToast('Export Complete', `Downloaded ${type} data.`, 'success');
+            } catch (error) {
+                console.error('Export failed', error);
+                showToast('Export Failed', error.message || 'Unable to export data.', 'error');
+            }
         }
 
         function attachLeadModalEvents() {
@@ -971,63 +1877,122 @@
         function openLeadModal(index) {
             const lead = currentLeads[Number(index)];
             if (!lead) return;
+            const modal = document.getElementById('leadModal');
+            if (!modal) return;
             document.getElementById('modalLeadName').textContent = lead.name || lead.phone || 'Lead';
             document.getElementById('modalLeadService').textContent = lead.service || 'General';
             document.getElementById('modalLeadSource').textContent = lead.source || 'Unknown';
             document.getElementById('modalLeadStatus').textContent = lead.status || 'In follow-up';
             document.getElementById('modalLeadNotes').textContent = lead.lastMessage || lead.notes || 'No notes yet.';
-            document.getElementById('leadModal').classList.add('open');
+            modal.dataset.currentIndex = index;
+            modal.classList.add('open');
         }
 
         function closeLeadModal() {
-            document.getElementById('leadModal').classList.remove('open');
+            const modal = document.getElementById('leadModal');
+            if (!modal) return;
+            modal.classList.remove('open');
+            modal.dataset.currentIndex = '';
+        }
+
+        function startLiveEvents(clientKey) {
+            if (!window.EventSource || clientKey === DEMO_CLIENT_KEY) {
+                stopLiveEvents();
+                return;
+            }
+            if (liveEventSource) liveEventSource.close();
+            liveEventSource = new EventSource(`${BASE_URL}/api/events/${clientKey}`);
+            liveEventSource.onmessage = (event) => {
+                if (!event.data) return;
+                try {
+                    const payload = JSON.parse(event.data);
+                    handleLiveEvent(payload);
+                } catch (err) {
+                    console.warn('Failed to parse event payload', err);
+                }
+            };
+            liveEventSource.onerror = () => {
+                stopLiveEvents();
+                setTimeout(() => startLiveEvents(clientKey), 10000);
+            };
+        }
+
+        function stopLiveEvents() {
+            if (liveEventSource) {
+                liveEventSource.close();
+                liveEventSource = null;
+            }
+        }
+
+        function handleLiveEvent(call) {
+            if (!call) return;
+            call.timeAgo = formatTimeAgo(call.timestamp || call.created_at);
+            dashboardData.recentCalls = [call, ...(dashboardData.recentCalls || [])].slice(0, 5);
+            renderCalls(dashboardData.recentCalls);
+            showToast('New Call Logged', `${call.name || 'Prospect'}: ${call.summary || 'Call completed'}`, 'info');
         }
 
         async function initDashboard() {
-            const clientKey = getClientFromURL();
-            const config = { ...CLIENT_CONFIG[clientKey] } || CLIENT_CONFIG[DEMO_CLIENT_KEY];
-            config.key = clientKey;
+            currentClient = getClientFromURL();
+            const config = { ...CLIENT_CONFIG[currentClient] } || CLIENT_CONFIG[DEMO_CLIENT_KEY];
+            config.key = currentClient;
             updateHeader(config);
             initThemeToggle();
             initModalControls();
+            initImporter();
 
-            let data = { ...DEMO_DATA };
-            if (clientKey === DEMO_CLIENT_KEY) {
+            dashboardData = { ...DEMO_DATA };
+            if (currentClient === DEMO_CLIENT_KEY) {
                 document.getElementById('demoBanner').style.display = 'block';
+                stopLiveEvents();
             } else {
                 const banner = document.getElementById('demoBanner');
                 if (banner) banner.style.display = 'none';
             }
 
-            const livePayload = await fetchLiveData(clientKey);
-            data = mergeData(data, livePayload);
+            const livePayload = await fetchLiveData(currentClient);
+            dashboardData = mergeData(dashboardData, livePayload);
 
-            updateStatusBar(data);
-            renderRecentActivity(data);
-            renderLeadPriority(data);
-            renderLeads(data.recentLeads || []);
-            renderServiceMix(data.serviceMix || []);
-            renderChart(config, data);
+            updateStatusBar(dashboardData);
+            renderRecentActivity(dashboardData);
+            renderROI(dashboardData.roi || DEMO_DATA.roi);
+            renderLeadJourney(dashboardData);
+            renderBeforeAfter(dashboardData);
+            renderLeadPriority(dashboardData);
+            renderLeads(dashboardData.recentLeads || []);
+            renderServiceMix(dashboardData.serviceMix || []);
+            renderAppointments(dashboardData.appointments || []);
+            renderChart(config, dashboardData);
+            renderForecast(dashboardData);
             renderSystemStatus(config);
-            renderCalls(data.recentCalls || []);
+            renderCalls(dashboardData.recentCalls || []);
             renderWorkflow(config.workflow || CLIENT_CONFIG.demo_client.workflow);
+            loadIntegrationHealth(currentClient);
+
+            startLiveEvents(currentClient);
 
             setInterval(async () => {
-                const refreshPayload = await fetchLiveData(clientKey);
+                const refreshPayload = await fetchLiveData(currentClient);
                 if (refreshPayload) {
-                    data = mergeData(data, refreshPayload);
-                    updateStatusBar(data);
-                    renderRecentActivity(data);
-                    renderLeadPriority(data);
-                    renderLeads(data.recentLeads || []);
-                    renderServiceMix(data.serviceMix || []);
-                    renderCalls(data.recentCalls || []);
-                    renderChart(config, data);
+                    dashboardData = mergeData(dashboardData, refreshPayload);
+                    updateStatusBar(dashboardData);
+                    renderRecentActivity(dashboardData);
+                    renderROI(dashboardData.roi || DEMO_DATA.roi);
+                    renderLeadJourney(dashboardData);
+                    renderBeforeAfter(dashboardData);
+                    renderLeadPriority(dashboardData);
+                    renderLeads(dashboardData.recentLeads || []);
+                    renderServiceMix(dashboardData.serviceMix || []);
+                    renderAppointments(dashboardData.appointments || []);
+                    renderCalls(dashboardData.recentCalls || []);
+                    renderChart(config, dashboardData);
+                    renderForecast(dashboardData);
                 }
             }, 30000);
         }
 
         document.addEventListener('DOMContentLoaded', initDashboard);
+        window.addEventListener('beforeunload', stopLiveEvents);
 
         function initThemeToggle() {
             const toggle = document.getElementById('themeToggle');
@@ -1051,6 +2016,59 @@
             }
         }
 
+        async function handleLeadAction(action) {
+            const modal = document.getElementById('leadModal');
+            if (!modal) return;
+            const index = modal.dataset.currentIndex;
+            if (index === undefined || index === '') return;
+            const lead = currentLeads[Number(index)];
+            if (!lead) return;
+
+            if (currentClient === DEMO_CLIENT_KEY || !lead.id) {
+                applyLocalLeadAction(lead, action);
+                dashboardData.recentLeads = dashboardData.recentLeads?.map((item, idx) =>
+                    idx === Number(index) ? lead : item
+                ) || currentLeads;
+                renderLeads(dashboardData.recentLeads || currentLeads);
+                closeLeadModal();
+                showToast('Lead Updated', `Lead ${action === 'snooze' ? 'snoozed' : 'escalated'} successfully`, 'success');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${BASE_URL}/api/leads/${lead.id}/${action}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const payload = await response.json();
+                if (!response.ok || !payload?.ok) {
+                    throw new Error(payload?.error || 'Action failed');
+                }
+                if (payload.lead) {
+                    dashboardData.recentLeads = (dashboardData.recentLeads || []).map(item =>
+                        item.id === lead.id ? { ...item, ...payload.lead } : item
+                    );
+                    renderLeads(dashboardData.recentLeads);
+                }
+                closeLeadModal();
+                showToast('Lead Updated', `Lead ${action === 'snooze' ? 'snoozed' : 'escalated'} successfully`, 'success');
+            } catch (error) {
+                console.error('Lead action failed', error);
+                showToast('Action Failed', error.message || 'Unable to update lead', 'error');
+                alert(`Unable to ${action} lead. ${error.message || ''}`);
+            }
+        }
+
+        function applyLocalLeadAction(lead, action) {
+            if (action === 'snooze') {
+                lead.status = 'Snoozed (demo)';
+                lead.lastMessage = 'Lead snoozed for 1 day (demo).';
+            } else {
+                lead.status = 'Priority (demo)';
+                lead.lastMessage = 'Escalated to operator (demo).';
+            }
+        }
+
         function initModalControls() {
             const backdrop = document.getElementById('leadModal');
             const closeBtn = document.getElementById('modalCloseBtn');
@@ -1061,8 +2079,160 @@
                 });
             }
             document.addEventListener('keydown', (event) => {
-                if (event.key === 'Escape') closeLeadModal();
+                if (event.key === 'Escape') {
+                    closeLeadModal();
+                    closeTranscriptModal();
+                }
             });
+            const snoozeBtn = document.getElementById('modalSnoozeBtn');
+            if (snoozeBtn) snoozeBtn.addEventListener('click', () => handleLeadAction('snooze'));
+            const escalateBtn = document.getElementById('modalEscalateBtn');
+            if (escalateBtn) escalateBtn.addEventListener('click', () => handleLeadAction('escalate'));
+
+            const transcriptBackdrop = document.getElementById('transcriptModal');
+            const transcriptCloseBtn = document.getElementById('transcriptCloseBtn');
+            if (transcriptCloseBtn) transcriptCloseBtn.addEventListener('click', closeTranscriptModal);
+            if (transcriptBackdrop) {
+                transcriptBackdrop.addEventListener('click', (event) => {
+                    if (event.target === transcriptBackdrop) closeTranscriptModal();
+                });
+            }
+        }
+
+        function initImporter() {
+            const input = document.getElementById('leadImportInput');
+            const button = document.getElementById('leadImportButton');
+            const dropzone = document.getElementById('leadDropzone');
+            if (button && input) button.addEventListener('click', () => input.click());
+            if (input) {
+                input.addEventListener('change', (event) => {
+                    const file = event.target.files?.[0];
+                    if (file) handleLeadImportFile(file);
+                    event.target.value = '';
+                });
+            }
+            if (dropzone) {
+                ['dragenter', 'dragover'].forEach(evt =>
+                    dropzone.addEventListener(evt, e => {
+                        e.preventDefault();
+                        dropzone.classList.add('dragover');
+                    })
+                );
+                ['dragleave', 'drop'].forEach(evt =>
+                    dropzone.addEventListener(evt, e => {
+                        e.preventDefault();
+                        dropzone.classList.remove('dragover');
+                    })
+                );
+                dropzone.addEventListener('drop', e => {
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) handleLeadImportFile(file);
+                });
+            }
+        }
+
+        function handleLeadImportFile(file) {
+            setImportStatus(`Processing ${file.name}...`);
+            const reader = new FileReader();
+            reader.onload = () => {
+                const leads = parseCsv(reader.result);
+                submitLeadImport(leads);
+            };
+            reader.onerror = () => setImportStatus('Unable to read file', 'error');
+            reader.readAsText(file);
+        }
+
+        function parseCsv(text) {
+            if (!text) return [];
+            const lines = text.trim().split(/\r?\n/);
+            if (lines.length < 2) return [];
+            const headers = lines.shift().split(',').map(h => h.trim().toLowerCase());
+            return lines
+                .map(line => {
+                    if (!line.trim()) return null;
+                    const cells = line.split(',').map(cell => cell.trim());
+                    const row = {};
+                    headers.forEach((header, idx) => {
+                        row[header] = cells[idx] || '';
+                    });
+                    return {
+                        name: row.name,
+                        phone: row.phone,
+                        service: row.service,
+                        source: row.source
+                    };
+                })
+                .filter(lead => lead && lead.phone);
+        }
+
+        async function submitLeadImport(leads = []) {
+            if (!Array.isArray(leads) || !leads.length) {
+                setImportStatus('No valid rows found in CSV', 'error');
+                return;
+            }
+            if (currentClient === DEMO_CLIENT_KEY) {
+                const demoLeads = leads.map((lead, idx) => ({
+                    id: Date.now() + idx,
+                    name: lead.name || lead.phone,
+                    phone: lead.phone,
+                    service: lead.service || 'Lead Follow-Up',
+                    source: lead.source || 'Import',
+                    status: 'New (demo)',
+                    lastMessage: 'Added via CSV import.',
+                    timeAgo: 'Just now'
+                }));
+                dashboardData.recentLeads = [...demoLeads, ...(dashboardData.recentLeads || [])].slice(0, 5);
+                renderLeads(dashboardData.recentLeads);
+                setImportStatus(`${demoLeads.length} leads staged (demo)`, 'success');
+                showToast('Leads Imported', `${demoLeads.length} leads added (demo mode)`, 'success');
+                return;
+            }
+            try {
+                setImportStatus('Uploading leads...');
+                showToast('Uploading', 'Importing leads...', 'info');
+                const response = await fetch(`${BASE_URL}/api/leads/import`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ clientKey: currentClient, leads })
+                });
+                const payload = await response.json();
+                if (!response.ok || !payload?.ok) {
+                    throw new Error(payload?.error || 'Import failed');
+                }
+                if (Array.isArray(payload.leads) && payload.leads.length) {
+                    dashboardData.recentLeads = [...payload.leads, ...(dashboardData.recentLeads || [])].slice(0, 5);
+                    renderLeads(dashboardData.recentLeads);
+                }
+                setImportStatus(`Imported ${payload.inserted} leads`, 'success');
+                showToast('Import Complete', `Successfully imported ${payload.inserted} leads`, 'success');
+            } catch (error) {
+                console.error('Import failed', error);
+                setImportStatus(error.message || 'Import failed', 'error');
+                showToast('Import Failed', error.message || 'Unable to import leads', 'error');
+            }
+        }
+
+        function setImportStatus(message, type) {
+            const statusEl = document.getElementById('leadImportStatus');
+            if (!statusEl) return;
+            statusEl.textContent = message;
+            statusEl.className = `import-status ${type || ''}`;
+        }
+
+        async function loadIntegrationHealth(clientKey) {
+            if (clientKey === DEMO_CLIENT_KEY) {
+                renderIntegrationStatus(DEMO_INTEGRATIONS);
+                return;
+            }
+            try {
+                const response = await fetch(`${BASE_URL}/api/integration-health/${clientKey}`);
+                const payload = await response.json();
+                if (payload?.ok && Array.isArray(payload.integrations)) {
+                    renderIntegrationStatus(payload.integrations);
+                }
+            } catch (error) {
+                console.warn('Failed to load integration health', error);
+            }
         }
     </script>
 </body>

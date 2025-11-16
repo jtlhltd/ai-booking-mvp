@@ -8069,7 +8069,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       leadRows,
       recentCallRows,
       responseRows,
-      touchpointRows
+      touchpointRows,
+      upcomingAppointmentRows
     ] = await Promise.all([
       query(`
         SELECT COUNT(*) AS total,
@@ -8102,7 +8103,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         LIMIT 5
       `, [clientKey]),
       query(`
-        SELECT l.name,
+        SELECT l.id,
+               l.name,
                l.phone,
                l.status,
                l.service,
@@ -8142,6 +8144,20 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
           AND created_at >= ${sqlDaysAgo(6)}
         GROUP BY bucket_day
       `, [clientKey]),
+      query(`
+        SELECT a.id,
+               a.start_iso,
+               a.end_iso,
+               a.status,
+               l.name,
+               l.service
+        FROM appointments a
+        LEFT JOIN leads l ON l.id = a.lead_id
+        WHERE a.client_key = $1
+          AND a.start_iso >= NOW()
+        ORDER BY a.start_iso ASC
+        LIMIT 5
+      `, [clientKey])
     ]);
 
     const totalLeads = parseInt(leadCounts.rows?.[0]?.total || 0, 10);
@@ -8169,6 +8185,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         ? row.lead_score
         : 70 + Math.floor(Math.random() * 20);
       return {
+        id: row.id,
         name: row.name || row.phone,
         phone: row.phone,
         status: row.status || 'Awaiting follow-up',
@@ -8241,6 +8258,21 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       touchpointData.push(touchpointMap.get(key) || 0);
     }
 
+    const upcomingAppointments = (upcomingAppointmentRows.rows || []).map(row => ({
+      id: row.id,
+      start: row.start_iso,
+      end: row.end_iso,
+      status: row.status || 'booked',
+      name: row.name || 'Prospect',
+      service: row.service || 'Consultation'
+    }));
+
+    const estimatedCost = Number((totalCalls * 0.4).toFixed(2));
+    const estimatedRevenue = Number((weeklyBookings * avgDealValue).toFixed(2));
+    const estimatedProfit = Number((estimatedRevenue - estimatedCost).toFixed(2));
+    const roiMultiplier = estimatedCost > 0 ? estimatedRevenue / estimatedCost : 0;
+    const roiPercentage = roiMultiplier ? (roiMultiplier - 1) * 100 : 0;
+
     res.json({
       ok: true,
       source: 'live',
@@ -8260,6 +8292,23 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       serviceMix,
       leads,
       recentCalls,
+      roi: {
+        costs: {
+          total: estimatedCost,
+          perCall: totalCalls > 0 ? Number((estimatedCost / totalCalls).toFixed(2)) : 0
+        },
+        revenue: {
+          total: estimatedRevenue,
+          bookings: weeklyBookings,
+          avgDealValue
+        },
+        roi: {
+          profit: estimatedProfit,
+          multiplier: Number(roiMultiplier.toFixed(1)),
+          percentage: Number(roiPercentage.toFixed(0))
+        }
+      },
+      appointments: upcomingAppointments,
       touchpoints: {
         labels: touchpointLabels,
         data: touchpointData
@@ -8267,6 +8316,325 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     });
   } catch (error) {
     console.error('[DEMO DASHBOARD ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+const SSE_POLL_INTERVAL_MS = 4000;
+const SSE_HEARTBEAT_MS = 15000;
+
+app.get('/api/events/:clientKey', async (req, res) => {
+  const { clientKey } = req.params;
+  res.set({
+    'Cache-Control': 'no-cache',
+    'Content-Type': 'text/event-stream',
+    Connection: 'keep-alive'
+  });
+  res.flushHeaders?.();
+
+  let isClosed = false;
+  let lastSent = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+  const sendRecentCalls = async () => {
+    if (isClosed) return;
+    try {
+      const recentCallRows = await query(`
+        SELECT c.lead_phone, c.status, c.outcome, c.created_at,
+               l.name, l.service
+        FROM calls c
+        LEFT JOIN leads l ON l.client_key = c.client_key AND l.phone = c.lead_phone
+        WHERE c.client_key = $1
+          AND c.created_at > $2
+        ORDER BY c.created_at ASC
+        LIMIT 10
+      `, [clientKey, lastSent]);
+
+      for (const row of recentCallRows.rows || []) {
+        lastSent = row.created_at;
+        const payload = {
+          name: row.name || row.lead_phone,
+          service: row.service || 'Lead Follow-Up',
+          channel: 'AI call + SMS',
+          summary: row.outcome ? `Outcome: ${row.outcome}` : 'Call completed',
+          status: mapCallStatus(row.status),
+          statusClass: mapStatusClass(row.status),
+          timestamp: row.created_at
+        };
+        res.write(`data: ${JSON.stringify(payload)}\n\n`);
+      }
+    } catch (error) {
+      console.error('[EVENT STREAM ERROR]', error);
+      res.write(`event: error\ndata: ${JSON.stringify({ message: 'stream_error' })}\n\n`);
+    }
+  };
+
+  const interval = setInterval(sendRecentCalls, SSE_POLL_INTERVAL_MS);
+  const heartbeat = setInterval(() => {
+    if (isClosed) return;
+    res.write('event: ping\ndata: {}\n\n');
+  }, SSE_HEARTBEAT_MS);
+
+  const closeStream = () => {
+    if (isClosed) return;
+    isClosed = true;
+    clearInterval(interval);
+    clearInterval(heartbeat);
+    res.end();
+  };
+
+  req.on('close', closeStream);
+  req.on('end', closeStream);
+  sendRecentCalls();
+});
+
+async function getLeadRecord(leadId) {
+  const result = await query(`
+    SELECT id, client_key, phone, name, service, status, source, notes
+    FROM leads
+    WHERE id = $1
+  `, [leadId]);
+  return result.rows?.[0];
+}
+
+function sanitizeLead(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    phone: row.phone,
+    service: row.service,
+    status: row.status,
+    source: row.source,
+    lastMessage: row.notes
+  };
+}
+
+app.post('/api/leads/:leadId/snooze', async (req, res) => {
+  const { leadId } = req.params;
+  const minutes = Math.max(5, parseInt(req.body?.minutes, 10) || 1440);
+  try {
+    const lead = await getLeadRecord(leadId);
+    if (!lead) {
+      return res.status(404).json({ ok: false, error: 'Lead not found' });
+    }
+    const snoozedUntil = new Date(Date.now() + minutes * 60000).toISOString();
+    await query(`
+      INSERT INTO lead_engagement (client_key, lead_phone, engagement_data)
+      VALUES ($1, $2, $3::jsonb)
+      ON CONFLICT (client_key, lead_phone)
+      DO UPDATE SET engagement_data = COALESCE(lead_engagement.engagement_data, '{}'::jsonb) || EXCLUDED.engagement_data,
+                    last_updated = NOW()
+    `, [lead.client_key, lead.phone, JSON.stringify({ snoozedUntil })]);
+
+    const updated = await query(`
+      UPDATE leads
+      SET status = $2,
+          notes = CONCAT('Snoozed until ', $3, ' • ', COALESCE(notes, ''))
+      WHERE id = $1
+      RETURNING id, name, phone, service, status, source, notes
+    `, [leadId, 'Snoozed', snoozedUntil]);
+
+    return res.json({ ok: true, lead: sanitizeLead(updated.rows?.[0]) });
+  } catch (error) {
+    console.error('[LEAD SNOOZE ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post('/api/leads/:leadId/escalate', async (req, res) => {
+  const { leadId } = req.params;
+  try {
+    const lead = await getLeadRecord(leadId);
+    if (!lead) {
+      return res.status(404).json({ ok: false, error: 'Lead not found' });
+    }
+    await query(`
+      INSERT INTO lead_engagement (client_key, lead_phone, engagement_data)
+      VALUES ($1, $2, $3::jsonb)
+      ON CONFLICT (client_key, lead_phone)
+      DO UPDATE SET engagement_data = COALESCE(lead_engagement.engagement_data, '{}'::jsonb) || EXCLUDED.engagement_data,
+                    last_updated = NOW()
+    `, [lead.client_key, lead.phone, JSON.stringify({ priority: true })]);
+
+    const updated = await query(`
+      UPDATE leads
+      SET status = $2,
+          notes = CONCAT('Escalated via dashboard at ', NOW()::text, ' • ', COALESCE(notes, ''))
+      WHERE id = $1
+      RETURNING id, name, phone, service, status, source, notes
+    `, [leadId, 'Priority']);
+
+    return res.json({ ok: true, lead: sanitizeLead(updated.rows?.[0]) });
+  } catch (error) {
+    console.error('[LEAD ESCALATE ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post('/api/leads/import', async (req, res) => {
+  try {
+    const { clientKey, leads } = req.body || {};
+    if (!clientKey || !Array.isArray(leads) || leads.length === 0) {
+      return res.status(400).json({ ok: false, error: 'Missing clientKey or leads payload' });
+    }
+    const inserted = [];
+    for (const payload of leads.slice(0, 200)) {
+      const phone = validateAndSanitizePhone(payload.phone);
+      if (!phone) continue;
+      const name = sanitizeInput(payload.name || phone, 120);
+      const service = sanitizeInput(payload.service || 'Lead Follow-Up', 120);
+      const source = sanitizeInput(payload.source || 'Import', 120);
+      const result = await query(`
+        INSERT INTO leads (client_key, name, phone, service, source, status)
+        VALUES ($1, $2, $3, $4, $5, 'new')
+        ON CONFLICT (client_key, phone)
+        DO UPDATE SET name = EXCLUDED.name,
+                      service = COALESCE(EXCLUDED.service, leads.service),
+                      source = COALESCE(EXCLUDED.source, leads.source)
+        RETURNING id, name, phone, service, source, status, notes
+      `, [clientKey, name, phone, service, source]);
+      if (result.rows?.[0]) {
+        inserted.push(result.rows[0]);
+      }
+    }
+
+    return res.json({
+      ok: true,
+      inserted: inserted.length,
+      leads: inserted.map(sanitizeLead)
+    });
+  } catch (error) {
+    console.error('[LEAD IMPORT ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+function getIntegrationStatuses() {
+  return [
+    {
+      name: 'Vapi Voice',
+      status: process.env.VAPI_PRIVATE_KEY ? 'active' : 'error',
+      detail: process.env.VAPI_PRIVATE_KEY ? 'Assistant + phone number connected' : 'Add Vapi key to enable calling'
+    },
+    {
+      name: 'Twilio SMS',
+      status: (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) ? 'active' : 'warning',
+      detail: (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) ? 'Messaging service verified' : 'Connect Twilio for SMS reminders'
+    },
+    {
+      name: 'Google Calendar',
+      status: process.env.GOOGLE_CLIENT_EMAIL ? 'active' : 'warning',
+      detail: process.env.GOOGLE_CLIENT_EMAIL ? 'Auto-booking synced' : 'Connect service account for calendar booking'
+    },
+    {
+      name: 'Slack Digest',
+      status: process.env.SLACK_WEBHOOK_URL ? 'active' : 'warning',
+      detail: process.env.SLACK_WEBHOOK_URL ? 'Posting daily summaries' : 'Add Slack webhook to enable digest'
+    }
+  ];
+}
+
+app.get('/api/integration-health/:clientKey', (req, res) => {
+  res.json({
+    ok: true,
+    integrations: getIntegrationStatuses()
+  });
+});
+
+app.get('/api/calls/:callId/transcript', async (req, res) => {
+  try {
+    const { callId } = req.params;
+    const result = await query(`
+      SELECT transcript, summary, duration, created_at
+      FROM calls
+      WHERE id = $1 OR lead_phone = $1
+      ORDER BY created_at DESC
+      LIMIT 1
+    `, [callId]);
+    
+    if (!result.rows || !result.rows.length) {
+      return res.status(404).json({ ok: false, error: 'Transcript not found' });
+    }
+    
+    const row = result.rows[0];
+    const transcript = row.transcript || row.summary || '[Transcript not available]';
+    
+    res.json({
+      ok: true,
+      transcript: typeof transcript === 'string' ? transcript : JSON.stringify(transcript),
+      duration: row.duration,
+      timestamp: row.created_at
+    });
+  } catch (error) {
+    console.error('[TRANSCRIPT ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.get('/api/export/:type', async (req, res) => {
+  try {
+    const { type } = req.params;
+    const { clientKey } = req.query;
+    if (!clientKey) {
+      return res.status(400).json({ ok: false, error: 'clientKey required' });
+    }
+    
+    let csv = '';
+    let filename = '';
+    
+    if (type === 'leads') {
+      const result = await query(`
+        SELECT name, phone, service, source, status, notes, created_at
+        FROM leads
+        WHERE client_key = $1
+        ORDER BY created_at DESC
+      `, [clientKey]);
+      
+      csv = 'Name,Phone,Service,Source,Status,Notes,Created\n';
+      result.rows.forEach(row => {
+        const escape = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
+        csv += `${escape(row.name)},${escape(row.phone)},${escape(row.service)},${escape(row.source)},${escape(row.status)},${escape(row.notes)},${escape(row.created_at)}\n`;
+      });
+      filename = `leads-export-${new Date().toISOString().split('T')[0]}.csv`;
+    } else if (type === 'calls') {
+      const result = await query(`
+        SELECT l.name, c.lead_phone, c.status, c.outcome, c.duration, c.created_at
+        FROM calls c
+        LEFT JOIN leads l ON l.client_key = c.client_key AND l.phone = c.lead_phone
+        WHERE c.client_key = $1
+        ORDER BY c.created_at DESC
+      `, [clientKey]);
+      
+      csv = 'Name,Phone,Status,Outcome,Duration (s),Created\n';
+      result.rows.forEach(row => {
+        const escape = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
+        csv += `${escape(row.name)},${escape(row.lead_phone)},${escape(row.status)},${escape(row.outcome)},${escape(row.duration)},${escape(row.created_at)}\n`;
+      });
+      filename = `calls-export-${new Date().toISOString().split('T')[0]}.csv`;
+    } else if (type === 'appointments') {
+      const result = await query(`
+        SELECT l.name, a.start_iso, a.end_iso, a.status, l.service
+        FROM appointments a
+        LEFT JOIN leads l ON l.id = a.lead_id
+        WHERE a.client_key = $1
+        ORDER BY a.start_iso DESC
+      `, [clientKey]);
+      
+      csv = 'Name,Start,End,Status,Service\n';
+      result.rows.forEach(row => {
+        const escape = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
+        csv += `${escape(row.name)},${escape(row.start_iso)},${escape(row.end_iso)},${escape(row.status)},${escape(row.service)}\n`;
+      });
+      filename = `appointments-export-${new Date().toISOString().split('T')[0]}.csv`;
+    } else {
+      return res.status(400).json({ ok: false, error: 'Invalid export type' });
+    }
+    
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
+  } catch (error) {
+    console.error('[EXPORT ERROR]', error);
     res.status(500).json({ ok: false, error: error.message });
   }
 });
