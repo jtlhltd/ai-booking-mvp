@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Client Dashboard - AI Booking Concierge</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -37,7 +40,7 @@
             box-sizing: border-box;
             font-family: inherit;
         }
-
+        
         body, html {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             min-height: 100vh;
@@ -51,13 +54,13 @@
         h1, h2, h3, h4, h5, h6, p, span, div, a, button, input, textarea, select, label, li, td, th, strong, em, small, b, i, u, mark, del, ins, sub, sup {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
-
+        
         .container {
             max-width: 1200px;
             margin: 0 auto;
             padding: 40px 20px 72px;
         }
-
+        
         .header {
             background: var(--surface);
             border-radius: 20px;
@@ -66,7 +69,7 @@
             border-left: 6px solid var(--primary);
             border: 1px solid rgba(92,106,196,0.15);
         }
-
+        
         .client-info {
             display: flex;
             justify-content: space-between;
@@ -80,7 +83,7 @@
             align-items: center;
             gap: 18px;
         }
-
+        
         .client-logo {
             width: 60px;
             height: 60px;
@@ -92,13 +95,13 @@
             color: #fff;
             background: var(--primary);
         }
-
+        
         .client-details h1 {
             font-size: 2.3rem;
             color: var(--primary);
             margin-bottom: 6px;
         }
-
+        
         .client-details p {
             color: var(--muted);
             font-size: 1rem;
@@ -517,7 +520,7 @@
             background: linear-gradient(90deg, var(--primary), transparent);
             border-radius: 2px;
         }
-
+        
         .card {
             background: var(--surface);
             border-radius: 18px;
@@ -544,12 +547,12 @@
         .card:hover::before {
             opacity: 1;
         }
-
+        
         .card:hover {
             transform: translateY(-2px);
             box-shadow: 0 12px 32px rgba(16, 26, 62, 0.12);
         }
-
+        
         .card h3 {
             margin-bottom: 18px;
             font-size: 1.2rem;
@@ -572,15 +575,15 @@
             padding: 12px 0;
             border-bottom: 1px solid #f1f3fb;
         }
-
+        
         .metric-row:last-child {
             border-bottom: none;
         }
-
+        
         .metric-label {
             color: var(--muted);
         }
-
+        
         .metric-value {
             font-weight: 600;
             color: var(--primary);
@@ -1718,7 +1721,7 @@
         body[data-theme="dark"] .retry-meta {
             color: #d0d4e8;
         }
-
+        
         @media (max-width: 768px) {
             .section-header {
                 font-size: 1.3rem;
@@ -1732,7 +1735,7 @@
             .activity-grid {
                 grid-template-columns: 1fr;
             }
-
+            
             .priority-visual {
                 gap: 10px;
             }
@@ -1816,7 +1819,7 @@
                     <div class="status-chip" id="clientStatus">Live</div>
                 </div>
             </div>
-
+            
             <div class="client-meta" id="clientMeta">
                 <div class="meta-item">
                     <div class="meta-label">Phone</div>
@@ -1833,9 +1836,9 @@
                 <div class="meta-item">
                     <div class="meta-label">Industry</div>
                     <div class="meta-value" id="metaIndustry">AI Booking Concierge</div>
-                </div>
             </div>
-
+        </div>
+        
             <div class="demo-banner" id="demoBanner">
                 <strong>Demo environment:</strong> This sandbox mirrors the live dashboard your clients see. We just preload it with mock data for Looms.
             </div>
@@ -1846,15 +1849,15 @@
             <div class="active-indicator-content">
                 <div class="active-indicator-title" id="activeTitle">Your concierge is active</div>
                 <div class="active-indicator-subtitle" id="activeSubtitle">Working on leads right now</div>
+                </div>
             </div>
-        </div>
-
+            
         <section class="status-bar" role="region" aria-label="Dashboard statistics">
             <div class="status-card" title="Total leads we're handling for you" role="article" aria-label="Leads we're managing">
                 <h4>Leads We're Managing</h4>
                 <div class="status-value" id="statusTotalLeads" aria-live="polite">48</div>
                 <p class="status-hint" id="statusHintLeads">7 new in last 24h</p>
-            </div>
+                </div>
             <div class="status-card" title="Calls your concierge has made" role="article" aria-label="Calls we've made">
                 <h4>Calls We've Made</h4>
                 <div class="status-value" id="statusTotalCalls" aria-live="polite">36</div>
@@ -1877,7 +1880,7 @@
                 <span>Your Investment (30d)</span>
                 <strong id="roiSpend">£0</strong>
                 <small>our service fee</small>
-            </div>
+                </div>
             <div class="roi-metric">
                 <span>Revenue We Generated</span>
                 <strong id="roiRevenue">£0</strong>
@@ -1906,10 +1909,10 @@
                     <div id="performance-chart">
                         <div class="chart" id="chartBars"></div>
                         <p class="chart-value" id="chartSummary">18 bookings we made this week</p>
-                    </div>
+                </div>
                     <div class="export-buttons">
                         <button class="export-btn secondary" onclick="exportData('calls')">📥 Export</button>
-                    </div>
+            </div>
                 </article>
 
 
@@ -1918,7 +1921,7 @@
                     <p class="card-subtitle">How effective our calls are.</p>
                     <div id="call-quality" class="call-quality-grid"></div>
                 </article>
-            </div>
+                </div>
         </section>
 
         <!-- LEAD MANAGEMENT SECTION -->
@@ -1932,7 +1935,7 @@
                     <div id="leads-list" class="leads-list"></div>
                     <div class="export-buttons">
                         <button class="export-btn secondary" onclick="exportData('leads')">📥 Export</button>
-                    </div>
+            </div>
                 </article>
 
                 <article class="card">
@@ -1941,7 +1944,7 @@
                     <div class="import-dropzone" id="leadDropzone">
                         Drag & drop CSV or <button type="button" id="leadImportButton">browse</button>
                         <small style="display:block;margin-top:6px;">Columns: name, phone, service, source</small>
-                    </div>
+                </div>
                     <input type="file" id="leadImportInput" accept=".csv" style="display:none">
                     <div class="import-status" id="leadImportStatus"></div>
                 </article>
@@ -1970,7 +1973,7 @@
                     <div id="upcoming-appointments" class="appt-list"></div>
                     <div class="export-buttons">
                         <button class="export-btn secondary" onclick="exportData('appointments')">📥 Export</button>
-                    </div>
+            </div>
                 </article>
 
                 <article class="card card-list">
@@ -1978,7 +1981,7 @@
                     <p class="card-subtitle">Listen to recent calls we made.</p>
                     <div id="call-recordings"></div>
                 </article>
-            </div>
+                </div>
         </section>
 
         <!-- SYSTEM STATUS SECTION -->
@@ -1992,7 +1995,7 @@
                         <div class="metric-row">
                             <span class="metric-label">Lead number</span>
                             <span class="metric-value" id="statusPhone">+44 20 3880 1234</span>
-                        </div>
+            </div>
                         <div class="metric-row">
                             <span class="metric-label">SMS & WhatsApp</span>
                             <span class="metric-value">✓ Active</span>
@@ -2029,12 +2032,12 @@
                 <ul id="workflow" class="workflow-list"></ul>
             </article>
         </section>
-    </div>
+                </div>
 
     <div class="data-freshness" id="dataFreshness" role="status" aria-live="polite">
         <span class="data-freshness-dot" id="freshnessDot"></span>
         <span id="freshnessText">Data syncing...</span>
-    </div>
+            </div>
 
     <div class="keyboard-hint" id="keyboardHint" role="tooltip" aria-hidden="true">
         Press <kbd>?</kbd> for keyboard shortcuts
@@ -2061,7 +2064,7 @@
             </div>
         </div>
     </div>
-
+    
     <div class="modal-backdrop" id="transcriptModal" role="dialog" aria-labelledby="transcriptModalTitle" aria-modal="true">
         <div class="lead-modal transcript-modal">
             <div class="modal-header">
@@ -2085,12 +2088,12 @@
             </div>
         </div>
     </div>
-
+    
     <script>
         const DEMO_CLIENT_KEY = 'demo_client';
         const BASE_URL = window.location.origin;
         const THEME_KEY = 'dashboard_theme';
-
+        
         const CLIENT_CONFIG = {
             demo_client: {
                 name: 'Demo Booking Partner',
@@ -2164,12 +2167,12 @@
             { name: 'Google Calendar', status: 'active', detail: 'Auto-booking in sync' },
             { name: 'Slack Digest', status: 'warning', detail: 'Add webhook to enable daily summary' }
         ];
-
+        
         let currentClient = null;
         let dashboardData = { ...DEMO_DATA };
         let currentLeads = [];
         let liveEventSource = null;
-
+        
         function getClientFromURL() {
             const params = new URLSearchParams(window.location.search);
             const clientParam = params.get('client');
@@ -2341,19 +2344,19 @@
                 <div class="activity-metric">
                     <div class="activity-metric-label">New Leads</div>
                     <div class="activity-metric-value">${formatNumber(data.last24hLeads || 0)}</div>
-                </div>
+                    </div>
                 <div class="activity-metric">
                     <div class="activity-metric-label">Calls Made</div>
                     <div class="activity-metric-value">${formatNumber(data.totalCalls || 0)}</div>
-                </div>
+                    </div>
                 <div class="activity-metric">
                     <div class="activity-metric-label">Bookings</div>
                     <div class="activity-metric-value">${formatNumber(data.bookingsThisWeek ?? 18)}</div>
-                </div>
+                    </div>
                 <div class="activity-metric">
                     <div class="activity-metric-label">Response Time</div>
                     <div class="activity-metric-value" style="font-size: 1.3rem;">${data.firstResponse || '—'}</div>
-                </div>
+                    </div>
             `;
         }
 
@@ -2410,7 +2413,7 @@
                             <button class="empty-state-btn" onclick="document.getElementById('leadImportButton')?.click()" aria-label="Upload leads to get started">
                                 📤 Send Us Leads to Book
                             </button>
-                        </div>
+                    </div>
                     </div>
                 `;
                 return;
@@ -2496,7 +2499,7 @@
                             <button class="empty-state-btn" onclick="document.getElementById('leadImportButton')?.click()" aria-label="Upload leads">
                                 📤 Upload Leads to Get Started
                             </button>
-                        </div>
+                    </div>
                     </div>
                 `;
                 return;
@@ -2551,7 +2554,7 @@
                         <div class="funnel-label">
                             <span>${stage.label}</span>
                             <span>${formatNumber(stage.value)} <span class="funnel-percent">(${stagePercent}%)</span></span>
-                        </div>
+                    </div>
                         <div class="funnel-bar">
                             <div class="funnel-fill" style="width:${percent}%; background:linear-gradient(90deg, ${stage.color}, ${stage.color}dd);"></div>
                         </div>
@@ -2652,7 +2655,7 @@
                 }
                 return;
             }
-
+            
             try {
                 const response = await fetch(`${BASE_URL}/api/active-indicator/${currentClient}`);
                 const payload = await response.json();
@@ -2739,7 +2742,7 @@
                             <span class="empty-state-icon">✅</span>
                             <div class="empty-state-title">All caught up!</div>
                             <div class="empty-state-message">No retries needed - all calls successful!</div>
-                        </div>
+                            </div>
                     `;
                     return;
                 }
@@ -2756,7 +2759,7 @@
                         <div>
                             <div class="retry-name">${lead.name}</div>
                             <div class="retry-meta">Attempt ${lead.attempts} • ${lead.phone || ''}</div>
-                        </div>
+                            </div>
                         <div class="retry-status">Retrying ${lead.nextRetry}</div>
                     </div>
                 `).join('');
@@ -2782,7 +2785,7 @@
                             <div>
                                 <div class="retry-name">${lead.name}</div>
                                 <div class="retry-meta">Attempt ${lead.attempts}/${lead.maxAttempts} • ${lead.phone || ''}</div>
-                            </div>
+                        </div>
                             <div class="retry-status">Retrying ${lead.nextRetry}</div>
                         </div>
                     `).join('');
@@ -2819,8 +2822,8 @@
                         <div class="timeline-content">
                             <div class="timeline-title">${item.icon} ${item.event}</div>
                             <div class="timeline-meta">${item.detail} • ${formatTimeAgo(item.time.toISOString())}</div>
-                        </div>
-                    </div>
+                            </div>
+                            </div>
                 `).join('');
                 return;
             }
@@ -2835,7 +2838,7 @@
                             <div class="timeline-content">
                                 <div class="timeline-title">${item.icon || '📋'} ${item.event}</div>
                                 <div class="timeline-meta">${item.detail || ''} • ${formatTimeAgo(item.time)}</div>
-                            </div>
+                        </div>
                         </div>
                     `).join('');
                 } else {
@@ -2855,7 +2858,7 @@
                 `;
             }
         }
-
+        
         function closeTimelineModal() {
             const modal = document.getElementById('timelineModal');
             if (modal) modal.classList.remove('open');
@@ -2873,7 +2876,7 @@
                             <span class="empty-state-icon">🎙️</span>
                             <div class="empty-state-title">No recordings yet</div>
                             <div class="empty-state-message">Call recordings will appear here after calls are made.</div>
-                        </div>
+                            </div>
                     `;
                     return;
                 }
@@ -2882,12 +2885,12 @@
                     <div class="recording-item">
                         <div class="recording-controls">
                             <button class="play-btn" onclick="playRecording('${call.id || index}', '${call.name || 'Prospect'}')" title="Play recording">▶</button>
-                        </div>
+                            </div>
                         <div class="recording-info">
                             <div class="recording-name">${call.name || 'Prospect'}</div>
                             <div class="recording-meta">${call.summary || 'Call completed'} • ${call.timeAgo || formatTimeAgo(call.created_at || '')} • ${Math.floor(Math.random() * 3 + 2)} min</div>
-                        </div>
-                    </div>
+                                </div>
+                            </div>
                 `).join('');
                 return;
             }
@@ -2902,7 +2905,7 @@
                                 <span class="empty-state-icon">🎙️</span>
                                 <div class="empty-state-title">No recordings yet</div>
                                 <div class="empty-state-message">Call recordings will appear here after calls are made.</div>
-                            </div>
+                                </div>
                         `;
                         return;
                     }
@@ -2913,11 +2916,11 @@
                             <div class="recording-item">
                                 <div class="recording-controls">
                                     <button class="play-btn" onclick="playRecording('${recording.id}', '${recording.name}', '${recording.recordingUrl || ''}')" title="Play recording">▶</button>
-                                </div>
+                            </div>
                                 <div class="recording-info">
                                     <div class="recording-name">${recording.name}</div>
                                     <div class="recording-meta">${recording.outcome || 'Call completed'} • ${recording.timeAgo || 'Recently'} • ${durationMin}:${String(durationSec).padStart(2, '0')}</div>
-                                </div>
+                        </div>
                             </div>
                         `;
                     }).join('');
@@ -2954,19 +2957,19 @@
                     <div class="calendar-detail-item">
                         <span class="calendar-detail-label">Last sync</span>
                         <span class="calendar-detail-value success">${formatTimeAgo(lastSync.toISOString())}</span>
-                    </div>
+                                </div>
                     <div class="calendar-detail-item">
                         <span class="calendar-detail-label">Conflicts resolved</span>
                         <span class="calendar-detail-value">${conflictsResolved} this week</span>
-                    </div>
+                                </div>
                     <div class="calendar-detail-item">
                         <span class="calendar-detail-label">Appointments booked</span>
                         <span class="calendar-detail-value success">${appointmentsBooked} this week</span>
-                    </div>
+                                </div>
                     <div class="calendar-detail-item">
                         <span class="calendar-detail-label">Calendar status</span>
                         <span class="calendar-detail-value success">✓ Synced and active</span>
-                    </div>
+                                </div>
                 `;
                 return;
             }
@@ -2980,11 +2983,11 @@
                         <div class="calendar-detail-item">
                             <span class="calendar-detail-label">Last sync</span>
                             <span class="calendar-detail-value ${payload.connected ? 'success' : 'warning'}">${lastSyncTime}</span>
-                        </div>
+                                    </div>
                         <div class="calendar-detail-item">
                             <span class="calendar-detail-label">Conflicts resolved</span>
                             <span class="calendar-detail-value">${payload.conflictsResolved || 0} this week</span>
-                        </div>
+                            </div>
                         <div class="calendar-detail-item">
                             <span class="calendar-detail-label">Appointments booked</span>
                             <span class="calendar-detail-value success">${payload.appointmentsBooked || 0} this week</span>
@@ -3283,7 +3286,7 @@
                     <div class="modal-header">
                         <h4>⌨️ Keyboard Shortcuts</h4>
                         <button class="modal-close" onclick="this.closest('.modal-backdrop').remove()" aria-label="Close">&times;</button>
-                    </div>
+                            </div>
                     <div class="modal-body">
                         ${shortcuts.map(s => `
                             <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(92,106,196,0.1);">
@@ -3291,7 +3294,7 @@
                                 <span style="color: var(--muted);">${s.desc}</span>
                             </div>
                         `).join('')}
-                    </div>
+                        </div>
                 </div>
             `;
             document.body.appendChild(modal);
@@ -3329,8 +3332,8 @@
                             renderRecentActivity(dashboardData);
                             renderLeads(dashboardData.recentLeads || []);
                             renderAppointments(dashboardData.appointments || []);
-                        }
-                    } catch (error) {
+                }
+            } catch (error) {
                         console.error('Failed to refresh after coming online', error);
                     }
                 }, 1000);
@@ -3378,8 +3381,8 @@
                         <div style="font-size: 0.9rem; margin-top: 4px;">${message}</div>
                         ${retryFn ? `<button class="empty-state-btn" style="margin-top: 8px; font-size: 0.85rem; padding: 6px 12px;" id="retry-${errorId}">Retry</button>` : ''}
                     </div>
-                </div>
-            `;
+                    </div>
+                `;
             container.innerHTML = errorHtml;
             if (retryFn) {
                 const retryBtn = document.getElementById(`retry-${errorId}`);
