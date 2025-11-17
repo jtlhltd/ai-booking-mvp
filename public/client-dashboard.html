@@ -194,6 +194,18 @@
             margin-bottom: 20px;
             padding-bottom: 12px;
             border-bottom: 2px solid rgba(92,106,196,0.15);
+            position: relative;
+        }
+
+        .section-header::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            width: 60px;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary), transparent);
+            border-radius: 2px;
         }
 
         .dashboard-grid {
@@ -305,6 +317,198 @@
             padding: 8px 0;
         }
 
+        .data-freshness {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--surface);
+            padding: 8px 14px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            color: var(--muted);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(92,106,196,0.1);
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .data-freshness-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #1b5e20;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .data-freshness-dot.offline {
+            background: #c62828;
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .skeleton {
+            background: linear-gradient(90deg, rgba(92,106,196,0.1) 25%, rgba(92,106,196,0.15) 50%, rgba(92,106,196,0.1) 75%);
+            background-size: 200% 100%;
+            animation: skeleton-loading 1.5s ease-in-out infinite;
+            border-radius: 8px;
+        }
+
+        @keyframes skeleton-loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        .skeleton-text {
+            height: 16px;
+            margin: 8px 0;
+        }
+
+        .skeleton-card {
+            padding: 20px;
+            border-radius: 18px;
+            background: var(--surface);
+            border: 1px solid rgba(92,106,196,0.08);
+        }
+
+        .empty-state-cta {
+            margin-top: 16px;
+        }
+
+        .empty-state-btn {
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            padding: 10px 20px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .empty-state-btn:hover {
+            background: var(--secondary);
+            transform: translateY(-1px);
+        }
+
+        .error-message {
+            background: #fee2e2;
+            border: 1px solid #fecaca;
+            color: #991b1b;
+            padding: 12px 16px;
+            border-radius: 10px;
+            margin: 12px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .error-message-icon {
+            font-size: 1.2rem;
+        }
+
+        .keyboard-hint {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: var(--surface);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            color: var(--muted);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(92,106,196,0.1);
+            z-index: 100;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .keyboard-hint.show {
+            opacity: 1;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #8c8fab;
+        }
+
+        .empty-state-icon {
+            font-size: 3rem;
+            opacity: 0.3;
+            margin-bottom: 12px;
+            display: block;
+        }
+
+        .empty-state-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #7a7fa4;
+            margin-bottom: 6px;
+        }
+
+        .empty-state-message {
+            font-size: 0.9rem;
+            color: #8c8fab;
+            line-height: 1.5;
+        }
+
+        .card-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+            color: #8c8fab;
+        }
+
+        .loading-spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid rgba(92,106,196,0.1);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.4s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .section-header {
+            position: relative;
+        }
+
+        .section-header::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 60px;
+            height: 2px;
+            background: linear-gradient(90deg, var(--primary), transparent);
+            border-radius: 2px;
+        }
+
         .card {
             background: var(--surface);
             border-radius: 18px;
@@ -312,6 +516,29 @@
             box-shadow: var(--card-shadow);
             border: 1px solid rgba(92,106,196,0.08);
             transition: transform 0.25s ease, box-shadow 0.25s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .card:hover::before {
+            opacity: 1;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(16, 26, 62, 0.12);
         }
 
         .card h3 {
@@ -1396,7 +1623,7 @@
                 </div>
                 <div style="display:flex; align-items:center; gap:12px;">
                     <div class="status-chip" style="background: #1b5e20; color: #fff;" id="conciergeStatus">✓ Concierge Active</div>
-                    <button class="theme-toggle" id="themeToggle" type="button">Dark mode</button>
+                    <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle dark mode">Dark mode</button>
                     <div class="status-chip" id="clientStatus">Live</div>
                 </div>
             </div>
@@ -1433,25 +1660,25 @@
             </div>
         </div>
 
-        <section class="status-bar">
-            <div class="status-card" title="Total leads we're handling for you">
+        <section class="status-bar" role="region" aria-label="Dashboard statistics">
+            <div class="status-card" title="Total leads we're handling for you" role="article" aria-label="Leads we're managing">
                 <h4>Leads We're Managing</h4>
-                <div class="status-value" id="statusTotalLeads">48</div>
+                <div class="status-value" id="statusTotalLeads" aria-live="polite">48</div>
                 <p class="status-hint" id="statusHintLeads">7 new in last 24h</p>
             </div>
-            <div class="status-card" title="Calls your concierge has made">
+            <div class="status-card" title="Calls your concierge has made" role="article" aria-label="Calls we've made">
                 <h4>Calls We've Made</h4>
-                <div class="status-value" id="statusTotalCalls">36</div>
+                <div class="status-value" id="statusTotalCalls" aria-live="polite">36</div>
                 <p class="status-hint" id="statusHintCalls">12 bookings this week</p>
             </div>
-            <div class="status-card" title="Conversion rate from our follow-up">
+            <div class="status-card" title="Conversion rate from our follow-up" role="article" aria-label="Our conversion rate">
                 <h4>Our Conversion Rate</h4>
-                <div class="status-value" id="statusConversionRate">63%</div>
+                <div class="status-value" id="statusConversionRate" aria-live="polite">63%</div>
                 <p class="status-hint" id="statusHintConversion">84% success rate</p>
             </div>
-            <div class="status-card" title="How fast we respond to your leads">
+            <div class="status-card" title="How fast we respond to your leads" role="article" aria-label="Our response time">
                 <h4>Our Response Time</h4>
-                <div class="status-value" id="statusFirstResponse">2m 58s</div>
+                <div class="status-value" id="statusFirstResponse" aria-live="polite">2m 58s</div>
                 <p class="status-hint" id="statusHintResponse">Always under 5 min</p>
             </div>
         </section>
@@ -1615,13 +1842,22 @@
         </section>
     </div>
 
+    <div class="data-freshness" id="dataFreshness" role="status" aria-live="polite">
+        <span class="data-freshness-dot" id="freshnessDot"></span>
+        <span id="freshnessText">Data syncing...</span>
+    </div>
+
+    <div class="keyboard-hint" id="keyboardHint" role="tooltip" aria-hidden="true">
+        Press <kbd>?</kbd> for keyboard shortcuts
+    </div>
+
     <div class="toast-container" id="toastContainer"></div>
 
-    <div class="modal-backdrop" id="leadModal">
+    <div class="modal-backdrop" id="leadModal" role="dialog" aria-labelledby="modalLeadName" aria-modal="true">
         <div class="lead-modal">
             <div class="modal-header">
                 <h4 id="modalLeadName">Lead Name</h4>
-                <button class="modal-close" id="modalCloseBtn" aria-label="Close">&times;</button>
+                <button class="modal-close" id="modalCloseBtn" aria-label="Close lead modal">&times;</button>
             </div>
             <div class="modal-body">
                 <p><strong>Service:</strong> <span id="modalLeadService">—</span></p>
@@ -1631,32 +1867,32 @@
                 <p id="modalLeadNotes">—</p>
             </div>
             <div class="modal-actions">
-                <button type="button" class="modal-btn" id="modalSnoozeBtn">Snooze 1 day</button>
-                <button type="button" class="modal-btn primary" id="modalEscalateBtn">Escalate</button>
+                <button type="button" class="modal-btn" id="modalSnoozeBtn" aria-label="Snooze lead for 1 day">Snooze 1 day</button>
+                <button type="button" class="modal-btn primary" id="modalEscalateBtn" aria-label="Escalate lead to operator">Escalate</button>
             </div>
         </div>
     </div>
 
-    <div class="modal-backdrop" id="transcriptModal">
+    <div class="modal-backdrop" id="transcriptModal" role="dialog" aria-labelledby="transcriptModalTitle" aria-modal="true">
         <div class="lead-modal transcript-modal">
             <div class="modal-header">
                 <h4 id="transcriptModalTitle">Call Transcript</h4>
-                <button class="modal-close" id="transcriptCloseBtn" aria-label="Close">&times;</button>
+                <button class="modal-close" id="transcriptCloseBtn" aria-label="Close transcript modal">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="transcript-content" id="transcriptContent">Loading transcript...</div>
+                <div class="transcript-content" id="transcriptContent" role="region" aria-live="polite">Loading transcript...</div>
             </div>
         </div>
     </div>
 
-    <div class="modal-backdrop" id="timelineModal">
+    <div class="modal-backdrop" id="timelineModal" role="dialog" aria-labelledby="timelineModalTitle" aria-modal="true">
         <div class="lead-modal timeline-modal">
             <div class="modal-header">
                 <h4 id="timelineModalTitle">Lead Journey Timeline</h4>
-                <button class="modal-close" id="timelineCloseBtn" aria-label="Close">&times;</button>
+                <button class="modal-close" id="timelineCloseBtn" aria-label="Close timeline modal">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="timeline" id="timelineContent">Loading timeline...</div>
+                <div class="timeline" id="timelineContent" role="region" aria-live="polite">Loading timeline...</div>
             </div>
         </div>
     </div>
@@ -1750,17 +1986,24 @@
             return (params.get('client') || DEMO_CLIENT_KEY).replace(/-/g, '_');
         }
 
+        let lastDataUpdate = new Date();
         async function fetchLiveData(clientKey) {
             if (clientKey !== DEMO_CLIENT_KEY) {
                 try {
                     const res = await fetch(`${BASE_URL}/api/demo-dashboard/${clientKey}`);
                     if (res.ok) {
                         const payload = await res.json();
-                        if (payload.ok) return payload;
+                        if (payload.ok) {
+                            lastDataUpdate = new Date();
+                            return payload;
+                        }
                     }
                 } catch (err) {
                     console.warn('Live data unavailable', err.message);
+                    throw err;
                 }
+            } else {
+                lastDataUpdate = new Date();
             }
             return null;
         }
@@ -1896,7 +2139,13 @@
             const container = document.getElementById('leads-list');
             if (!container) return;
             if (!leads.length) {
-                container.innerHTML = '<p style="color:#8c8fab;">Leads we receive will appear here as we start following up.</p>';
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <span class="empty-state-icon">👥</span>
+                        <div class="empty-state-title">No leads yet</div>
+                        <div class="empty-state-message">Leads we receive will appear here as we start following up.</div>
+                    </div>
+                `;
                 currentLeads = [];
                 return;
             }
@@ -1921,7 +2170,18 @@
             const container = document.getElementById('upcoming-appointments');
             if (!container) return;
             if (!Array.isArray(appointments) || !appointments.length) {
-                container.innerHTML = '<p style="color:#8c8fab;">Appointments we book will appear here automatically.</p>';
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <span class="empty-state-icon">📅</span>
+                        <div class="empty-state-title">No upcoming appointments</div>
+                        <div class="empty-state-message">Appointments we book will appear here automatically.</div>
+                        <div class="empty-state-cta">
+                            <button class="empty-state-btn" onclick="document.getElementById('leadImportButton')?.click()" aria-label="Upload leads to get started">
+                                📤 Send Us Leads to Book
+                            </button>
+                        </div>
+                    </div>
+                `;
                 return;
             }
             container.innerHTML = appointments.map(appt => `
@@ -1973,7 +2233,13 @@
             const container = document.getElementById('integration-health');
             if (!container) return;
             if (!Array.isArray(list) || !list.length) {
-                container.innerHTML = '<p style="color:#8c8fab;">Connect channels to monitor health.</p>';
+                container.innerHTML = `
+                    <div class="empty-state" style="padding: 20px;">
+                        <span class="empty-state-icon">🔌</span>
+                        <div class="empty-state-title">No integrations</div>
+                        <div class="empty-state-message">Connect channels to monitor health.</div>
+                    </div>
+                `;
                 return;
             }
             container.innerHTML = list.map(item => `
@@ -1990,7 +2256,18 @@
         function renderCalls(calls = []) {
             const container = document.getElementById('recent-calls');
             if (!calls.length) {
-                container.innerHTML = '<p style="color:#8c8fab;">Your concierge will start calling leads as soon as you send them to us.</p>';
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <span class="empty-state-icon">📞</span>
+                        <div class="empty-state-title">No calls yet</div>
+                        <div class="empty-state-message">Your concierge will start calling leads as soon as you send them to us.</div>
+                        <div class="empty-state-cta">
+                            <button class="empty-state-btn" onclick="document.getElementById('leadImportButton')?.click()" aria-label="Upload leads">
+                                📤 Upload Leads to Get Started
+                            </button>
+                        </div>
+                    </div>
+                `;
                 return;
             }
             container.innerHTML = calls.map((call, index) => {
@@ -2108,7 +2385,16 @@
                 }
             } catch (error) {
                 console.error('Failed to load transcript', error);
-                contentEl.textContent = 'Unable to load transcript. Please try again later.';
+                contentEl.innerHTML = `
+                    <div class="error-message" role="alert">
+                        <span class="error-message-icon">⚠️</span>
+                        <div>
+                            <strong>Unable to load transcript</strong>
+                            <div style="font-size: 0.9rem; margin-top: 4px;">${error.message || 'Please try again later.'}</div>
+                            <button class="empty-state-btn" style="margin-top: 8px; font-size: 0.85rem; padding: 6px 12px;" onclick="viewTranscript('${callId}', '${name}')">Retry</button>
+                        </div>
+                    </div>
+                `;
             }
         }
 
@@ -2145,6 +2431,7 @@
                 }
             } catch (error) {
                 console.error('Failed to load active indicator', error);
+                // Gracefully degrade - don't show error for this non-critical feature
             }
         }
 
@@ -2203,6 +2490,7 @@
                 }
             } catch (error) {
                 console.error('Failed to load call quality', error);
+                showError(container, 'Unable to load call quality metrics. Please refresh the page.', () => location.reload());
             }
         }
 
@@ -2215,7 +2503,13 @@
                 const failedCalls = Math.floor(totalCalls * 0.15);
                 
                 if (failedCalls === 0) {
-                    container.innerHTML = '<p style="color:#8c8fab;">No retries needed - all calls successful!</p>';
+                    container.innerHTML = `
+                        <div class="empty-state" style="padding: 20px;">
+                            <span class="empty-state-icon">✅</span>
+                            <div class="empty-state-title">All caught up!</div>
+                            <div class="empty-state-message">No retries needed - all calls successful!</div>
+                        </div>
+                    `;
                     return;
                 }
 
@@ -2243,7 +2537,13 @@
                 const payload = await response.json();
                 if (response.ok && payload?.ok) {
                     if (!payload.retries || payload.retries.length === 0) {
-                        container.innerHTML = '<p style="color:#8c8fab;">No retries needed - all calls successful!</p>';
+                        container.innerHTML = `
+                            <div class="empty-state" style="padding: 20px;">
+                                <span class="empty-state-icon">✅</span>
+                                <div class="empty-state-title">All caught up!</div>
+                                <div class="empty-state-message">No retries needed - all calls successful!</div>
+                            </div>
+                        `;
                         return;
                     }
                     container.innerHTML = payload.retries.map(lead => `
@@ -2258,6 +2558,7 @@
                 }
             } catch (error) {
                 console.error('Failed to load retry queue', error);
+                showError(container, 'Unable to load retry queue. Please refresh the page.', () => location.reload());
             }
         }
 
@@ -2311,7 +2612,16 @@
                 }
             } catch (error) {
                 console.error('Failed to load timeline', error);
-                contentEl.innerHTML = '<p>Unable to load timeline. Please try again later.</p>';
+                contentEl.innerHTML = `
+                    <div class="error-message" role="alert">
+                        <span class="error-message-icon">⚠️</span>
+                        <div>
+                            <strong>Unable to load timeline</strong>
+                            <div style="font-size: 0.9rem; margin-top: 4px;">${error.message || 'Please try again later.'}</div>
+                            <button class="empty-state-btn" style="margin-top: 8px; font-size: 0.85rem; padding: 6px 12px;" onclick="viewLeadTimeline('${leadId}', '${name}')">Retry</button>
+                        </div>
+                    </div>
+                `;
             }
         }
 
@@ -2327,7 +2637,13 @@
 
             if (currentClient === DEMO_CLIENT_KEY) {
                 if (!calls.length) {
-                    container.innerHTML = '<p style="color:#8c8fab;">Call recordings will appear here after calls are made.</p>';
+                    container.innerHTML = `
+                        <div class="empty-state" style="padding: 20px;">
+                            <span class="empty-state-icon">🎙️</span>
+                            <div class="empty-state-title">No recordings yet</div>
+                            <div class="empty-state-message">Call recordings will appear here after calls are made.</div>
+                        </div>
+                    `;
                     return;
                 }
 
@@ -2350,7 +2666,13 @@
                 const payload = await response.json();
                 if (response.ok && payload?.ok) {
                     if (!payload.recordings || payload.recordings.length === 0) {
-                        container.innerHTML = '<p style="color:#8c8fab;">Call recordings will appear here after calls are made.</p>';
+                        container.innerHTML = `
+                            <div class="empty-state" style="padding: 20px;">
+                                <span class="empty-state-icon">🎙️</span>
+                                <div class="empty-state-title">No recordings yet</div>
+                                <div class="empty-state-message">Call recordings will appear here after calls are made.</div>
+                            </div>
+                        `;
                         return;
                     }
                     container.innerHTML = payload.recordings.map(recording => {
@@ -2471,7 +2793,8 @@
                 showToast('Export Complete', `Downloaded ${type} data.`, 'success');
             } catch (error) {
                 console.error('Export failed', error);
-                showToast('Export Failed', error.message || 'Unable to export data.', 'error');
+                const errorMsg = error.message || 'Unable to export data. Please check your connection and try again.';
+                showToast('Export Failed', errorMsg, 'error');
             }
         }
 
@@ -2552,6 +2875,10 @@
             initThemeToggle();
             initModalControls();
             initImporter();
+            initAccessibility();
+            initKeyboardShortcuts();
+            initOfflineDetection();
+            initDataFreshness();
 
             dashboardData = { ...DEMO_DATA };
             if (currentClient === DEMO_CLIENT_KEY) {
@@ -2562,8 +2889,23 @@
                 if (banner) banner.style.display = 'none';
             }
 
-            const livePayload = await fetchLiveData(currentClient);
-            dashboardData = mergeData(dashboardData, livePayload);
+            // Show loading skeletons
+            const loadingContainers = ['leads-list', 'upcoming-appointments', 'recent-calls', 'recent-activity'];
+            loadingContainers.forEach(id => {
+                const container = document.getElementById(id);
+                if (container) showSkeleton(container, id === 'recent-activity' ? 'metrics' : 'list');
+            });
+
+            try {
+                const livePayload = await fetchLiveData(currentClient);
+                dashboardData = mergeData(dashboardData, livePayload);
+            } catch (error) {
+                console.error('Failed to load dashboard data', error);
+                const leadsContainer = document.getElementById('leads-list');
+                if (leadsContainer) {
+                    showError(leadsContainer, 'Unable to load dashboard data. Please refresh the page.', () => location.reload());
+                }
+            }
 
             updateStatusBar(dashboardData);
             renderRecentActivity(dashboardData);
@@ -2584,25 +2926,250 @@
 
             startLiveEvents(currentClient);
 
+            // Add fade-in animation to cards
+            setTimeout(() => {
+                document.querySelectorAll('.card').forEach((card, index) => {
+                    card.style.animationDelay = `${index * 0.05}s`;
+                    card.classList.add('fade-in');
+                });
+            }, 100);
+
             setInterval(async () => {
-                const refreshPayload = await fetchLiveData(currentClient);
-                if (refreshPayload) {
-                    dashboardData = mergeData(dashboardData, refreshPayload);
-                    updateStatusBar(dashboardData);
-                    renderRecentActivity(dashboardData);
-                    renderROI(dashboardData.roi || DEMO_DATA.roi);
-                    await renderActiveIndicator(dashboardData);
-                    renderLeadJourney(dashboardData);
-                    renderLeads(dashboardData.recentLeads || []);
-                    renderAppointments(dashboardData.appointments || []);
-                    renderCalls(dashboardData.recentCalls || []);
-                    await renderCallRecordings(dashboardData.recentCalls || []);
-                    await renderCallQuality(dashboardData);
-                    await renderRetryQueue(dashboardData);
-                    await renderCalendarDetails(dashboardData);
-                    renderChart(config, dashboardData);
+                try {
+                    const refreshPayload = await fetchLiveData(currentClient);
+                    if (refreshPayload) {
+                        dashboardData = mergeData(dashboardData, refreshPayload);
+                        updateStatusBar(dashboardData);
+                        renderRecentActivity(dashboardData);
+                        renderROI(dashboardData.roi || DEMO_DATA.roi);
+                        await renderActiveIndicator(dashboardData);
+                        renderLeadJourney(dashboardData);
+                        renderLeads(dashboardData.recentLeads || []);
+                        renderAppointments(dashboardData.appointments || []);
+                        renderCalls(dashboardData.recentCalls || []);
+                        await renderCallRecordings(dashboardData.recentCalls || []);
+                        await renderCallQuality(dashboardData);
+                        await renderRetryQueue(dashboardData);
+                        await renderCalendarDetails(dashboardData);
+                        renderChart(config, dashboardData);
+                    }
+                } catch (error) {
+                    console.error('Failed to refresh dashboard data', error);
+                    // Silent fail for background refresh - don't interrupt user
                 }
             }, 30000);
+        }
+
+        // Accessibility improvements
+        function initAccessibility() {
+            // Add ARIA labels to interactive elements
+            document.querySelectorAll('button').forEach(btn => {
+                if (!btn.getAttribute('aria-label') && !btn.textContent.trim()) {
+                    btn.setAttribute('aria-label', btn.title || 'Button');
+                }
+            });
+
+            // Add ARIA labels to cards
+            document.querySelectorAll('.card').forEach(card => {
+                const title = card.querySelector('h3');
+                if (title && !card.getAttribute('aria-label')) {
+                    card.setAttribute('aria-label', title.textContent);
+                }
+            });
+
+            // Improve keyboard navigation
+            document.querySelectorAll('.lead-item, .appt-item, .activity-item').forEach(item => {
+                if (!item.getAttribute('tabindex')) {
+                    item.setAttribute('tabindex', '0');
+                }
+                item.setAttribute('role', 'button');
+            });
+        }
+
+        // Keyboard shortcuts
+        function initKeyboardShortcuts() {
+            const hint = document.getElementById('keyboardHint');
+            let hintTimeout;
+
+            document.addEventListener('keydown', (e) => {
+                // Show hint on first keypress
+                if (hint && !hint.classList.contains('show')) {
+                    hint.classList.add('show');
+                    clearTimeout(hintTimeout);
+                    hintTimeout = setTimeout(() => hint.classList.remove('show'), 3000);
+                }
+
+                // ? - Show keyboard shortcuts
+                if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
+                    e.preventDefault();
+                    showKeyboardShortcuts();
+                }
+
+                // Escape - Close modals
+                if (e.key === 'Escape') {
+                    closeLeadModal();
+                    closeTranscriptModal();
+                    closeTimelineModal();
+                }
+
+                // u - Upload leads (when not in input)
+                if (e.key === 'u' && !e.ctrlKey && !e.metaKey && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+                    e.preventDefault();
+                    document.getElementById('leadImportButton')?.click();
+                }
+
+                // t - Toggle theme
+                if (e.key === 't' && !e.ctrlKey && !e.metaKey && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+                    e.preventDefault();
+                    document.getElementById('themeToggle')?.click();
+                }
+            });
+        }
+
+        function showKeyboardShortcuts() {
+            const shortcuts = [
+                { key: '?', desc: 'Show keyboard shortcuts' },
+                { key: 'Esc', desc: 'Close modals' },
+                { key: 'u', desc: 'Upload leads' },
+                { key: 't', desc: 'Toggle theme' }
+            ];
+
+            const modal = document.createElement('div');
+            modal.className = 'modal-backdrop open';
+            modal.setAttribute('role', 'dialog');
+            modal.setAttribute('aria-label', 'Keyboard shortcuts');
+            modal.innerHTML = `
+                <div class="lead-modal">
+                    <div class="modal-header">
+                        <h4>⌨️ Keyboard Shortcuts</h4>
+                        <button class="modal-close" onclick="this.closest('.modal-backdrop').remove()" aria-label="Close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        ${shortcuts.map(s => `
+                            <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(92,106,196,0.1);">
+                                <span><kbd style="background: rgba(92,106,196,0.1); padding: 4px 8px; border-radius: 4px; font-weight: 600;">${s.key}</kbd></span>
+                                <span style="color: var(--muted);">${s.desc}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) modal.remove();
+            });
+        }
+
+        // Offline detection
+        function initOfflineDetection() {
+            const freshnessDot = document.getElementById('freshnessDot');
+            const freshnessText = document.getElementById('freshnessText');
+
+            function updateOnlineStatus() {
+                if (navigator.onLine) {
+                    freshnessDot?.classList.remove('offline');
+                    if (freshnessText) freshnessText.textContent = 'Online';
+                } else {
+                    freshnessDot?.classList.add('offline');
+                    if (freshnessText) freshnessText.textContent = 'Offline';
+                    showToast('Connection Lost', 'You are currently offline. Data will sync when connection is restored.', 'warning');
+                }
+            }
+
+            window.addEventListener('online', () => {
+                updateOnlineStatus();
+                showToast('Connection Restored', 'You are back online. Syncing data...', 'success');
+                // Refresh data
+                setTimeout(async () => {
+                    try {
+                        const refreshPayload = await fetchLiveData(currentClient);
+                        if (refreshPayload) {
+                            dashboardData = mergeData(dashboardData, refreshPayload);
+                            updateStatusBar(dashboardData);
+                            renderRecentActivity(dashboardData);
+                            renderLeads(dashboardData.recentLeads || []);
+                            renderAppointments(dashboardData.appointments || []);
+                        }
+                    } catch (error) {
+                        console.error('Failed to refresh after coming online', error);
+                    }
+                }, 1000);
+            });
+
+            window.addEventListener('offline', updateOnlineStatus);
+            updateOnlineStatus();
+        }
+
+        // Data freshness indicator
+        function initDataFreshness() {
+            const freshnessText = document.getElementById('freshnessText');
+            if (!freshnessText) return;
+
+            function updateFreshness() {
+                const now = new Date();
+                const diffMs = now - lastDataUpdate;
+                const diffMins = Math.floor(diffMs / 60000);
+                const diffSecs = Math.floor((diffMs % 60000) / 1000);
+
+                if (diffMins < 1) {
+                    freshnessText.textContent = `Updated ${diffSecs}s ago`;
+                } else if (diffMins < 60) {
+                    freshnessText.textContent = `Updated ${diffMins}m ago`;
+                } else {
+                    const diffHours = Math.floor(diffMins / 60);
+                    freshnessText.textContent = `Updated ${diffHours}h ago`;
+                }
+            }
+
+            // Update freshness every second
+            setInterval(updateFreshness, 1000);
+            updateFreshness();
+        }
+
+        // Better error handling
+        function showError(container, message, retryFn = null) {
+            if (!container) return;
+            const errorId = `error-${Date.now()}`;
+            const errorHtml = `
+                <div class="error-message" role="alert" id="${errorId}">
+                    <span class="error-message-icon">⚠️</span>
+                    <div style="flex: 1;">
+                        <strong>Error loading data</strong>
+                        <div style="font-size: 0.9rem; margin-top: 4px;">${message}</div>
+                        ${retryFn ? `<button class="empty-state-btn" style="margin-top: 8px; font-size: 0.85rem; padding: 6px 12px;" id="retry-${errorId}">Retry</button>` : ''}
+                    </div>
+                </div>
+            `;
+            container.innerHTML = errorHtml;
+            if (retryFn) {
+                const retryBtn = document.getElementById(`retry-${errorId}`);
+                if (retryBtn) {
+                    retryBtn.addEventListener('click', retryFn);
+                }
+            }
+        }
+
+        // Loading skeleton
+        function showSkeleton(container, type = 'list') {
+            if (!container) return;
+            if (type === 'list') {
+                container.innerHTML = `
+                    <div class="skeleton-card">
+                        <div class="skeleton skeleton-text" style="width: 60%;"></div>
+                        <div class="skeleton skeleton-text" style="width: 80%;"></div>
+                        <div class="skeleton skeleton-text" style="width: 70%;"></div>
+                    </div>
+                `;
+            } else if (type === 'metrics') {
+                container.innerHTML = `
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
+                        <div class="skeleton skeleton-text" style="height: 60px;"></div>
+                        <div class="skeleton skeleton-text" style="height: 60px;"></div>
+                        <div class="skeleton skeleton-text" style="height: 60px;"></div>
+                        <div class="skeleton skeleton-text" style="height: 60px;"></div>
+                    </div>
+                `;
+            }
         }
 
         document.addEventListener('DOMContentLoaded', initDashboard);
@@ -2831,8 +3398,9 @@
                 showToast('Import Complete', `Successfully imported ${payload.inserted} leads`, 'success');
             } catch (error) {
                 console.error('Import failed', error);
-                setImportStatus(error.message || 'Import failed', 'error');
-                showToast('Import Failed', error.message || 'Unable to import leads', 'error');
+                const errorMsg = error.message || 'Unable to import leads. Please check your CSV format and try again.';
+                setImportStatus(errorMsg, 'error');
+                showToast('Import Failed', errorMsg, 'error');
             }
         }
 
