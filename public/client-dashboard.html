@@ -694,41 +694,6 @@
             margin-left: 8px;
         }
 
-        .before-after {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
-            padding: 16px 0;
-        }
-
-        .before-after-item {
-            text-align: center;
-            padding: 12px;
-            border-radius: 10px;
-            background: rgba(92,106,196,0.04);
-        }
-
-        .before-after-label {
-            font-size: 0.85rem;
-            color: #7a7fa4;
-            margin-bottom: 6px;
-        }
-
-        .before-after-value {
-            font-size: 1.6rem;
-            font-weight: 700;
-            color: var(--primary);
-        }
-
-        .before-after-delta {
-            font-size: 0.75rem;
-            color: #1b5e20;
-            margin-top: 4px;
-        }
-
-        .before-after-delta.negative {
-            color: #c62828;
-        }
 
         .transcript-btn {
             background: transparent;
@@ -992,40 +957,6 @@
             color: #7a7fa4;
         }
 
-        .next-actions {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            padding: 8px 0;
-        }
-
-        .action-item {
-            display: flex;
-            gap: 12px;
-            padding: 12px;
-            background: rgba(92,106,196,0.06);
-            border-radius: 10px;
-            border-left: 3px solid var(--primary);
-        }
-
-        .action-icon {
-            font-size: 1.2rem;
-        }
-
-        .action-content {
-            flex: 1;
-        }
-
-        .action-title {
-            font-weight: 600;
-            color: #2f3147;
-            margin-bottom: 4px;
-        }
-
-        .action-time {
-            font-size: 0.75rem;
-            color: #7a7fa4;
-        }
 
         .recording-item {
             display: flex;
@@ -1282,9 +1213,6 @@
                 grid-template-columns: 1fr;
                 padding: 16px;
             }
-            .before-after {
-                grid-template-columns: 1fr;
-            }
             .export-buttons {
                 flex-direction: column;
             }
@@ -1415,11 +1343,6 @@
                 <div id="lead-journey" class="funnel"></div>
             </article>
 
-            <article class="card">
-                <h3>📊 Your Growth Since We Started</h3>
-                <p class="card-subtitle">The impact of our concierge service on your business.</p>
-                <div id="before-after" class="before-after"></div>
-            </article>
 
             <article class="card">
                 <h3>⚡ What We're Doing For You (24h)</h3>
@@ -1476,11 +1399,6 @@
                 </div>
             </article>
 
-            <article class="card">
-                <h3>🧮 What We're Booking Most</h3>
-                <p class="card-subtitle">Where your concierge is spending time booking appointments.</p>
-                <div id="service-mix" class="mix-list"></div>
-            </article>
 
             <article class="card">
                 <h3>📅 Appointments We Booked</h3>
@@ -1558,11 +1476,6 @@
                 <div id="retry-queue" class="retry-queue"></div>
             </article>
 
-            <article class="card">
-                <h3>⏭️ What We're Doing Next</h3>
-                <p class="card-subtitle">Your concierge's planned actions for today and tomorrow.</p>
-                <div id="next-actions" class="next-actions"></div>
-            </article>
 
             <article class="card">
                 <h3>🎙️ Call Recordings</h3>
@@ -1881,36 +1794,6 @@
             attachLeadModalEvents();
         }
 
-        function renderServiceMix(mix = []) {
-            const container = document.getElementById('service-mix');
-            if (!container) return;
-            if (!Array.isArray(mix) || !mix.length) {
-                container.innerHTML = '<p style="color:#8c8fab;">Connect services to see distribution.</p>';
-                return;
-            }
-            const topPercent = Math.max(...mix.map(item => item.percent || 0), 0);
-            container.innerHTML = mix.map(service => {
-                const percent = Math.max(0, Math.min(100, service.percent || 0));
-                const tag = percent === topPercent && percent > 0
-                    ? '<span class="mix-tag">Top workflow</span>'
-                    : '';
-                return `
-                    <div class="mix-item">
-                        <div class="mix-header">
-                            <span>${service.name || 'Service'}</span>
-                            <span>${percent}%</span>
-                        </div>
-                        <div class="mix-bar" role="presentation">
-                            <div class="mix-bar-fill" style="width:${percent}%;"></div>
-                        </div>
-                        <div class="mix-meta">
-                            <span>${service.notes || 'Running in parallel'}</span>
-                            <span>${tag}</span>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
 
         function renderAppointments(appointments = []) {
             const container = document.getElementById('upcoming-appointments');
@@ -2047,43 +1930,6 @@
             }).join('');
         }
 
-        function renderBeforeAfter(data) {
-            const container = document.getElementById('before-after');
-            if (!container) return;
-            const currentLeads = data.totalLeads || 0;
-            const currentCalls = data.totalCalls || 0;
-            const currentBookings = data.bookingsThisWeek || 0;
-            const currentConversion = data.conversionRate || 0;
-
-            const baselineLeads = Math.max(1, Math.round(currentLeads * 0.3));
-            const baselineCalls = Math.max(1, Math.round(currentCalls * 0.2));
-            const baselineBookings = Math.max(1, Math.round(currentBookings * 0.15));
-            const baselineConversion = Math.max(10, currentConversion - 40);
-
-            const metrics = [
-                { label: 'Total Leads', before: baselineLeads, after: currentLeads },
-                { label: 'Calls Made', before: baselineCalls, after: currentCalls },
-                { label: 'Bookings', before: baselineBookings, after: currentBookings },
-                { label: 'Conversion', before: baselineConversion, after: currentConversion, suffix: '%' }
-            ];
-
-            container.innerHTML = metrics.map(metric => {
-                const delta = metric.after - metric.before;
-                const deltaPercent = metric.before > 0 ? Math.round((delta / metric.before) * 100) : 0;
-                const isPositive = delta >= 0;
-                return `
-                    <div class="before-after-item">
-                        <div class="before-after-label">${metric.label}</div>
-                        <div class="before-after-value">${metric.before}${metric.suffix || ''}</div>
-                        <div style="margin:8px 0; font-size:0.9rem;">→</div>
-                        <div class="before-after-value">${metric.after}${metric.suffix || ''}</div>
-                        <div class="before-after-delta ${isPositive ? '' : 'negative'}">
-                            ${isPositive ? '↑' : '↓'} ${Math.abs(deltaPercent)}%
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
 
         function renderForecast(data) {
             const container = document.getElementById('forecast-chart');
@@ -2387,63 +2233,6 @@
             if (modal) modal.classList.remove('open');
         }
 
-        async function renderNextActions(data) {
-            const container = document.getElementById('next-actions');
-            if (!container) return;
-
-            if (currentClient === DEMO_CLIENT_KEY) {
-                const totalLeads = data.totalLeads || 0;
-                const highPriority = data.highPriorityLeads || 0;
-                const actions = [];
-
-                if (highPriority > 0) {
-                    actions.push({ icon: '📞', title: `Call ${highPriority} high-priority leads`, time: 'Today, 2-4pm' });
-                }
-                if (totalLeads > highPriority) {
-                    actions.push({ icon: '💬', title: `Follow up with ${totalLeads - highPriority} medium-priority leads`, time: 'Today, 4-6pm' });
-                }
-                actions.push({ icon: '📧', title: 'Send appointment reminders', time: 'Tomorrow, 9am' });
-                actions.push({ icon: '🔄', title: 'Retry 3 failed calls', time: 'Tomorrow, 2pm' });
-
-                if (!actions.length) {
-                    container.innerHTML = '<p style="color:#8c8fab;">No scheduled actions - all caught up!</p>';
-                    return;
-                }
-
-                container.innerHTML = actions.map(action => `
-                    <div class="action-item">
-                        <div class="action-icon">${action.icon}</div>
-                        <div class="action-content">
-                            <div class="action-title">${action.title}</div>
-                            <div class="action-time">${action.time}</div>
-                        </div>
-                    </div>
-                `).join('');
-                return;
-            }
-
-            try {
-                const response = await fetch(`${BASE_URL}/api/next-actions/${currentClient}`);
-                const payload = await response.json();
-                if (response.ok && payload?.ok) {
-                    if (!payload.actions || payload.actions.length === 0) {
-                        container.innerHTML = '<p style="color:#8c8fab;">No scheduled actions - all caught up!</p>';
-                        return;
-                    }
-                    container.innerHTML = payload.actions.map(action => `
-                        <div class="action-item">
-                            <div class="action-icon">${action.icon}</div>
-                            <div class="action-content">
-                                <div class="action-title">${action.title}</div>
-                                <div class="action-time">${action.time}</div>
-                            </div>
-                        </div>
-                    `).join('');
-                }
-            } catch (error) {
-                console.error('Failed to load next actions', error);
-            }
-        }
 
         async function renderCallRecordings(calls = []) {
             const container = document.getElementById('call-recordings');
@@ -2694,17 +2483,14 @@
             renderROI(dashboardData.roi || DEMO_DATA.roi);
             await renderActiveIndicator(dashboardData);
             renderLeadJourney(dashboardData);
-            renderBeforeAfter(dashboardData);
             renderLeadPriority(dashboardData);
             renderLeads(dashboardData.recentLeads || []);
-            renderServiceMix(dashboardData.serviceMix || []);
             renderAppointments(dashboardData.appointments || []);
             renderChart(config, dashboardData);
             renderForecast(dashboardData);
             renderSystemStatus(config);
             await renderCallQuality(dashboardData);
             await renderRetryQueue(dashboardData);
-            await renderNextActions(dashboardData);
             await renderCalendarDetails(dashboardData);
             renderCalls(dashboardData.recentCalls || []);
             await renderCallRecordings(dashboardData.recentCalls || []);
@@ -2722,16 +2508,13 @@
                     renderROI(dashboardData.roi || DEMO_DATA.roi);
                     await renderActiveIndicator(dashboardData);
                     renderLeadJourney(dashboardData);
-                    renderBeforeAfter(dashboardData);
                     renderLeadPriority(dashboardData);
                     renderLeads(dashboardData.recentLeads || []);
-                    renderServiceMix(dashboardData.serviceMix || []);
                     renderAppointments(dashboardData.appointments || []);
                     renderCalls(dashboardData.recentCalls || []);
                     await renderCallRecordings(dashboardData.recentCalls || []);
                     await renderCallQuality(dashboardData);
                     await renderRetryQueue(dashboardData);
-                    await renderNextActions(dashboardData);
                     await renderCalendarDetails(dashboardData);
                     renderChart(config, dashboardData);
                     renderForecast(dashboardData);
