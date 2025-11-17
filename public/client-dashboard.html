@@ -183,10 +183,126 @@
             color: #8c8fab;
         }
 
+        .dashboard-section {
+            margin-bottom: 48px;
+        }
+
+        .section-header {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid rgba(92,106,196,0.15);
+        }
+
         .dashboard-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
             gap: 22px;
+        }
+
+        .card-chart {
+            min-height: 280px;
+        }
+
+        .card-visual {
+            min-height: 240px;
+        }
+
+        .card-list {
+            min-height: 300px;
+        }
+
+        .card-metrics {
+            min-height: 200px;
+        }
+
+        .card-fullwidth {
+            grid-column: 1 / -1;
+        }
+
+        .priority-visual {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 8px 0;
+        }
+
+        .priority-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .priority-label {
+            min-width: 120px;
+            font-size: 0.9rem;
+            color: #7a7fa4;
+        }
+
+        .priority-progress {
+            flex: 1;
+            height: 24px;
+            background: rgba(92,106,196,0.08);
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .priority-progress-fill {
+            height: 100%;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 8px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: #fff;
+        }
+
+        .priority-progress-fill.high {
+            background: linear-gradient(90deg, #1b5e20, #2e7d32);
+        }
+
+        .priority-progress-fill.medium {
+            background: linear-gradient(90deg, #f5a623, #ff9800);
+        }
+
+        .priority-progress-fill.low {
+            background: linear-gradient(90deg, #7a7fa4, #9ca3af);
+        }
+
+        .activity-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            padding: 8px 0;
+        }
+
+        .activity-metric {
+            text-align: center;
+            padding: 16px;
+            background: rgba(92,106,196,0.06);
+            border-radius: 12px;
+            border: 1px solid rgba(92,106,196,0.12);
+        }
+
+        .activity-metric-label {
+            font-size: 0.85rem;
+            color: #7a7fa4;
+            margin-bottom: 8px;
+        }
+
+        .activity-metric-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .status-compact {
+            padding: 8px 0;
         }
 
         .card {
@@ -1188,6 +1304,28 @@
         }
 
         @media (max-width: 768px) {
+            .section-header {
+                font-size: 1.3rem;
+                margin-bottom: 16px;
+            }
+
+            .dashboard-section {
+                margin-bottom: 32px;
+            }
+
+            .activity-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .priority-visual {
+                gap: 10px;
+            }
+
+            .priority-label {
+                min-width: 100px;
+                font-size: 0.85rem;
+            }
+
             .toast-container {
                 top: 12px;
                 right: 12px;
@@ -1336,160 +1474,151 @@
             </div>
         </section>
 
-        <section class="dashboard-grid">
-            <article class="card">
-                <h3>🔄 How We Convert Your Leads</h3>
-                <p class="card-subtitle">Your concierge's conversion funnel from lead to booking.</p>
-                <div id="lead-journey" class="funnel"></div>
-            </article>
+        <!-- PERFORMANCE & ANALYTICS SECTION -->
+        <section class="dashboard-section">
+            <h2 class="section-header">📊 Performance & Analytics</h2>
+            <div class="dashboard-grid">
+                <article class="card card-chart">
+                    <h3>🔄 Conversion Funnel</h3>
+                    <p class="card-subtitle">How we convert your leads into bookings.</p>
+                    <div id="lead-journey" class="funnel"></div>
+                </article>
 
-
-            <article class="card">
-                <h3>⚡ What We're Doing For You (24h)</h3>
-                <p class="card-subtitle">Your concierge's activity in the last 24 hours.</p>
-                <div id="recent-activity">
-                    <div class="metric-row">
-                        <span class="metric-label">New leads we received</span>
-                        <span class="metric-value">7</span>
+                <article class="card card-chart">
+                    <h3>📊 Weekly Activity</h3>
+                    <p class="card-subtitle">Calls and bookings we made this week.</p>
+                    <div id="performance-chart">
+                        <div class="chart" id="chartBars"></div>
+                        <p class="chart-value" id="chartSummary">18 bookings we made this week</p>
                     </div>
-                    <div class="metric-row">
-                        <span class="metric-label">Calls we made</span>
-                        <span class="metric-value">21</span>
+                    <div class="export-buttons">
+                        <button class="export-btn secondary" onclick="exportData('calls')">📥 Export</button>
                     </div>
-                    <div class="metric-row">
-                        <span class="metric-label">Appointments we booked</span>
-                        <span class="metric-value">12</span>
+                </article>
+
+                <article class="card card-chart">
+                    <h3>📈 Revenue Forecast</h3>
+                    <p class="card-subtitle">Projected bookings for next week.</p>
+                    <div id="forecast-chart" class="forecast-chart"></div>
+                    <p class="chart-value" id="forecastSummary">Based on current performance</p>
+                </article>
+
+                <article class="card">
+                    <h3>📊 Call Quality</h3>
+                    <p class="card-subtitle">How effective our calls are.</p>
+                    <div id="call-quality" class="call-quality-grid"></div>
+                </article>
+            </div>
+        </section>
+
+        <!-- LEAD MANAGEMENT SECTION -->
+        <section class="dashboard-section">
+            <h2 class="section-header">👥 Lead Management</h2>
+            <div class="dashboard-grid">
+                <article class="card card-visual">
+                    <h3>🎯 Priority Breakdown</h3>
+                    <p class="card-subtitle">How we prioritize your leads.</p>
+                    <div id="lead-priority" class="priority-visual"></div>
+                </article>
+
+                <article class="card card-list">
+                    <h3>📋 Recent Leads</h3>
+                    <p class="card-subtitle">Leads we're actively following up on.</p>
+                    <div id="leads-list" class="leads-list"></div>
+                    <div class="export-buttons">
+                        <button class="export-btn secondary" onclick="exportData('leads')">📥 Export</button>
                     </div>
-                    <div class="metric-row">
-                        <span class="metric-label">Our avg response time</span>
-                        <span class="metric-value">2m 58s</span>
+                </article>
+
+                <article class="card">
+                    <h3>📤 Upload Leads</h3>
+                    <p class="card-subtitle">Send us more leads to follow up on.</p>
+                    <div class="import-dropzone" id="leadDropzone">
+                        Drag & drop CSV or <button type="button" id="leadImportButton">browse</button>
+                        <small style="display:block;margin-top:6px;">Columns: name, phone, service, source</small>
                     </div>
-                </div>
-            </article>
+                    <input type="file" id="leadImportInput" accept=".csv" style="display:none">
+                    <div class="import-status" id="leadImportStatus"></div>
+                </article>
 
-            <article class="card">
-                <h3>🎯 Leads We're Prioritising</h3>
-                <p class="card-subtitle">How we score and prioritise your leads automatically.</p>
-                <div id="lead-priority">
-                    <div class="metric-row">
-                        <span class="metric-label">High priority (we're calling first)</span>
-                        <span class="metric-value">9</span>
+                <article class="card">
+                    <h3>🔄 Retry Queue</h3>
+                    <p class="card-subtitle">Leads we're retrying after initial contact.</p>
+                    <div id="retry-queue" class="retry-queue"></div>
+                </article>
+            </div>
+        </section>
+
+        <!-- OPERATIONS SECTION -->
+        <section class="dashboard-section">
+            <h2 class="section-header">⚡ Daily Operations</h2>
+            <div class="dashboard-grid">
+                <article class="card card-metrics">
+                    <h3>📈 Today's Activity</h3>
+                    <p class="card-subtitle">What we accomplished in the last 24 hours.</p>
+                    <div id="recent-activity" class="activity-grid"></div>
+                </article>
+
+                <article class="card card-list">
+                    <h3>📅 Upcoming Appointments</h3>
+                    <p class="card-subtitle">Appointments we booked for you.</p>
+                    <div id="upcoming-appointments" class="appt-list"></div>
+                    <div class="export-buttons">
+                        <button class="export-btn secondary" onclick="exportData('appointments')">📥 Export</button>
                     </div>
-                    <div class="metric-row">
-                        <span class="metric-label">Medium (in our queue)</span>
-                        <span class="metric-value">14</span>
+                </article>
+
+                <article class="card card-list">
+                    <h3>🎙️ Call Recordings</h3>
+                    <p class="card-subtitle">Listen to recent calls we made.</p>
+                    <div id="call-recordings"></div>
+                </article>
+            </div>
+        </section>
+
+        <!-- SYSTEM STATUS SECTION -->
+        <section class="dashboard-section">
+            <h2 class="section-header">⚙️ System Status</h2>
+            <div class="dashboard-grid">
+                <article class="card">
+                    <h3>🔌 Integrations</h3>
+                    <p class="card-subtitle">Everything connected to handle your bookings.</p>
+                    <div id="system-status" class="status-compact">
+                        <div class="metric-row">
+                            <span class="metric-label">Lead number</span>
+                            <span class="metric-value" id="statusPhone">+44 20 3880 1234</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">SMS & WhatsApp</span>
+                            <span class="metric-value">✓ Active</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">Calendar</span>
+                            <span class="metric-value">✓ Connected</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">Coverage</span>
+                            <span class="metric-value" id="statusCoverage">7 days/week, 24/7</span>
+                        </div>
                     </div>
-                    <div class="metric-row">
-                        <span class="metric-label">Low (scheduled follow-ups)</span>
-                        <span class="metric-value">7</span>
-                    </div>
-                    <div class="metric-row">
-                        <span class="metric-label">Overall quality score</span>
-                        <span class="metric-value">87</span>
-                    </div>
-                </div>
-            </article>
+                    <div id="integration-health" class="integration-list"></div>
+                    <div id="calendar-details" class="calendar-details"></div>
+                </article>
+            </div>
+        </section>
 
-            <article class="card">
-                <h3>👥 Leads We're Handling</h3>
-                <p class="card-subtitle">Recent leads your concierge is following up on.</p>
-                <div id="leads-list" class="leads-list"></div>
-                <div class="export-buttons">
-                    <button class="export-btn secondary" onclick="exportData('leads')">📥 Export Leads</button>
-                </div>
-            </article>
-
-
-            <article class="card">
-                <h3>📅 Appointments We Booked</h3>
-                <p class="card-subtitle">Upcoming appointments your concierge scheduled for you.</p>
-                <div id="upcoming-appointments" class="appt-list"></div>
-                <div class="export-buttons">
-                    <button class="export-btn secondary" onclick="exportData('appointments')">📥 Export Appointments</button>
-                </div>
-            </article>
-
-            <article class="card">
-                <h3>📤 Send Us More Leads</h3>
-                <p class="card-subtitle">Upload leads and we'll start following up within minutes.</p>
-                <div class="import-dropzone" id="leadDropzone">
-                    Drag & drop CSV or <button type="button" id="leadImportButton">browse</button>
-                    <small style="display:block;margin-top:6px;">Columns: name, phone, service, source</small>
-                </div>
-                <input type="file" id="leadImportInput" accept=".csv" style="display:none">
-                <div class="import-status" id="leadImportStatus"></div>
-            </article>
-
-            <article class="card">
-                <h3>📊 Our Weekly Performance</h3>
-                <p class="card-subtitle">How many calls and bookings we made for you this week.</p>
-                <div id="performance-chart">
-                    <div class="chart" id="chartBars"></div>
-                    <p class="chart-value" id="chartSummary">18 bookings we made this week</p>
-                </div>
-                <div class="export-buttons">
-                    <button class="export-btn secondary" onclick="exportData('calls')">📥 Export Call Log</button>
-                </div>
-            </article>
-
-            <article class="card">
-                <h3>📈 Forecast: What's Coming</h3>
-                <p class="card-subtitle">Projected bookings we'll make for you next week.</p>
-                <div id="forecast-chart" class="forecast-chart"></div>
-                <p class="chart-value" id="forecastSummary">Based on our current performance</p>
-            </article>
-
-            <article class="card">
-                <h3>⚙️ Your Concierge Status</h3>
-                <p class="card-subtitle">Everything we've connected to handle your bookings automatically.</p>
-                <div id="system-status">
-                    <div class="metric-row">
-                        <span class="metric-label">Your lead number</span>
-                        <span class="metric-value" id="statusPhone">+44 20 3880 1234</span>
-                    </div>
-                    <div class="metric-row">
-                        <span class="metric-label">SMS & WhatsApp</span>
-                        <span class="metric-value">✓ Active (we're texting)</span>
-                    </div>
-                    <div class="metric-row">
-                        <span class="metric-label">Your calendar</span>
-                        <span class="metric-value">✓ Connected (we're booking)</span>
-                    </div>
-                    <div class="metric-row">
-                        <span class="metric-label">Our coverage</span>
-                        <span class="metric-value" id="statusCoverage">7 days/week, 24/7</span>
-                    </div>
-                </div>
-                <div id="integration-health" class="integration-list"></div>
-                <div id="calendar-details" class="calendar-details"></div>
-            </article>
-
-            <article class="card">
-                <h3>📊 Call Quality Metrics</h3>
-                <p class="card-subtitle">How effective our calls are for you.</p>
-                <div id="call-quality" class="call-quality-grid"></div>
-            </article>
-
-            <article class="card">
-                <h3>🔄 Retry Queue</h3>
-                <p class="card-subtitle">Leads we're retrying after initial contact.</p>
-                <div id="retry-queue" class="retry-queue"></div>
-            </article>
-
-
-            <article class="card">
-                <h3>🎙️ Call Recordings</h3>
-                <p class="card-subtitle">Listen to recent calls we made for you.</p>
-                <div id="call-recordings"></div>
-            </article>
-
-            <article class="card" style="grid-column: 1 / -1;">
-                <h3>🗓️ Calls We're Making Right Now</h3>
-                <p class="card-subtitle">Live feed of conversations your concierge is having with your leads.</p>
+        <!-- LIVE ACTIVITY SECTION -->
+        <section class="dashboard-section">
+            <article class="card card-fullwidth">
+                <h3>🗓️ Live Activity Feed</h3>
+                <p class="card-subtitle">Real-time conversations your concierge is having with your leads.</p>
                 <div id="recent-calls" class="activity-feed"></div>
             </article>
+        </section>
 
-            <article class="card" style="grid-column: 1 / -1;">
+        <!-- WORKFLOW SECTION -->
+        <section class="dashboard-section">
+            <article class="card card-fullwidth">
                 <h3>📋 How We Handle Everything For You</h3>
                 <p class="card-subtitle">Your done-for-you workflow - this is what we do automatically every day.</p>
                 <ul id="workflow" class="workflow-list"></ul>
@@ -1744,11 +1873,24 @@
 
         function renderRecentActivity(data) {
             const container = document.getElementById('recent-activity');
+            if (!container) return;
             container.innerHTML = `
-                <div class="metric-row"><span class="metric-label">New leads we received</span><span class="metric-value">${formatNumber(data.last24hLeads)}</span></div>
-                <div class="metric-row"><span class="metric-label">Calls we made</span><span class="metric-value">${formatNumber(data.totalCalls)}</span></div>
-                <div class="metric-row"><span class="metric-label">Appointments we booked</span><span class="metric-value">${formatNumber(data.bookingsThisWeek ?? 18)}</span></div>
-                <div class="metric-row"><span class="metric-label">Our avg response time</span><span class="metric-value">${data.firstResponse || '—'}</span></div>
+                <div class="activity-metric">
+                    <div class="activity-metric-label">New Leads</div>
+                    <div class="activity-metric-value">${formatNumber(data.last24hLeads || 0)}</div>
+                </div>
+                <div class="activity-metric">
+                    <div class="activity-metric-label">Calls Made</div>
+                    <div class="activity-metric-value">${formatNumber(data.totalCalls || 0)}</div>
+                </div>
+                <div class="activity-metric">
+                    <div class="activity-metric-label">Bookings</div>
+                    <div class="activity-metric-value">${formatNumber(data.bookingsThisWeek ?? 18)}</div>
+                </div>
+                <div class="activity-metric">
+                    <div class="activity-metric-label">Response Time</div>
+                    <div class="activity-metric-value" style="font-size: 1.3rem;">${data.firstResponse || '—'}</div>
+                </div>
             `;
         }
 
@@ -1762,11 +1904,39 @@
 
         function renderLeadPriority(data) {
             const container = document.getElementById('lead-priority');
+            if (!container) return;
+            const high = data.highPriorityLeads ?? 0;
+            const medium = data.mediumPriorityLeads ?? 0;
+            const low = data.lowPriorityLeads ?? 0;
+            const total = high + medium + low;
+            const highPercent = total > 0 ? Math.round((high / total) * 100) : 0;
+            const mediumPercent = total > 0 ? Math.round((medium / total) * 100) : 0;
+            const lowPercent = total > 0 ? Math.round((low / total) * 100) : 0;
+            const score = data.avgLeadScore ?? 0;
+            
             container.innerHTML = `
-                <div class="metric-row"><span class="metric-label">High priority (we're calling first)</span><span class="metric-value">${formatNumber(data.highPriorityLeads ?? 0)}</span></div>
-                <div class="metric-row"><span class="metric-label">Medium (in our queue)</span><span class="metric-value">${formatNumber(data.mediumPriorityLeads ?? 0)}</span></div>
-                <div class="metric-row"><span class="metric-label">Low (scheduled follow-ups)</span><span class="metric-value">${formatNumber(data.lowPriorityLeads ?? 0)}</span></div>
-                <div class="metric-row"><span class="metric-label">Overall quality score</span><span class="metric-value">${formatNumber(data.avgLeadScore ?? 0)}</span></div>
+                <div class="priority-bar">
+                    <span class="priority-label">High Priority</span>
+                    <div class="priority-progress">
+                        <div class="priority-progress-fill high" style="width: ${highPercent}%;">${high > 0 ? high : ''}</div>
+                    </div>
+                </div>
+                <div class="priority-bar">
+                    <span class="priority-label">Medium</span>
+                    <div class="priority-progress">
+                        <div class="priority-progress-fill medium" style="width: ${mediumPercent}%;">${medium > 0 ? medium : ''}</div>
+                    </div>
+                </div>
+                <div class="priority-bar">
+                    <span class="priority-label">Low</span>
+                    <div class="priority-progress">
+                        <div class="priority-progress-fill low" style="width: ${lowPercent}%;">${low > 0 ? low : ''}</div>
+                    </div>
+                </div>
+                <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(92,106,196,0.12); text-align: center;">
+                    <div style="font-size: 0.85rem; color: #7a7fa4; margin-bottom: 4px;">Overall Quality Score</div>
+                    <div style="font-size: 2rem; font-weight: 700; color: var(--primary);">${score}</div>
+                </div>
             `;
         }
 
