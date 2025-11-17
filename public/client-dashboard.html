@@ -2827,7 +2827,9 @@
             contentEl.innerHTML = 'Loading timeline...';
             modal.classList.add('open');
 
-            if (currentClient === DEMO_CLIENT_KEY) {
+            // Check if we're in demo mode (fallback if currentClient not set)
+            const isDemo = !currentClient || currentClient === DEMO_CLIENT_KEY || !currentClient.includes('_');
+            if (isDemo) {
                 const now = new Date();
                 const timeline = [
                     { event: 'Lead received', time: new Date(now - 2 * 60 * 60 * 1000), icon: '📥', detail: 'Added via CSV import' },
@@ -3174,10 +3176,10 @@
             await renderCallQuality(dashboardData);
             await renderRetryQueue(dashboardData);
             await renderCalendarDetails(dashboardData);
-            // Ensure calls render - use DEMO_DATA if empty
-            const callsToRender = dashboardData.recentCalls && dashboardData.recentCalls.length 
+            // Ensure calls render - use DEMO_DATA if empty or undefined
+            const callsToRender = (dashboardData.recentCalls && Array.isArray(dashboardData.recentCalls) && dashboardData.recentCalls.length > 0)
                 ? dashboardData.recentCalls 
-                : DEMO_DATA.recentCalls;
+                : (DEMO_DATA.recentCalls || []);
             renderCalls(callsToRender);
             await renderCallRecordings(callsToRender);
             renderWorkflow(config.workflow || CLIENT_CONFIG.demo_client.workflow);
