@@ -1992,7 +1992,12 @@
 
         function getClientFromURL() {
             const params = new URLSearchParams(window.location.search);
-            return (params.get('client') || DEMO_CLIENT_KEY).replace(/-/g, '_');
+            const clientParam = params.get('client');
+            // If no client param or it's a demo variant, use DEMO_CLIENT_KEY
+            if (!clientParam || clientParam.includes('demo') || clientParam.includes('booking')) {
+                return DEMO_CLIENT_KEY;
+            }
+            return clientParam.replace(/-/g, '_');
         }
 
         let lastDataUpdate = new Date();
@@ -2994,8 +2999,11 @@
                         renderLeadJourney(dashboardData);
                         renderLeads(dashboardData.recentLeads || []);
                         renderAppointments(dashboardData.appointments || []);
-                        renderCalls(dashboardData.recentCalls || []);
-                        await renderCallRecordings(dashboardData.recentCalls || []);
+                        const callsToRender = dashboardData.recentCalls && dashboardData.recentCalls.length 
+                            ? dashboardData.recentCalls 
+                            : DEMO_DATA.recentCalls;
+                        renderCalls(callsToRender);
+                        await renderCallRecordings(callsToRender);
                         await renderCallQuality(dashboardData);
                         await renderRetryQueue(dashboardData);
                         await renderCalendarDetails(dashboardData);
