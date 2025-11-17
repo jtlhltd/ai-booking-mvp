@@ -2970,8 +2970,12 @@
             await renderCallQuality(dashboardData);
             await renderRetryQueue(dashboardData);
             await renderCalendarDetails(dashboardData);
-            renderCalls(dashboardData.recentCalls || []);
-            await renderCallRecordings(dashboardData.recentCalls || []);
+            // Ensure calls render - use DEMO_DATA if empty
+            const callsToRender = dashboardData.recentCalls && dashboardData.recentCalls.length 
+                ? dashboardData.recentCalls 
+                : DEMO_DATA.recentCalls;
+            renderCalls(callsToRender);
+            await renderCallRecordings(callsToRender);
             renderWorkflow(config.workflow || CLIENT_CONFIG.demo_client.workflow);
             loadIntegrationHealth(currentClient);
 
