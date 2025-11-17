@@ -3187,7 +3187,8 @@
             await renderRetryQueue(dashboardData);
             await renderCalendarDetails(dashboardData);
             // Always render calls - renderCalls will handle demo fallback
-            renderCalls(dashboardData.recentCalls || []);
+            const callsToRender = dashboardData.recentCalls || [];
+            renderCalls(callsToRender);
             await renderCallRecordings(callsToRender);
             renderWorkflow(config.workflow || CLIENT_CONFIG.demo_client.workflow);
             loadIntegrationHealth(currentClient);
@@ -3216,7 +3217,8 @@
                         renderLeadJourney(dashboardData);
                         renderLeads(dashboardData.recentLeads || []);
                         renderAppointments(dashboardData.appointments || []);
-                        renderCalls(dashboardData.recentCalls || []);
+                        const callsToRender = dashboardData.recentCalls || [];
+                        renderCalls(callsToRender);
                         await renderCallRecordings(callsToRender);
                         await renderCallQuality(dashboardData);
                         await renderRetryQueue(dashboardData);
