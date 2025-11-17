@@ -2512,9 +2512,8 @@
             const container = document.getElementById('recent-calls');
             if (!container) return;
             
-            // In demo mode, always use demo calls if empty
-            const isDemo = !currentClient || currentClient === DEMO_CLIENT_KEY || currentClient === 'demo_client';
-            const callsToShow = (calls && calls.length > 0) ? calls : (isDemo ? DEMO_DATA.recentCalls : []);
+            // Always use demo calls if empty array passed (default to demo in all cases)
+            const callsToShow = (calls && Array.isArray(calls) && calls.length > 0) ? calls : DEMO_DATA.recentCalls;
             
             if (!callsToShow || !callsToShow.length) {
                 container.innerHTML = `
