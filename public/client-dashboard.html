@@ -2983,6 +2983,8 @@
             setInterval(async () => {
                 try {
                     const refreshPayload = await fetchLiveData(currentClient);
+                    // Update freshness timestamp even in demo mode
+                    lastDataUpdate = new Date();
                     if (refreshPayload) {
                         dashboardData = mergeData(dashboardData, refreshPayload);
                         updateStatusBar(dashboardData);
