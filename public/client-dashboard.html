@@ -2510,7 +2510,13 @@
 
         function renderCalls(calls = []) {
             const container = document.getElementById('recent-calls');
-            if (!calls.length) {
+            if (!container) return;
+            
+            // In demo mode, always use demo calls if empty
+            const isDemo = !currentClient || currentClient === DEMO_CLIENT_KEY || currentClient === 'demo_client';
+            const callsToShow = (calls && calls.length > 0) ? calls : (isDemo ? DEMO_DATA.recentCalls : []);
+            
+            if (!callsToShow || !callsToShow.length) {
                 container.innerHTML = `
                     <div class="empty-state">
                         <span class="empty-state-icon">📞</span>
@@ -2525,7 +2531,7 @@
                 `;
                 return;
             }
-            container.innerHTML = calls.map((call, index) => {
+            container.innerHTML = callsToShow.map((call, index) => {
                 const timeAgo = call.timeAgo || formatTimeAgo(call.timestamp || call.created_at);
                 const callId = call.id || call.timestamp || index;
                 return `
@@ -2827,9 +2833,11 @@
             contentEl.innerHTML = 'Loading timeline...';
             modal.classList.add('open');
 
-            // Check if we're in demo mode (fallback if currentClient not set)
-            const isDemo = !currentClient || currentClient === DEMO_CLIENT_KEY || !currentClient.includes('_');
-            if (isDemo) {
+            // Always show demo timeline if no client key or demo mode
+            // Use setTimeout to ensure modal is visible first
+            setTimeout(() => {
+                const isDemo = !currentClient || currentClient === DEMO_CLIENT_KEY || currentClient === 'demo_client' || (typeof currentClient === 'string' && currentClient.includes('demo'));
+                if (isDemo) {
                 const now = new Date();
                 const timeline = [
                     { event: 'Lead received', time: new Date(now - 2 * 60 * 60 * 1000), icon: '📥', detail: 'Added via CSV import' },
@@ -2839,46 +2847,50 @@
                     { event: 'Appointment booked', time: new Date(now - 30 * 60 * 1000), icon: '📅', detail: 'Booked for next Tuesday, 2pm' }
                 ];
 
-                contentEl.innerHTML = timeline.map(item => `
-                    <div class="timeline-item">
-                        <div class="timeline-dot"></div>
-                        <div class="timeline-content">
-                            <div class="timeline-title">${item.icon} ${item.event}</div>
-                            <div class="timeline-meta">${item.detail} • ${formatTimeAgo(item.time.toISOString())}</div>
-                            </div>
-                            </div>
-                `).join('');
-                return;
-            }
-
-            try {
-                const response = await fetch(`${BASE_URL}/api/leads/${leadId}/timeline`);
-                const payload = await response.json();
-                if (response.ok && payload?.ok && payload.timeline) {
-                    contentEl.innerHTML = payload.timeline.map(item => `
+                    contentEl.innerHTML = timeline.map(item => `
                         <div class="timeline-item">
                             <div class="timeline-dot"></div>
                             <div class="timeline-content">
-                                <div class="timeline-title">${item.icon || '📋'} ${item.event}</div>
-                                <div class="timeline-meta">${item.detail || ''} • ${formatTimeAgo(item.time)}</div>
-                        </div>
-                        </div>
+                                <div class="timeline-title">${item.icon} ${item.event}</div>
+                                <div class="timeline-meta">${item.detail} • ${formatTimeAgo(item.time.toISOString())}</div>
+                            </div>
+                            </div>
                     `).join('');
-                } else {
-                    contentEl.innerHTML = '<p>Timeline not available for this lead.</p>';
+                    return;
+                }
+            }, 100);
+            
+            // If not demo, try API
+            if (currentClient && currentClient !== DEMO_CLIENT_KEY && currentClient !== 'demo_client') {
+                try {
+                    const response = await fetch(`${BASE_URL}/api/leads/${leadId}/timeline`);
+                    const payload = await response.json();
+                    if (response.ok && payload?.ok && payload.timeline) {
+                        contentEl.innerHTML = payload.timeline.map(item => `
+                            <div class="timeline-item">
+                                <div class="timeline-dot"></div>
+                                <div class="timeline-content">
+                                    <div class="timeline-title">${item.icon || '📋'} ${item.event}</div>
+                                    <div class="timeline-meta">${item.detail || ''} • ${formatTimeAgo(item.time)}</div>
+                        </div>
+                        </div>
+                        `).join('');
+                    } else {
+                        contentEl.innerHTML = '<p>Timeline not available for this lead.</p>';
                 }
             } catch (error) {
-                console.error('Failed to load timeline', error);
-                contentEl.innerHTML = `
-                    <div class="error-message" role="alert">
-                        <span class="error-message-icon">⚠️</span>
-                        <div>
-                            <strong>Unable to load timeline</strong>
-                            <div style="font-size: 0.9rem; margin-top: 4px;">${error.message || 'Please try again later.'}</div>
-                            <button class="empty-state-btn" style="margin-top: 8px; font-size: 0.85rem; padding: 6px 12px;" onclick="viewLeadTimeline('${leadId}', '${name}')">Retry</button>
-                        </div>
+                    console.error('Failed to load timeline', error);
+                    contentEl.innerHTML = `
+                        <div class="error-message" role="alert">
+                            <span class="error-message-icon">⚠️</span>
+                            <div>
+                                <strong>Unable to load timeline</strong>
+                                <div style="font-size: 0.9rem; margin-top: 4px;">${error.message || 'Please try again later.'}</div>
+                                <button class="empty-state-btn" style="margin-top: 8px; font-size: 0.85rem; padding: 6px 12px;" onclick="viewLeadTimeline('${leadId}', '${name}')">Retry</button>
+                            </div>
                     </div>
                 `;
+                }
             }
         }
         
