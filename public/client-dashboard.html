@@ -1496,12 +1496,6 @@
                     </div>
                 </article>
 
-                <article class="card card-chart">
-                    <h3>📈 Revenue Forecast</h3>
-                    <p class="card-subtitle">Projected bookings for next week.</p>
-                    <div id="forecast-chart" class="forecast-chart"></div>
-                    <p class="chart-value" id="forecastSummary">Based on current performance</p>
-                </article>
 
                 <article class="card">
                     <h3>📊 Call Quality</h3>
@@ -1515,11 +1509,6 @@
         <section class="dashboard-section">
             <h2 class="section-header">👥 Lead Management</h2>
             <div class="dashboard-grid">
-                <article class="card card-visual">
-                    <h3>🎯 Priority Breakdown</h3>
-                    <p class="card-subtitle">How we prioritize your leads.</p>
-                    <div id="lead-priority" class="priority-visual"></div>
-                </article>
 
                 <article class="card card-list">
                     <h3>📋 Recent Leads</h3>
@@ -1902,43 +1891,6 @@
             document.getElementById('roiProfit').textContent = `${formatCurrency(roi.roi?.profit ?? 0)} profit`;
         }
 
-        function renderLeadPriority(data) {
-            const container = document.getElementById('lead-priority');
-            if (!container) return;
-            const high = data.highPriorityLeads ?? 0;
-            const medium = data.mediumPriorityLeads ?? 0;
-            const low = data.lowPriorityLeads ?? 0;
-            const total = high + medium + low;
-            const highPercent = total > 0 ? Math.round((high / total) * 100) : 0;
-            const mediumPercent = total > 0 ? Math.round((medium / total) * 100) : 0;
-            const lowPercent = total > 0 ? Math.round((low / total) * 100) : 0;
-            const score = data.avgLeadScore ?? 0;
-            
-            container.innerHTML = `
-                <div class="priority-bar">
-                    <span class="priority-label">High Priority</span>
-                    <div class="priority-progress">
-                        <div class="priority-progress-fill high" style="width: ${highPercent}%;">${high > 0 ? high : ''}</div>
-                    </div>
-                </div>
-                <div class="priority-bar">
-                    <span class="priority-label">Medium</span>
-                    <div class="priority-progress">
-                        <div class="priority-progress-fill medium" style="width: ${mediumPercent}%;">${medium > 0 ? medium : ''}</div>
-                    </div>
-                </div>
-                <div class="priority-bar">
-                    <span class="priority-label">Low</span>
-                    <div class="priority-progress">
-                        <div class="priority-progress-fill low" style="width: ${lowPercent}%;">${low > 0 ? low : ''}</div>
-                    </div>
-                </div>
-                <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(92,106,196,0.12); text-align: center;">
-                    <div style="font-size: 0.85rem; color: #7a7fa4; margin-bottom: 4px;">Overall Quality Score</div>
-                    <div style="font-size: 2rem; font-weight: 700; color: var(--primary);">${score}</div>
-                </div>
-            `;
-        }
 
         function renderLeads(leads = []) {
             const container = document.getElementById('leads-list');
@@ -2101,41 +2053,6 @@
         }
 
 
-        function renderForecast(data) {
-            const container = document.getElementById('forecast-chart');
-            if (!container) return;
-            const recentBookings = data.bookingsThisWeek || 18;
-            const avgDaily = recentBookings / 7;
-            const labels = [];
-            const values = [];
-            const today = new Date();
-            for (let i = 0; i < 14; i++) {
-                const date = new Date(today);
-                date.setDate(date.getDate() + i);
-                labels.push(date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric' }));
-                const isPast = i < 7;
-                const baseValue = isPast ? avgDaily : avgDaily * (1 + (i - 6) * 0.05);
-                const variance = (Math.random() - 0.5) * 0.3;
-                values.push(Math.max(0, Math.round(baseValue * (1 + variance))));
-            }
-
-            const maxValue = Math.max(...values, 1);
-            container.innerHTML = values.map((value, idx) => {
-                const isPredicted = idx >= 7;
-                const height = (value / maxValue) * 100;
-                return `
-                    <div class="forecast-bar ${isPredicted ? 'predicted' : ''}" style="height:${height}%;" title="${labels[idx]}: ${value} bookings">
-                        ${value > 0 ? value : ''}
-                    </div>
-                `;
-            }).join('');
-
-            const predictedTotal = values.slice(7).reduce((sum, v) => sum + v, 0);
-            const summaryEl = document.getElementById('forecastSummary');
-            if (summaryEl) {
-                summaryEl.textContent = `Forecast: ${predictedTotal} bookings we'll make for you next week`;
-            }
-        }
 
         function showToast(title, message, type = 'info', duration = 3000) {
             const container = document.getElementById('toastContainer');
@@ -2653,11 +2570,9 @@
             renderROI(dashboardData.roi || DEMO_DATA.roi);
             await renderActiveIndicator(dashboardData);
             renderLeadJourney(dashboardData);
-            renderLeadPriority(dashboardData);
             renderLeads(dashboardData.recentLeads || []);
             renderAppointments(dashboardData.appointments || []);
             renderChart(config, dashboardData);
-            renderForecast(dashboardData);
             renderSystemStatus(config);
             await renderCallQuality(dashboardData);
             await renderRetryQueue(dashboardData);
@@ -2678,7 +2593,6 @@
                     renderROI(dashboardData.roi || DEMO_DATA.roi);
                     await renderActiveIndicator(dashboardData);
                     renderLeadJourney(dashboardData);
-                    renderLeadPriority(dashboardData);
                     renderLeads(dashboardData.recentLeads || []);
                     renderAppointments(dashboardData.appointments || []);
                     renderCalls(dashboardData.recentCalls || []);
@@ -2687,7 +2601,6 @@
                     await renderRetryQueue(dashboardData);
                     await renderCalendarDetails(dashboardData);
                     renderChart(config, dashboardData);
-                    renderForecast(dashboardData);
                 }
             }, 30000);
         }
