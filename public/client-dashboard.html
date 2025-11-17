@@ -3209,9 +3209,9 @@
                         renderLeadJourney(dashboardData);
                         renderLeads(dashboardData.recentLeads || []);
                         renderAppointments(dashboardData.appointments || []);
-                        const callsToRender = dashboardData.recentCalls && dashboardData.recentCalls.length 
+                        const callsToRender = (dashboardData.recentCalls && Array.isArray(dashboardData.recentCalls) && dashboardData.recentCalls.length > 0)
                             ? dashboardData.recentCalls 
-                            : DEMO_DATA.recentCalls;
+                            : (DEMO_DATA.recentCalls || []);
                         renderCalls(callsToRender);
                         await renderCallRecordings(callsToRender);
                         await renderCallQuality(dashboardData);
