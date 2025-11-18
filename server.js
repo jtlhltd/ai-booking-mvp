@@ -8639,17 +8639,15 @@ async function getIntegrationStatuses(clientKey) {
         }
       }
       
-      // Check if client has Twilio configured (either in sms_json/twilio_json or fallback to global)
-      const hasClientSmsConfig = !!(smsConfig.messagingServiceSid || smsConfig.fromNumber);
-      const hasGlobalTwilio = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN);
-      const isTwilioConfigured = hasClientSmsConfig || hasGlobalTwilio;
+      // Check if THIS CLIENT has Twilio configured (multi-tenant - no global fallback)
+      const hasClientSmsConfig = !!(smsConfig.messagingServiceSid || smsConfig.fromNumber || smsConfig.accountSid || smsConfig.authToken);
       
       const twilioIntegration = integrations.find(i => i.name === 'Twilio SMS');
       if (twilioIntegration) {
-        if (isTwilioConfigured) {
-          // Test actual connection if credentials exist
-          const twilioSid = process.env.TWILIO_ACCOUNT_SID;
-          const twilioToken = process.env.TWILIO_AUTH_TOKEN;
+        if (hasClientSmsConfig) {
+          // Client has Twilio config - test connection using client's credentials
+          const twilioSid = smsConfig.accountSid || smsConfig.messagingServiceSid;
+          const twilioToken = smsConfig.authToken;
           
           if (twilioSid && twilioToken) {
             try {
@@ -8668,19 +8666,20 @@ async function getIntegrationStatuses(clientKey) {
               } else {
                 twilioIntegration.status = 'warning';
                 const statusText = await twilioResponse.text().catch(() => '');
-                twilioIntegration.detail = `Twilio credentials invalid or expired (HTTP ${twilioResponse.status}). Check TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN in environment variables.`;
+                twilioIntegration.detail = `Twilio credentials invalid or expired (HTTP ${twilioResponse.status}). Update this client's SMS configuration with valid credentials.`;
               }
             } catch (error) {
               twilioIntegration.status = 'warning';
-              twilioIntegration.detail = `Connection test failed: ${error.message}. Check TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN in environment variables.`;
+              twilioIntegration.detail = `Connection test failed: ${error.message}. Check this client's SMS configuration.`;
             }
           } else {
             twilioIntegration.status = 'warning';
-            twilioIntegration.detail = 'Twilio credentials not found in environment variables. Add TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN to enable SMS.';
+            twilioIntegration.detail = 'This client has SMS configuration but missing accountSid or authToken. Update client SMS settings.';
           }
         } else {
+          // Client does NOT have Twilio configured
           twilioIntegration.status = 'warning';
-          twilioIntegration.detail = 'This client does not have Twilio configured. Add SMS settings in client configuration or set global TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN.';
+          twilioIntegration.detail = 'This client does not have Twilio configured. Add SMS settings (accountSid, authToken, messagingServiceSid, or fromNumber) in this client\'s configuration to enable SMS.';
         }
       }
     } catch (error) {
@@ -8698,45 +8697,11 @@ async function getIntegrationStatuses(clientKey) {
       }
     }
   } else {
-    // Fallback: check global env vars if no client key
-    const twilioSid = process.env.TWILIO_ACCOUNT_SID;
-    const twilioToken = process.env.TWILIO_AUTH_TOKEN;
+    // No client key - can't check client-specific config
     const twilioIntegration = integrations.find(i => i.name === 'Twilio SMS');
-    
-    if (twilioSid && twilioToken) {
-      try {
-        const auth = Buffer.from(`${twilioSid}:${twilioToken}`).toString('base64');
-        const twilioResponse = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioSid}.json`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Basic ${auth}`
-          },
-          signal: AbortSignal.timeout(5000)
-        });
-        
-        if (twilioResponse.ok) {
-          if (twilioIntegration) {
-            twilioIntegration.status = 'active';
-            twilioIntegration.detail = 'Messaging service verified';
-          }
-        } else {
-          if (twilioIntegration) {
-            const statusText = await twilioResponse.text().catch(() => '');
-            twilioIntegration.status = 'warning';
-            twilioIntegration.detail = `Twilio credentials invalid or expired (HTTP ${twilioResponse.status}). Check TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN.`;
-          }
-        }
-      } catch (error) {
-        if (twilioIntegration) {
-          twilioIntegration.status = 'warning';
-          twilioIntegration.detail = `Connection test failed: ${error.message}. Check TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN.`;
-        }
-      }
-    } else {
-      if (twilioIntegration) {
-        twilioIntegration.status = 'warning';
-        twilioIntegration.detail = 'Twilio credentials not found. Add TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN to environment variables to enable SMS.';
-      }
+    if (twilioIntegration) {
+      twilioIntegration.status = 'warning';
+      twilioIntegration.detail = 'Client key required to check Twilio configuration. Each client must have their own SMS settings configured.';
     }
   }
 
