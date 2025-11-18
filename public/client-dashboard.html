@@ -2584,6 +2584,9 @@
             // Store messaging for workflow rendering
             config.customWorkflow = messaging.workflow;
             
+            // Personalize all dashboard text with business name
+            personalizeDashboard(businessName);
+            
             // Map client config fields to meta fields
             // Phone: from numbers_json or twilio_json
             const phone = config.phone || 
