@@ -1988,7 +1988,7 @@
 
                 <article class="card card-list">
                     <h3>📋 Recent Leads</h3>
-                    <p class="card-subtitle">Leads we're actively following up on.</p>
+                    <p class="card-subtitle" id="recentLeadsSubtitle">Leads we're actively following up on.</p>
                     <div id="leads-list" class="leads-list"></div>
                     <div class="export-buttons">
                         <button class="export-btn secondary" onclick="exportData('leads')">📥 Export</button>
@@ -2026,7 +2026,7 @@
 
                 <article class="card card-list">
                     <h3>📅 Upcoming Appointments</h3>
-                    <p class="card-subtitle">Appointments we booked for you.</p>
+                    <p class="card-subtitle" id="appointmentsSubtitle">Appointments we booked for you.</p>
                     <div id="upcoming-appointments" class="appt-list"></div>
                     <div class="export-buttons">
                         <button class="export-btn secondary" onclick="exportData('appointments')">📥 Export</button>
@@ -2626,6 +2626,45 @@
             }
         }
 
+        function personalizeDashboard(businessName) {
+            // Update status cards
+            const statusCardLeads = document.getElementById('statusCardLeads');
+            if (statusCardLeads) statusCardLeads.textContent = `Leads ${businessName}'s Managing`;
+            
+            const statusCardCalls = document.getElementById('statusCardCalls');
+            if (statusCardCalls) statusCardCalls.textContent = `Calls ${businessName}'s Made`;
+            
+            const statusCardConversion = document.getElementById('statusCardConversion');
+            if (statusCardConversion) statusCardConversion.textContent = `${businessName}'s Conversion Rate`;
+            
+            const statusCardResponse = document.getElementById('statusCardResponse');
+            if (statusCardResponse) statusCardResponse.textContent = `${businessName}'s Response Time`;
+            
+            // Update ROI panel
+            const roiRevenueLabel = document.getElementById('roiRevenueLabel');
+            if (roiRevenueLabel) roiRevenueLabel.textContent = `Revenue ${businessName} Generated`;
+            
+            // Update active indicator
+            const activeTitle = document.getElementById('activeTitle');
+            if (activeTitle) activeTitle.textContent = `${businessName}'s concierge is active`;
+            
+            const activeSubtitle = document.getElementById('activeSubtitle');
+            if (activeSubtitle) activeSubtitle.textContent = `Working on ${businessName}'s leads right now`;
+            
+            // Update card subtitles
+            const callQualitySubtitle = document.getElementById('callQualitySubtitle');
+            if (callQualitySubtitle) callQualitySubtitle.textContent = `How effective ${businessName}'s calls are.`;
+            
+            const recentLeadsSubtitle = document.getElementById('recentLeadsSubtitle');
+            if (recentLeadsSubtitle) recentLeadsSubtitle.textContent = `Leads ${businessName}'s actively following up on.`;
+            
+            const appointmentsSubtitle = document.getElementById('appointmentsSubtitle');
+            if (appointmentsSubtitle) appointmentsSubtitle.textContent = `Appointments we booked for ${businessName}.`;
+            
+            const activityFeedSubtitle = document.getElementById('activityFeedSubtitle');
+            if (activityFeedSubtitle) activityFeedSubtitle.textContent = `Real-time conversations ${businessName}'s concierge is having with leads.`;
+        }
+        
         function formatNumber(value) {
             if (value === undefined || value === null) return '—';
             return Number(value).toLocaleString('en-GB');
