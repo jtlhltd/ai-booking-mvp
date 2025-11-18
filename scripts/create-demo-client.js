@@ -1197,6 +1197,21 @@ async function main() {
       if (prospectName) console.log(`Prospect name: ${prospectName}`);
       if (location) console.log(`Location: ${location}`);
       console.log('');
+      
+      // Non-interactive mode: use defaults
+      const industryDefaults = getIndustryDefaults(industry.trim(), location ? location.trim() : null);
+      prospectData = {
+        businessName: businessName.trim(),
+        industry: industry.trim(),
+        services,
+        prospectName: prospectName ? prospectName.trim() : null,
+        location: location ? location.trim() : null,
+        phoneNumber: process.env.VAPI_PHONE_NUMBER || process.env.TWILIO_PHONE_NUMBER || '+44 20 3880 1234',
+        businessHours: industryDefaults.businessHours,
+        timezone: industryDefaults.timezone,
+        description: null, // Will be auto-generated
+        tagline: null // Will be auto-generated
+      };
     } else {
       // Check for undo option
       const history = loadDemoHistory();
@@ -1362,21 +1377,6 @@ async function main() {
         timezone: timezone.trim(),
         description: description ? description.trim() : null,
         tagline: tagline ? tagline.trim() : null
-      };
-    } else {
-      // Non-interactive mode: use defaults
-      const industryDefaults = getIndustryDefaults(industry.trim(), location ? location.trim() : null);
-      prospectData = {
-        businessName: businessName.trim(),
-        industry: industry.trim(),
-        services,
-        prospectName: prospectName ? prospectName.trim() : null,
-        location: location ? location.trim() : null,
-        phoneNumber: process.env.VAPI_PHONE_NUMBER || process.env.TWILIO_PHONE_NUMBER || '+44 20 3880 1234',
-        businessHours: industryDefaults.businessHours,
-        timezone: industryDefaults.timezone,
-        description: null, // Will be auto-generated
-        tagline: null // Will be auto-generated
       };
     }
     

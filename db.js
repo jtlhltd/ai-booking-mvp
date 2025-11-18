@@ -85,16 +85,26 @@ class JsonFileDatabase {
 
 // ---------------------- Postgres ----------------------
 async function initPostgres() {
-  pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
-    max: 20, // Maximum 20 connections in pool
-    idleTimeoutMillis: 30000, // Close idle connections after 30 seconds
-    connectionTimeoutMillis: 2000, // Timeout after 2 seconds if no connection available
-  });
+  try {
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false },
+      max: 20, // Maximum 20 connections in pool
+      idleTimeoutMillis: 30000, // Close idle connections after 30 seconds
+      connectionTimeoutMillis: 5000, // Increased timeout to 5 seconds
+    });
 
-  // Run migrations for schema creation
-  await pool.query(`
+    // Test connection first
+    await pool.query('SELECT 1');
+  } catch (error) {
+    console.error('⚠️  Postgres connection failed:', error.message);
+    pool = null;
+    throw error; // Re-throw to trigger SQLite fallback
+  }
+
+  try {
+    // Run migrations for schema creation
+    await pool.query(`
     CREATE TABLE IF NOT EXISTS tenants (
       client_key TEXT PRIMARY KEY,
       display_name TEXT,
@@ -573,9 +583,21 @@ async function initPostgres() {
     // Don't fail startup if migration fails - columns might already exist
   }
 
-  DB_PATH = 'postgres';
-  console.log('DB: Postgres connected');
-  return 'postgres';
+    DB_PATH = 'postgres';
+    console.log('✅ DB: Postgres connected');
+    return 'postgres';
+  } catch (error) {
+    console.error('⚠️  Postgres initialization error:', error.message);
+    if (pool) {
+      try {
+        await pool.end();
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+      pool = null;
+    }
+    throw error; // Re-throw to trigger SQLite fallback
+  }
 }
 
 // ---------------------- SQLite fallback ----------------------
@@ -664,11 +686,18 @@ export async function init() {
   // Use PostgreSQL if explicitly configured, otherwise use SQLite
   if (dbType === 'postgres' && process.env.DATABASE_URL) {
     console.log('🔄 Initializing PostgreSQL...');
-    return await initPostgres();
-  } else {
-    console.log('🔄 Initializing SQLite...');
-    return initSqlite();
+    try {
+      return await initPostgres();
+    } catch (error) {
+      console.error('❌ PostgreSQL initialization failed:', error.message);
+      console.log('🔄 Falling back to SQLite...');
+      // Fall through to SQLite initialization
+    }
   }
+  
+  // Use SQLite (either as primary choice or fallback)
+  console.log('🔄 Initializing SQLite...');
+  return initSqlite();
 }
 
 // Enhanced database operations with comprehensive error handling
