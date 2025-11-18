@@ -2639,15 +2639,18 @@
                 return;
             }
             
-            // ALWAYS use demo calls - no conditions
-            const demoCalls = [
-                { id: 'demo-1', name: 'Sarah Patel', summary: 'Booked Tuesday 2:30pm via AI call', channel: 'Phone', timeAgo: '2 min ago' },
-                { id: 'demo-2', name: 'Marcus Flynn', summary: 'Requested reschedule • SMS follow-up sent', channel: 'SMS → Call', timeAgo: '9 min ago' },
-                { id: 'demo-3', name: 'Laura Chen', summary: 'Synced with Google Calendar • reminder scheduled', channel: 'Webhook sync', timeAgo: '25 min ago' },
-                { id: 'demo-4', name: 'Rick Alvarez', summary: 'Moved to Thursday • calendar updated', channel: 'Phone', timeAgo: '42 min ago' }
-            ];
+            // Only use demo calls for demo client
+            let callsToShow = calls && Array.isArray(calls) && calls.length > 0 ? calls : [];
             
-            const callsToShow = (calls && Array.isArray(calls) && calls.length > 0) ? calls : demoCalls;
+            // Fallback to demo calls ONLY if it's the demo client
+            if (callsToShow.length === 0 && currentClient === DEMO_CLIENT_KEY) {
+                callsToShow = [
+                    { id: 'demo-1', name: 'Sarah Patel', summary: 'Booked Tuesday 2:30pm via AI call', channel: 'Phone', timeAgo: '2 min ago' },
+                    { id: 'demo-2', name: 'Marcus Flynn', summary: 'Requested reschedule • SMS follow-up sent', channel: 'SMS → Call', timeAgo: '9 min ago' },
+                    { id: 'demo-3', name: 'Laura Chen', summary: 'Synced with Google Calendar • reminder scheduled', channel: 'Webhook sync', timeAgo: '25 min ago' },
+                    { id: 'demo-4', name: 'Rick Alvarez', summary: 'Moved to Thursday • calendar updated', channel: 'Phone', timeAgo: '42 min ago' }
+                ];
+            }
             
             if (!callsToShow || !callsToShow.length) {
                 container.innerHTML = `
