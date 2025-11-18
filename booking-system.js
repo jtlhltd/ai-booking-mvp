@@ -99,6 +99,12 @@ class BookingSystem {
           }
           
           console.log('[BOOKING SYSTEM] Private key format validated successfully');
+          console.log('[BOOKING SYSTEM] Using credentials:', {
+            clientEmail: clientEmail,
+            privateKeyLength: privateKey.length,
+            privateKeyStartsWith: privateKey.substring(0, 30),
+            privateKeyEndsWith: privateKey.substring(privateKey.length - 30)
+          });
           
           // Use the same JWT auth method as server.js
           const { makeJwtAuth } = await import('./gcal.js');
@@ -109,7 +115,7 @@ class BookingSystem {
           });
           
           // Authorize the JWT token (same as server.js)
-          console.log('[BOOKING SYSTEM] Attempting to authorize JWT token...');
+          console.log('[BOOKING SYSTEM] Attempting to authorize JWT token for:', clientEmail);
           await auth.authorize();
           console.log('[BOOKING SYSTEM] JWT token authorized successfully');
           
