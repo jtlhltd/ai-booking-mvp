@@ -8611,20 +8611,20 @@ async function getIntegrationStatuses(clientKey) {
               } else {
                 vapiIntegration.status = 'error';
                 const statusText = await vapiResponse.text().catch(() => '');
-                vapiIntegration.detail = `API key invalid or expired (HTTP ${vapiResponse.status}). Update this client's Vapi configuration with valid credentials.`;
+                vapiIntegration.detail = `API key invalid or expired (HTTP ${vapiResponse.status}). Update this client's vapi_json.privateKey in the database (tenants table) or via /api/admin/client/:clientKey PUT endpoint.`;
               }
             } catch (error) {
               vapiIntegration.status = 'error';
-              vapiIntegration.detail = `Connection test failed: ${error.message}. Check this client's Vapi configuration.`;
+              vapiIntegration.detail = `Connection test failed: ${error.message}. Check this client's vapi_json in the database (tenants table) or update via /api/admin/client/:clientKey PUT endpoint.`;
             }
           } else {
             vapiIntegration.status = 'error';
-            vapiIntegration.detail = 'This client has Vapi configuration but missing API key (privateKey, apiKey, or publicKey). Update client Vapi settings.';
+            vapiIntegration.detail = 'This client has Vapi configuration but missing API key (privateKey, apiKey, or publicKey). Update the client\'s vapi_json in the database or via /api/admin/client/:clientKey PUT endpoint.';
           }
         } else {
           // Client does NOT have Vapi configured
           vapiIntegration.status = 'error';
-          vapiIntegration.detail = 'This client does not have Vapi configured. Add Vapi settings (assistantId, phoneNumberId, and privateKey/apiKey) in this client\'s configuration to enable calling.';
+          vapiIntegration.detail = 'This client does not have Vapi configured. Update the client\'s vapi_json in the database (tenants table) with: { "assistantId": "...", "phoneNumberId": "...", "privateKey": "..." } or use the /api/admin/client/:clientKey PUT endpoint.';
         }
       }
     } catch (error) {
@@ -8645,7 +8645,7 @@ async function getIntegrationStatuses(clientKey) {
     const vapiIntegration = integrations.find(i => i.name === 'Vapi Voice');
     if (vapiIntegration) {
       vapiIntegration.status = 'error';
-      vapiIntegration.detail = 'Client key required to check Vapi configuration. Each client must have their own Vapi settings configured.';
+      vapiIntegration.detail = 'Client key required to check Vapi configuration. Each client must have their own Vapi settings in vapi_json (tenants table) or configured via /api/admin/client/:clientKey PUT endpoint.';
     }
   }
 
@@ -8709,20 +8709,20 @@ async function getIntegrationStatuses(clientKey) {
               } else {
                 twilioIntegration.status = 'warning';
                 const statusText = await twilioResponse.text().catch(() => '');
-                twilioIntegration.detail = `Twilio credentials invalid or expired (HTTP ${twilioResponse.status}). Update this client's SMS configuration with valid credentials.`;
+                twilioIntegration.detail = `Twilio credentials invalid or expired (HTTP ${twilioResponse.status}). Update this client's sms_json/twilio_json.accountSid and authToken in the database (tenants table) or via /api/admin/client/:clientKey PUT endpoint.`;
               }
             } catch (error) {
               twilioIntegration.status = 'warning';
-              twilioIntegration.detail = `Connection test failed: ${error.message}. Check this client's SMS configuration.`;
+              twilioIntegration.detail = `Connection test failed: ${error.message}. Check this client's sms_json/twilio_json in the database (tenants table) or update via /api/admin/client/:clientKey PUT endpoint.`;
             }
           } else {
             twilioIntegration.status = 'warning';
-            twilioIntegration.detail = 'This client has SMS configuration but missing accountSid or authToken. Update client SMS settings.';
+            twilioIntegration.detail = 'This client has SMS configuration but missing accountSid or authToken. Update the client\'s sms_json/twilio_json in the database or via /api/admin/client/:clientKey PUT endpoint.';
           }
         } else {
           // Client does NOT have Twilio configured
           twilioIntegration.status = 'warning';
-          twilioIntegration.detail = 'This client does not have Twilio configured. Add SMS settings (accountSid, authToken, messagingServiceSid, or fromNumber) in this client\'s configuration to enable SMS.';
+          twilioIntegration.detail = 'This client does not have Twilio configured. Update the client\'s sms_json or twilio_json in the database (tenants table) with: { "accountSid": "...", "authToken": "...", "messagingServiceSid": "..." } or use the /api/admin/client/:clientKey PUT endpoint.';
         }
       }
     } catch (error) {
@@ -8744,7 +8744,7 @@ async function getIntegrationStatuses(clientKey) {
     const twilioIntegration = integrations.find(i => i.name === 'Twilio SMS');
     if (twilioIntegration) {
       twilioIntegration.status = 'warning';
-      twilioIntegration.detail = 'Client key required to check Twilio configuration. Each client must have their own SMS settings configured.';
+      twilioIntegration.detail = 'Client key required to check Twilio configuration. Each client must have their own SMS settings in sms_json/twilio_json (tenants table) or configured via /api/admin/client/:clientKey PUT endpoint.';
     }
   }
 
@@ -8765,7 +8765,7 @@ async function getIntegrationStatuses(clientKey) {
         calendarIntegration.status = isConnected ? 'active' : 'warning';
         calendarIntegration.detail = isConnected 
           ? 'Auto-booking synced' 
-          : 'This client does not have Google Calendar connected. Add calendar configuration (service_account_email or access_token) in client settings to enable auto-booking.';
+          : 'This client does not have Google Calendar connected. Update the client\'s calendar_json in the database (tenants table) with: { "service_account_email": "..." } or { "access_token": "..." } or use the /api/admin/client/:clientKey PUT endpoint.';
       }
     } catch (error) {
       console.error('[INTEGRATION HEALTH ERROR]', error);
@@ -8780,7 +8780,7 @@ async function getIntegrationStatuses(clientKey) {
     const calendarIntegration = integrations.find(i => i.name === 'Google Calendar');
     if (calendarIntegration) {
       calendarIntegration.status = 'warning';
-      calendarIntegration.detail = 'Client key required to check Google Calendar configuration. Each client must have their own calendar settings configured.';
+      calendarIntegration.detail = 'Client key required to check Google Calendar configuration. Each client must have their own calendar settings in calendar_json (tenants table) or configured via /api/admin/client/:clientKey PUT endpoint.';
     }
   }
 
