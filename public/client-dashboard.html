@@ -2598,6 +2598,7 @@
             if (clientDescEl) {
                 if (hasClientConfig && config.description) {
                     clientDescEl.textContent = config.description;
+                    clientDescEl.dataset.fromConfig = 'true'; // Mark as set from config
                 } else {
                     clientDescEl.textContent = messaging.description;
                 }
@@ -2760,9 +2761,12 @@
             const callRecordingsSubtitle = document.getElementById('callRecordingsSubtitle');
             if (callRecordingsSubtitle) callRecordingsSubtitle.textContent = `Listen to recent calls we made for ${businessName}.`;
             
-            // Update description
+            // Update description - but only if it hasn't been set from client config
+            // (Don't overwrite the actual description from the API)
             const clientDescription = document.getElementById('clientDescription');
-            if (clientDescription) clientDescription.textContent = `See what we're doing for ${businessName} - calls, follow-ups, and bookings`;
+            if (clientDescription && !clientDescription.dataset.fromConfig) {
+                clientDescription.textContent = `See what we're doing for ${businessName} - calls, follow-ups, and bookings`;
+            }
         }
         
         function updateFreshnessIndicator() {
@@ -3770,6 +3774,13 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const data = await response.json();
                         if (data.ok && data.client) {
                             clientConfig = data.client;
+                            console.log('[DASHBOARD] Loaded client config:', {
+                                name: clientConfig.name || clientConfig.displayName,
+                                description: clientConfig.description,
+                                tagline: clientConfig.tagline,
+                                industry: clientConfig.industry,
+                                hasClientConfig: true
+                            });
                         }
                     }
                 } catch (err) {
