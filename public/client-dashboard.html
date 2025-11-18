@@ -2617,9 +2617,9 @@
                 }
             }
             
-            // Add industry-specific subtitle
+            // Add industry-specific subtitle (only if industry is actually configured)
             const subtitleEl = document.getElementById('clientSubtitle');
-            if (subtitleEl && industry && industry !== 'demo') {
+            if (subtitleEl && industry && industry !== 'demo' && hasClientConfig) {
                 const industryNames = {
                     dental: 'Dental Practice',
                     fitness: 'Fitness & Training',
