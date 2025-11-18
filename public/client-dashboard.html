@@ -1956,13 +1956,13 @@
             <div class="dashboard-grid">
                 <article class="card card-chart">
                     <h3>🔄 Conversion Funnel</h3>
-                    <p class="card-subtitle">How we convert your leads into bookings.</p>
+                    <p class="card-subtitle" id="conversionFunnelSubtitle">How we convert your leads into bookings.</p>
                     <div id="lead-journey" class="funnel"></div>
                 </article>
 
                 <article class="card card-chart">
                     <h3>📊 Weekly Activity</h3>
-                    <p class="card-subtitle">Calls and bookings we made this week.</p>
+                    <p class="card-subtitle" id="weeklyActivitySubtitle">Calls and bookings we made this week.</p>
                     <div id="performance-chart">
                         <div class="chart" id="chartBars"></div>
                         <p class="chart-value" id="chartSummary">18 bookings we made this week</p>
@@ -2020,7 +2020,7 @@
             <div class="dashboard-grid">
                 <article class="card card-metrics">
                     <h3>📈 Today's Activity</h3>
-                    <p class="card-subtitle">What we accomplished in the last 24 hours.</p>
+                    <p class="card-subtitle" id="todaysActivitySubtitle">What we accomplished in the last 24 hours.</p>
                     <div id="recent-activity" class="activity-grid"></div>
                 </article>
 
@@ -2666,6 +2666,20 @@
             
             const activityFeedSubtitle = document.getElementById('activityFeedSubtitle');
             if (activityFeedSubtitle) activityFeedSubtitle.textContent = `Real-time conversations ${businessName}'s concierge is having with leads.`;
+            
+            // Update more card subtitles
+            const conversionFunnelSubtitle = document.getElementById('conversionFunnelSubtitle');
+            if (conversionFunnelSubtitle) conversionFunnelSubtitle.textContent = `How we convert ${businessName}'s leads into bookings.`;
+            
+            const weeklyActivitySubtitle = document.getElementById('weeklyActivitySubtitle');
+            if (weeklyActivitySubtitle) weeklyActivitySubtitle.textContent = `Calls and bookings we made for ${businessName} this week.`;
+            
+            const todaysActivitySubtitle = document.getElementById('todaysActivitySubtitle');
+            if (todaysActivitySubtitle) todaysActivitySubtitle.textContent = `What we accomplished for ${businessName} in the last 24 hours.`;
+            
+            // Update description
+            const clientDescription = document.getElementById('clientDescription');
+            if (clientDescription) clientDescription.textContent = `See what we're doing for ${businessName} - calls, follow-ups, and bookings`;
         }
         
         function formatNumber(value) {
