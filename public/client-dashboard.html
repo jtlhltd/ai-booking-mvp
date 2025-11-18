@@ -2677,6 +2677,12 @@
             const todaysActivitySubtitle = document.getElementById('todaysActivitySubtitle');
             if (todaysActivitySubtitle) todaysActivitySubtitle.textContent = `What we accomplished for ${businessName} in the last 24 hours.`;
             
+            const retryQueueSubtitle = document.getElementById('retryQueueSubtitle');
+            if (retryQueueSubtitle) retryQueueSubtitle.textContent = `Leads we're retrying for ${businessName} after initial contact.`;
+            
+            const callRecordingsSubtitle = document.getElementById('callRecordingsSubtitle');
+            if (callRecordingsSubtitle) callRecordingsSubtitle.textContent = `Listen to recent calls we made for ${businessName}.`;
+            
             // Update description
             const clientDescription = document.getElementById('clientDescription');
             if (clientDescription) clientDescription.textContent = `See what we're doing for ${businessName} - calls, follow-ups, and bookings`;
