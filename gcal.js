@@ -16,6 +16,11 @@ export function makeJwtAuth({ clientEmail, privateKey, privateKeyB64 }) {
   if (key && key.includes('\\n')) {
     key = key.replace(/\\n/g, '\n');
   }
+  // Ensure key has proper format (PEM keys need newlines, don't trim)
+  // But remove any carriage returns that might cause issues
+  if (key) {
+    key = key.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  }
   
   // Debug: Log key info (without exposing full key)
   if (key) {
@@ -28,15 +33,20 @@ export function makeJwtAuth({ clientEmail, privateKey, privateKeyB64 }) {
     });
   }
   
-  return new google.auth.JWT(
-    clientEmail,
-    null,
-    key,
-    [
+  // Create JWT with explicit options to ensure consistent behavior
+  const jwtClient = new google.auth.JWT({
+    email: clientEmail,
+    key: key,
+    scopes: [
       'https://www.googleapis.com/auth/calendar',
       'https://www.googleapis.com/auth/calendar.events'
-    ]
-  );
+    ],
+    // Explicitly set these to avoid any defaults that might differ between environments
+    subject: undefined, // No impersonation needed
+    keyId: undefined, // Let Google derive from the key
+  });
+  
+  return jwtClient;
 }
 
 export async function insertEvent({ auth, calendarId, summary, description, startIso, endIso, timezone, attendees = [] }) {
