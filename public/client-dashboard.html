@@ -2629,10 +2629,10 @@
         function personalizeDashboard(businessName) {
             // Update status cards
             const statusCardLeads = document.getElementById('statusCardLeads');
-            if (statusCardLeads) statusCardLeads.textContent = `Leads ${businessName}'s Managing`;
+            if (statusCardLeads) statusCardLeads.textContent = `Leads We're Managing for ${businessName}`;
             
             const statusCardCalls = document.getElementById('statusCardCalls');
-            if (statusCardCalls) statusCardCalls.textContent = `Calls ${businessName}'s Made`;
+            if (statusCardCalls) statusCardCalls.textContent = `Calls We've Made for ${businessName}`;
             
             const statusCardConversion = document.getElementById('statusCardConversion');
             if (statusCardConversion) statusCardConversion.textContent = `${businessName}'s Conversion Rate`;
@@ -2642,7 +2642,7 @@
             
             // Update ROI panel
             const roiRevenueLabel = document.getElementById('roiRevenueLabel');
-            if (roiRevenueLabel) roiRevenueLabel.textContent = `Revenue ${businessName} Generated`;
+            if (roiRevenueLabel) roiRevenueLabel.textContent = `Revenue We Generated for ${businessName}`;
             
             // Update active indicator
             const activeTitle = document.getElementById('activeTitle');
@@ -2653,10 +2653,10 @@
             
             // Update card subtitles
             const callQualitySubtitle = document.getElementById('callQualitySubtitle');
-            if (callQualitySubtitle) callQualitySubtitle.textContent = `How effective ${businessName}'s calls are.`;
+            if (callQualitySubtitle) callQualitySubtitle.textContent = `How effective our calls are for ${businessName}.`;
             
             const recentLeadsSubtitle = document.getElementById('recentLeadsSubtitle');
-            if (recentLeadsSubtitle) recentLeadsSubtitle.textContent = `Leads ${businessName}'s actively following up on.`;
+            if (recentLeadsSubtitle) recentLeadsSubtitle.textContent = `Leads we're actively following up on for ${businessName}.`;
             
             const appointmentsSubtitle = document.getElementById('appointmentsSubtitle');
             if (appointmentsSubtitle) appointmentsSubtitle.textContent = `Appointments we booked for ${businessName}.`;
