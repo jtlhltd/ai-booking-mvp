@@ -759,6 +759,7 @@ function mapTenantRow(r) {
   const vapi = toJson(r.vapi_json) || {};
   const calendar = toJson(r.calendar_json) || {};
   const smsTemplates = toJson(r.sms_templates_json) || {};
+  const whiteLabel = toJson(r.white_label_config) || {};
 
   const out = {
     clientKey: r.client_key,
@@ -771,6 +772,7 @@ function mapTenantRow(r) {
     calendarId: calendar.calendarId || calendar.calendar_id || null,
     booking: calendar.booking || { defaultDurationMin: 30, timezone: r.timezone },
     smsTemplates,
+    whiteLabel,
     isEnabled: r.is_enabled === true || r.is_enabled === 1,
     createdAt: r.created_at
   };
@@ -792,7 +794,8 @@ export async function listFullClients() {
 export async function getFullClient(clientKey) {
   const { rows } = await query(`
     SELECT client_key, display_name, timezone, locale,
-           numbers_json, twilio_json, vapi_json, calendar_json, sms_templates_json, is_enabled, created_at
+           numbers_json, twilio_json, vapi_json, calendar_json, sms_templates_json, 
+           white_label_config, is_enabled, created_at
     FROM tenants WHERE client_key = $1
   `, [clientKey]);
   return mapTenantRow(rows[0]);

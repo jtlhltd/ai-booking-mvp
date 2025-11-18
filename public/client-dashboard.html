@@ -23,6 +23,7 @@
             --surface: #ffffff;
             --text: #2b2e3b;
             --muted: #6f7390;
+            --brand-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
 
         body[data-theme="dark"] {
@@ -1866,6 +1867,7 @@
                         <h1 id="clientName">Your Concierge Dashboard</h1>
                         <p id="clientDescription">See what we're doing for you - calls, follow-ups, and bookings</p>
                         <p id="clientTagline">We chase every lead you already paid for and land them on your calendar.</p>
+                        <p id="clientSubtitle" style="font-size: 0.95rem; color: var(--muted); margin-top: 8px; display: none;"></p>
                     </div>
                 </div>
                 <div style="display:flex; align-items:center; gap:12px;">
@@ -3556,7 +3558,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const callsToRender = dashboardData.recentCalls || [];
             renderCalls(callsToRender);
             await renderCallRecordings(callsToRender);
-            renderWorkflow(config.workflow || CLIENT_CONFIG.demo_client.workflow);
+            renderWorkflow(config.customWorkflow || config.workflow || CLIENT_CONFIG.demo_client.workflow);
             loadIntegrationHealth(currentClient);
 
             startLiveEvents(currentClient);
