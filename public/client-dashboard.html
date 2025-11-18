@@ -2626,10 +2626,15 @@
                            (config.services && typeof config.services === 'object' ? Object.keys(config.services).join(', ') : null) ||
                            '—';
             
-            document.getElementById('metaPhone').textContent = phone;
-            document.getElementById('metaTimezone').textContent = timezone;
-            document.getElementById('metaHours').textContent = businessHours;
-            document.getElementById('metaIndustry').textContent = industry;
+            const metaPhone = document.getElementById('metaPhone');
+            const metaTimezone = document.getElementById('metaTimezone');
+            const metaHours = document.getElementById('metaHours');
+            const metaIndustry = document.getElementById('metaIndustry');
+            
+            if (metaPhone) metaPhone.textContent = phone;
+            if (metaTimezone) metaTimezone.textContent = timezone;
+            if (metaHours) metaHours.textContent = businessHours;
+            if (metaIndustry) metaIndustry.textContent = industry;
 
             const banner = document.getElementById('demoBanner');
             if (banner) {
@@ -3711,7 +3716,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 }
             }
             
-            const config = clientConfig || { ...CLIENT_CONFIG[currentClient] } || CLIENT_CONFIG[DEMO_CLIENT_KEY];
+            const config = clientConfig || CLIENT_CONFIG[currentClient] || CLIENT_CONFIG[DEMO_CLIENT_KEY] || {};
             config.key = currentClient;
             
             // Update header with business name if available
