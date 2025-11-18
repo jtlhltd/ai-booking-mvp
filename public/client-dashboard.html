@@ -2626,10 +2626,33 @@
                                  '—';
             
             // Industry display: from industry or services (for meta field)
-            const industryDisplay = config.industry ||
-                           (config.services && Array.isArray(config.services) ? config.services.join(', ') : null) ||
-                           (config.services && typeof config.services === 'object' ? Object.keys(config.services).join(', ') : null) ||
-                           '—';
+            // Map industry codes to display names
+            const industryMap = {
+              'dental': 'Dental Practice',
+              'dentist': 'Dental Practice',
+              'fitness': 'Fitness & Training',
+              'beauty': 'Beauty Salon',
+              'salon': 'Beauty Salon',
+              'legal': 'Legal Practice',
+              'lawyer': 'Legal Practice',
+              'medical': 'Medical Practice',
+              'vet': 'Veterinary Practice',
+              'accounting': 'Accounting Services',
+              'real estate': 'Real Estate',
+              'home': 'Home Services',
+              'restaurant': 'Restaurant'
+            };
+            
+            let industryDisplay = config.industry;
+            if (industryDisplay && industryMap[industryDisplay.toLowerCase()]) {
+              industryDisplay = industryMap[industryDisplay.toLowerCase()];
+            } else if (config.services && Array.isArray(config.services) && config.services.length > 0) {
+              industryDisplay = config.services.join(', ');
+            } else if (config.services && typeof config.services === 'object') {
+              industryDisplay = Object.keys(config.services).join(', ');
+            } else {
+              industryDisplay = industryDisplay || '—';
+            }
             
             const metaPhone = document.getElementById('metaPhone');
             const metaTimezone = document.getElementById('metaTimezone');

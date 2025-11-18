@@ -1214,25 +1214,57 @@ async function main() {
     
     // Step 5: Create/update personalized client in database
     const clientKey = generateClientKey(prospectData);
+    
+    // Get phone number from environment or use a default
+    const phoneNumber = process.env.VAPI_PHONE_NUMBER || process.env.TWILIO_PHONE_NUMBER || '+44 20 3880 1234';
+    
+    // Generate business hours based on industry
+    const businessHours = '8am - 8pm, 7 days/week'; // Default, can be customized per industry
+    
     const clientData = {
       clientKey: clientKey,
       displayName: prospectData.businessName,
+      name: prospectData.businessName, // Also set 'name' for compatibility
       industry: prospectData.industry.toLowerCase(),
       services: prospectData.services,
       location: prospectData.location,
       timezone: 'Europe/London',
       locale: 'en-GB',
       isEnabled: true,
+      // Phone number for meta display
+      phone: phoneNumber,
+      numbers: {
+        primary: phoneNumber
+      },
+      numbers_json: {
+        primary: phoneNumber
+      },
+      // Business hours for meta display
+      businessHours: businessHours,
+      // Vapi configuration
       vapi: {
         assistantId: assistantId,
         phoneNumberId: null
       },
+      vapi_json: {
+        assistantId: assistantId,
+        phoneNumberId: null
+      },
+      // Booking configuration
       booking: {
         timezone: 'Europe/London',
         defaultDurationMin: 30,
         slotDuration: 30,
         bufferMinutes: 0,
-        daysAhead: 30
+        daysAhead: 30,
+        businessHours: businessHours
+      },
+      calendar_json: {
+        booking: {
+          timezone: 'Europe/London',
+          defaultDurationMin: 30,
+          businessHours: businessHours
+        }
       }
     };
     
