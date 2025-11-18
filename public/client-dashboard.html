@@ -2625,8 +2625,8 @@
                                  (config.booking ? `${config.booking.defaultDurationMin || 30}min slots` : null) ||
                                  '—';
             
-            // Industry: from industry or services
-            const industry = config.industry ||
+            // Industry display: from industry or services (for meta field)
+            const industryDisplay = config.industry ||
                            (config.services && Array.isArray(config.services) ? config.services.join(', ') : null) ||
                            (config.services && typeof config.services === 'object' ? Object.keys(config.services).join(', ') : null) ||
                            '—';
@@ -2639,7 +2639,7 @@
             if (metaPhone) metaPhone.textContent = phone;
             if (metaTimezone) metaTimezone.textContent = timezone;
             if (metaHours) metaHours.textContent = businessHours;
-            if (metaIndustry) metaIndustry.textContent = industry;
+            if (metaIndustry) metaIndustry.textContent = industryDisplay;
 
             const banner = document.getElementById('demoBanner');
             if (banner) {
