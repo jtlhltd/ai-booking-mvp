@@ -25,6 +25,7 @@ class BookingSystem {
               privateKey = Buffer.from(process.env.GOOGLE_PRIVATE_KEY_B64, 'base64').toString('utf8'); 
             } catch (e) {
               console.log('[BOOKING SYSTEM] Failed to decode base64 private key:', e.message);
+              throw e;
             }
           }
           
@@ -34,15 +35,15 @@ class BookingSystem {
           }
           
           // Ensure the private key has proper formatting
-          if (!privateKey.includes('BEGIN PRIVATE KEY')) {
-            throw new Error('Invalid private key format - missing BEGIN PRIVATE KEY');
+          if (!privateKey || !privateKey.includes('BEGIN PRIVATE KEY')) {
+            throw new Error('Invalid private key format - missing BEGIN PRIVATE KEY. Make sure GOOGLE_PRIVATE_KEY_B64 is correctly base64 encoded.');
           }
           
           // Use the same JWT auth method as server.js
           const { makeJwtAuth } = await import('./gcal.js');
           const auth = makeJwtAuth({
             clientEmail: process.env.GOOGLE_CLIENT_EMAIL,
-            privateKey: process.env.GOOGLE_PRIVATE_KEY,
+            privateKey: privateKey, // Use the decoded/processed key, not the env var
             privateKeyB64: process.env.GOOGLE_PRIVATE_KEY_B64
           });
           
