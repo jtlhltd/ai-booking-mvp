@@ -8579,14 +8579,24 @@ async function getIntegrationStatuses(clientKey) {
         `, [clientKey]);
         
         const client = clientResult.rows?.[0];
+        if (!client) {
+          // Client doesn't exist in database
+          const vapiIntegration = integrations.find(i => i.name === 'Vapi Voice');
+          if (vapiIntegration) {
+            vapiIntegration.status = 'error';
+            vapiIntegration.detail = `Client "${clientKey}" not found in database. Create the client first using /api/admin/client POST endpoint or ensure the client_key is correct.`;
+          }
+          return integrations; // Exit early
+        }
         vapiConfig = client?.vapi_json || {};
       } catch (columnError) {
         // If query fails, check if it's a column error or something else
         if (columnError.message?.includes('does not exist') && columnError.message?.includes('vapi_json')) {
           throw columnError; // Re-throw column errors
         }
-        // For other errors (like client not found), set empty config
+        // For other errors, set empty config and let error handler below deal with it
         vapiConfig = {};
+        throw columnError; // Re-throw to be caught by outer catch
       }
       
       // Check if THIS CLIENT has Vapi configured (multi-tenant - no global fallback)
@@ -8626,7 +8636,7 @@ async function getIntegrationStatuses(clientKey) {
             vapiIntegration.detail = 'This client has Vapi configuration but missing API key (privateKey, apiKey, or publicKey). Update the client\'s vapi_json in the database or via /api/admin/client/:clientKey PUT endpoint.';
           }
         } else {
-          // Client does NOT have Vapi configured
+          // Client exists but does NOT have Vapi configured
           vapiIntegration.status = 'error';
           vapiIntegration.detail = 'This client does not have Vapi configured. Update the client\'s vapi_json in the database (tenants table) with: { "assistantId": "...", "phoneNumberId": "...", "privateKey": "..." } or use the /api/admin/client/:clientKey PUT endpoint.';
         }
