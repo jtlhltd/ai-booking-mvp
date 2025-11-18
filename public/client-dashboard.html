@@ -2580,14 +2580,6 @@
             }
             dashboardData.recentLeads = leads;
             currentLeads = leads.slice(0, 5);
-            // Escape HTML to prevent XSS
-            const escapeHtml = (text) => {
-                if (!text) return '';
-                const div = document.createElement('div');
-                div.textContent = text;
-                return div.innerHTML;
-            };
-            
             container.innerHTML = currentLeads.map((lead, index) => {
                 const leadId = escapeHtml(String(lead.id || lead.phone || index));
                 const leadName = escapeHtml(lead.name || 'Prospect');
@@ -2628,8 +2620,8 @@
             container.innerHTML = appointments.map(appt => `
                 <div class="appt-item">
                     <div>
-                        <div class="appt-name">${appt.name || 'Prospect'}</div>
-                        <div class="appt-service">${appt.service || 'Consultation'}</div>
+                        <div class="appt-name">${escapeHtml(appt.name || 'Prospect')}</div>
+                        <div class="appt-service">${escapeHtml(appt.service || 'Consultation')}</div>
                     </div>
                     <div class="appt-time">${formatAppointmentTime(appt.start)}</div>
                 </div>
@@ -2773,12 +2765,13 @@
             }
             container.innerHTML = callsToShow.map((call, index) => {
                 const timeAgo = call.timeAgo || formatTimeAgo(call.timestamp || call.created_at);
-                const callId = call.id || call.timestamp || index;
+                const callId = escapeHtml(String(call.id || call.timestamp || index));
+                const callName = escapeHtml(call.name || 'Prospect');
                 return `
                     <div class="activity-item">
-                        <strong>${call.name || 'Prospect'}</strong> • ${call.channel || 'AI call'}
-                        <div class="activity-meta">${call.summary || 'Conversation logged'} • ${timeAgo}</div>
-                        <button class="transcript-btn" onclick="viewTranscript('${callId}', '${call.name || 'Prospect'}')">📄 View Transcript</button>
+                        <strong>${escapeHtml(call.name || 'Prospect')}</strong> • ${escapeHtml(call.channel || 'AI call')}
+                        <div class="activity-meta">${escapeHtml(call.summary || 'Conversation logged')} • ${timeAgo}</div>
+                        <button class="transcript-btn" onclick="viewTranscript('${callId}', '${callName}')">📄 View Transcript</button>
                     </div>
                 `;
             }).join('');
