@@ -2569,21 +2569,53 @@
             applyClientBranding(config);
             
             // Get industry-specific messaging
-            const industry = config.industry || 'dental';
-            const businessName = config.name || config.displayName || config.display_name || 'Your Business';
+            // Only use industry if it's actually configured (not from CLIENT_CONFIG mock data)
+            const industry = (clientConfig && clientConfig.industry) ? config.industry : null;
+            // Use 'dental' as fallback only for messaging/UI purposes, not for display
+            const industryForMessaging = industry || 'dental';
+            // Only use business name from actual client config
+            const businessName = (clientConfig && (clientConfig.name || clientConfig.displayName || clientConfig.display_name)) 
+                ? (config.name || config.displayName || config.display_name) 
+                : 'Your Business';
             const services = config.services || config.serviceMap || [];
             const messaging = getIndustryMessaging(industry, businessName, services);
             
             // Update header content (with null checks)
+            // Only use values from actual client config, not CLIENT_CONFIG mock data
             const clientNameEl = document.getElementById('clientName');
             const clientDescEl = document.getElementById('clientDescription');
             const clientTaglineEl = document.getElementById('clientTagline');
             const clientStatusEl = document.getElementById('clientStatus');
             
-            if (clientNameEl) clientNameEl.textContent = businessName;
-            if (clientDescEl) clientDescEl.textContent = config.description || messaging.description;
-            if (clientTaglineEl) clientTaglineEl.textContent = config.tagline || messaging.tagline;
-            if (clientStatusEl) clientStatusEl.textContent = config.status || 'Live';
+            // Only set name if it's from actual client config
+            if (clientNameEl) {
+                if (clientConfig && (clientConfig.name || clientConfig.displayName || clientConfig.display_name)) {
+                    clientNameEl.textContent = businessName;
+                } else {
+                    clientNameEl.textContent = 'Your Concierge Dashboard';
+                }
+            }
+            if (clientDescEl) {
+                if (clientConfig && clientConfig.description) {
+                    clientDescEl.textContent = config.description;
+                } else {
+                    clientDescEl.textContent = messaging.description;
+                }
+            }
+            if (clientTaglineEl) {
+                if (clientConfig && clientConfig.tagline) {
+                    clientTaglineEl.textContent = config.tagline;
+                } else {
+                    clientTaglineEl.textContent = messaging.tagline;
+                }
+            }
+            if (clientStatusEl) {
+                if (clientConfig && config.status) {
+                    clientStatusEl.textContent = config.status;
+                } else {
+                    clientStatusEl.textContent = 'Live';
+                }
+            }
             
             // Add industry-specific subtitle
             const subtitleEl = document.getElementById('clientSubtitle');
@@ -3752,19 +3784,19 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const config = clientConfig || CLIENT_CONFIG[currentClient] || CLIENT_CONFIG[DEMO_CLIENT_KEY] || {};
             config.key = currentClient;
             
-            // If we're using CLIENT_CONFIG fallback, clear meta fields so they show "Not supplied"
-            // Only use meta fields from actual clientConfig (from API/file)
+            // If we're using CLIENT_CONFIG fallback, clear ALL mock data fields
+            // Only use fields from actual clientConfig (from API/file)
             if (!clientConfig) {
-                // Don't use CLIENT_CONFIG defaults for meta fields - they're mock data
+                // Don't use CLIENT_CONFIG defaults - they're all mock data
                 delete config.phone;
                 delete config.numbers;
                 delete config.numbers_json;
                 delete config.businessHours;
                 delete config.timezone;
-                // Keep industry only if it's actually set in the URL/client key, not from demo defaults
-                if (currentClient === DEMO_CLIENT_KEY) {
-                    delete config.industry;
-                }
+                delete config.industry;
+                delete config.name;
+                delete config.displayName;
+                // Keep only essential non-meta fields for UI functionality
             }
             
             // Update header with business name if available
