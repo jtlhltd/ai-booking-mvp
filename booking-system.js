@@ -22,7 +22,9 @@ class BookingSystem {
           // Handle base64 encoded private key
           if (!privateKey && process.env.GOOGLE_PRIVATE_KEY_B64) {
             try { 
-              privateKey = Buffer.from(process.env.GOOGLE_PRIVATE_KEY_B64, 'base64').toString('utf8'); 
+              privateKey = Buffer.from(process.env.GOOGLE_PRIVATE_KEY_B64, 'base64').toString('utf8');
+              console.log('[BOOKING SYSTEM] Decoded base64 key, length:', privateKey.length, 'chars');
+              console.log('[BOOKING SYSTEM] First 50 chars:', privateKey.substring(0, 50));
             } catch (e) {
               console.log('[BOOKING SYSTEM] Failed to decode base64 private key:', e.message);
               throw e;
@@ -32,12 +34,20 @@ class BookingSystem {
           // Handle escaped newlines
           if (privateKey && privateKey.includes('\\n')) {
             privateKey = privateKey.replace(/\\n/g, '\n');
+            console.log('[BOOKING SYSTEM] Replaced escaped newlines');
           }
           
           // Ensure the private key has proper formatting
           if (!privateKey || !privateKey.includes('BEGIN PRIVATE KEY')) {
+            console.error('[BOOKING SYSTEM] Private key validation failed:');
+            console.error('  - Key exists:', !!privateKey);
+            console.error('  - Key length:', privateKey ? privateKey.length : 0);
+            console.error('  - Contains BEGIN:', privateKey ? privateKey.includes('BEGIN') : false);
+            console.error('  - First 100 chars:', privateKey ? privateKey.substring(0, 100) : 'N/A');
             throw new Error('Invalid private key format - missing BEGIN PRIVATE KEY. Make sure GOOGLE_PRIVATE_KEY_B64 is correctly base64 encoded.');
           }
+          
+          console.log('[BOOKING SYSTEM] Private key format validated successfully');
           
           // Use the same JWT auth method as server.js
           const { makeJwtAuth } = await import('./gcal.js');
