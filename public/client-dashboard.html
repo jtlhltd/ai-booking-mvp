@@ -1857,19 +1857,19 @@
             <div class="client-meta" id="clientMeta">
                 <div class="meta-item">
                     <div class="meta-label">Phone</div>
-                    <div class="meta-value" id="metaPhone">+44 20 3880 1234</div>
+                    <div class="meta-value" id="metaPhone">—</div>
                 </div>
                 <div class="meta-item">
                     <div class="meta-label">Timezone</div>
-                    <div class="meta-value" id="metaTimezone">Europe/London</div>
+                    <div class="meta-value" id="metaTimezone">—</div>
                 </div>
                 <div class="meta-item">
                     <div class="meta-label">Coverage</div>
-                    <div class="meta-value" id="metaHours">8am - 8pm, 7 days/week</div>
+                    <div class="meta-value" id="metaHours">—</div>
                 </div>
                 <div class="meta-item">
                     <div class="meta-label">Industry</div>
-                    <div class="meta-value" id="metaIndustry">AI Booking Concierge</div>
+                    <div class="meta-value" id="metaIndustry">—</div>
             </div>
         </div>
         
@@ -1889,23 +1889,23 @@
         <section class="status-bar" role="region" aria-label="Dashboard statistics">
             <div class="status-card" title="Total leads we're handling for you" role="article" aria-label="Leads we're managing">
                 <h4>Leads We're Managing</h4>
-                <div class="status-value" id="statusTotalLeads" aria-live="polite">48</div>
-                <p class="status-hint" id="statusHintLeads">7 new in last 24h</p>
+                <div class="status-value" id="statusTotalLeads" aria-live="polite">—</div>
+                <p class="status-hint" id="statusHintLeads">Loading...</p>
                 </div>
             <div class="status-card" title="Calls your concierge has made" role="article" aria-label="Calls we've made">
                 <h4>Calls We've Made</h4>
-                <div class="status-value" id="statusTotalCalls" aria-live="polite">36</div>
-                <p class="status-hint" id="statusHintCalls">12 bookings this week</p>
+                <div class="status-value" id="statusTotalCalls" aria-live="polite">—</div>
+                <p class="status-hint" id="statusHintCalls">Loading...</p>
             </div>
             <div class="status-card" title="Conversion rate from our follow-up" role="article" aria-label="Our conversion rate">
                 <h4>Our Conversion Rate</h4>
-                <div class="status-value" id="statusConversionRate" aria-live="polite">63%</div>
-                <p class="status-hint" id="statusHintConversion">84% success rate</p>
+                <div class="status-value" id="statusConversionRate" aria-live="polite">—</div>
+                <p class="status-hint" id="statusHintConversion">Loading...</p>
             </div>
             <div class="status-card" title="How fast we respond to your leads" role="article" aria-label="Our response time">
                 <h4>Our Response Time</h4>
-                <div class="status-value" id="statusFirstResponse" aria-live="polite">2m 58s</div>
-                <p class="status-hint" id="statusHintResponse">Always under 5 min</p>
+                <div class="status-value" id="statusFirstResponse" aria-live="polite">—</div>
+                <p class="status-hint" id="statusHintResponse">Loading...</p>
             </div>
         </section>
 
@@ -2726,7 +2726,8 @@
             if (!container) return;
             const totalLeads = data.totalLeads || 0;
             const contacted = data.totalCalls || 0;
-            const engaged = Math.round(contacted * 0.75);
+            // Engaged = leads that were contacted but not yet booked (use actual data if available)
+            const engaged = data.engagedLeads || Math.max(0, contacted - (data.bookingsThisWeek || 0));
             const booked = data.bookingsThisWeek || 0;
 
             const stages = [
@@ -2991,7 +2992,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         </div>
                         <div class="quality-metric">
                             <div class="quality-label">Best Time</div>
-                            <div class="quality-value">${payload.bestTime || '2-4pm'}</div>
+                            <div class="quality-value">${payload.bestTime || '—'}</div>
                             <div class="quality-badge">to call</div>
                         </div>
                     `;
