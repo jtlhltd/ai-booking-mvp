@@ -2302,27 +2302,28 @@
             return null;
         }
 
-        function mergeData(base = {}, livePayload) {
+        function mergeData(base = {}, livePayload, isDemoClient = false) {
             if (!livePayload) return base;
             
             // For real clients, use live payload data directly (don't merge with demo data)
             // Only merge if we're in demo mode and want to preserve imported leads
-            const isDemoMode = base.totalLeads > 0 && base.recentLeads && base.recentLeads.length > 0;
+            const isDemoMode = isDemoClient || (base.totalLeads > 0 && base.recentLeads && base.recentLeads.length > 0 && base.recentLeads.some(l => l.status && l.status.includes('(demo)')));
             
             if (!isDemoMode) {
-                // Real client - use API data directly
+                // Real client - use API data directly from livePayload
+                const metrics = livePayload.metrics || {};
                 return {
-                    totalLeads: livePayload.totalLeads || 0,
-                    totalCalls: livePayload.totalCalls || 0,
-                    last24hLeads: livePayload.last24hLeads || 0,
-                    conversionRate: livePayload.conversionRate || 0,
-                    successRate: livePayload.successRate || 0,
-                    firstResponse: livePayload.firstResponse || '—',
-                    bookingsThisWeek: livePayload.bookingsThisWeek || 0,
-                    avgLeadScore: livePayload.avgLeadScore || 0,
-                    highPriorityLeads: livePayload.highPriorityLeads || 0,
-                    mediumPriorityLeads: livePayload.mediumPriorityLeads || 0,
-                    lowPriorityLeads: livePayload.lowPriorityLeads || 0,
+                    totalLeads: metrics.totalLeads || livePayload.totalLeads || 0,
+                    totalCalls: metrics.totalCalls || livePayload.totalCalls || 0,
+                    last24hLeads: metrics.last24hLeads || livePayload.last24hLeads || 0,
+                    conversionRate: metrics.conversionRate || livePayload.conversionRate || 0,
+                    successRate: metrics.successRate || livePayload.successRate || 0,
+                    firstResponse: metrics.firstResponse || livePayload.firstResponse || '—',
+                    bookingsThisWeek: metrics.bookingsThisWeek || livePayload.bookingsThisWeek || 0,
+                    avgLeadScore: metrics.avgLeadScore || livePayload.avgLeadScore || 0,
+                    highPriorityLeads: metrics.highPriorityLeads || livePayload.highPriorityLeads || 0,
+                    mediumPriorityLeads: metrics.mediumPriorityLeads || livePayload.mediumPriorityLeads || 0,
+                    lowPriorityLeads: metrics.lowPriorityLeads || livePayload.lowPriorityLeads || 0,
                     recentLeads: livePayload.leads || [],
                     recentCalls: livePayload.recentCalls || [],
                     appointments: livePayload.appointments || [],
@@ -3392,11 +3393,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const livePayload = await fetchLiveData(currentClient);
                 if (livePayload) {
                     // Use real data from API, don't merge with demo data
-                    dashboardData = mergeData({}, livePayload);
+                    dashboardData = mergeData({}, livePayload, currentClient === DEMO_CLIENT_KEY);
                 } else if (currentClient === DEMO_CLIENT_KEY) {
                     // Only use demo data if it's the demo client and no API data
                     dashboardData = { ...DEMO_DATA };
                 }
+                // If no livePayload and not demo client, dashboardData stays as empty structure
             } catch (error) {
                 console.error('Failed to load dashboard data', error);
                 // Only show error for real clients, demo client can use demo data
@@ -3410,7 +3412,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
             updateStatusBar(dashboardData);
             renderRecentActivity(dashboardData);
-            renderROI(dashboardData.roi || DEMO_DATA.roi);
+            // Use dashboardData.roi, or empty ROI if not available (never use DEMO_DATA.roi for real clients)
+            const roiData = dashboardData.roi || { costs: { total: 0, perCall: 0 }, revenue: { total: 0, bookings: 0, avgDealValue: 0 }, roi: { profit: 0, multiplier: 0, percentage: 0 } };
+            renderROI(roiData);
             await renderActiveIndicator(dashboardData);
             renderLeadJourney(dashboardData);
             renderLeads(dashboardData.recentLeads || []);
@@ -3446,7 +3450,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         dashboardData = mergeData(dashboardData, refreshPayload);
                         updateStatusBar(dashboardData);
                         renderRecentActivity(dashboardData);
-                        renderROI(dashboardData.roi || DEMO_DATA.roi);
+                        const roiData = dashboardData.roi || { costs: { total: 0, perCall: 0 }, revenue: { total: 0, bookings: 0, avgDealValue: 0 }, roi: { profit: 0, multiplier: 0, percentage: 0 } };
+                        renderROI(roiData);
                         await renderActiveIndicator(dashboardData);
                         renderLeadJourney(dashboardData);
                         renderLeads(dashboardData.recentLeads || []);
