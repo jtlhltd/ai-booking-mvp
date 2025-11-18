@@ -8564,45 +8564,88 @@ async function getIntegrationStatuses(clientKey) {
     }
   ];
 
-  // Test Vapi connection
-  const vapiKey = process.env.VAPI_PRIVATE_KEY || process.env.VAPI_PUBLIC_KEY || process.env.VAPI_API_KEY;
-  if (vapiKey) {
+  // Check Vapi connection for this specific client (multi-tenant)
+  if (clientKey) {
     try {
-      const vapiResponse = await fetch('https://api.vapi.ai/assistant', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${vapiKey}`,
-          'Content-Type': 'application/json'
-        },
-        signal: AbortSignal.timeout(5000) // 5 second timeout
-      });
+      // Get client config - handle both vapi_json column
+      let clientResult;
+      let vapiConfig = {};
       
-      if (vapiResponse.ok) {
-        const vapiIntegration = integrations.find(i => i.name === 'Vapi Voice');
-        if (vapiIntegration) {
-          vapiIntegration.status = 'active';
-          vapiIntegration.detail = 'Assistant + phone number connected';
-        }
-      } else {
-        const vapiIntegration = integrations.find(i => i.name === 'Vapi Voice');
-        if (vapiIntegration) {
+      try {
+        clientResult = await query(`
+          SELECT vapi_json, sms_json, twilio_json
+          FROM tenants
+          WHERE client_key = $1
+        `, [clientKey]);
+        
+        const client = clientResult.rows?.[0];
+        vapiConfig = client?.vapi_json || {};
+      } catch (columnError) {
+        // If query fails, handle gracefully
+        throw columnError;
+      }
+      
+      // Check if THIS CLIENT has Vapi configured (multi-tenant - no global fallback)
+      const hasClientVapiConfig = !!(vapiConfig.assistantId || vapiConfig.phoneNumberId || vapiConfig.apiKey || vapiConfig.privateKey);
+      
+      const vapiIntegration = integrations.find(i => i.name === 'Vapi Voice');
+      if (vapiIntegration) {
+        if (hasClientVapiConfig) {
+          // Client has Vapi config - test connection using client's API key
+          const vapiKey = vapiConfig.privateKey || vapiConfig.apiKey || vapiConfig.publicKey;
+          
+          if (vapiKey) {
+            try {
+              const vapiResponse = await fetch('https://api.vapi.ai/assistant', {
+                method: 'GET',
+                headers: {
+                  'Authorization': `Bearer ${vapiKey}`,
+                  'Content-Type': 'application/json'
+                },
+                signal: AbortSignal.timeout(5000) // 5 second timeout
+              });
+              
+              if (vapiResponse.ok) {
+                vapiIntegration.status = 'active';
+                vapiIntegration.detail = 'Assistant + phone number connected';
+              } else {
+                vapiIntegration.status = 'error';
+                const statusText = await vapiResponse.text().catch(() => '');
+                vapiIntegration.detail = `API key invalid or expired (HTTP ${vapiResponse.status}). Update this client's Vapi configuration with valid credentials.`;
+              }
+            } catch (error) {
+              vapiIntegration.status = 'error';
+              vapiIntegration.detail = `Connection test failed: ${error.message}. Check this client's Vapi configuration.`;
+            }
+          } else {
+            vapiIntegration.status = 'error';
+            vapiIntegration.detail = 'This client has Vapi configuration but missing API key (privateKey, apiKey, or publicKey). Update client Vapi settings.';
+          }
+        } else {
+          // Client does NOT have Vapi configured
           vapiIntegration.status = 'error';
-          const statusText = await vapiResponse.text().catch(() => '');
-          vapiIntegration.detail = `API key invalid or expired (HTTP ${vapiResponse.status}). Check VAPI_PRIVATE_KEY in environment variables.`;
+          vapiIntegration.detail = 'This client does not have Vapi configured. Add Vapi settings (assistantId, phoneNumberId, and privateKey/apiKey) in this client\'s configuration to enable calling.';
         }
       }
     } catch (error) {
+      console.error('[INTEGRATION HEALTH ERROR]', error);
       const vapiIntegration = integrations.find(i => i.name === 'Vapi Voice');
       if (vapiIntegration) {
-        vapiIntegration.status = 'error';
-        vapiIntegration.detail = `Connection test failed: ${error.message}. Check VAPI_PRIVATE_KEY in environment variables.`;
+        if (error.message?.includes('does not exist')) {
+          vapiIntegration.status = 'error';
+          vapiIntegration.detail = 'Database schema needs update. The tenants table is missing Vapi configuration columns. Contact support to update the database schema.';
+        } else {
+          vapiIntegration.status = 'error';
+          vapiIntegration.detail = `Unable to check Vapi configuration: ${error.message}. Database connection may be unavailable.`;
+        }
       }
     }
   } else {
+    // No client key - can't check client-specific config
     const vapiIntegration = integrations.find(i => i.name === 'Vapi Voice');
     if (vapiIntegration) {
       vapiIntegration.status = 'error';
-      vapiIntegration.detail = 'Vapi API key not found. Add VAPI_PRIVATE_KEY to environment variables to enable calling.';
+      vapiIntegration.detail = 'Client key required to check Vapi configuration. Each client must have their own Vapi settings configured.';
     }
   }
 
@@ -8733,13 +8776,11 @@ async function getIntegrationStatuses(clientKey) {
       }
     }
   } else {
-    // Fallback: check env var if no client key
+    // No client key - can't check client-specific config
     const calendarIntegration = integrations.find(i => i.name === 'Google Calendar');
     if (calendarIntegration) {
-      calendarIntegration.status = process.env.GOOGLE_CLIENT_EMAIL ? 'active' : 'warning';
-      calendarIntegration.detail = process.env.GOOGLE_CLIENT_EMAIL 
-        ? 'Auto-booking synced' 
-        : 'Google Calendar not configured. Add GOOGLE_CLIENT_EMAIL to environment variables or configure calendar in client settings.';
+      calendarIntegration.status = 'warning';
+      calendarIntegration.detail = 'Client key required to check Google Calendar configuration. Each client must have their own calendar settings configured.';
     }
   }
 
