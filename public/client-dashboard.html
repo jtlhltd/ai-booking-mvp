@@ -2701,6 +2701,26 @@
             if (clientDescription) clientDescription.textContent = `See what we're doing for ${businessName} - calls, follow-ups, and bookings`;
         }
         
+        function updateFreshnessIndicator() {
+            const freshnessEl = document.getElementById('freshnessText');
+            if (!freshnessEl) return;
+            
+            if (lastDataUpdate) {
+                const secondsAgo = Math.floor((Date.now() - lastDataUpdate.getTime()) / 1000);
+                if (secondsAgo < 60) {
+                    freshnessEl.textContent = `Updated ${secondsAgo}s ago`;
+                } else if (secondsAgo < 3600) {
+                    const minutes = Math.floor(secondsAgo / 60);
+                    freshnessEl.textContent = `Updated ${minutes}m ago`;
+                } else {
+                    const hours = Math.floor(secondsAgo / 3600);
+                    freshnessEl.textContent = `Updated ${hours}h ago`;
+                }
+            } else {
+                freshnessEl.textContent = 'Data syncing...';
+            }
+        }
+        
         function formatNumber(value) {
             if (value === undefined || value === null) return '—';
             return Number(value).toLocaleString('en-GB');
