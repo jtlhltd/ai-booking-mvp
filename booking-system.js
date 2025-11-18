@@ -25,10 +25,25 @@ class BookingSystem {
           clientEmail = saJson.client_email || clientEmail;
           privateKey = saJson.private_key || privateKey;
           
+          console.log('[BOOKING SYSTEM] Extracted from JSON:', {
+            clientEmail: clientEmail ? 'SET' : 'MISSING',
+            privateKeyLength: privateKey ? privateKey.length : 0,
+            privateKeyFirstChars: privateKey ? privateKey.substring(0, 50).replace(/\n/g, '\\n') : 'N/A',
+            hasEscapedNewlines: privateKey ? privateKey.includes('\\n') : false,
+            hasActualNewlines: privateKey ? privateKey.includes('\n') : false
+          });
+          
           // Replace literal \n with actual newlines (JSON stores newlines as \n)
-          if (privateKey && privateKey.includes('\\n')) {
-            privateKey = privateKey.replace(/\\n/g, '\n');
-            console.log('[BOOKING SYSTEM] Replaced escaped newlines in private key from JSON');
+          // JSON.parse() should already convert \n to actual newlines, but check for both cases
+          if (privateKey) {
+            if (privateKey.includes('\\n')) {
+              privateKey = privateKey.replace(/\\n/g, '\n');
+              console.log('[BOOKING SYSTEM] Replaced escaped newlines (\\n) in private key from JSON');
+            }
+            // Also ensure we have actual newlines (JSON.parse might have already done this)
+            if (!privateKey.includes('\n') && privateKey.includes('BEGIN')) {
+              console.warn('[BOOKING SYSTEM] Warning: Private key has no newlines but has BEGIN marker');
+            }
           }
           
           console.log('[BOOKING SYSTEM] Loaded credentials from GOOGLE_SA_JSON_BASE64');
