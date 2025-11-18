@@ -2028,19 +2028,19 @@
                     <div id="system-status" class="status-compact">
                         <div class="metric-row">
                             <span class="metric-label">Lead number</span>
-                            <span class="metric-value" id="statusPhone">+44 20 3880 1234</span>
+                            <span class="metric-value" id="statusPhone">—</span>
             </div>
                         <div class="metric-row">
                             <span class="metric-label">SMS & WhatsApp</span>
-                            <span class="metric-value">✓ Active</span>
+                            <span class="metric-value" id="statusSMS">—</span>
                         </div>
                         <div class="metric-row">
                             <span class="metric-label">Calendar</span>
-                            <span class="metric-value">✓ Connected</span>
+                            <span class="metric-value" id="statusCalendar">—</span>
                         </div>
                         <div class="metric-row">
                             <span class="metric-label">Coverage</span>
-                            <span class="metric-value" id="statusCoverage">7 days/week, 24/7</span>
+                            <span class="metric-value" id="statusCoverage">—</span>
                         </div>
                     </div>
                     <div id="integration-health" class="integration-list"></div>
@@ -2603,9 +2603,37 @@
         }
 
 
-        function renderSystemStatus(config) {
+        async function renderSystemStatus(config) {
             document.getElementById('statusPhone').textContent = config.phone || '—';
             document.getElementById('statusCoverage').textContent = config.businessHours || '—';
+            
+            // Update SMS/Calendar status from integration health
+            if (currentClient !== DEMO_CLIENT_KEY) {
+                try {
+                    const response = await fetch(`${BASE_URL}/api/integration-health/${currentClient}`);
+                    const payload = await response.json();
+                    if (payload?.ok && Array.isArray(payload.integrations)) {
+                        const twilio = payload.integrations.find(i => i.name === 'Twilio SMS');
+                        const calendar = payload.integrations.find(i => i.name === 'Google Calendar');
+                        
+                        document.getElementById('statusSMS').textContent = twilio?.status === 'active' ? '✓ Active' : '⚠ Not connected';
+                        document.getElementById('statusSMS').className = twilio?.status === 'active' ? 'metric-value success' : 'metric-value warning';
+                        
+                        document.getElementById('statusCalendar').textContent = calendar?.status === 'active' ? '✓ Connected' : '⚠ Not connected';
+                        document.getElementById('statusCalendar').className = calendar?.status === 'active' ? 'metric-value success' : 'metric-value warning';
+                    }
+                } catch (error) {
+                    console.warn('Failed to load integration status', error);
+                    document.getElementById('statusSMS').textContent = '⚠ Unknown';
+                    document.getElementById('statusCalendar').textContent = '⚠ Unknown';
+                }
+            } else {
+                // Demo client - show active status
+                document.getElementById('statusSMS').textContent = '✓ Active';
+                document.getElementById('statusSMS').className = 'metric-value success';
+                document.getElementById('statusCalendar').textContent = '✓ Connected';
+                document.getElementById('statusCalendar').className = 'metric-value success';
+            }
         }
 
         function renderIntegrationStatus(list = []) {
@@ -3214,6 +3242,25 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 }
             } catch (error) {
                 console.error('Failed to load calendar details', error);
+                // Show error state when API fails
+                container.innerHTML = `
+                    <div class="calendar-detail-item">
+                        <span class="calendar-detail-label">Last sync</span>
+                        <span class="calendar-detail-value warning">—</span>
+                    </div>
+                    <div class="calendar-detail-item">
+                        <span class="calendar-detail-label">Conflicts resolved</span>
+                        <span class="calendar-detail-value">0 this week</span>
+                    </div>
+                    <div class="calendar-detail-item">
+                        <span class="calendar-detail-label">Appointments booked</span>
+                        <span class="calendar-detail-value">0 this week</span>
+                    </div>
+                    <div class="calendar-detail-item">
+                        <span class="calendar-detail-label">Calendar status</span>
+                        <span class="calendar-detail-value warning">⚠ Not connected</span>
+                    </div>
+                `;
             }
         }
 
@@ -3423,7 +3470,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             renderLeads(dashboardData.recentLeads || []);
             renderAppointments(dashboardData.appointments || []);
             renderChart(config, dashboardData);
-            renderSystemStatus(config);
+            await renderSystemStatus(config);
             await renderCallQuality(dashboardData);
             await renderRetryQueue(dashboardData);
             await renderCalendarDetails(dashboardData);
