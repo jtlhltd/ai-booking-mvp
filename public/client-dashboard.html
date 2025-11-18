@@ -2580,17 +2580,29 @@
             }
             dashboardData.recentLeads = leads;
             currentLeads = leads.slice(0, 5);
-            container.innerHTML = currentLeads.map((lead, index) => `
+            // Escape HTML to prevent XSS
+            const escapeHtml = (text) => {
+                if (!text) return '';
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            };
+            
+            container.innerHTML = currentLeads.map((lead, index) => {
+                const leadId = escapeHtml(String(lead.id || lead.phone || index));
+                const leadName = escapeHtml(lead.name || 'Prospect');
+                return `
                 <div class="lead-item" data-lead-index="${index}" role="button" tabindex="0">
-                    <div class="lead-name">${lead.name || 'Prospect'}</div>
+                    <div class="lead-name">${escapeHtml(lead.name || 'Prospect')}</div>
                     <div class="lead-meta">
-                        <span>${lead.phone || lead.email || ''}</span>
-                        <span>${lead.service || 'General'}</span>
+                        <span>${escapeHtml(lead.phone || lead.email || '')}</span>
+                        <span>${escapeHtml(lead.service || 'General')}</span>
                     </div>
-                    <div class="lead-status">${lead.status || 'In follow-up'}</div>
-                    <button class="timeline-btn" onclick="event.stopPropagation(); viewLeadTimeline('${lead.id || lead.phone || index}', '${lead.name || 'Prospect'}')">📊 View Timeline</button>
+                    <div class="lead-status">${escapeHtml(lead.status || 'In follow-up')}</div>
+                    <button class="timeline-btn" onclick="event.stopPropagation(); viewLeadTimeline('${leadId}', '${leadName}')">📊 View Timeline</button>
                 </div>
-            `).join('');
+            `;
+            }).join('');
             attachLeadModalEvents();
         }
 
