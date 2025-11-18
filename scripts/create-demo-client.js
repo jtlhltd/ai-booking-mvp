@@ -102,6 +102,122 @@ function validateLocation(location) {
 }
 
 /**
+ * Get industry-specific defaults (business hours, logo, colors, timezone)
+ */
+function getIndustryDefaults(industry, location = null) {
+  const industryLower = (industry || '').toLowerCase();
+  
+  // Industry-specific business hours
+  const businessHoursMap = {
+    dental: '8am - 6pm, Mon-Fri',
+    dentist: '8am - 6pm, Mon-Fri',
+    fitness: '6am - 9pm, Mon-Sat',
+    beauty: '9am - 7pm, Tue-Sat',
+    salon: '9am - 7pm, Tue-Sat',
+    legal: '9am - 5pm, Mon-Fri',
+    lawyer: '9am - 5pm, Mon-Fri',
+    medical: '8am - 6pm, Mon-Fri',
+    vet: '8am - 6pm, Mon-Sat',
+    accounting: '9am - 5pm, Mon-Fri',
+    'real estate': '9am - 6pm, Mon-Sat',
+    home: '8am - 6pm, Mon-Sat',
+    restaurant: '11am - 10pm, 7 days/week'
+  };
+  
+  // Industry-specific logo emojis
+  const logoMap = {
+    dental: '🦷',
+    dentist: '🦷',
+    fitness: '💪',
+    beauty: '💅',
+    salon: '💅',
+    legal: '⚖️',
+    lawyer: '⚖️',
+    medical: '🏥',
+    vet: '🐾',
+    accounting: '📊',
+    'real estate': '🏠',
+    home: '🔧',
+    restaurant: '🍽️',
+    default: '🏢'
+  };
+  
+  // Industry-specific colors (matching dashboard)
+  const colorsMap = {
+    dental: { primary: '#2e7d32', secondary: '#1b5e20', accent: '#4caf50' },
+    dentist: { primary: '#2e7d32', secondary: '#1b5e20', accent: '#4caf50' },
+    fitness: { primary: '#d32f2f', secondary: '#b71c1c', accent: '#f44336' },
+    beauty: { primary: '#c2185b', secondary: '#880e4f', accent: '#e91e63' },
+    salon: { primary: '#c2185b', secondary: '#880e4f', accent: '#e91e63' },
+    legal: { primary: '#1565c0', secondary: '#0d47a1', accent: '#2196f3' },
+    lawyer: { primary: '#1565c0', secondary: '#0d47a1', accent: '#2196f3' },
+    medical: { primary: '#0277bd', secondary: '#01579b', accent: '#03a9f4' },
+    vet: { primary: '#0277bd', secondary: '#01579b', accent: '#03a9f4' },
+    accounting: { primary: '#5c6ac4', secondary: '#3a4a9f', accent: '#10b981' },
+    'real estate': { primary: '#5c6ac4', secondary: '#3a4a9f', accent: '#10b981' },
+    home: { primary: '#5c6ac4', secondary: '#3a4a9f', accent: '#10b981' },
+    restaurant: { primary: '#5c6ac4', secondary: '#3a4a9f', accent: '#10b981' },
+    default: { primary: '#5c6ac4', secondary: '#3a4a9f', accent: '#10b981' }
+  };
+  
+  // Default timezone based on location (simplified)
+  let defaultTimezone = 'Europe/London';
+  if (location) {
+    const locationLower = location.toLowerCase();
+    if (locationLower.includes('us') || locationLower.includes('america') || locationLower.includes('new york') || locationLower.includes('los angeles')) {
+      defaultTimezone = 'America/New_York';
+    } else if (locationLower.includes('australia') || locationLower.includes('sydney') || locationLower.includes('melbourne')) {
+      defaultTimezone = 'Australia/Sydney';
+    }
+  }
+  
+  // Find matching industry key
+  const matchingKey = Object.keys(businessHoursMap).find(key => industryLower.includes(key)) || 'default';
+  
+  return {
+    businessHours: businessHoursMap[matchingKey] || '8am - 8pm, 7 days/week',
+    logo: logoMap[matchingKey] || logoMap.default,
+    colors: colorsMap[matchingKey] || colorsMap.default,
+    timezone: defaultTimezone
+  };
+}
+
+/**
+ * Generate description from industry, business name, and services
+ */
+function generateDescription(industry, businessName, services) {
+  const industryLower = (industry || '').toLowerCase();
+  const serviceList = Array.isArray(services) ? services.join(', ') : (services || 'services');
+  
+  const templates = {
+    dental: `Your AI receptionist is following up on leads and booking appointments 24/7 for ${businessName}.`,
+    dentist: `Your AI receptionist is following up on leads and booking appointments 24/7 for ${businessName}.`,
+    fitness: `Your AI booking assistant is following up on leads and scheduling sessions 24/7 for ${businessName}.`,
+    beauty: `Your AI booking assistant is following up on leads and scheduling appointments 24/7 for ${businessName}.`,
+    salon: `Your AI booking assistant is following up on leads and scheduling appointments 24/7 for ${businessName}.`,
+    legal: `Your AI receptionist is following up on leads and scheduling consultations 24/7 for ${businessName}.`,
+    lawyer: `Your AI receptionist is following up on leads and scheduling consultations 24/7 for ${businessName}.`,
+    medical: `Your AI receptionist is following up on leads and scheduling appointments 24/7 for ${businessName}.`,
+    vet: `Your AI receptionist is following up on leads and scheduling appointments 24/7 for ${businessName}.`,
+    accounting: `Your AI booking assistant is following up on leads and scheduling consultations 24/7 for ${businessName}.`,
+    'real estate': `Your AI booking assistant is following up on leads and scheduling viewings 24/7 for ${businessName}.`,
+    home: `Your AI booking assistant is following up on leads and scheduling appointments 24/7 for ${businessName}.`,
+    restaurant: `Your AI booking assistant is following up on leads and scheduling reservations 24/7 for ${businessName}.`
+  };
+  
+  const matchingKey = Object.keys(templates).find(key => industryLower.includes(key));
+  return matchingKey ? templates[matchingKey] : `Your AI booking assistant is following up on leads and scheduling appointments 24/7 for ${businessName}.`;
+}
+
+/**
+ * Generate tagline from industry and business name
+ */
+function generateTagline(industry, businessName) {
+  // Tagline is consistent across industries per dashboard
+  return `We're calling every lead you've already paid for and booking them into your calendar.`;
+}
+
+/**
  * Better file naming
  */
 function generateFileName(prospectData) {
@@ -1062,6 +1178,7 @@ async function main() {
     
     // Step 3: Get prospect details (from command line args or prompt)
     let businessName, industry, services, prospectName, location;
+    let prospectData; // Will be initialized later
     
     const args = process.argv.slice(2);
     
@@ -1194,15 +1311,74 @@ async function main() {
           console.log(`⚠️  ${validation.error}, using anyway\n`);
         }
       }
+      
+      // Get industry defaults for optional fields
+      const industryDefaults = getIndustryDefaults(industry.trim(), location ? location.trim() : null);
+      
+      // Optional: Phone number
+      const phonePrompt = `Phone number (optional, press Enter for default: ${process.env.VAPI_PHONE_NUMBER || process.env.TWILIO_PHONE_NUMBER || '+44 20 3880 1234'}): `;
+      let phoneNumber = await question(phonePrompt);
+      if (!phoneNumber.trim()) {
+        phoneNumber = process.env.VAPI_PHONE_NUMBER || process.env.TWILIO_PHONE_NUMBER || '+44 20 3880 1234';
+      }
+      
+      // Optional: Business hours
+      const hoursPrompt = `Business hours (optional, press Enter for default: ${industryDefaults.businessHours}): `;
+      let businessHours = await question(hoursPrompt);
+      if (!businessHours.trim()) {
+        businessHours = industryDefaults.businessHours;
+      }
+      
+      // Optional: Timezone
+      const timezonePrompt = `Timezone (optional, press Enter for default: ${industryDefaults.timezone}): `;
+      let timezone = await question(timezonePrompt);
+      if (!timezone.trim()) {
+        timezone = industryDefaults.timezone;
+      }
+      
+      // Optional: Description
+      const descriptionPrompt = `Description (optional, press Enter to auto-generate): `;
+      let description = await question(descriptionPrompt);
+      if (!description.trim()) {
+        description = null; // Will be auto-generated
+      }
+      
+      // Optional: Tagline
+      const taglinePrompt = `Tagline (optional, press Enter to auto-generate): `;
+      let tagline = await question(taglinePrompt);
+      if (!tagline.trim()) {
+        tagline = null; // Will be auto-generated
+      }
+      
+      // Store optional fields in prospectData for interactive mode
+      prospectData = {
+        businessName: businessName.trim(),
+        industry: industry.trim(),
+        services,
+        prospectName: prospectName ? prospectName.trim() : null,
+        location: location ? location.trim() : null,
+        phoneNumber: phoneNumber.trim(),
+        businessHours: businessHours.trim(),
+        timezone: timezone.trim(),
+        description: description ? description.trim() : null,
+        tagline: tagline ? tagline.trim() : null
+      };
+    } else {
+      // Non-interactive mode: use defaults
+      const industryDefaults = getIndustryDefaults(industry.trim(), location ? location.trim() : null);
+      prospectData = {
+        businessName: businessName.trim(),
+        industry: industry.trim(),
+        services,
+        prospectName: prospectName ? prospectName.trim() : null,
+        location: location ? location.trim() : null,
+        phoneNumber: process.env.VAPI_PHONE_NUMBER || process.env.TWILIO_PHONE_NUMBER || '+44 20 3880 1234',
+        businessHours: industryDefaults.businessHours,
+        timezone: industryDefaults.timezone,
+        description: null, // Will be auto-generated
+        tagline: null // Will be auto-generated
+      };
     }
-    
-    const prospectData = {
-      businessName: businessName.trim(),
-      industry: industry.trim(),
-      services,
-      prospectName: prospectName ? prospectName.trim() : null,
-      location: location ? location.trim() : null
-    };
     
     if (args.length < 3) {
       console.log('\n');
@@ -1215,11 +1391,71 @@ async function main() {
     // Step 5: Create/update personalized client in database
     const clientKey = generateClientKey(prospectData);
     
-    // Get phone number from environment or use a default
-    const phoneNumber = process.env.VAPI_PHONE_NUMBER || process.env.TWILIO_PHONE_NUMBER || '+44 20 3880 1234';
+    // Get industry defaults for branding
+    const industryDefaults = getIndustryDefaults(prospectData.industry, prospectData.location);
     
-    // Generate business hours based on industry
-    const businessHours = '8am - 8pm, 7 days/week'; // Default, can be customized per industry
+    // Use values from prospectData or defaults
+    const phoneNumber = prospectData.phoneNumber || process.env.VAPI_PHONE_NUMBER || process.env.TWILIO_PHONE_NUMBER || '+44 20 3880 1234';
+    const businessHours = prospectData.businessHours || industryDefaults.businessHours;
+    const timezone = prospectData.timezone || industryDefaults.timezone;
+    
+    // Generate description and tagline if not provided
+    const description = prospectData.description || generateDescription(prospectData.industry, prospectData.businessName, prospectData.services);
+    const tagline = prospectData.tagline || generateTagline(prospectData.industry, prospectData.businessName);
+    
+    // Get branding from industry defaults
+    const logo = industryDefaults.logo;
+    const colors = industryDefaults.colors;
+    
+    // Build whiteLabel config
+    const whiteLabel = {
+      branding: {
+        logo: logo,
+        primaryColor: colors.primary,
+        secondaryColor: colors.secondary,
+        accentColor: colors.accent,
+        fontFamily: "'Inter', sans-serif"
+      }
+    };
+    
+    // Preview mode (if --preview flag)
+    if (process.argv.includes('--preview') || process.argv.includes('-p')) {
+      console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('📋 PREVIEW: What will be created');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+      console.log(`Business Name: ${prospectData.businessName}`);
+      console.log(`Industry: ${prospectData.industry}`);
+      console.log(`Services: ${prospectData.services.join(', ')}`);
+      console.log(`Location: ${prospectData.location || '—'}`);
+      console.log(`Client Key: ${clientKey}`);
+      console.log('');
+      console.log('Contact & Hours:');
+      console.log(`  Phone: ${phoneNumber}`);
+      console.log(`  Timezone: ${timezone}`);
+      console.log(`  Business Hours: ${businessHours}`);
+      console.log('');
+      console.log('Content:');
+      console.log(`  Description: ${description.substring(0, 80)}...`);
+      console.log(`  Tagline: ${tagline}`);
+      console.log('');
+      console.log('Branding:');
+      console.log(`  Logo: ${logo}`);
+      console.log(`  Primary Color: ${colors.primary}`);
+      console.log(`  Secondary Color: ${colors.secondary}`);
+      console.log(`  Accent Color: ${colors.accent}`);
+      console.log('');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+      
+      if (isInteractive) {
+        const proceed = await question('Continue with creation? (y/n): ');
+        if (proceed.toLowerCase() !== 'y') {
+          console.log('\n❌ Cancelled.\n');
+          rl.close();
+          process.exit(0);
+        }
+        console.log('');
+      }
+    }
     
     const clientData = {
       clientKey: clientKey,
@@ -1228,10 +1464,14 @@ async function main() {
       industry: prospectData.industry.toLowerCase(),
       services: prospectData.services,
       location: prospectData.location,
-      timezone: 'Europe/London',
+      timezone: timezone,
       locale: 'en-GB',
       isEnabled: true,
-      // Phone number for meta display
+      // Header fields
+      description: description,
+      tagline: tagline,
+      status: 'Live',
+      // Phone number for meta display (in multiple locations for dashboard compatibility)
       phone: phoneNumber,
       numbers: {
         primary: phoneNumber
@@ -1239,8 +1479,15 @@ async function main() {
       numbers_json: {
         primary: phoneNumber
       },
-      // Business hours for meta display
+      // Business hours for meta display (in multiple locations)
       businessHours: businessHours,
+      // Branding fields
+      logo: logo,
+      primaryColor: colors.primary,
+      secondaryColor: colors.secondary,
+      accentColor: colors.accent,
+      fontFamily: "'Inter', sans-serif",
+      whiteLabel: whiteLabel,
       // Vapi configuration
       vapi: {
         assistantId: assistantId,
@@ -1252,7 +1499,7 @@ async function main() {
       },
       // Booking configuration
       booking: {
-        timezone: 'Europe/London',
+        timezone: timezone,
         defaultDurationMin: 30,
         slotDuration: 30,
         bufferMinutes: 0,
@@ -1261,7 +1508,7 @@ async function main() {
       },
       calendar_json: {
         booking: {
-          timezone: 'Europe/London',
+          timezone: timezone,
           defaultDurationMin: 30,
           businessHours: businessHours
         }
@@ -1297,6 +1544,16 @@ async function main() {
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
     console.log(`Assistant ID: ${assistantId}`);
     console.log(`Dashboard URL: ${dashboardUrl}\n`);
+    
+    // Integration status
+    console.log('🔌 Integration Status:\n');
+    console.log(`   ${assistantId ? '✅' : '❌'} Vapi Voice: ${assistantId ? 'Active' : 'Not configured'}`);
+    const calendarId = clientData.calendar_json?.calendarId || clientData.calendarId;
+    console.log(`   ${calendarId ? '✅' : '⚠️ '} Google Calendar: ${calendarId ? 'Connected' : 'Not connected'}`);
+    const twilioConfigured = clientData.twilio_json || clientData.sms;
+    console.log(`   ${twilioConfigured ? '✅' : '⚠️ '} Twilio SMS: ${twilioConfigured ? 'Configured' : 'Not configured'}`);
+    console.log('');
+    
     console.log(demoScript);
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
     
