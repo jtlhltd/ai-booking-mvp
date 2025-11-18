@@ -8587,21 +8587,22 @@ async function getIntegrationStatuses(clientKey) {
         const vapiIntegration = integrations.find(i => i.name === 'Vapi Voice');
         if (vapiIntegration) {
           vapiIntegration.status = 'error';
-          vapiIntegration.detail = 'API key invalid or expired';
+          const statusText = await vapiResponse.text().catch(() => '');
+          vapiIntegration.detail = `API key invalid or expired (HTTP ${vapiResponse.status}). Check VAPI_PRIVATE_KEY in environment variables.`;
         }
       }
     } catch (error) {
       const vapiIntegration = integrations.find(i => i.name === 'Vapi Voice');
       if (vapiIntegration) {
         vapiIntegration.status = 'error';
-        vapiIntegration.detail = 'Connection test failed - check API key';
+        vapiIntegration.detail = `Connection test failed: ${error.message}. Check VAPI_PRIVATE_KEY in environment variables.`;
       }
     }
   } else {
     const vapiIntegration = integrations.find(i => i.name === 'Vapi Voice');
     if (vapiIntegration) {
       vapiIntegration.status = 'error';
-      vapiIntegration.detail = 'Add Vapi key to enable calling';
+      vapiIntegration.detail = 'Vapi API key not found. Add VAPI_PRIVATE_KEY to environment variables to enable calling.';
     }
   }
 
@@ -8646,19 +8647,20 @@ async function getIntegrationStatuses(clientKey) {
                 twilioIntegration.detail = 'Messaging service verified';
               } else {
                 twilioIntegration.status = 'warning';
-                twilioIntegration.detail = 'Credentials invalid or expired';
+                const statusText = await twilioResponse.text().catch(() => '');
+                twilioIntegration.detail = `Twilio credentials invalid or expired (HTTP ${twilioResponse.status}). Check TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN in environment variables.`;
               }
             } catch (error) {
               twilioIntegration.status = 'warning';
-              twilioIntegration.detail = 'Connection test failed - check credentials';
+              twilioIntegration.detail = `Connection test failed: ${error.message}. Check TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN in environment variables.`;
             }
           } else {
             twilioIntegration.status = 'warning';
-            twilioIntegration.detail = 'Twilio credentials not configured';
+            twilioIntegration.detail = 'Twilio credentials not found in environment variables. Add TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN to enable SMS.';
           }
         } else {
           twilioIntegration.status = 'warning';
-          twilioIntegration.detail = 'Connect Twilio for SMS reminders';
+          twilioIntegration.detail = 'This client does not have Twilio configured. Add SMS settings in client configuration or set global TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN.';
         }
       }
     } catch (error) {
@@ -8666,7 +8668,7 @@ async function getIntegrationStatuses(clientKey) {
       const twilioIntegration = integrations.find(i => i.name === 'Twilio SMS');
       if (twilioIntegration) {
         twilioIntegration.status = 'warning';
-        twilioIntegration.detail = 'Unable to check Twilio configuration';
+        twilioIntegration.detail = `Unable to check Twilio configuration: ${error.message}. Database connection may be unavailable.`;
       }
     }
   } else {
@@ -8693,20 +8695,21 @@ async function getIntegrationStatuses(clientKey) {
           }
         } else {
           if (twilioIntegration) {
+            const statusText = await twilioResponse.text().catch(() => '');
             twilioIntegration.status = 'warning';
-            twilioIntegration.detail = 'Credentials invalid or expired';
+            twilioIntegration.detail = `Twilio credentials invalid or expired (HTTP ${twilioResponse.status}). Check TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN.`;
           }
         }
       } catch (error) {
         if (twilioIntegration) {
           twilioIntegration.status = 'warning';
-          twilioIntegration.detail = 'Connection test failed';
+          twilioIntegration.detail = `Connection test failed: ${error.message}. Check TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN.`;
         }
       }
     } else {
       if (twilioIntegration) {
         twilioIntegration.status = 'warning';
-        twilioIntegration.detail = 'Connect Twilio for SMS reminders';
+        twilioIntegration.detail = 'Twilio credentials not found. Add TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN to environment variables to enable SMS.';
       }
     }
   }
@@ -8728,11 +8731,15 @@ async function getIntegrationStatuses(clientKey) {
         calendarIntegration.status = isConnected ? 'active' : 'warning';
         calendarIntegration.detail = isConnected 
           ? 'Auto-booking synced' 
-          : 'Connect service account for calendar booking';
+          : 'This client does not have Google Calendar connected. Add calendar configuration (service_account_email or access_token) in client settings to enable auto-booking.';
       }
     } catch (error) {
       console.error('[INTEGRATION HEALTH ERROR]', error);
-      // Keep warning status if check fails
+      const calendarIntegration = integrations.find(i => i.name === 'Google Calendar');
+      if (calendarIntegration) {
+        calendarIntegration.status = 'warning';
+        calendarIntegration.detail = `Unable to check calendar configuration: ${error.message}. Database connection may be unavailable.`;
+      }
     }
   } else {
     // Fallback: check env var if no client key
@@ -8741,7 +8748,7 @@ async function getIntegrationStatuses(clientKey) {
       calendarIntegration.status = process.env.GOOGLE_CLIENT_EMAIL ? 'active' : 'warning';
       calendarIntegration.detail = process.env.GOOGLE_CLIENT_EMAIL 
         ? 'Auto-booking synced' 
-        : 'Connect service account for calendar booking';
+        : 'Google Calendar not configured. Add GOOGLE_CLIENT_EMAIL to environment variables or configure calendar in client settings.';
     }
   }
 

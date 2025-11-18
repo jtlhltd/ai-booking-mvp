@@ -885,11 +885,18 @@
 
         .integration-item {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            flex-direction: column;
+            gap: 8px;
             border: 1px solid rgba(92,106,196,0.12);
             border-radius: 10px;
-            padding: 8px 12px;
+            padding: 10px 12px;
+        }
+
+        .integration-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
         }
 
         .integration-label {
@@ -905,6 +912,20 @@
             height: 10px;
             border-radius: 50%;
             display: inline-block;
+        }
+
+        .integration-detail {
+            font-size: 0.75rem;
+            color: #7a7fa4;
+            line-height: 1.4;
+            margin-top: 4px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(92,106,196,0.1);
+        }
+
+        body[data-theme="dark"] .integration-detail {
+            color: #a0a4c8;
+            border-top-color: rgba(92,106,196,0.3);
         }
 
         .integration-status {
@@ -2650,12 +2671,15 @@
                 return;
             }
             container.innerHTML = list.map(item => `
-                <div class="integration-item" title="${item.detail || ''}">
-                    <div class="integration-label">
-                        <span class="integration-dot" style="background:${item.status === 'active' ? '#1b5e20' : item.status === 'warning' ? '#f5a623' : '#c62828'};"></span>
-                        ${item.name}
+                <div class="integration-item">
+                    <div class="integration-item-header">
+                        <div class="integration-label">
+                            <span class="integration-dot" style="background:${item.status === 'active' ? '#1b5e20' : item.status === 'warning' ? '#f5a623' : '#c62828'};"></span>
+                            ${item.name}
+                        </div>
+                        <div class="integration-status ${item.status || 'inactive'}">${item.status || 'unknown'}</div>
                     </div>
-                    <div class="integration-status ${item.status || 'inactive'}">${item.status || 'unknown'}</div>
+                    ${item.detail && item.status !== 'active' ? `<div class="integration-detail">${item.detail}</div>` : ''}
                 </div>
             `).join('');
         }
@@ -2954,23 +2978,23 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const avgDuration = Math.floor((totalCalls * 2.5) + Math.random() * 1.5);
                 const successRate = totalCalls > 0 ? Math.round((bookings / totalCalls) * 100) : 0;
                 const bestHour = '2-4pm';
-
-                container.innerHTML = `
+                    
+                    container.innerHTML = `
                     <div class="quality-metric">
                         <div class="quality-label">Avg Duration</div>
                         <div class="quality-value">${avgDuration}m</div>
                         <div class="quality-badge">per call</div>
-                    </div>
+                            </div>
                     <div class="quality-metric">
                         <div class="quality-label">Success Rate</div>
                         <div class="quality-value">${successRate}%</div>
                         <div class="quality-badge">bookings</div>
-                    </div>
+                            </div>
                     <div class="quality-metric">
                         <div class="quality-label">Best Time</div>
                         <div class="quality-value">${bestHour}</div>
                         <div class="quality-badge">to call</div>
-                    </div>
+                            </div>
                 `;
                 return;
             }
@@ -2984,7 +3008,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             <div class="quality-label">Avg Duration</div>
                             <div class="quality-value">${payload.avgDuration || 0}m</div>
                             <div class="quality-badge">per call</div>
-                        </div>
+                            </div>
                         <div class="quality-metric">
                             <div class="quality-label">Success Rate</div>
                             <div class="quality-value">${payload.successRate || 0}%</div>
@@ -3036,7 +3060,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             <div class="retry-meta">Attempt ${lead.attempts} • ${lead.phone || ''}</div>
                             </div>
                         <div class="retry-status">Retrying ${lead.nextRetry}</div>
-                    </div>
+                        </div>
                 `).join('');
                 return;
             }
@@ -3046,13 +3070,13 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const payload = await response.json();
                 if (response.ok && payload?.ok) {
                     if (!payload.retries || payload.retries.length === 0) {
-                        container.innerHTML = `
+                    container.innerHTML = `
                             <div class="empty-state" style="padding: 20px;">
                                 <span class="empty-state-icon">✅</span>
                                 <div class="empty-state-title">All caught up!</div>
                                 <div class="empty-state-message">No retries needed - all calls successful!</div>
-                            </div>
-                        `;
+                        </div>
+                    `;
                         return;
                     }
                     container.innerHTML = payload.retries.map(lead => `
@@ -3060,7 +3084,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             <div>
                                 <div class="retry-name">${lead.name}</div>
                                 <div class="retry-meta">Attempt ${lead.attempts}/${lead.maxAttempts} • ${lead.phone || ''}</div>
-                        </div>
+                    </div>
                             <div class="retry-status">Retrying ${lead.nextRetry}</div>
                         </div>
                     `).join('');
@@ -3264,7 +3288,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 `;
             }
         }
-
+        
         async function exportData(type) {
             if (currentClient === DEMO_CLIENT_KEY) {
                 showToast('Export Ready', `Demo data export for ${type} would download here.`, 'info');
@@ -3372,7 +3396,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 try {
                     const response = await fetch(`${BASE_URL}/api/clients/${currentClient}`);
                     if (response.ok) {
-                        const data = await response.json();
+                const data = await response.json();
                         if (data.ok && data.client) {
                             clientConfig = data.client;
                         }
