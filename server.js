@@ -8554,18 +8554,13 @@ async function getIntegrationStatuses(clientKey) {
     },
     {
       name: 'Twilio SMS',
-      status: 'warning', // Default to warning, will test actual connection
+      status: 'warning', // Default to warning, will check client-specific config
       detail: 'Checking connection...'
     },
     {
       name: 'Google Calendar',
       status: 'warning', // Default to warning, will check actual connection
       detail: 'Checking connection...'
-    },
-    {
-      name: 'Slack Digest',
-      status: process.env.SLACK_WEBHOOK_URL ? 'active' : 'warning',
-      detail: process.env.SLACK_WEBHOOK_URL ? 'Posting daily summaries' : 'Add Slack webhook to enable digest'
     }
   ];
 
@@ -8610,45 +8605,109 @@ async function getIntegrationStatuses(clientKey) {
     }
   }
 
-  // Test Twilio connection
-  const twilioSid = process.env.TWILIO_ACCOUNT_SID;
-  const twilioToken = process.env.TWILIO_AUTH_TOKEN;
-  if (twilioSid && twilioToken) {
+  // Check Twilio connection for this specific client
+  if (clientKey) {
     try {
-      const auth = Buffer.from(`${twilioSid}:${twilioToken}`).toString('base64');
-      const twilioResponse = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioSid}.json`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Basic ${auth}`
-        },
-        signal: AbortSignal.timeout(5000) // 5 second timeout
-      });
+      const clientResult = await query(`
+        SELECT sms_json, vapi_json
+        FROM tenants
+        WHERE client_key = $1
+      `, [clientKey]);
+
+      const client = clientResult.rows?.[0];
+      const smsConfig = client?.sms_json || {};
+      const vapiConfig = client?.vapi_json || {};
       
-      if (twilioResponse.ok) {
-        const twilioIntegration = integrations.find(i => i.name === 'Twilio SMS');
-        if (twilioIntegration) {
-          twilioIntegration.status = 'active';
-          twilioIntegration.detail = 'Messaging service verified';
-        }
-      } else {
-        const twilioIntegration = integrations.find(i => i.name === 'Twilio SMS');
-        if (twilioIntegration) {
+      // Check if client has Twilio configured (either in sms_json or fallback to global)
+      const hasClientSmsConfig = !!(smsConfig.messagingServiceSid || smsConfig.fromNumber);
+      const hasGlobalTwilio = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN);
+      const isTwilioConfigured = hasClientSmsConfig || hasGlobalTwilio;
+      
+      const twilioIntegration = integrations.find(i => i.name === 'Twilio SMS');
+      if (twilioIntegration) {
+        if (isTwilioConfigured) {
+          // Test actual connection if credentials exist
+          const twilioSid = process.env.TWILIO_ACCOUNT_SID;
+          const twilioToken = process.env.TWILIO_AUTH_TOKEN;
+          
+          if (twilioSid && twilioToken) {
+            try {
+              const auth = Buffer.from(`${twilioSid}:${twilioToken}`).toString('base64');
+              const twilioResponse = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioSid}.json`, {
+                method: 'GET',
+                headers: {
+                  'Authorization': `Basic ${auth}`
+                },
+                signal: AbortSignal.timeout(5000) // 5 second timeout
+              });
+              
+              if (twilioResponse.ok) {
+                twilioIntegration.status = 'active';
+                twilioIntegration.detail = 'Messaging service verified';
+              } else {
+                twilioIntegration.status = 'warning';
+                twilioIntegration.detail = 'Credentials invalid or expired';
+              }
+            } catch (error) {
+              twilioIntegration.status = 'warning';
+              twilioIntegration.detail = 'Connection test failed - check credentials';
+            }
+          } else {
+            twilioIntegration.status = 'warning';
+            twilioIntegration.detail = 'Twilio credentials not configured';
+          }
+        } else {
           twilioIntegration.status = 'warning';
-          twilioIntegration.detail = 'Credentials invalid or expired';
+          twilioIntegration.detail = 'Connect Twilio for SMS reminders';
         }
       }
     } catch (error) {
+      console.error('[INTEGRATION HEALTH ERROR]', error);
       const twilioIntegration = integrations.find(i => i.name === 'Twilio SMS');
       if (twilioIntegration) {
         twilioIntegration.status = 'warning';
-        twilioIntegration.detail = 'Connection test failed - check credentials';
+        twilioIntegration.detail = 'Unable to check Twilio configuration';
       }
     }
   } else {
+    // Fallback: check global env vars if no client key
+    const twilioSid = process.env.TWILIO_ACCOUNT_SID;
+    const twilioToken = process.env.TWILIO_AUTH_TOKEN;
     const twilioIntegration = integrations.find(i => i.name === 'Twilio SMS');
-    if (twilioIntegration) {
-      twilioIntegration.status = 'warning';
-      twilioIntegration.detail = 'Connect Twilio for SMS reminders';
+    
+    if (twilioSid && twilioToken) {
+      try {
+        const auth = Buffer.from(`${twilioSid}:${twilioToken}`).toString('base64');
+        const twilioResponse = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioSid}.json`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Basic ${auth}`
+          },
+          signal: AbortSignal.timeout(5000)
+        });
+        
+        if (twilioResponse.ok) {
+          if (twilioIntegration) {
+            twilioIntegration.status = 'active';
+            twilioIntegration.detail = 'Messaging service verified';
+          }
+        } else {
+          if (twilioIntegration) {
+            twilioIntegration.status = 'warning';
+            twilioIntegration.detail = 'Credentials invalid or expired';
+          }
+        }
+      } catch (error) {
+        if (twilioIntegration) {
+          twilioIntegration.status = 'warning';
+          twilioIntegration.detail = 'Connection test failed';
+        }
+      }
+    } else {
+      if (twilioIntegration) {
+        twilioIntegration.status = 'warning';
+        twilioIntegration.detail = 'Connect Twilio for SMS reminders';
+      }
     }
   }
 
