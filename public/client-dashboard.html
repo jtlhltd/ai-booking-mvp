@@ -3747,8 +3747,25 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 }
             }
             
+            // Use clientConfig if available, otherwise use CLIENT_CONFIG but only for non-meta fields
+            // Meta fields (phone, timezone, businessHours, industry) should only come from actual client config
             const config = clientConfig || CLIENT_CONFIG[currentClient] || CLIENT_CONFIG[DEMO_CLIENT_KEY] || {};
             config.key = currentClient;
+            
+            // If we're using CLIENT_CONFIG fallback, clear meta fields so they show "Not supplied"
+            // Only use meta fields from actual clientConfig (from API/file)
+            if (!clientConfig) {
+                // Don't use CLIENT_CONFIG defaults for meta fields - they're mock data
+                delete config.phone;
+                delete config.numbers;
+                delete config.numbers_json;
+                delete config.businessHours;
+                delete config.timezone;
+                // Keep industry only if it's actually set in the URL/client key, not from demo defaults
+                if (currentClient === DEMO_CLIENT_KEY) {
+                    delete config.industry;
+                }
+            }
             
             // Update header with business name if available
             if (clientConfig && clientConfig.displayName) {
