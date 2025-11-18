@@ -21,12 +21,28 @@ class BookingSystem {
       // First, try GOOGLE_SA_JSON_BASE64 (full service account JSON)
       if (process.env.GOOGLE_SA_JSON_BASE64) {
         try {
+          // Log base64 info for debugging
+          const base64Length = process.env.GOOGLE_SA_JSON_BASE64.length;
+          const base64FirstChars = process.env.GOOGLE_SA_JSON_BASE64.substring(0, 50);
+          const base64LastChars = process.env.GOOGLE_SA_JSON_BASE64.substring(Math.max(0, base64Length - 50));
+          console.log('[BOOKING SYSTEM] GOOGLE_SA_JSON_BASE64 info:', {
+            length: base64Length,
+            firstChars: base64FirstChars,
+            lastChars: base64LastChars,
+            hasSpaces: process.env.GOOGLE_SA_JSON_BASE64.includes(' '),
+            hasNewlines: process.env.GOOGLE_SA_JSON_BASE64.includes('\n'),
+            hasQuotes: process.env.GOOGLE_SA_JSON_BASE64.startsWith('"') || process.env.GOOGLE_SA_JSON_BASE64.endsWith('"')
+          });
+          
           const saJson = JSON.parse(Buffer.from(process.env.GOOGLE_SA_JSON_BASE64, 'base64').toString('utf8'));
           clientEmail = saJson.client_email || clientEmail;
           privateKey = saJson.private_key || privateKey;
           
           console.log('[BOOKING SYSTEM] Extracted from JSON:', {
             clientEmail: clientEmail ? 'SET' : 'MISSING',
+            keyId: saJson.private_key_id || 'MISSING',
+            expectedKeyId: 'b5b7fbada5c1466a2ac43b89faf81c347f4ab434',
+            keyIdMatch: saJson.private_key_id === 'b5b7fbada5c1466a2ac43b89faf81c347f4ab434',
             privateKeyLength: privateKey ? privateKey.length : 0,
             privateKeyFirstChars: privateKey ? privateKey.substring(0, 50).replace(/\n/g, '\\n') : 'N/A',
             hasEscapedNewlines: privateKey ? privateKey.includes('\\n') : false,
