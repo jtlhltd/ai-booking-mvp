@@ -2308,14 +2308,12 @@
                     const res = await fetch(`${BASE_URL}/api/demo-dashboard/${clientKey}`);
                     if (res.ok) {
                         const payload = await res.json();
-                        if (!payload || !payload.ok) {
-                            // Return empty structure if API returns error
-                            return null;
-                        }
-                        if (payload.ok) {
+                        if (payload && payload.ok) {
                             lastDataUpdate = new Date();
                             return payload;
                         }
+                        // Return null if API returns error
+                        return null;
                     }
                 } catch (err) {
                     console.warn('Live data unavailable', err.message);
