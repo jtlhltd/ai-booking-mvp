@@ -8447,11 +8447,18 @@ function sanitizeLead(row) {
 
 app.post('/api/leads/:leadId/snooze', async (req, res) => {
   const { leadId } = req.params;
-  const minutes = Math.max(5, parseInt(req.body?.minutes, 10) || 1440);
+  const { clientKey, minutes } = req.body || {};
+  const snoozeMinutes = Math.max(5, parseInt(minutes, 10) || 1440);
   try {
+    if (!clientKey) {
+      return res.status(400).json({ ok: false, error: 'clientKey required' });
+    }
     const lead = await getLeadRecord(leadId);
     if (!lead) {
       return res.status(404).json({ ok: false, error: 'Lead not found' });
+    }
+    if (lead.client_key !== clientKey) {
+      return res.status(403).json({ ok: false, error: 'Access denied' });
     }
     const snoozedUntil = new Date(Date.now() + snoozeMinutes * 60000).toISOString();
     await query(`
