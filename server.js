@@ -8110,21 +8110,21 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     ] = await Promise.all([
       query(`
         SELECT COUNT(*) AS total,
-               SUM(CASE WHEN created_at >= ${sqlHoursAgo(24)} THEN 1 ELSE 0 END) AS last24
+               COUNT(*) FILTER (WHERE created_at >= ${sqlHoursAgo(24)}) AS last24
         FROM leads
         WHERE client_key = $1
       `, [clientKey]),
       query(`
         SELECT COUNT(*) AS total,
-               SUM(CASE WHEN created_at >= ${sqlHoursAgo(24)} THEN 1 ELSE 0 END) AS last24,
-               SUM(CASE WHEN outcome = 'booked' THEN 1 ELSE 0 END) AS booked
+               COUNT(*) FILTER (WHERE created_at >= ${sqlHoursAgo(24)}) AS last24,
+               COUNT(*) FILTER (WHERE outcome = 'booked') AS booked
         FROM calls
         WHERE client_key = $1
       `, [clientKey]),
       query(`
         SELECT COUNT(*) AS total,
-               SUM(CASE WHEN status IN ('no_show','no-show') THEN 1 ELSE 0 END) AS no_shows,
-               SUM(CASE WHEN status IN ('cancelled','canceled') THEN 1 ELSE 0 END) AS cancellations
+               COUNT(*) FILTER (WHERE status IN ('no_show','no-show')) AS no_shows,
+               COUNT(*) FILTER (WHERE status IN ('cancelled','canceled')) AS cancellations
         FROM appointments
         WHERE client_key = $1
           AND created_at >= ${sqlDaysAgo(7)}

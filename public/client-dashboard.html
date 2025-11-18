@@ -2438,7 +2438,15 @@
         async function fetchLiveData(clientKey) {
             if (clientKey !== DEMO_CLIENT_KEY) {
                 try {
-                    const res = await fetch(`${BASE_URL}/api/demo-dashboard/${clientKey}`);
+                    // Add timeout to prevent hanging
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+                    
+                    const res = await fetch(`${BASE_URL}/api/demo-dashboard/${clientKey}`, {
+                        signal: controller.signal
+                    });
+                    clearTimeout(timeoutId);
+                    
                     if (res.ok) {
                         const payload = await res.json();
                         if (payload && payload.ok) {
@@ -2449,8 +2457,13 @@
                         return null;
                     }
                 } catch (err) {
-                    console.warn('Live data unavailable', err.message);
-                    throw err;
+                    if (err.name === 'AbortError') {
+                        console.warn('Data fetch timeout - server may be slow');
+                    } else {
+                        console.warn('Live data unavailable', err.message);
+                    }
+                    // Don't throw - return null to allow dashboard to continue with existing data
+                    return null;
                 }
             } else {
                 lastDataUpdate = new Date();
@@ -3757,25 +3770,32 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 }
             }
 
+            // Render critical data first (non-blocking)
             updateStatusBar(dashboardData);
             renderRecentActivity(dashboardData);
-            // Use dashboardData.roi, or empty ROI if not available (never use DEMO_DATA.roi for real clients)
             const roiData = dashboardData.roi || { costs: { total: 0, perCall: 0 }, revenue: { total: 0, bookings: 0, avgDealValue: 0 }, roi: { profit: 0, multiplier: 0, percentage: 0 } };
             renderROI(roiData);
-            await renderActiveIndicator(dashboardData);
             renderLeadJourney(dashboardData);
             renderLeads(dashboardData.recentLeads || []);
             renderAppointments(dashboardData.appointments || []);
             renderChart(config, dashboardData);
-            await renderSystemStatus(config);
-            await renderCallQuality(dashboardData);
-            await renderRetryQueue(dashboardData);
-            await renderCalendarDetails(dashboardData);
-            // Always render calls - renderCalls will handle demo fallback
             const callsToRender = dashboardData.recentCalls || [];
             renderCalls(callsToRender);
-            await renderCallRecordings(callsToRender);
             renderWorkflow(config.customWorkflow || config.workflow || CLIENT_CONFIG.demo_client.workflow);
+            
+            // Load async data in parallel (non-blocking)
+            Promise.all([
+                renderActiveIndicator(dashboardData).catch(err => console.warn('Active indicator failed', err)),
+                renderSystemStatus(config).catch(err => console.warn('System status failed', err)),
+                renderCallQuality(dashboardData).catch(err => console.warn('Call quality failed', err)),
+                renderRetryQueue(dashboardData).catch(err => console.warn('Retry queue failed', err)),
+                renderCalendarDetails(dashboardData).catch(err => console.warn('Calendar details failed', err)),
+                renderCallRecordings(callsToRender).catch(err => console.warn('Call recordings failed', err))
+            ]).then(() => {
+                console.log('All async data loaded');
+            });
+            
+            // Load integration health (non-blocking)
             loadIntegrationHealth(currentClient);
 
             startLiveEvents(currentClient);
