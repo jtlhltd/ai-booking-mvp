@@ -785,7 +785,8 @@ function mapTenantRow(r) {
 export async function listFullClients() {
   const { rows } = await query(`
     SELECT client_key, display_name, timezone, locale,
-           numbers_json, twilio_json, vapi_json, calendar_json, sms_templates_json, is_enabled, created_at
+           numbers_json, twilio_json, vapi_json, calendar_json, sms_templates_json, 
+           white_label_config, is_enabled, created_at
     FROM tenants ORDER BY created_at DESC
   `);
   return rows.map(mapTenantRow);
