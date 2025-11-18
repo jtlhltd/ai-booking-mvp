@@ -133,6 +133,8 @@ import vapiWebhooks from './routes/vapi-webhooks.js';
 import twilioVoiceWebhooks from './routes/twilio-voice-webhooks.js';
 import appointmentsRouter from './routes/appointments.js';
 import receptionistRouter from './routes/receptionist.js';
+import healthRouter from './routes/health.js';
+import monitoringRouter from './routes/monitoring.js';
 import * as store from './store.js';
 import * as sheets from './sheets.js';
 import messagingService from './lib/messaging-service.js';
@@ -12052,6 +12054,10 @@ app.post('/api/leads', async (req, res) => {
 
 
 
+
+// Health and monitoring routes (before other routes for quick access)
+app.use(healthRouter);
+app.use(monitoringRouter);
 
 // Mounted minimal lead intake + STOP webhook
 app.use(leadsRouter);

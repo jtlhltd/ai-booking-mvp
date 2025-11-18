@@ -277,36 +277,58 @@ export function securityHeaders(req, res, next) {
   next();
 }
 
-// Request logging middleware
+// Request logging middleware with structured logging
 export async function requestLogging(req, res, next) {
   try {
     const startTime = Date.now();
     
-    // Log request
-    console.log('[REQUEST]', {
-      method: req.method,
-      url: req.url,
-      ip: req.ip,
-      userAgent: req.get('User-Agent'),
-      clientKey: req.clientKey || 'anonymous',
-      apiKeyId: req.apiKey?.id || 'none',
-      timestamp: new Date().toISOString()
-    });
+    // Try to use structured logger, fallback to console
+    const logRequest = async () => {
+      try {
+        const { getLogger } = await import('../lib/structured-logger.js');
+        const logger = getLogger({ component: 'request-logging' });
+        logger.logRequest(req, res);
+      } catch (e) {
+        // Fallback to console logging
+        console.log('[REQUEST]', {
+          method: req.method,
+          url: req.url,
+          ip: req.ip,
+          userAgent: req.get('User-Agent'),
+          clientKey: req.clientKey || 'anonymous',
+          apiKeyId: req.apiKey?.id || 'none',
+          timestamp: new Date().toISOString()
+        });
+      }
+    };
+    
+    // Log request (fire and forget)
+    logRequest();
     
     // Override res.end to log response
     const originalEnd = res.end;
     res.end = function(chunk, encoding) {
       const duration = Date.now() - startTime;
       
-      console.log('[RESPONSE]', {
-        method: req.method,
-        url: req.url,
-        statusCode: res.statusCode,
-        duration: `${duration}ms`,
-        clientKey: req.clientKey || 'anonymous',
-        apiKeyId: req.apiKey?.id || 'none',
-        timestamp: new Date().toISOString()
-      });
+      // Log response (fire and forget)
+      (async () => {
+        try {
+          const { getLogger } = await import('../lib/structured-logger.js');
+          const logger = getLogger({ component: 'request-logging' });
+          logger.logRequest(req, res, duration);
+        } catch (e) {
+          // Fallback to console logging
+          console.log('[RESPONSE]', {
+            method: req.method,
+            url: req.url,
+            statusCode: res.statusCode,
+            duration: `${duration}ms`,
+            clientKey: req.clientKey || 'anonymous',
+            apiKeyId: req.apiKey?.id || 'none',
+            timestamp: new Date().toISOString()
+          });
+        }
+      })();
       
       originalEnd.call(this, chunk, encoding);
     };
