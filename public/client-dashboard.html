@@ -2589,7 +2589,7 @@
             
             // Only set name if it's from actual client config
             if (clientNameEl) {
-                if (clientConfig && (clientConfig.name || clientConfig.displayName || clientConfig.display_name)) {
+                if (hasClientConfig && (config.name || config.displayName || config.display_name)) {
                     clientNameEl.textContent = businessName;
                 } else {
                     clientNameEl.textContent = 'Your Concierge Dashboard';
