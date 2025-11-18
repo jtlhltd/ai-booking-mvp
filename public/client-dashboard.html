@@ -2659,11 +2659,11 @@
             const metaHours = document.getElementById('metaHours');
             const metaIndustry = document.getElementById('metaIndustry');
             
-            // Only show what's configured, show "—" for missing
-            if (metaPhone) metaPhone.textContent = phone || '—';
-            if (metaTimezone) metaTimezone.textContent = timezone || '—';
-            if (metaHours) metaHours.textContent = businessHours || '—';
-            if (metaIndustry) metaIndustry.textContent = industryDisplay || '—';
+            // Only show what's configured, show "Not supplied" for missing
+            if (metaPhone) metaPhone.textContent = phone || 'Not supplied';
+            if (metaTimezone) metaTimezone.textContent = timezone || 'Not supplied';
+            if (metaHours) metaHours.textContent = businessHours || 'Not supplied';
+            if (metaIndustry) metaIndustry.textContent = industryDisplay || 'Not supplied';
 
             const banner = document.getElementById('demoBanner');
             if (banner) {
@@ -2947,8 +2947,10 @@
 
 
         async function renderSystemStatus(config) {
-            document.getElementById('statusPhone').textContent = config.phone || '—';
-            document.getElementById('statusCoverage').textContent = config.businessHours || '—';
+            const statusPhoneEl = document.getElementById('statusPhone');
+            const statusCoverageEl = document.getElementById('statusCoverage');
+            if (statusPhoneEl) statusPhoneEl.textContent = config.phone || 'Not supplied';
+            if (statusCoverageEl) statusCoverageEl.textContent = config.businessHours || 'Not supplied';
             
             // Update SMS/Calendar status from integration health
             if (currentClient !== DEMO_CLIENT_KEY) {
