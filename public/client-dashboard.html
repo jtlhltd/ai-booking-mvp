@@ -2564,21 +2564,21 @@
             };
         }
 
-        function updateHeader(config) {
+        function updateHeader(config, hasClientConfig = false) {
             // Apply branding first (colors, logo)
             applyClientBranding(config);
             
             // Get industry-specific messaging
             // Only use industry if it's actually configured (not from CLIENT_CONFIG mock data)
-            const industry = (clientConfig && clientConfig.industry) ? config.industry : null;
+            const industry = (hasClientConfig && config.industry) ? config.industry : null;
             // Use 'dental' as fallback only for messaging/UI purposes, not for display
             const industryForMessaging = industry || 'dental';
             // Only use business name from actual client config
-            const businessName = (clientConfig && (clientConfig.name || clientConfig.displayName || clientConfig.display_name)) 
+            const businessName = (hasClientConfig && (config.name || config.displayName || config.display_name)) 
                 ? (config.name || config.displayName || config.display_name) 
                 : 'Your Business';
             const services = config.services || config.serviceMap || [];
-            const messaging = getIndustryMessaging(industry, businessName, services);
+            const messaging = getIndustryMessaging(industryForMessaging, businessName, services);
             
             // Update header content (with null checks)
             // Only use values from actual client config, not CLIENT_CONFIG mock data
@@ -3807,7 +3807,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 }
             }
             
-            updateHeader(config);
+            updateHeader(config, !!clientConfig);
             initThemeToggle();
             initModalControls();
             initImporter();
