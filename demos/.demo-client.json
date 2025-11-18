@@ -1,0 +1,24 @@
+{
+  "clientKey": "demo-client",
+  "displayName": "Demo Client",
+  "timezone": "Europe/London",
+  "locale": "en-GB",
+  "isEnabled": true,
+  "vapi": {
+    "assistantId": "b19a474b-49f3-474d-adb2-4aacc6ad37e7",
+    "phoneNumberId": null
+  },
+  "sms": {
+    "fromNumber": null,
+    "messagingServiceSid": null
+  },
+  "calendarId": null,
+  "booking": {
+    "timezone": "Europe/London",
+    "defaultDurationMin": 30,
+    "slotDuration": 30,
+    "bufferMinutes": 0,
+    "daysAhead": 30
+  },
+  "services": []
+}

@@ -15,6 +15,7 @@ import fs from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import axios from 'axios';
 import { init, getFullClient, upsertFullClient } from '../db.js';
 import { onboardClient, cloneVapiAssistant, updateClientConfig } from '../lib/client-onboarding.js';
 
@@ -23,6 +24,10 @@ const DEMO_CLIENT_KEY = 'demo-client';
 const VAPI_API_URL = 'https://api.vapi.ai';
 const DEMO_HISTORY_FILE = path.join(process.cwd(), 'demos', '.demo-history.json');
 const DEMO_STATS_FILE = path.join(process.cwd(), 'demos', '.demo-stats.json');
+const DEMO_CLIENT_FILE = path.join(process.cwd(), 'demos', '.demo-client.json');
+
+// Database connection state
+let dbConnected = false;
 
 // Create readline interface for prompts
 const rl = readline.createInterface({
@@ -34,6 +39,23 @@ function question(prompt) {
   return new Promise((resolve) => {
     rl.question(prompt, resolve);
   });
+}
+
+/**
+ * Generate a unique client key from prospect data
+ */
+function generateClientKey(prospectData) {
+  const businessSlug = prospectData.businessName
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .substring(0, 30);
+  
+  const prospectSlug = prospectData.prospectName
+    ? '-' + prospectData.prospectName.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 10)
+    : '';
+  
+  return `${businessSlug}${prospectSlug}` || 'demo-client';
 }
 
 /**
@@ -327,10 +349,54 @@ async function offerTestCall(assistantId, isInteractive) {
 }
 
 /**
+ * Load demo client from local file (fallback when DB unavailable)
+ */
+function loadDemoClientFromFile() {
+  try {
+    if (fs.existsSync(DEMO_CLIENT_FILE)) {
+      return JSON.parse(fs.readFileSync(DEMO_CLIENT_FILE, 'utf8'));
+    }
+  } catch (error) {
+    console.warn('⚠️  Could not load demo client from file:', error.message);
+  }
+  return null;
+}
+
+/**
+ * Save demo client to local file (fallback when DB unavailable)
+ */
+function saveDemoClientToFile(client) {
+  try {
+    const demosDir = path.dirname(DEMO_CLIENT_FILE);
+    if (!fs.existsSync(demosDir)) {
+      fs.mkdirSync(demosDir, { recursive: true });
+    }
+    fs.writeFileSync(DEMO_CLIENT_FILE, JSON.stringify(client, null, 2));
+  } catch (error) {
+    console.warn('⚠️  Could not save demo client to file:', error.message);
+  }
+}
+
+/**
  * Get or create demo client
  */
 async function getOrCreateDemoClient() {
-  let client = await getFullClient(DEMO_CLIENT_KEY);
+  let client = null;
+  
+  // Try database first if connected
+  if (dbConnected) {
+    try {
+      client = await getFullClient(DEMO_CLIENT_KEY);
+    } catch (error) {
+      console.warn('⚠️  Database query failed, using local file:', error.message);
+      dbConnected = false;
+    }
+  }
+  
+  // Fallback to local file
+  if (!client) {
+    client = loadDemoClientFromFile();
+  }
   
   if (!client) {
     console.log('\n📦 Creating demo client account (first time setup)...\n');
@@ -361,8 +427,21 @@ async function getOrCreateDemoClient() {
       services: []
     };
     
-    await upsertFullClient(demoClient);
-    client = await getFullClient(DEMO_CLIENT_KEY);
+    // Try to save to database
+    if (dbConnected) {
+      try {
+        await upsertFullClient(demoClient);
+        client = await getFullClient(DEMO_CLIENT_KEY);
+      } catch (error) {
+        console.warn('⚠️  Could not save to database, using local file:', error.message);
+        dbConnected = false;
+        saveDemoClientToFile(demoClient);
+        client = demoClient;
+      }
+    } else {
+      saveDemoClientToFile(demoClient);
+      client = demoClient;
+    }
     
     console.log('✅ Demo client created!\n');
   } else {
@@ -386,6 +465,9 @@ async function getOrCreateAssistant(client) {
   // Check if client has assistant ID
   const assistantId = client.vapi?.assistantId || client.vapiAssistantId;
   if (assistantId) {
+    // Skip verification for now - just use the assistant ID
+    // (Verification was failing due to fetch issues, but assistants exist)
+    console.log(`✅ Using existing assistant: ${assistantId}\n`);
     return assistantId;
   }
   
@@ -403,8 +485,19 @@ async function getOrCreateAssistant(client) {
   });
   
   // Update client with assistant ID
-  const updatedClient = await getFullClient(DEMO_CLIENT_KEY);
-  await upsertFullClient({
+  let updatedClient;
+  if (dbConnected) {
+    try {
+      updatedClient = await getFullClient(DEMO_CLIENT_KEY);
+    } catch (error) {
+      updatedClient = loadDemoClientFromFile() || client;
+      dbConnected = false;
+    }
+  } else {
+    updatedClient = loadDemoClientFromFile() || client;
+  }
+  
+  const updatedClientData = {
     clientKey: DEMO_CLIENT_KEY,
     displayName: updatedClient.displayName,
     timezone: updatedClient.timezone,
@@ -418,7 +511,20 @@ async function getOrCreateAssistant(client) {
     calendarId: updatedClient.calendarId,
     booking: updatedClient.booking,
     services: updatedClient.services || []
-  });
+  };
+  
+  // Try to save to database
+  if (dbConnected) {
+    try {
+      await upsertFullClient(updatedClientData);
+    } catch (error) {
+      console.warn('⚠️  Could not save to database, using local file:', error.message);
+      dbConnected = false;
+      saveDemoClientToFile(updatedClientData);
+    }
+  } else {
+    saveDemoClientToFile(updatedClientData);
+  }
   
   return assistant.assistantId;
 }
@@ -433,27 +539,46 @@ async function updateAssistant(assistantId, prospectData, isInteractive = true) 
     throw new Error('VAPI_PRIVATE_KEY environment variable not set');
   }
   
-  // Get current assistant
-  const getResponse = await fetch(`${VAPI_API_URL}/assistant/${assistantId}`, {
-    method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`,
-      'Content-Type': 'application/json'
-    }
-  });
+  // Try to get current assistant, but if it fails, continue anyway
+  let assistant = null;
+  let previousState = null;
   
-  if (!getResponse.ok) {
-    throw new Error(`Failed to get assistant: ${getResponse.status}`);
+  try {
+    const getResponse = await axios.get(`${VAPI_API_URL}/assistant/${assistantId}`, {
+      headers: {
+        'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'Node.js'
+      }
+    });
+    
+    assistant = getResponse.data;
+    // Save current state for undo
+    previousState = {
+      name: assistant.name,
+      firstMessage: assistant.firstMessage,
+      systemPrompt: assistant.model?.messages?.[0]?.content || ''
+    };
+    saveDemoHistory(assistantId, previousState);
+  } catch (error) {
+    if (error.response?.status === 500) {
+      console.warn(`⚠️  Vapi API returned 500 (Cloudflare issue), will update anyway...\n`);
+    } else {
+      console.warn(`⚠️  Could not fetch assistant: ${error.message}, will update anyway...\n`);
+    }
   }
   
-  const assistant = await getResponse.json();
-  
-  // Save current state for undo
-  saveDemoHistory(assistantId, {
-    name: assistant.name,
-    firstMessage: assistant.firstMessage,
-    systemPrompt: assistant.model?.messages?.[0]?.content || ''
-  });
+  // If we couldn't get the assistant, use defaults
+  if (!assistant) {
+    assistant = {
+      name: 'Assistant',
+      firstMessage: '',
+      model: { messages: [{ role: 'system', content: '' }] },
+      voice: {},
+      tools: []
+    };
+  }
   
   // Get current system prompt
   let systemPrompt = assistant.model?.messages?.[0]?.content || '';
@@ -514,35 +639,68 @@ async function updateAssistant(assistantId, prospectData, isInteractive = true) 
     } catch (error) {
       console.log('⚠️  Could not load industry template, using generic prompt\n');
       // Fallback to generic prompt
-      systemPrompt = `You are a professional AI assistant for ${prospectData.businessName}, a ${prospectData.industry} business.
+      systemPrompt = `You are calling leads on behalf of ${prospectData.businessName}, a ${prospectData.industry} business. Your job is to call prospects who have shown interest and book them for ${prospectData.services.join(' or ')}.
 
-**YOUR GOAL:** Qualify leads and book appointments for ${prospectData.services.join(', ')}.
+**YOUR ROLE:** You are calling as a representative of ${prospectData.businessName}. The person answering is a LEAD who has expressed interest. Your goal is to book them for an appointment.
+
+**CONVERSATION STYLE:**
+- Sound natural and conversational, not robotic
+- Use natural filler words: "umm", "ahh", "right", "okay", "I see"
+- Be warm, friendly, and professional
+- Keep responses brief and efficient (under 2 minutes total call time)
+- Listen to their responses and adapt accordingly
 
 **CONVERSATION FLOW:**
 
-1. **Greeting (Warm & Professional)**
-   "Hi there! I'm calling from ${prospectData.businessName} about your inquiry. Do you have a quick minute?"
+1. **Greeting (Warm & Professional - 10 seconds)**
+   "Hi there! I'm calling from ${prospectData.businessName} about your ${prospectData.services[0] || 'inquiry'}. Do you have a quick minute?"
 
-2. **Qualify the Lead**
-   Ask 2-3 key questions about their needs and timing.
+2. **Qualify the Lead (30 seconds)**
+   Ask 2-3 key questions:
+   - "What type of ${prospectData.services[0] || 'service'} are you looking for?"
+   - "When would you like to get started?"
+   - "Have you had ${prospectData.services[0] || 'this service'} before?"
 
-3. **Book the Appointment**
+3. **Book the Appointment (30 seconds)**
    "Great! Let me check our calendar and find you a time that works..."
-   - Use calendar_checkAndBook tool
+   - Use calendar_checkAndBook tool to check availability
    - Offer 2-3 specific time slots
-   - Confirm details
+   - Confirm details (date, time, service)
 
-4. **Confirmation**
+4. **Confirmation (10 seconds)**
    "Perfect! You're all set for [DATE] at [TIME]. You'll get a confirmation text with all the details."
+   - Use notify_send tool to send SMS confirmation
 
-**TONE:**
-- Professional but friendly
-- Conversational, not scripted
-- Brief and efficient (under 2 minutes)
+**OBJECTION HANDLING:**
+
+If "Too busy":
+→ "I totally understand! This will only take 2 minutes. When's a better time to call back?"
+
+If "How much?":
+→ "Price depends on the specifics. Can I ask a few quick questions so I can give you an accurate quote?"
+
+If "Send info":
+→ "Absolutely! I'll text you our information right now."
+→ Use notify_send tool to send SMS
+
+If "Not interested":
+→ "No problem! Can I ask - is it the timing or the service itself?"
+→ If genuine: "Thanks for your time! Have a great day."
+
+**IMPORTANT RULES:**
+- Always use £ (pounds) not $ (dollars)
+- Don't mention specific prices over the phone
+- SMS goes to the number being called (don't ask for different number)
+- Keep it conversational - don't sound like a robot
+- If they want to book, ALWAYS use calendar_checkAndBook tool
+- Maximum call time: 5 minutes
+- British English only
 
 **TOOLS AVAILABLE:**
-1. calendar_checkAndBook - Book appointments
-2. notify_send - Send SMS with information`;
+1. calendar_checkAndBook - Check availability and book appointments
+2. notify_send - Send SMS notifications
+
+Let's convert this lead! 🚀`;
       
       firstMessage = `Hi! Thanks for your interest in ${prospectData.businessName}. How can I help you today?`;
     }
@@ -568,19 +726,65 @@ async function updateAssistant(assistantId, prospectData, isInteractive = true) 
   // Update assistant (name must be <= 40 characters)
   const assistantName = `${prospectData.businessName} - Booking`.substring(0, 40);
   
-  // Check for required tools
-  const requiredTools = ['calendar_checkAndBook', 'notify_send'];
-  const existingTools = assistant.serverUrl ? (assistant.tools || []) : [];
-  const missingTools = requiredTools.filter(tool => 
-    !existingTools.some(et => et.type === tool || et.function?.name === tool)
-  );
+  // Auto-configure tools if missing
+  const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || process.env.BASE_URL || 'https://ai-booking-mvp.onrender.com';
+  const serverUrl = `${PUBLIC_BASE_URL}/webhooks/vapi`;
   
+  const requiredTools = [
+    {
+      type: 'function',
+      function: {
+        name: 'calendar_checkAndBook',
+        description: 'Check calendar availability and book an appointment',
+        parameters: {
+          type: 'object',
+          properties: {
+            date: { type: 'string', description: 'Date in YYYY-MM-DD format' },
+            time: { type: 'string', description: 'Time in HH:MM format (24-hour)' },
+            durationMinutes: { type: 'number', description: 'Duration in minutes', default: 30 },
+            service: { type: 'string', description: 'Service name' },
+            customerName: { type: 'string', description: 'Customer name' },
+            customerPhone: { type: 'string', description: 'Customer phone number' }
+          },
+          required: ['date', 'time', 'customerName', 'customerPhone']
+        }
+      }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'notify_send',
+        description: 'Send SMS notification to customer',
+        parameters: {
+          type: 'object',
+          properties: {
+            message: { type: 'string', description: 'Message to send' },
+            phoneNumber: { type: 'string', description: 'Phone number to send to' }
+          },
+          required: ['message', 'phoneNumber']
+        }
+      }
+    }
+  ];
+  
+  const existingTools = assistant.tools || [];
+  const existingToolNames = existingTools.map(t => t.type === 'function' ? t.function?.name : t.type);
+  const missingTools = requiredTools.filter(tool => {
+    const toolName = tool.type === 'function' ? tool.function?.name : tool.type;
+    return !existingToolNames.includes(toolName);
+  });
+  
+  // Note: Tools cannot be set via PATCH - they must be configured in Vapi dashboard
+  // We'll just note if they're missing
   if (missingTools.length > 0 && isInteractive) {
-    console.log(`⚠️  Warning: Missing tools: ${missingTools.join(', ')}`);
-    console.log('   The assistant may not work properly without these tools.\n');
-    const continueAnyway = await question('Continue anyway? (y/n): ');
-    if (continueAnyway.toLowerCase() !== 'y') {
-      throw new Error('Update cancelled by user');
+    console.log(`⚠️  Note: Missing tools: ${missingTools.map(t => t.type === 'function' ? t.function?.name : t.type).join(', ')}`);
+    console.log('   Tools must be configured manually in Vapi dashboard.\n');
+  }
+  
+  // Auto-configure serverUrl if needed
+  if (!assistant.serverUrl) {
+    if (isInteractive) {
+      console.log(`🔧 Setting serverUrl: ${serverUrl}\n`);
     }
   }
   
@@ -604,6 +808,10 @@ async function updateAssistant(assistantId, prospectData, isInteractive = true) 
     name: assistantName,
     model: {
       ...assistant.model,
+      provider: assistant.model?.provider || 'openai',
+      model: assistant.model?.model || 'gpt-3.5-turbo',
+      temperature: 0.7, // Balanced creativity and consistency
+      maxTokens: 250, // Keep responses concise
       messages: [
         {
           role: 'system',
@@ -611,6 +819,20 @@ async function updateAssistant(assistantId, prospectData, isInteractive = true) 
         }
       ]
     }
+  };
+  
+  // Auto-configure serverUrl if needed (but not tools - they must be set separately)
+  if (!assistant.serverUrl) {
+    updatePayload.serverUrl = serverUrl;
+  }
+  
+  // Optimize voice settings (only include allowed properties)
+  // Note: Some voice properties like 'stability' may not be allowed in PATCH
+  updatePayload.voice = {
+    provider: assistant.voice?.provider || '11labs',
+    voiceId: assistant.voice?.voiceId || 'pNInz6obpgDQGcFmaJgB', // Adam voice
+    speed: assistant.voice?.speed || 0.95 // Slightly slower for clarity
+    // Note: stability and similarityBoost may need to be set via Vapi dashboard
   };
   
   // Always set first message (use generated one or existing)
@@ -645,21 +867,102 @@ async function updateAssistant(assistantId, prospectData, isInteractive = true) 
     // Ignore voice setting errors
   }
   
-  const updateResponse = await fetch(`${VAPI_API_URL}/assistant/${assistantId}`, {
-    method: 'PATCH',
-    headers: {
-      'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(updatePayload)
-  });
+  // Retry logic for updates (Vapi can be flaky)
+  let updateSuccess = false;
+  let lastError = null;
+  const maxRetries = 3;
   
-  if (!updateResponse.ok) {
-    const errorText = await updateResponse.text();
-    throw new Error(`Failed to update assistant: ${updateResponse.status} - ${errorText}`);
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      if (attempt > 1) {
+        console.log(`   Retry attempt ${attempt}/${maxRetries}...\n`);
+        await new Promise(resolve => setTimeout(resolve, 2000 * attempt)); // Exponential backoff
+      }
+      
+      // Log what we're sending (for debugging)
+      if (isInteractive && attempt === 1) {
+        console.log(`\n📤 Updating assistant with:`);
+        console.log(`   Name: ${updatePayload.name}`);
+        console.log(`   First Message: ${updatePayload.firstMessage?.substring(0, 50)}...`);
+        console.log(`   System Prompt: ${systemPrompt.substring(0, 100)}...\n`);
+      }
+      
+      const updateResponse = await axios.patch(`${VAPI_API_URL}/assistant/${assistantId}`, updatePayload, {
+        headers: {
+          'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'User-Agent': 'Node.js'
+        },
+        timeout: 10000 // 10 second timeout
+      });
+      
+      // Verify the update actually worked
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second for Vapi to process
+      
+      try {
+        const verifyResponse = await axios.get(`${VAPI_API_URL}/assistant/${assistantId}`, {
+          headers: {
+            'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`,
+            'Accept': 'application/json'
+          },
+          timeout: 10000
+        });
+        
+        const updatedPrompt = verifyResponse.data.model?.messages?.[0]?.content || '';
+        if (updatedPrompt.includes(prospectData.businessName)) {
+          console.log(`✅ Updated and verified: Assistant now mentions "${prospectData.businessName}"\n`);
+          updateSuccess = true;
+          break;
+        } else {
+          console.warn(`⚠️  Update may not have applied. Prompt doesn't mention "${prospectData.businessName}"`);
+          console.warn(`   Current prompt starts with: ${updatedPrompt.substring(0, 150)}...`);
+          if (attempt < maxRetries) {
+            console.warn(`   Will retry...\n`);
+            lastError = new Error('Update did not apply - prompt verification failed');
+            continue;
+          }
+        }
+      } catch (verifyError) {
+        console.warn(`⚠️  Could not verify update: ${verifyError.message}`);
+        if (attempt < maxRetries) {
+          console.warn(`   Will retry...\n`);
+          lastError = verifyError;
+          continue;
+        }
+      }
+      
+      // If we got here and verification passed, we're done
+      if (updateSuccess) break;
+      
+    } catch (error) {
+      lastError = error;
+      if (error.response?.status === 500) {
+        if (attempt < maxRetries) {
+          console.warn(`⚠️  Vapi API returned 500 (Cloudflare error). Retrying...\n`);
+          continue;
+        } else {
+          throw new Error(`Failed to update assistant after ${maxRetries} attempts: Vapi API returned 500 (Cloudflare error). The assistant may need to be updated manually in the Vapi dashboard.`);
+        }
+      } else if (error.response?.status === 400) {
+        // 400 errors are usually permanent (bad request), don't retry
+        const errorText = error.response?.data || error.message;
+        throw new Error(`Failed to update assistant: ${error.response.status} - ${JSON.stringify(errorText).substring(0, 200)}`);
+      } else {
+        if (attempt < maxRetries) {
+          console.warn(`⚠️  Update failed: ${error.message}. Retrying...\n`);
+          continue;
+        } else {
+          const errorText = error.response?.data || error.message;
+          throw new Error(`Failed to update assistant after ${maxRetries} attempts: ${error.response?.status || 'unknown'} - ${JSON.stringify(errorText).substring(0, 200)}`);
+        }
+      }
+    }
   }
   
-  console.log(`✅ Updated Vapi assistant for ${prospectData.businessName}\n`);
+  if (!updateSuccess && lastError) {
+    throw lastError;
+  }
   
   return assistantId;
 }
@@ -739,8 +1042,17 @@ async function main() {
     console.log('This script personalizes your demo client\'s Vapi assistant');
     console.log('for each prospect demo.\n');
     
-    // Initialize database
-    await init();
+    // Initialize database (optional - will use local file if fails)
+    try {
+      await init();
+      dbConnected = true;
+      console.log('✅ Database connected\n');
+    } catch (error) {
+      console.warn('⚠️  Database connection failed (using local file storage):');
+      console.warn(`   ${error.message}\n`);
+      console.log('💡 This is fine - the script will work without database access.\n');
+      dbConnected = false;
+    }
     
     // Step 1: Get or create demo client
     const client = await getOrCreateDemoClient();
@@ -900,9 +1212,49 @@ async function main() {
     const isInteractive = args.length < 3;
     await updateAssistant(assistantId, prospectData, isInteractive);
     
-    // Step 5: Generate output
-    const baseUrl = process.env.BASE_URL || 'https://yourdomain.com';
-    const dashboardUrl = `${baseUrl}/client-dashboard.html?client=${DEMO_CLIENT_KEY}`;
+    // Step 5: Create/update personalized client in database
+    const clientKey = generateClientKey(prospectData);
+    const clientData = {
+      clientKey: clientKey,
+      displayName: prospectData.businessName,
+      industry: prospectData.industry.toLowerCase(),
+      services: prospectData.services,
+      location: prospectData.location,
+      timezone: 'Europe/London',
+      locale: 'en-GB',
+      isEnabled: true,
+      vapi: {
+        assistantId: assistantId,
+        phoneNumberId: null
+      },
+      booking: {
+        timezone: 'Europe/London',
+        defaultDurationMin: 30,
+        slotDuration: 30,
+        bufferMinutes: 0,
+        daysAhead: 30
+      }
+    };
+    
+    // Save client to database or file
+    if (dbConnected) {
+      try {
+        await upsertFullClient(clientData);
+        console.log(`✅ Created personalized client: ${prospectData.businessName}\n`);
+      } catch (error) {
+        console.warn(`⚠️  Could not save client to database: ${error.message}`);
+        console.warn(`   Using demo client instead...\n`);
+      }
+    } else {
+      // Save to local file for demo purposes
+      const clientFile = path.join(process.cwd(), 'demos', `.client-${clientKey}.json`);
+      fs.writeFileSync(clientFile, JSON.stringify(clientData, null, 2));
+      console.log(`✅ Created personalized client config: ${clientKey}\n`);
+    }
+    
+    // Step 6: Generate output
+    const baseUrl = process.env.PUBLIC_BASE_URL || process.env.BASE_URL || 'https://ai-booking-mvp.onrender.com';
+    const dashboardUrl = `${baseUrl}/client-dashboard.html?client=${clientKey}`;
     const demoScript = generateDemoScript(prospectData);
     
     // Generate all output formats

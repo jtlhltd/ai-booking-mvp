@@ -5058,31 +5058,29 @@ app.get('/mock-call', async (req, res) => {
       });
     }
     
+    // Get assistant ID from query or use default
+    const assistantId = req.query.assistantId || "dd67a51c-7485-4b62-930a-4a84f328a1c9";
+    const phoneNumberId = req.query.phoneNumberId || "934ecfdb-fe7b-4d53-81c0-7908b97036b5";
+    const phoneNumber = req.query.phone || "+447491683261";
+    
     // Mock lead data
     const mockLead = {
-      businessName: "Test Dental Practice",
-      decisionMaker: "Dr. Sarah Johnson",
-      industry: "dental",
-      location: "London",
-      phoneNumber: "+447491683261", // Your number
-      email: "sarah@testdental.co.uk",
-      website: "www.testdental.co.uk"
+      businessName: "Test Business",
+      decisionMaker: "Test Lead",
+      industry: "general",
+      location: "UK",
+      phoneNumber: phoneNumber,
+      email: "test@example.com",
+      website: "www.example.com"
     };
     
-    // Create a call with British-optimized assistant
+    // Create a call with specified assistant
     const callData = {
-      assistantId: "dd67a51c-7485-4b62-930a-4a84f328a1c9",
-      phoneNumberId: "934ecfdb-fe7b-4d53-81c0-7908b97036b5",
+      assistantId: assistantId,
+      phoneNumberId: phoneNumberId,
       customer: {
         number: mockLead.phoneNumber,
         name: mockLead.decisionMaker
-      },
-      assistantOverrides: {
-        firstMessage: "Hello, this is Sarah from AI Booking Solutions. I hope I'm not catching you at a bad time? I'm calling to help businesses like yours with appointment booking. Do you have a couple of minutes to chat about this?",
-        silenceTimeoutSeconds: 15,
-        startSpeakingPlan: {
-          waitSeconds: 2
-        }
       }
     };
     
@@ -5095,22 +5093,56 @@ app.get('/mock-call', async (req, res) => {
       body: JSON.stringify(callData)
     });
     
-    if (vapiResponse.ok) {
-      const callResult = await vapiResponse.json();
-      res.json({
-        success: true,
-        message: 'Mock call initiated successfully!',
-        callId: callResult.id,
-        mockLead: mockLead,
-        status: 'Calling your mobile now...'
-      });
-    } else {
-      const errorData = await vapiResponse.json();
-      res.json({
+    const responseText = await vapiResponse.text();
+    
+    // Check if response is HTML (Cloudflare error page)
+    if (responseText.trim().startsWith('<!DOCTYPE') || responseText.includes('Cloudflare')) {
+      return res.json({
         success: false,
-        message: 'Failed to initiate mock call',
-        error: errorData
+        message: 'Vapi API is currently experiencing issues (Cloudflare error)',
+        error: 'Vapi API returned HTML error page instead of JSON',
+        status: vapiResponse.status,
+        suggestion: 'Please try again in a few minutes. The Vapi service appears to be temporarily unavailable due to Cloudflare issues.',
+        responsePreview: responseText.substring(0, 200)
       });
+    }
+    
+    if (vapiResponse.ok) {
+      try {
+        const callResult = JSON.parse(responseText);
+        res.json({
+          success: true,
+          message: 'Mock call initiated successfully!',
+          callId: callResult.id,
+          mockLead: mockLead,
+          status: 'Calling your mobile now...'
+        });
+      } catch (e) {
+        res.json({
+          success: false,
+          message: 'Vapi returned invalid JSON response',
+          error: 'Response was not valid JSON',
+          responsePreview: responseText.substring(0, 200)
+        });
+      }
+    } else {
+      try {
+        const errorData = JSON.parse(responseText);
+        res.json({
+          success: false,
+          message: 'Failed to initiate mock call',
+          error: errorData,
+          status: vapiResponse.status
+        });
+      } catch (e) {
+        res.json({
+          success: false,
+          message: 'Failed to initiate mock call',
+          error: 'Invalid JSON response from Vapi',
+          status: vapiResponse.status,
+          responsePreview: responseText.substring(0, 300)
+        });
+      }
     }
     
   } catch (error) {
@@ -16346,9 +16378,25 @@ app.get('/api/clients', async (_req, res) => {
 
 app.get('/api/clients/:key', async (req, res) => {
   try {
-    const c = await getFullClient(req.params.key);
+    let c = await getFullClient(req.params.key);
+    
+    // Fallback: check local client files if not in database
+    if (!c) {
+      try {
+        const fs = await import('fs');
+        const path = await import('path');
+        const clientFile = path.join(process.cwd(), 'demos', `.client-${req.params.key}.json`);
+        if (fs.existsSync(clientFile)) {
+          const fileContent = fs.readFileSync(clientFile, 'utf8');
+          c = JSON.parse(fileContent);
+        }
+      } catch (fileError) {
+        // Ignore file read errors
+      }
+    }
+    
     if (!c) return res.status(404).json({ ok:false, error: 'not found' });
-  res.json({ ok:true, client: c });
+    res.json({ ok:true, client: c });
   } catch (e) {
     res.status(500).json({ ok:false, error: String(e) });
   }

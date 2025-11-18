@@ -1,0 +1,15 @@
+{
+  "assistantId": "b19a474b-49f3-474d-adb2-4aacc6ad37e7",
+  "dashboardUrl": "https://ai-booking-mvp.onrender.com/client-dashboard.html?client=stay-focused-fitness-chris",
+  "prospect": {
+    "businessName": "Stay Focused Fitness",
+    "industry": "Fitness",
+    "services": [
+      "Personal Training"
+    ],
+    "prospectName": "Chris",
+    "location": "Birmingham"
+  },
+  "script": "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nDEMO SCRIPT FOR STAY FOCUSED FITNESS\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n[0:00-0:10] PERSONAL OPENING\n\"Hi Chris, I saw Stay Focused Fitness is a Fitness in Birmingham. \nI made a quick 2-minute demo showing exactly how we convert your leads \ninto appointments.\"\n\n[0:10-0:20] THE PROBLEM\n\"Most Fitness businesses lose 70% of their leads because they can't \nfollow up fast enough. Watch this...\"\n\n[0:20-0:30] SHOW DASHBOARD\n[Screen share dashboard]\n\"Here's your dashboard. When you upload leads, they appear here.\nRight now I've got 5 test leads.\"\n\n[0:30-1:00] THE MAGIC - AI CALLING\n\"Within 5 minutes, the AI calls them. Watch this...\"\n[Make call to your number]\n[You answer as lead]\n[AI books appointment naturally]\n\"See how natural that was? It just booked an appointment.\"\n\n[1:00-1:15] SHOW RESULT\n[Show calendar]\n\"And it just appeared in your calendar. The lead got a confirmation text. \nAll automatic.\"\n\n[1:15-1:30] SHOW METRICS\n[Show dashboard metrics]\n\"5 leads, 3 calls, 2 appointments booked. That's a 40% conversion rate. \nMost businesses get 10-20%.\"\n\n[1:30-2:00] CLOSE\n\"I've already set this up for Stay Focused Fitness. Want to test it with 10 of \nyour actual leads this week? Takes 5 minutes to set up. Just reply if \ninterested.\"\n\n[2:00] END\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nNOTES:\n- Business: Stay Focused Fitness\n- Industry: Fitness\n- Services: Personal Training\n- Prospect: Chris\n- Location: Birmingham\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n",
+  "createdAt": "2025-11-18T12:37:01.175Z"
+}

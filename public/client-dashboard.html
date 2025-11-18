@@ -2149,6 +2149,69 @@
             }
         };
 
+        function generatePersonalizedDemoData(clientConfig) {
+            const businessName = clientConfig.displayName || 'Business';
+            const services = clientConfig.services || ['Service'];
+            const primaryService = services[0];
+            const industry = clientConfig.industry || 'business';
+            
+            // Generate service-specific lead names and scenarios
+            const leadNames = ['Jordan Hale', 'Priya Desai', 'Lewis Grant', 'Emily Carr', 'Tom Osei'];
+            const statuses = [
+                `Booked • ${primaryService} confirmed`,
+                `Awaiting reply • interested in ${primaryService}`,
+                `Engaged • asked about ${primaryService}`,
+                `Left voicemail • SMS reminder sent`,
+                `Nurture • considering ${primaryService}`
+            ];
+            
+            return {
+                totalLeads: 48,
+                totalCalls: 36,
+                last24hLeads: 7,
+                conversionRate: 63,
+                successRate: 84,
+                firstResponse: '2m 58s',
+                bookingsThisWeek: 18,
+                avgLeadScore: 87,
+                highPriorityLeads: 9,
+                mediumPriorityLeads: 14,
+                lowPriorityLeads: 7,
+                touchpoints: {
+                    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                    data: [5, 7, 6, 9, 8, 10, 7]
+                },
+                recentLeads: [
+                    { id: 1, name: leadNames[0], phone: '+44 7700 900451', service: primaryService, status: statuses[0], source: 'Website form', timeAgo: '2 min ago', lastMessage: `"Got the confirmation, see you Tuesday."` },
+                    { id: 2, name: leadNames[1], phone: '+44 7700 900512', service: primaryService, status: statuses[1], source: 'Referral', timeAgo: '9 min ago', lastMessage: `Asked about ${primaryService}; AI sent options.` },
+                    { id: 3, name: leadNames[2], phone: '+44 7700 900623', service: primaryService, status: statuses[2], source: 'Google Ads', timeAgo: '25 min ago', lastMessage: `Shared information + queued callback tomorrow.` },
+                    { id: 4, name: leadNames[3], phone: '+44 7700 900734', service: primaryService, status: statuses[3], source: 'Facebook Lead', timeAgo: '40 min ago', lastMessage: 'Voicemail dropped, SMS reminder scheduled at 9am.' },
+                    { id: 5, name: leadNames[4], phone: '+44 7700 900845', service: primaryService, status: statuses[4], source: 'Website form', timeAgo: '58 min ago', lastMessage: 'Sent information PDF.' }
+                ],
+                serviceMix: services.map((service, i) => ({
+                    name: service,
+                    percent: i === 0 ? 45 : Math.floor(55 / (services.length - 1)),
+                    notes: `${service} bookings`
+                })),
+                recentCalls: [
+                    { id: 'demo-1', name: 'Sarah Patel', summary: `Booked ${primaryService} via AI call`, channel: 'Phone', timeAgo: '2 min ago' },
+                    { id: 'demo-2', name: 'Marcus Flynn', summary: `Requested reschedule • SMS follow-up sent`, channel: 'SMS → Call', timeAgo: '9 min ago' },
+                    { id: 'demo-3', name: 'Laura Chen', summary: `Synced with calendar • reminder scheduled`, channel: 'Webhook sync', timeAgo: '25 min ago' },
+                    { id: 'demo-4', name: 'Rick Alvarez', summary: `Moved appointment • calendar updated`, channel: 'Phone', timeAgo: '42 min ago' }
+                ],
+                appointments: [
+                    { id: 101, name: 'Isla Brown', service: primaryService, start: new Date(Date.now() + 60 * 60 * 1000).toISOString(), status: 'booked' },
+                    { id: 102, name: 'Liam Wright', service: primaryService, start: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(), status: 'booked' },
+                    { id: 103, name: 'Maya Reyes', service: primaryService, start: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(), status: 'pending' }
+                ],
+                roi: {
+                    costs: { total: 612.4, perCall: 12.4 },
+                    revenue: { total: 6280, bookings: 18, avgDealValue: 349 },
+                    roi: { profit: 5667.6, multiplier: 10.3, percentage: 930 }
+                }
+            };
+        }
+
         const DEMO_DATA = {
             totalLeads: 48,
             totalCalls: 36,
@@ -2674,8 +2737,91 @@
             contentEl.textContent = 'Loading transcript...';
             modal.classList.add('open');
 
-            if (currentClient === DEMO_CLIENT_KEY) {
-                contentEl.textContent = `[DEMO TRANSCRIPT]\n\nAI: Hello! This is ${name || 'the AI concierge'}. How can I help you book an appointment today?\n\nCustomer: I'd like to schedule a consultation.\n\nAI: Absolutely! I'd be happy to help you schedule a consultation. What day works best for you?\n\nCustomer: How about next Tuesday?\n\nAI: Let me check availability for next Tuesday. I have slots at 10am, 2pm, and 4pm. Which time works for you?\n\nCustomer: 2pm sounds good.\n\nAI: Perfect! I've booked you for next Tuesday at 2pm. You'll receive a confirmation email shortly. Is there anything else I can help you with?\n\nCustomer: No, that's all. Thank you!\n\nAI: You're welcome! We look forward to seeing you next Tuesday at 2pm. Have a great day!\n\n[Call ended - Outcome: Booked]`;
+            // Always show demo transcripts in demo mode
+            const isDemo = !currentClient || currentClient === DEMO_CLIENT_KEY || currentClient === 'demo_client' || 
+                          (typeof currentClient === 'string' && (currentClient.includes('demo') || currentClient.includes('booking')));
+            
+            if (isDemo) {
+                // Show realistic demo transcripts based on call ID
+                const demoTranscripts = {
+                    'demo-1': `AI: Hi Sarah, this is your AI booking concierge. I'm calling to follow up on your inquiry about our AI Strategy Session.
+
+Sarah: Oh yes, I was interested in learning more about how this could help my business.
+
+AI: Great! I'd be happy to help. Based on your inquiry, it sounds like you're looking to streamline your lead follow-up process. Is that correct?
+
+Sarah: Exactly. We're getting leads but struggling to follow up quickly enough.
+
+AI: Perfect! Our AI concierge can handle that for you. We can call your leads within minutes of them coming in, 24/7. Would you like to schedule a strategy session to see how this would work for your business?
+
+Sarah: Yes, that would be great. When are you available?
+
+AI: I have availability next Tuesday at 2:30pm or Thursday at 10am. Which works better for you?
+
+Sarah: Tuesday at 2:30pm sounds perfect.
+
+AI: Excellent! I've booked you for Tuesday, November 19th at 2:30pm. You'll receive a calendar invite and confirmation email shortly. Is there anything else I can help you with today?
+
+Sarah: No, that's perfect. Thank you so much!
+
+AI: You're very welcome, Sarah! We'll see you on Tuesday. Have a wonderful day!
+
+[Call ended - Duration: 3m 42s | Outcome: Booked]`,
+                    'demo-2': `AI: Hi Marcus, this is your AI booking concierge. I'm calling about your appointment scheduled for tomorrow.
+
+Marcus: Oh hi, actually I need to reschedule if possible.
+
+AI: Of course! I'd be happy to help you reschedule. What day and time would work better for you?
+
+Marcus: Could we do Thursday afternoon instead? Maybe around 3pm?
+
+AI: Let me check... Yes, I have Thursday at 3pm available. Would you like me to move your appointment to Thursday at 3pm?
+
+Marcus: Yes, that would be perfect.
+
+AI: Done! I've rescheduled your appointment to Thursday, November 21st at 3pm. You'll receive an updated calendar invite. Is there anything else I can help with?
+
+Marcus: No, that's all. Thanks!
+
+AI: You're welcome! We'll see you Thursday. Have a great day!
+
+[Call ended - Duration: 1m 15s | Outcome: Rescheduled | SMS follow-up sent]`,
+                    'demo-3': `AI: Hi Laura, this is your AI booking concierge. I'm calling to confirm your appointment details and send you a reminder.
+
+Laura: Hi, yes I'm all set for tomorrow.
+
+AI: Perfect! Your appointment is scheduled for tomorrow, Wednesday at 10am. I've just synced this with your Google Calendar and sent you a reminder. You should see it appear in your calendar shortly.
+
+Laura: Great, I can see it now. Thank you for the reminder!
+
+AI: You're very welcome! We'll see you tomorrow at 10am. If anything comes up, just let us know. Have a great day!
+
+[Call ended - Duration: 1m 8s | Outcome: Confirmed | Calendar synced]`,
+                    'demo-4': `AI: Hi Rick, this is your AI booking concierge. I'm calling about your appointment scheduled for this week.
+
+Rick: Hi, I actually need to move it to next week if possible.
+
+AI: Absolutely! What day next week works best for you?
+
+Rick: How about Thursday?
+
+AI: I have Thursday at 2pm or 4pm available. Which would you prefer?
+
+Rick: 2pm works great.
+
+AI: Perfect! I've moved your appointment to Thursday, November 28th at 2pm. Your calendar has been updated. You'll receive a confirmation shortly.
+
+Rick: Excellent, thank you!
+
+AI: You're welcome! We'll see you next Thursday. Have a great week!
+
+[Call ended - Duration: 1m 32s | Outcome: Rescheduled | Calendar updated]`
+                };
+
+                const transcript = demoTranscripts[callId] || demoTranscripts['demo-1'];
+                setTimeout(() => {
+                    contentEl.innerHTML = `<pre style="white-space: pre-wrap; font-family: 'Inter', sans-serif; line-height: 1.6; color: var(--text); margin: 0;">${transcript}</pre>`;
+                }, 300);
                 return;
             }
 
@@ -3141,8 +3287,34 @@
 
         async function initDashboard() {
             currentClient = getClientFromURL();
-            const config = { ...CLIENT_CONFIG[currentClient] } || CLIENT_CONFIG[DEMO_CLIENT_KEY];
+            
+            // Fetch client config from API if not demo
+            let clientConfig = null;
+            if (currentClient !== DEMO_CLIENT_KEY) {
+                try {
+                    const response = await fetch(`${BASE_URL}/api/clients/${currentClient}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.ok && data.client) {
+                            clientConfig = data.client;
+                        }
+                    }
+                } catch (err) {
+                    console.warn('Could not fetch client config:', err);
+                }
+            }
+            
+            const config = clientConfig || { ...CLIENT_CONFIG[currentClient] } || CLIENT_CONFIG[DEMO_CLIENT_KEY];
             config.key = currentClient;
+            
+            // Update header with business name if available
+            if (clientConfig && clientConfig.displayName) {
+                document.getElementById('clientName').textContent = `${clientConfig.displayName} - Concierge Dashboard`;
+                if (clientConfig.services && clientConfig.services.length > 0) {
+                    document.getElementById('clientDescription').textContent = `AI-powered booking for ${clientConfig.services.join(', ')}`;
+                }
+            }
+            
             updateHeader(config);
             initThemeToggle();
             initModalControls();
@@ -3152,7 +3324,13 @@
             initOfflineDetection();
             initDataFreshness();
 
-            dashboardData = { ...DEMO_DATA };
+            // Generate personalized demo data if client config is available
+            if (clientConfig && currentClient !== DEMO_CLIENT_KEY) {
+                dashboardData = generatePersonalizedDemoData(clientConfig);
+            } else {
+                dashboardData = { ...DEMO_DATA };
+            }
+            
             if (currentClient === DEMO_CLIENT_KEY) {
                 document.getElementById('demoBanner').style.display = 'block';
                 stopLiveEvents();
