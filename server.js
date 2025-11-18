@@ -8545,8 +8545,8 @@ app.post('/api/leads/import', async (req, res) => {
   }
 });
 
-function getIntegrationStatuses() {
-  return [
+async function getIntegrationStatuses(clientKey) {
+  const integrations = [
     {
       name: 'Vapi Voice',
       status: process.env.VAPI_PRIVATE_KEY ? 'active' : 'error',
@@ -8559,8 +8559,8 @@ function getIntegrationStatuses() {
     },
     {
       name: 'Google Calendar',
-      status: process.env.GOOGLE_CLIENT_EMAIL ? 'active' : 'warning',
-      detail: process.env.GOOGLE_CLIENT_EMAIL ? 'Auto-booking synced' : 'Connect service account for calendar booking'
+      status: 'warning', // Default to warning, will check actual connection
+      detail: 'Checking connection...'
     },
     {
       name: 'Slack Digest',
@@ -8568,13 +8568,55 @@ function getIntegrationStatuses() {
       detail: process.env.SLACK_WEBHOOK_URL ? 'Posting daily summaries' : 'Add Slack webhook to enable digest'
     }
   ];
+
+  // Check actual calendar connection for this client
+  if (clientKey) {
+    try {
+      const tenantResult = await query(`
+        SELECT calendar_json
+        FROM tenants
+        WHERE client_key = $1
+      `, [clientKey]);
+
+      const calendarConfig = tenantResult.rows?.[0]?.calendar_json || {};
+      const isConnected = !!(calendarConfig.service_account_email || calendarConfig.access_token);
+      
+      const calendarIntegration = integrations.find(i => i.name === 'Google Calendar');
+      if (calendarIntegration) {
+        calendarIntegration.status = isConnected ? 'active' : 'warning';
+        calendarIntegration.detail = isConnected 
+          ? 'Auto-booking synced' 
+          : 'Connect service account for calendar booking';
+      }
+    } catch (error) {
+      console.error('[INTEGRATION HEALTH ERROR]', error);
+      // Keep warning status if check fails
+    }
+  } else {
+    // Fallback: check env var if no client key
+    const calendarIntegration = integrations.find(i => i.name === 'Google Calendar');
+    if (calendarIntegration) {
+      calendarIntegration.status = process.env.GOOGLE_CLIENT_EMAIL ? 'active' : 'warning';
+      calendarIntegration.detail = process.env.GOOGLE_CLIENT_EMAIL 
+        ? 'Auto-booking synced' 
+        : 'Connect service account for calendar booking';
+    }
+  }
+
+  return integrations;
 }
 
-app.get('/api/integration-health/:clientKey', (req, res) => {
-  res.json({
-    ok: true,
-    integrations: getIntegrationStatuses()
-  });
+app.get('/api/integration-health/:clientKey', async (req, res) => {
+  try {
+    const integrations = await getIntegrationStatuses(req.params.clientKey);
+    res.json({
+      ok: true,
+      integrations
+    });
+  } catch (error) {
+    console.error('[INTEGRATION HEALTH ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
 });
 
 app.get('/api/calls/:callId/transcript', async (req, res) => {
