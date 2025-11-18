@@ -105,9 +105,21 @@ async function initPostgres() {
       vapi_json JSONB,
       calendar_json JSONB,
       sms_templates_json JSONB,
+      white_label_config JSONB,
       is_enabled BOOLEAN DEFAULT TRUE,
       created_at TIMESTAMPTZ DEFAULT now()
     );
+    
+    -- Add white_label_config column if it doesn't exist (migration)
+    DO $$ 
+    BEGIN 
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'tenants' AND column_name = 'white_label_config'
+      ) THEN
+        ALTER TABLE tenants ADD COLUMN white_label_config JSONB;
+      END IF;
+    END $$;
 
     CREATE TABLE IF NOT EXISTS leads (
       id BIGSERIAL PRIMARY KEY,
@@ -586,6 +598,7 @@ function initSqlite() {
       vapi_json TEXT,
       calendar_json TEXT,
       sms_templates_json TEXT,
+      white_label_config TEXT,
       is_enabled INTEGER DEFAULT 1,
       created_at TEXT DEFAULT (datetime('now'))
     );
@@ -816,16 +829,17 @@ export async function upsertFullClient(c) {
   };
   const calendar_json = JSON.stringify(calendar);
   const sms_templates_json = c.smsTemplates ? JSON.stringify(c.smsTemplates) : null;
+  const white_label_config = c.whiteLabel ? JSON.stringify(c.whiteLabel) : null;
 
   const args = [
     c.clientKey, c.displayName || c.clientKey, c.booking?.timezone || c.timezone || null, c.locale || 'en-GB',
-    numbers_json, twilio_json, vapi_json, calendar_json, sms_templates_json
+    numbers_json, twilio_json, vapi_json, calendar_json, sms_templates_json, white_label_config
   ];
 
   if (pool) {
     await query(`
-      INSERT INTO tenants (client_key, display_name, timezone, locale, numbers_json, twilio_json, vapi_json, calendar_json, sms_templates_json)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      INSERT INTO tenants (client_key, display_name, timezone, locale, numbers_json, twilio_json, vapi_json, calendar_json, sms_templates_json, white_label_config)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
       ON CONFLICT (client_key) DO UPDATE SET
         display_name = EXCLUDED.display_name,
         timezone = EXCLUDED.timezone,
@@ -834,15 +848,16 @@ export async function upsertFullClient(c) {
         twilio_json = EXCLUDED.twilio_json,
         vapi_json = EXCLUDED.vapi_json,
         calendar_json = EXCLUDED.calendar_json,
-        sms_templates_json = EXCLUDED.sms_templates_json
+        sms_templates_json = EXCLUDED.sms_templates_json,
+        white_label_config = EXCLUDED.white_label_config
     `, args);
   } else {
     const row = sqlite.prepare('SELECT client_key FROM tenants WHERE client_key=?').get(c.clientKey);
     if (row) {
-      sqlite.prepare('UPDATE tenants SET display_name=?, timezone=?, locale=?, numbers_json=?, twilio_json=?, vapi_json=?, calendar_json=?, sms_templates_json=? WHERE client_key=?')
-        .run(args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[0]);
+      sqlite.prepare('UPDATE tenants SET display_name=?, timezone=?, locale=?, numbers_json=?, twilio_json=?, vapi_json=?, calendar_json=?, sms_templates_json=?, white_label_config=? WHERE client_key=?')
+        .run(args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[0]);
     } else {
-      sqlite.prepare('INSERT INTO tenants (client_key, display_name, timezone, locale, numbers_json, twilio_json, vapi_json, calendar_json, sms_templates_json) VALUES (?,?,?,?,?,?,?,?,?)')
+      sqlite.prepare('INSERT INTO tenants (client_key, display_name, timezone, locale, numbers_json, twilio_json, vapi_json, calendar_json, sms_templates_json, white_label_config) VALUES (?,?,?,?,?,?,?,?,?,?)')
         .run(...args);
     }
   }
