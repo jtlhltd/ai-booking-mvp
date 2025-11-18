@@ -24,6 +24,13 @@ class BookingSystem {
           const saJson = JSON.parse(Buffer.from(process.env.GOOGLE_SA_JSON_BASE64, 'base64').toString('utf8'));
           clientEmail = saJson.client_email || clientEmail;
           privateKey = saJson.private_key || privateKey;
+          
+          // Replace literal \n with actual newlines (JSON stores newlines as \n)
+          if (privateKey && privateKey.includes('\\n')) {
+            privateKey = privateKey.replace(/\\n/g, '\n');
+            console.log('[BOOKING SYSTEM] Replaced escaped newlines in private key from JSON');
+          }
+          
           console.log('[BOOKING SYSTEM] Loaded credentials from GOOGLE_SA_JSON_BASE64');
         } catch (e) {
           console.error('[BOOKING SYSTEM] Failed to parse GOOGLE_SA_JSON_BASE64:', e.message);
