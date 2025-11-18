@@ -2304,10 +2304,36 @@
 
         function mergeData(base = {}, livePayload) {
             if (!livePayload) return base;
-            const metrics = livePayload.metrics || {};
             
-            // In demo mode, preserve imported leads by merging arrays intelligently
-            // Keep imported leads (marked with "New (demo)" status) at the front
+            // For real clients, use live payload data directly (don't merge with demo data)
+            // Only merge if we're in demo mode and want to preserve imported leads
+            const isDemoMode = base.totalLeads > 0 && base.recentLeads && base.recentLeads.length > 0;
+            
+            if (!isDemoMode) {
+                // Real client - use API data directly
+                return {
+                    totalLeads: livePayload.totalLeads || 0,
+                    totalCalls: livePayload.totalCalls || 0,
+                    last24hLeads: livePayload.last24hLeads || 0,
+                    conversionRate: livePayload.conversionRate || 0,
+                    successRate: livePayload.successRate || 0,
+                    firstResponse: livePayload.firstResponse || '—',
+                    bookingsThisWeek: livePayload.bookingsThisWeek || 0,
+                    avgLeadScore: livePayload.avgLeadScore || 0,
+                    highPriorityLeads: livePayload.highPriorityLeads || 0,
+                    mediumPriorityLeads: livePayload.mediumPriorityLeads || 0,
+                    lowPriorityLeads: livePayload.lowPriorityLeads || 0,
+                    recentLeads: livePayload.leads || [],
+                    recentCalls: livePayload.recentCalls || [],
+                    appointments: livePayload.appointments || [],
+                    serviceMix: livePayload.serviceMix || [],
+                    touchpoints: livePayload.touchpoints || { labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], data: [0, 0, 0, 0, 0, 0, 0] },
+                    roi: livePayload.roi || { costs: { total: 0, perCall: 0 }, revenue: { total: 0, bookings: 0, avgDealValue: 0 }, roi: { profit: 0, multiplier: 0, percentage: 0 } }
+                };
+            }
+            
+            // Demo mode: merge with imported leads
+            const metrics = livePayload.metrics || {};
             const baseLeads = Array.isArray(base.recentLeads) ? base.recentLeads : [];
             const importedLeads = baseLeads.filter(lead => lead.status && lead.status.includes('(demo)'));
             const existingLeads = baseLeads.filter(lead => !lead.status || !lead.status.includes('(demo)'));
@@ -3324,17 +3350,32 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             initOfflineDetection();
             initDataFreshness();
 
-            // Generate personalized demo data if client config is available
-            if (clientConfig && currentClient !== DEMO_CLIENT_KEY) {
-                dashboardData = generatePersonalizedDemoData(clientConfig);
-            } else {
-                dashboardData = { ...DEMO_DATA };
-            }
-            
+            // Initialize with empty data structure for real clients, demo data only for demo client
             if (currentClient === DEMO_CLIENT_KEY) {
+                dashboardData = { ...DEMO_DATA };
                 document.getElementById('demoBanner').style.display = 'block';
                 stopLiveEvents();
             } else {
+                // For real clients, start with empty structure - will be populated from API
+                dashboardData = {
+                    totalLeads: 0,
+                    totalCalls: 0,
+                    last24hLeads: 0,
+                    conversionRate: 0,
+                    successRate: 0,
+                    firstResponse: '—',
+                    bookingsThisWeek: 0,
+                    avgLeadScore: 0,
+                    highPriorityLeads: 0,
+                    mediumPriorityLeads: 0,
+                    lowPriorityLeads: 0,
+                    recentLeads: [],
+                    recentCalls: [],
+                    appointments: [],
+                    serviceMix: [],
+                    touchpoints: { labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], data: [0, 0, 0, 0, 0, 0, 0] },
+                    roi: { costs: { total: 0, perCall: 0 }, revenue: { total: 0, bookings: 0, avgDealValue: 0 }, roi: { profit: 0, multiplier: 0, percentage: 0 } }
+                };
                 const banner = document.getElementById('demoBanner');
                 if (banner) banner.style.display = 'none';
             }
@@ -3346,14 +3387,24 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 if (container) showSkeleton(container, id === 'recent-activity' ? 'metrics' : 'list');
             });
 
+            // Always try to fetch real data from API
             try {
                 const livePayload = await fetchLiveData(currentClient);
-                dashboardData = mergeData(dashboardData, livePayload);
+                if (livePayload) {
+                    // Use real data from API, don't merge with demo data
+                    dashboardData = mergeData({}, livePayload);
+                } else if (currentClient === DEMO_CLIENT_KEY) {
+                    // Only use demo data if it's the demo client and no API data
+                    dashboardData = { ...DEMO_DATA };
+                }
             } catch (error) {
                 console.error('Failed to load dashboard data', error);
-                const leadsContainer = document.getElementById('leads-list');
-                if (leadsContainer) {
-                    showError(leadsContainer, 'Unable to load dashboard data. Please refresh the page.', () => location.reload());
+                // Only show error for real clients, demo client can use demo data
+                if (currentClient !== DEMO_CLIENT_KEY) {
+                    const leadsContainer = document.getElementById('leads-list');
+                    if (leadsContainer) {
+                        showError(leadsContainer, 'Unable to load dashboard data. Please refresh the page.', () => location.reload());
+                    }
                 }
             }
 
