@@ -14,12 +14,27 @@ class BookingSystem {
   async initializeServices() {
     try {
       // Initialize Google Calendar with service account auth
-      if (process.env.GOOGLE_CLIENT_EMAIL && (process.env.GOOGLE_PRIVATE_KEY || process.env.GOOGLE_PRIVATE_KEY_B64)) {
+      // Support multiple formats: GOOGLE_SA_JSON_BASE64, GOOGLE_PRIVATE_KEY_B64, or GOOGLE_PRIVATE_KEY
+      let clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
+      let privateKey = process.env.GOOGLE_PRIVATE_KEY || '';
+      
+      // First, try GOOGLE_SA_JSON_BASE64 (full service account JSON)
+      if (process.env.GOOGLE_SA_JSON_BASE64) {
         try {
-          // Use JWT authentication (same as working server endpoints)
-          let privateKey = process.env.GOOGLE_PRIVATE_KEY || '';
-          
-          // Handle base64 encoded private key
+          const saJson = JSON.parse(Buffer.from(process.env.GOOGLE_SA_JSON_BASE64, 'base64').toString('utf8'));
+          clientEmail = saJson.client_email || clientEmail;
+          privateKey = saJson.private_key || privateKey;
+          console.log('[BOOKING SYSTEM] Loaded credentials from GOOGLE_SA_JSON_BASE64');
+        } catch (e) {
+          console.error('[BOOKING SYSTEM] Failed to parse GOOGLE_SA_JSON_BASE64:', e.message);
+          throw new Error('Invalid GOOGLE_SA_JSON_BASE64 format');
+        }
+      }
+      
+      // If we have credentials, proceed with initialization
+      if (clientEmail && (privateKey || process.env.GOOGLE_PRIVATE_KEY_B64)) {
+        try {
+          // Handle base64 encoded private key (if not already extracted from JSON)
           if (!privateKey && process.env.GOOGLE_PRIVATE_KEY_B64) {
             try { 
               privateKey = Buffer.from(process.env.GOOGLE_PRIVATE_KEY_B64, 'base64').toString('utf8');
@@ -66,8 +81,8 @@ class BookingSystem {
           // Use the same JWT auth method as server.js
           const { makeJwtAuth } = await import('./gcal.js');
           const auth = makeJwtAuth({
-            clientEmail: process.env.GOOGLE_CLIENT_EMAIL,
-            privateKey: privateKey, // Use the decoded/processed key, not the env var
+            clientEmail: clientEmail, // Use extracted email (from JSON or env)
+            privateKey: privateKey, // Use the decoded/processed key
             privateKeyB64: process.env.GOOGLE_PRIVATE_KEY_B64
           });
           
@@ -88,6 +103,7 @@ class BookingSystem {
             stack: error.stack
           });
           console.log('   Environment check:', {
+            GOOGLE_SA_JSON_BASE64: !!process.env.GOOGLE_SA_JSON_BASE64,
             GOOGLE_CLIENT_EMAIL: !!process.env.GOOGLE_CLIENT_EMAIL,
             GOOGLE_PRIVATE_KEY: !!process.env.GOOGLE_PRIVATE_KEY,
             GOOGLE_PRIVATE_KEY_B64: !!process.env.GOOGLE_PRIVATE_KEY_B64,
@@ -98,9 +114,12 @@ class BookingSystem {
       } else {
         console.log('⚠️ Google Calendar credentials not found - calendar integration disabled');
         console.log('   Missing:', {
+          GOOGLE_SA_JSON_BASE64: !!process.env.GOOGLE_SA_JSON_BASE64,
           GOOGLE_CLIENT_EMAIL: !!process.env.GOOGLE_CLIENT_EMAIL,
-          GOOGLE_PRIVATE_KEY: !!process.env.GOOGLE_PRIVATE_KEY
+          GOOGLE_PRIVATE_KEY: !!process.env.GOOGLE_PRIVATE_KEY,
+          GOOGLE_PRIVATE_KEY_B64: !!process.env.GOOGLE_PRIVATE_KEY_B64
         });
+        console.log('   Tip: Set GOOGLE_SA_JSON_BASE64 (full JSON) or GOOGLE_CLIENT_EMAIL + GOOGLE_PRIVATE_KEY_B64');
         this.calendar = null;
       }
 
