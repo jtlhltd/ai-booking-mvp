@@ -8581,8 +8581,12 @@ async function getIntegrationStatuses(clientKey) {
         const client = clientResult.rows?.[0];
         vapiConfig = client?.vapi_json || {};
       } catch (columnError) {
-        // If query fails, handle gracefully
-        throw columnError;
+        // If query fails, check if it's a column error or something else
+        if (columnError.message?.includes('does not exist') && columnError.message?.includes('vapi_json')) {
+          throw columnError; // Re-throw column errors
+        }
+        // For other errors (like client not found), set empty config
+        vapiConfig = {};
       }
       
       // Check if THIS CLIENT has Vapi configured (multi-tenant - no global fallback)
@@ -8631,12 +8635,16 @@ async function getIntegrationStatuses(clientKey) {
       console.error('[INTEGRATION HEALTH ERROR]', error);
       const vapiIntegration = integrations.find(i => i.name === 'Vapi Voice');
       if (vapiIntegration) {
-        if (error.message?.includes('does not exist')) {
+        if (error.message?.includes('does not exist') && error.message?.includes('vapi_json')) {
           vapiIntegration.status = 'error';
-          vapiIntegration.detail = 'Database schema needs update. The tenants table is missing Vapi configuration columns. Contact support to update the database schema.';
+          vapiIntegration.detail = 'Database schema needs update. The tenants table is missing vapi_json column. Contact support to update the database schema.';
+        } else if (error.message?.includes('relation "tenants" does not exist')) {
+          vapiIntegration.status = 'error';
+          vapiIntegration.detail = 'Database table not found. The tenants table does not exist. Contact support to set up the database.';
         } else {
+          // Most likely: client doesn't exist or no vapi_json configured
           vapiIntegration.status = 'error';
-          vapiIntegration.detail = `Unable to check Vapi configuration: ${error.message}. Database connection may be unavailable.`;
+          vapiIntegration.detail = 'This client does not have Vapi configured. Update the client\'s vapi_json in the database (tenants table) with: { "assistantId": "...", "phoneNumberId": "...", "privateKey": "..." } or use the /api/admin/client/:clientKey PUT endpoint.';
         }
       }
     }
