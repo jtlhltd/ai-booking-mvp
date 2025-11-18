@@ -2574,11 +2574,16 @@
             const services = config.services || config.serviceMap || [];
             const messaging = getIndustryMessaging(industry, businessName, services);
             
-            // Update header content
-            document.getElementById('clientName').textContent = businessName;
-            document.getElementById('clientDescription').textContent = config.description || messaging.description;
-            document.getElementById('clientTagline').textContent = config.tagline || messaging.tagline;
-            document.getElementById('clientStatus').textContent = config.status || 'Live';
+            // Update header content (with null checks)
+            const clientNameEl = document.getElementById('clientName');
+            const clientDescEl = document.getElementById('clientDescription');
+            const clientTaglineEl = document.getElementById('clientTagline');
+            const clientStatusEl = document.getElementById('clientStatus');
+            
+            if (clientNameEl) clientNameEl.textContent = businessName;
+            if (clientDescEl) clientDescEl.textContent = config.description || messaging.description;
+            if (clientTaglineEl) clientTaglineEl.textContent = config.tagline || messaging.tagline;
+            if (clientStatusEl) clientStatusEl.textContent = config.status || 'Live';
             
             // Add industry-specific subtitle
             const subtitleEl = document.getElementById('clientSubtitle');
