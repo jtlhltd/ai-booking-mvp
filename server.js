@@ -8453,7 +8453,7 @@ app.post('/api/leads/:leadId/snooze', async (req, res) => {
     if (!lead) {
       return res.status(404).json({ ok: false, error: 'Lead not found' });
     }
-    const snoozedUntil = new Date(Date.now() + minutes * 60000).toISOString();
+    const snoozedUntil = new Date(Date.now() + snoozeMinutes * 60000).toISOString();
     await query(`
       INSERT INTO lead_engagement (client_key, lead_phone, engagement_data)
       VALUES ($1, $2, $3::jsonb)
@@ -8479,10 +8479,17 @@ app.post('/api/leads/:leadId/snooze', async (req, res) => {
 
 app.post('/api/leads/:leadId/escalate', async (req, res) => {
   const { leadId } = req.params;
+  const { clientKey } = req.body || {};
   try {
+    if (!clientKey) {
+      return res.status(400).json({ ok: false, error: 'clientKey required' });
+    }
     const lead = await getLeadRecord(leadId);
     if (!lead) {
       return res.status(404).json({ ok: false, error: 'Lead not found' });
+    }
+    if (lead.client_key !== clientKey) {
+      return res.status(403).json({ ok: false, error: 'Access denied' });
     }
     await query(`
       INSERT INTO lead_engagement (client_key, lead_phone, engagement_data)

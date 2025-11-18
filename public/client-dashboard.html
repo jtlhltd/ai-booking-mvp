@@ -3818,7 +3818,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             try {
                 const response = await fetch(`${BASE_URL}/api/leads/${lead.id}/${action}`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ clientKey: currentClient })
                 });
                 const payload = await response.json();
                 if (!response.ok || !payload?.ok) {
