@@ -1873,15 +1873,38 @@ export async function cleanupOldRateLimitRecords(hoursOld = 24) {
 
 // Security event logging functions
 export async function logSecurityEvent({ clientKey, eventType, eventSeverity = 'info', eventData = null, ipAddress = null, userAgent = null }) {
+  // Skip logging for unknown/anonymous clients to avoid foreign key violations
+  if (!clientKey || clientKey === 'unknown' || clientKey === 'anonymous') {
+    return null;
+  }
+  
+  // Verify client exists before logging (to avoid foreign key violations)
+  try {
+    const client = await getFullClient(clientKey);
+    if (!client) {
+      // Client doesn't exist, skip logging
+      return null;
+    }
+  } catch (error) {
+    // Error checking client, skip logging to avoid cascading errors
+    return null;
+  }
+  
   const eventDataJson = eventData ? JSON.stringify(eventData) : null;
   
-  const { rows } = await query(`
-    INSERT INTO security_events (client_key, event_type, event_severity, event_data, ip_address, user_agent)
-    VALUES ($1, $2, $3, $4, $5, $6)
-    RETURNING *
-  `, [clientKey, eventType, eventSeverity, eventDataJson, ipAddress, userAgent]);
-  
-  return rows[0];
+  try {
+    const { rows } = await query(`
+      INSERT INTO security_events (client_key, event_type, event_severity, event_data, ip_address, user_agent)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING *
+    `, [clientKey, eventType, eventSeverity, eventDataJson, ipAddress, userAgent]);
+    
+    return rows[0];
+  } catch (error) {
+    // Silently fail security event logging to avoid breaking the main request
+    console.warn('[SECURITY LOG] Failed to log security event:', error.message);
+    return null;
+  }
 }
 
 export async function getSecurityEvents(clientKey, limit = 100, eventType = null, severity = null) {
