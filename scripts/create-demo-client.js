@@ -1407,7 +1407,7 @@ async function main() {
     const logo = industryDefaults.logo;
     const colors = industryDefaults.colors;
     
-    // Build whiteLabel config
+    // Build whiteLabel config with all fields
     const whiteLabel = {
       branding: {
         logo: logo,
@@ -1415,7 +1415,15 @@ async function main() {
         secondaryColor: colors.secondary,
         accentColor: colors.accent,
         fontFamily: "'Inter', sans-serif"
-      }
+      },
+      description: description,
+      tagline: tagline,
+      status: 'Live',
+      industry: prospectData.industry.toLowerCase(),
+      services: prospectData.services,
+      location: prospectData.location,
+      phone: phoneNumber,
+      businessHours: businessHours
     };
     
     // Preview mode (if --preview flag)

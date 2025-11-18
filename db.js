@@ -85,21 +85,46 @@ class JsonFileDatabase {
 
 // ---------------------- Postgres ----------------------
 async function initPostgres() {
+  // Validate DATABASE_URL format
+  const dbUrl = process.env.DATABASE_URL;
+  if (!dbUrl) {
+    throw new Error('DATABASE_URL environment variable is not set');
+  }
+  
+  // Check if DATABASE_URL looks complete
+  if (!dbUrl.includes('://') || !dbUrl.includes('@')) {
+    console.warn('⚠️  DATABASE_URL format may be incomplete. Expected format: postgresql://user:password@host:port/database');
+  }
+  
   try {
     pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
+      connectionString: dbUrl,
       ssl: { rejectUnauthorized: false },
       max: 20, // Maximum 20 connections in pool
       idleTimeoutMillis: 30000, // Close idle connections after 30 seconds
-      connectionTimeoutMillis: 5000, // Increased timeout to 5 seconds
+      connectionTimeoutMillis: 10000, // Increased timeout to 10 seconds for remote databases
     });
 
-    // Test connection first
-    await pool.query('SELECT 1');
+    // Test connection first with timeout
+    console.log('🔌 Testing Postgres connection...');
+    await Promise.race([
+      pool.query('SELECT 1'),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Connection timeout after 10 seconds')), 10000)
+      )
+    ]);
+    console.log('✅ Postgres connection successful');
   } catch (error) {
-    console.error('⚠️  Postgres connection failed:', error.message);
-    pool = null;
-    throw error; // Re-throw to trigger SQLite fallback
+    console.error('❌ Postgres connection failed:', error.message);
+    if (pool) {
+      try {
+        await pool.end();
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+      pool = null;
+    }
+    throw error;
   }
 
   try {
@@ -683,19 +708,32 @@ function initSqlite() {
 
 // ---------------------- Core API ----------------------
 export async function init() {
-  // Use PostgreSQL if explicitly configured, otherwise use SQLite
-  if (dbType === 'postgres' && process.env.DATABASE_URL) {
+  // Use PostgreSQL if explicitly configured
+  if (dbType === 'postgres') {
+    if (!process.env.DATABASE_URL) {
+      throw new Error('❌ DATABASE_URL is required when DB_TYPE=postgres. Please set DATABASE_URL in your environment variables.');
+    }
+    
     console.log('🔄 Initializing PostgreSQL...');
     try {
       return await initPostgres();
     } catch (error) {
       console.error('❌ PostgreSQL initialization failed:', error.message);
-      console.log('🔄 Falling back to SQLite...');
-      // Fall through to SQLite initialization
+      
+      // Provide helpful error messages
+      if (error.message.includes('ENOTFOUND') || error.message.includes('getaddrinfo')) {
+        console.error('\n💡 Postgres connection troubleshooting:');
+        console.error('   1. Check if your database is paused (Render free tier pauses after inactivity)');
+        console.error('   2. Verify DATABASE_URL is complete and correct');
+        console.error('   3. Ensure the database hostname is reachable');
+        console.error('   4. Check your Render dashboard and resume the database if paused\n');
+      }
+      
+      throw new Error(`PostgreSQL connection failed: ${error.message}. Please fix your DATABASE_URL or set DB_TYPE to something other than 'postgres' to use SQLite.`);
     }
   }
   
-  // Use SQLite (either as primary choice or fallback)
+  // Use SQLite (when DB_TYPE is not 'postgres' or not set)
   console.log('🔄 Initializing SQLite...');
   return initSqlite();
 }
@@ -821,6 +859,39 @@ function mapTenantRow(r) {
   out.vapiAssistantId = vapi.assistantId || null;
   out.vapiPhoneNumberId = vapi.phoneNumberId || null;
   out.serviceMap = (calendar.services) || {};
+  
+  // Extract additional fields from whiteLabel config (saved by create-demo-client script)
+  if (whiteLabel.branding) {
+    out.logo = whiteLabel.branding.logo || null;
+    out.primaryColor = whiteLabel.branding.primaryColor || null;
+    out.secondaryColor = whiteLabel.branding.secondaryColor || null;
+    out.accentColor = whiteLabel.branding.accentColor || null;
+    out.fontFamily = whiteLabel.branding.fontFamily || null;
+  }
+  if (whiteLabel.description) out.description = whiteLabel.description;
+  if (whiteLabel.tagline) out.tagline = whiteLabel.tagline;
+  if (whiteLabel.status) out.status = whiteLabel.status;
+  if (whiteLabel.industry) out.industry = whiteLabel.industry;
+  if (whiteLabel.services) out.services = whiteLabel.services;
+  if (whiteLabel.location) out.location = whiteLabel.location;
+  
+  // Extract from top-level whiteLabel or from numbers
+  if (whiteLabel.phone) {
+    out.phone = whiteLabel.phone;
+  } else if (numbers.primary) {
+    out.phone = numbers.primary;
+  }
+  
+  // Extract business hours from booking or whiteLabel
+  if (whiteLabel.businessHours) {
+    out.businessHours = whiteLabel.businessHours;
+  } else if (out.booking && out.booking.businessHours) {
+    out.businessHours = out.booking.businessHours;
+  }
+  
+  // Also set name for compatibility (same as displayName)
+  out.name = out.displayName;
+  
   return out;
 }
 
@@ -858,7 +929,27 @@ export async function upsertFullClient(c) {
   };
   const calendar_json = JSON.stringify(calendar);
   const sms_templates_json = c.smsTemplates ? JSON.stringify(c.smsTemplates) : null;
-  const white_label_config = c.whiteLabel ? JSON.stringify(c.whiteLabel) : null;
+  
+  // Build comprehensive whiteLabel config with all fields from create-demo-client script
+  const whiteLabel = c.whiteLabel || {};
+  // Merge in additional fields if provided directly (for backward compatibility)
+  if (c.description) whiteLabel.description = c.description;
+  if (c.tagline) whiteLabel.tagline = c.tagline;
+  if (c.status) whiteLabel.status = c.status;
+  if (c.industry) whiteLabel.industry = c.industry;
+  if (c.services) whiteLabel.services = c.services;
+  if (c.location) whiteLabel.location = c.location;
+  if (c.phone) whiteLabel.phone = c.phone;
+  if (c.businessHours) whiteLabel.businessHours = c.businessHours;
+  // Merge branding fields
+  if (!whiteLabel.branding) whiteLabel.branding = {};
+  if (c.logo) whiteLabel.branding.logo = c.logo;
+  if (c.primaryColor) whiteLabel.branding.primaryColor = c.primaryColor;
+  if (c.secondaryColor) whiteLabel.branding.secondaryColor = c.secondaryColor;
+  if (c.accentColor) whiteLabel.branding.accentColor = c.accentColor;
+  if (c.fontFamily) whiteLabel.branding.fontFamily = c.fontFamily;
+  
+  const white_label_config = Object.keys(whiteLabel).length > 0 ? JSON.stringify(whiteLabel) : null;
 
   const args = [
     c.clientKey, c.displayName || c.clientKey, c.booking?.timezone || c.timezone || null, c.locale || 'en-GB',
