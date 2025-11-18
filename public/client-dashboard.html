@@ -2596,21 +2596,21 @@
                 }
             }
             if (clientDescEl) {
-                if (clientConfig && clientConfig.description) {
+                if (hasClientConfig && config.description) {
                     clientDescEl.textContent = config.description;
                 } else {
                     clientDescEl.textContent = messaging.description;
                 }
             }
             if (clientTaglineEl) {
-                if (clientConfig && clientConfig.tagline) {
+                if (hasClientConfig && config.tagline) {
                     clientTaglineEl.textContent = config.tagline;
                 } else {
                     clientTaglineEl.textContent = messaging.tagline;
                 }
             }
             if (clientStatusEl) {
-                if (clientConfig && config.status) {
+                if (hasClientConfig && config.status) {
                     clientStatusEl.textContent = config.status;
                 } else {
                     clientStatusEl.textContent = 'Live';
@@ -2638,25 +2638,23 @@
             personalizeDashboard(businessName);
             
             // Map client config fields to meta fields
-            // Only show what's actually configured, use "—" for missing
-            const phone = config.phone || 
+            // Only show what's actually configured, use "Not supplied" for missing
+            // Only use values if hasClientConfig is true (not from CLIENT_CONFIG mock data)
+            const phone = (hasClientConfig && (config.phone || 
                          config.numbers?.primary || 
                          config.numbers_json?.primary ||
                          config.twilio_json?.fromNumber ||
-                         config.sms?.fromNumber ||
-                         null;
+                         config.sms?.fromNumber)) || null;
             
             // Timezone: from timezone or booking.timezone
-            const timezone = config.timezone || 
+            const timezone = (hasClientConfig && (config.timezone || 
                            config.booking?.timezone ||
-                           config.calendar_json?.booking?.timezone ||
-                           null;
+                           config.calendar_json?.booking?.timezone)) || null;
             
             // Business Hours: from businessHours or booking config
-            const businessHours = config.businessHours ||
+            const businessHours = (hasClientConfig && (config.businessHours ||
                                  config.booking?.businessHours ||
-                                 config.calendar_json?.booking?.businessHours ||
-                                 null;
+                                 config.calendar_json?.booking?.businessHours)) || null;
             
             // Industry display: from industry or services (for meta field)
             // Map industry codes to display names
@@ -2677,12 +2675,12 @@
             };
             
             let industryDisplay = null;
-            if (config.industry) {
+            if (hasClientConfig && config.industry) {
               const industryLower = config.industry.toLowerCase();
               industryDisplay = industryMap[industryLower] || config.industry;
-            } else if (config.services && Array.isArray(config.services) && config.services.length > 0) {
+            } else if (hasClientConfig && config.services && Array.isArray(config.services) && config.services.length > 0) {
               industryDisplay = config.services.join(', ');
-            } else if (config.services && typeof config.services === 'object' && Object.keys(config.services).length > 0) {
+            } else if (hasClientConfig && config.services && typeof config.services === 'object' && Object.keys(config.services).length > 0) {
               industryDisplay = Object.keys(config.services).join(', ');
             }
             
