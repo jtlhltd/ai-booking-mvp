@@ -16,6 +16,18 @@ export function makeJwtAuth({ clientEmail, privateKey, privateKeyB64 }) {
   if (key && key.includes('\\n')) {
     key = key.replace(/\\n/g, '\n');
   }
+  
+  // Debug: Log key info (without exposing full key)
+  if (key) {
+    console.log('[GCAL] JWT Auth setup:', {
+      clientEmail,
+      keyLength: key.length,
+      keyHasNewlines: key.includes('\n'),
+      keyStartsWith: key.substring(0, 30),
+      keyEndsWith: key.substring(key.length - 30)
+    });
+  }
+  
   return new google.auth.JWT(
     clientEmail,
     null,
