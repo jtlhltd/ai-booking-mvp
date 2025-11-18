@@ -2431,7 +2431,8 @@
             if (!clientParam || clientParam.includes('demo') || clientParam.includes('booking')) {
                 return DEMO_CLIENT_KEY;
             }
-            return clientParam.replace(/-/g, '_');
+            // Keep dashes - database keys use dashes, not underscores
+            return clientParam;
         }
 
         let lastDataUpdate = new Date();
@@ -2565,6 +2566,16 @@
         }
 
         function updateHeader(config, hasClientConfig = false) {
+            console.log('[updateHeader] Called with:', {
+                hasClientConfig,
+                name: config.name || config.displayName,
+                description: config.description,
+                tagline: config.tagline,
+                industry: config.industry,
+                phone: config.phone,
+                businessHours: config.businessHours
+            });
+            
             // Apply branding first (colors, logo)
             applyClientBranding(config);
             
