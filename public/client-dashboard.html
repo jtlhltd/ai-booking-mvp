@@ -3798,12 +3798,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
             
             // Update header with business name if available
-            if (clientConfig && clientConfig.displayName) {
-                document.getElementById('clientName').textContent = `${clientConfig.displayName} - Concierge Dashboard`;
-                if (clientConfig.services && clientConfig.services.length > 0) {
-                    document.getElementById('clientDescription').textContent = `AI-powered booking for ${clientConfig.services.join(', ')}`;
-                }
-            }
+            // REMOVED: This was overwriting updateHeader. Let updateHeader handle all header updates.
             
             updateHeader(config, !!clientConfig);
             initThemeToggle();
