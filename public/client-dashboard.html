@@ -2922,7 +2922,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
 
             try {
-                const response = await fetch(`${BASE_URL}/api/calls/${callId}/transcript`);
+                const response = await fetch(`${BASE_URL}/api/calls/${callId}/transcript?clientKey=${currentClient}`);
                 const payload = await response.json();
                 if (response.ok && payload?.ok && payload.transcript) {
                     contentEl.textContent = payload.transcript;

@@ -8821,13 +8821,20 @@ app.get('/api/integration-health/:clientKey', async (req, res) => {
 app.get('/api/calls/:callId/transcript', async (req, res) => {
   try {
     const { callId } = req.params;
+    const { clientKey } = req.query;
+    
+    if (!clientKey) {
+      return res.status(400).json({ ok: false, error: 'clientKey required' });
+    }
+    
     const result = await query(`
       SELECT transcript, summary, duration, created_at
       FROM calls
-      WHERE id = $1 OR lead_phone = $1
+      WHERE (id = $1 OR call_id = $1 OR lead_phone = $1)
+        AND client_key = $2
       ORDER BY created_at DESC
       LIMIT 1
-    `, [callId]);
+    `, [callId, clientKey]);
     
     if (!result.rows || !result.rows.length) {
       return res.status(404).json({ ok: false, error: 'Transcript not found' });
@@ -8851,17 +8858,22 @@ app.get('/api/calls/:callId/transcript', async (req, res) => {
 app.get('/api/leads/:leadId/timeline', async (req, res) => {
   try {
     const { leadId } = req.params;
+    const { clientKey } = req.query;
+    
+    if (!clientKey) {
+      return res.status(400).json({ ok: false, error: 'clientKey required' });
+    }
     
     const leadResult = await query(`
-      SELECT id, name, phone, created_at, source
+      SELECT id, name, phone, created_at, source, client_key
       FROM leads
-      WHERE id = $1 OR phone = $1
+      WHERE (id = $1 OR phone = $1) AND client_key = $2
       ORDER BY created_at DESC
       LIMIT 1
-    `, [leadId]);
+    `, [leadId, clientKey]);
     
     if (!leadResult.rows || !leadResult.rows.length) {
-      return res.status(404).json({ ok: false, error: 'Lead not found' });
+      return res.status(404).json({ ok: false, error: 'Lead not found or access denied' });
     }
     
     const lead = leadResult.rows[0];
@@ -8869,16 +8881,16 @@ app.get('/api/leads/:leadId/timeline', async (req, res) => {
     const callsResult = await query(`
       SELECT status, outcome, created_at, duration
       FROM calls
-      WHERE lead_phone = $1
+      WHERE lead_phone = $1 AND client_key = $2
       ORDER BY created_at ASC
-    `, [lead.phone]);
+    `, [lead.phone, clientKey]);
     
     const appointmentsResult = await query(`
       SELECT start_iso, end_iso, status, created_at
       FROM appointments
-      WHERE lead_id = $1
+      WHERE lead_id = $1 AND client_key = $2
       ORDER BY created_at ASC
-    `, [lead.id]);
+    `, [lead.id, clientKey]);
     
     const timeline = [];
     
