@@ -2420,14 +2420,41 @@
 
         function updateHeader(config) {
             document.getElementById('clientLogo').textContent = config.logo || '🏢';
-            document.getElementById('clientName').textContent = config.name;
+            document.getElementById('clientName').textContent = config.name || config.displayName || config.display_name || 'Your Concierge Dashboard';
             document.getElementById('clientDescription').textContent = config.description || '';
             document.getElementById('clientTagline').textContent = config.tagline || '';
             document.getElementById('clientStatus').textContent = config.status || 'Live';
-            document.getElementById('metaPhone').textContent = config.phone || '—';
-            document.getElementById('metaTimezone').textContent = config.timezone || '—';
-            document.getElementById('metaHours').textContent = config.businessHours || '—';
-            document.getElementById('metaIndustry').textContent = config.industry || '—';
+            
+            // Map client config fields to meta fields
+            // Phone: from numbers_json or twilio_json
+            const phone = config.phone || 
+                         config.numbers?.primary || 
+                         config.numbers_json?.primary ||
+                         config.twilio_json?.fromNumber ||
+                         config.sms?.fromNumber ||
+                         '—';
+            
+            // Timezone: from timezone or booking.timezone
+            const timezone = config.timezone || 
+                           config.booking?.timezone ||
+                           config.calendar_json?.booking?.timezone ||
+                           '—';
+            
+            // Business Hours: from businessHours or booking config
+            const businessHours = config.businessHours ||
+                                 (config.booking ? `${config.booking.defaultDurationMin || 30}min slots` : null) ||
+                                 '—';
+            
+            // Industry: from industry or services
+            const industry = config.industry ||
+                           (config.services && Array.isArray(config.services) ? config.services.join(', ') : null) ||
+                           (config.services && typeof config.services === 'object' ? Object.keys(config.services).join(', ') : null) ||
+                           '—';
+            
+            document.getElementById('metaPhone').textContent = phone;
+            document.getElementById('metaTimezone').textContent = timezone;
+            document.getElementById('metaHours').textContent = businessHours;
+            document.getElementById('metaIndustry').textContent = industry;
 
             const banner = document.getElementById('demoBanner');
             if (banner) {

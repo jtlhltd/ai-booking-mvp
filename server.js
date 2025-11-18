@@ -9044,14 +9044,20 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
     `, [clientKey]);
 
     const stats = allCalls.rows?.[0] || {};
-    const bestHour = result.rows?.[0]?.hour_of_day || 14;
-    const bestHourEnd = bestHour + 2;
+    const bestHourRow = result.rows?.[0];
+    const bestHour = bestHourRow?.hour_of_day;
+    const bestHourEnd = bestHour ? bestHour + 2 : null;
+    
+    // Only show best time if we have actual booking data
+    const bestTime = bestHourRow && bestHourRow.bookings > 0 
+      ? `${String(bestHour).padStart(2, '0')}:00-${String(bestHourEnd).padStart(2, '0')}:00`
+      : '—';
 
     res.json({
       ok: true,
       avgDuration: stats.avg_duration || 0,
       successRate: stats.total_calls > 0 ? Math.round((stats.bookings / stats.total_calls) * 100) : 0,
-      bestTime: `${bestHour}:00-${bestHourEnd}:00`
+      bestTime
     });
   } catch (error) {
     console.error('[CALL QUALITY ERROR]', error);
