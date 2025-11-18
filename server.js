@@ -8549,13 +8549,13 @@ async function getIntegrationStatuses(clientKey) {
   const integrations = [
     {
       name: 'Vapi Voice',
-      status: process.env.VAPI_PRIVATE_KEY ? 'active' : 'error',
-      detail: process.env.VAPI_PRIVATE_KEY ? 'Assistant + phone number connected' : 'Add Vapi key to enable calling'
+      status: 'warning', // Default to warning, will test actual connection
+      detail: 'Checking connection...'
     },
     {
       name: 'Twilio SMS',
-      status: (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) ? 'active' : 'warning',
-      detail: (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) ? 'Messaging service verified' : 'Connect Twilio for SMS reminders'
+      status: 'warning', // Default to warning, will test actual connection
+      detail: 'Checking connection...'
     },
     {
       name: 'Google Calendar',
@@ -8568,6 +8568,89 @@ async function getIntegrationStatuses(clientKey) {
       detail: process.env.SLACK_WEBHOOK_URL ? 'Posting daily summaries' : 'Add Slack webhook to enable digest'
     }
   ];
+
+  // Test Vapi connection
+  const vapiKey = process.env.VAPI_PRIVATE_KEY || process.env.VAPI_PUBLIC_KEY || process.env.VAPI_API_KEY;
+  if (vapiKey) {
+    try {
+      const vapiResponse = await fetch('https://api.vapi.ai/assistant', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${vapiKey}`,
+          'Content-Type': 'application/json'
+        },
+        signal: AbortSignal.timeout(5000) // 5 second timeout
+      });
+      
+      if (vapiResponse.ok) {
+        const vapiIntegration = integrations.find(i => i.name === 'Vapi Voice');
+        if (vapiIntegration) {
+          vapiIntegration.status = 'active';
+          vapiIntegration.detail = 'Assistant + phone number connected';
+        }
+      } else {
+        const vapiIntegration = integrations.find(i => i.name === 'Vapi Voice');
+        if (vapiIntegration) {
+          vapiIntegration.status = 'error';
+          vapiIntegration.detail = 'API key invalid or expired';
+        }
+      }
+    } catch (error) {
+      const vapiIntegration = integrations.find(i => i.name === 'Vapi Voice');
+      if (vapiIntegration) {
+        vapiIntegration.status = 'error';
+        vapiIntegration.detail = 'Connection test failed - check API key';
+      }
+    }
+  } else {
+    const vapiIntegration = integrations.find(i => i.name === 'Vapi Voice');
+    if (vapiIntegration) {
+      vapiIntegration.status = 'error';
+      vapiIntegration.detail = 'Add Vapi key to enable calling';
+    }
+  }
+
+  // Test Twilio connection
+  const twilioSid = process.env.TWILIO_ACCOUNT_SID;
+  const twilioToken = process.env.TWILIO_AUTH_TOKEN;
+  if (twilioSid && twilioToken) {
+    try {
+      const auth = Buffer.from(`${twilioSid}:${twilioToken}`).toString('base64');
+      const twilioResponse = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioSid}.json`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Basic ${auth}`
+        },
+        signal: AbortSignal.timeout(5000) // 5 second timeout
+      });
+      
+      if (twilioResponse.ok) {
+        const twilioIntegration = integrations.find(i => i.name === 'Twilio SMS');
+        if (twilioIntegration) {
+          twilioIntegration.status = 'active';
+          twilioIntegration.detail = 'Messaging service verified';
+        }
+      } else {
+        const twilioIntegration = integrations.find(i => i.name === 'Twilio SMS');
+        if (twilioIntegration) {
+          twilioIntegration.status = 'warning';
+          twilioIntegration.detail = 'Credentials invalid or expired';
+        }
+      }
+    } catch (error) {
+      const twilioIntegration = integrations.find(i => i.name === 'Twilio SMS');
+      if (twilioIntegration) {
+        twilioIntegration.status = 'warning';
+        twilioIntegration.detail = 'Connection test failed - check credentials';
+      }
+    }
+  } else {
+    const twilioIntegration = integrations.find(i => i.name === 'Twilio SMS');
+    if (twilioIntegration) {
+      twilioIntegration.status = 'warning';
+      twilioIntegration.detail = 'Connect Twilio for SMS reminders';
+    }
+  }
 
   // Check actual calendar connection for this client
   if (clientKey) {
