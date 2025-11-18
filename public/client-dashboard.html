@@ -2606,24 +2606,25 @@
             personalizeDashboard(businessName);
             
             // Map client config fields to meta fields
-            // Phone: from numbers_json or twilio_json
+            // Only show what's actually configured, use "—" for missing
             const phone = config.phone || 
                          config.numbers?.primary || 
                          config.numbers_json?.primary ||
                          config.twilio_json?.fromNumber ||
                          config.sms?.fromNumber ||
-                         '—';
+                         null;
             
             // Timezone: from timezone or booking.timezone
             const timezone = config.timezone || 
                            config.booking?.timezone ||
                            config.calendar_json?.booking?.timezone ||
-                           '—';
+                           null;
             
             // Business Hours: from businessHours or booking config
             const businessHours = config.businessHours ||
-                                 (config.booking ? `${config.booking.defaultDurationMin || 30}min slots` : null) ||
-                                 '—';
+                                 config.booking?.businessHours ||
+                                 config.calendar_json?.booking?.businessHours ||
+                                 null;
             
             // Industry display: from industry or services (for meta field)
             // Map industry codes to display names
@@ -2643,15 +2644,14 @@
               'restaurant': 'Restaurant'
             };
             
-            let industryDisplay = config.industry;
-            if (industryDisplay && industryMap[industryDisplay.toLowerCase()]) {
-              industryDisplay = industryMap[industryDisplay.toLowerCase()];
+            let industryDisplay = null;
+            if (config.industry) {
+              const industryLower = config.industry.toLowerCase();
+              industryDisplay = industryMap[industryLower] || config.industry;
             } else if (config.services && Array.isArray(config.services) && config.services.length > 0) {
               industryDisplay = config.services.join(', ');
-            } else if (config.services && typeof config.services === 'object') {
+            } else if (config.services && typeof config.services === 'object' && Object.keys(config.services).length > 0) {
               industryDisplay = Object.keys(config.services).join(', ');
-            } else {
-              industryDisplay = industryDisplay || '—';
             }
             
             const metaPhone = document.getElementById('metaPhone');
@@ -2659,10 +2659,11 @@
             const metaHours = document.getElementById('metaHours');
             const metaIndustry = document.getElementById('metaIndustry');
             
-            if (metaPhone) metaPhone.textContent = phone;
-            if (metaTimezone) metaTimezone.textContent = timezone;
-            if (metaHours) metaHours.textContent = businessHours;
-            if (metaIndustry) metaIndustry.textContent = industryDisplay;
+            // Only show what's configured, show "—" for missing
+            if (metaPhone) metaPhone.textContent = phone || '—';
+            if (metaTimezone) metaTimezone.textContent = timezone || '—';
+            if (metaHours) metaHours.textContent = businessHours || '—';
+            if (metaIndustry) metaIndustry.textContent = industryDisplay || '—';
 
             const banner = document.getElementById('demoBanner');
             if (banner) {
