@@ -2308,6 +2308,10 @@
                     const res = await fetch(`${BASE_URL}/api/demo-dashboard/${clientKey}`);
                     if (res.ok) {
                         const payload = await res.json();
+                        if (!payload || !payload.ok) {
+                            // Return empty structure if API returns error
+                            return null;
+                        }
                         if (payload.ok) {
                             lastDataUpdate = new Date();
                             return payload;
@@ -2632,21 +2636,32 @@
             if (currentClient !== DEMO_CLIENT_KEY) {
                 try {
                     const response = await fetch(`${BASE_URL}/api/integration-health/${currentClient}`);
-                    const payload = await response.json();
-                    if (payload?.ok && Array.isArray(payload.integrations)) {
-                        const twilio = payload.integrations.find(i => i.name === 'Twilio SMS');
-                        const calendar = payload.integrations.find(i => i.name === 'Google Calendar');
-                        
-                        document.getElementById('statusSMS').textContent = twilio?.status === 'active' ? '✓ Active' : '⚠ Not connected';
-                        document.getElementById('statusSMS').className = twilio?.status === 'active' ? 'metric-value success' : 'metric-value warning';
-                        
-                        document.getElementById('statusCalendar').textContent = calendar?.status === 'active' ? '✓ Connected' : '⚠ Not connected';
-                        document.getElementById('statusCalendar').className = calendar?.status === 'active' ? 'metric-value success' : 'metric-value warning';
+                    if (response.ok) {
+                        const payload = await response.json();
+                        if (payload?.ok && Array.isArray(payload.integrations)) {
+                            const twilio = payload.integrations.find(i => i.name === 'Twilio SMS');
+                            const calendar = payload.integrations.find(i => i.name === 'Google Calendar');
+                            
+                            if (document.getElementById('statusSMS')) {
+                                document.getElementById('statusSMS').textContent = twilio?.status === 'active' ? '✓ Active' : '⚠ Not connected';
+                                document.getElementById('statusSMS').className = twilio?.status === 'active' ? 'metric-value success' : 'metric-value warning';
+                            }
+                            
+                            if (document.getElementById('statusCalendar')) {
+                                document.getElementById('statusCalendar').textContent = calendar?.status === 'active' ? '✓ Connected' : '⚠ Not connected';
+                                document.getElementById('statusCalendar').className = calendar?.status === 'active' ? 'metric-value success' : 'metric-value warning';
+                            }
+                        }
                     }
                 } catch (error) {
                     console.warn('Failed to load integration status', error);
-                    document.getElementById('statusSMS').textContent = '⚠ Unknown';
-                    document.getElementById('statusCalendar').textContent = '⚠ Unknown';
+                    // Don't break dashboard - just show unknown status
+                    if (document.getElementById('statusSMS')) {
+                        document.getElementById('statusSMS').textContent = '⚠ Unknown';
+                    }
+                    if (document.getElementById('statusCalendar')) {
+                        document.getElementById('statusCalendar').textContent = '⚠ Unknown';
+                    }
                 }
             } else {
                 // Demo client - show active status
@@ -4008,12 +4023,29 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
             try {
                 const response = await fetch(`${BASE_URL}/api/integration-health/${clientKey}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
                 const payload = await response.json();
                 if (payload?.ok && Array.isArray(payload.integrations)) {
                     renderIntegrationStatus(payload.integrations);
+                } else {
+                    // Show empty state if no integrations returned
+                    renderIntegrationStatus([]);
                 }
             } catch (error) {
                 console.warn('Failed to load integration health', error);
+                // Show empty state on error - don't break dashboard
+                const container = document.getElementById('integration-health');
+                if (container) {
+                    container.innerHTML = `
+                        <div class="empty-state" style="padding: 20px;">
+                            <span class="empty-state-icon">⚠️</span>
+                            <div class="empty-state-title">Unable to load integrations</div>
+                            <div class="empty-state-message">Integration status unavailable. Dashboard will continue to work normally.</div>
+                        </div>
+                    `;
+                }
             }
         }
     </script>
