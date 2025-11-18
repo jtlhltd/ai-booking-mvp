@@ -8609,17 +8609,37 @@ async function getIntegrationStatuses(clientKey) {
   // Check Twilio connection for this specific client
   if (clientKey) {
     try {
-      const clientResult = await query(`
-        SELECT sms_json, vapi_json
-        FROM tenants
-        WHERE client_key = $1
-      `, [clientKey]);
-
-      const client = clientResult.rows?.[0];
-      const smsConfig = client?.sms_json || {};
-      const vapiConfig = client?.vapi_json || {};
+      // Try to get client config - handle both sms_json (new) and twilio_json (legacy) columns
+      let clientResult;
+      let smsConfig = {};
       
-      // Check if client has Twilio configured (either in sms_json or fallback to global)
+      try {
+        // First try with sms_json (new schema)
+        clientResult = await query(`
+          SELECT sms_json, vapi_json, twilio_json
+          FROM tenants
+          WHERE client_key = $1
+        `, [clientKey]);
+        
+        const client = clientResult.rows?.[0];
+        // Prefer sms_json, fallback to twilio_json for legacy support
+        smsConfig = client?.sms_json || client?.twilio_json || {};
+      } catch (columnError) {
+        // If sms_json doesn't exist, try with just twilio_json
+        if (columnError.message?.includes('sms_json')) {
+          clientResult = await query(`
+            SELECT twilio_json, vapi_json
+            FROM tenants
+            WHERE client_key = $1
+          `, [clientKey]);
+          const client = clientResult.rows?.[0];
+          smsConfig = client?.twilio_json || {};
+        } else {
+          throw columnError;
+        }
+      }
+      
+      // Check if client has Twilio configured (either in sms_json/twilio_json or fallback to global)
       const hasClientSmsConfig = !!(smsConfig.messagingServiceSid || smsConfig.fromNumber);
       const hasGlobalTwilio = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN);
       const isTwilioConfigured = hasClientSmsConfig || hasGlobalTwilio;
@@ -8667,8 +8687,14 @@ async function getIntegrationStatuses(clientKey) {
       console.error('[INTEGRATION HEALTH ERROR]', error);
       const twilioIntegration = integrations.find(i => i.name === 'Twilio SMS');
       if (twilioIntegration) {
-        twilioIntegration.status = 'warning';
-        twilioIntegration.detail = `Unable to check Twilio configuration: ${error.message}. Database connection may be unavailable.`;
+        // Provide more helpful error message based on error type
+        if (error.message?.includes('does not exist')) {
+          twilioIntegration.status = 'warning';
+          twilioIntegration.detail = 'Database schema needs update. The tenants table is missing SMS configuration columns. Contact support to update the database schema.';
+        } else {
+          twilioIntegration.status = 'warning';
+          twilioIntegration.detail = `Unable to check Twilio configuration: ${error.message}. Database connection may be unavailable.`;
+        }
       }
     }
   } else {
