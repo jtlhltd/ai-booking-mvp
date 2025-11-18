@@ -1911,22 +1911,22 @@
             
         <section class="status-bar" role="region" aria-label="Dashboard statistics">
             <div class="status-card" title="Total leads we're handling for you" role="article" aria-label="Leads we're managing">
-                <h4>Leads We're Managing</h4>
+                <h4 id="statusCardLeads">Leads We're Managing</h4>
                 <div class="status-value" id="statusTotalLeads" aria-live="polite">—</div>
                 <p class="status-hint" id="statusHintLeads">Loading...</p>
                 </div>
             <div class="status-card" title="Calls your concierge has made" role="article" aria-label="Calls we've made">
-                <h4>Calls We've Made</h4>
+                <h4 id="statusCardCalls">Calls We've Made</h4>
                 <div class="status-value" id="statusTotalCalls" aria-live="polite">—</div>
                 <p class="status-hint" id="statusHintCalls">Loading...</p>
             </div>
             <div class="status-card" title="Conversion rate from our follow-up" role="article" aria-label="Our conversion rate">
-                <h4>Our Conversion Rate</h4>
+                <h4 id="statusCardConversion">Our Conversion Rate</h4>
                 <div class="status-value" id="statusConversionRate" aria-live="polite">—</div>
                 <p class="status-hint" id="statusHintConversion">Loading...</p>
             </div>
             <div class="status-card" title="How fast we respond to your leads" role="article" aria-label="Our response time">
-                <h4>Our Response Time</h4>
+                <h4 id="statusCardResponse">Our Response Time</h4>
                 <div class="status-value" id="statusFirstResponse" aria-live="polite">—</div>
                 <p class="status-hint" id="statusHintResponse">Loading...</p>
             </div>
@@ -2150,6 +2150,9 @@
         const DEMO_CLIENT_KEY = 'demo_client';
         const BASE_URL = window.location.origin;
         const THEME_KEY = 'dashboard_theme';
+        
+        // Global client name for personalization
+        let clientBusinessName = 'Your Business';
         
         // XSS Protection: Escape HTML to prevent XSS attacks
         function escapeHtml(text) {
@@ -2728,7 +2731,7 @@
                     <div class="empty-state">
                         <span class="empty-state-icon">👥</span>
                         <div class="empty-state-title">No leads yet</div>
-                        <div class="empty-state-message">Leads we receive will appear here as we start following up.</div>
+                        <div class="empty-state-message">Leads ${clientBusinessName} receives will appear here as we start following up.</div>
                     </div>
                 `;
                 currentLeads = [];
@@ -2763,10 +2766,10 @@
                     <div class="empty-state">
                         <span class="empty-state-icon">📅</span>
                         <div class="empty-state-title">No upcoming appointments</div>
-                        <div class="empty-state-message">Appointments we book will appear here automatically.</div>
+                        <div class="empty-state-message">Appointments we book for ${clientBusinessName} will appear here automatically.</div>
                         <div class="empty-state-cta">
                             <button class="empty-state-btn" onclick="document.getElementById('leadImportButton')?.click()" aria-label="Upload leads to get started">
-                                📤 Send Us Leads to Book
+                                📤 Send ${clientBusinessName} Leads to Book
                             </button>
                     </div>
                     </div>
