@@ -2159,6 +2159,126 @@
             return div.innerHTML;
         }
         
+        // Industry-specific color schemes
+        function getIndustryColors(industry) {
+            const colors = {
+                dental: { primary: '#2e7d32', secondary: '#1b5e20', accent: '#4caf50' },
+                fitness: { primary: '#d32f2f', secondary: '#b71c1c', accent: '#f44336' },
+                beauty: { primary: '#c2185b', secondary: '#880e4f', accent: '#e91e63' },
+                legal: { primary: '#1565c0', secondary: '#0d47a1', accent: '#2196f3' },
+                medical: { primary: '#0277bd', secondary: '#01579b', accent: '#03a9f4' },
+                default: { primary: '#5c6ac4', secondary: '#3a4a9f', accent: '#10b981' }
+            };
+            return colors[industry?.toLowerCase()] || colors.default;
+        }
+        
+        // Industry-specific messaging
+        function getIndustryMessaging(industry, businessName, services) {
+            const industryLower = (industry || '').toLowerCase();
+            const serviceList = Array.isArray(services) ? services.join(', ') : (services || 'services');
+            
+            const messaging = {
+                dental: {
+                    tagline: `We're calling every lead you've already paid for and booking them into your calendar.`,
+                    description: `Your AI receptionist is following up on leads and booking appointments 24/7.`,
+                    workflow: [
+                        { icon: '📥', title: 'Import leads', desc: 'We pull directly from your CRM, forms, or spreadsheets.' },
+                        { icon: '🤖', title: 'AI speed-to-lead', desc: 'Calls go out within minutes to convert inquiries into appointments.' },
+                        { icon: '📅', title: 'Appointments land in calendar', desc: 'Confirmed bookings drop straight into your practice calendar.' },
+                        { icon: '📊', title: 'Daily digest', desc: 'Email summary with leads touched and appointments booked.' }
+                    ]
+                },
+                fitness: {
+                    tagline: `We're calling every lead you've already paid for and booking them into your calendar.`,
+                    description: `Your AI booking assistant is following up on leads and scheduling sessions 24/7.`,
+                    workflow: [
+                        { icon: '📥', title: 'Import leads', desc: 'We pull directly from your CRM, forms, or spreadsheets.' },
+                        { icon: '🤖', title: 'AI speed-to-lead', desc: 'Calls go out within minutes to convert inquiries into sessions.' },
+                        { icon: '📅', title: 'Sessions land in calendar', desc: 'Confirmed bookings drop straight into your training calendar.' },
+                        { icon: '📊', title: 'Daily digest', desc: 'Email summary with leads touched and sessions booked.' }
+                    ]
+                },
+                beauty: {
+                    tagline: `We're calling every lead you've already paid for and booking them into your calendar.`,
+                    description: `Your AI booking assistant is following up on leads and scheduling appointments 24/7.`,
+                    workflow: [
+                        { icon: '📥', title: 'Import leads', desc: 'We pull directly from your CRM, forms, or spreadsheets.' },
+                        { icon: '🤖', title: 'AI speed-to-lead', desc: 'Calls go out within minutes to convert inquiries into bookings.' },
+                        { icon: '📅', title: 'Appointments land in calendar', desc: 'Confirmed bookings drop straight into your salon calendar.' },
+                        { icon: '📊', title: 'Daily digest', desc: 'Email summary with leads touched and appointments booked.' }
+                    ]
+                },
+                legal: {
+                    tagline: `We're calling every lead you've already paid for and booking them into your calendar.`,
+                    description: `Your AI receptionist is following up on leads and scheduling consultations 24/7.`,
+                    workflow: [
+                        { icon: '📥', title: 'Import leads', desc: 'We pull directly from your CRM, forms, or spreadsheets.' },
+                        { icon: '🤖', title: 'AI speed-to-lead', desc: 'Calls go out within minutes to convert inquiries into consultations.' },
+                        { icon: '📅', title: 'Consultations land in calendar', desc: 'Confirmed bookings drop straight into your practice calendar.' },
+                        { icon: '📊', title: 'Daily digest', desc: 'Email summary with leads touched and consultations booked.' }
+                    ]
+                },
+                medical: {
+                    tagline: `We're calling every lead you've already paid for and booking them into your calendar.`,
+                    description: `Your AI receptionist is following up on leads and scheduling appointments 24/7.`,
+                    workflow: [
+                        { icon: '📥', title: 'Import leads', desc: 'We pull directly from your CRM, forms, or spreadsheets.' },
+                        { icon: '🤖', title: 'AI speed-to-lead', desc: 'Calls go out within minutes to convert inquiries into appointments.' },
+                        { icon: '📅', title: 'Appointments land in calendar', desc: 'Confirmed bookings drop straight into your practice calendar.' },
+                        { icon: '📊', title: 'Daily digest', desc: 'Email summary with leads touched and appointments booked.' }
+                    ]
+                }
+            };
+            
+            const match = messaging[industryLower] || messaging.dental;
+            return {
+                tagline: match.tagline.replace('[Business]', businessName || 'Your Business'),
+                description: match.description,
+                workflow: match.workflow
+            };
+        }
+        
+        // Apply client branding (colors, logo, fonts)
+        function applyClientBranding(config) {
+            const branding = config.whiteLabel?.branding || {};
+            const industry = config.industry || '';
+            const industryColors = getIndustryColors(industry);
+            
+            const primaryColor = branding.primaryColor || config.primaryColor || industryColors.primary;
+            const secondaryColor = branding.secondaryColor || config.secondaryColor || industryColors.secondary;
+            const accentColor = branding.accentColor || config.accentColor || industryColors.accent;
+            const fontFamily = branding.fontFamily || config.fontFamily || "'Inter', sans-serif";
+            
+            // Apply CSS variables dynamically
+            document.documentElement.style.setProperty('--primary', primaryColor);
+            document.documentElement.style.setProperty('--secondary', secondaryColor);
+            document.documentElement.style.setProperty('--success', accentColor);
+            document.documentElement.style.setProperty('--brand-font', fontFamily);
+            
+            // Apply custom logo (image or emoji)
+            const logoEl = document.getElementById('clientLogo');
+            if (logoEl) {
+                if (branding.logo) {
+                    if (branding.logo.startsWith('http') || branding.logo.startsWith('/')) {
+                        logoEl.innerHTML = `<img src="${escapeHtml(branding.logo)}" alt="${escapeHtml(config.displayName || 'Logo')}" style="width: 100%; height: 100%; object-fit: contain; border-radius: 12px;">`;
+                    } else {
+                        logoEl.textContent = branding.logo;
+                    }
+                } else {
+                    // Industry-specific default logos
+                    const industryLogos = {
+                        dental: '🦷',
+                        fitness: '💪',
+                        beauty: '💅',
+                        legal: '⚖️',
+                        medical: '🏥',
+                        default: '🏢'
+                    };
+                    logoEl.textContent = config.logo || industryLogos[industry?.toLowerCase()] || industryLogos.default;
+                }
+            }
+        }
+        
         const CLIENT_CONFIG = {
             demo_client: {
                 name: 'Demo Booking Partner',
@@ -2429,11 +2549,37 @@
         }
 
         function updateHeader(config) {
-            document.getElementById('clientLogo').textContent = config.logo || '🏢';
-            document.getElementById('clientName').textContent = config.name || config.displayName || config.display_name || 'Your Concierge Dashboard';
-            document.getElementById('clientDescription').textContent = config.description || '';
-            document.getElementById('clientTagline').textContent = config.tagline || '';
+            // Apply branding first (colors, logo)
+            applyClientBranding(config);
+            
+            // Get industry-specific messaging
+            const industry = config.industry || 'dental';
+            const businessName = config.name || config.displayName || config.display_name || 'Your Business';
+            const services = config.services || config.serviceMap || [];
+            const messaging = getIndustryMessaging(industry, businessName, services);
+            
+            // Update header content
+            document.getElementById('clientName').textContent = businessName;
+            document.getElementById('clientDescription').textContent = config.description || messaging.description;
+            document.getElementById('clientTagline').textContent = config.tagline || messaging.tagline;
             document.getElementById('clientStatus').textContent = config.status || 'Live';
+            
+            // Add industry-specific subtitle
+            const subtitleEl = document.getElementById('clientSubtitle');
+            if (subtitleEl && industry && industry !== 'demo') {
+                const industryNames = {
+                    dental: 'Dental Practice',
+                    fitness: 'Fitness & Training',
+                    beauty: 'Beauty Salon',
+                    legal: 'Legal Practice',
+                    medical: 'Medical Practice'
+                };
+                subtitleEl.textContent = industryNames[industry.toLowerCase()] || industry;
+                subtitleEl.style.display = 'block';
+            }
+            
+            // Store messaging for workflow rendering
+            config.customWorkflow = messaging.workflow;
             
             // Map client config fields to meta fields
             // Phone: from numbers_json or twilio_json
@@ -2789,12 +2935,17 @@
 
         function renderWorkflow(steps = []) {
             const container = document.getElementById('workflow');
+            if (!container) return;
+            if (!Array.isArray(steps) || steps.length === 0) {
+                container.innerHTML = '<li style="color: var(--muted);">Workflow information not available</li>';
+                return;
+            }
             container.innerHTML = steps.map(step => `
                 <li class="workflow-step">
-                    <div class="workflow-icon">${step.icon}</div>
+                    <div class="workflow-icon">${escapeHtml(step.icon || '📋')}</div>
                     <div>
-                        <strong>${step.title}</strong>
-                        <p style="color:#6f7390; margin-top:4px;">${step.desc}</p>
+                        <strong>${escapeHtml(step.title || 'Step')}</strong>
+                        <p style="color: var(--muted); margin-top:4px;">${escapeHtml(step.desc || step.description || '')}</p>
                     </div>
                 </li>
             `).join('');
