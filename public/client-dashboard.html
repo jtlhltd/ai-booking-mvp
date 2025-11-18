@@ -3960,6 +3960,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 setImportStatus('No valid rows found in CSV', 'error');
                 return;
             }
+            
+            // Ensure currentClient is set
+            if (!currentClient) {
+                currentClient = getClientFromURL();
+            }
+            
             if (currentClient === DEMO_CLIENT_KEY) {
                 const demoLeads = leads.map((lead, idx) => ({
                     id: Date.now() + idx,
@@ -3982,16 +3988,47 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 return;
             }
             try {
+                if (!currentClient || currentClient === DEMO_CLIENT_KEY) {
+                    throw new Error('Client key is required. Please access the dashboard with a valid client key in the URL (?client=your-client-key)');
+                }
+                
                 setImportStatus('Uploading leads...');
                 showToast('Uploading', 'Importing leads...', 'info');
+                
+                const requestBody = { 
+                    clientKey: currentClient, 
+                    leads: leads.map(lead => ({
+                        name: lead.name || '',
+                        phone: lead.phone || '',
+                        service: lead.service || 'Lead Follow-Up',
+                        source: lead.source || 'Import'
+                    })).filter(lead => lead.phone) // Only send leads with phone numbers
+                };
+                
+                if (!requestBody.leads || requestBody.leads.length === 0) {
+                    throw new Error('No valid leads found. Ensure your CSV has a "phone" column with phone numbers.');
+                }
+                
                 const response = await fetch(`${BASE_URL}/api/leads/import`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ clientKey: currentClient, leads })
+                    body: JSON.stringify(requestBody)
                 });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    let errorData;
+                    try {
+                        errorData = JSON.parse(errorText);
+                    } catch {
+                        throw new Error(`Import failed: ${response.status} ${response.statusText}`);
+                    }
+                    throw new Error(errorData.error || errorData.message || 'Import failed');
+                }
+                
                 const payload = await response.json();
-                if (!response.ok || !payload?.ok) {
-                    throw new Error(payload?.error || 'Import failed');
+                if (!payload?.ok) {
+                    throw new Error(payload.error || 'Import failed');
                 }
                 if (Array.isArray(payload.leads) && payload.leads.length) {
                     dashboardData.recentLeads = [...payload.leads, ...(dashboardData.recentLeads || [])].slice(0, 5);
