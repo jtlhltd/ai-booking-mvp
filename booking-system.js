@@ -38,13 +38,27 @@ class BookingSystem {
           }
           
           // Ensure the private key has proper formatting
-          if (!privateKey || !privateKey.includes('BEGIN PRIVATE KEY')) {
+          if (!privateKey) {
+            throw new Error('Private key is empty. Check GOOGLE_PRIVATE_KEY_B64 in your .env file.');
+          }
+          
+          // Check for BEGIN marker
+          if (!privateKey.includes('BEGIN')) {
             console.error('[BOOKING SYSTEM] Private key validation failed:');
-            console.error('  - Key exists:', !!privateKey);
-            console.error('  - Key length:', privateKey ? privateKey.length : 0);
-            console.error('  - Contains BEGIN:', privateKey ? privateKey.includes('BEGIN') : false);
-            console.error('  - First 100 chars:', privateKey ? privateKey.substring(0, 100) : 'N/A');
-            throw new Error('Invalid private key format - missing BEGIN PRIVATE KEY. Make sure GOOGLE_PRIVATE_KEY_B64 is correctly base64 encoded.');
+            console.error('  - Key length:', privateKey.length);
+            console.error('  - First 100 chars:', privateKey.substring(0, 100));
+            throw new Error('Invalid private key format - missing BEGIN marker. The base64 key appears to be corrupted.');
+          }
+          
+          // Check for PRIVATE KEY (not PVMVATE or other typos)
+          if (!privateKey.includes('PRIVATE KEY')) {
+            const beginLine = privateKey.split('\n')[0] || privateKey.substring(0, 50);
+            console.error('[BOOKING SYSTEM] Private key validation failed:');
+            console.error('  - Key length:', privateKey.length);
+            console.error('  - BEGIN line:', beginLine);
+            console.error('  - Expected: -----BEGIN PRIVATE KEY-----');
+            console.error('  - Found:', beginLine);
+            throw new Error(`Invalid private key format - the key header is incorrect. Expected "-----BEGIN PRIVATE KEY-----" but found "${beginLine}". The base64 key appears to be corrupted. Please regenerate it from Google Cloud Console.`);
           }
           
           console.log('[BOOKING SYSTEM] Private key format validated successfully');
