@@ -798,6 +798,7 @@ app.get('/api/admin/clients', async (req, res) => {
 
 app.get('/api/admin/calls', async (req, res) => {
   try {
+    const { getCallsByTenant } = await import('./db.js');
     const clients = await listFullClients();
     
     // Get real call data
