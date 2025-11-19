@@ -8589,7 +8589,7 @@ async function getIntegrationStatuses(clientKey) {
       
       try {
         clientResult = await query(`
-          SELECT vapi_json, sms_json, twilio_json
+          SELECT vapi_json, twilio_json
           FROM tenants
           WHERE client_key = $1
         `, [clientKey]);
@@ -8686,34 +8686,24 @@ async function getIntegrationStatuses(clientKey) {
   // Check Twilio connection for this specific client
   if (clientKey) {
     try {
-      // Try to get client config - handle both sms_json (new) and twilio_json (legacy) columns
+      // Get client config from twilio_json column
       let clientResult;
       let smsConfig = {};
       
       try {
-        // First try with sms_json (new schema)
+        // Query twilio_json (sms_json column doesn't exist in schema)
         clientResult = await query(`
-          SELECT sms_json, vapi_json, twilio_json
+          SELECT twilio_json, vapi_json
           FROM tenants
           WHERE client_key = $1
         `, [clientKey]);
         
         const client = clientResult.rows?.[0];
-        // Prefer sms_json, fallback to twilio_json for legacy support
-        smsConfig = client?.sms_json || client?.twilio_json || {};
-      } catch (columnError) {
-        // If sms_json doesn't exist, try with just twilio_json
-        if (columnError.message?.includes('sms_json')) {
-          clientResult = await query(`
-            SELECT twilio_json, vapi_json
-            FROM tenants
-            WHERE client_key = $1
-          `, [clientKey]);
-          const client = clientResult.rows?.[0];
-          smsConfig = client?.twilio_json || {};
-        } else {
-          throw columnError;
-        }
+        smsConfig = client?.twilio_json || {};
+      } catch (error) {
+        // If query fails, log and continue with empty config
+        console.error('[INTEGRATION HEALTH ERROR] Failed to query client config:', error.message);
+        smsConfig = {};
       }
       
       // Check if THIS CLIENT has Twilio configured (multi-tenant - no global fallback)
