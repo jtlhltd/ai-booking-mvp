@@ -13751,8 +13751,45 @@ app.post('/api/calendar/check-book', async (req, res) => {
       }
     }
     
-    const customerName = lead?.name || req.body?.customerName;
-    if (!customerName) return res.status(400).json({ error: 'Missing customer name' });
+    let customerName = lead?.name || req.body?.customerName;
+    
+    // If customer name is missing, try to get it from VAPI call data or use default
+    if (!customerName || customerName.trim() === '') {
+      if (callId && process.env.VAPI_PRIVATE_KEY) {
+        try {
+          console.log('[BOOKING] 🔍 No customer name in request, fetching from VAPI using callId:', callId);
+          const vapiResponse = await fetch(`https://api.vapi.ai/call/${callId}`, {
+            headers: {
+              'Authorization': `Bearer ${process.env.VAPI_PRIVATE_KEY}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (vapiResponse.ok) {
+            const callData = await vapiResponse.json();
+            console.log('[BOOKING] 📞 VAPI call data for customer name:', JSON.stringify(callData, null, 2));
+            
+            // Try to extract customer name from call data
+            if (callData?.customer?.name) {
+              customerName = callData.customer.name;
+              console.log('[BOOKING] ✅ Got customer name from VAPI call data:', customerName);
+            }
+          }
+        } catch (error) {
+          console.error('[BOOKING] ❌ Error fetching customer name from VAPI:', error.message);
+        }
+      }
+      
+      // If still no customer name, use "Jonah" for demo clients or return error
+      if (!customerName || customerName.trim() === '') {
+        if (isDemo) {
+          customerName = 'Jonah';
+          console.log('[BOOKING] 🎯 Using hardcoded customer name for demo:', customerName);
+        } else {
+          return res.status(400).json({ error: 'Missing customer name' });
+        }
+      }
+    }
     
     // Phone is required - if not provided, use demo fallback or return error
     if (!phone) {
