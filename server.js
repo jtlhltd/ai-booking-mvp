@@ -13756,35 +13756,8 @@ app.post('/api/calendar/check-book', async (req, res) => {
     
     // Phone is required - if not provided, use demo fallback or return error
     if (!phone) {
-      // Try to get phone from VAPI call data using call ID
-      if (finalCallId) {
-        try {
-          console.log('[BOOKING] 🔍 Fetching call data from VAPI API for callId:', finalCallId);
-          const vapiResponse = await fetch(`https://api.vapi.ai/call/${finalCallId}`, {
-            headers: {
-              'Authorization': `Bearer ${process.env.VAPI_PRIVATE_KEY}`,
-              'Content-Type': 'application/json'
-            }
-          });
-          
-          if (vapiResponse.ok) {
-            const callData = await vapiResponse.json();
-            console.log('[BOOKING] 📞 VAPI call data received:', JSON.stringify(callData, null, 2));
-            
-            if (callData?.customer?.number) {
-              phone = callData.customer.number;
-              console.log('[BOOKING] ✅ Got phone from VAPI call data:', phone);
-            }
-          } else {
-            console.warn('[BOOKING] ⚠️ VAPI API returned status:', vapiResponse.status);
-          }
-        } catch (error) {
-          console.error('[BOOKING] ❌ Error fetching call data from VAPI:', error.message);
-        }
-      }
-      
       // For demo clients, use a hardcoded phone number as fallback
-      if (!phone && isDemo) {
+      if (isDemo) {
         phone = '+447491683261'; // Your actual phone number
         console.log('[BOOKING] 🎯 Using hardcoded demo phone number:', phone);
       } else if (!phone) {
