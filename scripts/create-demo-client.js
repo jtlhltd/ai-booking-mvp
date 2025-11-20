@@ -864,7 +864,7 @@ Let's convert this lead! 🚀`;
       type: 'function',
       function: {
         name: 'calendar_checkAndBook',
-        description: 'Check calendar availability and book an appointment',
+        description: 'Check calendar availability and book an appointment. The phone number is automatically included from the call - DO NOT ask the customer for their phone number.',
         parameters: {
           type: 'object',
           properties: {
@@ -872,8 +872,7 @@ Let's convert this lead! 🚀`;
             time: { type: 'string', description: 'Time in HH:MM format (24-hour)' },
             durationMinutes: { type: 'number', description: 'Duration in minutes', default: 30 },
             service: { type: 'string', description: 'Service name' },
-            customerName: { type: 'string', description: 'Customer name' },
-            customerPhone: { type: 'string', description: 'Customer phone number (optional - will use the number being called if not provided)' }
+            customerName: { type: 'string', description: 'Customer name' }
           },
           required: ['date', 'time', 'customerName']
         }
