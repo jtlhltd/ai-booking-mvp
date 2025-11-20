@@ -13748,39 +13748,17 @@ app.post('/api/calendar/check-book', async (req, res) => {
       console.warn('[BOOKING] ⚠️ No callId found in request. Request body keys:', Object.keys(req.body || {}));
     }
     
-    // 5. Last resort: most recent active call (function calls happen during active calls)
-    // Try progressively longer time windows
+    // 5. SIMPLE: Get phone from the most recent call for this client
+    // VAPI is calling a number - that number should be in our calls table
     if (!phone) {
       try {
-        // First try last 2 minutes (very recent, likely the active call)
-        let recentCall = await query(
-          `SELECT lead_phone FROM calls WHERE client_key = $1 AND created_at >= NOW() - INTERVAL '2 minutes' ORDER BY created_at DESC LIMIT 1`,
+        const recentCall = await query(
+          `SELECT lead_phone FROM calls WHERE client_key = $1 ORDER BY created_at DESC LIMIT 1`,
           [client.clientKey]
         );
-        
         if (recentCall?.rows?.[0]?.lead_phone) {
           phone = recentCall.rows[0].lead_phone;
-          console.log('[BOOKING] ✅ Using phone from most recent active call (last 2 min):', phone);
-        } else {
-          // Try last 5 minutes
-          recentCall = await query(
-            `SELECT lead_phone FROM calls WHERE client_key = $1 AND created_at >= NOW() - INTERVAL '5 minutes' ORDER BY created_at DESC LIMIT 1`,
-            [client.clientKey]
-          );
-          if (recentCall?.rows?.[0]?.lead_phone) {
-            phone = recentCall.rows[0].lead_phone;
-            console.log('[BOOKING] ✅ Using phone from recent call (last 5 min):', phone);
-          } else {
-            // Try last 15 minutes (for slower connections or delayed function calls)
-            recentCall = await query(
-              `SELECT lead_phone FROM calls WHERE client_key = $1 AND created_at >= NOW() - INTERVAL '15 minutes' ORDER BY created_at DESC LIMIT 1`,
-              [client.clientKey]
-            );
-            if (recentCall?.rows?.[0]?.lead_phone) {
-              phone = recentCall.rows[0].lead_phone;
-              console.log('[BOOKING] ✅ Using phone from recent call (last 15 min):', phone);
-            }
-          }
+          console.log('[BOOKING] ✅ Using phone from most recent call:', phone);
         }
       } catch (err) {
         console.warn('[BOOKING] Could not look up phone from calls:', err.message);
