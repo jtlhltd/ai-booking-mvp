@@ -818,7 +818,11 @@ If "Not interested":
 
 **TOOLS AVAILABLE:**
 1. calendar_checkAndBook - Check availability and book appointments
+   - Use the phone number from the call (the number you're calling) - DO NOT ask for it
+   - Only need: date, time, customerName, service
+   - Phone number is automatically included from the call
 2. notify_send - Send SMS notifications
+   - Use the phone number from the call (the number you're calling) - DO NOT ask for it
 
 Let's convert this lead! 🚀`;
       
