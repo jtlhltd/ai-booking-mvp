@@ -869,9 +869,9 @@ Let's convert this lead! 🚀`;
             durationMinutes: { type: 'number', description: 'Duration in minutes', default: 30 },
             service: { type: 'string', description: 'Service name' },
             customerName: { type: 'string', description: 'Customer name' },
-            customerPhone: { type: 'string', description: 'Customer phone number' }
+            customerPhone: { type: 'string', description: 'Customer phone number (optional - will use the number being called if not provided)' }
           },
-          required: ['date', 'time', 'customerName', 'customerPhone']
+          required: ['date', 'time', 'customerName']
         }
       }
     },

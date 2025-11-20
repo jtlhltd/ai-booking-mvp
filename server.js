@@ -13605,10 +13605,51 @@ app.post('/api/calendar/check-book', async (req, res) => {
       ? req.body.durationMin
       : (svc?.durationMin || client?.bookingDefaultDurationMin || 30);
 
+    // Get phone from request body, metadata, or look up from call context
+    // VAPI tool calls should include phone, but if not, try to get it from the call being made
+    const bodyPhone = req.body?.lead?.phone || req.body?.customerPhone;
+    const metadataPhone = req.body?.metadata?.leadPhone || req.body?.metadata?.customerPhone;
+    const headerPhone = req.get('X-Customer-Phone') || req.get('X-Lead-Phone');
+    
+    // If phone not in body, try to get from call metadata or look up recent call
+    let phone = bodyPhone || metadataPhone || headerPhone;
+    
+    // If still no phone, try to get from the most recent call for this client
+    // (VAPI should include it, but this is a fallback)
+    if (!phone) {
+      try {
+        const recentCall = await query(
+          `SELECT lead_phone FROM calls WHERE client_key = $1 ORDER BY created_at DESC LIMIT 1`,
+          [client.clientKey]
+        );
+        if (recentCall?.rows?.[0]?.lead_phone) {
+          phone = recentCall.rows[0].lead_phone;
+          console.log('[BOOKING] Using phone from most recent call:', phone);
+        }
+      } catch (err) {
+        console.warn('[BOOKING] Could not look up phone from calls:', err.message);
+      }
+    }
+    
     const { lead } = req.body || {};
-    if (!lead?.name || !lead?.phone) return res.status(400).json({ error: 'Missing lead{name, phone}' });
-    lead.phone = normalizePhoneE164(lead.phone);
-    if (!lead.phone) return res.status(400).json({ error: 'lead.phone must be E.164' });
+    const customerName = lead?.name || req.body?.customerName;
+    if (!customerName) return res.status(400).json({ error: 'Missing customer name' });
+    
+    // Phone is required - if not provided, return helpful error
+    if (!phone) {
+      return res.status(400).json({ 
+        error: 'Phone number required. The phone number should be automatically included from the call. If calling the API directly, include it in lead.phone or customerPhone.' 
+      });
+    }
+    
+    // Normalize phone
+    const normalizedPhone = normalizePhoneE164(phone);
+    if (!normalizedPhone) return res.status(400).json({ error: 'Phone must be valid E.164 format' });
+    
+    // Ensure lead object has name and phone
+    if (!lead) req.body.lead = {};
+    lead.name = customerName;
+    lead.phone = normalizedPhone;
 
     const parseInTimezone = (value, timeZone) => {
       if (value == null) return null;
