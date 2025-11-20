@@ -3859,7 +3859,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             
             updateHeader(config, !!clientConfig);
             initThemeToggle();
-            initTestCallButton(currentClient, config);
+            // Init test call button - it will fetch config if needed
+            initTestCallButton(currentClient, config).catch(err => console.warn('Test call button init error:', err));
             initModalControls();
             initImporter();
             initAccessibility();
@@ -4209,18 +4210,59 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         document.addEventListener('DOMContentLoaded', initDashboard);
         window.addEventListener('beforeunload', stopLiveEvents);
 
-        function initTestCallButton(clientKey, config) {
+        async function initTestCallButton(clientKey, config) {
             const testCallBtn = document.getElementById('testCallBtn');
-            if (!testCallBtn) return;
+            if (!testCallBtn) {
+                console.warn('[TEST CALL] Button element not found');
+                return;
+            }
+
+            // Try to get full client config if not already loaded
+            let fullConfig = config;
+            if (clientKey && clientKey !== DEMO_CLIENT_KEY && (!config?.vapi?.assistantId && !config?.assistantId)) {
+                try {
+                    const response = await fetch(`${BASE_URL}/api/clients/${clientKey}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.ok && data.client) {
+                            fullConfig = data.client;
+                        }
+                    }
+                } catch (err) {
+                    console.warn('[TEST CALL] Could not fetch client config:', err);
+                }
+            }
 
             // Show button for demo clients or clients with isDemo flag
+            // Also check if client has a VAPI assistant ID (likely a demo)
+            const hasAssistantId = fullConfig?.vapi?.assistantId || fullConfig?.assistantId;
             const isDemo = clientKey === DEMO_CLIENT_KEY || 
+                         clientKey === 'demo_client' ||
+                         clientKey === 'demo-client' ||
                          clientKey?.includes('demo') || 
-                         config?.isDemo === true ||
+                         clientKey?.includes('booking') ||
+                         fullConfig?.isDemo === true ||
                          (typeof clientKey === 'string' && (clientKey.includes('demo') || clientKey.includes('booking')));
 
-            if (isDemo) {
+            console.log('[TEST CALL] Client check:', {
+                clientKey,
+                isDemo,
+                hasAssistantId,
+                configIsDemo: fullConfig?.isDemo,
+                vapiAssistantId: fullConfig?.vapi?.assistantId,
+                assistantId: fullConfig?.assistantId
+            });
+
+            // Show button if it's a demo client OR if it has an assistant ID (for testing)
+            // Also show if clientKey exists (not the default demo_client) - means it's a real demo client
+            const shouldShow = isDemo || hasAssistantId || (clientKey && clientKey !== DEMO_CLIENT_KEY);
+            
+            if (shouldShow) {
                 testCallBtn.style.display = 'block';
+                console.log('[TEST CALL] Button shown for client:', clientKey);
+                
+                // Store the final config for the click handler
+                const finalAssistantId = fullConfig?.vapi?.assistantId || fullConfig?.assistantId;
                 
                 testCallBtn.addEventListener('click', async () => {
                     if (testCallBtn.disabled) return;
@@ -4236,7 +4278,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             },
                             body: JSON.stringify({
                                 clientKey: clientKey,
-                                assistantId: config?.vapi?.assistantId || config?.assistantId
+                                assistantId: finalAssistantId
                             })
                         });
 
