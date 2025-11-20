@@ -1,9 +1,10 @@
 {
-  "total": 12,
-  "thisWeek": 12,
+  "total": 14,
+  "thisWeek": 14,
   "byIndustry": {
     "service businesses": 1,
-    "fitness": 11
+    "fitness": 11,
+    "health & fitness": 2
   },
-  "lastUpdated": "2025-11-20T12:25:59.849Z"
+  "lastUpdated": "2025-11-20T15:05:14.468Z"
 }
