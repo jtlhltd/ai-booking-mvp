@@ -13721,6 +13721,14 @@ app.post('/api/calendar/check-book', async (req, res) => {
       }
     }
     
+    // Normalize phone to E.164 format if we have one
+    if (phone && phone.trim() !== '') {
+      const { normalizePhone } = await import('./util/phone.js');
+      const normalizedPhone = normalizePhone(phone);
+      console.log('[BOOKING] 📞 Phone normalization:', phone, '->', normalizedPhone);
+      phone = normalizedPhone;
+    }
+    
     // Debug logging if still no phone - log FULL request details
     if (!phone) {
       console.error('[BOOKING] ❌ Could not find phone number after all attempts');
