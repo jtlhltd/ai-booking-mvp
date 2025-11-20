@@ -13748,22 +13748,8 @@ app.post('/api/calendar/check-book', async (req, res) => {
       console.warn('[BOOKING] ⚠️ No callId found in request. Request body keys:', Object.keys(req.body || {}));
     }
     
-    // 5. SIMPLE: Get phone from the most recent call for this client
-    // VAPI is calling a number - that number should be in our calls table
-    if (!phone) {
-      try {
-        const recentCall = await query(
-          `SELECT lead_phone FROM calls WHERE client_key = $1 ORDER BY created_at DESC LIMIT 1`,
-          [client.clientKey]
-        );
-        if (recentCall?.rows?.[0]?.lead_phone) {
-          phone = recentCall.rows[0].lead_phone;
-          console.log('[BOOKING] ✅ Using phone from most recent call:', phone);
-        }
-      } catch (err) {
-        console.warn('[BOOKING] Could not look up phone from calls:', err.message);
-      }
-    }
+    // 5. If still no phone and no callId, we can't proceed
+    // VAPI should include the phone or callId in the function call request
     
     // Debug logging if still no phone - log FULL request details
     if (!phone) {
