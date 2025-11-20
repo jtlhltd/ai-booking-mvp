@@ -8112,13 +8112,19 @@ app.post('/api/demo/test-call', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Client not found' });
     }
 
-    // Check if it's a demo client
-    const isDemo = client.isDemo === true || 
-                   clientKey.includes('demo') || 
-                   clientKey === 'demo_client' || 
-                   clientKey === 'demo-client';
+    // Check if it's a demo client using the same logic as booking simulation
+    // Also allow if client has a VAPI assistant ID (demo clients typically have these)
+    const isDemo = isDemoClient(client);
+    const hasAssistantId = client.vapi?.assistantId || client.assistantId;
 
-    if (!isDemo) {
+    if (!isDemo && !hasAssistantId) {
+      console.log('[DEMO TEST CALL] Client not detected as demo:', {
+        clientKey,
+        isDemo,
+        hasAssistantId,
+        clientIsDemo: client.isDemo,
+        clientDemo: client.demo
+      });
       return res.status(403).json({ success: false, error: 'Test calls only available for demo clients' });
     }
 
