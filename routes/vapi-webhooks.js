@@ -221,49 +221,6 @@ router.post('/webhooks/vapi', async (req, res) => {
             continue;
           }
           
-          // Handle calendar_checkAndBook - we have callId and leadPhone here!
-          if (functionName === 'calendar_checkAndBook') {
-            console.log('[VAPI WEBHOOK] Handling calendar_checkAndBook with callId:', callId, 'leadPhone:', leadPhone);
-            
-            // Forward to booking endpoint with callId and phone included
-            try {
-              const bookingResponse = await fetch(`${process.env.PUBLIC_BASE_URL || 'http://localhost:3000'}/api/calendar/check-book`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'X-Client-Key': tenantKey,
-                  'X-Call-Id': callId || '',
-                  'X-Customer-Phone': leadPhone || ''
-                },
-                body: JSON.stringify({
-                  ...functionArgs,
-                  callId: callId,
-                  metadata: {
-                    callId: callId,
-                    leadPhone: leadPhone,
-                    customerPhone: leadPhone,
-                    ...metadata
-                  },
-                  lead: {
-                    ...(functionArgs.lead || {}),
-                    phone: leadPhone || functionArgs.lead?.phone || '',
-                    name: functionArgs.lead?.name || functionArgs.customerName || ''
-                  },
-                  customerPhone: leadPhone || functionArgs.customerPhone || ''
-                })
-              });
-              
-              const bookingResult = await bookingResponse.json();
-              console.log('[VAPI WEBHOOK] Booking result:', bookingResult);
-              
-              // Return result to VAPI
-              return bookingResult;
-            } catch (error) {
-              console.error('[VAPI WEBHOOK] Error calling booking endpoint:', error);
-              return { error: error.message };
-            }
-          }
-          
           // Legacy functions (keep existing logic)
           if (toolCall.function.name === 'access_google_sheet') {
             const args = JSON.parse(toolCall.function.arguments);
