@@ -13643,8 +13643,8 @@ function isDemoClient(client) {
   if (clientKey.startsWith('demo-') || clientKey.includes('-demo')) return true;
   // Check if client has demo flag
   if (client.isDemo === true || client.demo === true) return true;
-  // Check if client key is in demo list
-  const demoKeys = ['demo-client', 'demo_client'];
+  // Check if client key is in demo list (including our specific demo clients)
+  const demoKeys = ['demo-client', 'demo_client', 'stay-focused-fitness-chris'];
   if (demoKeys.includes(clientKey.toLowerCase())) return true;
   return false;
 }
