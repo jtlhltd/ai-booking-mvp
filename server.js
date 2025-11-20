@@ -13717,7 +13717,6 @@ app.post('/api/calendar/check-book', async (req, res) => {
       console.error('[BOOKING] Client key:', client?.clientKey);
     }
     
-    const { lead } = req.body || {};
     const customerName = lead?.name || req.body?.customerName;
     if (!customerName) return res.status(400).json({ error: 'Missing customer name' });
     
