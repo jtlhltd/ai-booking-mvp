@@ -13769,15 +13769,64 @@ app.post('/api/calendar/check-book', async (req, res) => {
     let sms = null;
     
     if (isDemo) {
-      // Simulate Google Calendar booking
-      google = {
-        id: `demo_event_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        htmlLink: `https://calendar.google.com/calendar/event?eid=demo_${Date.now()}`,
-        status: 'confirmed',
-        demo: true
-      };
+      // For demo clients, use REAL bookings but with generic demo credentials
+      // This allows reuse across all demos while still showing real functionality
       
-      // Simulate SMS confirmation (don't actually send)
+      // Use demo calendar (from env or default to 'primary')
+      const demoCalendarId = process.env.DEMO_GOOGLE_CALENDAR_ID || GOOGLE_CALENDAR_ID || 'primary';
+      
+      // Use demo phone number for SMS (TEST_PHONE_NUMBER or lead's phone)
+      const demoSmsTo = process.env.DEMO_SMS_TO || process.env.TEST_PHONE_NUMBER || lead.phone;
+      
+      console.log('[DEMO BOOKING] Using real bookings with demo credentials:', {
+        clientKey: client?.clientKey,
+        calendarId: demoCalendarId,
+        smsTo: demoSmsTo,
+        leadName: lead.name,
+        service: requestedService
+      });
+      
+      // Real Google Calendar booking (using demo calendar)
+      try {
+        if (GOOGLE_CLIENT_EMAIL && (GOOGLE_PRIVATE_KEY || GOOGLE_PRIVATE_KEY_B64) && demoCalendarId) {
+          const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY, privateKeyB64: GOOGLE_PRIVATE_KEY_B64 });
+          await auth.authorize();
+          const summary = `[DEMO] ${requestedService || 'Appointment'} — ${lead.name || lead.phone}`;
+          const description = [
+            `Demo booking - Auto-booked by AI agent`,
+            `Client: ${client?.displayName || client?.clientKey || 'Demo Client'}`,
+            `Name: ${lead.name}`,
+            `Phone: ${lead.phone}`,
+            `Note: This is a demo booking`
+          ].join('\\n');
+
+          let event;
+          try {
+            event = await insertEvent({
+              auth, calendarId: demoCalendarId, summary, description,
+              startIso: startISO, endIso: endISO, timezone: tz
+            });
+          } catch (e) {
+            const code = e?.response?.status || 500;
+            const data = e?.response?.data || e?.message || String(e);
+            console.warn('[DEMO BOOKING] Google Calendar error:', data);
+            google = { skipped: true, error: String(data) };
+            event = null;
+          }
+
+          if (event) {
+            google = { id: event.id, htmlLink: event.htmlLink, status: event.status, demo: true };
+            console.log('[DEMO BOOKING] Real calendar event created:', event.id);
+          }
+        } else {
+          google = { skipped: true, reason: 'no_google_credentials' };
+        }
+      } catch (err) {
+        console.error('[DEMO BOOKING] Google Calendar error:', err);
+        google = { error: String(err) };
+      }
+
+      // Real SMS confirmation (using demo phone number)
       const startDt = DateTime.fromISO(startISO, { zone: tz });
       const when = startDt.isValid
         ? startDt.toFormat('ccc dd LLL yyyy • hh:mma')
@@ -13804,24 +13853,31 @@ app.post('/api/calendar/check-book', async (req, res) => {
         time: startDt.isValid ? startDt.toFormat('HH:mm') : null
       };
       const body = renderTemplate(template, templateVars);
+
+      // Use Twilio to send real SMS to demo number
+      try {
+        const twilioFromNumber = TWILIO_FROM_NUMBER || process.env.DEMO_SMS_FROM;
+        
+        if (defaultSmsClient && (TWILIO_MESSAGING_SERVICE_SID || twilioFromNumber)) {
+          const payload = { to: demoSmsTo, body: body };
+          if (TWILIO_MESSAGING_SERVICE_SID) {
+            payload.messagingServiceSid = TWILIO_MESSAGING_SERVICE_SID;
+          } else {
+            payload.from = twilioFromNumber;
+          }
+          const smsResponse = await defaultSmsClient.messages.create(payload);
+          sms = { id: smsResponse.sid, to: demoSmsTo, demo: true };
+          console.log('[DEMO BOOKING] Real SMS sent to demo number:', demoSmsTo);
+        } else {
+          sms = { skipped: true, reason: 'no_twilio_credentials' };
+          console.warn('[DEMO BOOKING] Twilio not configured, skipping SMS');
+        }
+      } catch (smsError) {
+        console.error('[DEMO BOOKING] SMS error:', smsError);
+        sms = { error: String(smsError) };
+      }
       
-      sms = {
-        id: `SM${Math.random().toString(36).substr(2, 32).toUpperCase()}`,
-        to: lead.phone,
-        demo: true,
-        simulatedMessage: body
-      };
-      
-      console.log('[DEMO BOOKING] Simulated booking for demo client:', {
-        clientKey: client?.clientKey,
-        leadName: lead.name,
-        leadPhone: lead.phone,
-        service: requestedService,
-        slot: { start: startISO, end: endISO }
-      });
-      
-      // For demos, save appointment to database so it shows up in dashboard
-      // (but still simulate Google Calendar and SMS)
+      // Save appointment to database so it shows up in dashboard
       try {
         // Get or create lead first
         let leadId = null;
@@ -13844,16 +13900,15 @@ app.post('/api/calendar/check-book', async (req, res) => {
         }
         
         // Save appointment to database
-        if (leadId) {
+        if (leadId && google?.id) {
           await query(
             'INSERT INTO appointments (client_key, lead_id, gcal_event_id, start_iso, end_iso, status) VALUES ($1, $2, $3, $4, $5, $6)',
             [client?.clientKey, leadId, google.id, startISO, endISO, 'booked']
           );
-          console.log('[DEMO BOOKING] Appointment saved to database for dashboard display');
+          console.log('[DEMO BOOKING] Appointment saved to database');
         }
       } catch (dbError) {
         console.warn('[DEMO BOOKING] Could not save appointment to database:', dbError.message);
-        // Continue anyway - simulation still works
       }
     } else {
       // Real booking flow for non-demo clients
