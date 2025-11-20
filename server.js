@@ -13751,7 +13751,7 @@ app.post('/api/calendar/check-book', async (req, res) => {
       }
     }
     
-    let customerName = lead?.name || req.body?.customerName;
+    let customerName = req.body?.customerName;
     
     // If customer name is missing, try to get it from VAPI call data or use default
     if (!customerName || customerName.trim() === '') {
