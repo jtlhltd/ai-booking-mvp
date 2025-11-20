@@ -2709,6 +2709,8 @@
               'dental': 'Dental Practice',
               'dentist': 'Dental Practice',
               'fitness': 'Fitness & Training',
+              'health & fitness': 'Health & Fitness',
+              'health and fitness': 'Health & Fitness',
               'beauty': 'Beauty Salon',
               'salon': 'Beauty Salon',
               'legal': 'Legal Practice',
@@ -2721,10 +2723,24 @@
               'restaurant': 'Restaurant'
             };
             
+            // Helper to capitalize words properly
+            function capitalizeIndustry(industry) {
+              if (!industry) return null;
+              // If it's already in the map, use that
+              const industryLower = industry.toLowerCase();
+              if (industryMap[industryLower]) {
+                return industryMap[industryLower];
+              }
+              // Otherwise capitalize each word
+              return industry.split(/[\s&]+/).map(word => 
+                word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+              ).join(' & ');
+            }
+            
             let industryDisplay = null;
             if (hasClientConfig && config.industry) {
               const industryLower = config.industry.toLowerCase();
-              industryDisplay = industryMap[industryLower] || config.industry;
+              industryDisplay = industryMap[industryLower] || capitalizeIndustry(config.industry);
             } else if (hasClientConfig && config.services && Array.isArray(config.services) && config.services.length > 0) {
               industryDisplay = config.services.join(', ');
             } else if (hasClientConfig && config.services && typeof config.services === 'object' && Object.keys(config.services).length > 0) {
@@ -3030,7 +3046,7 @@
             const statusPhoneEl = document.getElementById('statusPhone');
             const statusCoverageEl = document.getElementById('statusCoverage');
             if (statusPhoneEl) statusPhoneEl.textContent = config.phone || 'Not supplied';
-            if (statusCoverageEl) statusCoverageEl.textContent = config.businessHours || 'Not supplied';
+            if (statusCoverageEl) statusCoverageEl.textContent = '24/7'; // Service runs 24/7, not business hours
             
             // Update SMS/Calendar status from integration health
             if (currentClient !== DEMO_CLIENT_KEY) {

@@ -1370,6 +1370,9 @@ async function main() {
       services = args[2].split(',').map(s => s.trim()).filter(s => s);
       prospectName = args[3] || null; // Optional: prospect's name
       location = args[4] || null; // Optional: location
+      const phoneNumberArg = args[5] || null; // Optional: phone number
+      const businessHoursArg = args[6] || null; // Optional: business hours
+      const timezoneArg = args[7] || null; // Optional: timezone
       
       console.log('📝 Using command line arguments:\n');
       console.log(`Business name: ${businessName}`);
@@ -1377,9 +1380,12 @@ async function main() {
       console.log(`Services: ${services.join(', ')}`);
       if (prospectName) console.log(`Prospect name: ${prospectName}`);
       if (location) console.log(`Location: ${location}`);
+      if (phoneNumberArg) console.log(`Phone number: ${phoneNumberArg}`);
+      if (businessHoursArg) console.log(`Business hours: ${businessHoursArg}`);
+      if (timezoneArg) console.log(`Timezone: ${timezoneArg}`);
       console.log('');
       
-      // Non-interactive mode: use defaults
+      // Non-interactive mode: use provided values or defaults
       const industryDefaults = getIndustryDefaults(industry.trim(), location ? location.trim() : null);
       prospectData = {
         businessName: businessName.trim(),
@@ -1387,9 +1393,9 @@ async function main() {
         services,
         prospectName: prospectName ? prospectName.trim() : null,
         location: location ? location.trim() : null,
-        phoneNumber: process.env.VAPI_PHONE_NUMBER || process.env.TWILIO_PHONE_NUMBER || '+44 20 3880 1234',
-        businessHours: industryDefaults.businessHours,
-        timezone: industryDefaults.timezone,
+        phoneNumber: phoneNumberArg ? phoneNumberArg.trim() : (process.env.VAPI_PHONE_NUMBER || process.env.TWILIO_PHONE_NUMBER || '+44 20 3880 1234'),
+        businessHours: businessHoursArg ? businessHoursArg.trim() : industryDefaults.businessHours,
+        timezone: timezoneArg ? timezoneArg.trim() : industryDefaults.timezone,
         description: null, // Will be auto-generated
         tagline: null // Will be auto-generated
       };
