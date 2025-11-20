@@ -13754,11 +13754,17 @@ app.post('/api/calendar/check-book', async (req, res) => {
     const customerName = lead?.name || req.body?.customerName;
     if (!customerName) return res.status(400).json({ error: 'Missing customer name' });
     
-    // Phone is required - if not provided, return helpful error
+    // Phone is required - if not provided, use demo fallback or return error
     if (!phone) {
-      return res.status(400).json({ 
-        error: 'Phone number required. The phone number should be automatically included from the call. If calling the API directly, include it in lead.phone or customerPhone.' 
-      });
+      // For demo clients, use a hardcoded phone number as fallback
+      if (isDemo) {
+        phone = '+447491683261'; // Your actual phone number
+        console.log('[BOOKING] 🎯 Using hardcoded demo phone number:', phone);
+      } else {
+        return res.status(400).json({ 
+          error: 'Phone number required. The phone number should be automatically included from the call. If calling the API directly, include it in lead.phone or customerPhone.' 
+        });
+      }
     }
     
     // Normalize phone
