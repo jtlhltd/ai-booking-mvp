@@ -13707,29 +13707,23 @@ app.post('/api/calendar/check-book', async (req, res) => {
     
     // If still no phone, get it from the most recent call for this client
     // VAPI is calling a number - that number should be in our calls table
-    // Check last 30 minutes to catch active calls
+    // Check most recent call first (no time limit) - function calls happen during active calls
     if (!phone || phone.trim() === '') {
       try {
-        const recentCall = await query(
-          `SELECT lead_phone FROM calls WHERE client_key = $1 AND created_at >= NOW() - INTERVAL '30 minutes' ORDER BY created_at DESC LIMIT 1`,
+        console.log('[BOOKING] 🔍 Looking up phone from calls table for client:', client.clientKey);
+        const anyCall = await query(
+          `SELECT lead_phone, created_at FROM calls WHERE client_key = $1 AND lead_phone IS NOT NULL AND lead_phone != '' ORDER BY created_at DESC LIMIT 1`,
           [client.clientKey]
         );
-        if (recentCall?.rows?.[0]?.lead_phone) {
-          phone = recentCall.rows[0].lead_phone;
-          console.log('[BOOKING] ✅ Using phone from most recent call (last 30 min):', phone);
+        if (anyCall?.rows?.[0]?.lead_phone) {
+          phone = anyCall.rows[0].lead_phone;
+          const callAge = anyCall.rows[0].created_at;
+          console.log('[BOOKING] ✅ Using phone from most recent call:', phone, 'Call created at:', callAge);
         } else {
-          // Fallback: check all calls (in case webhook hasn't stored it yet)
-          const anyCall = await query(
-            `SELECT lead_phone FROM calls WHERE client_key = $1 ORDER BY created_at DESC LIMIT 1`,
-            [client.clientKey]
-          );
-          if (anyCall?.rows?.[0]?.lead_phone) {
-            phone = anyCall.rows[0].lead_phone;
-            console.log('[BOOKING] ✅ Using phone from most recent call (any time):', phone);
-          }
+          console.warn('[BOOKING] ⚠️ No calls found in database for client:', client.clientKey);
         }
       } catch (err) {
-        console.warn('[BOOKING] Could not look up phone from calls:', err.message);
+        console.error('[BOOKING] ❌ Error looking up phone from calls:', err.message);
       }
     }
     
