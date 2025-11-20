@@ -13819,6 +13819,42 @@ app.post('/api/calendar/check-book', async (req, res) => {
         service: requestedService,
         slot: { start: startISO, end: endISO }
       });
+      
+      // For demos, save appointment to database so it shows up in dashboard
+      // (but still simulate Google Calendar and SMS)
+      try {
+        // Get or create lead first
+        let leadId = null;
+        const existingLead = await query(
+          'SELECT id FROM leads WHERE client_key = $1 AND phone = $2 LIMIT 1',
+          [client?.clientKey, lead.phone]
+        );
+        
+        if (existingLead?.rows?.[0]?.id) {
+          leadId = existingLead.rows[0].id;
+        } else {
+          // Create lead if it doesn't exist
+          const newLead = await query(
+            'INSERT INTO leads (client_key, name, phone, service, status, source) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+            [client?.clientKey, lead.name, lead.phone, requestedService || 'appointment', 'booked', 'demo']
+          );
+          if (newLead?.rows?.[0]?.id) {
+            leadId = newLead.rows[0].id;
+          }
+        }
+        
+        // Save appointment to database
+        if (leadId) {
+          await query(
+            'INSERT INTO appointments (client_key, lead_id, gcal_event_id, start_iso, end_iso, status) VALUES ($1, $2, $3, $4, $5, $6)',
+            [client?.clientKey, leadId, google.id, startISO, endISO, 'booked']
+          );
+          console.log('[DEMO BOOKING] Appointment saved to database for dashboard display');
+        }
+      } catch (dbError) {
+        console.warn('[DEMO BOOKING] Could not save appointment to database:', dbError.message);
+        // Continue anyway - simulation still works
+      }
     } else {
       // Real booking flow for non-demo clients
       try {
