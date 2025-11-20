@@ -1922,7 +1922,7 @@
                     <div class="meta-value" id="metaTimezone">—</div>
                 </div>
                 <div class="meta-item">
-                    <div class="meta-label">Coverage</div>
+                    <div class="meta-label">Business Hours</div>
                     <div class="meta-value" id="metaHours">—</div>
                 </div>
                 <div class="meta-item">
@@ -2097,7 +2097,7 @@
                             <span class="metric-value" id="statusCalendar">—</span>
                         </div>
                         <div class="metric-row">
-                            <span class="metric-label">Coverage</span>
+                            <span class="metric-label">Business Hours</span>
                             <span class="metric-value" id="statusCoverage">—</span>
                         </div>
                     </div>
@@ -3046,7 +3046,7 @@
             const statusPhoneEl = document.getElementById('statusPhone');
             const statusCoverageEl = document.getElementById('statusCoverage');
             if (statusPhoneEl) statusPhoneEl.textContent = config.phone || 'Not supplied';
-            if (statusCoverageEl) statusCoverageEl.textContent = '24/7'; // Service runs 24/7, not business hours
+            if (statusCoverageEl) statusCoverageEl.textContent = config.businessHours || 'Not supplied';
             
             // Update SMS/Calendar status from integration health
             if (currentClient !== DEMO_CLIENT_KEY) {
