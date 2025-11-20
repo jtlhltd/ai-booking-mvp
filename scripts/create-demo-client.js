@@ -527,6 +527,7 @@ async function getOrCreateDemoClient() {
       timezone: 'Europe/London',
       locale: 'en-GB',
       isEnabled: true,
+      isDemo: true, // Mark as demo client for simulated bookings
       booking: {
         timezone: 'Europe/London',
         defaultDurationMin: 30,
@@ -743,11 +744,14 @@ async function updateAssistant(assistantId, prospectData, isInteractive = true) 
       
       // Get template
       const template = getTemplate(normalizedIndustry);
+      // For demos, hardcode leadName to "Jonah" (the person being called during demo)
+      // But keep prospectName as the actual prospect for use elsewhere
       const customized = customizeTemplate(normalizedIndustry, {
         businessName: prospectData.businessName,
         primaryService: prospectData.services[0] || 'consultation',
         serviceArea: 'your area',
-        voiceGender: template.voiceGender || 'female'
+        voiceGender: template.voiceGender || 'female',
+        leadName: 'Jonah' // Hardcoded for VAPI assistant calls - this is who gets called
       });
       
       systemPrompt = customized.systemPrompt;
@@ -822,6 +826,7 @@ Let's convert this lead! 🚀`;
     }
   } else {
     // Template has placeholders - replace them
+    // For demos, hardcode to use "Jonah" (the person doing the demo)
     systemPrompt = systemPrompt
       .replace(/\{businessName\}/g, prospectData.businessName)
       .replace(/\[Practice\]/g, prospectData.businessName)
@@ -829,12 +834,16 @@ Let's convert this lead! 🚀`;
       .replace(/\[Company\]/g, prospectData.businessName)
       .replace(/\[Restaurant\]/g, prospectData.businessName)
       .replace(/\{industry\}/g, prospectData.industry)
-      .replace(/\{services\}/g, prospectData.services.join(', '));
+      .replace(/\{services\}/g, prospectData.services.join(', '))
+      .replace(/\{leadName\}/g, 'Jonah')
+      .replace(/\[Name\]/g, 'Jonah');
     
     // Update first message if it exists
     if (firstMessage) {
       firstMessage = firstMessage
         .replace(/\{businessName\}/g, prospectData.businessName)
+        .replace(/\{leadName\}/g, 'Jonah')
+        .replace(/\[Name\]/g, 'Jonah')
         .replace(/\[.*?\]/g, prospectData.businessName);
     }
   }
@@ -927,7 +936,7 @@ Let's convert this lead! 🚀`;
       provider: assistant.model?.provider || 'openai',
       model: assistant.model?.model || 'gpt-3.5-turbo',
       temperature: 0.7, // Balanced creativity and consistency
-      maxTokens: 250, // Keep responses concise
+      maxTokens: 200, // Shorter responses for speed
       messages: [
         {
           role: 'system',
@@ -942,12 +951,12 @@ Let's convert this lead! 🚀`;
     updatePayload.serverUrl = serverUrl;
   }
   
-  // Optimize voice settings (only include allowed properties)
+  // Optimize voice settings for high conversion (Sarah - female voice)
   // Note: Some voice properties like 'stability' may not be allowed in PATCH
   updatePayload.voice = {
     provider: assistant.voice?.provider || '11labs',
-    voiceId: assistant.voice?.voiceId || 'pNInz6obpgDQGcFmaJgB', // Adam voice
-    speed: assistant.voice?.speed || 0.95 // Slightly slower for clarity
+    voiceId: '21m00Tcm4TlvDq8ikWAM', // Sarah - high conversion female voice
+    speed: 1.0 // Slightly faster for efficiency
     // Note: stability and similarityBoost may need to be set via Vapi dashboard
   };
   
@@ -1095,48 +1104,93 @@ function generateDemoScript(prospectData) {
   const prospectName = prospectData.prospectName || '[Prospect Name]';
   const location = prospectData.location || '[location]';
   
+  // Industry-specific pain points and metrics
+  const industryData = getIndustrySpecificData(industry);
+  
   return `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 DEMO SCRIPT FOR ${businessName.toUpperCase()}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[0:00-0:10] PERSONAL OPENING
-"Hi ${prospectName}, I saw ${businessName} is a ${industry} in ${location}. 
-I made a quick 2-minute demo showing exactly how we convert your leads 
-into appointments."
+[0:00-0:12] HOOK - GRAB ATTENTION
+"Hi ${prospectName}, quick question - how many leads did ${businessName} 
+get last week that you never followed up with? 
 
-[0:10-0:20] THE PROBLEM
-"Most ${industry} businesses lose 70% of their leads because they can't 
-follow up fast enough. Watch this..."
+[PAUSE - Let them think]
 
-[0:20-0:30] SHOW DASHBOARD
-[Screen share dashboard]
-"Here's your dashboard. When you upload leads, they appear here.
-Right now I've got 5 test leads."
+Because I just set up something for you that turns those missed leads into 
+booked appointments automatically. Want to see it?"
 
-[0:30-1:00] THE MAGIC - AI CALLING
-"Within 5 minutes, the AI calls them. Watch this..."
-[Make call to your number]
-[You answer as lead]
-[AI books appointment naturally]
-"See how natural that was? It just booked an appointment."
+[0:12-0:25] THE PAIN - MAKE IT REAL
+"Here's what I see with ${industry} businesses in ${location}: 
+${industryData.painPoint}
 
-[1:00-1:15] SHOW RESULT
-[Show calendar]
-"And it just appeared in your calendar. The lead got a confirmation text. 
-All automatic."
+${industryData.specificExample}
 
-[1:15-1:30] SHOW METRICS
-[Show dashboard metrics]
-"5 leads, 3 calls, 2 appointments booked. That's a 40% conversion rate. 
-Most businesses get 10-20%."
+That's why I built this - watch what happens when a lead comes in..."
 
-[1:30-2:00] CLOSE
-"I've already set this up for ${businessName}. Want to test it with 10 of 
-your actual leads this week? Takes 5 minutes to set up. Just reply if 
-interested."
+[0:25-0:40] SHOW DASHBOARD - BUILD ANTICIPATION
+[Screen share dashboard - zoom in on lead list]
+"See this? This is your dashboard. I've loaded 5 test leads here.
+${industryData.dashboardContext}
+
+Now watch what happens in the next 30 seconds..."
+
+[0:40-1:15] THE MAGIC - LIVE DEMO
+"Within 5 minutes of a lead coming in, our AI calls them. 
+[Click 'Make Call' or show call in progress]
+
+[When call connects - answer as the lead]
+[AI books appointment naturally - let it flow]
+
+[After call ends]
+"Did you hear that? It sounded completely natural. It handled the 
+conversation, answered questions, and booked an appointment - all 
+without you lifting a finger."
+
+[1:15-1:30] SHOW THE RESULT - PROVE IT WORKS
+[Switch to calendar view]
+"Look - it's already in your calendar. ${industryData.calendarContext}
+
+[Switch to SMS view if available]
+"And the lead just got this confirmation text. They know exactly when 
+to show up. Zero work for you."
+
+[1:30-1:45] THE NUMBERS - BUILD URGENCY
+[Show dashboard metrics - highlight conversion rate]
+"Here's what this means: ${industryData.metrics}
+
+Most ${industry} businesses get ${industryData.industryAverage}% conversion. 
+You're seeing ${industryData.demoConversion}% here. That's ${industryData.improvement} 
+more appointments from the same leads."
+
+[1:45-2:00] STRONG CLOSE - CLEAR NEXT STEP
+"I've already set this up for ${businessName} - your assistant is ready, 
+your calendar is connected, everything's done.
+
+Here's what I'm proposing: Let's test this with 10 of your actual leads 
+this week. If it works, great. If not, no charge. Takes 5 minutes to 
+upload the leads.
+
+Sound good? Just reply 'yes' and I'll send you the link to upload them."
 
 [2:00] END
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+KEY TALKING POINTS:
+✓ ${industryData.keyBenefit1}
+✓ ${industryData.keyBenefit2}
+✓ ${industryData.keyBenefit3}
+
+OBJECTION HANDLERS:
+- "How much does it cost?" → "Let's see if it works first. If you book 
+  more appointments, we'll talk pricing. Fair?"
+- "Is this really AI?" → "Yes, but listen to that call - could you tell? 
+  That's the point. It works 24/7, never gets tired, and converts better 
+  than most humans."
+- "I need to think about it" → "Totally understand. That's why I'm offering 
+  a free test with 10 leads. No commitment, just see if it works. Takes 5 
+  minutes. Why not?"
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 NOTES:
@@ -1145,8 +1199,107 @@ NOTES:
 - Services: ${services}
 ${prospectData.prospectName ? `- Prospect: ${prospectData.prospectName}` : '- Prospect: [Replace in script]'}
 ${prospectData.location ? `- Location: ${prospectData.location}` : '- Location: [Replace in script]'}
+- Dashboard URL: [Add your dashboard URL]
+- Assistant ID: [Add Vapi assistant ID]
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `;
+}
+
+/**
+ * Get industry-specific data for demo script personalization
+ */
+function getIndustrySpecificData(industry) {
+  const normalized = (industry || '').toLowerCase();
+  
+  // Fitness & Wellness
+  if (normalized.includes('fitness') || normalized.includes('gym') || 
+      normalized.includes('personal training') || normalized.includes('wellness')) {
+    return {
+      painPoint: 'Most fitness businesses lose 60-70% of leads because people call after hours or during classes when you can\'t answer.',
+      specificExample: 'Someone sees your Instagram at 9pm, calls, gets voicemail, and moves on. That lead is gone forever.',
+      dashboardContext: 'These are real leads - people who filled out your form or called but you couldn\'t reach.',
+      calendarContext: 'The appointment is locked in. Your client knows exactly when to show up.',
+      metrics: '5 leads, 3 calls made, 2 appointments booked. That\'s a 40% conversion rate.',
+      industryAverage: '10-15',
+      demoConversion: '40',
+      improvement: '2-3x',
+      keyBenefit1: 'Works 24/7 - captures leads even at 2am',
+      keyBenefit2: 'Handles class bookings, personal training, consultations',
+      keyBenefit3: 'Sends automatic reminders - cuts no-shows by 50%'
+    };
+  }
+  
+  // Beauty & Aesthetics
+  if (normalized.includes('beauty') || normalized.includes('aesthetic') || 
+      normalized.includes('spa') || normalized.includes('salon') || 
+      normalized.includes('nail') || normalized.includes('hair')) {
+    return {
+      painPoint: 'Beauty businesses lose 65% of leads because clients want to book NOW, not wait for you to call back tomorrow.',
+      specificExample: 'Someone wants a Botox appointment. They call at lunch, you\'re with a client, they hang up and book with your competitor.',
+      dashboardContext: 'These are people who tried to book - website inquiries, phone calls, social media DMs.',
+      calendarContext: 'The booking is confirmed. Your client got a text with all the details.',
+      metrics: '5 leads, 4 calls made, 3 appointments booked. That\'s a 60% conversion rate.',
+      industryAverage: '15-20',
+      demoConversion: '60',
+      improvement: '3x',
+      keyBenefit1: 'Instant response - books appointments in under 2 minutes',
+      keyBenefit2: 'Handles consultations, treatments, follow-ups',
+      keyBenefit3: 'Sends pre-appointment reminders - reduces no-shows'
+    };
+  }
+  
+  // Healthcare & Medical
+  if (normalized.includes('medical') || normalized.includes('health') || 
+      normalized.includes('dental') || normalized.includes('doctor') || 
+      normalized.includes('clinic') || normalized.includes('gp')) {
+    return {
+      painPoint: 'Medical practices lose 50% of new patient inquiries because reception can\'t answer every call, especially during busy periods.',
+      specificExample: 'A new patient calls during your busiest hour. Reception is swamped. They leave a message, you call back tomorrow, but they\'ve already booked elsewhere.',
+      dashboardContext: 'These are new patient inquiries - people looking for appointments.',
+      calendarContext: 'The appointment is scheduled. The patient received confirmation with all details.',
+      metrics: '5 leads, 4 calls made, 2 appointments booked. That\'s a 40% conversion rate.',
+      industryAverage: '12-18',
+      demoConversion: '40',
+      improvement: '2-2.5x',
+      keyBenefit1: 'Never misses a call - handles overflow when reception is busy',
+      keyBenefit2: 'Qualifies patients, books consultations, sends reminders',
+      keyBenefit3: 'HIPAA-compliant handling of patient information'
+    };
+  }
+  
+  // Professional Services
+  if (normalized.includes('legal') || normalized.includes('lawyer') || 
+      normalized.includes('accountant') || normalized.includes('consultant') || 
+      normalized.includes('coach') || normalized.includes('advisor')) {
+    return {
+      painPoint: 'Professional services lose 40% of leads because prospects want to speak to someone immediately, not wait for a callback.',
+      specificExample: 'A potential client calls about urgent advice. You\'re in a meeting. They leave a message, but by the time you call back, they\'ve found someone else.',
+      dashboardContext: 'These are qualified leads - people who need your services.',
+      calendarContext: 'The consultation is booked. Your prospect has all the details.',
+      metrics: '5 leads, 3 calls made, 2 consultations booked. That\'s a 40% conversion rate.',
+      industryAverage: '15-25',
+      demoConversion: '40',
+      improvement: '1.5-2x',
+      keyBenefit1: 'Captures leads instantly - never miss an opportunity',
+      keyBenefit2: 'Qualifies prospects, books consultations, sends prep materials',
+      keyBenefit3: 'Professional tone that matches your brand'
+    };
+  }
+  
+  // Default / Generic
+  return {
+    painPoint: 'Most businesses lose 60-70% of leads because they can\'t follow up fast enough or when leads are ready to book.',
+    specificExample: 'A lead calls when you\'re busy, gets voicemail, and moves on to a competitor who answers.',
+    dashboardContext: 'These are real leads - people who showed interest but you couldn\'t reach.',
+    calendarContext: 'The appointment is confirmed. Your client has all the details.',
+    metrics: '5 leads, 3 calls made, 2 appointments booked. That\'s a 40% conversion rate.',
+    industryAverage: '10-20',
+    demoConversion: '40',
+    improvement: '2-3x',
+    keyBenefit1: 'Works 24/7 - never misses a lead',
+    keyBenefit2: 'Natural conversations that convert better',
+    keyBenefit3: 'Automatic confirmations and reminders'
+  };
 }
 
 /**
@@ -1475,6 +1628,7 @@ async function main() {
       timezone: timezone,
       locale: 'en-GB',
       isEnabled: true,
+      isDemo: true, // Mark as demo client for simulated bookings
       // Header fields
       description: description,
       tagline: tagline,

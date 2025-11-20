@@ -129,3 +129,7 @@ COMMENT ON TABLE business_faqs IS 'Frequently asked questions for AI assistant';
 
 
 
+
+
+
+

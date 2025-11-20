@@ -13446,6 +13446,20 @@ app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
 });
 
 // Booking (auto-book + branded SMS)
+// Helper to check if a client is a demo client
+function isDemoClient(client) {
+  if (!client) return false;
+  const clientKey = client.clientKey || '';
+  // Check if client key starts with "demo-" or matches demo patterns
+  if (clientKey.startsWith('demo-') || clientKey.includes('-demo')) return true;
+  // Check if client has demo flag
+  if (client.isDemo === true || client.demo === true) return true;
+  // Check if client key is in demo list
+  const demoKeys = ['demo-client', 'demo_client'];
+  if (demoKeys.includes(clientKey.toLowerCase())) return true;
+  return false;
+}
+
 app.post('/api/calendar/check-book', async (req, res) => {
   const headerIdemKey = req.get('Idempotency-Key');
   const idemKey = headerIdemKey || null;
@@ -13458,6 +13472,9 @@ app.post('/api/calendar/check-book', async (req, res) => {
     const tz = pickTimezone(client);
     const calendarId = pickCalendarId(client);
     const requestStartedAt = Date.now();
+    
+    // Check if this is a demo client - if so, simulate booking
+    const isDemo = isDemoClient(client);
 
     let services = client?.services ?? client?.servicesJson ?? [];
     if (!Array.isArray(services)) {
@@ -13638,57 +13655,20 @@ app.post('/api/calendar/check-book', async (req, res) => {
     const startISO = new Date(startDate).toISOString();
     const endISO = new Date(startDate.getTime() + dur * 60 * 1000).toISOString();
 
+    // For demo clients, simulate booking without real integrations
     let google = { skipped: true };
-    try {
-      if (GOOGLE_CLIENT_EMAIL && (GOOGLE_PRIVATE_KEY || GOOGLE_PRIVATE_KEY_B64) && calendarId) {
-        const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY, privateKeyB64: GOOGLE_PRIVATE_KEY_B64 });
-        await auth.authorize();
-        const summary = `${requestedService || 'Appointment'} — ${lead.name || lead.phone}`;
-        const description = [
-          `Auto-booked by AI agent`,
-          `Tenant: ${client?.clientKey || 'default'}`,
-          `Name: ${lead.name}`,
-          `Phone: ${lead.phone}`
-        ].join('\\n');
-
-        const attendees = []; // removed invites
-
-        let event;
-        try {
-          const maybeRetry =
-            typeof withRetry === 'function'
-              ? withRetry
-              : async (fn) => fn();
-          event = await maybeRetry(() => insertEvent({
-            auth, calendarId, summary, description,
-            startIso: startISO, endIso: endISO, timezone: tz
-          }), { retries: 2, delayMs: 300 });
-        } catch (e) {
-          const code = e?.response?.status || 500;
-          const data = e?.response?.data || e?.message || String(e);
-          // If Google credentials are missing/invalid, skip calendar insert but continue
-          const grantError = typeof data === 'string' && data.includes('invalid_grant');
-          if (!grantError) {
-            return res.status(code).json({ ok:false, error:'gcal_insert_failed', details: data });
-          }
-          console.warn('[GCAL] Skipping insert due to invalid credentials', data);
-          google = { skipped: true, error: 'invalid_grant' };
-          event = null;
-        }
-
-        if (event) {
-          google = { id: event.id, htmlLink: event.htmlLink, status: event.status };
-        }
-      }
-    } catch (err) {
-      console.error(JSON.stringify({ evt: 'gcal.error', rid: req.id, error: String(err) }));
-      google = { error: String(err) };
-    }
-
     let sms = null;
-    const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
-    const smsOverrides = demoOverrides?.sms;
-    if (configured && !(smsOverrides?.skip === true)) {
+    
+    if (isDemo) {
+      // Simulate Google Calendar booking
+      google = {
+        id: `demo_event_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        htmlLink: `https://calendar.google.com/calendar/event?eid=demo_${Date.now()}`,
+        status: 'confirmed',
+        demo: true
+      };
+      
+      // Simulate SMS confirmation (don't actually send)
       const startDt = DateTime.fromISO(startISO, { zone: tz });
       const when = startDt.isValid
         ? startDt.toFormat('ccc dd LLL yyyy • hh:mma')
@@ -13700,7 +13680,7 @@ app.post('/api/calendar/check-book', async (req, res) => {
       const brand = client?.displayName || client?.clientKey || 'Our Clinic';
       const sig = client?.brandSignature ? ` ${client.brandSignature}` : '';
       const defaultBody = `Hi {{name}}, your {{service}} is booked with {{brand}} for {{when}} {{tz}}.{{link}}{{sig}} Reply STOP to opt out.`;
-      const template = smsOverrides?.message || client?.smsTemplates?.confirm || defaultBody;
+      const template = client?.smsTemplates?.confirm || defaultBody;
       const templateVars = {
         name: lead.name,
         service: requestedService || 'appointment',
@@ -13715,19 +13695,113 @@ app.post('/api/calendar/check-book', async (req, res) => {
         time: startDt.isValid ? startDt.toFormat('HH:mm') : null
       };
       const body = renderTemplate(template, templateVars);
-
+      
+      sms = {
+        id: `SM${Math.random().toString(36).substr(2, 32).toUpperCase()}`,
+        to: lead.phone,
+        demo: true,
+        simulatedMessage: body
+      };
+      
+      console.log('[DEMO BOOKING] Simulated booking for demo client:', {
+        clientKey: client?.clientKey,
+        leadName: lead.name,
+        leadPhone: lead.phone,
+        service: requestedService,
+        slot: { start: startISO, end: endISO }
+      });
+    } else {
+      // Real booking flow for non-demo clients
       try {
-        const payload = { to: lead.phone, body };
-        if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid;
-        else payload.from = fromNumber;
-        const resp = await smsClient.messages.create(payload);
-        sms = { id: resp.sid, to: lead.phone, override: Boolean(smsOverrides) };
+        if (GOOGLE_CLIENT_EMAIL && (GOOGLE_PRIVATE_KEY || GOOGLE_PRIVATE_KEY_B64) && calendarId) {
+          const auth = makeJwtAuth({ clientEmail: GOOGLE_CLIENT_EMAIL, privateKey: GOOGLE_PRIVATE_KEY, privateKeyB64: GOOGLE_PRIVATE_KEY_B64 });
+          await auth.authorize();
+          const summary = `${requestedService || 'Appointment'} — ${lead.name || lead.phone}`;
+          const description = [
+            `Auto-booked by AI agent`,
+            `Tenant: ${client?.clientKey || 'default'}`,
+            `Name: ${lead.name}`,
+            `Phone: ${lead.phone}`
+          ].join('\\n');
+
+          const attendees = []; // removed invites
+
+          let event;
+          try {
+            const maybeRetry =
+              typeof withRetry === 'function'
+                ? withRetry
+                : async (fn) => fn();
+            event = await maybeRetry(() => insertEvent({
+              auth, calendarId, summary, description,
+              startIso: startISO, endIso: endISO, timezone: tz
+            }), { retries: 2, delayMs: 300 });
+          } catch (e) {
+            const code = e?.response?.status || 500;
+            const data = e?.response?.data || e?.message || String(e);
+            // If Google credentials are missing/invalid, skip calendar insert but continue
+            const grantError = typeof data === 'string' && data.includes('invalid_grant');
+            if (!grantError) {
+              return res.status(code).json({ ok:false, error:'gcal_insert_failed', details: data });
+            }
+            console.warn('[GCAL] Skipping insert due to invalid credentials', data);
+            google = { skipped: true, error: 'invalid_grant' };
+            event = null;
+          }
+
+          if (event) {
+            google = { id: event.id, htmlLink: event.htmlLink, status: event.status };
+          }
+        }
       } catch (err) {
-        console.error(JSON.stringify({ evt: 'sms.error', rid: req.id, error: String(err) }));
-        sms = { error: String(err) };
+        console.error(JSON.stringify({ evt: 'gcal.error', rid: req.id, error: String(err) }));
+        google = { error: String(err) };
       }
-    } else if (configured && smsOverrides?.skip === true) {
-      sms = { skipped: true, reason: 'demo_skip' };
+
+      // Real SMS flow for non-demo clients
+      const { messagingServiceSid, fromNumber, smsClient, configured } = smsConfig(client);
+      const smsOverrides = demoOverrides?.sms;
+      if (configured && !(smsOverrides?.skip === true)) {
+        const startDt = DateTime.fromISO(startISO, { zone: tz });
+        const when = startDt.isValid
+          ? startDt.toFormat('ccc dd LLL yyyy • hh:mma')
+          : new Date(startISO).toLocaleString(client?.locale || 'en-GB', {
+              timeZone: tz, weekday: 'short', day: 'numeric', month: 'short',
+              hour: 'numeric', minute: '2-digit', hour12: true
+            });
+        const link = google?.htmlLink ? ` Calendar: ${google.htmlLink}` : '';
+        const brand = client?.displayName || client?.clientKey || 'Our Clinic';
+        const sig = client?.brandSignature ? ` ${client.brandSignature}` : '';
+        const defaultBody = `Hi {{name}}, your {{service}} is booked with {{brand}} for {{when}} {{tz}}.{{link}}{{sig}} Reply STOP to opt out.`;
+        const template = smsOverrides?.message || client?.smsTemplates?.confirm || defaultBody;
+        const templateVars = {
+          name: lead.name,
+          service: requestedService || 'appointment',
+          brand,
+          when,
+          tz,
+          link,
+          sig,
+          duration: dur,
+          day: startDt.isValid ? startDt.toFormat('cccc') : null,
+          date: startDt.isValid ? startDt.toFormat('dd LLL yyyy') : null,
+          time: startDt.isValid ? startDt.toFormat('HH:mm') : null
+        };
+        const body = renderTemplate(template, templateVars);
+
+        try {
+          const payload = { to: lead.phone, body };
+          if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid;
+          else payload.from = fromNumber;
+          const resp = await smsClient.messages.create(payload);
+          sms = { id: resp.sid, to: lead.phone, override: Boolean(smsOverrides) };
+        } catch (err) {
+          console.error(JSON.stringify({ evt: 'sms.error', rid: req.id, error: String(err) }));
+          sms = { error: String(err) };
+        }
+      } else if (configured && smsOverrides?.skip === true) {
+        sms = { skipped: true, reason: 'demo_skip' };
+      }
     }
 
     const calls = await readJson(CALLS_PATH, []);
