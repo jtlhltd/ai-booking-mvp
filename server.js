@@ -13749,26 +13749,61 @@ app.post('/api/calendar/check-book', async (req, res) => {
     }
     
     // 5. Last resort: most recent active call (function calls happen during active calls)
+    // Try progressively longer time windows
     if (!phone) {
       try {
-        const recentCall = await query(
+        // First try last 2 minutes (very recent, likely the active call)
+        let recentCall = await query(
           `SELECT lead_phone FROM calls WHERE client_key = $1 AND created_at >= NOW() - INTERVAL '2 minutes' ORDER BY created_at DESC LIMIT 1`,
           [client.clientKey]
         );
+        
         if (recentCall?.rows?.[0]?.lead_phone) {
           phone = recentCall.rows[0].lead_phone;
-          console.log('[BOOKING] Using phone from most recent active call:', phone);
+          console.log('[BOOKING] ✅ Using phone from most recent active call (last 2 min):', phone);
+        } else {
+          // Try last 5 minutes
+          recentCall = await query(
+            `SELECT lead_phone FROM calls WHERE client_key = $1 AND created_at >= NOW() - INTERVAL '5 minutes' ORDER BY created_at DESC LIMIT 1`,
+            [client.clientKey]
+          );
+          if (recentCall?.rows?.[0]?.lead_phone) {
+            phone = recentCall.rows[0].lead_phone;
+            console.log('[BOOKING] ✅ Using phone from recent call (last 5 min):', phone);
+          } else {
+            // Try last 15 minutes (for slower connections or delayed function calls)
+            recentCall = await query(
+              `SELECT lead_phone FROM calls WHERE client_key = $1 AND created_at >= NOW() - INTERVAL '15 minutes' ORDER BY created_at DESC LIMIT 1`,
+              [client.clientKey]
+            );
+            if (recentCall?.rows?.[0]?.lead_phone) {
+              phone = recentCall.rows[0].lead_phone;
+              console.log('[BOOKING] ✅ Using phone from recent call (last 15 min):', phone);
+            }
+          }
         }
       } catch (err) {
         console.warn('[BOOKING] Could not look up phone from calls:', err.message);
       }
     }
     
-    // Debug logging if still no phone
+    // Debug logging if still no phone - log FULL request details
     if (!phone) {
-      console.error('[BOOKING] ❌ Could not find phone number. Request body keys:', Object.keys(req.body || {}));
-      console.error('[BOOKING] Request body:', JSON.stringify(req.body, null, 2));
-      console.error('[BOOKING] Request headers:', JSON.stringify(req.headers, null, 2));
+      console.error('[BOOKING] ❌ Could not find phone number after all attempts');
+      console.error('[BOOKING] Request method:', req.method);
+      console.error('[BOOKING] Request URL:', req.url);
+      console.error('[BOOKING] Request body keys:', Object.keys(req.body || {}));
+      console.error('[BOOKING] Full request body:', JSON.stringify(req.body, null, 2));
+      console.error('[BOOKING] Request headers (relevant):', {
+        'X-Call-Id': req.get('X-Call-Id'),
+        'X-Vapi-Call-Id': req.get('X-Vapi-Call-Id'),
+        'X-Customer-Phone': req.get('X-Customer-Phone'),
+        'X-Customer-Number': req.get('X-Customer-Number'),
+        'X-Lead-Phone': req.get('X-Lead-Phone'),
+        'Content-Type': req.get('Content-Type'),
+        'User-Agent': req.get('User-Agent')
+      });
+      console.error('[BOOKING] Client key:', client?.clientKey);
     }
     
     const { lead } = req.body || {};
