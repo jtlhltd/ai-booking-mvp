@@ -13605,29 +13605,48 @@ app.post('/api/calendar/check-book', async (req, res) => {
       ? req.body.durationMin
       : (svc?.durationMin || client?.bookingDefaultDurationMin || 30);
 
-    // Log the full request to debug phone number issue
-    console.log('[BOOKING DEBUG] Request body:', JSON.stringify(req.body, null, 2));
-    console.log('[BOOKING DEBUG] Request headers:', JSON.stringify(req.headers, null, 2));
+    // VAPI knows the number it's calling - get it from the call context
+    // When VAPI makes a function call, it should include the call context
+    // Check multiple possible locations where VAPI might include the customer phone
     
-    // Get phone from request body, metadata, headers, or look up from call context
-    // VAPI function calls should include phone, but if not, try to get it from the call being made
-    const bodyPhone = req.body?.lead?.phone || req.body?.customerPhone;
-    const metadataPhone = req.body?.metadata?.leadPhone || req.body?.metadata?.customerPhone || req.body?.metadata?.phone;
-    const headerPhone = req.get('X-Customer-Phone') || req.get('X-Lead-Phone') || req.get('X-Phone') || req.get('X-Vapi-Customer-Phone');
+    // 1. Direct in request body (most common for function calls)
+    let phone = req.body?.customer?.number || 
+                req.body?.customer?.phone || 
+                req.body?.lead?.phone || 
+                req.body?.customerPhone ||
+                req.body?.phone;
     
-    // Try to get call ID from headers or body to look up phone from VAPI
-    const callId = req.get('X-Call-Id') || req.get('X-Vapi-Call-Id') || req.body?.callId || req.body?.metadata?.callId || req.body?.call?.id;
+    // 2. In metadata (VAPI sometimes puts it here)
+    if (!phone) {
+      phone = req.body?.metadata?.customer?.number ||
+              req.body?.metadata?.customerPhone ||
+              req.body?.metadata?.leadPhone ||
+              req.body?.metadata?.phone ||
+              req.body?.call?.customer?.number ||
+              req.body?.call?.customer?.phone;
+    }
     
-    console.log('[BOOKING DEBUG] Phone sources:', { bodyPhone, metadataPhone, headerPhone, callId });
+    // 3. In headers (VAPI might send it as a header)
+    if (!phone) {
+      phone = req.get('X-Customer-Phone') || 
+              req.get('X-Customer-Number') ||
+              req.get('X-Lead-Phone') || 
+              req.get('X-Phone') ||
+              req.get('X-Vapi-Customer-Phone');
+    }
     
-    let phone = bodyPhone || metadataPhone || headerPhone;
+    // 4. Get call ID and look up from VAPI API (VAPI definitely knows this)
+    const callId = req.get('X-Call-Id') || 
+                   req.get('X-Vapi-Call-Id') ||
+                   req.body?.callId || 
+                   req.body?.call?.id ||
+                   req.body?.metadata?.callId;
     
-    // If still no phone, try to get from call ID via VAPI API
     if (!phone && callId) {
       try {
         const VAPI_PRIVATE_KEY = process.env.VAPI_PRIVATE_KEY;
         if (VAPI_PRIVATE_KEY) {
-          console.log('[BOOKING DEBUG] Looking up call in VAPI:', callId);
+          console.log('[BOOKING] Looking up customer phone from VAPI call:', callId);
           const vapiResponse = await fetch(`https://api.vapi.ai/call/${callId}`, {
             headers: {
               'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`,
@@ -13636,10 +13655,10 @@ app.post('/api/calendar/check-book', async (req, res) => {
           });
           if (vapiResponse.ok) {
             const callData = await vapiResponse.json();
-            phone = callData.customer?.number || callData.phone || callData.customerPhone;
-            console.log('[BOOKING] Got phone from VAPI call data:', phone, 'from call:', callId);
-          } else {
-            console.warn('[BOOKING] VAPI call lookup failed:', vapiResponse.status);
+            phone = callData.customer?.number || callData.customer?.phone || callData.phone;
+            if (phone) {
+              console.log('[BOOKING] ✅ Got phone from VAPI call API:', phone);
+            }
           }
         }
       } catch (err) {
@@ -13647,8 +13666,7 @@ app.post('/api/calendar/check-book', async (req, res) => {
       }
     }
     
-    // If still no phone, try to get from the most recent ACTIVE call for this client
-    // Function calls happen during active calls, so look for calls in the last 2 minutes
+    // 5. Last resort: most recent active call (function calls happen during active calls)
     if (!phone) {
       try {
         const recentCall = await query(
@@ -13657,21 +13675,18 @@ app.post('/api/calendar/check-book', async (req, res) => {
         );
         if (recentCall?.rows?.[0]?.lead_phone) {
           phone = recentCall.rows[0].lead_phone;
-          console.log('[BOOKING] Using phone from most recent active call (last 2 min):', phone);
-        } else {
-          // Fallback: try last 10 minutes if nothing in 2 minutes
-          const fallbackCall = await query(
-            `SELECT lead_phone FROM calls WHERE client_key = $1 AND created_at >= NOW() - INTERVAL '10 minutes' ORDER BY created_at DESC LIMIT 1`,
-            [client.clientKey]
-          );
-          if (fallbackCall?.rows?.[0]?.lead_phone) {
-            phone = fallbackCall.rows[0].lead_phone;
-            console.log('[BOOKING] Using phone from recent call (last 10 min):', phone);
-          }
+          console.log('[BOOKING] Using phone from most recent active call:', phone);
         }
       } catch (err) {
         console.warn('[BOOKING] Could not look up phone from calls:', err.message);
       }
+    }
+    
+    // Debug logging if still no phone
+    if (!phone) {
+      console.error('[BOOKING] ❌ Could not find phone number. Request body keys:', Object.keys(req.body || {}));
+      console.error('[BOOKING] Request body:', JSON.stringify(req.body, null, 2));
+      console.error('[BOOKING] Request headers:', JSON.stringify(req.headers, null, 2));
     }
     
     const { lead } = req.body || {};
