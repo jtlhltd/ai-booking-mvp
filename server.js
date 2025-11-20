@@ -13694,9 +13694,10 @@ app.post('/api/calendar/check-book', async (req, res) => {
           });
           if (vapiResponse.ok) {
             const callData = await vapiResponse.json();
-            phone = callData?.customer?.number || callData?.phoneNumberId || '';
+            phone = callData?.customer?.number || callData?.phoneNumber?.number || '';
             if (phone) {
               console.log('[BOOKING] ✅ Got phone from VAPI call:', phone);
+              console.log('[BOOKING] 🔍 Full VAPI call data:', JSON.stringify(callData, null, 2));
             }
           }
         } catch (err) {
