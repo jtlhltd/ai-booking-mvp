@@ -8136,17 +8136,11 @@ app.post('/api/demo/test-call', async (req, res) => {
 
     // Use EXACT same logic and values as demo creator script (offerTestCall function)
     // Copy-pasted from scripts/create-demo-client.js lines 420-449
+    // Hardcoded values to avoid needing Render env vars
     const VAPI_PRIVATE_KEY = process.env.VAPI_PRIVATE_KEY;
-    const VAPI_PHONE_NUMBER_ID = process.env.VAPI_PHONE_NUMBER_ID;
-    const TEST_PHONE = process.env.TEST_PHONE_NUMBER;
+    const VAPI_PHONE_NUMBER_ID = process.env.VAPI_PHONE_NUMBER_ID || "934ecfdb-fe7b-4d53-81c0-7908b97036b5";
+    const TEST_PHONE = process.env.TEST_PHONE_NUMBER || "+447491683261";
     const VAPI_API_URL = 'https://api.vapi.ai';
-
-    if (!VAPI_PHONE_NUMBER_ID || !TEST_PHONE) {
-      return res.status(500).json({ 
-        success: false, 
-        error: 'VAPI_PHONE_NUMBER_ID or TEST_PHONE_NUMBER not set' 
-      });
-    }
 
     if (!VAPI_PRIVATE_KEY) {
       return res.status(500).json({ success: false, error: 'VAPI_PRIVATE_KEY not configured' });
