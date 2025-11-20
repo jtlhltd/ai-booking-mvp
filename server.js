@@ -13672,15 +13672,26 @@ app.post('/api/calendar/check-book', async (req, res) => {
     
     // If phone is empty/missing, get it from the most recent call for this client
     // VAPI is calling a number - that number should be in our calls table
+    // Check last 10 minutes to catch active calls
     if (!phone || phone.trim() === '') {
       try {
         const recentCall = await query(
-          `SELECT lead_phone FROM calls WHERE client_key = $1 ORDER BY created_at DESC LIMIT 1`,
+          `SELECT lead_phone FROM calls WHERE client_key = $1 AND created_at >= NOW() - INTERVAL '10 minutes' ORDER BY created_at DESC LIMIT 1`,
           [client.clientKey]
         );
         if (recentCall?.rows?.[0]?.lead_phone) {
           phone = recentCall.rows[0].lead_phone;
-          console.log('[BOOKING] Using phone from most recent call:', phone);
+          console.log('[BOOKING] ✅ Using phone from most recent call (last 10 min):', phone);
+        } else {
+          // Fallback: check all calls (in case webhook hasn't stored it yet)
+          const anyCall = await query(
+            `SELECT lead_phone FROM calls WHERE client_key = $1 ORDER BY created_at DESC LIMIT 1`,
+            [client.clientKey]
+          );
+          if (anyCall?.rows?.[0]?.lead_phone) {
+            phone = anyCall.rows[0].lead_phone;
+            console.log('[BOOKING] ✅ Using phone from most recent call (any time):', phone);
+          }
         }
       } catch (err) {
         console.warn('[BOOKING] Could not look up phone from calls:', err.message);
