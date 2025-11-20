@@ -8097,6 +8097,119 @@ app.get('/api/ab-test-results/:clientKey', async (req, res) => {
 });
 
 // Live demo dashboard data (used by client dashboard for Looms)
+// Test call endpoint for demo clients
+app.post('/api/demo/test-call', async (req, res) => {
+  try {
+    const { clientKey, assistantId } = req.body;
+    
+    if (!clientKey) {
+      return res.status(400).json({ success: false, error: 'Client key required' });
+    }
+
+    // Get client to check if it's a demo client and get assistant ID
+    const client = await getFullClient(clientKey);
+    if (!client) {
+      return res.status(404).json({ success: false, error: 'Client not found' });
+    }
+
+    // Check if it's a demo client
+    const isDemo = client.isDemo === true || 
+                   clientKey.includes('demo') || 
+                   clientKey === 'demo_client' || 
+                   clientKey === 'demo-client';
+
+    if (!isDemo) {
+      return res.status(403).json({ success: false, error: 'Test calls only available for demo clients' });
+    }
+
+    // Get assistant ID from client config or request
+    const finalAssistantId = assistantId || client.vapi?.assistantId || client.assistantId;
+    if (!finalAssistantId) {
+      return res.status(400).json({ success: false, error: 'Assistant ID not found for this client' });
+    }
+
+    // Get test phone number from environment
+    const testPhone = process.env.TEST_PHONE_NUMBER;
+    if (!testPhone) {
+      return res.status(500).json({ success: false, error: 'TEST_PHONE_NUMBER not configured' });
+    }
+
+    const VAPI_PRIVATE_KEY = process.env.VAPI_PRIVATE_KEY;
+    if (!VAPI_PRIVATE_KEY) {
+      return res.status(500).json({ success: false, error: 'VAPI_PRIVATE_KEY not configured' });
+    }
+
+    const VAPI_API_URL = 'https://api.vapi.ai';
+
+    // Make VAPI call
+    const payload = {
+      assistantId: finalAssistantId,
+      customer: {
+        number: testPhone,
+        name: 'Jonah'
+      },
+      metadata: {
+        clientKey: clientKey,
+        callPurpose: 'demo_test',
+        isDemo: true
+      }
+    };
+
+    // Add phoneNumberId if available
+    if (client.vapi?.phoneNumberId || process.env.VAPI_PHONE_NUMBER_ID) {
+      payload.phoneNumberId = client.vapi?.phoneNumberId || process.env.VAPI_PHONE_NUMBER_ID;
+    }
+
+    console.log('[DEMO TEST CALL] Initiating test call:', {
+      clientKey,
+      assistantId: finalAssistantId,
+      phoneNumber: testPhone
+    });
+
+    const response = await fetch(`${VAPI_API_URL}/call`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[DEMO TEST CALL] VAPI API error:', response.status, errorText);
+      return res.status(500).json({ 
+        success: false, 
+        error: `VAPI API error: ${response.status}`,
+        details: errorText.substring(0, 200)
+      });
+    }
+
+    const callData = await response.json();
+
+    console.log('[DEMO TEST CALL] Call initiated successfully:', {
+      callId: callData.id,
+      status: callData.status
+    });
+
+    res.json({
+      success: true,
+      callId: callData.id,
+      status: callData.status,
+      phoneNumber: testPhone,
+      assistantId: finalAssistantId,
+      message: 'Test call initiated! Answer your phone to test the assistant.'
+    });
+
+  } catch (error) {
+    console.error('[DEMO TEST CALL] Error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to initiate test call' 
+    });
+  }
+});
+
 app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
   const { clientKey } = req.params;
   try {

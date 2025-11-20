@@ -23,11 +23,43 @@ After running either script, you'll get:
 - ✅ Demo script file in `demos/` folder
 - ✅ Dashboard URL
 
-### Step 3: Test Demo Booking
+### Step 3: Test the Assistant
 
-**Submit a test lead:**
+**Make a test call to verify everything works:**
 ```bash
-node scripts/test-submit-lead.js
+node scripts/test-demo-call.js [assistantId] [yourPhoneNumber]
+```
+
+Example:
+```bash
+node scripts/test-demo-call.js b19a474b-49f3-474d-adb2-4aacc6ad37e7 +447700900123
+```
+
+**What to verify:**
+- ✅ Assistant says "Hi Jonah!" (not "Hi Name!")
+- ✅ Voice sounds good (Sarah - professional female)
+- ✅ Gets to booking quickly (under 90 seconds)
+- ✅ Booking simulation works (no real calendar/SMS)
+
+### Step 4: Populate Test Leads
+
+**Auto-populate dashboard with test leads:**
+```bash
+node scripts/populate-demo-leads.js [clientKey]
+```
+
+Example:
+```bash
+node scripts/populate-demo-leads.js stay-focused-fitness-chris
+```
+
+This adds 5 test leads to your dashboard so you have data to show during the demo.
+
+### Step 5: Test Demo Booking
+
+**Submit a test lead manually:**
+```bash
+node scripts/test-submit-lead.js "Test Lead" "+447700900123" "test@example.com" "demo-client"
 ```
 
 Or use the API directly:
@@ -55,7 +87,7 @@ When a lead books during a demo:
 4. **VAPI Assistant** tells prospect: "Your appointment is booked!"
 5. **No real integrations needed** - everything is simulated
 
-### Step 5: View Results
+### Step 6: View Results
 
 **Dashboard:**
 ```

@@ -651,6 +651,40 @@
             background: rgba(92,106,196,0.1);
         }
 
+        .test-call-btn {
+            border: 1px solid rgba(27, 94, 32, 0.3);
+            background: rgba(27, 94, 32, 0.1);
+            color: #1b5e20;
+            padding: 8px 16px;
+            border-radius: 999px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            font-size: 0.9rem;
+        }
+
+        .test-call-btn:hover {
+            background: rgba(27, 94, 32, 0.2);
+            border-color: rgba(27, 94, 32, 0.5);
+            transform: translateY(-1px);
+        }
+
+        .test-call-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        body[data-theme="dark"] .test-call-btn {
+            border-color: rgba(76, 175, 80, 0.4);
+            background: rgba(76, 175, 80, 0.15);
+            color: #81c784;
+        }
+
+        body[data-theme="dark"] .test-call-btn:hover {
+            background: rgba(76, 175, 80, 0.25);
+        }
+
         .modal-backdrop {
             position: fixed;
             inset: 0;
@@ -1872,6 +1906,7 @@
                 </div>
                 <div style="display:flex; align-items:center; gap:12px;">
                     <div class="status-chip" style="background: #1b5e20; color: #fff;" id="conciergeStatus">✓ Concierge Active</div>
+                    <button class="test-call-btn" id="testCallBtn" type="button" aria-label="Test call" style="display: none;">📞 Test Call</button>
                     <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle dark mode">Dark mode</button>
                     <div class="status-chip" id="clientStatus">Live</div>
                 </div>
@@ -3824,6 +3859,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             
             updateHeader(config, !!clientConfig);
             initThemeToggle();
+            initTestCallButton(currentClient, config);
             initModalControls();
             initImporter();
             initAccessibility();
@@ -4172,6 +4208,61 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
         document.addEventListener('DOMContentLoaded', initDashboard);
         window.addEventListener('beforeunload', stopLiveEvents);
+
+        function initTestCallButton(clientKey, config) {
+            const testCallBtn = document.getElementById('testCallBtn');
+            if (!testCallBtn) return;
+
+            // Show button for demo clients or clients with isDemo flag
+            const isDemo = clientKey === DEMO_CLIENT_KEY || 
+                         clientKey?.includes('demo') || 
+                         config?.isDemo === true ||
+                         (typeof clientKey === 'string' && (clientKey.includes('demo') || clientKey.includes('booking')));
+
+            if (isDemo) {
+                testCallBtn.style.display = 'block';
+                
+                testCallBtn.addEventListener('click', async () => {
+                    if (testCallBtn.disabled) return;
+                    
+                    testCallBtn.disabled = true;
+                    testCallBtn.textContent = '📞 Calling...';
+                    
+                    try {
+                        const response = await fetch(`${BASE_URL}/api/demo/test-call`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                clientKey: clientKey,
+                                assistantId: config?.vapi?.assistantId || config?.assistantId
+                            })
+                        });
+
+                        const data = await response.json();
+                        
+                        if (data.success) {
+                            showToast('Test Call Initiated', `Calling ${data.phoneNumber || 'your phone'}... Answer to test the assistant!`, 'success');
+                            testCallBtn.textContent = '✅ Call Sent';
+                            setTimeout(() => {
+                                testCallBtn.textContent = '📞 Test Call';
+                                testCallBtn.disabled = false;
+                            }, 5000);
+                        } else {
+                            throw new Error(data.error || 'Failed to initiate call');
+                        }
+                    } catch (error) {
+                        console.error('Test call error:', error);
+                        showToast('Test Call Failed', error.message || 'Could not initiate call. Check console for details.', 'error');
+                        testCallBtn.textContent = '📞 Test Call';
+                        testCallBtn.disabled = false;
+                    }
+                });
+            } else {
+                testCallBtn.style.display = 'none';
+            }
+        }
 
         function initThemeToggle() {
             const toggle = document.getElementById('themeToggle');
