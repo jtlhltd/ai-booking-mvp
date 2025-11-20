@@ -12708,15 +12708,75 @@ try {
 app.post('/api/notify/send', async (req, res) => {
   try {
     const client = await getClientFromHeader(req);
-    const { channel, to, message } = req.body || {};
+    if (!client) return res.status(400).json({ ok:false, error:'Unknown tenant' });
+    
+    let { channel, to, message, phoneNumber } = req.body || {};
     if (channel !== 'sms') return res.status(400).json({ ok:false, error:'Only channel="sms" is supported' });
-    if (!to || !message) return res.status(400).json({ ok:false, error:'Missing "to" or "message"' });
+    if (!message) return res.status(400).json({ ok:false, error:'Missing "message"' });
+
+    // Get phone number - VAPI might not include it, so look it up from call context
+    let phone = to || phoneNumber;
+    
+    // If no phone provided, try to get from call context (same as booking endpoint)
+    if (!phone) {
+      // Try to get callId from request
+      const callId = req.get('X-Call-Id') || 
+                     req.get('X-Vapi-Call-Id') ||
+                     req.body?.callId || 
+                     req.body?.call?.id ||
+                     req.body?.metadata?.callId ||
+                     req.body?.message?.call?.id;
+      
+      if (callId) {
+        try {
+          const VAPI_PRIVATE_KEY = process.env.VAPI_PRIVATE_KEY;
+          if (VAPI_PRIVATE_KEY) {
+            console.log('[NOTIFY] Looking up phone from VAPI call:', callId);
+            const vapiResponse = await fetch(`https://api.vapi.ai/call/${callId}`, {
+              headers: {
+                'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`,
+                'Content-Type': 'application/json'
+              }
+            });
+            if (vapiResponse.ok) {
+              const callData = await vapiResponse.json();
+              phone = callData.customer?.number || callData.customer?.phone || callData.phone;
+              if (phone) {
+                console.log('[NOTIFY] ✅ Got phone from VAPI call API:', phone);
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('[NOTIFY] Could not get phone from VAPI call:', err.message);
+        }
+      }
+      
+      // Fallback: most recent active call
+      if (!phone) {
+        try {
+          const recentCall = await query(
+            `SELECT lead_phone FROM calls WHERE client_key = $1 AND created_at >= NOW() - INTERVAL '2 minutes' ORDER BY created_at DESC LIMIT 1`,
+            [client.clientKey]
+          );
+          if (recentCall?.rows?.[0]?.lead_phone) {
+            phone = recentCall.rows[0].lead_phone;
+            console.log('[NOTIFY] Using phone from most recent active call:', phone);
+          }
+        } catch (err) {
+          console.warn('[NOTIFY] Could not look up phone from calls:', err.message);
+        }
+      }
+    }
+    
+    if (!phone) {
+      return res.status(400).json({ ok:false, error:'Missing phone number. Include "to" or "phoneNumber" in request body, or ensure callId is available to look up from call context.' });
+    }
 
     const { smsClient, messagingServiceSid, fromNumber, configured } = smsConfig(client);
     if (!configured) return res.status(400).json({ ok:false, error:'SMS not configured (no fromNumber or messagingServiceSid)' });
 
-    const normalizedTo = normalizePhoneE164(to);
-    if (!normalizedTo) return res.status(400).json({ ok:false, error:'Invalid recipient phone number (must be E.164)' });
+    const normalizedTo = normalizePhoneE164(phone);
+    if (!normalizedTo) return res.status(400).json({ ok:false, error:`Invalid recipient phone number (must be E.164): ${phone}` });
 
     const payload = { to: normalizedTo, body: message };
     if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid;
@@ -12727,7 +12787,8 @@ app.post('/api/notify/send', async (req, res) => {
   } catch (e) {
     const msg = e?.message || 'sms_error';
     const code = e?.status || e?.code || 500;
-    return res.status(500).json({ ok:false, error: msg });
+    console.error('[NOTIFY] Error:', msg);
+    return res.status(code).json({ ok:false, error: msg });
   }
 });
 app.post('/webhooks/twilio-status', express.urlencoded({ extended: false }), twilioWebhookVerification, async (req, res) => {
