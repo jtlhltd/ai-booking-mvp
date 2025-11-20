@@ -13700,18 +13700,31 @@ app.post('/api/calendar/check-book', async (req, res) => {
     // VAPI knows the number it's calling - we just need to get the callId to look it up
     const callId = req.get('X-Call-Id') || 
                    req.get('X-Vapi-Call-Id') ||
+                   req.query?.callId ||          // Query parameter
                    req.body?.callId ||           // Top-level callId (most common)
                    req.body?.call?.id ||
                    req.body?.metadata?.callId ||
-                   req.body?.message?.call?.id;  // Sometimes in message.call.id
+                   req.body?.message?.call?.id ||  // Sometimes in message.call.id
+                   req.body?.callId;             // Direct in body
     
-    console.log('[BOOKING] CallId sources:', {
-      header: req.get('X-Call-Id') || req.get('X-Vapi-Call-Id'),
+    // Log EVERYTHING to see what VAPI is sending
+    console.log('[BOOKING] 🔍 FULL REQUEST DEBUG:', {
+      method: req.method,
+      url: req.url,
+      path: req.path,
+      query: req.query,
+      headers: {
+        'X-Call-Id': req.get('X-Call-Id'),
+        'X-Vapi-Call-Id': req.get('X-Vapi-Call-Id'),
+        'X-Customer-Phone': req.get('X-Customer-Phone'),
+        'Content-Type': req.get('Content-Type')
+      },
+      bodyKeys: Object.keys(req.body || {}),
       bodyCallId: req.body?.callId,
-      bodyCallId2: req.body?.call?.id,
-      metadataCallId: req.body?.metadata?.callId,
-      messageCallId: req.body?.message?.call?.id,
-      finalCallId: callId
+      bodyCall: req.body?.call,
+      bodyMetadata: req.body?.metadata,
+      finalCallId: callId,
+      foundPhone: !!phone
     });
     
     // ALWAYS try to get phone from VAPI API if we have callId (VAPI definitely knows this)
