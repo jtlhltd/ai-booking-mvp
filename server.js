@@ -13605,17 +13605,42 @@ app.post('/api/calendar/check-book', async (req, res) => {
       ? req.body.durationMin
       : (svc?.durationMin || client?.bookingDefaultDurationMin || 30);
 
-    // Get phone from request body, metadata, or look up from call context
-    // VAPI tool calls should include phone, but if not, try to get it from the call being made
+    // Get phone from request body, metadata, headers, or look up from call context
+    // VAPI function calls should include phone, but if not, try to get it from the call being made
     const bodyPhone = req.body?.lead?.phone || req.body?.customerPhone;
-    const metadataPhone = req.body?.metadata?.leadPhone || req.body?.metadata?.customerPhone;
-    const headerPhone = req.get('X-Customer-Phone') || req.get('X-Lead-Phone');
+    const metadataPhone = req.body?.metadata?.leadPhone || req.body?.metadata?.customerPhone || req.body?.metadata?.phone;
+    const headerPhone = req.get('X-Customer-Phone') || req.get('X-Lead-Phone') || req.get('X-Phone');
     
-    // If phone not in body, try to get from call metadata or look up recent call
+    // Try to get call ID from headers or body to look up phone from VAPI
+    const callId = req.get('X-Call-Id') || req.body?.callId || req.body?.metadata?.callId;
+    
     let phone = bodyPhone || metadataPhone || headerPhone;
     
+    // If still no phone, try to get from call ID via VAPI API
+    if (!phone && callId) {
+      try {
+        const VAPI_PRIVATE_KEY = process.env.VAPI_PRIVATE_KEY;
+        if (VAPI_PRIVATE_KEY) {
+          const vapiResponse = await fetch(`https://api.vapi.ai/call/${callId}`, {
+            headers: {
+              'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          if (vapiResponse.ok) {
+            const callData = await vapiResponse.json();
+            phone = callData.customer?.number || callData.phone || callData.customerPhone;
+            if (phone) {
+              console.log('[BOOKING] Got phone from VAPI call data:', phone);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[BOOKING] Could not get phone from VAPI call:', err.message);
+      }
+    }
+    
     // If still no phone, try to get from the most recent call for this client
-    // (VAPI should include it, but this is a fallback)
     if (!phone) {
       try {
         const recentCall = await query(
