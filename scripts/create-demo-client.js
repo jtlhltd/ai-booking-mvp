@@ -872,7 +872,15 @@ Let's convert this lead! 🚀`;
             time: { type: 'string', description: 'Time in HH:MM format (24-hour)' },
             durationMinutes: { type: 'number', description: 'Duration in minutes', default: 30 },
             service: { type: 'string', description: 'Service name' },
-            customerName: { type: 'string', description: 'Customer name' }
+            customerName: { type: 'string', description: 'Customer name' },
+            lead: {
+              type: 'object',
+              description: 'Lead information (automatically populated from call context)',
+              properties: {
+                phone: { type: 'string', description: 'Customer phone number (from call)' },
+                name: { type: 'string', description: 'Customer name' }
+              }
+            }
           },
           required: ['date', 'time', 'customerName']
         }
