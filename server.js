@@ -13935,8 +13935,9 @@ app.post('/api/calendar/check-book', async (req, res) => {
       // Use demo calendar (from env or default to 'primary')
       const demoCalendarId = process.env.DEMO_GOOGLE_CALENDAR_ID || GOOGLE_CALENDAR_ID || 'primary';
       
-      // Use demo phone number for SMS (TEST_PHONE_NUMBER or lead's phone)
-      const demoSmsTo = process.env.DEMO_SMS_TO || process.env.TEST_PHONE_NUMBER || lead.phone;
+      // Use demo phone number for SMS - prefer lead.phone (which we just looked up) over env vars
+      // This ensures we use the actual phone number from the call, not a placeholder
+      const demoSmsTo = lead.phone || process.env.DEMO_SMS_TO || process.env.TEST_PHONE_NUMBER;
       
       console.log('[DEMO BOOKING] Using real bookings with demo credentials:', {
         clientKey: client?.clientKey,
