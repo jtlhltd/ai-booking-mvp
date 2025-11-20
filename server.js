@@ -13732,18 +13732,20 @@ app.post('/api/calendar/check-book', async (req, res) => {
       console.error('[BOOKING] ❌ Could not find phone number after all attempts');
       console.error('[BOOKING] Request method:', req.method);
       console.error('[BOOKING] Request URL:', req.url);
+      console.error('[BOOKING] Request path:', req.path);
+      console.error('[BOOKING] Request query:', req.query);
       console.error('[BOOKING] Request body keys:', Object.keys(req.body || {}));
       console.error('[BOOKING] Full request body:', JSON.stringify(req.body, null, 2));
-      console.error('[BOOKING] Request headers (relevant):', {
-        'X-Call-Id': req.get('X-Call-Id'),
-        'X-Vapi-Call-Id': req.get('X-Vapi-Call-Id'),
-        'X-Customer-Phone': req.get('X-Customer-Phone'),
-        'X-Customer-Number': req.get('X-Customer-Number'),
-        'X-Lead-Phone': req.get('X-Lead-Phone'),
-        'Content-Type': req.get('Content-Type'),
-        'User-Agent': req.get('User-Agent')
-      });
+      console.error('[BOOKING] ALL Request headers:', JSON.stringify(req.headers, null, 2));
       console.error('[BOOKING] Client key:', client?.clientKey);
+      
+      // Try to extract callId from URL or any other location
+      const urlCallId = req.path.match(/call[_-]?id[=:]([^\/\s]+)/i)?.[1] || 
+                       req.query?.callId || 
+                       req.query?.call_id;
+      if (urlCallId) {
+        console.error('[BOOKING] Found callId in URL/query:', urlCallId);
+      }
     }
     
     const customerName = lead?.name || req.body?.customerName;
