@@ -8134,14 +8134,11 @@ app.post('/api/demo/test-call', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Assistant ID not found for this client' });
     }
 
-    // Use same logic as demo creator script
+    // Use exact same logic and values as demo creator script (offerTestCall function)
     const VAPI_PRIVATE_KEY = process.env.VAPI_PRIVATE_KEY;
     const VAPI_PHONE_NUMBER_ID = process.env.VAPI_PHONE_NUMBER_ID;
     const TEST_PHONE = process.env.TEST_PHONE_NUMBER;
-
-    if (!VAPI_PRIVATE_KEY) {
-      return res.status(500).json({ success: false, error: 'VAPI_PRIVATE_KEY not configured' });
-    }
+    const VAPI_API_URL = 'https://api.vapi.ai';
 
     if (!VAPI_PHONE_NUMBER_ID || !TEST_PHONE) {
       return res.status(500).json({ 
@@ -8150,9 +8147,11 @@ app.post('/api/demo/test-call', async (req, res) => {
       });
     }
 
-    const VAPI_API_URL = 'https://api.vapi.ai';
+    if (!VAPI_PRIVATE_KEY) {
+      return res.status(500).json({ success: false, error: 'VAPI_PRIVATE_KEY not configured' });
+    }
 
-    // Make VAPI call - same structure as demo creator script
+    // Make VAPI call - exact same structure as demo creator script
     const payload = {
       assistantId: finalAssistantId,
       phoneNumberId: VAPI_PHONE_NUMBER_ID,
