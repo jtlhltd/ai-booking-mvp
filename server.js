@@ -12751,16 +12751,26 @@ app.post('/api/notify/send', async (req, res) => {
         }
       }
       
-      // Fallback: most recent active call
+      // Fallback: most recent active call (expanded to 30 minutes like booking endpoint)
       if (!phone) {
         try {
           const recentCall = await query(
-            `SELECT lead_phone FROM calls WHERE client_key = $1 AND created_at >= NOW() - INTERVAL '2 minutes' ORDER BY created_at DESC LIMIT 1`,
+            `SELECT lead_phone FROM calls WHERE client_key = $1 AND created_at >= NOW() - INTERVAL '30 minutes' ORDER BY created_at DESC LIMIT 1`,
             [client.clientKey]
           );
           if (recentCall?.rows?.[0]?.lead_phone) {
             phone = recentCall.rows[0].lead_phone;
-            console.log('[NOTIFY] Using phone from most recent active call:', phone);
+            console.log('[NOTIFY] ✅ Using phone from most recent call (last 30 min):', phone);
+          } else {
+            // Final fallback: any recent call
+            const anyCall = await query(
+              `SELECT lead_phone FROM calls WHERE client_key = $1 ORDER BY created_at DESC LIMIT 1`,
+              [client.clientKey]
+            );
+            if (anyCall?.rows?.[0]?.lead_phone) {
+              phone = anyCall.rows[0].lead_phone;
+              console.log('[NOTIFY] ✅ Using phone from most recent call (any time):', phone);
+            }
           }
         } catch (err) {
           console.warn('[NOTIFY] Could not look up phone from calls:', err.message);
