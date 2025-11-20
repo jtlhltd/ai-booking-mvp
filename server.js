@@ -13670,18 +13670,43 @@ app.post('/api/calendar/check-book', async (req, res) => {
     const { lead } = req.body || {};
     let phone = lead?.phone || req.body?.customerPhone || req.body?.phone;
     
-    // If phone is empty/missing, get it from the most recent call for this client
+    // If phone is empty/missing, try to get it from VAPI API using callId
+    if (!phone || phone.trim() === '') {
+      const callId = req.body?.callId || req.body?.metadata?.callId || req.get('X-Call-Id') || req.get('X-Vapi-Call-Id');
+      if (callId && process.env.VAPI_PRIVATE_KEY) {
+        try {
+          console.log('[BOOKING] 🔍 Fetching phone from VAPI API using callId:', callId);
+          const vapiResponse = await fetch(`https://api.vapi.ai/call/${callId}`, {
+            headers: {
+              'Authorization': `Bearer ${process.env.VAPI_PRIVATE_KEY}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          if (vapiResponse.ok) {
+            const callData = await vapiResponse.json();
+            phone = callData?.customer?.number || callData?.phoneNumberId || '';
+            if (phone) {
+              console.log('[BOOKING] ✅ Got phone from VAPI API:', phone);
+            }
+          }
+        } catch (err) {
+          console.warn('[BOOKING] Could not fetch phone from VAPI API:', err.message);
+        }
+      }
+    }
+    
+    // If still no phone, get it from the most recent call for this client
     // VAPI is calling a number - that number should be in our calls table
-    // Check last 10 minutes to catch active calls
+    // Check last 30 minutes to catch active calls
     if (!phone || phone.trim() === '') {
       try {
         const recentCall = await query(
-          `SELECT lead_phone FROM calls WHERE client_key = $1 AND created_at >= NOW() - INTERVAL '10 minutes' ORDER BY created_at DESC LIMIT 1`,
+          `SELECT lead_phone FROM calls WHERE client_key = $1 AND created_at >= NOW() - INTERVAL '30 minutes' ORDER BY created_at DESC LIMIT 1`,
           [client.clientKey]
         );
         if (recentCall?.rows?.[0]?.lead_phone) {
           phone = recentCall.rows[0].lead_phone;
-          console.log('[BOOKING] ✅ Using phone from most recent call (last 10 min):', phone);
+          console.log('[BOOKING] ✅ Using phone from most recent call (last 30 min):', phone);
         } else {
           // Fallback: check all calls (in case webhook hasn't stored it yet)
           const anyCall = await query(
