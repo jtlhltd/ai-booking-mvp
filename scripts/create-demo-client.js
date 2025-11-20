@@ -899,11 +899,39 @@ Let's convert this lead! 🚀`;
     return !existingToolNames.includes(toolName);
   });
   
-  // Note: Tools cannot be set via PATCH - they must be configured in Vapi dashboard
-  // We'll just note if they're missing
-  if (missingTools.length > 0 && isInteractive) {
-    console.log(`⚠️  Note: Missing tools: ${missingTools.map(t => t.type === 'function' ? t.function?.name : t.type).join(', ')}`);
-    console.log('   Tools must be configured manually in Vapi dashboard.\n');
+  // Try to add missing tools via PATCH
+  if (missingTools.length > 0) {
+    try {
+      const toolsToAdd = [...existingTools, ...missingTools];
+      const patchResponse = await axios.patch(`${VAPI_API_URL}/assistant/${assistantId}`, {
+        tools: toolsToAdd
+      }, {
+        headers: {
+          'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'User-Agent': 'Node.js'
+        }
+      });
+      
+      if (patchResponse.status === 200) {
+        console.log(`✅ Added ${missingTools.length} missing tool(s): ${missingTools.map(t => t.type === 'function' ? t.function?.name : t.type).join(', ')}\n`);
+      } else {
+        throw new Error(`PATCH returned ${patchResponse.status}`);
+      }
+    } catch (error) {
+      // If PATCH fails, note that tools need manual configuration
+      if (isInteractive) {
+        console.log(`⚠️  Note: Missing tools: ${missingTools.map(t => t.type === 'function' ? t.function?.name : t.type).join(', ')}`);
+        console.log('   Attempted to add tools automatically but failed. Please add them manually in Vapi dashboard:');
+        console.log('   1. Go to https://dashboard.vapi.ai');
+        console.log('   2. Find your assistant');
+        console.log('   3. Go to "Tools" section');
+        console.log('   4. Add function tools: calendar_checkAndBook and notify_send');
+        console.log('   5. Set serverUrl to:', serverUrl);
+        console.log('');
+      }
+    }
   }
   
   // Auto-configure serverUrl if needed
