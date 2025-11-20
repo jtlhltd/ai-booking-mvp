@@ -8209,6 +8209,9 @@ app.post('/api/demo/test-call', async (req, res) => {
 app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
   const { clientKey } = req.params;
   try {
+    // Get client config first
+    const client = await getFullClient(clientKey);
+    
     const [
       leadCounts,
       callCounts,
@@ -8460,6 +8463,12 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       touchpoints: {
         labels: touchpointLabels,
         data: touchpointData
+      },
+      config: {
+        phone: client?.phone || client?.whiteLabel?.phone || client?.numbers?.primary || '+44 20 3880 1234',
+        businessHours: client?.businessHours || client?.whiteLabel?.businessHours || client?.booking?.businessHours || '8am - 8pm, 7 days/week',
+        timezone: client?.timezone || client?.booking?.timezone || 'Europe/London',
+        industry: client?.industry || client?.whiteLabel?.industry || null
       }
     });
   } catch (error) {
