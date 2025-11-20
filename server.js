@@ -13676,13 +13676,49 @@ app.post('/api/calendar/check-book', async (req, res) => {
       ? req.body.durationMin
       : (svc?.durationMin || client?.bookingDefaultDurationMin || 30);
 
-    // SIMPLE: Get phone from request body - VAPI should include it automatically
+    // Get phone from request body first
     const { lead } = req.body || {};
     let phone = lead?.phone || req.body?.customerPhone || req.body?.phone || '';
     
-    // Normalize empty strings to null
-    if (phone && phone.trim() === '') {
-      phone = '';
+    // If phone is empty, try to get it from callId (VAPI includes callId in function calls)
+    if (!phone || phone.trim() === '') {
+      const callId = req.body?.callId || req.body?.metadata?.callId || req.get('X-Call-Id') || req.get('X-Vapi-Call-Id');
+      if (callId && process.env.VAPI_PRIVATE_KEY) {
+        try {
+          console.log('[BOOKING] 🔍 No phone in request, fetching from VAPI using callId:', callId);
+          const vapiResponse = await fetch(`https://api.vapi.ai/call/${callId}`, {
+            headers: {
+              'Authorization': `Bearer ${process.env.VAPI_PRIVATE_KEY}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          if (vapiResponse.ok) {
+            const callData = await vapiResponse.json();
+            phone = callData?.customer?.number || callData?.phoneNumberId || '';
+            if (phone) {
+              console.log('[BOOKING] ✅ Got phone from VAPI call:', phone);
+            }
+          }
+        } catch (err) {
+          console.warn('[BOOKING] Could not fetch phone from VAPI:', err.message);
+        }
+      }
+      
+      // Last resort: get from most recent call in database
+      if (!phone || phone.trim() === '') {
+        try {
+          const recentCall = await query(
+            `SELECT lead_phone FROM calls WHERE client_key = $1 AND lead_phone IS NOT NULL AND lead_phone != '' ORDER BY created_at DESC LIMIT 1`,
+            [client.clientKey]
+          );
+          if (recentCall?.rows?.[0]?.lead_phone) {
+            phone = recentCall.rows[0].lead_phone;
+            console.log('[BOOKING] ✅ Using phone from most recent call:', phone);
+          }
+        } catch (err) {
+          console.warn('[BOOKING] Could not look up phone from calls:', err.message);
+        }
+      }
     }
     
     // Debug logging if still no phone - log FULL request details
