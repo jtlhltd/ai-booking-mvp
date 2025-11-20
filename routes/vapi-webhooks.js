@@ -221,6 +221,49 @@ router.post('/webhooks/vapi', async (req, res) => {
             continue;
           }
           
+          // Handle calendar_checkAndBook - we have the customer phone in the webhook!
+          if (functionName === 'calendar_checkAndBook') {
+            console.log('[VAPI WEBHOOK] 🔧 Intercepting calendar_checkAndBook - customer phone:', leadPhone);
+            
+            // Add phone to function args from webhook data
+            const argsWithPhone = {
+              ...functionArgs,
+              lead: {
+                ...(functionArgs.lead || {}),
+                phone: leadPhone || functionArgs.lead?.phone || '',
+                name: functionArgs.lead?.name || functionArgs.customerName || ''
+              },
+              customerPhone: leadPhone || functionArgs.customerPhone || '',
+              phone: leadPhone || functionArgs.phone || ''
+            };
+            
+            console.log('[VAPI WEBHOOK] 📞 Enhanced args with phone:', JSON.stringify(argsWithPhone, null, 2));
+            
+            // Call booking endpoint directly with phone included
+            try {
+              const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || 'http://localhost:3000';
+              const bookingResponse = await fetch(`${PUBLIC_BASE_URL}/api/calendar/check-book`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-Client-Key': tenantKey,
+                  'X-Call-Id': callId || '',
+                  'X-Customer-Phone': leadPhone || ''
+                },
+                body: JSON.stringify(argsWithPhone)
+              });
+              
+              const bookingResult = await bookingResponse.json();
+              console.log('[VAPI WEBHOOK] ✅ Booking result:', bookingResult);
+              
+              // Store the result for VAPI to use (this won't work for function calls, but we log it)
+              return bookingResult;
+            } catch (error) {
+              console.error('[VAPI WEBHOOK] ❌ Error calling booking endpoint:', error);
+              return { error: error.message };
+            }
+          }
+          
           // Legacy functions (keep existing logic)
           if (toolCall.function.name === 'access_google_sheet') {
             const args = JSON.parse(toolCall.function.arguments);
