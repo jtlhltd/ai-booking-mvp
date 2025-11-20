@@ -13676,55 +13676,13 @@ app.post('/api/calendar/check-book', async (req, res) => {
       ? req.body.durationMin
       : (svc?.durationMin || client?.bookingDefaultDurationMin || 30);
 
-    // SIMPLE: Get phone from request body (like it used to work)
+    // SIMPLE: Get phone from request body - VAPI should include it automatically
     const { lead } = req.body || {};
-    let phone = lead?.phone || req.body?.customerPhone || req.body?.phone;
+    let phone = lead?.phone || req.body?.customerPhone || req.body?.phone || '';
     
-    // If phone is empty/missing, try to get it from VAPI API using callId
-    if (!phone || phone.trim() === '') {
-      const callId = req.body?.callId || req.body?.metadata?.callId || req.get('X-Call-Id') || req.get('X-Vapi-Call-Id');
-      if (callId && process.env.VAPI_PRIVATE_KEY) {
-        try {
-          console.log('[BOOKING] 🔍 Fetching phone from VAPI API using callId:', callId);
-          const vapiResponse = await fetch(`https://api.vapi.ai/call/${callId}`, {
-            headers: {
-              'Authorization': `Bearer ${process.env.VAPI_PRIVATE_KEY}`,
-              'Content-Type': 'application/json'
-            }
-          });
-          if (vapiResponse.ok) {
-            const callData = await vapiResponse.json();
-            phone = callData?.customer?.number || callData?.phoneNumberId || '';
-            if (phone) {
-              console.log('[BOOKING] ✅ Got phone from VAPI API:', phone);
-            }
-          }
-        } catch (err) {
-          console.warn('[BOOKING] Could not fetch phone from VAPI API:', err.message);
-        }
-      }
-    }
-    
-    // If still no phone, get it from the most recent call for this client
-    // VAPI is calling a number - that number should be in our calls table
-    // Check most recent call first (no time limit) - function calls happen during active calls
-    if (!phone || phone.trim() === '') {
-      try {
-        console.log('[BOOKING] 🔍 Looking up phone from calls table for client:', client.clientKey);
-        const anyCall = await query(
-          `SELECT lead_phone, created_at FROM calls WHERE client_key = $1 AND lead_phone IS NOT NULL AND lead_phone != '' ORDER BY created_at DESC LIMIT 1`,
-          [client.clientKey]
-        );
-        if (anyCall?.rows?.[0]?.lead_phone) {
-          phone = anyCall.rows[0].lead_phone;
-          const callAge = anyCall.rows[0].created_at;
-          console.log('[BOOKING] ✅ Using phone from most recent call:', phone, 'Call created at:', callAge);
-        } else {
-          console.warn('[BOOKING] ⚠️ No calls found in database for client:', client.clientKey);
-        }
-      } catch (err) {
-        console.error('[BOOKING] ❌ Error looking up phone from calls:', err.message);
-      }
+    // Normalize empty strings to null
+    if (phone && phone.trim() === '') {
+      phone = '';
     }
     
     // Debug logging if still no phone - log FULL request details
