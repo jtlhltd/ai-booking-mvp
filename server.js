@@ -8134,42 +8134,38 @@ app.post('/api/demo/test-call', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Assistant ID not found for this client' });
     }
 
-    // Get test phone number from environment
-    const testPhone = process.env.TEST_PHONE_NUMBER;
-    if (!testPhone) {
-      return res.status(500).json({ success: false, error: 'TEST_PHONE_NUMBER not configured' });
-    }
-
+    // Use same logic as demo creator script
     const VAPI_PRIVATE_KEY = process.env.VAPI_PRIVATE_KEY;
+    const VAPI_PHONE_NUMBER_ID = process.env.VAPI_PHONE_NUMBER_ID;
+    const TEST_PHONE = process.env.TEST_PHONE_NUMBER;
+
     if (!VAPI_PRIVATE_KEY) {
       return res.status(500).json({ success: false, error: 'VAPI_PRIVATE_KEY not configured' });
     }
 
+    if (!VAPI_PHONE_NUMBER_ID || !TEST_PHONE) {
+      return res.status(500).json({ 
+        success: false, 
+        error: 'VAPI_PHONE_NUMBER_ID or TEST_PHONE_NUMBER not set' 
+      });
+    }
+
     const VAPI_API_URL = 'https://api.vapi.ai';
 
-    // Make VAPI call
+    // Make VAPI call - same structure as demo creator script
     const payload = {
       assistantId: finalAssistantId,
+      phoneNumberId: VAPI_PHONE_NUMBER_ID,
       customer: {
-        number: testPhone,
-        name: 'Jonah'
-      },
-      metadata: {
-        clientKey: clientKey,
-        callPurpose: 'demo_test',
-        isDemo: true
+        number: TEST_PHONE
       }
     };
-
-    // Add phoneNumberId if available
-    if (client.vapi?.phoneNumberId || process.env.VAPI_PHONE_NUMBER_ID) {
-      payload.phoneNumberId = client.vapi?.phoneNumberId || process.env.VAPI_PHONE_NUMBER_ID;
-    }
 
     console.log('[DEMO TEST CALL] Initiating test call:', {
       clientKey,
       assistantId: finalAssistantId,
-      phoneNumber: testPhone
+      phoneNumber: TEST_PHONE,
+      phoneNumberId: VAPI_PHONE_NUMBER_ID
     });
 
     const response = await fetch(`${VAPI_API_URL}/call`, {
@@ -8202,9 +8198,9 @@ app.post('/api/demo/test-call', async (req, res) => {
       success: true,
       callId: callData.id,
       status: callData.status,
-      phoneNumber: testPhone,
+      phoneNumber: TEST_PHONE,
       assistantId: finalAssistantId,
-      message: 'Test call initiated! Answer your phone to test the assistant.'
+      message: 'Test call initiated! Check your phone in a few seconds...'
     });
 
   } catch (error) {
