@@ -12720,7 +12720,8 @@ try {
 // Twilio delivery receipts
 
 // Simple SMS send route (per-tenant or global fallback)
-app.post('/api/notify/send', async (req, res) => {
+// Support both /api/notify/send and /api/notify/send/:anything for VAPI compatibility
+app.post(['/api/notify/send', '/api/notify/send/:param'], async (req, res) => {
   try {
     const client = await getClientFromHeader(req);
     if (!client) return res.status(400).json({ ok:false, error:'Unknown tenant' });
