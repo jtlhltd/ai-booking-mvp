@@ -5,6 +5,7 @@ import { analyzeCall } from '../lib/call-quality-analysis.js';
 import messagingService from '../lib/messaging-service.js';
 import { extractLogisticsFields } from '../lib/logistics-extractor.js';
 import { recordReceptionistTelemetry } from '../lib/demo-telemetry.js';
+import { storeCallContext } from '../lib/call-context-cache.js';
 
 const router = express.Router();
 
@@ -99,6 +100,16 @@ router.post('/webhooks/vapi', async (req, res) => {
     // Just get phone from wherever it might be
     const tenantKey = metadata.tenantKey || metadata.clientKey || 'logistics_client';
     const leadPhone = metadata.leadPhone || body.customer?.number || body.phone || '';
+    const leadName = metadata.leadName || body.customer?.name || '';
+    
+    // Store call context for API endpoint lookups (if we have callId and phone)
+    if (callId && leadPhone) {
+      storeCallContext(callId, leadPhone, leadName, {
+        tenantKey,
+        status,
+        timestamp: Date.now()
+      });
+    }
     
     // Skip only if absolutely no data at all
     if (!transcript && !status) {

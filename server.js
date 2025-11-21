@@ -139,8 +139,8 @@ import * as store from './store.js';
 import * as sheets from './sheets.js';
 import messagingService from './lib/messaging-service.js';
 import { AIInsightsEngine, LeadScoringEngine } from './lib/ai-insights.js';
+import { getCallContext, storeCallContext } from './lib/call-context-cache.js';
 // Real API integration - dynamic imports will be used in endpoints
-
 
 const app = express();
 
@@ -13680,12 +13680,37 @@ app.post('/api/calendar/check-book', async (req, res) => {
       : (svc?.durationMin || client?.bookingDefaultDurationMin || 30);
 
     // Get callId first (needed for both phone and name lookup)
-    const callId = req.body?.callId || req.body?.metadata?.callId || req.get('X-Call-Id') || req.get('X-Vapi-Call-Id');
+    // Try multiple locations including idempotency header which might have call context
+    const callId = req.body?.callId || 
+                   req.body?.metadata?.callId || 
+                   req.get('X-Call-Id') || 
+                   req.get('X-Vapi-Call-Id') ||
+                   req.get('Cookie')?.match(/callId=([^;]+)/)?.[1]; // Extract from cookie if present
+    
+    console.log('[BOOKING][check-book] 🔍 CallId detection:', { 
+      fromBody: req.body?.callId,
+      fromMetadata: req.body?.metadata?.callId,
+      fromXCallId: req.get('X-Call-Id'),
+      fromXVapiCallId: req.get('X-Vapi-Call-Id'),
+      fromCookie: req.get('Cookie')?.match(/callId=([^;]+)/)?.[1],
+      finalCallId: callId
+    });
     
     // Extract phone from various possible locations (new simplified structure)
-    let phone = req.body?.customerPhone || req.body?.phone || '';
+    let phone = req.body?.customerPhone || req.body?.phone || req.get('X-Customer-Phone') || '';
     
-    // If phone is empty, try to get it from callId (VAPI includes callId in function calls)
+    // If phone is empty, try to get it from call context cache first (fastest)
+    if (!phone || phone.trim() === '') {
+      if (callId) {
+        const cachedContext = getCallContext(callId);
+        if (cachedContext?.phone) {
+          phone = cachedContext.phone;
+          console.log('[BOOKING] ✅ Got phone from call context cache:', phone);
+        }
+      }
+    }
+    
+    // If still empty, try to get it from VAPI API (requires API call)
     if (!phone || phone.trim() === '') {
       if (callId && process.env.VAPI_PRIVATE_KEY) {
         try {
@@ -13758,7 +13783,18 @@ app.post('/api/calendar/check-book', async (req, res) => {
     // Extract customer name from request or VAPI call data
     let customerName = req.body?.customerName || req.body?.name;
     
-    // If customer name is missing, try to get it from VAPI call data
+    // If customer name is missing, try to get it from call context cache first
+    if (!customerName || customerName.trim() === '') {
+      if (callId) {
+        const cachedContext = getCallContext(callId);
+        if (cachedContext?.customerName) {
+          customerName = cachedContext.customerName;
+          console.log('[BOOKING] ✅ Got customer name from call context cache:', customerName);
+        }
+      }
+    }
+    
+    // If still empty, try to get it from VAPI API
     if (!customerName || customerName.trim() === '') {
       if (callId && process.env.VAPI_PRIVATE_KEY) {
         try {
