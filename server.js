@@ -12718,6 +12718,7 @@ try {
 });
 
 // Twilio delivery receipts
+console.log('🔥🔥🔥 [DEBUG] Code execution reached line 12720 - before handleNotifySend function');
 
 // Shared SMS handler function
 const handleNotifySend = async (req, res) => {
@@ -12817,6 +12818,7 @@ const handleNotifySend = async (req, res) => {
   }
 };
 
+console.log('🔥🔥🔥 [DEBUG] Code execution reached line 12818 - after handleNotifySend function');
 console.log('🔥🔥🔥 [DEBUG] Code execution reached line 12820 - about to register notify routes');
 
 // Simple SMS send route (per-tenant or global fallback)
