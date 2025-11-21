@@ -13719,12 +13719,20 @@ app.post('/api/calendar/check-book', async (req, res) => {
       // If still no phone, try to get the most recent call for this tenant
       if (!phone || phone.trim() === '') {
         const tenantKey = client?.key || client?.tenantKey;
+        console.log('[BOOKING] 🔍 Looking up most recent call:', {
+          clientKey: client?.key,
+          clientTenantKey: client?.tenantKey,
+          finalTenantKey: tenantKey
+        });
         if (tenantKey) {
           const recentContext = getMostRecentCallContext(tenantKey);
+          console.log('[BOOKING] 🔍 getMostRecentCallContext result:', recentContext);
           if (recentContext?.phone) {
             phone = recentContext.phone;
             console.log('[BOOKING] ✅ Got phone from most recent call context:', phone);
           }
+        } else {
+          console.log('[BOOKING] ❌ No tenantKey available for most recent lookup');
         }
       }
     }

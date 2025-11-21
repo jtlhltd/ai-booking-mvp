@@ -115,6 +115,7 @@ router.post('/webhooks/vapi', async (req, res) => {
     // Store call context for API endpoint lookups (if we have callId and phone)
     if (callId && leadPhone) {
       console.log('[VAPI WEBHOOK] ✅ Storing call context');
+      console.log('[VAPI WEBHOOK] 📦 Storing with tenantKey:', tenantKey, 'phone:', leadPhone, 'name:', leadName);
       storeCallContext(callId, leadPhone, leadName, {
         tenantKey,
         status,
