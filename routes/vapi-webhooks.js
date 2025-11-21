@@ -119,13 +119,14 @@ router.post('/webhooks/vapi', async (req, res) => {
     console.log('[VAPI WEBHOOK] 👤 Name:', leadName);
     console.log('[VAPI WEBHOOK] 📊 Status:', status);
     
-    // Store call context for API endpoint lookups (if we have callId and phone)
-    if (callId && leadPhone) {
-      console.log('[VAPI WEBHOOK] ✅✅✅ STORING CALL CONTEXT ✅✅✅');
+    // ALWAYS store the callId for this tenant, even without phone
+    // The booking endpoint will fetch phone from VAPI API using this callId
+    if (callId) {
+      console.log('[VAPI WEBHOOK] ✅✅✅ STORING CALL CONTEXT (even without phone) ✅✅✅');
       console.log('[VAPI WEBHOOK] Storage payload:', JSON.stringify({
         callId: callId,
-        phone: leadPhone,
-        name: leadName,
+        phone: leadPhone || null,
+        name: leadName || null,
         metadata: {
           tenantKey: tenantKey,
           status: status,
@@ -133,7 +134,7 @@ router.post('/webhooks/vapi', async (req, res) => {
         }
       }, null, 2));
       
-      storeCallContext(callId, leadPhone, leadName, {
+      storeCallContext(callId, leadPhone || null, leadName || null, {
         tenantKey,
         status,
         timestamp: Date.now()
@@ -141,7 +142,7 @@ router.post('/webhooks/vapi', async (req, res) => {
       
       console.log('[VAPI WEBHOOK] ✅ STORAGE COMPLETE');
     } else {
-      console.log('[VAPI WEBHOOK] ❌❌❌ NOT STORING - MISSING DATA ❌❌❌');
+      console.log('[VAPI WEBHOOK] ❌❌❌ NOT STORING - NO CALL ID ❌❌❌');
       console.log('[VAPI WEBHOOK] Missing data debug:', { 
         hasCallId: !!callId,
         callIdValue: callId,

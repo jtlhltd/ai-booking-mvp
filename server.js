@@ -13683,35 +13683,31 @@ app.post('/api/calendar/check-book', async (req, res) => {
     let recentContext = getMostRecentCallContext(tenantKey);
     console.log('[BOOKING] Most recent call context:', JSON.stringify(recentContext, null, 2));
     
-    // If no cache, try to get call details from VAPI API using X-Call-Id header
-    if (!recentContext?.phone && process.env.VAPI_PRIVATE_KEY) {
-      const vapiCallId = req.get('X-Call-Id');
-      if (vapiCallId) {
-        console.log('[BOOKING] 🔍 No cache, fetching call from VAPI API:', vapiCallId);
-        try {
-          const vapiResponse = await fetch(`https://api.vapi.ai/call/${vapiCallId}`, {
-            headers: {
-              'Authorization': `Bearer ${process.env.VAPI_PRIVATE_KEY}`,
-              'Content-Type': 'application/json'
-            }
-          });
-          if (vapiResponse.ok) {
-            const callData = await vapiResponse.json();
-            console.log('[BOOKING] ✅ Got call data from VAPI:', JSON.stringify(callData, null, 2));
-            const phone = callData?.customer?.number || callData?.phoneNumber?.number || '';
-            const name = callData?.customer?.name || '';
-            if (phone) {
-              recentContext = { phone, name };
-              console.log('[BOOKING] ✅ Extracted from VAPI: phone:', phone, 'name:', name);
-            }
-          } else {
-            console.error('[BOOKING] VAPI API returned status:', vapiResponse.status);
+    // If cache has callId but no phone, fetch from VAPI API
+    if (recentContext?.callId && !recentContext?.phone && process.env.VAPI_PRIVATE_KEY) {
+      console.log('[BOOKING] 🔍 Have callId but no phone, fetching from VAPI API:', recentContext.callId);
+      try {
+        const vapiResponse = await fetch(`https://api.vapi.ai/call/${recentContext.callId}`, {
+          headers: {
+            'Authorization': `Bearer ${process.env.VAPI_PRIVATE_KEY}`,
+            'Content-Type': 'application/json'
           }
-        } catch (err) {
-          console.error('[BOOKING] Failed to fetch from VAPI API:', err.message);
+        });
+        if (vapiResponse.ok) {
+          const callData = await vapiResponse.json();
+          console.log('[BOOKING] ✅ Got call data from VAPI:', JSON.stringify(callData, null, 2));
+          const phone = callData?.customer?.number || callData?.phoneNumber?.number || '';
+          const name = callData?.customer?.name || '';
+          if (phone) {
+            recentContext.phone = phone;
+            recentContext.name = name || recentContext.name;
+            console.log('[BOOKING] ✅ Extracted from VAPI: phone:', phone, 'name:', name);
+          }
+        } else {
+          console.error('[BOOKING] VAPI API returned status:', vapiResponse.status);
         }
-      } else {
-        console.error('[BOOKING] No X-Call-Id header to fetch from VAPI');
+      } catch (err) {
+        console.error('[BOOKING] Failed to fetch from VAPI API:', err.message);
       }
     }
     
