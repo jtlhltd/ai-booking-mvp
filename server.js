@@ -13987,13 +13987,33 @@ app.post('/api/calendar/check-book', async (req, res) => {
         const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?$/);
         if (isoMatch) {
           const [, year, month, day, hour, minute, second] = isoMatch;
-          const [tzHour, tzMinute] = (client?.booking?.timezoneOffset ?? '00:00').split(':').map(Number);
+          
+          // TIMEZONE FIX: Use Luxon to properly convert UK local time to UTC
+          // This handles DST automatically (GMT in winter, BST in summer)
+          try {
+            const ukDateTime = DateTime.fromObject({
+              year: Number(year),
+              month: Number(month),
+              day: Number(day),
+              hour: Number(hour),
+              minute: Number(minute),
+              second: Number(second || 0)
+            }, { zone: timeZone || 'Europe/London' });
+            
+            if (ukDateTime.isValid) {
+              return ukDateTime.toJSDate(); // This gives us the correct UTC time
+            }
+          } catch (luxonError) {
+            console.log('[TIMEZONE PARSE] Luxon conversion failed, falling back to UTC:', luxonError.message);
+          }
+          
+          // Fallback: treat as UTC if Luxon fails
           const baseUtc = Date.UTC(
             Number(year),
             Number(month) - 1,
             Number(day),
-            Number(hour) - (Number.isFinite(tzHour) ? tzHour : 0),
-            Number(minute) - (Number.isFinite(tzMinute) ? tzMinute : 0),
+            Number(hour),
+            Number(minute),
             Number(second || 0)
           );
           if (!Number.isNaN(baseUtc)) {
