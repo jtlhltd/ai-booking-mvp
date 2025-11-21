@@ -12821,6 +12821,7 @@ const handleNotifySend = async (req, res) => {
 // Support both /api/notify/send and /api/notify/send/:param for VAPI compatibility
 app.post('/api/notify/send', handleNotifySend);
 app.post('/api/notify/send/:param', handleNotifySend);
+console.log('🟢🟢🟢 [NOTIFY-ROUTES] REGISTERED: POST /api/notify/send and /api/notify/send/:param');
 app.post('/webhooks/twilio-status', express.urlencoded({ extended: false }), twilioWebhookVerification, async (req, res) => {
   
   const rows = await readJson(SMS_STATUS_PATH, []);
