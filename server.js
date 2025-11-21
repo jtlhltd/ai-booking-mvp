@@ -13676,13 +13676,14 @@ app.post('/api/calendar/check-book', async (req, res) => {
       ? req.body.durationMin
       : (svc?.durationMin || client?.bookingDefaultDurationMin || 30);
 
+    // Get callId first (needed for both phone and name lookup)
+    const callId = req.body?.callId || req.body?.metadata?.callId || req.get('X-Call-Id') || req.get('X-Vapi-Call-Id');
+    
     // Get phone from request body first
-    const { lead } = req.body || {};
-    let phone = lead?.phone || req.body?.customerPhone || req.body?.phone || '';
+    let phone = req.body?.customerPhone || req.body?.phone || '';
     
     // If phone is empty, try to get it from callId (VAPI includes callId in function calls)
     if (!phone || phone.trim() === '') {
-      const callId = req.body?.callId || req.body?.metadata?.callId || req.get('X-Call-Id') || req.get('X-Vapi-Call-Id');
       if (callId && process.env.VAPI_PRIVATE_KEY) {
         try {
           console.log('[BOOKING] 🔍 No phone in request, fetching from VAPI using callId:', callId);
