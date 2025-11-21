@@ -12817,6 +12817,8 @@ const handleNotifySend = async (req, res) => {
   }
 };
 
+console.log('🔥🔥🔥 [DEBUG] Code execution reached line 12820 - about to register notify routes');
+
 // Simple SMS send route (per-tenant or global fallback)
 // Support both /api/notify/send and /api/notify/send/:param for VAPI compatibility
 console.log('🟢🟢🟢 [NOTIFY-ROUTES] ABOUT TO REGISTER ROUTES...');
