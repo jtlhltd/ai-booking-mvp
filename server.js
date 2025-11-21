@@ -13771,6 +13771,9 @@ app.post('/api/calendar/check-book', async (req, res) => {
     if (!req.body.lead) req.body.lead = {};
     req.body.lead.name = customerName;
     req.body.lead.phone = normalizedPhone;
+    
+    // Create a shorthand reference for easier access
+    const lead = req.body.lead;
 
     const parseInTimezone = (value, timeZone) => {
       if (value == null) return null;
