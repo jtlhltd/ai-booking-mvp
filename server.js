@@ -12719,9 +12719,8 @@ try {
 
 // Twilio delivery receipts
 
-// Simple SMS send route (per-tenant or global fallback)
-// Support both /api/notify/send and /api/notify/send/:anything for VAPI compatibility
-app.post(['/api/notify/send', '/api/notify/send/:param'], async (req, res) => {
+// Shared SMS handler function
+const handleNotifySend = async (req, res) => {
   try {
     const client = await getClientFromHeader(req);
     if (!client) return res.status(400).json({ ok:false, error:'Unknown tenant' });
@@ -12816,7 +12815,12 @@ app.post(['/api/notify/send', '/api/notify/send/:param'], async (req, res) => {
     console.error('[NOTIFY] Error:', msg);
     return res.status(code).json({ ok:false, error: msg });
   }
-});
+};
+
+// Simple SMS send route (per-tenant or global fallback)
+// Support both /api/notify/send and /api/notify/send/:param for VAPI compatibility
+app.post('/api/notify/send', handleNotifySend);
+app.post('/api/notify/send/:param', handleNotifySend);
 app.post('/webhooks/twilio-status', express.urlencoded({ extended: false }), twilioWebhookVerification, async (req, res) => {
   
   const rows = await readJson(SMS_STATUS_PATH, []);
