@@ -13676,9 +13676,9 @@ app.get('/api/debug/cache', (req, res) => {
   });
 });
 
-console.log('🟢🟢🟢 [v2] REGISTERING ROUTE: POST /api/calendar/check-book');
+console.log('🟢🟢🟢 [v3-LEAD-FIX] REGISTERING ROUTE: POST /api/calendar/check-book');
 app.post('/api/calendar/check-book', async (req, res) => {
-  console.log('🚨🚨🚨 [v2] HANDLER CALLED - FIRST LINE - test_client fix active');
+  console.log('🚨🚨🚨 [v3-LEAD-FIX] HANDLER CALLED - lead variable fix deployed');
 
   try {
     console.log('[BOOKING] Request received:', new Date().toISOString());
