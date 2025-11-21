@@ -13706,6 +13706,25 @@ app.get('/api/debug/cache', (req, res) => {
 });
 
 console.error('🟢🟢🟢 [v3-LEAD-FIX] REGISTERING ROUTE: POST /api/calendar/check-book');
+
+// MOVED NOTIFY ROUTES HERE TO TEST IF THEY GET REGISTERED
+console.log('🟢🟢🟢 [NOTIFY-ROUTES-MOVED] ABOUT TO REGISTER ROUTES...');
+
+// Test route first
+app.post('/api/notify/test', (req, res) => {
+  res.json({ ok: true, message: 'Test route works!' });
+});
+console.log('🟢🟢🟢 [NOTIFY-ROUTES-MOVED] REGISTERED: POST /api/notify/test');
+
+app.post('/api/notify/send', (req, res) => {
+  res.json({ ok: true, message: 'Simple notify route works!', timestamp: new Date().toISOString() });
+});
+console.log('🟢🟢🟢 [NOTIFY-ROUTES-MOVED] REGISTERED: POST /api/notify/send');
+app.post('/api/notify/send/:param', (req, res) => {
+  res.json({ ok: true, message: 'Simple notify route with param works!', param: req.params.param, timestamp: new Date().toISOString() });
+});
+console.log('🟢🟢🟢 [NOTIFY-ROUTES-MOVED] REGISTERED: POST /api/notify/send/:param');
+
 app.post('/api/calendar/check-book', async (req, res) => {
   console.log('🚨🚨🚨 [v3-LEAD-FIX] HANDLER CALLED - lead variable fix deployed');
 
