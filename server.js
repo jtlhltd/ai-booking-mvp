@@ -12721,7 +12721,7 @@ console.log('🔥🔥🔥 [DEBUG] Code execution reached line 12706 - after Goog
   }
 });
 
-console.log('🔥🔥🔥 [DEBUG] Code execution reached TOP LEVEL after calendar function - line 12723');
+console.error('🔥🔥🔥 [CRITICAL ERROR DEBUG] Code execution reached TOP LEVEL after calendar function - line 12723');
 
 // Twilio delivery receipts
 console.log('🔥🔥🔥 [DEBUG] Code execution reached line 12720 - before handleNotifySend function');
@@ -13701,7 +13701,7 @@ app.get('/api/debug/cache', (req, res) => {
   });
 });
 
-console.log('🟢🟢🟢 [v3-LEAD-FIX] REGISTERING ROUTE: POST /api/calendar/check-book');
+console.error('🟢🟢🟢 [v3-LEAD-FIX] REGISTERING ROUTE: POST /api/calendar/check-book');
 app.post('/api/calendar/check-book', async (req, res) => {
   console.log('🚨🚨🚨 [v3-LEAD-FIX] HANDLER CALLED - lead variable fix deployed');
 
