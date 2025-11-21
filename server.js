@@ -13680,11 +13680,43 @@ app.post('/api/calendar/check-book', async (req, res) => {
     const tenantKey = client?.key || client?.tenantKey || 'logistics_client';
     console.log('[BOOKING] Looking up most recent call for tenant:', tenantKey);
     
-    const recentContext = getMostRecentCallContext(tenantKey);
+    let recentContext = getMostRecentCallContext(tenantKey);
     console.log('[BOOKING] Most recent call context:', JSON.stringify(recentContext, null, 2));
     
+    // If no cache, try to get call details from VAPI API using X-Call-Id header
+    if (!recentContext?.phone && process.env.VAPI_PRIVATE_KEY) {
+      const vapiCallId = req.get('X-Call-Id');
+      if (vapiCallId) {
+        console.log('[BOOKING] 🔍 No cache, fetching call from VAPI API:', vapiCallId);
+        try {
+          const vapiResponse = await fetch(`https://api.vapi.ai/call/${vapiCallId}`, {
+            headers: {
+              'Authorization': `Bearer ${process.env.VAPI_PRIVATE_KEY}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          if (vapiResponse.ok) {
+            const callData = await vapiResponse.json();
+            console.log('[BOOKING] ✅ Got call data from VAPI:', JSON.stringify(callData, null, 2));
+            const phone = callData?.customer?.number || callData?.phoneNumber?.number || '';
+            const name = callData?.customer?.name || '';
+            if (phone) {
+              recentContext = { phone, name };
+              console.log('[BOOKING] ✅ Extracted from VAPI: phone:', phone, 'name:', name);
+            }
+          } else {
+            console.error('[BOOKING] VAPI API returned status:', vapiResponse.status);
+          }
+        } catch (err) {
+          console.error('[BOOKING] Failed to fetch from VAPI API:', err.message);
+        }
+      } else {
+        console.error('[BOOKING] No X-Call-Id header to fetch from VAPI');
+      }
+    }
+    
     if (!recentContext?.phone) {
-      console.error('[BOOKING] No phone in cache for tenant:', tenantKey);
+      console.error('[BOOKING] No phone found after all attempts for tenant:', tenantKey);
       return res.status(400).json({ 
         error: 'No active call found. Please try again.',
         debug: { tenantKey, cacheEmpty: true }
