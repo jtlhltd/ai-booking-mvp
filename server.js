@@ -13801,7 +13801,7 @@ app.post('/api/calendar/check-book', async (req, res) => {
       if (isDemo) {
         phone = '+447491683261'; // Your actual phone number
         console.log('[BOOKING] 🎯 Using hardcoded demo phone number:', phone);
-      } else if (!phone) {
+      } else {
         return res.status(400).json({ 
           error: 'Phone number required. The phone number should be automatically included from the call. If calling the API directly, include it in lead.phone or customerPhone.' 
         });
