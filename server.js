@@ -13706,6 +13706,7 @@ app.post('/api/calendar/check-book', async (req, res) => {
     
     // Simplified debug (headers can be huge and cause issues)
     console.log('[BOOKING][check-book] 📥 Request body:', JSON.stringify(req.body, null, 2));
+    console.log('[BOOKING][check-book] 🔍 Request received at:', new Date().toISOString());
     
     console.log('[BOOKING][check-book] 🔍 CallId detection:', { 
       fromBody: req.body?.callId,
