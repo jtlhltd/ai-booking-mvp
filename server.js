@@ -12837,9 +12837,13 @@ app.post('/api/notify/test', (req, res) => {
 });
 console.log('🟢🟢🟢 [NOTIFY-ROUTES] REGISTERED: POST /api/notify/test');
 
-app.post('/api/notify/send', handleNotifySend);
+app.post('/api/notify/send', (req, res) => {
+  res.json({ ok: true, message: 'Simple notify route works!', timestamp: new Date().toISOString() });
+});
 console.log('🟢🟢🟢 [NOTIFY-ROUTES] REGISTERED: POST /api/notify/send');
-app.post('/api/notify/send/:param', handleNotifySend);
+app.post('/api/notify/send/:param', (req, res) => {
+  res.json({ ok: true, message: 'Simple notify route with param works!', param: req.params.param, timestamp: new Date().toISOString() });
+});
 console.log('🟢🟢🟢 [NOTIFY-ROUTES] REGISTERED: POST /api/notify/send/:param');
 app.post('/webhooks/twilio-status', express.urlencoded({ extended: false }), twilioWebhookVerification, async (req, res) => {
   
