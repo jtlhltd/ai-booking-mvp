@@ -13665,10 +13665,16 @@ function isDemoClient(client) {
 }
 
 app.post('/api/calendar/check-book', async (req, res) => {
+  console.log('[BOOKING][check-book] ========== REQUEST RECEIVED ==========');
+  console.log('[BOOKING][check-book] 🕐 Timestamp:', new Date().toISOString());
+  
   const headerIdemKey = req.get('Idempotency-Key');
   const idemKey = headerIdemKey || null;
   const cached = idemKey ? getCachedIdem(idemKey) : null;
-  if (cached) return res.status(cached.status).json(cached.body);
+  if (cached) {
+    console.log('[BOOKING][check-book] ♻️  RETURNING CACHED RESPONSE (idempotency)');
+    return res.status(cached.status).json(cached.body);
+  }
 
   try {
     const client = await getClientFromHeader(req); // DB-backed
