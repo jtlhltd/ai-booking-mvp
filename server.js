@@ -13830,6 +13830,9 @@ console.log('🟢🟢🟢 [NOTIFY-ROUTES-MOVED] REGISTERED: POST /api/notify/sen
 app.post('/api/calendar/check-book', async (req, res) => {
   console.log('🚨🚨🚨 [v3-LEAD-FIX] HANDLER CALLED - lead variable fix deployed');
 
+  // Define idemKey for idempotency handling
+  const idemKey = deriveIdemKey(req);
+
   try {
     console.log('[BOOKING] Request received:', new Date().toISOString());
     
