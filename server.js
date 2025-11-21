@@ -13743,14 +13743,9 @@ app.post('/api/calendar/check-book', async (req, res) => {
       // If still no phone, try to get the most recent call for this tenant
       if (!phone || phone.trim() === '') {
         console.log('[BOOKING] 🔍 Trying most recent call fallback...');
-        const tenantKey = client?.key || client?.tenantKey;
-        console.log('[BOOKING] 🏢 Client info:', {
-          'client.key': client?.key,
-          'client.tenantKey': client?.tenantKey,
-          'client.name': client?.name,
-          'client.id': client?.id,
-          'FINAL tenantKey': tenantKey
-        });
+        // CRITICAL: Use SAME logic as webhook (routes/vapi-webhooks.js line 101)
+        const tenantKey = client?.key || client?.tenantKey || 'logistics_client';
+        console.log('[BOOKING] 🏢 Looking up with tenantKey:', tenantKey);
         
         if (tenantKey) {
           console.log('[BOOKING] 🔍 Calling getMostRecentCallContext with tenantKey:', tenantKey);
