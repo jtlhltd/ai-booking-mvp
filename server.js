@@ -13676,10 +13676,10 @@ app.get('/api/debug/cache', (req, res) => {
   });
 });
 
-console.log('🟢🟢🟢 REGISTERING ROUTE: POST /api/calendar/check-book at line 13667');
+console.log('🟢🟢🟢 [v2] REGISTERING ROUTE: POST /api/calendar/check-book');
 app.post('/api/calendar/check-book', async (req, res) => {
-  console.log('🚨🚨🚨 HANDLER CALLED - FIRST LINE');
-  
+  console.log('🚨🚨🚨 [v2] HANDLER CALLED - FIRST LINE - test_client fix active');
+
   try {
     console.log('[BOOKING] Request received:', new Date().toISOString());
     
@@ -13700,25 +13700,25 @@ app.post('/api/calendar/check-book', async (req, res) => {
       console.log('[BOOKING] 🔍 Have callId but no phone, fetching from VAPI API:', recentContext.callId);
       try {
         const vapiResponse = await fetch(`https://api.vapi.ai/call/${recentContext.callId}`, {
-          headers: {
-            'Authorization': `Bearer ${process.env.VAPI_PRIVATE_KEY}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        if (vapiResponse.ok) {
-          const callData = await vapiResponse.json();
+            headers: {
+              'Authorization': `Bearer ${process.env.VAPI_PRIVATE_KEY}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          if (vapiResponse.ok) {
+            const callData = await vapiResponse.json();
           console.log('[BOOKING] ✅ Got call data from VAPI:', JSON.stringify(callData, null, 2));
           const phone = callData?.customer?.number || callData?.phoneNumber?.number || '';
           const name = callData?.customer?.name || '';
-          if (phone) {
+            if (phone) {
             recentContext.phone = phone;
             recentContext.name = name || recentContext.name;
             console.log('[BOOKING] ✅ Extracted from VAPI: phone:', phone, 'name:', name);
-          }
+            }
         } else {
           console.error('[BOOKING] VAPI API returned status:', vapiResponse.status);
-        }
-      } catch (err) {
+          }
+        } catch (err) {
         console.error('[BOOKING] Failed to fetch from VAPI API:', err.message);
       }
     }
