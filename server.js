@@ -139,7 +139,7 @@ import * as store from './store.js';
 import * as sheets from './sheets.js';
 import messagingService from './lib/messaging-service.js';
 import { AIInsightsEngine, LeadScoringEngine } from './lib/ai-insights.js';
-import { getCallContext, storeCallContext } from './lib/call-context-cache.js';
+import { getCallContext, storeCallContext, getMostRecentCallContext } from './lib/call-context-cache.js';
 // Real API integration - dynamic imports will be used in endpoints
 
 const app = express();
@@ -13707,11 +13707,24 @@ app.post('/api/calendar/check-book', async (req, res) => {
     
     // If phone is empty, try to get it from call context cache first (fastest)
     if (!phone || phone.trim() === '') {
+      // Try with callId first if available
       if (callId) {
         const cachedContext = getCallContext(callId);
         if (cachedContext?.phone) {
           phone = cachedContext.phone;
-          console.log('[BOOKING] ✅ Got phone from call context cache:', phone);
+          console.log('[BOOKING] ✅ Got phone from call context cache (by callId):', phone);
+        }
+      }
+      
+      // If still no phone, try to get the most recent call for this tenant
+      if (!phone || phone.trim() === '') {
+        const tenantKey = client?.key || client?.tenantKey;
+        if (tenantKey) {
+          const recentContext = getMostRecentCallContext(tenantKey);
+          if (recentContext?.phone) {
+            phone = recentContext.phone;
+            console.log('[BOOKING] ✅ Got phone from most recent call context:', phone);
+          }
         }
       }
     }
