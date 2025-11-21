@@ -99,16 +99,29 @@ router.post('/webhooks/vapi', async (req, res) => {
     // For logistics calls, we can extract without tenant metadata
     // Just get phone from wherever it might be
     const tenantKey = metadata.tenantKey || metadata.clientKey || 'logistics_client';
-    const leadPhone = metadata.leadPhone || body.customer?.number || body.phone || '';
-    const leadName = metadata.leadName || body.customer?.name || '';
+    const leadPhone = metadata.leadPhone || body.customer?.number || body.call?.customer?.number || body.phone || '';
+    const leadName = metadata.leadName || body.customer?.name || body.call?.customer?.name || '';
+    
+    console.log('[VAPI WEBHOOK] 📞 Phone extraction:', { 
+      callId, 
+      leadPhone, 
+      leadName,
+      'metadata.leadPhone': metadata.leadPhone,
+      'body.customer?.number': body.customer?.number,
+      'body.call?.customer?.number': body.call?.customer?.number,
+      'body.phone': body.phone
+    });
     
     // Store call context for API endpoint lookups (if we have callId and phone)
     if (callId && leadPhone) {
+      console.log('[VAPI WEBHOOK] ✅ Storing call context');
       storeCallContext(callId, leadPhone, leadName, {
         tenantKey,
         status,
         timestamp: Date.now()
       });
+    } else {
+      console.log('[VAPI WEBHOOK] ⚠️ NOT storing - missing data:', { hasCallId: !!callId, hasLeadPhone: !!leadPhone });
     }
     
     // Skip only if absolutely no data at all
