@@ -14407,6 +14407,9 @@ app.post('/api/calendar/check-book', async (req, res) => {
     setCachedIdem(idemKey, 200, responseBody);
     return res.json(responseBody);
   } catch (e) {
+    console.error('[BOOKING][check-book] ❌❌❌ CAUGHT ERROR IN OUTER CATCH:', e);
+    console.error('[BOOKING][check-book] Error stack:', e?.stack);
+    console.error('[BOOKING][check-book] Error message:', e?.message);
     const status = 500;
     const body = { error: String(e) };
     setCachedIdem(idemKey, status, body);
