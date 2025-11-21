@@ -13664,6 +13664,7 @@ function isDemoClient(client) {
   return false;
 }
 
+console.log('🟢🟢🟢 REGISTERING ROUTE: POST /api/calendar/check-book at line 13667');
 app.post('/api/calendar/check-book', async (req, res) => {
   console.log('[BOOKING][check-book] ========== REQUEST RECEIVED ==========');
   console.log('[BOOKING][check-book] 🕐 Timestamp:', new Date().toISOString());
