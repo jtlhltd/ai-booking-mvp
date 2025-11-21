@@ -13732,8 +13732,11 @@ app.post('/api/dashboard/reset/:clientKey', async (req, res) => {
     // Delete messages for this client
     await query('DELETE FROM messages WHERE client_key = $1', [clientKey]);
     
-    // Delete leads for this client (optional - uncomment if you want to reset leads too)
-    // await query('DELETE FROM leads WHERE client_key = $1', [clientKey]);
+    // Delete leads for this client if requested
+    const includeLeads = req.body?.includeLeads || req.query?.includeLeads;
+    if (includeLeads) {
+      await query('DELETE FROM leads WHERE client_key = $1', [clientKey]);
+    }
     
     console.log(`[DASHBOARD RESET] ✅ Successfully reset dashboard data for ${clientKey}`);
     
@@ -13744,7 +13747,7 @@ app.post('/api/dashboard/reset/:clientKey', async (req, res) => {
         appointments: true,
         calls: true,
         messages: true,
-        leads: false // Set to true if you uncomment the leads deletion above
+        leads: includeLeads || false
       }
     });
     
