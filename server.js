@@ -13687,6 +13687,12 @@ app.post('/api/calendar/check-book', async (req, res) => {
                    req.get('X-Vapi-Call-Id') ||
                    req.get('Cookie')?.match(/callId=([^;]+)/)?.[1]; // Extract from cookie if present
     
+    console.log('[BOOKING][check-book] 🔍 FULL REQUEST DEBUG:', {
+      body: req.body,
+      headers: req.headers,
+      query: req.query
+    });
+    
     console.log('[BOOKING][check-book] 🔍 CallId detection:', { 
       fromBody: req.body?.callId,
       fromMetadata: req.body?.metadata?.callId,
