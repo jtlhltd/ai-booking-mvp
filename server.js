@@ -13863,8 +13863,8 @@ app.post('/api/calendar/check-book', async (req, res) => {
     const referenceNow = DateTime.now().setZone(tz);
     demoOverrides = await getDemoOverrides({
       tenant: client?.clientKey || null,
-      leadPhone: lead.phone,
-      leadName: lead.name || null,
+      leadPhone: req.body.lead.phone,
+      leadName: req.body.lead.name || null,
       service: requestedService || null
     }, { now: referenceNow, timezone: tz });
 
