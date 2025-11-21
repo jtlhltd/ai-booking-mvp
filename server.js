@@ -13667,41 +13667,46 @@ function isDemoClient(client) {
 console.log('🟢🟢🟢 REGISTERING ROUTE: POST /api/calendar/check-book at line 13667');
 app.post('/api/calendar/check-book', async (req, res) => {
   console.log('🚨🚨🚨 HANDLER CALLED - FIRST LINE');
-  console.log('[BOOKING][check-book] ========== REQUEST RECEIVED ==========');
-  console.log('[BOOKING][check-book] 🕐 Timestamp:', new Date().toISOString());
   
-  const headerIdemKey = req.get('Idempotency-Key');
-  const idemKey = headerIdemKey || null;
-  const cached = idemKey ? getCachedIdem(idemKey) : null;
-  if (cached) {
-    console.log('[BOOKING][check-book] ♻️  RETURNING CACHED RESPONSE (idempotency)');
-    return res.status(cached.status).json(cached.body);
-  }
-
   try {
-    console.log('[BOOKING][check-book] 🔍 About to call getClientFromHeader...');
-    let client;
-    try {
-      client = await getClientFromHeader(req); // DB-backed
-      console.log('[BOOKING][check-book] 🔍 getClientFromHeader result:', client ? 'found' : 'null');
-    } catch (getClientError) {
-      console.error('[BOOKING][check-book] ❌ getClientFromHeader threw error:', getClientError);
-      throw getClientError;
-    }
+    console.log('[BOOKING] Request received:', new Date().toISOString());
+    
+    const client = await getClientFromHeader(req);
     if (!client) return res.status(400).json({ error: 'Unknown tenant' });
+    
+    console.log('[BOOKING] Client found:', client?.key || client?.tenantKey);
+    
+    // SIMPLE APPROACH: Get phone from most recent call for this tenant
+    const tenantKey = client?.key || client?.tenantKey || 'logistics_client';
+    console.log('[BOOKING] Looking up most recent call for tenant:', tenantKey);
+    
+    const recentContext = getMostRecentCallContext(tenantKey);
+    console.log('[BOOKING] Most recent call context:', JSON.stringify(recentContext, null, 2));
+    
+    if (!recentContext?.phone) {
+      console.error('[BOOKING] No phone in cache for tenant:', tenantKey);
+      return res.status(400).json({ 
+        error: 'No active call found. Please try again.',
+        debug: { tenantKey, cacheEmpty: true }
+      });
+    }
+    
+    const phone = recentContext.phone;
+    const customerName = recentContext.name || req.body?.customerName || 'Customer';
+    
+    console.log('[BOOKING] ✅ Using phone from cache:', phone);
+    console.log('[BOOKING] ✅ Using name:', customerName);
+    
+    // Get basic client settings
     const tz = pickTimezone(client);
     const calendarId = pickCalendarId(client);
-    const requestStartedAt = Date.now();
-    
-    // Check if this is a demo client - if so, simulate booking
     const isDemo = isDemoClient(client);
-
+    
+    // Get service duration
     let services = client?.services ?? client?.servicesJson ?? [];
     if (!Array.isArray(services)) {
-      try { services = JSON.parse(String(services)); }
-      catch { services = []; }
+      try { services = JSON.parse(String(services)); } catch { services = []; }
     }
-    // Handle both old and new VAPI structure
     const requestedService = req.body?.service;
     const svc = services.find(s => s.id === requestedService);
     const dur = (typeof req.body?.durationMinutes === 'number' && req.body.durationMinutes > 0)
@@ -13709,227 +13714,13 @@ app.post('/api/calendar/check-book', async (req, res) => {
       : (typeof req.body?.durationMin === 'number' && req.body.durationMin > 0)
       ? req.body.durationMin
       : (svc?.durationMin || client?.bookingDefaultDurationMin || 30);
-
-    // Get callId first (needed for both phone and name lookup)
-    // Try multiple locations including idempotency header which might have call context
-    // CRITICAL: VAPI sends empty strings '', so we need to filter those out
-    const callId = (req.body?.callId && req.body.callId.trim()) || 
-                   (req.body?.metadata?.callId && req.body.metadata.callId.trim()) || 
-                   (req.get('X-Call-Id') && req.get('X-Call-Id').trim()) || 
-                   (req.get('X-Vapi-Call-Id') && req.get('X-Vapi-Call-Id').trim()) ||
-                   req.get('Cookie')?.match(/callId=([^;]+)/)?.[1] || // Extract from cookie if present
-                   ''; // Default to empty string
-    
-    // Simplified debug (headers can be huge and cause issues)
-    console.log('[BOOKING][check-book] ========== NEW REQUEST ==========');
-    console.log('[BOOKING][check-book] 📥 Request body:', JSON.stringify(req.body, null, 2));
-    console.log('[BOOKING][check-book] 🔍 Request received at:', new Date().toISOString());
-    console.log('[BOOKING][check-book] 🔧 Server restart ID:', Date.now());
-    
-    console.log('[BOOKING][check-book] 🔍 CallId detection:', { 
-      fromBody: req.body?.callId,
-      fromMetadata: req.body?.metadata?.callId,
-      fromXCallId: req.get('X-Call-Id'),
-      fromXVapiCallId: req.get('X-Vapi-Call-Id'),
-      fromCookie: req.get('Cookie')?.match(/callId=([^;]+)/)?.[1],
-      finalCallId: callId
-    });
-    
-    console.log('[BOOKING] ==================== PHONE LOOKUP DEBUG ====================');
-    console.log('[BOOKING] 📥 Request body:', JSON.stringify(req.body, null, 2));
-    console.log('[BOOKING] 📥 Headers:', {
-      'X-Customer-Phone': req.get('X-Customer-Phone'),
-      'X-Call-Id': req.get('X-Call-Id'),
-      'X-Vapi-Call-Id': req.get('X-Vapi-Call-Id'),
-      'Cookie': req.get('Cookie')
-    });
-    
-    // Extract phone from various possible locations (new simplified structure)
-    // CRITICAL: VAPI sends empty strings '', so we need to filter those out
-    let phone = (req.body?.customerPhone && req.body.customerPhone.trim()) || 
-                (req.body?.phone && req.body.phone.trim()) || 
-                (req.get('X-Customer-Phone') && req.get('X-Customer-Phone').trim()) || 
-                '';
-    
-    console.log('[BOOKING] 📞 Phone extraction from request:', {
-      'req.body.customerPhone': req.body?.customerPhone,
-      'req.body.phone': req.body?.phone,
-      'X-Customer-Phone header': req.get('X-Customer-Phone'),
-      'INITIAL phone': phone
-    });
-    
-    // If phone is empty, try to get it from call context cache first (fastest)
-    if (!phone || phone === '') {
-      console.log('[BOOKING] ⚠️ No phone in request, trying cache lookups...');
-      
-      // Try with callId first if available
-      if (callId) {
-        console.log('[BOOKING] 🔍 Trying lookup by callId:', callId);
-        const cachedContext = getCallContext(callId);
-        console.log('[BOOKING] 🔍 getCallContext result:', cachedContext);
-        if (cachedContext?.phone) {
-          phone = cachedContext.phone;
-          console.log('[BOOKING] ✅✅✅ GOT PHONE FROM CACHE (by callId):', phone);
-        } else {
-          console.log('[BOOKING] ❌ No phone found in cache for callId:', callId);
-        }
-      } else {
-        console.log('[BOOKING] ❌ No callId available for direct cache lookup');
-      }
-      
-      // If still no phone, try to get the most recent call for this tenant
-      if (!phone || phone.trim() === '') {
-        console.log('[BOOKING] 🔍 Trying most recent call fallback...');
-        // CRITICAL: Use SAME logic as webhook (routes/vapi-webhooks.js line 101)
-        const tenantKey = client?.key || client?.tenantKey || 'logistics_client';
-        console.log('[BOOKING] 🏢 Looking up with tenantKey:', tenantKey);
-        
-        if (tenantKey) {
-          console.log('[BOOKING] 🔍 Calling getMostRecentCallContext with tenantKey:', tenantKey);
-          const recentContext = getMostRecentCallContext(tenantKey);
-          console.log('[BOOKING] 🔍 getMostRecentCallContext FULL result:', JSON.stringify(recentContext, null, 2));
-          
-          if (recentContext?.phone) {
-            phone = recentContext.phone;
-            console.log('[BOOKING] ✅✅✅ GOT PHONE FROM MOST RECENT CALL:', phone);
-          } else {
-            console.log('[BOOKING] ❌ getMostRecentCallContext returned no phone');
-          }
-        } else {
-          console.log('[BOOKING] ❌❌❌ NO TENANTKEY - CANNOT DO FALLBACK LOOKUP');
-        }
-      }
-    } else {
-      console.log('[BOOKING] ✅ Phone found in request:', phone);
-    }
-    
-    console.log('[BOOKING] 📞 FINAL PHONE VALUE:', phone);
-    
-    // If still empty, try to get it from VAPI API (requires API call)
-    if (!phone || phone.trim() === '') {
-      if (callId && process.env.VAPI_PRIVATE_KEY) {
-        try {
-          console.log('[BOOKING] 🔍 No phone in request, fetching from VAPI using callId:', callId);
-          const vapiResponse = await fetch(`https://api.vapi.ai/call/${callId}`, {
-            headers: {
-              'Authorization': `Bearer ${process.env.VAPI_PRIVATE_KEY}`,
-              'Content-Type': 'application/json'
-            }
-          });
-          if (vapiResponse.ok) {
-            const callData = await vapiResponse.json();
-            phone = callData?.customer?.number || callData?.phoneNumber?.number || '';
-            if (phone) {
-              console.log('[BOOKING] ✅ Got phone from VAPI call:', phone);
-              console.log('[BOOKING] 🔍 Full VAPI call data:', JSON.stringify(callData, null, 2));
-            }
-          }
-        } catch (err) {
-          console.warn('[BOOKING] Could not fetch phone from VAPI:', err.message);
-        }
-      }
-      
-      // Last resort: get from most recent call in database
-      if (!phone || phone.trim() === '') {
-        try {
-          const recentCall = await query(
-            `SELECT lead_phone FROM calls WHERE client_key = $1 AND lead_phone IS NOT NULL AND lead_phone != '' ORDER BY created_at DESC LIMIT 1`,
-            [client.clientKey]
-          );
-          if (recentCall?.rows?.[0]?.lead_phone) {
-            phone = recentCall.rows[0].lead_phone;
-            console.log('[BOOKING] ✅ Using phone from most recent call:', phone);
-          }
-        } catch (err) {
-          console.warn('[BOOKING] Could not look up phone from calls:', err.message);
-        }
-      }
-    }
-    
-    // Normalize phone to E.164 format if we have one
-    if (phone && phone.trim() !== '') {
-      const { normalizePhone } = await import('./util/phone.js');
-      const normalizedPhone = normalizePhone(phone);
-      console.log('[BOOKING] 📞 Phone normalization:', phone, '->', normalizedPhone);
-      phone = normalizedPhone;
-    }
-    
-    // Debug logging if still no phone - log FULL request details
-    if (!phone) {
-      console.error('[BOOKING] ❌ Could not find phone number after all attempts');
-      console.error('[BOOKING] Request method:', req.method);
-      console.error('[BOOKING] Request URL:', req.url);
-      console.error('[BOOKING] Request path:', req.path);
-      console.error('[BOOKING] Request query:', req.query);
-      console.error('[BOOKING] Request body keys:', Object.keys(req.body || {}));
-      console.error('[BOOKING] Full request body:', JSON.stringify(req.body, null, 2));
-      console.error('[BOOKING] ALL Request headers:', JSON.stringify(req.headers, null, 2));
-      console.error('[BOOKING] Client key:', client?.clientKey);
-      
-      // Try to extract callId from URL or any other location
-      const urlCallId = req.path.match(/call[_-]?id[=:]([^\/\s]+)/i)?.[1] || 
-                       req.query?.callId || 
-                       req.query?.call_id;
-      if (urlCallId) {
-        console.error('[BOOKING] Found callId in URL/query:', urlCallId);
-      }
-    }
-    
-    // Extract customer name from request or VAPI call data
-    let customerName = req.body?.customerName || req.body?.name;
-    
-    // If customer name is missing, try to get it from call context cache first
-    if (!customerName || customerName.trim() === '') {
-      if (callId) {
-        const cachedContext = getCallContext(callId);
-        if (cachedContext?.customerName) {
-          customerName = cachedContext.customerName;
-          console.log('[BOOKING] ✅ Got customer name from call context cache:', customerName);
-        }
-      }
-    }
-    
-    // If still empty, try to get it from VAPI API
-    if (!customerName || customerName.trim() === '') {
-      if (callId && process.env.VAPI_PRIVATE_KEY) {
-        try {
-          console.log('[BOOKING] 🔍 No customer name in request, fetching from VAPI using callId:', callId);
-          const vapiResponse = await fetch(`https://api.vapi.ai/call/${callId}`, {
-            headers: {
-              'Authorization': `Bearer ${process.env.VAPI_PRIVATE_KEY}`,
-              'Content-Type': 'application/json'
-            }
-          });
-          
-          if (vapiResponse.ok) {
-            const callData = await vapiResponse.json();
-            if (callData?.customer?.name) {
-              customerName = callData.customer.name;
-              console.log('[BOOKING] ✅ Using customer name from VAPI API call data:', customerName);
-            }
-          }
-        } catch (err) {
-          console.warn('[BOOKING] Could not fetch customer name from VAPI API:', err.message);
-        }
-      }
-      
-    // Ensure we always have a customer name - use generic fallback if missing
-    if (!customerName || customerName.trim() === '') {
-      customerName = 'Customer';
-      console.log('[BOOKING] 🎯 Using generic customer name fallback');
-    }
-    }
-    
-    // Phone is required - return error if not provided
-    if (!phone || phone.trim() === '') {
-      return res.status(400).json({ 
-        error: 'Phone number required. The phone number should be automatically included from the call. If calling the API directly, include it in lead.phone or customerPhone.' 
-      });
-    }
     
     // Normalize phone
     const normalizedPhone = normalizePhoneE164(phone);
-    if (!normalizedPhone) return res.status(400).json({ error: 'Phone must be valid E.164 format' });
+    if (!normalizedPhone) {
+      console.error('[BOOKING] Failed to normalize phone:', phone);
+      return res.status(400).json({ error: 'Phone must be valid E.164 format' });
+    }
     
     // Ensure lead object has name and phone
     if (!req.body.lead) req.body.lead = {};
