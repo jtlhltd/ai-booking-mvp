@@ -9666,9 +9666,24 @@ const SMS_STATUS_PATH = path.join(DATA_DIR, 'sms-status.json');
 const JOBS_PATH  = path.join(DATA_DIR, 'jobs.json');
 
 // === Env: Google
-const GOOGLE_CLIENT_EMAIL    = process.env.GOOGLE_CLIENT_EMAIL    || '';
-const GOOGLE_PRIVATE_KEY     = process.env.GOOGLE_PRIVATE_KEY     || '';
-const GOOGLE_PRIVATE_KEY_B64 = process.env.GOOGLE_PRIVATE_KEY_B64 || '';
+// Support both individual env vars AND full JSON base64
+let GOOGLE_CLIENT_EMAIL    = process.env.GOOGLE_CLIENT_EMAIL    || '';
+let GOOGLE_PRIVATE_KEY     = process.env.GOOGLE_PRIVATE_KEY     || '';
+let GOOGLE_PRIVATE_KEY_B64 = process.env.GOOGLE_PRIVATE_KEY_B64 || '';
+
+// If GOOGLE_SA_JSON_BASE64 is provided, extract credentials from it
+if (process.env.GOOGLE_SA_JSON_BASE64 && !GOOGLE_CLIENT_EMAIL) {
+  try {
+    const jsonString = Buffer.from(process.env.GOOGLE_SA_JSON_BASE64, 'base64').toString('utf8');
+    const serviceAccount = JSON.parse(jsonString);
+    GOOGLE_CLIENT_EMAIL = serviceAccount.client_email || '';
+    GOOGLE_PRIVATE_KEY = serviceAccount.private_key || '';
+    console.log('[GOOGLE AUTH] Using credentials from GOOGLE_SA_JSON_BASE64');
+  } catch (e) {
+    console.error('[GOOGLE AUTH] Failed to parse GOOGLE_SA_JSON_BASE64:', e.message);
+  }
+}
+
 const GOOGLE_CALENDAR_ID     = process.env.GOOGLE_CALENDAR_ID     || 'primary';
 const TIMEZONE               = process.env.TZ || process.env.TIMEZONE || 'Europe/London';
 
