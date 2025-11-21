@@ -12721,6 +12721,8 @@ console.log('🔥🔥🔥 [DEBUG] Code execution reached line 12706 - after Goog
   }
 });
 
+console.log('🔥🔥🔥 [DEBUG] Code execution reached TOP LEVEL after calendar function - line 12723');
+
 // Twilio delivery receipts
 console.log('🔥🔥🔥 [DEBUG] Code execution reached line 12720 - before handleNotifySend function');
 
