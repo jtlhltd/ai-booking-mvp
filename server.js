@@ -139,7 +139,7 @@ import * as store from './store.js';
 import * as sheets from './sheets.js';
 import messagingService from './lib/messaging-service.js';
 import { AIInsightsEngine, LeadScoringEngine } from './lib/ai-insights.js';
-import { getCallContext, storeCallContext, getMostRecentCallContext } from './lib/call-context-cache.js';
+import { getCallContext, storeCallContext, getMostRecentCallContext, getCallContextCacheStats } from './lib/call-context-cache.js';
 // Real API integration - dynamic imports will be used in endpoints
 
 const app = express();
