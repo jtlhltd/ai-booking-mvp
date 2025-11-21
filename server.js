@@ -13681,17 +13681,16 @@ app.post('/api/calendar/check-book', async (req, res) => {
 
     // Get callId first (needed for both phone and name lookup)
     // Try multiple locations including idempotency header which might have call context
-    const callId = req.body?.callId || 
-                   req.body?.metadata?.callId || 
-                   req.get('X-Call-Id') || 
-                   req.get('X-Vapi-Call-Id') ||
-                   req.get('Cookie')?.match(/callId=([^;]+)/)?.[1]; // Extract from cookie if present
+    // CRITICAL: VAPI sends empty strings '', so we need to filter those out
+    const callId = (req.body?.callId && req.body.callId.trim()) || 
+                   (req.body?.metadata?.callId && req.body.metadata.callId.trim()) || 
+                   (req.get('X-Call-Id') && req.get('X-Call-Id').trim()) || 
+                   (req.get('X-Vapi-Call-Id') && req.get('X-Vapi-Call-Id').trim()) ||
+                   req.get('Cookie')?.match(/callId=([^;]+)/)?.[1] || // Extract from cookie if present
+                   ''; // Default to empty string
     
-    console.log('[BOOKING][check-book] 🔍 FULL REQUEST DEBUG:', {
-      body: req.body,
-      headers: req.headers,
-      query: req.query
-    });
+    // Simplified debug (headers can be huge and cause issues)
+    console.log('[BOOKING][check-book] 📥 Request body:', JSON.stringify(req.body, null, 2));
     
     console.log('[BOOKING][check-book] 🔍 CallId detection:', { 
       fromBody: req.body?.callId,
@@ -13712,7 +13711,11 @@ app.post('/api/calendar/check-book', async (req, res) => {
     });
     
     // Extract phone from various possible locations (new simplified structure)
-    let phone = req.body?.customerPhone || req.body?.phone || req.get('X-Customer-Phone') || '';
+    // CRITICAL: VAPI sends empty strings '', so we need to filter those out
+    let phone = (req.body?.customerPhone && req.body.customerPhone.trim()) || 
+                (req.body?.phone && req.body.phone.trim()) || 
+                (req.get('X-Customer-Phone') && req.get('X-Customer-Phone').trim()) || 
+                '';
     
     console.log('[BOOKING] 📞 Phone extraction from request:', {
       'req.body.customerPhone': req.body?.customerPhone,
@@ -13722,7 +13725,7 @@ app.post('/api/calendar/check-book', async (req, res) => {
     });
     
     // If phone is empty, try to get it from call context cache first (fastest)
-    if (!phone || phone.trim() === '') {
+    if (!phone || phone === '') {
       console.log('[BOOKING] ⚠️ No phone in request, trying cache lookups...');
       
       // Try with callId first if available
@@ -13890,7 +13893,7 @@ app.post('/api/calendar/check-book', async (req, res) => {
     }
     
     // Phone is required - if not provided, use demo fallback or return error
-    if (!phone) {
+    if (!phone || phone.trim() === '') {
       // For demo clients, use a hardcoded phone number as fallback
       if (isDemo) {
         phone = '+447491683261'; // Your actual phone number
