@@ -11336,7 +11336,7 @@ async function resolveTenantKeyFromInbound({ to, messagingServiceSid }) {
 // Simple {{var}} template renderer for SMS bodies
 function renderTemplate(str, vars = {}) {
   try {
-    return String(str).replace(/\\{\\{\\s*([a-zA-Z0-9_]+)\\s*\\}\\}/g, (_, k) => {
+    return String(str).replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, k) => {
       const v = vars[k];
       return (v === undefined || v === null) ? '' : String(v);
     });
@@ -13799,7 +13799,10 @@ const handleNotifySend = async (req, res) => {
       name: 'Customer', // Default fallback
       customerName: 'Customer',
       businessName: client?.displayName || client?.clientKey || 'Our Business',
-      phone: phone
+      phone: phone,
+      // Add more common variables
+      clientName: client?.displayName || client?.clientKey || 'Our Business',
+      companyName: client?.displayName || client?.clientKey || 'Our Business'
     });
 
     const { smsClient, messagingServiceSid, fromNumber, configured } = smsConfig(client);
