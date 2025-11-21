@@ -13664,6 +13664,17 @@ function isDemoClient(client) {
   return false;
 }
 
+// DEBUG: Cache inspector endpoint
+app.get('/api/debug/cache', (req, res) => {
+  const { getMostRecentCallContext } = require('./lib/call-context-cache.js');
+  const recent = getMostRecentCallContext('logistics_client');
+  res.json({
+    tenantKey: 'logistics_client',
+    recentContext: recent,
+    timestamp: new Date().toISOString()
+  });
+});
+
 console.log('🟢🟢🟢 REGISTERING ROUTE: POST /api/calendar/check-book at line 13667');
 app.post('/api/calendar/check-book', async (req, res) => {
   console.log('🚨🚨🚨 HANDLER CALLED - FIRST LINE');
