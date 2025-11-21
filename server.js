@@ -13925,9 +13925,9 @@ app.post('/api/calendar/check-book', async (req, res) => {
     if (!normalizedPhone) return res.status(400).json({ error: 'Phone must be valid E.164 format' });
     
     // Ensure lead object has name and phone
-    if (!lead) req.body.lead = {};
-    lead.name = customerName;
-    lead.phone = normalizedPhone;
+    if (!req.body.lead) req.body.lead = {};
+    req.body.lead.name = customerName;
+    req.body.lead.phone = normalizedPhone;
 
     const parseInTimezone = (value, timeZone) => {
       if (value == null) return null;
