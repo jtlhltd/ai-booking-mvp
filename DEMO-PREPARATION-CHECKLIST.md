@@ -114,3 +114,5 @@ https://ai-booking-mvp.onrender.com/client-dashboard.html?client=[clientKey]
 - Check client has `isDemo: true` flag
 - Check logs for `[DEMO BOOKING]` entries
 
+
+

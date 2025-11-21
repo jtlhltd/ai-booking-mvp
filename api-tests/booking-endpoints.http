@@ -1,0 +1,66 @@
+### AI Booking MVP - API Tests
+### Use Ctrl+Shift+P -> "Rest Client: Send Request" or click "Send Request" above each request
+
+@baseUrl = https://ai-booking-mvp.onrender.com
+@localUrl = http://localhost:3000
+
+### Health Check
+GET {{baseUrl}}/
+
+###
+
+### Get Client Configuration
+GET {{baseUrl}}/api/clients/stay-focused-fitness-chris
+
+###
+
+### Get Client Events/Appointments  
+GET {{baseUrl}}/api/events/stay-focused-fitness-chris
+
+###
+
+### Integration Health Check
+GET {{baseUrl}}/api/integration-health
+
+###
+
+### Get Leads for Client
+GET {{baseUrl}}/api/leads?clientKey=stay-focused-fitness-chris
+
+###
+
+### Get Calls for Client
+GET {{baseUrl}}/api/calls?clientKey=stay-focused-fitness-chris
+
+###
+
+### Test Local Development (when server running locally)
+GET {{localUrl}}/api/clients/stay-focused-fitness-chris
+
+###
+
+### Create Test Lead (POST example)
+POST {{baseUrl}}/api/leads
+Content-Type: application/json
+
+{
+  "clientKey": "stay-focused-fitness-chris",
+  "name": "Test Lead",
+  "phone": "+1234567890",
+  "email": "test@example.com",
+  "source": "API Test"
+}
+
+###
+
+### Book Appointment (POST example)
+POST {{baseUrl}}/api/book-appointment
+Content-Type: application/json
+
+{
+  "clientKey": "stay-focused-fitness-chris",
+  "leadId": "123",
+  "datetime": "2025-11-25T10:00:00Z",
+  "service": "Consultation"
+}
+

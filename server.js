@@ -13702,40 +13702,76 @@ app.post('/api/calendar/check-book', async (req, res) => {
       finalCallId: callId
     });
     
+    console.log('[BOOKING] ==================== PHONE LOOKUP DEBUG ====================');
+    console.log('[BOOKING] 📥 Request body:', JSON.stringify(req.body, null, 2));
+    console.log('[BOOKING] 📥 Headers:', {
+      'X-Customer-Phone': req.get('X-Customer-Phone'),
+      'X-Call-Id': req.get('X-Call-Id'),
+      'X-Vapi-Call-Id': req.get('X-Vapi-Call-Id'),
+      'Cookie': req.get('Cookie')
+    });
+    
     // Extract phone from various possible locations (new simplified structure)
     let phone = req.body?.customerPhone || req.body?.phone || req.get('X-Customer-Phone') || '';
     
+    console.log('[BOOKING] 📞 Phone extraction from request:', {
+      'req.body.customerPhone': req.body?.customerPhone,
+      'req.body.phone': req.body?.phone,
+      'X-Customer-Phone header': req.get('X-Customer-Phone'),
+      'INITIAL phone': phone
+    });
+    
     // If phone is empty, try to get it from call context cache first (fastest)
     if (!phone || phone.trim() === '') {
+      console.log('[BOOKING] ⚠️ No phone in request, trying cache lookups...');
+      
       // Try with callId first if available
       if (callId) {
+        console.log('[BOOKING] 🔍 Trying lookup by callId:', callId);
         const cachedContext = getCallContext(callId);
+        console.log('[BOOKING] 🔍 getCallContext result:', cachedContext);
         if (cachedContext?.phone) {
           phone = cachedContext.phone;
-          console.log('[BOOKING] ✅ Got phone from call context cache (by callId):', phone);
+          console.log('[BOOKING] ✅✅✅ GOT PHONE FROM CACHE (by callId):', phone);
+        } else {
+          console.log('[BOOKING] ❌ No phone found in cache for callId:', callId);
         }
+      } else {
+        console.log('[BOOKING] ❌ No callId available for direct cache lookup');
       }
       
       // If still no phone, try to get the most recent call for this tenant
       if (!phone || phone.trim() === '') {
+        console.log('[BOOKING] 🔍 Trying most recent call fallback...');
         const tenantKey = client?.key || client?.tenantKey;
-        console.log('[BOOKING] 🔍 Looking up most recent call:', {
-          clientKey: client?.key,
-          clientTenantKey: client?.tenantKey,
-          finalTenantKey: tenantKey
+        console.log('[BOOKING] 🏢 Client info:', {
+          'client.key': client?.key,
+          'client.tenantKey': client?.tenantKey,
+          'client.name': client?.name,
+          'client.id': client?.id,
+          'FINAL tenantKey': tenantKey
         });
+        
         if (tenantKey) {
+          console.log('[BOOKING] 🔍 Calling getMostRecentCallContext with tenantKey:', tenantKey);
           const recentContext = getMostRecentCallContext(tenantKey);
-          console.log('[BOOKING] 🔍 getMostRecentCallContext result:', recentContext);
+          console.log('[BOOKING] 🔍 getMostRecentCallContext FULL result:', JSON.stringify(recentContext, null, 2));
+          
           if (recentContext?.phone) {
             phone = recentContext.phone;
-            console.log('[BOOKING] ✅ Got phone from most recent call context:', phone);
+            console.log('[BOOKING] ✅✅✅ GOT PHONE FROM MOST RECENT CALL:', phone);
+          } else {
+            console.log('[BOOKING] ❌ getMostRecentCallContext returned no phone');
           }
         } else {
-          console.log('[BOOKING] ❌ No tenantKey available for most recent lookup');
+          console.log('[BOOKING] ❌❌❌ NO TENANTKEY - CANNOT DO FALLBACK LOOKUP');
         }
       }
+    } else {
+      console.log('[BOOKING] ✅ Phone found in request:', phone);
     }
+    
+    console.log('[BOOKING] 📞 FINAL PHONE VALUE:', phone);
     
     // If still empty, try to get it from VAPI API (requires API call)
     if (!phone || phone.trim() === '') {

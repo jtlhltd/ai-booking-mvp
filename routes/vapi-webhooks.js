@@ -102,27 +102,55 @@ router.post('/webhooks/vapi', async (req, res) => {
     const leadPhone = metadata.leadPhone || body.customer?.number || body.call?.customer?.number || body.phone || '';
     const leadName = metadata.leadName || body.customer?.name || body.call?.customer?.name || '';
     
+    console.log('[VAPI WEBHOOK] ==================== COMPLETE DEBUG ====================');
+    console.log('[VAPI WEBHOOK] 🆔 CallId:', callId);
+    console.log('[VAPI WEBHOOK] 🏢 TenantKey components:', {
+      'metadata.tenantKey': metadata.tenantKey,
+      'metadata.clientKey': metadata.clientKey,
+      'FINAL tenantKey': tenantKey
+    });
     console.log('[VAPI WEBHOOK] 📞 Phone extraction:', { 
-      callId, 
-      leadPhone, 
-      leadName,
       'metadata.leadPhone': metadata.leadPhone,
       'body.customer?.number': body.customer?.number,
       'body.call?.customer?.number': body.call?.customer?.number,
-      'body.phone': body.phone
+      'body.phone': body.phone,
+      'FINAL leadPhone': leadPhone
     });
+    console.log('[VAPI WEBHOOK] 👤 Name:', leadName);
+    console.log('[VAPI WEBHOOK] 📊 Status:', status);
     
     // Store call context for API endpoint lookups (if we have callId and phone)
     if (callId && leadPhone) {
-      console.log('[VAPI WEBHOOK] ✅ Storing call context');
-      console.log('[VAPI WEBHOOK] 📦 Storing with tenantKey:', tenantKey, 'phone:', leadPhone, 'name:', leadName);
+      console.log('[VAPI WEBHOOK] ✅✅✅ STORING CALL CONTEXT ✅✅✅');
+      console.log('[VAPI WEBHOOK] Storage payload:', JSON.stringify({
+        callId: callId,
+        phone: leadPhone,
+        name: leadName,
+        metadata: {
+          tenantKey: tenantKey,
+          status: status,
+          timestamp: Date.now()
+        }
+      }, null, 2));
+      
       storeCallContext(callId, leadPhone, leadName, {
         tenantKey,
         status,
         timestamp: Date.now()
       });
+      
+      console.log('[VAPI WEBHOOK] ✅ STORAGE COMPLETE');
     } else {
-      console.log('[VAPI WEBHOOK] ⚠️ NOT storing - missing data:', { hasCallId: !!callId, hasLeadPhone: !!leadPhone });
+      console.log('[VAPI WEBHOOK] ❌❌❌ NOT STORING - MISSING DATA ❌❌❌');
+      console.log('[VAPI WEBHOOK] Missing data debug:', { 
+        hasCallId: !!callId,
+        callIdValue: callId,
+        callIdType: typeof callId,
+        hasLeadPhone: !!leadPhone,
+        leadPhoneValue: leadPhone,
+        leadPhoneType: typeof leadPhone,
+        leadPhoneLength: leadPhone?.length
+      });
     }
     
     // Skip only if absolutely no data at all
