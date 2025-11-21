@@ -13716,6 +13716,49 @@ app.post('/api/notify/test', (req, res) => {
 });
 console.log('🟢🟢🟢 [NOTIFY-ROUTES-MOVED] REGISTERED: POST /api/notify/test');
 
+// Dashboard reset endpoint
+app.post('/api/dashboard/reset/:clientKey', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    
+    console.log(`[DASHBOARD RESET] Resetting data for client: ${clientKey}`);
+    
+    // Delete appointments for this client
+    await safeQuery('DELETE FROM appointments WHERE client_key = $1', [clientKey]);
+    
+    // Delete calls for this client
+    await safeQuery('DELETE FROM calls WHERE client_key = $1', [clientKey]);
+    
+    // Delete messages for this client
+    await safeQuery('DELETE FROM messages WHERE client_key = $1', [clientKey]);
+    
+    // Delete leads for this client (optional - uncomment if you want to reset leads too)
+    // await safeQuery('DELETE FROM leads WHERE client_key = $1', [clientKey]);
+    
+    console.log(`[DASHBOARD RESET] ✅ Successfully reset dashboard data for ${clientKey}`);
+    
+    res.json({
+      success: true,
+      message: `Dashboard data reset successfully for ${clientKey}`,
+      cleared: {
+        appointments: true,
+        calls: true,
+        messages: true,
+        leads: false // Set to true if you uncomment the leads deletion above
+      }
+    });
+    
+  } catch (error) {
+    console.error('[DASHBOARD RESET] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to reset dashboard data',
+      details: error.message
+    });
+  }
+});
+console.log('🟢🟢🟢 [DASHBOARD-RESET] REGISTERED: POST /api/dashboard/reset/:clientKey');
+
 // Restore full SMS functionality with variable interpolation
 const handleNotifySend = async (req, res) => {
   try {
