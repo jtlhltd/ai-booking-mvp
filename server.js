@@ -13677,7 +13677,9 @@ app.post('/api/calendar/check-book', async (req, res) => {
   }
 
   try {
+    console.log('[BOOKING][check-book] 🔍 About to call getClientFromHeader...');
     const client = await getClientFromHeader(req); // DB-backed
+    console.log('[BOOKING][check-book] 🔍 getClientFromHeader result:', client ? 'found' : 'null');
     if (!client) return res.status(400).json({ error: 'Unknown tenant' });
     const tz = pickTimezone(client);
     const calendarId = pickCalendarId(client);
