@@ -13666,11 +13666,12 @@ function isDemoClient(client) {
 
 // DEBUG: Cache inspector endpoint
 app.get('/api/debug/cache', (req, res) => {
-  const { getMostRecentCallContext } = require('./lib/call-context-cache.js');
-  const recent = getMostRecentCallContext('logistics_client');
+  const stats = getCallContextCacheStats();
+  const recentForLogistics = getMostRecentCallContext('logistics_client');
+  
   res.json({
-    tenantKey: 'logistics_client',
-    recentContext: recent,
+    stats,
+    recentForLogisticsClient: recentForLogistics,
     timestamp: new Date().toISOString()
   });
 });
@@ -13688,7 +13689,7 @@ app.post('/api/calendar/check-book', async (req, res) => {
     console.log('[BOOKING] Client found:', client?.key || client?.tenantKey);
     
     // SIMPLE APPROACH: Get phone from most recent call for this tenant
-    const tenantKey = client?.key || client?.tenantKey || 'logistics_client';
+    const tenantKey = client?.key || client?.tenantKey || 'test_client';
     console.log('[BOOKING] Looking up most recent call for tenant:', tenantKey);
     
     let recentContext = getMostRecentCallContext(tenantKey);

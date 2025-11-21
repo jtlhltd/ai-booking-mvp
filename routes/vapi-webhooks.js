@@ -98,7 +98,8 @@ router.post('/webhooks/vapi', async (req, res) => {
 
     // For logistics calls, we can extract without tenant metadata
     // Just get phone from wherever it might be
-    const tenantKey = metadata.tenantKey || metadata.clientKey || 'logistics_client';
+    // Use test_client as default since that's what VAPI sends in X-Client-Key header
+    const tenantKey = metadata.tenantKey || metadata.clientKey || 'test_client';
     const leadPhone = metadata.leadPhone || body.customer?.number || body.call?.customer?.number || body.phone || '';
     const leadName = metadata.leadName || body.customer?.name || body.call?.customer?.name || '';
     
