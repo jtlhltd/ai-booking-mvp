@@ -13783,14 +13783,16 @@ app.post('/api/calendar/check-book', async (req, res) => {
       }
       
       // If still no customer name, use "Jonah" for demo clients or return error
-      if (!customerName || customerName.trim() === '') {
-        if (isDemo) {
-          customerName = 'Jonah';
-          console.log('[BOOKING] 🎯 Using hardcoded customer name for demo:', customerName);
-        } else {
-          return res.status(400).json({ error: 'Missing customer name' });
-        }
+    // Ensure we always have a customer name - NEVER return error
+    if (!customerName || customerName.trim() === '') {
+      if (isDemo) {
+        customerName = 'Jonah';
+        console.log('[BOOKING] 🎯 Using hardcoded customer name for demo:', customerName);
+      } else {
+        customerName = 'Customer';
+        console.log('[BOOKING] 🎯 Using generic customer name fallback');
       }
+    }
     }
     
     // Phone is required - if not provided, use demo fallback or return error
