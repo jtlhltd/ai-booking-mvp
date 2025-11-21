@@ -12683,6 +12683,8 @@ try {
   console.error('reminder scheduling failed', e?.message || e);
 }
 
+console.log('🔥🔥🔥 [DEBUG] Code execution reached line 12686 - before Google Sheets append');
+
 // Append to Google Sheets ledger (optional)
 try {
   if (process.env.BOOKINGS_SHEET_ID) {
@@ -12702,6 +12704,8 @@ try {
     });
   }
 } catch (e) { console.warn('sheets append error', e?.message || e); }
+
+console.log('🔥🔥🔥 [DEBUG] Code execution reached line 12706 - after Google Sheets append');
 
     return res.status(201).json({
       ok: true,
