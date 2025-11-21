@@ -12820,6 +12820,13 @@ const handleNotifySend = async (req, res) => {
 // Simple SMS send route (per-tenant or global fallback)
 // Support both /api/notify/send and /api/notify/send/:param for VAPI compatibility
 console.log('🟢🟢🟢 [NOTIFY-ROUTES] ABOUT TO REGISTER ROUTES...');
+
+// Test route first
+app.post('/api/notify/test', (req, res) => {
+  res.json({ ok: true, message: 'Test route works!' });
+});
+console.log('🟢🟢🟢 [NOTIFY-ROUTES] REGISTERED: POST /api/notify/test');
+
 app.post('/api/notify/send', handleNotifySend);
 console.log('🟢🟢🟢 [NOTIFY-ROUTES] REGISTERED: POST /api/notify/send');
 app.post('/api/notify/send/:param', handleNotifySend);
