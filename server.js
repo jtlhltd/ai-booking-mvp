@@ -13724,16 +13724,16 @@ app.post('/api/dashboard/reset/:clientKey', async (req, res) => {
     console.log(`[DASHBOARD RESET] Resetting data for client: ${clientKey}`);
     
     // Delete appointments for this client
-    await safeQuery('DELETE FROM appointments WHERE client_key = $1', [clientKey]);
+    await query('DELETE FROM appointments WHERE client_key = $1', [clientKey]);
     
     // Delete calls for this client
-    await safeQuery('DELETE FROM calls WHERE client_key = $1', [clientKey]);
+    await query('DELETE FROM calls WHERE client_key = $1', [clientKey]);
     
     // Delete messages for this client
-    await safeQuery('DELETE FROM messages WHERE client_key = $1', [clientKey]);
+    await query('DELETE FROM messages WHERE client_key = $1', [clientKey]);
     
     // Delete leads for this client (optional - uncomment if you want to reset leads too)
-    // await safeQuery('DELETE FROM leads WHERE client_key = $1', [clientKey]);
+    // await query('DELETE FROM leads WHERE client_key = $1', [clientKey]);
     
     console.log(`[DASHBOARD RESET] ✅ Successfully reset dashboard data for ${clientKey}`);
     
