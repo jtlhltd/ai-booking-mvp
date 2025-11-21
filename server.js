@@ -13670,16 +13670,19 @@ app.post('/api/calendar/check-book', async (req, res) => {
       try { services = JSON.parse(String(services)); }
       catch { services = []; }
     }
+    // Handle both old and new VAPI structure
     const requestedService = req.body?.service;
     const svc = services.find(s => s.id === requestedService);
-    const dur = (typeof req.body?.durationMin === 'number' && req.body.durationMin > 0)
+    const dur = (typeof req.body?.durationMinutes === 'number' && req.body.durationMinutes > 0)
+      ? req.body.durationMinutes
+      : (typeof req.body?.durationMin === 'number' && req.body.durationMin > 0)
       ? req.body.durationMin
       : (svc?.durationMin || client?.bookingDefaultDurationMin || 30);
 
     // Get callId first (needed for both phone and name lookup)
     const callId = req.body?.callId || req.body?.metadata?.callId || req.get('X-Call-Id') || req.get('X-Vapi-Call-Id');
     
-    // Get phone from request body first
+    // Extract phone from various possible locations (new simplified structure)
     let phone = req.body?.customerPhone || req.body?.phone || '';
     
     // If phone is empty, try to get it from callId (VAPI includes callId in function calls)
@@ -13752,9 +13755,10 @@ app.post('/api/calendar/check-book', async (req, res) => {
       }
     }
     
-    let customerName = req.body?.customerName;
+    // Extract customer name from request or VAPI call data
+    let customerName = req.body?.customerName || req.body?.name;
     
-    // If customer name is missing, try to get it from VAPI call data or use default
+    // If customer name is missing, try to get it from VAPI call data
     if (!customerName || customerName.trim() === '') {
       if (callId && process.env.VAPI_PRIVATE_KEY) {
         try {
@@ -13768,16 +13772,13 @@ app.post('/api/calendar/check-book', async (req, res) => {
           
           if (vapiResponse.ok) {
             const callData = await vapiResponse.json();
-            console.log('[BOOKING] 📞 VAPI call data for customer name:', JSON.stringify(callData, null, 2));
-            
-            // Try to extract customer name from call data
             if (callData?.customer?.name) {
               customerName = callData.customer.name;
-              console.log('[BOOKING] ✅ Got customer name from VAPI call data:', customerName);
+              console.log('[BOOKING] ✅ Using customer name from VAPI API call data:', customerName);
             }
           }
-        } catch (error) {
-          console.error('[BOOKING] ❌ Error fetching customer name from VAPI:', error.message);
+        } catch (err) {
+          console.warn('[BOOKING] Could not fetch customer name from VAPI API:', err.message);
         }
       }
       
@@ -13861,7 +13862,15 @@ app.post('/api/calendar/check-book', async (req, res) => {
       debugInfo.parsedFromPreference = parsedFromPreference ? new Date(parsedFromPreference).toISOString() : null;
     }
 
+    // Handle new VAPI structure with separate date and time fields
+    let combinedDateTime = null;
+    if (req.body?.date && req.body?.time) {
+      combinedDateTime = `${req.body.date}T${req.body.time}:00`;
+      console.log('[BOOKING] 📅 Combined date/time from new VAPI structure:', combinedDateTime);
+    }
+
     const startHints = [
+      combinedDateTime, // New VAPI structure: date + time
       req.body?.slot?.start,
       req.body?.slot?.startTime,
       req.body?.slot?.startISO,
