@@ -9654,7 +9654,7 @@ app.get('/api/calendar-sync/:clientKey', cacheMiddleware({ ttl: 300000, keyPrefi
 
     const calendarConfig = tenantResult.rows?.[0]?.calendar_json || {};
     const isConnected = !!(calendarConfig.service_account_email || calendarConfig.access_token);
-    
+
     // Get last successful sync time
     const lastSync = await query(`
       SELECT MAX(created_at) AS last_sync
@@ -9682,7 +9682,7 @@ app.get('/api/calendar-sync/:clientKey', cacheMiddleware({ ttl: 300000, keyPrefi
         AND status = 'conflict'
         AND created_at >= NOW() - INTERVAL '7 days'
     `, [clientKey]);
-    
+
     // Alert if no sync in 24 hours (Quick Win #5)
     if (isConnected && hoursSinceSync !== null && hoursSinceSync > 24 && process.env.YOUR_EMAIL) {
       try {
@@ -13403,21 +13403,21 @@ async function handleSmsStatusWebhook(req, res) {
     }
     
     // Also log to JSON file for backward compatibility
-    const rows = await readJson(SMS_STATUS_PATH, []);
+  const rows = await readJson(SMS_STATUS_PATH, []);
     rows.push({
-      evt: 'sms.status',
-      rid: req.id,
-      at: new Date().toISOString(),
+    evt: 'sms.status',
+    rid: req.id,
+    at: new Date().toISOString(),
       sid: messageSid,
       status,
       to,
       from,
-      messagingServiceSid: req.body.MessagingServiceSid || null,
+    messagingServiceSid: req.body.MessagingServiceSid || null,
       errorCode
     });
-    await writeJson(SMS_STATUS_PATH, rows);
+  await writeJson(SMS_STATUS_PATH, rows);
     
-    res.type('text/plain').send('OK');
+  res.type('text/plain').send('OK');
   } catch (error) {
     console.error('[SMS STATUS WEBHOOK ERROR]', error);
     res.type('text/plain').send('OK'); // Always return OK to Twilio
@@ -14361,16 +14361,16 @@ const handleNotifySend = async (req, res) => {
           const VAPI_PRIVATE_KEY = process.env.VAPI_PRIVATE_KEY;
           if (VAPI_PRIVATE_KEY) {
             console.log('[NOTIFY] Looking up phone from VAPI call:', callId);
-            const vapiResponse = await fetch(`https://api.vapi.ai/call/${callId}`, {
-              headers: {
+          const vapiResponse = await fetch(`https://api.vapi.ai/call/${callId}`, {
+            headers: {
                 'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`,
-                'Content-Type': 'application/json'
-              }
-            });
-            if (vapiResponse.ok) {
-              const callData = await vapiResponse.json();
+              'Content-Type': 'application/json'
+            }
+          });
+          if (vapiResponse.ok) {
+            const callData = await vapiResponse.json();
               phone = callData.customer?.number || callData.customer?.phone || callData.phone;
-              if (phone) {
+            if (phone) {
                 console.log('[NOTIFY] ✅ Got phone from VAPI call API:', phone);
               }
             }
@@ -14454,11 +14454,31 @@ const handleNotifySend = async (req, res) => {
       // Don't fail the request if DB storage fails
     }
     
+    // Record successful idempotency
+    if (req.idempotencyKey) {
+      try {
+        const { recordIdempotency } = await import('./lib/idempotency.js');
+        await recordIdempotency(clientKey, 'sms', req.idempotencyKey, { ok: true, sid: resp.sid });
+      } catch (idemError) {
+        console.warn('[NOTIFY] Failed to record idempotency:', idemError.message);
+      }
+    }
+    
     return res.json({ ok:true, sid: resp.sid, message: interpolatedMessage });
   } catch (e) {
     const msg = e?.message || 'sms_error';
     const code = e?.status || e?.code || 500;
     console.error('[NOTIFY] Error:', msg);
+    
+    // Record failed idempotency
+    if (req.idempotencyKey) {
+      try {
+        const { recordIdempotency } = await import('./lib/idempotency.js');
+        await recordIdempotency(clientKey, 'sms', req.idempotencyKey, { ok: false, error: msg });
+      } catch (idemError) {
+        console.warn('[NOTIFY] Failed to record idempotency:', idemError.message);
+      }
+    }
     
     // Send email alert for SMS send failures
     if (process.env.YOUR_EMAIL && code >= 500) {
@@ -14486,8 +14506,31 @@ console.log('🟢🟢🟢 [NOTIFY-ROUTES-MOVED] REGISTERED: POST /api/notify/sen
 app.post('/api/calendar/check-book', async (req, res) => {
   console.log('🚨🚨🚨 [v3-LEAD-FIX] HANDLER CALLED - lead variable fix deployed');
 
-  // Define idemKey for idempotency handling
-  const idemKey = deriveIdemKey(req);
+  // Enhanced idempotency handling using new library
+  const client = await getClientFromHeader(req);
+  const clientKey = client?.key || client?.tenantKey || 'default';
+  
+  let idemKey;
+  try {
+    const { generateIdempotencyKey, checkIdempotency, recordIdempotency } = await import('./lib/idempotency.js');
+    idemKey = generateIdempotencyKey(clientKey, 'booking', req.body);
+    
+    // Check for duplicate request
+    const duplicateCheck = await checkIdempotency(clientKey, 'booking', idemKey, 5 * 60 * 1000); // 5 minute window
+    if (duplicateCheck.isDuplicate) {
+      console.log('[BOOKING] Duplicate request detected:', duplicateCheck.message);
+      return res.status(409).json({
+        ok: false,
+        error: 'Duplicate request',
+        message: duplicateCheck.message,
+        timeSinceOriginal: duplicateCheck.timeSinceOriginal
+      });
+    }
+  } catch (idemError) {
+    console.warn('[BOOKING] Idempotency check failed, continuing:', idemError.message);
+    // Fallback to old method if new library fails
+    idemKey = deriveIdemKey(req);
+  }
 
   try {
     console.log('[BOOKING] Request received:', new Date().toISOString());
@@ -14534,7 +14577,7 @@ app.post('/api/calendar/check-book', async (req, res) => {
     
     if (!recentContext?.phone) {
       console.error('[BOOKING] No phone found after all attempts for tenant:', tenantKey);
-      return res.status(400).json({ 
+        return res.status(400).json({ 
         error: 'No active call found. Please try again.',
         debug: { tenantKey, cacheEmpty: true }
       });
@@ -14888,34 +14931,34 @@ app.post('/api/calendar/check-book', async (req, res) => {
       try {
         const { withTransaction } = await import('./db.js');
         await withTransaction(async (txQuery) => {
-          // Get or create lead first
-          let leadId = null;
+        // Get or create lead first
+        let leadId = null;
           const existingLead = await txQuery(
-            'SELECT id FROM leads WHERE client_key = $1 AND phone = $2 LIMIT 1',
-            [client?.clientKey, lead.phone]
-          );
-          
-          if (existingLead?.rows?.[0]?.id) {
-            leadId = existingLead.rows[0].id;
-          } else {
-            // Create lead if it doesn't exist
+          'SELECT id FROM leads WHERE client_key = $1 AND phone = $2 LIMIT 1',
+          [client?.clientKey, lead.phone]
+        );
+        
+        if (existingLead?.rows?.[0]?.id) {
+          leadId = existingLead.rows[0].id;
+        } else {
+          // Create lead if it doesn't exist
             const newLead = await txQuery(
-              'INSERT INTO leads (client_key, name, phone, service, status, source) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
-              [client?.clientKey, lead.name, lead.phone, requestedService || 'appointment', 'booked', 'demo']
-            );
-            if (newLead?.rows?.[0]?.id) {
-              leadId = newLead.rows[0].id;
-            }
+            'INSERT INTO leads (client_key, name, phone, service, status, source) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+            [client?.clientKey, lead.name, lead.phone, requestedService || 'appointment', 'booked', 'demo']
+          );
+          if (newLead?.rows?.[0]?.id) {
+            leadId = newLead.rows[0].id;
           }
-          
-          // Save appointment to database
-          if (leadId && google?.id) {
+        }
+        
+        // Save appointment to database
+        if (leadId && google?.id) {
             await txQuery(
-              'INSERT INTO appointments (client_key, lead_id, gcal_event_id, start_iso, end_iso, status) VALUES ($1, $2, $3, $4, $5, $6)',
-              [client?.clientKey, leadId, google.id, startISO, endISO, 'booked']
-            );
+            'INSERT INTO appointments (client_key, lead_id, gcal_event_id, start_iso, end_iso, status) VALUES ($1, $2, $3, $4, $5, $6)',
+            [client?.clientKey, leadId, google.id, startISO, endISO, 'booked']
+          );
             console.log('[DEMO BOOKING] Appointment saved to database (transaction committed)');
-          }
+        }
         });
       } catch (dbError) {
         console.warn('[DEMO BOOKING] Could not save appointment to database:', dbError.message);
@@ -15072,7 +15115,15 @@ app.post('/api/calendar/check-book', async (req, res) => {
       recordDemoTelemetry(telemetryPayload);
     }
 
+    // Record successful idempotency using new library
+    try {
+      const { recordIdempotency } = await import('./lib/idempotency.js');
+      await recordIdempotency(clientKey, 'booking', idemKey, responseBody);
+    } catch (idemError) {
+      console.warn('[BOOKING] Failed to record idempotency, using fallback:', idemError.message);
     setCachedIdem(idemKey, 200, responseBody);
+    }
+    
     return res.json(responseBody);
   } catch (e) {
     console.error('[BOOKING][check-book] ❌❌❌ CAUGHT ERROR IN OUTER CATCH:', e);
@@ -15096,7 +15147,15 @@ app.post('/api/calendar/check-book', async (req, res) => {
     
     const status = 500;
     const body = { error: String(e) };
+    
+    // Record failed idempotency using new library
+    try {
+      const { recordIdempotency } = await import('./lib/idempotency.js');
+      await recordIdempotency(clientKey, 'booking', idemKey, body);
+    } catch (idemError) {
+      console.warn('[BOOKING] Failed to record idempotency, using fallback:', idemError.message);
     setCachedIdem(idemKey, status, body);
+    }
     return res.status(status).json(body);
   }
 });
@@ -17044,22 +17103,22 @@ app.get('/api/stats', cacheMiddleware({ ttl: 60000 }), async (req, res) => {
         const statsResult = await optimizedQuery(`
           WITH 
           lead_stats AS (
-            SELECT COUNT(*) as total
-            FROM leads
+          SELECT COUNT(*) as total
+          FROM leads
             WHERE client_key = $1 AND created_at >= $2
           ),
           call_stats AS (
-            SELECT 
-              COUNT(*) as total,
-              SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
-              SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
-              SUM(CASE WHEN status = 'no_answer' THEN 1 ELSE 0 END) as no_answer
-            FROM call_queue
+          SELECT 
+            COUNT(*) as total,
+            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+            SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
+            SUM(CASE WHEN status = 'no_answer' THEN 1 ELSE 0 END) as no_answer
+          FROM call_queue
             WHERE client_key = $1 AND created_at >= $2
           ),
           booking_stats AS (
-            SELECT COUNT(*) as total
-            FROM leads
+          SELECT COUNT(*) as total
+          FROM leads
             WHERE client_key = $1 AND status = 'booked' AND updated_at >= $2
           ),
           appointment_stats AS (
