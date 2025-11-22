@@ -1,4 +1,4 @@
-### AI Booking MVP - API Tests
+### AI Booking System - API Tests
 ### Use Ctrl+Shift+P -> "Rest Client: Send Request" or click "Send Request" above each request
 
 @baseUrl = https://ai-booking-mvp.onrender.com

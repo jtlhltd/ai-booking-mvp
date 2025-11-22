@@ -1,4 +1,4 @@
-// Service Worker for AI Booking MVP
+// Service Worker for AI Booking System
 // Provides offline capability, caching, and PWA features
 
 const CACHE_VERSION = 'v1.0.0';

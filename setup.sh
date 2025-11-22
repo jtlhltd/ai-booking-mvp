@@ -1,10 +1,10 @@
 #!/bin/bash
-# Environment Setup Script for AI Booking MVP
+# Environment Setup Script for AI Booking System
 # Run this script to set up your development environment
 
 set -e
 
-echo "🚀 Setting up AI Booking MVP development environment..."
+echo "🚀 Setting up AI Booking System development environment..."
 
 # Check if Node.js is installed
 if ! command -v node &> /dev/null; then

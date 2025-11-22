@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide covers the comprehensive error handling system implemented in your AI Booking MVP. The system provides consistent error responses, proper error classification, retry logic, and circuit breaker patterns.
+This guide covers the comprehensive error handling system implemented in your AI Booking System. The system provides consistent error responses, proper error classification, retry logic, and circuit breaker patterns.
 
 ## 🎯 **Key Features**
 

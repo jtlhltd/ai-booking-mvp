@@ -1,4 +1,4 @@
--- AI Booking MVP - Common Database Queries
+-- AI Booking System - Common Database Queries
 -- Use with PostgreSQL extension: Ctrl+Shift+P -> "SQLTools: Run Query"
 
 -- Check all clients/tenants

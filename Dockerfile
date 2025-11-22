@@ -1,4 +1,4 @@
-# Docker Configuration for AI Booking MVP
+# Docker Configuration for AI Booking System
 # Multi-stage build for production optimization
 
 # Development stage

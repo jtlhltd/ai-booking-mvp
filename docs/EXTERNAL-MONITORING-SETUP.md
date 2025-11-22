@@ -16,7 +16,7 @@ Your system has internal health checks, but if Render has a regional outage or y
 2. Click "Add New Monitor"
 3. Configure:
    - **Monitor Type:** HTTP(s)
-   - **Friendly Name:** AI Booking MVP
+   - **Friendly Name:** AI Booking System
    - **URL:** `https://ai-booking-mvp.onrender.com/health`
    - **Monitoring Interval:** 5 minutes (free) or 1 minute (paid)
    - **Alert Contacts:** Add your email
@@ -56,7 +56,7 @@ Your system has internal health checks, but if Render has a regional outage or y
 
 ### Alert Message Example:
 ```
-🚨 AI Booking MVP is DOWN!
+🚨 AI Booking System is DOWN!
 
 URL: https://ai-booking-mvp.onrender.com/health
 Status: Failed
@@ -91,7 +91,7 @@ External monitoring adds:
 
 ## Cost
 
-- **UptimeRobot Free:** $0/month (perfect for MVP)
+- **UptimeRobot Free:** $0/month (perfect for production)
 - **UptimeRobot Pro:** $7/month (1-minute checks)
 - **Pingdom:** $10/month
 - **StatusCake Free:** $0/month

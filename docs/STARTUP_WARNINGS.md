@@ -94,7 +94,7 @@ After starting the server, verify everything is working:
 
 1. **Database:** Should see `✅ DB: Postgres connected`
 2. **No critical errors:** Only warnings about optional features (like Google Calendar)
-3. **Server listening:** Should see `AI Booking MVP listening on http://localhost:3000`
+3. **Server listening:** Should see `AI Booking System listening on http://localhost:3000`
 4. **Test the dashboard:** Visit `http://localhost:3000/client-dashboard.html?client=your-client-key`
 
 If you see errors that aren't covered here, check:

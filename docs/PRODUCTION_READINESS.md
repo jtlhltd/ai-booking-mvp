@@ -1,6 +1,6 @@
 # Production Readiness Guide
 
-This document outlines the production-ready features implemented for the AI Booking MVP system.
+This document outlines the production-ready features implemented for the AI Booking System.
 
 ## 🏥 Health Checks
 

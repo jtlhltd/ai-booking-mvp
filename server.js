@@ -82,7 +82,7 @@ function parseStartPreference(preference, timeZone) {
   }
 }
 
-// server.js — AI Booking MVP (SQLite tenants + env bootstrap + richer tenant awareness)
+// server.js — AI Booking System (SQLite tenants + env bootstrap + richer tenant awareness)
 import 'dotenv/config';
 import bcrypt from 'bcrypt';
 import { generateUKBusinesses, getIndustryCategories, fuzzySearch } from './enhanced-business-search.js';
@@ -9570,7 +9570,7 @@ app.get('/api-docs', async (req, res) => {
 <!DOCTYPE html>
 <html>
 <head>
-  <title>API Documentation - AI Booking MVP</title>
+  <title>API Documentation - AI Booking System</title>
   <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui.css" />
   <style>
     body { margin: 0; }
@@ -13059,7 +13059,7 @@ app.get('/healthz', async (_req, res) => {
     const rows = await listFullClients();
     res.json({
       ok: true,
-      service: 'ai-booking-mvp',
+      service: 'ai-booking-system',
       time: new Date().toISOString(),
       gcalConfigured: !!(GOOGLE_CLIENT_EMAIL && (GOOGLE_PRIVATE_KEY || GOOGLE_PRIVATE_KEY_B64) && GOOGLE_CALENDAR_ID),
       smsConfigured: defaultSmsConfigured,
@@ -13977,7 +13977,7 @@ app.post('/webhooks/twilio-inbound', express.urlencoded({ extended: false }), tw
                 headers: { 
                   'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`, 
                   'Content-Type': 'application/json',
-                  'User-Agent': 'AI-Booking-MVP/1.0'
+                  'User-Agent': 'AI-Booking-System/1.0'
                 },
                 body: JSON.stringify(payload),
                 timeout: 30000 // 30 second timeout
@@ -21737,7 +21737,7 @@ async function startServer() {
     await bootstrapClients();
     
     server.listen(process.env.PORT ? Number(process.env.PORT) : 10000, '0.0.0.0', () => {
-      console.log(`AI Booking MVP listening on http://localhost:${process.env.PORT || 10000} (DB: ${DB_PATH})`);
+      console.log(`AI Booking System listening on http://localhost:${process.env.PORT || 10000} (DB: ${DB_PATH})`);
       console.log(`Security middleware: Enhanced authentication and rate limiting enabled`);
       console.log(`Booking system: ${bookingSystem ? 'Available' : 'Not Available'}`);
       console.log(`SMS-Email pipeline: ${smsEmailPipeline ? 'Available' : 'Not Available'}`);
