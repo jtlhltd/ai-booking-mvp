@@ -100,9 +100,10 @@ async function initPostgres() {
     pool = new Pool({
       connectionString: dbUrl,
       ssl: { rejectUnauthorized: false },
-      max: 20, // Maximum 20 connections in pool
+      max: 30, // Increased from 20 to 30 to handle higher load
       idleTimeoutMillis: 30000, // Close idle connections after 30 seconds
       connectionTimeoutMillis: 10000, // Increased timeout to 10 seconds for remote databases
+      statement_timeout: 30000, // 30 second query timeout to prevent hanging queries
     });
 
     // Test connection first with timeout
