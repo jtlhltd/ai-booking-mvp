@@ -439,7 +439,7 @@ async function initPostgres() {
 
     CREATE TABLE IF NOT EXISTS query_performance (
       id BIGSERIAL PRIMARY KEY,
-      query_hash TEXT NOT NULL,
+      query_hash TEXT NOT NULL UNIQUE,
       query_preview TEXT,
       avg_duration DECIMAL(10,2),
       max_duration DECIMAL(10,2),
@@ -447,6 +447,7 @@ async function initPostgres() {
       last_executed_at TIMESTAMPTZ DEFAULT now(),
       created_at TIMESTAMPTZ DEFAULT now()
     );
+    CREATE UNIQUE INDEX IF NOT EXISTS query_perf_hash_unique_idx ON query_performance(query_hash);
     CREATE INDEX IF NOT EXISTS query_perf_hash_idx ON query_performance(query_hash);
     CREATE INDEX IF NOT EXISTS query_perf_duration_idx ON query_performance(avg_duration DESC);
 
@@ -858,13 +859,17 @@ async function query(text, params = []) {
     
     const duration = Date.now() - startTime;
     
-    // Track query performance (async, don't wait)
+    // Track query performance (async, fire-and-forget, don't wait)
+    // Use setImmediate to ensure tracking doesn't block query completion
     if (dbType === 'postgres' && duration >= 100) {
-      // Import and track asynchronously to avoid blocking
-      import('./lib/query-performance-tracker.js').then(module => {
-        module.trackQueryPerformance(text, duration, params).catch(err => {
-          // Silently fail - don't break queries if tracking fails
-          console.warn('[DB] Query tracking error:', err.message);
+      setImmediate(() => {
+        // Import and track asynchronously to avoid blocking
+        import('./lib/query-performance-tracker.js').then(module => {
+          module.trackQueryPerformance(text, duration, params).catch(() => {
+            // Silently fail - don't log or break queries if tracking fails
+          });
+        }).catch(() => {
+          // Silently fail - don't break queries if import fails
         });
       });
     }
