@@ -9478,6 +9478,19 @@ app.get('/api/backup-status', async (req, res) => {
 });
 console.log('🟢🟢🟢 [BACKUP] REGISTERED: GET /api/backup-status');
 
+// Database connection limit endpoint
+app.get('/api/database/connection-limit', async (req, res) => {
+  try {
+    const { getConnectionLimit } = await import('./lib/database-health.js');
+    const limitInfo = await getConnectionLimit();
+    res.json(limitInfo);
+  } catch (error) {
+    console.error('[CONNECTION LIMIT ENDPOINT ERROR]', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+console.log('🟢🟢🟢 [DB LIMIT] REGISTERED: GET /api/database/connection-limit');
+
 // Cost monitoring endpoint
 app.get('/api/cost-summary/:clientKey', async (req, res) => {
   try {
