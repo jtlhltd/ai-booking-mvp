@@ -110,7 +110,7 @@ import { performanceMiddleware, getPerformanceMonitor } from './lib/performance-
 import { cacheMiddleware, getCache } from './lib/cache.js';
 
 import { makeJwtAuth, insertEvent, freeBusy } from './gcal.js';
-import { init as initDb,  upsertFullClient, getFullClient, listFullClients, deleteClient, DB_PATH, query } from './db.js'; // SQLite-backed tenants
+import { init as initDb,  upsertFullClient, getFullClient, listFullClients, deleteClient, DB_PATH, query, pool } from './db.js'; // SQLite-backed tenants
 import { 
   authenticateApiKey, 
   rateLimitMiddleware, 
@@ -11606,6 +11606,32 @@ app.use('/webhook/sms-reply', express.urlencoded({ extended: false }));
 app.use((req, _res, next) => { req.id = 'req_' + nanoid(10); next(); });
 app.use(rateLimit({ windowMs: 60_000, max: 60, standardHeaders: true, legacyHeaders: false }));
 
+// Graceful shutdown state management
+let isShuttingDown = false;
+let activeRequests = 0;
+let shutdownTimeout = null;
+
+// Track active requests for graceful shutdown
+app.use((req, res, next) => {
+  if (isShuttingDown) {
+    return res.status(503).json({ 
+      ok: false,
+      error: 'Server is shutting down',
+      retryAfter: 30,
+      message: 'Please retry your request in a few moments'
+    });
+  }
+  
+  activeRequests++;
+  res.on('finish', () => {
+    activeRequests--;
+  });
+  res.on('close', () => {
+    activeRequests--;
+  });
+  next();
+});
+
 async function ensureDataFiles() {
   await fs.mkdir(DATA_DIR, { recursive: true });
   for (const p of [LEADS_PATH, CALLS_PATH, SMS_STATUS_PATH, JOBS_PATH]) {
@@ -21801,5 +21827,77 @@ async function startServer() {
     process.exit(1);
   }
 }
+
+// Graceful shutdown handlers
+async function gracefulShutdown(signal) {
+  if (isShuttingDown) {
+    console.log('[SHUTDOWN] Already shutting down, ignoring signal');
+    return;
+  }
+  
+  isShuttingDown = true;
+  console.log(`\n[SHUTDOWN] ${signal} received, starting graceful shutdown...`);
+  console.log(`[SHUTDOWN] Active requests: ${activeRequests}`);
+  
+  // Step 1: Stop accepting new connections
+  server.close(() => {
+    console.log('[SHUTDOWN] HTTP server closed, no longer accepting connections');
+  });
+  
+  // Step 2: Close WebSocket connections
+  io.close(() => {
+    console.log('[SHUTDOWN] WebSocket server closed');
+  });
+  
+  // Step 3: Wait for active requests to complete (max 30 seconds)
+  const waitForRequests = setInterval(() => {
+    if (activeRequests === 0) {
+      clearInterval(waitForRequests);
+      closeDatabase();
+    } else {
+      console.log(`[SHUTDOWN] Waiting for ${activeRequests} active requests to complete...`);
+    }
+  }, 1000);
+  
+  // Step 4: Force close after timeout
+  shutdownTimeout = setTimeout(() => {
+    console.error('[SHUTDOWN] Timeout reached (30s), forcing shutdown');
+    clearInterval(waitForRequests);
+    closeDatabase();
+  }, 30000);
+}
+
+async function closeDatabase() {
+  try {
+    // Close database pool
+    if (pool) {
+      console.log('[SHUTDOWN] Closing database pool...');
+      await pool.end();
+      console.log('[SHUTDOWN] Database pool closed successfully');
+    }
+    
+    console.log('[SHUTDOWN] Graceful shutdown complete');
+    process.exit(0);
+  } catch (error) {
+    console.error('[SHUTDOWN ERROR] Error during shutdown:', error);
+    process.exit(1);
+  }
+}
+
+// Register signal handlers
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('[FATAL] Uncaught exception:', error);
+  gracefulShutdown('UNCAUGHT_EXCEPTION');
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[FATAL] Unhandled rejection at:', promise, 'reason:', reason);
+  gracefulShutdown('UNHANDLED_REJECTION');
+});
 
 startServer();
