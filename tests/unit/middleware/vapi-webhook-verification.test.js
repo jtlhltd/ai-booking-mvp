@@ -1,9 +1,9 @@
 // tests/unit/middleware/vapi-webhook-verification.test.js
 // Unit tests for VAPI webhook signature verification
 
-import { describe, test, expect, beforeEach, afterEach } from '@jest/globals';
+import { describe, test, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import crypto from 'crypto';
-import { verifyVapiSignature } from '../../../../middleware/vapi-webhook-verification.js';
+import { verifyVapiSignature } from '../../../middleware/vapi-webhook-verification.js';
 
 describe('VAPI Webhook Signature Verification', () => {
   const originalSecret = process.env.VAPI_WEBHOOK_SECRET;
@@ -68,7 +68,8 @@ describe('VAPI Webhook Signature Verification', () => {
   test('should reject request with invalid signature', () => {
     const body = { test: 'data' };
     const bodyString = JSON.stringify(body);
-    const invalidSignature = 'invalid-signature';
+    // Invalid signature must be same length as valid signature (64 hex chars)
+    const invalidSignature = 'a'.repeat(64);
     
     const req = {
       get: (header) => header === 'X-Vapi-Signature' ? invalidSignature : null,

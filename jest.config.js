@@ -3,15 +3,8 @@
 
 export default {
   testEnvironment: 'node',
-  globals: {
-    'ts-jest': {
-      useESM: true
-    }
-  },
   transform: {},
-  moduleNameMapper: {
-    '^(\\.{1,2}/.*)\\.js$': '$1'
-  },
+  moduleNameMapper: {},
   testMatch: [
     '**/__tests__/**/*.js',
     '**/?(*.)+(spec|test).js'

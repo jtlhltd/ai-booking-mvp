@@ -55,7 +55,7 @@ function Test-Endpoint {
         $content = $response.Content | ConvertFrom-Json
         
         if ($statusCode -eq $ExpectedStatus) {
-            Write-Host "  ✓ PASSED (Status: $statusCode)" -ForegroundColor Green
+            Write-Host "  PASSED (Status: $statusCode)" -ForegroundColor Green
             $testResults += @{
                 Name = $Name
                 Status = "PASSED"
@@ -63,7 +63,7 @@ function Test-Endpoint {
             }
             return $true
         } else {
-            Write-Host "  ✗ FAILED (Expected: $ExpectedStatus, Got: $statusCode)" -ForegroundColor Red
+            Write-Host "  FAILED (Expected: $ExpectedStatus, Got: $statusCode)" -ForegroundColor Red
             $testResults += @{
                 Name = $Name
                 Status = "FAILED"
@@ -73,7 +73,7 @@ function Test-Endpoint {
             return $false
         }
     } catch {
-        Write-Host "  ✗ ERROR: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "  ERROR: $($_.Exception.Message)" -ForegroundColor Red
         $testResults += @{
             Name = $Name
             Status = "ERROR"

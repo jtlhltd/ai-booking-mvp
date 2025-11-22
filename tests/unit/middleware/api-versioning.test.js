@@ -2,7 +2,7 @@
 // Unit tests for API versioning middleware
 
 import { describe, test, expect, jest } from '@jest/globals';
-import { apiVersioning, versionedRoute } from '../../../../middleware/api-versioning.js';
+import { apiVersioning, versionedRoute } from '../../../middleware/api-versioning.js';
 
 describe('API Versioning Middleware', () => {
   test('should extract version from path', () => {

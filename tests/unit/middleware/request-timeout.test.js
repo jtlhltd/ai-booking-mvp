@@ -2,7 +2,7 @@
 // Unit tests for request timeout middleware
 
 import { describe, test, expect, jest, beforeEach, afterEach } from '@jest/globals';
-import { requestTimeout, smartRequestTimeout, getTimeoutForPath, TIMEOUTS } from '../../../../middleware/request-timeout.js';
+import { requestTimeout, smartRequestTimeout, getTimeoutForPath, TIMEOUTS } from '../../../middleware/request-timeout.js';
 
 describe('Request Timeout Middleware', () => {
   beforeEach(() => {
@@ -15,7 +15,12 @@ describe('Request Timeout Middleware', () => {
   
   test('should set timeout for requests', () => {
     const middleware = requestTimeout(1000);
-    const req = { method: 'GET', path: '/test', ip: '127.0.0.1' };
+    const req = { 
+      method: 'GET', 
+      path: '/test', 
+      ip: '127.0.0.1',
+      get: jest.fn().mockReturnValue('test-agent')
+    };
     const res = {
       headersSent: false,
       status: jest.fn().mockReturnThis(),
@@ -43,7 +48,12 @@ describe('Request Timeout Middleware', () => {
   
   test('should clear timeout when response finishes', () => {
     const middleware = requestTimeout(1000);
-    const req = { method: 'GET', path: '/test', ip: '127.0.0.1' };
+    const req = { 
+      method: 'GET', 
+      path: '/test', 
+      ip: '127.0.0.1',
+      get: jest.fn().mockReturnValue('test-agent')
+    };
     const originalEnd = jest.fn();
     const res = {
       headersSent: false,
@@ -77,7 +87,12 @@ describe('Request Timeout Middleware', () => {
   
   test('smartRequestTimeout should use path-based timeout', () => {
     const middleware = smartRequestTimeout();
-    const req = { method: 'GET', path: '/api/health', ip: '127.0.0.1' };
+    const req = { 
+      method: 'GET', 
+      path: '/api/health', 
+      ip: '127.0.0.1',
+      get: jest.fn().mockReturnValue('test-agent')
+    };
     const res = {
       headersSent: false,
       status: jest.fn().mockReturnThis(),
