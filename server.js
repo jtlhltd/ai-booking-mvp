@@ -11604,6 +11604,11 @@ app.use((req, res, next) => {
 });
 
 app.use(morgan('dev'));
+
+// Request timeout middleware (before other middleware to catch all requests)
+const { smartRequestTimeout } = await import('./middleware/request-timeout.js');
+app.use(smartRequestTimeout());
+
 app.use(cors({
   origin: ORIGIN === '*' ? true : ORIGIN,
   methods: ['GET','POST','OPTIONS','DELETE'],
