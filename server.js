@@ -9912,6 +9912,22 @@ function adjustColorBrightness(hex, percent) {
 }
 
 // --- healthz: report which integrations are configured (without leaking secrets)
+// Comprehensive health check endpoint
+app.get('/api/health/comprehensive', async (req, res) => {
+  try {
+    const { getComprehensiveHealth } = await import('./lib/health-monitor.js');
+    const health = await getComprehensiveHealth(req.query.clientKey || null);
+    res.json(health);
+  } catch (error) {
+    console.error('[HEALTH CHECK ERROR]', error);
+    res.status(500).json({
+      status: 'error',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 app.get('/healthz', (req, res) => {
   const flags = {
     apiKey: !!process.env.API_KEY,
@@ -13121,7 +13137,8 @@ try {
     const msg = err?.response?.data || err?.message || '';
     if (sc === 400 && String(msg).toLowerCase().includes('id')) {
       // Retry once without ID if Google rejects the custom id
-      respInsert = await cal.events.insert({
+      respInsert = await withTimeout(
+        () => cal.events.insert({
         calendarId,
         requestBody: {
           summary,
@@ -14868,36 +14885,39 @@ app.post('/api/calendar/check-book', async (req, res) => {
         sms = { error: String(smsError) };
       }
       
-      // Save appointment to database so it shows up in dashboard
+      // Save appointment to database so it shows up in dashboard (with transaction safety)
       try {
-        // Get or create lead first
-        let leadId = null;
-        const existingLead = await query(
-          'SELECT id FROM leads WHERE client_key = $1 AND phone = $2 LIMIT 1',
-          [client?.clientKey, lead.phone]
-        );
-        
-        if (existingLead?.rows?.[0]?.id) {
-          leadId = existingLead.rows[0].id;
-        } else {
-          // Create lead if it doesn't exist
-          const newLead = await query(
-            'INSERT INTO leads (client_key, name, phone, service, status, source) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
-            [client?.clientKey, lead.name, lead.phone, requestedService || 'appointment', 'booked', 'demo']
+        const { withTransaction } = await import('./db.js');
+        await withTransaction(async (txQuery) => {
+          // Get or create lead first
+          let leadId = null;
+          const existingLead = await txQuery(
+            'SELECT id FROM leads WHERE client_key = $1 AND phone = $2 LIMIT 1',
+            [client?.clientKey, lead.phone]
           );
-          if (newLead?.rows?.[0]?.id) {
-            leadId = newLead.rows[0].id;
+          
+          if (existingLead?.rows?.[0]?.id) {
+            leadId = existingLead.rows[0].id;
+          } else {
+            // Create lead if it doesn't exist
+            const newLead = await txQuery(
+              'INSERT INTO leads (client_key, name, phone, service, status, source) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+              [client?.clientKey, lead.name, lead.phone, requestedService || 'appointment', 'booked', 'demo']
+            );
+            if (newLead?.rows?.[0]?.id) {
+              leadId = newLead.rows[0].id;
+            }
           }
-        }
-        
-        // Save appointment to database
-        if (leadId && google?.id) {
-          await query(
-            'INSERT INTO appointments (client_key, lead_id, gcal_event_id, start_iso, end_iso, status) VALUES ($1, $2, $3, $4, $5, $6)',
-            [client?.clientKey, leadId, google.id, startISO, endISO, 'booked']
-          );
-          console.log('[DEMO BOOKING] Appointment saved to database');
-        }
+          
+          // Save appointment to database
+          if (leadId && google?.id) {
+            await txQuery(
+              'INSERT INTO appointments (client_key, lead_id, gcal_event_id, start_iso, end_iso, status) VALUES ($1, $2, $3, $4, $5, $6)',
+              [client?.clientKey, leadId, google.id, startISO, endISO, 'booked']
+            );
+            console.log('[DEMO BOOKING] Appointment saved to database (transaction committed)');
+          }
+        });
       } catch (dbError) {
         console.warn('[DEMO BOOKING] Could not save appointment to database:', dbError.message);
       }
@@ -14984,7 +15004,32 @@ app.post('/api/calendar/check-book', async (req, res) => {
           const payload = { to: lead.phone, body };
           if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid;
           else payload.from = fromNumber;
-          const resp = await smsClient.messages.create(payload);
+          
+          // Use circuit breaker and timeout for SMS
+          const resp = await withCircuitBreaker(
+            'twilio_sms',
+            async () => {
+              return await withTimeout(
+                () => smsClient.messages.create(payload),
+                TIMEOUTS.twilio,
+                'Twilio SMS send'
+              );
+            },
+            async () => {
+              // Fallback: Try email if available
+              if (lead.email) {
+                const messagingService = (await import('./lib/messaging-service.js')).default;
+                await messagingService.sendEmail({
+                  to: lead.email,
+                  subject: `Appointment Confirmation - ${client?.displayName || 'Your Appointment'}`,
+                  body: body.replace(/\n/g, '<br>')
+                });
+                return { sid: 'email_fallback', email: true };
+              }
+              throw new Error('SMS circuit breaker open and no email fallback');
+            }
+          );
+          
           sms = { id: resp.sid, to: lead.phone, override: Boolean(smsOverrides) };
         } catch (err) {
           console.error(JSON.stringify({ evt: 'sms.error', rid: req.id, error: String(err) }));
@@ -17009,45 +17054,62 @@ app.get('/api/stats', cacheMiddleware({ ttl: 60000 }), async (req, res) => {
     let stats = {};
 
     if (clientKey) {
-      // Client-specific stats from database
+      // Client-specific stats from database - optimized single query with caching
       try {
+        // Check cache first
+        const cacheKey = `stats:${clientKey}:${range}`;
+        const cached = dashboardStatsCache.get(cacheKey);
+        if (cached && Date.now() < cached.expires) {
+          return res.json({ ok: true, ...cached.data });
+        }
+        
         const { query } = await import('./db.js');
+        const { optimizedQuery } = await import('./lib/query-optimizer.js');
 
-        // Get lead stats
-        const leadsResult = await query(`
-          SELECT COUNT(*) as total
-          FROM leads
-          WHERE client_key = $1
-            AND created_at >= $2
-        `, [clientKey, startDate]);
-
-        // Get call stats
-        const callsResult = await query(`
+        // Single optimized query with CTEs for all stats
+        const statsResult = await optimizedQuery(`
+          WITH 
+          lead_stats AS (
+            SELECT COUNT(*) as total
+            FROM leads
+            WHERE client_key = $1 AND created_at >= $2
+          ),
+          call_stats AS (
+            SELECT 
+              COUNT(*) as total,
+              SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+              SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
+              SUM(CASE WHEN status = 'no_answer' THEN 1 ELSE 0 END) as no_answer
+            FROM call_queue
+            WHERE client_key = $1 AND created_at >= $2
+          ),
+          booking_stats AS (
+            SELECT COUNT(*) as total
+            FROM leads
+            WHERE client_key = $1 AND status = 'booked' AND updated_at >= $2
+          ),
+          appointment_stats AS (
+            SELECT COUNT(*) as total
+            FROM appointments
+            WHERE client_key = $1 AND created_at >= $2
+          )
           SELECT 
-            COUNT(*) as total,
-            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
-            SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
-            SUM(CASE WHEN status = 'no_answer' THEN 1 ELSE 0 END) as no_answer
-          FROM call_queue
-          WHERE client_key = $1
-            AND created_at >= $2
-        `, [clientKey, startDate]);
+            (SELECT total FROM lead_stats) as leads,
+            (SELECT total FROM call_stats) as calls,
+            (SELECT completed FROM call_stats) as completed,
+            (SELECT failed FROM call_stats) as failed,
+            (SELECT no_answer FROM call_stats) as no_answer,
+            (SELECT total FROM booking_stats) as bookings,
+            (SELECT total FROM appointment_stats) as appointments
+        `, [clientKey, startDate], { timeout: 5000 });
 
-        // Get booking stats
-        const bookingsResult = await query(`
-          SELECT COUNT(*) as total
-          FROM leads
-          WHERE client_key = $1
-            AND status = 'booked'
-            AND updated_at >= $2
-        `, [clientKey, startDate]);
-
-        const leads = parseInt(leadsResult.rows[0]?.total || 0);
-        const calls = parseInt(callsResult.rows[0]?.total || 0);
-        const completed = parseInt(callsResult.rows[0]?.completed || 0);
-        const failed = parseInt(callsResult.rows[0]?.failed || 0);
-        const noAnswer = parseInt(callsResult.rows[0]?.no_answer || 0);
-        const bookings = parseInt(bookingsResult.rows[0]?.total || 0);
+        const row = statsResult.rows[0];
+        const leads = parseInt(row?.leads || 0);
+        const calls = parseInt(row?.calls || 0);
+        const completed = parseInt(row?.completed || 0);
+        const failed = parseInt(row?.failed || 0);
+        const noAnswer = parseInt(row?.no_answer || 0);
+        const bookings = parseInt(row?.bookings || 0);
 
         // Calculate metrics
         const conversionRate = calls > 0 ? ((bookings / calls) * 100).toFixed(1) : 0;
@@ -17080,6 +17142,12 @@ app.get('/api/stats', cacheMiddleware({ ttl: 60000 }), async (req, res) => {
           trendBookings: trendCalls.map(c => Math.floor(c * 0.21)), // Mock booking trend
           peakHours: [12, 18, 25, 22, 15, 20, 28, 24, 19] // Mock peak hours data
         };
+        
+        // Cache the result
+        dashboardStatsCache.set(cacheKey, {
+          data: stats,
+          expires: Date.now() + DASHBOARD_CACHE_TTL
+        });
 
       } catch (dbError) {
         console.error('[STATS API] Database error:', dbError);
@@ -21627,6 +21695,45 @@ async function startServer() {
       }
     });
     console.log('✅ Budget monitoring scheduled (runs every 6 hours)');
+    
+    // Connection pool health check - runs every 15 minutes
+    cron.schedule('*/15 * * * *', async () => {
+      try {
+        const { checkPoolHealth } = await import('./lib/connection-pool-monitor.js');
+        await checkPoolHealth();
+      } catch (error) {
+        console.error('[POOL MONITOR CRON ERROR]', error);
+      }
+    });
+    console.log('✅ Connection pool monitoring scheduled (runs every 15 minutes)');
+    
+    // Request queue processing - runs every 2 minutes
+    cron.schedule('*/2 * * * *', async () => {
+      try {
+        const { processQueue } = await import('./lib/request-queue.js');
+        const result = await processQueue({ maxConcurrent: 10, maxProcess: 50 });
+        if (result.processed > 0) {
+          console.log(`[REQUEST QUEUE] Processed ${result.processed} queued requests`);
+        }
+      } catch (error) {
+        console.error('[REQUEST QUEUE CRON ERROR]', error);
+      }
+    });
+    console.log('✅ Request queue processing scheduled (runs every 2 minutes)');
+    
+    // Dead letter queue cleanup - runs daily
+    cron.schedule('0 2 * * *', async () => {
+      try {
+        const { cleanupDLQ } = await import('./lib/dead-letter-queue.js');
+        const result = await cleanupDLQ();
+        if (result.deleted > 0) {
+          console.log(`[DLQ CLEANUP] Deleted ${result.deleted} old resolved items`);
+        }
+      } catch (error) {
+        console.error('[DLQ CLEANUP CRON ERROR]', error);
+      }
+    });
+    console.log('✅ Dead letter queue cleanup scheduled (runs daily at 2 AM)');
     
     // Start webhook retry processing (runs every 5 minutes)
     const { processWebhookRetryQueue } = await import('./lib/webhook-retry.js');

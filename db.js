@@ -387,6 +387,59 @@ async function initPostgres() {
     CREATE INDEX IF NOT EXISTS cost_alerts_tenant_idx ON cost_alerts(client_key);
     CREATE INDEX IF NOT EXISTS cost_alerts_status_idx ON cost_alerts(status);
 
+    CREATE TABLE IF NOT EXISTS dead_letter_queue (
+      id BIGSERIAL PRIMARY KEY,
+      client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
+      original_table TEXT NOT NULL,
+      original_id BIGINT,
+      operation_type TEXT NOT NULL,
+      payload JSONB NOT NULL,
+      error_history JSONB,
+      failure_reason TEXT,
+      retry_count INTEGER DEFAULT 0,
+      max_retries INTEGER,
+      first_failed_at TIMESTAMPTZ,
+      last_attempted_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      resolved_at TIMESTAMPTZ,
+      resolution_notes TEXT
+    );
+    CREATE INDEX IF NOT EXISTS dlq_client_idx ON dead_letter_queue(client_key);
+    CREATE INDEX IF NOT EXISTS dlq_type_idx ON dead_letter_queue(operation_type);
+    CREATE INDEX IF NOT EXISTS dlq_resolved_idx ON dead_letter_queue(resolved_at);
+    CREATE INDEX IF NOT EXISTS dlq_created_idx ON dead_letter_queue(created_at);
+
+    CREATE TABLE IF NOT EXISTS background_jobs (
+      id BIGSERIAL PRIMARY KEY,
+      job_id TEXT UNIQUE NOT NULL,
+      client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
+      job_type TEXT NOT NULL,
+      status TEXT NOT NULL,
+      total_items INTEGER DEFAULT 0,
+      processed_items INTEGER DEFAULT 0,
+      error_count INTEGER DEFAULT 0,
+      metadata JSONB,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      updated_at TIMESTAMPTZ DEFAULT now(),
+      completed_at TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS bg_jobs_job_id_idx ON background_jobs(job_id);
+    CREATE INDEX IF NOT EXISTS bg_jobs_client_idx ON background_jobs(client_key);
+    CREATE INDEX IF NOT EXISTS bg_jobs_status_idx ON background_jobs(status);
+
+    CREATE TABLE IF NOT EXISTS query_performance (
+      id BIGSERIAL PRIMARY KEY,
+      query_hash TEXT NOT NULL,
+      query_preview TEXT,
+      avg_duration DECIMAL(10,2),
+      max_duration DECIMAL(10,2),
+      call_count INTEGER DEFAULT 1,
+      last_executed_at TIMESTAMPTZ DEFAULT now(),
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS query_perf_hash_idx ON query_performance(query_hash);
+    CREATE INDEX IF NOT EXISTS query_perf_duration_idx ON query_performance(avg_duration DESC);
+
     CREATE TABLE IF NOT EXISTS analytics_events (
       id BIGSERIAL PRIMARY KEY,
       client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
@@ -905,17 +958,99 @@ export async function listFullClients() {
   return rows.map(mapTenantRow);
 }
 
+// Client cache with 5-minute TTL
+const clientCache = new Map();
+const CLIENT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 export async function getFullClient(clientKey) {
+  // Check cache first
+  const cacheKey = `client:${clientKey}`;
+  const cached = clientCache.get(cacheKey);
+  
+  if (cached && Date.now() < cached.expires) {
+    return cached.data;
+  }
+  
+  // Fetch from database
   const { rows } = await query(`
     SELECT client_key, display_name, timezone, locale,
            numbers_json, twilio_json, vapi_json, calendar_json, sms_templates_json, 
            white_label_config, is_enabled, created_at
     FROM tenants WHERE client_key = $1
   `, [clientKey]);
-  return mapTenantRow(rows[0]);
+  
+  const client = mapTenantRow(rows[0]);
+  
+  // Cache the result
+  if (client) {
+    clientCache.set(cacheKey, {
+      data: client,
+      expires: Date.now() + CLIENT_CACHE_TTL
+    });
+  }
+  
+  return client;
+}
+
+// Invalidate client cache (call after updates)
+export function invalidateClientCache(clientKey) {
+  clientCache.delete(`client:${clientKey}`);
+  // Also clear any related caches
+  for (const key of clientCache.keys()) {
+    if (key.includes(clientKey)) {
+      clientCache.delete(key);
+    }
+  }
+}
+
+/**
+ * Execute a function within a database transaction
+ * Automatically commits on success, rolls back on error
+ */
+export async function withTransaction(callback) {
+  if (!pool) {
+    // No pool, execute without transaction
+    return await callback(query);
+  }
+  
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    
+    // Create a transaction-scoped query function
+    const txQuery = async (text, params) => {
+      const result = await client.query(text, params);
+      return result;
+    };
+    
+    const result = await callback(txQuery);
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+// Cleanup expired cache entries periodically
+if (typeof setInterval !== 'undefined') {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, value] of clientCache.entries()) {
+      if (now >= value.expires) {
+        clientCache.delete(key);
+      }
+    }
+  }, 10 * 60 * 1000); // Every 10 minutes
 }
 
 export async function upsertFullClient(c) {
+  // Invalidate cache before update
+  if (c.clientKey) {
+    invalidateClientCache(c.clientKey);
+  }
   const numbers_json = c.numbers ? JSON.stringify(c.numbers) : null;
   const twilio_json = c.sms ? JSON.stringify(c.sms) : null;
   const vapi = c.vapi || {};
