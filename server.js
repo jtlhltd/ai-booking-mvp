@@ -13137,8 +13137,7 @@ try {
     const msg = err?.response?.data || err?.message || '';
     if (sc === 400 && String(msg).toLowerCase().includes('id')) {
       // Retry once without ID if Google rejects the custom id
-      respInsert = await withTimeout(
-        () => cal.events.insert({
+      respInsert = await cal.events.insert({
         calendarId,
         requestBody: {
           summary,
@@ -15004,32 +15003,7 @@ app.post('/api/calendar/check-book', async (req, res) => {
           const payload = { to: lead.phone, body };
           if (messagingServiceSid) payload.messagingServiceSid = messagingServiceSid;
           else payload.from = fromNumber;
-          
-          // Use circuit breaker and timeout for SMS
-          const resp = await withCircuitBreaker(
-            'twilio_sms',
-            async () => {
-              return await withTimeout(
-                () => smsClient.messages.create(payload),
-                TIMEOUTS.twilio,
-                'Twilio SMS send'
-              );
-            },
-            async () => {
-              // Fallback: Try email if available
-              if (lead.email) {
-                const messagingService = (await import('./lib/messaging-service.js')).default;
-                await messagingService.sendEmail({
-                  to: lead.email,
-                  subject: `Appointment Confirmation - ${client?.displayName || 'Your Appointment'}`,
-                  body: body.replace(/\n/g, '<br>')
-                });
-                return { sid: 'email_fallback', email: true };
-              }
-              throw new Error('SMS circuit breaker open and no email fallback');
-            }
-          );
-          
+          const resp = await smsClient.messages.create(payload);
           sms = { id: resp.sid, to: lead.phone, override: Boolean(smsOverrides) };
         } catch (err) {
           console.error(JSON.stringify({ evt: 'sms.error', rid: req.id, error: String(err) }));
