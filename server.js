@@ -9961,6 +9961,45 @@ app.get('/healthz', (req, res) => {
   res.json({ ok: true, integrations: flags });
 });
 
+// Load balancer health check endpoint
+// Lightweight endpoint for load balancers to check server health
+// Returns 200 if server is healthy, 503 if unhealthy
+app.get('/health/lb', async (req, res) => {
+  try {
+    // Quick database connectivity check
+    const dbHealthy = await Promise.race([
+      query('SELECT 1').then(() => true),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('DB timeout')), 2000))
+    ]).catch(() => false);
+    
+    // Check if server is shutting down
+    const isShuttingDown = global.isShuttingDown || false;
+    
+    // Determine health status
+    const healthy = dbHealthy && !isShuttingDown;
+    
+    if (healthy) {
+      res.status(200).json({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime()
+      });
+    } else {
+      res.status(503).json({
+        status: 'unhealthy',
+        reason: !dbHealthy ? 'database_unavailable' : 'shutting_down',
+        timestamp: new Date().toISOString()
+      });
+    }
+  } catch (error) {
+    res.status(503).json({
+      status: 'unhealthy',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // --- Tenant header normalizer ---
 app.use((req, _res, next) => {
   const hdrs = req.headers || {};
