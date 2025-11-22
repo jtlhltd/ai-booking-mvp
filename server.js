@@ -21859,6 +21859,79 @@ async function startServer() {
     });
     console.log('✅ Webhook retry processing scheduled (runs every 5 minutes)');
     
+    // Automated data cleanup (runs weekly on Sunday at 3 AM)
+    cron.schedule('0 3 * * 0', async () => {
+      console.log('[CRON] 🧹 Starting automated data cleanup...');
+      
+      try {
+        const { GDPRManager } = await import('./lib/security.js');
+        const { query } = await import('./db.js');
+        const gdpr = new GDPRManager({ query });
+        
+        // Run with 2-year retention (730 days)
+        const result = await gdpr.applyDataRetention(730, {
+          dryRun: false,
+          tables: ['leads', 'calls', 'messages', 'appointments'],
+          preserveStatuses: ['active', 'booked', 'pending']
+        });
+        
+        const totalDeleted = Object.values(result.itemsDeleted || {}).reduce((sum, count) => sum + (count || 0), 0);
+        
+        console.log(`[CRON] ✅ Data cleanup completed:`, {
+          totalDeleted,
+          breakdown: result.itemsDeleted,
+          errors: result.errors?.length || 0
+        });
+        
+        // Send summary email if items were deleted
+        if (process.env.YOUR_EMAIL && totalDeleted > 0) {
+          try {
+            const messagingService = (await import('./lib/messaging-service.js')).default;
+            await messagingService.sendEmail({
+              to: process.env.YOUR_EMAIL,
+              subject: `📊 Weekly Data Cleanup Summary`,
+              body: `
+Weekly Data Cleanup Report
+==========================
+
+Total Items Deleted: ${totalDeleted}
+Date: ${new Date().toLocaleDateString()}
+Retention Period: 730 days (2 years)
+
+Breakdown:
+${Object.entries(result.itemsDeleted || {}).map(([table, count]) => `- ${table}: ${count}`).join('\n')}
+
+${result.errors && result.errors.length > 0 ? `\nErrors: ${result.errors.length}` : ''}
+              `.trim()
+            });
+          } catch (emailError) {
+            console.error('[CLEANUP] Failed to send summary email:', emailError);
+          }
+        }
+        
+        // Log errors if any
+        if (result.errors && result.errors.length > 0) {
+          const { sendCriticalAlert } = await import('./lib/error-monitoring.js');
+          await sendCriticalAlert({
+            message: `Data cleanup completed with ${result.errors.length} error(s)`,
+            errorType: 'Data Cleanup',
+            severity: 'warning',
+            metadata: { result }
+          });
+        }
+      } catch (error) {
+        console.error('[CRON ERROR] Data cleanup failed:', error);
+        const { sendCriticalAlert } = await import('./lib/error-monitoring.js');
+        await sendCriticalAlert({
+          message: `Data cleanup failed: ${error.message}`,
+          errorType: 'Data Cleanup Failure',
+          severity: 'critical',
+          metadata: { error: error.message, stack: error.stack }
+        });
+      }
+    });
+    console.log('✅ Automated data cleanup scheduled (runs every Sunday at 3 AM)');
+    
   } catch (error) {
     console.error('❌ Failed to start server:', error);
     process.exit(1);
