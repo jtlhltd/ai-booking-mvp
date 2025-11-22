@@ -6,8 +6,22 @@ import messagingService from '../lib/messaging-service.js';
 import { extractLogisticsFields } from '../lib/logistics-extractor.js';
 import { recordReceptionistTelemetry } from '../lib/demo-telemetry.js';
 import { storeCallContext } from '../lib/call-context-cache.js';
+import { verifyVapiSignature } from '../middleware/vapi-webhook-verification.js';
 
 const router = express.Router();
+
+// Middleware to preserve raw body for signature verification
+router.use('/webhooks/vapi', express.raw({ type: 'application/json' }), (req, res, next) => {
+  // Store raw body for signature verification
+  req.rawBody = req.body;
+  // Parse JSON body for normal processing
+  try {
+    req.body = JSON.parse(req.body.toString());
+  } catch (e) {
+    req.body = {};
+  }
+  next();
+});
 
 // In-memory deduplication of processed call IDs (best-effort, survives process lifetime)
 const processedCallIds = new Set();
@@ -22,7 +36,7 @@ function markProcessed(callId) {
 }
 
 // Enhanced VAPI webhook handler with comprehensive call tracking
-router.post('/webhooks/vapi', async (req, res) => {
+router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
   // Extract correlation ID from webhook metadata
   const body = req.body || {};
   const correlationId = body.metadata?.correlationId || 
