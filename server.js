@@ -11609,6 +11609,12 @@ app.use(morgan('dev'));
 const { smartRequestTimeout } = await import('./middleware/request-timeout.js');
 app.use(smartRequestTimeout());
 
+// API versioning middleware
+const { apiVersioning, legacyRouteRedirect } = await import('./middleware/api-versioning.js');
+app.use(apiVersioning());
+// Redirect legacy /api/* routes to /api/v1/* (optional - can be disabled)
+// app.use(legacyRouteRedirect);
+
 app.use(cors({
   origin: ORIGIN === '*' ? true : ORIGIN,
   methods: ['GET','POST','OPTIONS','DELETE'],
