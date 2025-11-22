@@ -13139,8 +13139,9 @@ async function handleSmsStatusWebhook(req, res) {
 app.post('/webhooks/twilio-status', express.urlencoded({ extended: false }), twilioWebhookVerification, handleSmsStatusWebhook);
 
 // Test endpoint for SMS status webhook (no signature verification for testing)
-app.post('/api/test/sms-status-webhook', express.urlencoded({ extended: false }), async (req, res) => {
+app.post('/api/test/sms-status-webhook', express.json(), express.urlencoded({ extended: false }), async (req, res) => {
   console.log('[TEST SMS STATUS] Test webhook called');
+  console.log('[TEST SMS STATUS] Body:', JSON.stringify(req.body));
   await handleSmsStatusWebhook(req, res);
 });
 console.log('🟢🟢🟢 [TEST] REGISTERED: POST /api/test/sms-status-webhook');
