@@ -811,54 +811,81 @@ import {
 } from './lib/errors.js';
 import { getRetryManager } from './lib/retry-logic.js';
 
-// Core query function with caching
+// Core query function with caching and performance tracking
 async function query(text, params = []) {
   const cache = getCache();
   const cacheKey = `query:${text}:${JSON.stringify(params)}`;
   
   // For SELECT queries, check cache first
   if (text.trim().toUpperCase().startsWith('SELECT')) {
-    const cached = cache.get(cacheKey);
+    const cached = await cache.get(cacheKey);
     if (cached) {
       console.log('[DB CACHE] Serving cached query result');
       return cached;
     }
   }
   
+  // Track query performance
+  const startTime = Date.now();
   let result;
-  if (dbType === 'postgres' && pool) {
-    result = await pool.query(text, params);
-  } else if (sqlite) {
-    // Convert PostgreSQL-style placeholders ($1, $2, etc.) to SQLite-style (?)
-    let sqliteText = text;
-    if (text.includes('$1')) {
-      // Replace $1, $2, etc. with ?
-      sqliteText = text.replace(/\$\d+/g, '?');
-    }
-    const stmt = sqlite.prepare(sqliteText);
-    if (text.trim().toUpperCase().startsWith('SELECT')) {
-      result = { rows: stmt.all(...params) };
-    } else {
-      result = stmt.run(...params);
-    }
-  } else {
-    // JSON fallback
-    const jsonDb = new JsonFileDatabase('./data');
-    const stmt = jsonDb.prepare(text);
-    if (text.trim().toUpperCase().startsWith('SELECT')) {
-      result = { rows: stmt.all(...params) };
-    } else {
-      result = stmt.run(...params);
-    }
-  }
   
-  // Cache SELECT results for 5 minutes
-  if (text.trim().toUpperCase().startsWith('SELECT') && result.rows) {
-    cache.set(cacheKey, result, 300000); // 5 minutes
-    console.log('[DB CACHE] Cached query result');
+  try {
+    if (dbType === 'postgres' && pool) {
+      result = await pool.query(text, params);
+    } else if (sqlite) {
+      // Convert PostgreSQL-style placeholders ($1, $2, etc.) to SQLite-style (?)
+      let sqliteText = text;
+      if (text.includes('$1')) {
+        // Replace $1, $2, etc. with ?
+        sqliteText = text.replace(/\$\d+/g, '?');
+      }
+      const stmt = sqlite.prepare(sqliteText);
+      if (text.trim().toUpperCase().startsWith('SELECT')) {
+        result = { rows: stmt.all(...params) };
+      } else {
+        result = stmt.run(...params);
+      }
+    } else {
+      // JSON fallback
+      const jsonDb = new JsonFileDatabase('./data');
+      const stmt = jsonDb.prepare(text);
+      if (text.trim().toUpperCase().startsWith('SELECT')) {
+        result = { rows: stmt.all(...params) };
+      } else {
+        result = stmt.run(...params);
+      }
+    }
+    
+    const duration = Date.now() - startTime;
+    
+    // Track query performance (async, don't wait)
+    if (dbType === 'postgres' && duration >= 100) {
+      // Import and track asynchronously to avoid blocking
+      import('./lib/query-performance-tracker.js').then(module => {
+        module.trackQueryPerformance(text, duration, params).catch(err => {
+          // Silently fail - don't break queries if tracking fails
+          console.warn('[DB] Query tracking error:', err.message);
+        });
+      });
+    }
+    
+    // Cache SELECT results for 5 minutes
+    if (text.trim().toUpperCase().startsWith('SELECT') && result.rows) {
+      await cache.set(cacheKey, result, 300000); // 5 minutes
+      console.log('[DB CACHE] Cached query result');
+    }
+    
+    return result;
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    // Still track failed queries for analysis
+    if (dbType === 'postgres' && duration >= 100) {
+      import('./lib/query-performance-tracker.js').then(module => {
+        module.trackQueryPerformance(text, duration, params).catch(() => {});
+      });
+    }
+    throw error;
   }
-  
-  return result;
 }
 
 // Wrap database operations with error handling

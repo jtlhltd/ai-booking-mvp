@@ -9553,6 +9553,95 @@ app.get('/api/webhook-retry-stats', async (req, res) => {
 });
 console.log('🟢🟢🟢 [WEBHOOK RETRY] REGISTERED: GET /api/webhook-retry-stats');
 
+// Query performance monitoring endpoints
+app.get('/api/performance/queries/slow', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 20;
+    const minDuration = parseInt(req.query.minDuration) || 1000;
+    
+    const { getSlowQueries } = await import('./lib/query-performance-tracker.js');
+    const slowQueries = await getSlowQueries(limit, minDuration);
+    
+    res.json({
+      ok: true,
+      slowQueries,
+      count: slowQueries.length,
+      threshold: minDuration,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[QUERY PERFORMANCE ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+console.log('🟢🟢🟢 [PERF] REGISTERED: GET /api/performance/queries/slow');
+
+app.get('/api/performance/queries/stats', async (req, res) => {
+  try {
+    const { getQueryPerformanceStats } = await import('./lib/query-performance-tracker.js');
+    const stats = await getQueryPerformanceStats();
+    
+    if (!stats) {
+      return res.status(500).json({ ok: false, error: 'Failed to fetch query performance stats' });
+    }
+    
+    res.json({
+      ok: true,
+      stats,
+      thresholds: {
+        slow: 1000,
+        critical: 5000
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[QUERY STATS ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+console.log('🟢🟢🟢 [PERF] REGISTERED: GET /api/performance/queries/stats');
+
+app.get('/api/performance/queries/recommendations', async (req, res) => {
+  try {
+    const { getOptimizationRecommendations } = await import('./lib/query-performance-tracker.js');
+    const recommendations = await getOptimizationRecommendations();
+    
+    res.json({
+      ok: true,
+      recommendations,
+      count: recommendations.length,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[QUERY RECOMMENDATIONS ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+console.log('🟢🟢🟢 [PERF] REGISTERED: GET /api/performance/queries/recommendations');
+
+// Rate limiting status endpoint
+app.get('/api/rate-limit/status', async (req, res) => {
+  try {
+    const identifier = req.query.identifier || req.ip || 'unknown';
+    const { getRateLimitStatus, getRateLimitStats } = await import('./lib/rate-limiting.js');
+    
+    const status = await getRateLimitStatus(identifier);
+    const stats = getRateLimitStats();
+    
+    res.json({
+      ok: true,
+      identifier,
+      limits: status,
+      systemStats: stats,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[RATE LIMIT STATUS ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+console.log('🟢🟢🟢 [RATE LIMIT] REGISTERED: GET /api/rate-limit/status');
+
 // API Documentation endpoint (OpenAPI/Swagger)
 app.get('/api-docs', async (req, res) => {
   try {
@@ -10757,14 +10846,14 @@ function getCacheKey(prefix, ...params) {
   return `${prefix}:${params.join(':')}`;
 }
 
-function getCached(key) {
+async function getCached(key) {
   // Use centralized cache system from lib/cache.js
-  return cache.get(key);
+  return await cache.get(key);
 }
 
-function setCache(key, data, ttl = CACHE_TTL) {
+async function setCache(key, data, ttl = CACHE_TTL) {
   // Use centralized cache system from lib/cache.js
-  cache.set(key, data, ttl);
+  await cache.set(key, data, ttl);
 }
 
 function clearCache(pattern = null) {
@@ -10788,7 +10877,7 @@ async function getCachedClient(tenantKey) {
   if (!client) {
     client = await getFullClient(tenantKey);
     if (client) {
-      setCache(cacheKey, client, 2 * 60 * 1000); // 2 minutes cache
+      await setCache(cacheKey, client, 2 * 60 * 1000); // 2 minutes cache
     }
   }
   
@@ -10798,12 +10887,12 @@ async function getCachedClient(tenantKey) {
 // Cached analytics dashboard
 async function getCachedAnalyticsDashboard(clientKey, days = 30) {
   const cacheKey = getCacheKey('analytics', clientKey, days.toString());
-  let dashboard = getCached(cacheKey);
+  let dashboard = await getCached(cacheKey);
   
   if (!dashboard) {
     dashboard = await getAnalyticsDashboard(clientKey, days);
     if (dashboard) {
-      setCache(cacheKey, dashboard, 1 * 60 * 1000); // 1 minute cache
+      await setCache(cacheKey, dashboard, 1 * 60 * 1000); // 1 minute cache
     }
   }
   
@@ -10829,7 +10918,7 @@ async function getCachedMetrics(clientKey) {
       lastUpdated: new Date().toISOString()
     };
     
-    setCache(cacheKey, metrics, 30 * 1000); // 30 seconds cache
+    await setCache(cacheKey, metrics, 30 * 1000); // 30 seconds cache
   }
   
   return metrics;
