@@ -98,9 +98,10 @@ async function initPostgres() {
   
   try {
     // Render.com databases support up to 103 connections (verified via /api/database/connection-limit)
-    // Set pool to 15 to handle concurrent requests efficiently while leaving plenty of headroom
+    // Set pool to 25 to handle concurrent requests efficiently while leaving plenty of headroom
     // This prevents connection exhaustion while maintaining good performance
-    const maxConnections = parseInt(process.env.DB_POOL_MAX) || 15;
+    // Increased from 15 to 25 to handle higher concurrent load
+    const maxConnections = parseInt(process.env.DB_POOL_MAX) || 25;
     
     pool = new Pool({
       connectionString: dbUrl,
