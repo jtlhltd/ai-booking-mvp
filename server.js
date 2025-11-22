@@ -9454,6 +9454,59 @@ app.get('/api/recordings/quality-check/:clientKey', async (req, res) => {
   }
 });
 
+// Backup monitoring endpoint
+app.get('/api/backup-status', async (req, res) => {
+  try {
+    const { verifyBackupSystem } = await import('./lib/backup-monitoring.js');
+    const status = await verifyBackupSystem();
+    
+    res.json({
+      ok: true,
+      status: status.status,
+      message: status.message,
+      details: {
+        databaseAccessible: status.databaseAccessible,
+        recentActivity: status.recentActivity,
+        hoursSinceActivity: status.backupAge ? parseFloat(status.backupAge.toFixed(1)) : null
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[BACKUP STATUS ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+console.log('🟢🟢🟢 [BACKUP] REGISTERED: GET /api/backup-status');
+
+// Cost monitoring endpoint
+app.get('/api/cost-summary/:clientKey', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const period = req.query.period || 'daily'; // daily, weekly, monthly
+    
+    const { getCostSummary } = await import('./lib/cost-monitoring.js');
+    const summary = await getCostSummary({ clientKey, period });
+    
+    if (!summary.success) {
+      return res.status(500).json({ ok: false, error: summary.error });
+    }
+    
+    res.json({
+      ok: true,
+      clientKey,
+      period: summary.period,
+      total: summary.total,
+      breakdown: summary.breakdown,
+      summary: summary.summary,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[COST SUMMARY ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+console.log('🟢🟢🟢 [COST] REGISTERED: GET /api/cost-summary/:clientKey');
+
 // Quick Win #4: SMS delivery rate tracking
 app.get('/api/sms-delivery-rate/:clientKey', async (req, res) => {
   try {
@@ -9584,6 +9637,59 @@ app.get('/api/calendar-sync/:clientKey', cacheMiddleware({ ttl: 300000, keyPrefi
     res.status(500).json({ ok: false, error: error.message });
   }
 });
+
+// Backup monitoring endpoint
+app.get('/api/backup-status', async (req, res) => {
+  try {
+    const { verifyBackupSystem } = await import('./lib/backup-monitoring.js');
+    const status = await verifyBackupSystem();
+    
+    res.json({
+      ok: true,
+      status: status.status,
+      message: status.message,
+      details: {
+        databaseAccessible: status.databaseAccessible,
+        recentActivity: status.recentActivity,
+        hoursSinceActivity: status.backupAge ? status.backupAge.toFixed(1) : null
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[BACKUP STATUS ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+console.log('🟢🟢🟢 [BACKUP] REGISTERED: GET /api/backup-status');
+
+// Cost monitoring endpoint
+app.get('/api/cost-summary/:clientKey', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const period = req.query.period || 'daily'; // daily, weekly, monthly
+    
+    const { getCostSummary } = await import('./lib/cost-monitoring.js');
+    const summary = await getCostSummary({ clientKey, period });
+    
+    if (!summary.success) {
+      return res.status(500).json({ ok: false, error: summary.error });
+    }
+    
+    res.json({
+      ok: true,
+      clientKey,
+      period: summary.period,
+      total: summary.total,
+      breakdown: summary.breakdown,
+      summary: summary.summary,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[COST SUMMARY ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+console.log('🟢🟢🟢 [COST] REGISTERED: GET /api/cost-summary/:clientKey');
 
 // API endpoint for active work indicator
 app.get('/api/active-indicator/:clientKey', cacheMiddleware({ ttl: 10000, keyPrefix: 'active-indicator:' }), async (req, res) => {
@@ -12468,6 +12574,22 @@ app.get('/api/health/detailed', async (req, res) => {
       status: !!(process.env.EMAIL_SERVICE && process.env.EMAIL_USER && process.env.EMAIL_PASS) ? 'configured' : 'not_configured',
       hasAdminEmail: !!process.env.YOUR_EMAIL
     };
+    
+    // Backup monitoring status
+    try {
+      const { verifyBackupSystem } = await import('./lib/backup-monitoring.js');
+      const backupStatus = await verifyBackupSystem();
+      health.services.backup = {
+        status: backupStatus.status === 'healthy' ? 'healthy' : backupStatus.status === 'warning' ? 'warning' : 'error',
+        message: backupStatus.message,
+        hoursSinceActivity: backupStatus.backupAge ? parseFloat(backupStatus.backupAge.toFixed(1)) : null
+      };
+    } catch (error) {
+      health.services.backup = {
+        status: 'error',
+        message: 'Failed to check backup status'
+      };
+    }
     
     // Overall status
     const allHealthy = Object.values(health.services).every(s => s.status === 'healthy' || s.status === 'configured');
@@ -21399,6 +21521,36 @@ async function startServer() {
       }
     });
     console.log('✅ Weekly report generation scheduled (runs every Monday at 9 AM)');
+    
+    // Start backup monitoring (runs daily at 6 AM)
+    const { monitorBackups } = await import('./lib/backup-monitoring.js');
+    cron.schedule('0 6 * * *', async () => {
+      console.log('[CRON] 💾 Checking backup status...');
+      try {
+        const result = await monitorBackups();
+        if (result.status === 'healthy') {
+          console.log('[CRON] ✅ Backup system appears healthy');
+        } else {
+          console.log(`[CRON] ⚠️ Backup check: ${result.status} - ${result.message || ''}`);
+        }
+      } catch (error) {
+        console.error('[CRON ERROR] Backup monitoring failed:', error);
+      }
+    });
+    console.log('✅ Backup monitoring scheduled (runs daily at 6 AM)');
+    
+    // Start cost/budget monitoring (runs every 6 hours)
+    const { monitorAllBudgets } = await import('./lib/cost-monitoring.js');
+    cron.schedule('0 */6 * * *', async () => {
+      console.log('[CRON] 💰 Monitoring client budgets...');
+      try {
+        const result = await monitorAllBudgets();
+        console.log(`[CRON] ✅ Budget monitoring completed: ${result.clientsChecked} clients checked, ${result.alertsFound} alerts found`);
+      } catch (error) {
+        console.error('[CRON ERROR] Budget monitoring failed:', error);
+      }
+    });
+    console.log('✅ Budget monitoring scheduled (runs every 6 hours)');
     
   } catch (error) {
     console.error('❌ Failed to start server:', error);
