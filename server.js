@@ -9538,6 +9538,10 @@ app.get('/api-docs', async (req, res) => {
     const docs = generateApiDocs();
     
     // Support both JSON and HTML views
+    // Prioritize format query parameter
+    if (req.query.format === 'json') {
+      return res.json(docs);
+    }
     if (req.query.format === 'html' || req.accepts('text/html')) {
       // Return HTML page with Swagger UI
       res.send(`
