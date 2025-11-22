@@ -16907,7 +16907,7 @@ app.post('/admin/fix-tenants', async (req, res) => {
 // Health check endpoint
 app.get('/health', async (req, res) => {
   try {
-    const { getLastHealthCheck, getDatabaseStats } = await import('./lib/database-health.js');
+    const { getLastHealthCheck, getDatabaseStats, getConnectionLimit } = await import('./lib/database-health.js');
     const messagingService = (await import('./lib/messaging-service.js')).default;
     
     const health = {
