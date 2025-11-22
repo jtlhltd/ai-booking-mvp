@@ -9642,6 +9642,270 @@ app.get('/api/rate-limit/status', async (req, res) => {
 });
 console.log('🟢🟢🟢 [RATE LIMIT] REGISTERED: GET /api/rate-limit/status');
 
+// Call outcome analysis endpoints
+app.get('/api/analytics/call-outcomes/:clientKey', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const days = parseInt(req.query.days) || 30;
+    
+    const { analyzeCallOutcomes } = await import('./lib/call-outcome-analyzer.js');
+    const analysis = await analyzeCallOutcomes(clientKey, days);
+    
+    res.json({
+      ok: true,
+      clientKey,
+      analysis,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[CALL OUTCOME ANALYSIS ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+console.log('🟢🟢🟢 [ANALYTICS] REGISTERED: GET /api/analytics/call-outcomes/:clientKey');
+
+app.get('/api/analytics/best-call-times/:clientKey', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const days = parseInt(req.query.days) || 30;
+    
+    const { getBestCallTimes } = await import('./lib/call-outcome-analyzer.js');
+    const bestTimes = await getBestCallTimes(clientKey, days);
+    
+    res.json({
+      ok: true,
+      clientKey,
+      bestTimes,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[BEST CALL TIMES ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+console.log('🟢🟢🟢 [ANALYTICS] REGISTERED: GET /api/analytics/best-call-times/:clientKey');
+
+// Multi-client management endpoints
+app.get('/api/admin/clients/overview', authenticateApiKey, async (req, res) => {
+  try {
+    const { getAllClientsOverview } = await import('./lib/multi-client-manager.js');
+    const overview = await getAllClientsOverview();
+    
+    res.json({
+      ok: true,
+      overview,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[CLIENTS OVERVIEW ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+console.log('🟢🟢🟢 [ADMIN] REGISTERED: GET /api/admin/clients/overview');
+
+app.get('/api/admin/clients/needing-attention', authenticateApiKey, async (req, res) => {
+  try {
+    const { getClientsNeedingAttention } = await import('./lib/multi-client-manager.js');
+    const attention = await getClientsNeedingAttention();
+    
+    res.json({
+      ok: true,
+      attention,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[CLIENTS ATTENTION ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+console.log('🟢🟢🟢 [ADMIN] REGISTERED: GET /api/admin/clients/needing-attention');
+
+app.post('/api/admin/clients/bulk-update', authenticateApiKey, async (req, res) => {
+  try {
+    const { clientKeys, enabled } = req.body;
+    
+    if (!Array.isArray(clientKeys) || typeof enabled !== 'boolean') {
+      return res.status(400).json({ ok: false, error: 'Invalid request body' });
+    }
+    
+    const { bulkUpdateClientStatus } = await import('./lib/multi-client-manager.js');
+    const result = await bulkUpdateClientStatus(clientKeys, enabled);
+    
+    res.json({
+      ok: true,
+      result,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[BULK UPDATE ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+console.log('🟢🟢🟢 [ADMIN] REGISTERED: POST /api/admin/clients/bulk-update');
+
+// Automated reporting endpoints
+app.get('/api/reports/:clientKey', authenticateApiKey, async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const period = req.query.period || 'weekly';
+    
+    const { generateClientReport } = await import('./lib/automated-reporting.js');
+    const report = await generateClientReport(clientKey, period);
+    
+    if (report.error) {
+      return res.status(404).json({ ok: false, error: report.error });
+    }
+    
+    res.json({
+      ok: true,
+      report,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[REPORT GENERATION ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+console.log('🟢🟢🟢 [REPORTS] REGISTERED: GET /api/reports/:clientKey');
+
+app.post('/api/reports/:clientKey/send', authenticateApiKey, async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const { period = 'weekly', email = null } = req.body;
+    
+    const { sendClientReport } = await import('./lib/automated-reporting.js');
+    const result = await sendClientReport(clientKey, period, email);
+    
+    if (!result.success) {
+      return res.status(400).json({ ok: false, error: result.error });
+    }
+    
+    res.json({
+      ok: true,
+      result,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[SEND REPORT ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+console.log('🟢🟢🟢 [REPORTS] REGISTERED: POST /api/reports/:clientKey/send');
+
+// SMS template library endpoints
+app.get('/api/sms/templates', authenticateApiKey, async (req, res) => {
+  try {
+    const { listTemplates } = await import('./lib/sms-template-library.js');
+    const templates = listTemplates();
+    
+    res.json({
+      ok: true,
+      templates,
+      count: templates.length,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[SMS TEMPLATES ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+console.log('🟢🟢🟢 [SMS] REGISTERED: GET /api/sms/templates');
+
+app.post('/api/sms/templates/render', authenticateApiKey, async (req, res) => {
+  try {
+    const { templateKey, variables } = req.body;
+    
+    if (!templateKey) {
+      return res.status(400).json({ ok: false, error: 'templateKey is required' });
+    }
+    
+    const { renderSMSTemplate, validateTemplateVariables } = await import('./lib/sms-template-library.js');
+    
+    // Validate variables
+    const validation = validateTemplateVariables(templateKey, variables || {});
+    if (!validation.valid) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Invalid template variables',
+        missing: validation.missing,
+        required: validation.required
+      });
+    }
+    
+    const message = renderSMSTemplate(templateKey, variables);
+    
+    res.json({
+      ok: true,
+      templateKey,
+      message,
+      variables,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[SMS TEMPLATE RENDER ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+console.log('🟢🟢🟢 [SMS] REGISTERED: POST /api/sms/templates/render');
+
+// Monitoring dashboard endpoints
+app.get('/api/monitoring/dashboard', authenticateApiKey, async (req, res) => {
+  try {
+    const { getSystemMonitoringData } = await import('./lib/monitoring-dashboard.js');
+    const data = await getSystemMonitoringData();
+    
+    res.json({
+      ok: true,
+      data,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[MONITORING DASHBOARD ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+console.log('🟢🟢🟢 [MONITORING] REGISTERED: GET /api/monitoring/dashboard');
+
+app.get('/api/monitoring/client-usage', authenticateApiKey, async (req, res) => {
+  try {
+    const days = parseInt(req.query.days) || 30;
+    const { getClientUsageAnalytics } = await import('./lib/monitoring-dashboard.js');
+    const analytics = await getClientUsageAnalytics(days);
+    
+    res.json({
+      ok: true,
+      analytics,
+      count: analytics.length,
+      period: `${days} days`,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[CLIENT USAGE ANALYTICS ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+console.log('🟢🟢🟢 [MONITORING] REGISTERED: GET /api/monitoring/client-usage');
+
+app.get('/api/monitoring/performance-trends', authenticateApiKey, async (req, res) => {
+  try {
+    const days = parseInt(req.query.days) || 30;
+    const { getPerformanceTrends } = await import('./lib/monitoring-dashboard.js');
+    const trends = await getPerformanceTrends(days);
+    
+    res.json({
+      ok: true,
+      trends,
+      count: trends.length,
+      period: `${days} days`,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[PERFORMANCE TRENDS ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+console.log('🟢🟢🟢 [MONITORING] REGISTERED: GET /api/monitoring/performance-trends');
+
 // API Documentation endpoint (OpenAPI/Swagger)
 app.get('/api-docs', async (req, res) => {
   try {
@@ -21945,6 +22209,18 @@ async function startServer() {
     console.log('✅ Budget monitoring scheduled (runs every 6 hours)');
     
     // Connection pool health check - runs every 15 minutes
+    // Automated client reporting (weekly on Mondays at 9 AM)
+    cron.schedule('0 9 * * 1', async () => {
+      try {
+        const { sendScheduledReports } = await import('./lib/automated-reporting.js');
+        const result = await sendScheduledReports('weekly');
+        console.log(`[AUTOMATED REPORTS] Sent ${result.successful}/${result.total} weekly reports`);
+      } catch (error) {
+        console.error('[AUTOMATED REPORTS ERROR]', error);
+      }
+    });
+    console.log('✅ Scheduled: Weekly automated client reports (Mondays 9 AM)');
+
     cron.schedule('*/15 * * * *', async () => {
       try {
         const { checkPoolHealth } = await import('./lib/connection-pool-monitor.js');
