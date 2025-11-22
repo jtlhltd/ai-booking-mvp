@@ -11779,6 +11779,81 @@ app.get('/api/test', (req, res) => {
   });
 });
 
+// Test endpoint for SMS status webhook (no signature verification for testing)
+// Moved here to ensure it's registered early - uses handleSmsStatusWebhook defined later
+app.post('/api/test/sms-status-webhook', express.json(), express.urlencoded({ extended: false }), async (req, res) => {
+  console.log('[TEST SMS STATUS] Test webhook called');
+  console.log('[TEST SMS STATUS] Body:', JSON.stringify(req.body));
+  
+  // Call the handler function (defined later in the file)
+  // We'll reference it by calling it directly since it's in the same file
+  const messageSid = req.body.MessageSid;
+  const status = req.body.MessageStatus;
+  const to = req.body.To;
+  const from = req.body.From;
+  const errorCode = req.body.ErrorCode || null;
+  
+  console.log('[SMS STATUS WEBHOOK] Received status update:', { messageSid, status, to, errorCode });
+  
+  try {
+    // Update message status in database if we have the SID
+    if (messageSid) {
+      const updateResult = await query(`
+        UPDATE messages 
+        SET status = $1, updated_at = NOW()
+        WHERE provider_sid = $2
+        RETURNING id, client_key, to_phone
+      `, [status, messageSid]);
+      
+      if (updateResult.rows.length > 0) {
+        console.log('[SMS STATUS WEBHOOK] ✅ Updated message in database:', updateResult.rows[0]);
+      } else {
+        console.log('[SMS STATUS WEBHOOK] ⚠️ Message SID not found in database:', messageSid);
+      }
+      
+      // If failed, send email alert
+      if (status === 'failed' || errorCode) {
+        console.error('[SMS DELIVERY FAILED]', { messageSid, to, status, errorCode });
+        
+        if (process.env.YOUR_EMAIL) {
+          try {
+            const messagingService = (await import('./lib/messaging-service.js')).default;
+            await messagingService.sendEmail({
+              to: process.env.YOUR_EMAIL,
+              subject: `⚠️ SMS Delivery Failed - ${to}`,
+              body: `SMS delivery failed for ${to}\n\nStatus: ${status}\nError Code: ${errorCode || 'N/A'}\nMessage SID: ${messageSid}\nTime: ${new Date().toISOString()}`
+            });
+            console.log('[SMS STATUS WEBHOOK] ✅ Email alert sent');
+          } catch (emailError) {
+            console.error('[SMS STATUS WEBHOOK] Failed to send email alert:', emailError.message);
+          }
+        }
+      }
+    }
+    
+    // Also log to JSON file for backward compatibility
+    const rows = await readJson(SMS_STATUS_PATH, []);
+    rows.push({
+      evt: 'sms.status',
+      rid: req.id,
+      at: new Date().toISOString(),
+      sid: messageSid,
+      status,
+      to,
+      from,
+      messagingServiceSid: req.body.MessagingServiceSid || null,
+      errorCode
+    });
+    await writeJson(SMS_STATUS_PATH, rows);
+    
+    res.type('text/plain').send('OK');
+  } catch (error) {
+    console.error('[SMS STATUS WEBHOOK ERROR]', error);
+    res.type('text/plain').send('OK');
+  }
+});
+console.log('🟢🟢🟢 [TEST] REGISTERED: POST /api/test/sms-status-webhook (early registration)');
+
 // Test Companies House API endpoint
 app.get('/api/test-companies-house', async (req, res) => {
   try {
