@@ -9528,7 +9528,7 @@ app.get('/api/calendar-sync/:clientKey', cacheMiddleware({ ttl: 300000, keyPrefi
     
     // Get last successful sync time
     const lastSync = await query(`
-      SELECT MAX(created_at) as last_sync
+      SELECT MAX(created_at) AS last_sync
       FROM appointments
       WHERE client_key = $1
         AND gcal_event_id IS NOT NULL
@@ -9539,20 +9539,6 @@ app.get('/api/calendar-sync/:clientKey', cacheMiddleware({ ttl: 300000, keyPrefi
       ? Math.floor((Date.now() - new Date(lastSyncTime).getTime()) / (1000 * 60 * 60))
       : null;
     
-    // Alert if no sync in 24 hours
-    if (isConnected && hoursSinceSync !== null && hoursSinceSync > 24 && process.env.ADMIN_EMAIL) {
-      try {
-        const messagingService = (await import('./lib/messaging-service.js')).default;
-        await messagingService.sendEmail({
-          to: process.env.ADMIN_EMAIL,
-          subject: `⚠️ Calendar Sync Stale - ${hoursSinceSync}h Since Last Sync`,
-          body: `Calendar sync hasn't happened in ${hoursSinceSync} hours for ${clientKey}\n\nLast sync: ${lastSyncTime}\nTime: ${new Date().toISOString()}`
-        });
-      } catch (emailError) {
-        console.error('[CALENDAR SYNC] Failed to send alert:', emailError.message);
-      }
-    }
-
     const recentAppointments = await query(`
       SELECT COUNT(*) AS count
       FROM appointments
@@ -9567,18 +9553,6 @@ app.get('/api/calendar-sync/:clientKey', cacheMiddleware({ ttl: 300000, keyPrefi
         AND status = 'conflict'
         AND created_at >= NOW() - INTERVAL '7 days'
     `, [clientKey]);
-
-    const lastSync = await query(`
-      SELECT MAX(created_at) AS last_sync
-      FROM appointments
-      WHERE client_key = $1
-        AND gcal_event_id IS NOT NULL
-    `, [clientKey]);
-    
-    const lastSyncTime = lastSync.rows[0]?.last_sync;
-    const hoursSinceSync = lastSyncTime 
-      ? Math.floor((Date.now() - new Date(lastSyncTime).getTime()) / (1000 * 60 * 60))
-      : null;
     
     // Alert if no sync in 24 hours (Quick Win #5)
     if (isConnected && hoursSinceSync !== null && hoursSinceSync > 24 && process.env.YOUR_EMAIL) {
@@ -9597,8 +9571,8 @@ app.get('/api/calendar-sync/:clientKey', cacheMiddleware({ ttl: 300000, keyPrefi
     res.json({
       ok: true,
       connected: isConnected,
-      lastSyncTime,
-      hoursSinceSync,
+      lastSyncTime: lastSyncTime || null,
+      hoursSinceSync: hoursSinceSync || null,
       lastSync: lastSync.rows?.[0]?.last_sync || new Date().toISOString(),
       appointmentsBooked: parseInt(recentAppointments.rows?.[0]?.count || 0, 10),
       conflictsResolved: parseInt(conflicts.rows?.[0]?.count || 0, 10),
