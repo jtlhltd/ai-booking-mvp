@@ -97,14 +97,21 @@ async function initPostgres() {
   }
   
   try {
+    // Render.com free tier databases typically have 3-5 connection limit
+    // Set pool to 2 to leave room for admin connections and prevent exhaustion
+    const maxConnections = parseInt(process.env.DB_POOL_MAX) || 2;
+    
     pool = new Pool({
       connectionString: dbUrl,
       ssl: { rejectUnauthorized: false },
-      max: 30, // Increased from 20 to 30 to handle higher load
-      idleTimeoutMillis: 30000, // Close idle connections after 30 seconds
-      connectionTimeoutMillis: 10000, // Increased timeout to 10 seconds for remote databases
-      statement_timeout: 30000, // 30 second query timeout to prevent hanging queries
+      max: maxConnections, // Reduced to match database connection limits (Render free tier = 3)
+      idleTimeoutMillis: 10000, // Close idle connections after 10 seconds (more aggressive)
+      connectionTimeoutMillis: 5000, // Reduced to 5 seconds for faster failure detection
+      statement_timeout: 20000, // 20 second query timeout to prevent hanging queries
+      allowExitOnIdle: true, // Allow pool to close when idle
     });
+    
+    console.log(`🔌 Database pool configured: max=${maxConnections} connections`);
 
     // Test connection first with timeout
     console.log('🔌 Testing Postgres connection...');
