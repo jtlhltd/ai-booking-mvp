@@ -2,7 +2,6 @@
 // Jest configuration for ESM support
 
 export default {
-  preset: 'default',
   testEnvironment: 'node',
   extensionsToTreatAsEsm: ['.js'],
   globals: {
