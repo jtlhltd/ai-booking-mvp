@@ -7934,7 +7934,27 @@ app.post('/api/import-lead-email/:clientKey', async (req, res) => {
       });
     }
     
-    // Import single lead
+    // Apply deduplication before importing
+    const { processBulkLeads } = await import('./lib/lead-deduplication.js');
+    const dedupResult = await processBulkLeads([{
+      name: lead.name,
+      phone: lead.phone,
+      email: lead.email,
+      service: lead.service,
+      source: 'email_forward',
+      status: 'new',
+      created_at: new Date().toISOString()
+    }], clientKey);
+    
+    if (dedupResult.valid === 0) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Lead is duplicate or invalid',
+        details: dedupResult.duplicates > 0 ? 'Duplicate phone number' : 'Invalid lead data'
+      });
+    }
+    
+    // Import single lead (deduplication already checked)
     await findOrCreateLead({
       tenantKey: clientKey,
       phone: lead.phone,
@@ -9365,7 +9385,134 @@ app.get('/api/call-recordings/:clientKey', cacheMiddleware({ ttl: 120000, keyPre
   }
 });
 
-// API endpoint for calendar sync details
+// Quick Win #3: Call recording quality check endpoint
+app.get('/api/recordings/quality-check/:clientKey', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const limit = parseInt(req.query.limit) || 10;
+    
+    const recordings = await query(`
+      SELECT id, call_id, recording_url, created_at
+      FROM calls
+      WHERE client_key = $1
+        AND recording_url IS NOT NULL
+        AND recording_url != ''
+      ORDER BY created_at DESC
+      LIMIT $2
+    `, [clientKey, limit]);
+    
+    const checks = [];
+    for (const rec of recordings.rows || []) {
+      let accessible = false;
+      let statusCode = null;
+      
+      if (rec.recording_url) {
+        try {
+          const response = await fetch(rec.recording_url, { method: 'HEAD', timeout: 5000 });
+          accessible = response.ok;
+          statusCode = response.status;
+        } catch (error) {
+          accessible = false;
+        }
+      }
+      
+      checks.push({
+        callId: rec.call_id,
+        recordingUrl: rec.recording_url,
+        accessible,
+        statusCode,
+        createdAt: rec.created_at
+      });
+    }
+    
+    const brokenCount = checks.filter(c => !c.accessible).length;
+    
+    // Alert if broken recordings found
+    if (brokenCount > 0 && process.env.YOUR_EMAIL) {
+      try {
+        const messagingService = (await import('./lib/messaging-service.js')).default;
+        await messagingService.sendEmail({
+          to: process.env.YOUR_EMAIL,
+          subject: `⚠️ ${brokenCount} Broken Recording${brokenCount > 1 ? 's' : ''} Found`,
+          body: `Found ${brokenCount} inaccessible recording(s) for ${clientKey}\n\nCheck the /api/recordings/quality-check/${clientKey} endpoint for details.`
+        });
+      } catch (emailError) {
+        console.error('[RECORDING QUALITY] Failed to send alert:', emailError.message);
+      }
+    }
+    
+    res.json({
+      ok: true,
+      total: checks.length,
+      accessible: checks.filter(c => c.accessible).length,
+      broken: brokenCount,
+      checks
+    });
+  } catch (error) {
+    console.error('[RECORDING QUALITY ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Quick Win #4: SMS delivery rate tracking
+app.get('/api/sms-delivery-rate/:clientKey', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const days = parseInt(req.query.days) || 7;
+    
+    const stats = await query(`
+      SELECT 
+        COUNT(*) as total,
+        COUNT(*) FILTER (WHERE status = 'delivered') as delivered,
+        COUNT(*) FILTER (WHERE status = 'failed') as failed,
+        COUNT(*) FILTER (WHERE status = 'sent') as sent,
+        COUNT(*) FILTER (WHERE status = 'queued') as queued
+      FROM messages
+      WHERE client_key = $1
+        AND channel = 'sms'
+        AND direction = 'outbound'
+        AND created_at >= NOW() - INTERVAL '${days} days'
+    `, [clientKey]);
+    
+    const row = stats.rows[0];
+    const total = parseInt(row.total || 0);
+    const delivered = parseInt(row.delivered || 0);
+    const failed = parseInt(row.failed || 0);
+    const deliveryRate = total > 0 ? ((delivered / total) * 100).toFixed(1) : 0;
+    
+    // Alert if delivery rate drops below 95%
+    if (parseFloat(deliveryRate) < 95 && process.env.YOUR_EMAIL && total >= 10) {
+      try {
+        const messagingService = (await import('./lib/messaging-service.js')).default;
+        await messagingService.sendEmail({
+          to: process.env.YOUR_EMAIL,
+          subject: `⚠️ SMS Delivery Rate Low: ${deliveryRate}%`,
+          body: `SMS delivery rate is below 95% for ${clientKey}\n\nDelivery Rate: ${deliveryRate}%\nTotal: ${total}\nDelivered: ${delivered}\nFailed: ${failed}\n\nTime: ${new Date().toISOString()}`
+        });
+      } catch (emailError) {
+        console.error('[SMS DELIVERY RATE] Failed to send alert:', emailError.message);
+      }
+    }
+    
+    res.json({
+      ok: true,
+      clientKey,
+      period: `${days} days`,
+      total,
+      delivered,
+      failed,
+      sent: parseInt(row.sent || 0),
+      queued: parseInt(row.queued || 0),
+      deliveryRate: `${deliveryRate}%`,
+      isHealthy: parseFloat(deliveryRate) >= 95
+    });
+  } catch (error) {
+    console.error('[SMS DELIVERY RATE ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// API endpoint for calendar sync details (Quick Win #5: Enhanced with status monitoring)
 app.get('/api/calendar-sync/:clientKey', cacheMiddleware({ ttl: 300000, keyPrefix: 'calendar-sync:' }), async (req, res) => {
   try {
     const { clientKey } = req.params;
@@ -9378,6 +9525,33 @@ app.get('/api/calendar-sync/:clientKey', cacheMiddleware({ ttl: 300000, keyPrefi
 
     const calendarConfig = tenantResult.rows?.[0]?.calendar_json || {};
     const isConnected = !!(calendarConfig.service_account_email || calendarConfig.access_token);
+    
+    // Get last successful sync time
+    const lastSync = await query(`
+      SELECT MAX(created_at) as last_sync
+      FROM appointments
+      WHERE client_key = $1
+        AND gcal_event_id IS NOT NULL
+    `, [clientKey]);
+    
+    const lastSyncTime = lastSync.rows[0]?.last_sync;
+    const hoursSinceSync = lastSyncTime 
+      ? Math.floor((Date.now() - new Date(lastSyncTime).getTime()) / (1000 * 60 * 60))
+      : null;
+    
+    // Alert if no sync in 24 hours
+    if (isConnected && hoursSinceSync !== null && hoursSinceSync > 24 && process.env.ADMIN_EMAIL) {
+      try {
+        const messagingService = (await import('./lib/messaging-service.js')).default;
+        await messagingService.sendEmail({
+          to: process.env.ADMIN_EMAIL,
+          subject: `⚠️ Calendar Sync Stale - ${hoursSinceSync}h Since Last Sync`,
+          body: `Calendar sync hasn't happened in ${hoursSinceSync} hours for ${clientKey}\n\nLast sync: ${lastSyncTime}\nTime: ${new Date().toISOString()}`
+        });
+      } catch (emailError) {
+        console.error('[CALENDAR SYNC] Failed to send alert:', emailError.message);
+      }
+    }
 
     const recentAppointments = await query(`
       SELECT COUNT(*) AS count
@@ -9398,11 +9572,33 @@ app.get('/api/calendar-sync/:clientKey', cacheMiddleware({ ttl: 300000, keyPrefi
       SELECT MAX(created_at) AS last_sync
       FROM appointments
       WHERE client_key = $1
+        AND gcal_event_id IS NOT NULL
     `, [clientKey]);
+    
+    const lastSyncTime = lastSync.rows[0]?.last_sync;
+    const hoursSinceSync = lastSyncTime 
+      ? Math.floor((Date.now() - new Date(lastSyncTime).getTime()) / (1000 * 60 * 60))
+      : null;
+    
+    // Alert if no sync in 24 hours (Quick Win #5)
+    if (isConnected && hoursSinceSync !== null && hoursSinceSync > 24 && process.env.YOUR_EMAIL) {
+      try {
+        const messagingService = (await import('./lib/messaging-service.js')).default;
+        await messagingService.sendEmail({
+          to: process.env.YOUR_EMAIL,
+          subject: `⚠️ Calendar Sync Stale - ${hoursSinceSync}h Since Last Sync`,
+          body: `Calendar sync hasn't happened in ${hoursSinceSync} hours for ${clientKey}\n\nLast sync: ${lastSyncTime}\nTime: ${new Date().toISOString()}`
+        });
+      } catch (emailError) {
+        console.error('[CALENDAR SYNC] Failed to send alert:', emailError.message);
+      }
+    }
 
     res.json({
       ok: true,
       connected: isConnected,
+      lastSyncTime,
+      hoursSinceSync,
       lastSync: lastSync.rows?.[0]?.last_sync || new Date().toISOString(),
       appointmentsBooked: parseInt(recentAppointments.rows?.[0]?.count || 0, 10),
       conflictsResolved: parseInt(conflicts.rows?.[0]?.count || 0, 10),
@@ -12183,6 +12379,57 @@ app.post('/api/leads', async (req, res) => {
 app.use(healthRouter);
 app.use(monitoringRouter);
 
+// Detailed health dashboard endpoint (Quick Win #1)
+app.get('/api/health/detailed', async (req, res) => {
+  try {
+    const health = {
+      timestamp: new Date().toISOString(),
+      services: {}
+    };
+    
+    // Database health
+    try {
+      await query('SELECT 1');
+      health.services.database = { status: 'healthy', lastCheck: new Date().toISOString() };
+    } catch (error) {
+      health.services.database = { status: 'unhealthy', error: error.message };
+    }
+    
+    // Twilio SMS health
+    health.services.twilio = {
+      status: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) ? 'configured' : 'not_configured',
+      hasMessagingService: !!process.env.TWILIO_MESSAGING_SERVICE_SID,
+      hasFromNumber: !!process.env.TWILIO_FROM_NUMBER
+    };
+    
+    // VAPI health
+    health.services.vapi = {
+      status: !!(process.env.VAPI_ASSISTANT_ID && process.env.VAPI_PHONE_NUMBER_ID) ? 'configured' : 'not_configured',
+      hasPrivateKey: !!process.env.VAPI_PRIVATE_KEY
+    };
+    
+    // Google Calendar health
+    health.services.googleCalendar = {
+      status: !!(process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY) ? 'configured' : 'not_configured',
+      calendarId: process.env.GOOGLE_CALENDAR_ID || 'primary'
+    };
+    
+    // Email service health
+    health.services.email = {
+      status: !!(process.env.EMAIL_SERVICE && process.env.EMAIL_USER && process.env.EMAIL_PASS) ? 'configured' : 'not_configured',
+      hasAdminEmail: !!process.env.YOUR_EMAIL
+    };
+    
+    // Overall status
+    const allHealthy = Object.values(health.services).every(s => s.status === 'healthy' || s.status === 'configured');
+    health.overall = allHealthy ? 'healthy' : 'degraded';
+    
+    res.json(health);
+  } catch (error) {
+    res.status(500).json({ error: error.message, timestamp: new Date().toISOString() });
+  }
+});
+
 // Mounted minimal lead intake + STOP webhook
 app.use(leadsRouter);
 app.use(twilioWebhooks);
@@ -12846,22 +13093,57 @@ app.post('/api/notify/send/:param', (req, res) => {
 });
 console.log('🟢🟢🟢 [NOTIFY-ROUTES] REGISTERED: POST /api/notify/send/:param');
 app.post('/webhooks/twilio-status', express.urlencoded({ extended: false }), twilioWebhookVerification, async (req, res) => {
-  
-  const rows = await readJson(SMS_STATUS_PATH, []);
-  const log = {
-    evt: 'sms.status',
-    rid: req.id,
-    at: new Date().toISOString(),
-    sid: req.body.MessageSid || null,
-    status: req.body.MessageStatus || null,
-    to: req.body.To || null,
-    from: req.body.From || null,
-    messagingServiceSid: req.body.MessagingServiceSid || null,
-    errorCode: req.body.ErrorCode || null
-  };
-  rows.push(log);
-  await writeJson(SMS_STATUS_PATH, rows);
-  res.type('text/plain').send('OK');
+  try {
+    const messageSid = req.body.MessageSid;
+    const status = req.body.MessageStatus;
+    const to = req.body.To;
+    const from = req.body.From;
+    const errorCode = req.body.ErrorCode || null;
+    
+    // Update message status in database if we have the SID
+    if (messageSid) {
+      await query(`
+        UPDATE messages 
+        SET status = $1, updated_at = NOW()
+        WHERE provider_sid = $2
+      `, [status, messageSid]);
+      
+      // If failed, log error
+      if (status === 'failed' || errorCode) {
+        console.error('[SMS DELIVERY FAILED]', { messageSid, to, status, errorCode });
+        
+      // Send email alert for failed SMS
+      if (process.env.YOUR_EMAIL) {
+        const messagingService = (await import('./lib/messaging-service.js')).default;
+        await messagingService.sendEmail({
+          to: process.env.YOUR_EMAIL,
+            subject: `⚠️ SMS Delivery Failed - ${to}`,
+            body: `SMS delivery failed for ${to}\n\nStatus: ${status}\nError Code: ${errorCode || 'N/A'}\nMessage SID: ${messageSid}\nTime: ${new Date().toISOString()}`
+          });
+        }
+      }
+    }
+    
+    // Also log to JSON file for backward compatibility
+    const rows = await readJson(SMS_STATUS_PATH, []);
+    rows.push({
+      evt: 'sms.status',
+      rid: req.id,
+      at: new Date().toISOString(),
+      sid: messageSid,
+      status,
+      to,
+      from,
+      messagingServiceSid: req.body.MessagingServiceSid || null,
+      errorCode
+    });
+    await writeJson(SMS_STATUS_PATH, rows);
+    
+    res.type('text/plain').send('OK');
+  } catch (error) {
+    console.error('[SMS STATUS WEBHOOK ERROR]', error);
+    res.type('text/plain').send('OK'); // Always return OK to Twilio
+  }
 });
 
 // Twilio inbound STOP/START to toggle consent + YES => trigger Vapi call
@@ -13862,11 +14144,47 @@ const handleNotifySend = async (req, res) => {
     else if (fromNumber) payload.from = fromNumber;
 
     const resp = await smsClient.messages.create(payload);
+    
+    // Store message in database for tracking
+    try {
+      await query(`
+        INSERT INTO messages (client_key, to_phone, from_phone, channel, direction, body, provider_sid, status, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+      `, [
+        client.clientKey,
+        normalizedTo,
+        fromNumber || messagingServiceSid || 'unknown',
+        'sms',
+        'outbound',
+        interpolatedMessage,
+        resp.sid,
+        resp.status || 'queued'
+      ]);
+    } catch (dbError) {
+      console.warn('[NOTIFY] Failed to store message in DB:', dbError.message);
+      // Don't fail the request if DB storage fails
+    }
+    
     return res.json({ ok:true, sid: resp.sid, message: interpolatedMessage });
   } catch (e) {
     const msg = e?.message || 'sms_error';
     const code = e?.status || e?.code || 500;
     console.error('[NOTIFY] Error:', msg);
+    
+    // Send email alert for SMS send failures
+    if (process.env.YOUR_EMAIL && code >= 500) {
+      try {
+        const messagingService = (await import('./lib/messaging-service.js')).default;
+        await messagingService.sendEmail({
+          to: process.env.YOUR_EMAIL,
+          subject: `⚠️ SMS Send Failed - ${client?.clientKey || 'unknown'}`,
+          body: `SMS send failed\n\nClient: ${client?.clientKey || 'unknown'}\nTo: ${phone || 'unknown'}\nError: ${msg}\nCode: ${code}\nTime: ${new Date().toISOString()}`
+        });
+      } catch (emailError) {
+        console.error('[NOTIFY] Failed to send error email:', emailError.message);
+      }
+    }
+    
     return res.status(code).json({ ok:false, error: msg });
   }
 };
@@ -14468,6 +14786,22 @@ app.post('/api/calendar/check-book', async (req, res) => {
     console.error('[BOOKING][check-book] ❌❌❌ CAUGHT ERROR IN OUTER CATCH:', e);
     console.error('[BOOKING][check-book] Error stack:', e?.stack);
     console.error('[BOOKING][check-book] Error message:', e?.message);
+    
+    // Send email alert for failed booking (Quick Win #2)
+    if (process.env.YOUR_EMAIL) {
+      try {
+        const messagingService = (await import('./lib/messaging-service.js')).default;
+        const client = await getClientFromHeader(req).catch(() => null);
+        await messagingService.sendEmail({
+          to: process.env.YOUR_EMAIL,
+          subject: `🚨 Booking Failed - ${client?.clientKey || 'unknown'}`,
+          body: `Booking failed\n\nClient: ${client?.clientKey || 'unknown'}\nLead: ${req.body?.lead?.name || 'unknown'} (${req.body?.lead?.phone || 'unknown'})\nService: ${req.body?.service || 'unknown'}\nError: ${e.message}\nStack: ${e.stack}\nTime: ${new Date().toISOString()}`
+        });
+      } catch (emailError) {
+        console.error('[BOOKING] Failed to send alert email:', emailError.message);
+      }
+    }
+    
     const status = 500;
     const body = { error: String(e) };
     setCachedIdem(idemKey, status, body);

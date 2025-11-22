@@ -53,3 +53,4 @@ API_KEY=your_api_key
 - Hover over any line to see Git blame info
 - Use Git Graph to visualize your repository history
 
+

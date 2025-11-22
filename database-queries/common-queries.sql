@@ -76,3 +76,4 @@ SELECT
     white_label IS NOT NULL as has_branding
 FROM tenants;
 
+
