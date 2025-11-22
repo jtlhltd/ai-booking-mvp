@@ -97,9 +97,10 @@ async function initPostgres() {
   }
   
   try {
-    // Render.com free tier databases typically have 3-5 connection limit
-    // Set pool to 2 to leave room for admin connections and prevent exhaustion
-    const maxConnections = parseInt(process.env.DB_POOL_MAX) || 2;
+    // Render.com free tier databases have 3 connection limit
+    // Set pool to 1 to leave room for admin connections and prevent exhaustion
+    // With 1 connection, requests will queue but won't exhaust the database limit
+    const maxConnections = parseInt(process.env.DB_POOL_MAX) || 1;
     
     pool = new Pool({
       connectionString: dbUrl,
