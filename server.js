@@ -5078,12 +5078,19 @@ app.get('/mock-call', async (req, res) => {
     };
     
     // Create a call with specified assistant
+    // Include correlation ID in VAPI call
+    const correlationId = req.correlationId || req.id || `req_${nanoid(12)}`;
+    
     const callData = {
       assistantId: assistantId,
       phoneNumberId: phoneNumberId,
       customer: {
         number: mockLead.phoneNumber,
         name: mockLead.decisionMaker
+      },
+      metadata: {
+        correlationId,
+        requestId: correlationId
       }
     };
     
@@ -5091,7 +5098,9 @@ app.get('/mock-call', async (req, res) => {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${vapiKey}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'X-Correlation-ID': correlationId,
+        'X-Request-ID': correlationId
       },
       body: JSON.stringify(callData)
     });
@@ -11603,7 +11612,35 @@ app.use(cors({
 app.use('/webhooks/twilio-status', express.urlencoded({ extended: false }));
 app.use('/webhooks/twilio-inbound', express.urlencoded({ extended: false }));
 app.use('/webhook/sms-reply', express.urlencoded({ extended: false }));
-app.use((req, _res, next) => { req.id = 'req_' + nanoid(10); next(); });
+
+// Enhanced correlation ID middleware
+app.use((req, res, next) => {
+  // Generate or use existing correlation ID
+  const correlationId = req.get('X-Correlation-ID') || 
+                       req.get('X-Request-ID') || 
+                       `req_${nanoid(12)}`;
+  
+  // Attach to request object (backward compatible)
+  req.correlationId = correlationId;
+  req.id = correlationId;
+  
+  // Add to response headers
+  res.set('X-Correlation-ID', correlationId);
+  res.set('X-Request-ID', correlationId);
+  
+  // Add to log context for structured logging
+  req.logContext = {
+    correlationId,
+    method: req.method,
+    path: req.path,
+    clientKey: req.clientKey || 'anonymous',
+    ip: req.ip,
+    userAgent: req.get('User-Agent') || 'unknown'
+  };
+  
+  next();
+});
+
 app.use(rateLimit({ windowMs: 60_000, max: 60, standardHeaders: true, legacyHeaders: false }));
 
 // Graceful shutdown state management

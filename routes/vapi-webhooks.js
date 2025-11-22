@@ -23,16 +23,25 @@ function markProcessed(callId) {
 
 // Enhanced VAPI webhook handler with comprehensive call tracking
 router.post('/webhooks/vapi', async (req, res) => {
-  console.log('[VAPI WEBHOOK] ==================== NEW WEBHOOK RECEIVED ====================');
-  console.log('[VAPI WEBHOOK] Timestamp:', new Date().toISOString());
+  // Extract correlation ID from webhook metadata
+  const body = req.body || {};
+  const correlationId = body.metadata?.correlationId || 
+                        body.metadata?.requestId ||
+                        body.call?.metadata?.correlationId ||
+                        `webhook_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  
+  // Attach to request for logging
+  req.correlationId = correlationId;
+  req.id = correlationId;
+  
+  console.log(`[${correlationId}] [VAPI WEBHOOK] ==================== NEW WEBHOOK RECEIVED ====================`);
+  console.log(`[${correlationId}] [VAPI WEBHOOK] Timestamp:`, new Date().toISOString());
   
   try {
-    console.log('[VAPI WEBHOOK DEBUG] Raw body:', JSON.stringify(req.body, null, 2));
-    console.log('[VAPI WEBHOOK DEBUG] Raw body type:', typeof req.body);
-    console.log('[VAPI WEBHOOK DEBUG] Body keys:', Object.keys(req.body || {}));
-    console.log('[VAPI WEBHOOK DEBUG] Headers:', JSON.stringify(req.headers, null, 2));
-    
-    const body = req.body || {};
+    console.log(`[${correlationId}] [VAPI WEBHOOK DEBUG] Raw body:`, JSON.stringify(req.body, null, 2));
+    console.log(`[${correlationId}] [VAPI WEBHOOK DEBUG] Raw body type:`, typeof req.body);
+    console.log(`[${correlationId}] [VAPI WEBHOOK DEBUG] Body keys:`, Object.keys(req.body || {}));
+    console.log(`[${correlationId}] [VAPI WEBHOOK DEBUG] Headers:`, JSON.stringify(req.headers, null, 2));
     // Support VAPI "message" envelope (chat/preview and some assistants)
     const message = body.message || null;
     if (message && typeof message === 'object') {

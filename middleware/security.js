@@ -343,11 +343,15 @@ export async function requestLogging(req, res, next) {
 // Enhanced error handling middleware
 export async function errorHandler(error, req, res, next) {
   try {
+    // Get correlation ID for error logging
+    const correlationId = req?.correlationId || req?.id || 'unknown';
+    
     // Import error handling utilities
     const { formatErrorResponse, logError, AppError } = await import('../lib/errors.js');
     
-    // Log the error with full context
+    // Log the error with full context including correlation ID
     const logData = logError(error, req, {
+      correlationId,
       endpoint: req.path,
       method: req.method,
       userAgent: req.get('User-Agent'),
@@ -363,6 +367,7 @@ export async function errorHandler(error, req, res, next) {
           eventType: 'server_error',
           eventSeverity: error.statusCode >= 500 ? 'error' : 'warning',
           eventData: {
+            correlationId,
             error: error.message,
             code: error.code,
             url: req.url,
@@ -403,10 +408,12 @@ export async function errorHandler(error, req, res, next) {
     });
     
     // Fallback error response
+    const correlationId = req?.correlationId || req?.id || 'unknown';
     res.status(500).json({
       error: {
         message: 'Internal server error',
         code: 'HANDLER_ERROR',
+        correlationId,
         timestamp: new Date().toISOString(),
         statusCode: 500
       }
