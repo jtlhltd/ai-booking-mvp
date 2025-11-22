@@ -13066,7 +13066,8 @@ app.post('/api/notify/send/:param', (req, res) => {
   res.json({ ok: true, message: 'Simple notify route with param works!', param: req.params.param, timestamp: new Date().toISOString() });
 });
 console.log('🟢🟢🟢 [NOTIFY-ROUTES] REGISTERED: POST /api/notify/send/:param');
-app.post('/webhooks/twilio-status', express.urlencoded({ extended: false }), twilioWebhookVerification, async (req, res) => {
+// SMS Status Webhook Handler (shared function for both real and test endpoints)
+async function handleSmsStatusWebhook(req, res) {
   try {
     const messageSid = req.body.MessageSid;
     const status = req.body.MessageStatus;
@@ -13074,26 +13075,40 @@ app.post('/webhooks/twilio-status', express.urlencoded({ extended: false }), twi
     const from = req.body.From;
     const errorCode = req.body.ErrorCode || null;
     
+    console.log('[SMS STATUS WEBHOOK] Received status update:', { messageSid, status, to, errorCode });
+    
     // Update message status in database if we have the SID
     if (messageSid) {
-      await query(`
+      const updateResult = await query(`
         UPDATE messages 
         SET status = $1, updated_at = NOW()
         WHERE provider_sid = $2
+        RETURNING id, client_key, to_phone
       `, [status, messageSid]);
+      
+      if (updateResult.rows.length > 0) {
+        console.log('[SMS STATUS WEBHOOK] ✅ Updated message in database:', updateResult.rows[0]);
+      } else {
+        console.log('[SMS STATUS WEBHOOK] ⚠️ Message SID not found in database:', messageSid);
+      }
       
       // If failed, log error
       if (status === 'failed' || errorCode) {
         console.error('[SMS DELIVERY FAILED]', { messageSid, to, status, errorCode });
         
-      // Send email alert for failed SMS
-      if (process.env.YOUR_EMAIL) {
-        const messagingService = (await import('./lib/messaging-service.js')).default;
-        await messagingService.sendEmail({
-          to: process.env.YOUR_EMAIL,
-            subject: `⚠️ SMS Delivery Failed - ${to}`,
-            body: `SMS delivery failed for ${to}\n\nStatus: ${status}\nError Code: ${errorCode || 'N/A'}\nMessage SID: ${messageSid}\nTime: ${new Date().toISOString()}`
-          });
+        // Send email alert for failed SMS
+        if (process.env.YOUR_EMAIL) {
+          try {
+            const messagingService = (await import('./lib/messaging-service.js')).default;
+            await messagingService.sendEmail({
+              to: process.env.YOUR_EMAIL,
+              subject: `⚠️ SMS Delivery Failed - ${to}`,
+              body: `SMS delivery failed for ${to}\n\nStatus: ${status}\nError Code: ${errorCode || 'N/A'}\nMessage SID: ${messageSid}\nTime: ${new Date().toISOString()}`
+            });
+            console.log('[SMS STATUS WEBHOOK] ✅ Email alert sent');
+          } catch (emailError) {
+            console.error('[SMS STATUS WEBHOOK] Failed to send email alert:', emailError.message);
+          }
         }
       }
     }
@@ -13118,7 +13133,17 @@ app.post('/webhooks/twilio-status', express.urlencoded({ extended: false }), twi
     console.error('[SMS STATUS WEBHOOK ERROR]', error);
     res.type('text/plain').send('OK'); // Always return OK to Twilio
   }
+}
+
+// Real Twilio webhook (with signature verification)
+app.post('/webhooks/twilio-status', express.urlencoded({ extended: false }), twilioWebhookVerification, handleSmsStatusWebhook);
+
+// Test endpoint for SMS status webhook (no signature verification for testing)
+app.post('/api/test/sms-status-webhook', express.urlencoded({ extended: false }), async (req, res) => {
+  console.log('[TEST SMS STATUS] Test webhook called');
+  await handleSmsStatusWebhook(req, res);
 });
+console.log('🟢🟢🟢 [TEST] REGISTERED: POST /api/test/sms-status-webhook');
 
 // Twilio inbound STOP/START to toggle consent + YES => trigger Vapi call
 const VAPI_URL = 'https://api.vapi.ai';
