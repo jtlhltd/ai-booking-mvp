@@ -578,6 +578,22 @@ router.post('/webhooks/vapi', async (req, res) => {
       error: e?.message || e,
       stack: e?.stack?.substring(0, 200)
     });
+    
+    // Add to retry queue for failed webhook processing
+    try {
+      const { addWebhookToRetryQueue } = await import('../lib/webhook-retry.js');
+      await addWebhookToRetryQueue({
+        webhookType: 'vapi',
+        webhookUrl: '/webhooks/vapi',
+        payload: req.body,
+        headers: req.headers,
+        error: e
+      });
+      console.log('[VAPI WEBHOOK] Added failed webhook to retry queue');
+    } catch (retryError) {
+      console.error('[VAPI WEBHOOK] Failed to add to retry queue:', retryError);
+    }
+    
     // Don't send response if headers already sent
     if (!res.headersSent) {
       res.status(200).json({ ok: true });

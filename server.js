@@ -9507,6 +9507,30 @@ app.get('/api/cost-summary/:clientKey', async (req, res) => {
 });
 console.log('🟢🟢🟢 [COST] REGISTERED: GET /api/cost-summary/:clientKey');
 
+// Webhook retry statistics endpoint
+app.get('/api/webhook-retry-stats', async (req, res) => {
+  try {
+    const { clientKey } = req.query;
+    const { getWebhookRetryStats } = await import('./lib/webhook-retry.js');
+    const stats = await getWebhookRetryStats(clientKey);
+    
+    if (!stats.success) {
+      return res.status(500).json({ ok: false, error: stats.error });
+    }
+    
+    res.json({
+      ok: true,
+      stats: stats.stats,
+      summary: stats.summary,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[WEBHOOK RETRY STATS ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+console.log('🟢🟢🟢 [WEBHOOK RETRY] REGISTERED: GET /api/webhook-retry-stats');
+
 // Quick Win #4: SMS delivery rate tracking
 app.get('/api/sms-delivery-rate/:clientKey', async (req, res) => {
   try {
@@ -21551,6 +21575,21 @@ async function startServer() {
       }
     });
     console.log('✅ Budget monitoring scheduled (runs every 6 hours)');
+    
+    // Start webhook retry processing (runs every 5 minutes)
+    const { processWebhookRetryQueue } = await import('./lib/webhook-retry.js');
+    cron.schedule('*/5 * * * *', async () => {
+      console.log('[CRON] 🔄 Processing webhook retries...');
+      try {
+        const result = await processWebhookRetryQueue();
+        if (result.processed > 0) {
+          console.log(`[CRON] ✅ Processed ${result.processed} webhook retries (${result.success} succeeded, ${result.failed} failed)`);
+        }
+      } catch (error) {
+        console.error('[CRON ERROR] Webhook retry processing failed:', error);
+      }
+    });
+    console.log('✅ Webhook retry processing scheduled (runs every 5 minutes)');
     
   } catch (error) {
     console.error('❌ Failed to start server:', error);
