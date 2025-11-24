@@ -2278,6 +2278,14 @@
         
         // Apply client branding (colors, logo, fonts)
         function applyClientBranding(config) {
+            console.log('[applyClientBranding] Config:', {
+                hasWhiteLabel: !!config.whiteLabel,
+                hasBranding: !!config.whiteLabel?.branding,
+                primaryColor: config.primaryColor || config.whiteLabel?.branding?.primaryColor,
+                secondaryColor: config.secondaryColor || config.whiteLabel?.branding?.secondaryColor,
+                accentColor: config.accentColor || config.whiteLabel?.branding?.accentColor
+            });
+            
             // Get branding from whiteLabel.branding or top-level config
             const branding = config.whiteLabel?.branding || {};
             const industry = config.industry || '';
@@ -2289,15 +2297,20 @@
             const accentColor = branding.accentColor || config.accentColor || industryColors.accent;
             const fontFamily = branding.fontFamily || config.fontFamily || "'Inter', sans-serif";
             
+            console.log('[applyClientBranding] Applying colors:', { primaryColor, secondaryColor, accentColor });
+            
             // Apply CSS variables dynamically (always apply, even if using defaults)
             if (primaryColor) {
                 document.documentElement.style.setProperty('--primary', primaryColor);
+                console.log('[applyClientBranding] Set --primary to', primaryColor);
             }
             if (secondaryColor) {
                 document.documentElement.style.setProperty('--secondary', secondaryColor);
+                console.log('[applyClientBranding] Set --secondary to', secondaryColor);
             }
             if (accentColor) {
                 document.documentElement.style.setProperty('--success', accentColor);
+                console.log('[applyClientBranding] Set --success to', accentColor);
             }
             if (fontFamily) {
                 document.documentElement.style.setProperty('--brand-font', fontFamily);
@@ -3872,6 +3885,16 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const config = clientConfig || CLIENT_CONFIG[currentClient] || CLIENT_CONFIG[DEMO_CLIENT_KEY] || {};
             config.key = currentClient;
             
+            // Debug: Log what we have
+            console.log('[initDashboard] Config after merge:', {
+                hasClientConfig: !!clientConfig,
+                hasWhiteLabel: !!config.whiteLabel,
+                hasBranding: !!config.whiteLabel?.branding,
+                primaryColor: config.primaryColor || config.whiteLabel?.branding?.primaryColor,
+                displayName: config.displayName || config.name,
+                industry: config.industry
+            });
+            
             // If we're using CLIENT_CONFIG fallback, clear ALL mock data fields
             // Only use fields from actual clientConfig (from API/file)
             // BUT preserve branding/color fields - they should always be applied if available
@@ -3887,18 +3910,38 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 delete config.displayName;
                 // Keep only essential non-meta fields for UI functionality
                 // BUT preserve branding fields (colors, logo, whiteLabel) - these should be applied regardless
-            }
-            
-            // Always apply branding if available, even if clientConfig is null
-            // This ensures colors and branding work even with partial data
-            if (config.whiteLabel || config.primaryColor || config.secondaryColor || config.accentColor) {
-                applyClientBranding(config);
+                // Note: CLIENT_CONFIG doesn't have branding, so this is fine
+            } else {
+                // When clientConfig exists, ensure whiteLabel is preserved
+                if (clientConfig.whiteLabel && !config.whiteLabel) {
+                    config.whiteLabel = clientConfig.whiteLabel;
+                }
+                // Also ensure top-level color fields are preserved
+                if (clientConfig.primaryColor && !config.primaryColor) {
+                    config.primaryColor = clientConfig.primaryColor;
+                }
+                if (clientConfig.secondaryColor && !config.secondaryColor) {
+                    config.secondaryColor = clientConfig.secondaryColor;
+                }
+                if (clientConfig.accentColor && !config.accentColor) {
+                    config.accentColor = clientConfig.accentColor;
+                }
             }
             
             // Update header with business name if available
             // REMOVED: This was overwriting updateHeader. Let updateHeader handle all header updates.
-            
+            // updateHeader will call applyClientBranding, so we don't need to call it separately
+            // But ensure branding is applied even if updateHeader doesn't do it
             updateHeader(config, !!clientConfig);
+            
+            // Always apply branding if available (as a fallback, in case updateHeader didn't)
+            // This ensures colors and branding work even with partial data
+            if (config.whiteLabel || config.primaryColor || config.secondaryColor || config.accentColor) {
+                // Small delay to ensure DOM is ready
+                setTimeout(() => {
+                    applyClientBranding(config);
+                }, 100);
+            }
             initThemeToggle();
             // Init test call button - it will fetch config if needed
             initTestCallButton(currentClient, config).catch(err => console.warn('Test call button init error:', err));
