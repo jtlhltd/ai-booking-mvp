@@ -13214,7 +13214,8 @@ app.use(receptionistRouter);
 // Add caching middleware to frequently accessed endpoints
 app.use('/api/stats', cacheMiddleware({ ttl: 60000 })); // 1 minute cache
 app.use('/api/analytics', cacheMiddleware({ ttl: 300000 })); // 5 minute cache
-app.use('/api/clients/:clientKey', cacheMiddleware({ ttl: 180000 })); // 3 minute cache
+// Cache middleware for client endpoints - using specific route patterns to avoid conflicts
+app.get('/api/clients/:clientKey', cacheMiddleware({ ttl: 180000 })); // 3 minute cache
 
 app.use(vapiWebhooks);
 
@@ -18542,13 +18543,29 @@ app.get('/api/clients/:key', async (req, res) => {
     console.log(`[API] Returning client data for ${clientKey}:`, {
       hasDisplayName: !!c.displayName,
       hasWhiteLabel: !!c.whiteLabel,
-      hasBranding: !!c.whiteLabel?.branding
+      hasBranding: !!c.whiteLabel?.branding,
+      clientKeys: Object.keys(c || {}).slice(0, 10)
     });
     
-    res.json({ ok:true, client: c });
+    // Ensure we always return a properly formatted response
+    const response = { ok: true, client: c };
+    console.log(`[API] Sending response for ${clientKey}, response keys:`, Object.keys(response));
+    
+    // Check if response was already sent
+    if (res.headersSent) {
+      console.error(`[API] Response already sent for ${clientKey}!`);
+      return;
+    }
+    
+    res.json(response);
   } catch (e) {
     console.error(`[API] Error in /api/clients/:key:`, e);
-    res.status(500).json({ ok:false, error: String(e) });
+    console.error(`[API] Error stack:`, e.stack);
+    
+    // Ensure error response is properly formatted
+    if (!res.headersSent) {
+      res.status(500).json({ ok: false, error: String(e) });
+    }
   }
 });
 
