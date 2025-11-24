@@ -2278,20 +2278,30 @@
         
         // Apply client branding (colors, logo, fonts)
         function applyClientBranding(config) {
+            // Get branding from whiteLabel.branding or top-level config
             const branding = config.whiteLabel?.branding || {};
             const industry = config.industry || '';
             const industryColors = getIndustryColors(industry);
             
+            // Try multiple sources for colors: whiteLabel.branding, top-level config, or industry defaults
             const primaryColor = branding.primaryColor || config.primaryColor || industryColors.primary;
             const secondaryColor = branding.secondaryColor || config.secondaryColor || industryColors.secondary;
             const accentColor = branding.accentColor || config.accentColor || industryColors.accent;
             const fontFamily = branding.fontFamily || config.fontFamily || "'Inter', sans-serif";
             
-            // Apply CSS variables dynamically
-            document.documentElement.style.setProperty('--primary', primaryColor);
-            document.documentElement.style.setProperty('--secondary', secondaryColor);
-            document.documentElement.style.setProperty('--success', accentColor);
-            document.documentElement.style.setProperty('--brand-font', fontFamily);
+            // Apply CSS variables dynamically (always apply, even if using defaults)
+            if (primaryColor) {
+                document.documentElement.style.setProperty('--primary', primaryColor);
+            }
+            if (secondaryColor) {
+                document.documentElement.style.setProperty('--secondary', secondaryColor);
+            }
+            if (accentColor) {
+                document.documentElement.style.setProperty('--success', accentColor);
+            }
+            if (fontFamily) {
+                document.documentElement.style.setProperty('--brand-font', fontFamily);
+            }
             
             // Apply custom logo (image or emoji)
             const logoEl = document.getElementById('clientLogo');
@@ -2611,12 +2621,16 @@
                 businessHours: config.businessHours
             });
             
-            // Apply branding first (colors, logo)
+            // Apply branding first (colors, logo) - always apply if available, regardless of hasClientConfig
+            // This ensures colors and branding work even with partial data
             applyClientBranding(config);
             
             // Get industry-specific messaging
             // Only use industry if it's actually configured (not from CLIENT_CONFIG mock data)
-            const industry = (hasClientConfig && config.industry) ? config.industry : null;
+            // But allow industry from whiteLabel even if hasClientConfig is false
+            const industry = (hasClientConfig && config.industry) 
+                ? config.industry 
+                : (config.whiteLabel?.industry || config.industry || null);
             // Use 'dental' as fallback only for messaging/UI purposes, not for display
             const industryForMessaging = industry || 'dental';
             // Only use business name from actual client config
@@ -3841,6 +3855,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                                 description: clientConfig.description,
                                 tagline: clientConfig.tagline,
                                 industry: clientConfig.industry,
+                                hasWhiteLabel: !!clientConfig.whiteLabel,
+                                hasBranding: !!clientConfig.whiteLabel?.branding,
+                                primaryColor: clientConfig.whiteLabel?.branding?.primaryColor || clientConfig.primaryColor,
                                 hasClientConfig: true
                             });
                         }
@@ -3857,6 +3874,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             
             // If we're using CLIENT_CONFIG fallback, clear ALL mock data fields
             // Only use fields from actual clientConfig (from API/file)
+            // BUT preserve branding/color fields - they should always be applied if available
             if (!clientConfig) {
                 // Don't use CLIENT_CONFIG defaults - they're all mock data
                 delete config.phone;
@@ -3868,6 +3886,13 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 delete config.name;
                 delete config.displayName;
                 // Keep only essential non-meta fields for UI functionality
+                // BUT preserve branding fields (colors, logo, whiteLabel) - these should be applied regardless
+            }
+            
+            // Always apply branding if available, even if clientConfig is null
+            // This ensures colors and branding work even with partial data
+            if (config.whiteLabel || config.primaryColor || config.secondaryColor || config.accentColor) {
+                applyClientBranding(config);
             }
             
             // Update header with business name if available
