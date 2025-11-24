@@ -18512,26 +18512,42 @@ app.get('/api/clients', async (_req, res) => {
 
 app.get('/api/clients/:key', async (req, res) => {
   try {
-    let c = await getFullClient(req.params.key);
+    const clientKey = req.params.key;
+    console.log(`[API] GET /api/clients/${clientKey} - Fetching client...`);
+    
+    let c = await getFullClient(clientKey);
+    console.log(`[API] getFullClient returned:`, c ? 'client found' : 'null');
     
     // Fallback: check local client files if not in database
     if (!c) {
       try {
         const fs = await import('fs');
         const path = await import('path');
-        const clientFile = path.join(process.cwd(), 'demos', `.client-${req.params.key}.json`);
+        const clientFile = path.join(process.cwd(), 'demos', `.client-${clientKey}.json`);
         if (fs.existsSync(clientFile)) {
           const fileContent = fs.readFileSync(clientFile, 'utf8');
           c = JSON.parse(fileContent);
+          console.log(`[API] Loaded client from file:`, clientFile);
         }
       } catch (fileError) {
-        // Ignore file read errors
+        console.warn(`[API] File fallback error:`, fileError.message);
       }
     }
     
-    if (!c) return res.status(404).json({ ok:false, error: 'not found' });
+    if (!c) {
+      console.log(`[API] Client not found: ${clientKey}`);
+      return res.status(404).json({ ok:false, error: 'not found' });
+    }
+    
+    console.log(`[API] Returning client data for ${clientKey}:`, {
+      hasDisplayName: !!c.displayName,
+      hasWhiteLabel: !!c.whiteLabel,
+      hasBranding: !!c.whiteLabel?.branding
+    });
+    
     res.json({ ok:true, client: c });
   } catch (e) {
+    console.error(`[API] Error in /api/clients/:key:`, e);
     res.status(500).json({ ok:false, error: String(e) });
   }
 });
@@ -22425,4 +22441,5 @@ process.on('unhandledRejection', (reason, promise) => {
   gracefulShutdown('UNHANDLED_REJECTION');
 });
 
+startServer();
 startServer();
