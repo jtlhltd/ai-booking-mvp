@@ -3858,9 +3858,14 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             let clientConfig = null;
             if (currentClient !== DEMO_CLIENT_KEY) {
                 try {
+                    console.log('[DASHBOARD] Fetching client config from:', `${BASE_URL}/api/clients/${currentClient}`);
                     const response = await fetch(`${BASE_URL}/api/clients/${currentClient}`);
+                    console.log('[DASHBOARD] Response status:', response.status, response.ok);
+                    
                     if (response.ok) {
-                const data = await response.json();
+                        const data = await response.json();
+                        console.log('[DASHBOARD] API response data:', data);
+                        
                         if (data.ok && data.client) {
                             clientConfig = data.client;
                             console.log('[DASHBOARD] Loaded client config:', {
@@ -3871,12 +3876,23 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                                 hasWhiteLabel: !!clientConfig.whiteLabel,
                                 hasBranding: !!clientConfig.whiteLabel?.branding,
                                 primaryColor: clientConfig.whiteLabel?.branding?.primaryColor || clientConfig.primaryColor,
+                                secondaryColor: clientConfig.whiteLabel?.branding?.secondaryColor || clientConfig.secondaryColor,
+                                accentColor: clientConfig.whiteLabel?.branding?.accentColor || clientConfig.accentColor,
                                 hasClientConfig: true
                             });
+                        } else {
+                            console.warn('[DASHBOARD] API response missing client data:', {
+                                hasOk: !!data.ok,
+                                hasClient: !!data.client,
+                                data: data
+                            });
                         }
+                    } else {
+                        const errorText = await response.text();
+                        console.error('[DASHBOARD] API error response:', response.status, errorText);
                     }
                 } catch (err) {
-                    console.warn('Could not fetch client config:', err);
+                    console.error('[DASHBOARD] Could not fetch client config:', err);
                 }
             }
             
