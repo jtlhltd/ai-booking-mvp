@@ -2797,6 +2797,9 @@
         }
 
         function personalizeDashboard(businessName) {
+            // Update global clientBusinessName variable
+            clientBusinessName = businessName;
+            
             // Update status cards
             const statusCardLeads = document.getElementById('statusCardLeads');
             if (statusCardLeads) statusCardLeads.textContent = `Leads We're Managing for ${businessName}`;
@@ -2978,12 +2981,14 @@
         function renderLeads(leads = []) {
             const container = document.getElementById('leads-list');
             if (!container) return;
+            // Use current clientBusinessName (updated by personalizeDashboard)
+            const businessName = clientBusinessName || 'Your Business';
             if (!leads.length) {
                 container.innerHTML = `
                     <div class="empty-state">
                         <span class="empty-state-icon">👥</span>
                         <div class="empty-state-title">No leads yet</div>
-                        <div class="empty-state-message">Leads ${clientBusinessName} receives will appear here as we start following up.</div>
+                        <div class="empty-state-message">Leads ${businessName} receives will appear here as we start following up.</div>
                     </div>
                 `;
                 currentLeads = [];
@@ -3013,15 +3018,17 @@
         function renderAppointments(appointments = []) {
             const container = document.getElementById('upcoming-appointments');
             if (!container) return;
+            // Use current clientBusinessName (updated by personalizeDashboard)
+            const businessName = clientBusinessName || 'Your Business';
             if (!Array.isArray(appointments) || !appointments.length) {
                 container.innerHTML = `
                     <div class="empty-state">
                         <span class="empty-state-icon">📅</span>
                         <div class="empty-state-title">No upcoming appointments</div>
-                        <div class="empty-state-message">Appointments we book for ${clientBusinessName} will appear here automatically.</div>
+                        <div class="empty-state-message">Appointments we book for ${businessName} will appear here automatically.</div>
                         <div class="empty-state-cta">
                             <button class="empty-state-btn" onclick="document.getElementById('leadImportButton')?.click()" aria-label="Upload leads to get started">
-                                📤 Send ${clientBusinessName} Leads to Book
+                                📤 Send ${businessName} Leads to Book
                             </button>
                     </div>
                     </div>
@@ -3052,7 +3059,9 @@
             `).join('');
             document.getElementById('chartBars').innerHTML = bars;
             const totalCalls = totals.reduce((sum,v)=>sum+v,0);
-            document.getElementById('chartSummary').textContent = `${totalCalls} call${totalCalls !== 1 ? 's' : ''} we made for ${clientBusinessName} this week`;
+            // Use current clientBusinessName (updated by personalizeDashboard)
+            const businessName = clientBusinessName || 'Your Business';
+            document.getElementById('chartSummary').textContent = `${totalCalls} call${totalCalls !== 1 ? 's' : ''} we made for ${businessName} this week`;
         }
 
         function formatAppointmentTime(isoDate) {
