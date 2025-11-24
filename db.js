@@ -970,6 +970,11 @@ function mapTenantRow(r) {
   if (whiteLabel.services) out.services = whiteLabel.services;
   if (whiteLabel.location) out.location = whiteLabel.location;
   
+  // Extract business name from whiteLabel if display_name is missing
+  if (!out.displayName) {
+    out.displayName = whiteLabel.name || whiteLabel.businessName || whiteLabel.branding?.name || whiteLabel.branding?.businessName || null;
+  }
+  
   // Extract from top-level whiteLabel or from numbers
   if (whiteLabel.phone) {
     out.phone = whiteLabel.phone;
@@ -1118,6 +1123,11 @@ export async function upsertFullClient(c) {
   if (c.location) whiteLabel.location = c.location;
   if (c.phone) whiteLabel.phone = c.phone;
   if (c.businessHours) whiteLabel.businessHours = c.businessHours;
+  // Store business name in whiteLabel as backup (for dashboard personalization)
+  if (c.displayName || c.name || c.businessName) {
+    whiteLabel.name = c.displayName || c.name || c.businessName;
+    whiteLabel.businessName = c.displayName || c.name || c.businessName;
+  }
   // Merge branding fields
   if (!whiteLabel.branding) whiteLabel.branding = {};
   if (c.logo) whiteLabel.branding.logo = c.logo;
