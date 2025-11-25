@@ -158,6 +158,10 @@ const performanceMonitor = getPerformanceMonitor();
 const cache = getCache();
 const isPostgres = (process.env.DB_TYPE || '').toLowerCase() === 'postgres';
 
+// Dashboard stats cache (separate from main cache for stats-specific TTL)
+const DASHBOARD_CACHE_TTL = 60000; // 60 seconds
+const dashboardStatsCache = new Map();
+
 // WebSocket connection handling
 io.on('connection', (socket) => {
   console.log('Admin Hub client connected:', socket.id);
@@ -17584,7 +17588,7 @@ app.get('/api/stats', cacheMiddleware({ ttl: 60000 }), async (req, res) => {
         // Check cache first
         const cacheKey = `stats:${clientKey}:${range}`;
         const cached = dashboardStatsCache.get(cacheKey);
-        if (cached && Date.now() < cached.expires) {
+        if (cached && cached.expires && Date.now() < cached.expires) {
           return res.json({ ok: true, ...cached.data });
         }
         
