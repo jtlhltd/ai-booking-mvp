@@ -17,6 +17,7 @@
  *   --color-primary <hex>     Update primary color
  *   --color-secondary <hex>   Update secondary color
  *   --color-accent <hex>      Update accent color
+ *   --vapi-assistant <id>     Update VAPI assistant ID
  */
 
 import 'dotenv/config';
@@ -68,6 +69,8 @@ function parseArgs() {
       updates.secondaryColor = args[++i];
     } else if (arg === '--color-accent' && i + 1 < args.length) {
       updates.accentColor = args[++i];
+    } else if (arg === '--vapi-assistant' && i + 1 < args.length) {
+      updates.vapiAssistantId = args[++i];
     }
     
     i++;
@@ -205,6 +208,14 @@ async function updateClient(clientKey, updates) {
     client.whiteLabel.branding.accentColor = updates.accentColor;
   }
   
+  if (updates.vapiAssistantId) {
+    client.vapiAssistantId = updates.vapiAssistantId;
+    client.vapi = client.vapi || {};
+    client.vapi.assistantId = updates.vapiAssistantId;
+    client.vapi_json = client.vapi_json || {};
+    client.vapi_json.assistantId = updates.vapiAssistantId;
+  }
+  
   // Save to database
   if (dbConnected) {
     try {
@@ -244,6 +255,7 @@ if (!clientKey) {
   console.error('  --color-primary <hex>     Update primary color');
   console.error('  --color-secondary <hex>   Update secondary color');
   console.error('  --color-accent <hex>      Update accent color');
+  console.error('  --vapi-assistant <id>     Update VAPI assistant ID');
   console.error('');
   console.error('Example:');
   console.error('  node scripts/update-client.js stay-focused-fitness-chris \\');

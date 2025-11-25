@@ -8764,12 +8764,14 @@ async function getIntegrationStatuses(clientKey) {
       }
       
       // Check if THIS CLIENT has Vapi configured (multi-tenant - no global fallback)
+      const hasAssistantId = !!vapiConfig.assistantId;
+      const hasPhoneNumberId = !!vapiConfig.phoneNumberId;
       const hasClientVapiConfig = !!(vapiConfig.assistantId || vapiConfig.phoneNumberId || vapiConfig.apiKey || vapiConfig.privateKey);
       
       const vapiIntegration = integrations.find(i => i.name === 'Vapi Voice');
       if (vapiIntegration) {
         if (hasClientVapiConfig) {
-          // Client has Vapi config - test connection using client's API key
+          // Client has Vapi config - test connection using client's API key if available
           const vapiKey = vapiConfig.privateKey || vapiConfig.apiKey || vapiConfig.publicKey;
           
           if (vapiKey) {
@@ -8785,19 +8787,29 @@ async function getIntegrationStatuses(clientKey) {
               
               if (vapiResponse.ok) {
                 vapiIntegration.status = 'active';
-                vapiIntegration.detail = 'Assistant + phone number connected';
+                vapiIntegration.detail = hasPhoneNumberId 
+                  ? 'Assistant + phone number connected'
+                  : 'Assistant connected (phone number not configured)';
               } else {
-                vapiIntegration.status = 'error';
+                vapiIntegration.status = 'warning';
                 const statusText = await vapiResponse.text().catch(() => '');
-                vapiIntegration.detail = `API key invalid or expired (HTTP ${vapiResponse.status}). Update this client's vapi_json.privateKey in the database (tenants table) or via /api/admin/client/:clientKey PUT endpoint.`;
+                vapiIntegration.detail = `Assistant configured but API key test failed (HTTP ${vapiResponse.status}). Verify the API key is correct.`;
               }
             } catch (error) {
-              vapiIntegration.status = 'error';
-              vapiIntegration.detail = `Connection test failed: ${error.message}. Check this client's vapi_json in the database (tenants table) or update via /api/admin/client/:clientKey PUT endpoint.`;
+              vapiIntegration.status = 'warning';
+              vapiIntegration.detail = `Assistant configured but connection test failed: ${error.message}. Verify the API key is correct.`;
             }
           } else {
-            vapiIntegration.status = 'error';
-            vapiIntegration.detail = 'This client has Vapi configuration but missing API key (privateKey, apiKey, or publicKey). Update the client\'s vapi_json in the database or via /api/admin/client/:clientKey PUT endpoint.';
+            // Has assistantId but no API key - show as configured but with warning
+            if (hasAssistantId) {
+              vapiIntegration.status = 'active';
+              vapiIntegration.detail = hasPhoneNumberId
+                ? 'Assistant connected (API key not stored - connection test skipped)'
+                : `Assistant "${vapiConfig.assistantId}" connected (API key not stored - connection test skipped)`;
+            } else {
+              vapiIntegration.status = 'warning';
+              vapiIntegration.detail = 'Vapi configuration incomplete. Add assistantId and optionally privateKey for connection testing.';
+            }
           }
         } else {
           // Client exists but does NOT have Vapi configured
@@ -21454,6 +21466,11 @@ app.get('/leads', (req, res) => {
   res.sendFile('public/leads.html', { root: '.' });
 });
 
+// Lead testing dashboard page (for testing first 10 real leads)
+app.get('/lead-testing-dashboard', (req, res) => {
+  res.sendFile('public/leads.html', { root: '.' });
+});
+
 // API endpoint to fetch leads
 app.get('/api/leads', async (req, res) => {
   try {
@@ -21467,6 +21484,7 @@ app.get('/api/leads', async (req, res) => {
     }
 
     const { query } = await import('./db.js');
+    const limit = parseInt(req.query.limit) || 1000;
     
     const result = await query(`
       SELECT 
@@ -21486,8 +21504,8 @@ app.get('/api/leads', async (req, res) => {
       FROM leads
       WHERE client_key = $1
       ORDER BY created_at DESC
-      LIMIT 1000
-    `, [clientKey]);
+      LIMIT $2
+    `, [clientKey, limit]);
 
     const leads = result.rows.map(row => ({
       id: row.id,
@@ -21516,6 +21534,134 @@ app.get('/api/leads', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to fetch leads',
+      details: error.message
+    });
+  }
+});
+
+// API endpoint to update a lead
+app.put('/api/leads/:leadId', async (req, res) => {
+  try {
+    const { leadId } = req.params;
+    const clientKey = req.query.clientKey || req.get('X-Client-Key') || req.body.clientKey;
+    
+    if (!clientKey) {
+      return res.status(400).json({
+        success: false,
+        error: 'clientKey is required'
+      });
+    }
+
+    const { query } = await import('./db.js');
+    
+    // Verify lead exists and belongs to client
+    const existing = await query(`
+      SELECT id, client_key FROM leads WHERE id = $1
+    `, [leadId]);
+
+    if (!existing.rows || existing.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Lead not found'
+      });
+    }
+
+    if (existing.rows[0].client_key !== clientKey) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied'
+      });
+    }
+
+    // Build update query dynamically
+    const updates = [];
+    const values = [];
+    let paramIndex = 1;
+
+    if (req.body.name !== undefined) {
+      updates.push(`name = $${paramIndex++}`);
+      values.push(req.body.name);
+    }
+    if (req.body.phone !== undefined) {
+      updates.push(`phone = $${paramIndex++}`);
+      values.push(req.body.phone);
+    }
+    if (req.body.email !== undefined) {
+      updates.push(`email = $${paramIndex++}`);
+      values.push(req.body.email);
+    }
+    if (req.body.status !== undefined) {
+      updates.push(`status = $${paramIndex++}`);
+      values.push(req.body.status);
+    }
+    if (req.body.source !== undefined) {
+      updates.push(`source = $${paramIndex++}`);
+      values.push(req.body.source);
+    }
+    if (req.body.notes !== undefined) {
+      updates.push(`notes = $${paramIndex++}`);
+      values.push(req.body.notes);
+    }
+    if (req.body.score !== undefined) {
+      updates.push(`score = $${paramIndex++}`);
+      values.push(parseInt(req.body.score));
+    }
+    if (req.body.tags !== undefined) {
+      updates.push(`tags = $${paramIndex++}`);
+      values.push(Array.isArray(req.body.tags) ? req.body.tags.join(',') : req.body.tags);
+    }
+    if (req.body.customFields !== undefined) {
+      updates.push(`custom_fields = $${paramIndex++}::jsonb`);
+      values.push(JSON.stringify(req.body.customFields));
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No fields to update'
+      });
+    }
+
+    // Always update updated_at
+    updates.push(`updated_at = NOW()`);
+    
+    values.push(leadId);
+    const whereParam = paramIndex;
+
+    const result = await query(`
+      UPDATE leads
+      SET ${updates.join(', ')}
+      WHERE id = $${whereParam}
+      RETURNING id, name, phone, email, status, tags, source, score, notes, custom_fields, created_at, updated_at, last_contacted_at
+    `, values);
+
+    const updatedLead = result.rows[0];
+    const lead = {
+      id: updatedLead.id,
+      name: updatedLead.name || 'Unknown',
+      phone: updatedLead.phone,
+      email: updatedLead.email,
+      status: updatedLead.status || 'new',
+      tags: updatedLead.tags ? updatedLead.tags.split(',').map(t => t.trim()) : [],
+      source: updatedLead.source || 'Unknown',
+      score: updatedLead.score || 50,
+      notes: updatedLead.notes || '',
+      customFields: updatedLead.custom_fields || {},
+      created_at: updatedLead.created_at,
+      updated_at: updatedLead.updated_at,
+      last_contacted_at: updatedLead.last_contacted_at
+    };
+
+    res.json({
+      success: true,
+      lead
+    });
+
+  } catch (error) {
+    console.error('[UPDATE LEAD ERROR]', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update lead',
       details: error.message
     });
   }

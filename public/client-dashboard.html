@@ -2301,19 +2301,19 @@
             
             // Apply CSS variables dynamically (always apply, even if using defaults)
             if (primaryColor) {
-                document.documentElement.style.setProperty('--primary', primaryColor);
+            document.documentElement.style.setProperty('--primary', primaryColor);
                 console.log('[applyClientBranding] Set --primary to', primaryColor);
             }
             if (secondaryColor) {
-                document.documentElement.style.setProperty('--secondary', secondaryColor);
+            document.documentElement.style.setProperty('--secondary', secondaryColor);
                 console.log('[applyClientBranding] Set --secondary to', secondaryColor);
             }
             if (accentColor) {
-                document.documentElement.style.setProperty('--success', accentColor);
+            document.documentElement.style.setProperty('--success', accentColor);
                 console.log('[applyClientBranding] Set --success to', accentColor);
             }
             if (fontFamily) {
-                document.documentElement.style.setProperty('--brand-font', fontFamily);
+            document.documentElement.style.setProperty('--brand-font', fontFamily);
             }
             
             // Apply custom logo (image or emoji)
@@ -2714,11 +2714,13 @@
             // Map client config fields to meta fields
             // Only show what's actually configured, use "Not supplied" for missing
             // Only use values if hasClientConfig is true (not from CLIENT_CONFIG mock data)
+            // Also check whiteLabel as a fallback source
             const phone = (hasClientConfig && (config.phone || 
                          config.numbers?.primary || 
                          config.numbers_json?.primary ||
                          config.twilio_json?.fromNumber ||
-                         config.sms?.fromNumber)) || null;
+                         config.sms?.fromNumber ||
+                         config.whiteLabel?.phone)) || null;
             
             // Timezone: from timezone or booking.timezone
             const timezone = (hasClientConfig && (config.timezone || 
@@ -2728,7 +2730,8 @@
             // Business Hours: from businessHours or booking config
             const businessHours = (hasClientConfig && (config.businessHours ||
                                  config.booking?.businessHours ||
-                                 config.calendar_json?.booking?.businessHours)) || null;
+                                 config.calendar_json?.booking?.businessHours ||
+                                 config.whiteLabel?.businessHours)) || null;
             
             // Industry display: from industry or services (for meta field)
             // Map industry codes to display names
@@ -2747,7 +2750,10 @@
               'accounting': 'Accounting Services',
               'real estate': 'Real Estate',
               'home': 'Home Services',
-              'restaurant': 'Restaurant'
+              'restaurant': 'Restaurant',
+              'shipping': 'Shipping & Logistics',
+              'logistics': 'Shipping & Logistics',
+              'delivery': 'Delivery Services'
             };
             
             // Helper to capitalize words properly
@@ -2765,11 +2771,15 @@
             }
             
             let industryDisplay = null;
-            if (hasClientConfig && config.industry) {
-              const industryLower = config.industry.toLowerCase();
-              industryDisplay = industryMap[industryLower] || capitalizeIndustry(config.industry);
+            // Check industry from multiple sources
+            const industryValue = config.industry || config.whiteLabel?.industry;
+            if (hasClientConfig && industryValue) {
+              const industryLower = industryValue.toLowerCase();
+              industryDisplay = industryMap[industryLower] || capitalizeIndustry(industryValue);
             } else if (hasClientConfig && config.services && Array.isArray(config.services) && config.services.length > 0) {
               industryDisplay = config.services.join(', ');
+            } else if (hasClientConfig && config.whiteLabel?.services && Array.isArray(config.whiteLabel.services) && config.whiteLabel.services.length > 0) {
+              industryDisplay = config.whiteLabel.services.join(', ');
             } else if (hasClientConfig && config.services && typeof config.services === 'object' && Object.keys(config.services).length > 0) {
               industryDisplay = Object.keys(config.services).join(', ');
             }
@@ -3872,7 +3882,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     console.log('[DASHBOARD] Response status:', response.status, response.ok);
                     
                     if (response.ok) {
-                        const data = await response.json();
+                const data = await response.json();
                         console.log('[DASHBOARD] API response data:', data);
                         
                         if (data.ok && data.client) {
