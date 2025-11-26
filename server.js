@@ -13167,24 +13167,72 @@ app.get('/api/health/detailed', async (req, res) => {
       const { verifyBackupSystem } = await import('./lib/backup-monitoring.js');
       const backupStatus = await verifyBackupSystem();
       health.services.backup = {
-        status: backupStatus.status === 'healthy' ? 'healthy' : backupStatus.status === 'warning' ? 'warning' : 'error',
+        status: backupStatus.status === 'healthy' ? 'healthy' : backupStatus.status === 'warning' ? 'warning' : backupStatus.status === 'info' ? 'info' : 'error',
         message: backupStatus.message,
-        hoursSinceActivity: backupStatus.backupAge ? parseFloat(backupStatus.backupAge.toFixed(1)) : null
+        hoursSinceActivity: backupStatus.backupAge ? parseFloat(backupStatus.backupAge.toFixed(1)) : null,
+        databaseAccessible: backupStatus.databaseAccessible,
+        recentActivity: backupStatus.recentActivity,
+        hasAnyData: backupStatus.hasAnyData
       };
     } catch (error) {
       health.services.backup = {
         status: 'error',
-        message: 'Failed to check backup status'
+        message: 'Failed to check backup status',
+        error: error.message
       };
     }
     
     // Overall status
-    const allHealthy = Object.values(health.services).every(s => s.status === 'healthy' || s.status === 'configured');
+    const allHealthy = Object.values(health.services).every(s => s.status === 'healthy' || s.status === 'configured' || s.status === 'info');
     health.overall = allHealthy ? 'healthy' : 'degraded';
     
     res.json(health);
   } catch (error) {
     res.status(500).json({ error: error.message, timestamp: new Date().toISOString() });
+  }
+});
+
+// Manual backup check endpoint
+app.get('/api/admin/backup/check', authenticateApiKey, async (req, res) => {
+  try {
+    const { verifyBackupSystem, monitorBackups } = await import('./lib/backup-monitoring.js');
+    
+    // Run full backup verification
+    const verification = await verifyBackupSystem();
+    
+    // Optionally trigger monitoring (which sends email if needed)
+    const triggerAlert = req.query.alert === 'true';
+    if (triggerAlert) {
+      await monitorBackups();
+    }
+    
+    res.json({
+      ok: true,
+      timestamp: new Date().toISOString(),
+      backup: {
+        status: verification.status,
+        message: verification.message,
+        databaseAccessible: verification.databaseAccessible,
+        recentActivity: verification.recentActivity,
+        hoursSinceActivity: verification.backupAge ? parseFloat(verification.backupAge.toFixed(1)) : null,
+        hasAnyData: verification.hasAnyData
+      },
+      actionRequired: verification.status === 'warning' || verification.status === 'error',
+      recommendations: verification.status === 'warning' || verification.status === 'error' ? [
+        '1. Check Render Dashboard → Postgres → Backups tab',
+        '2. Verify automatic backups are enabled',
+        '3. Check if any backups exist in the last 48 hours',
+        '4. If no backups exist, create a manual backup immediately',
+        '5. If system is just idle (no recent activity), this may be informational only'
+      ] : []
+    });
+  } catch (error) {
+    console.error('[BACKUP CHECK ERROR]', error);
+    res.status(500).json({
+      ok: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
   }
 });
 
