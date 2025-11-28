@@ -9492,7 +9492,12 @@ app.get('/api/backup-status', async (req, res) => {
       details: {
         databaseAccessible: status.databaseAccessible,
         recentActivity: status.recentActivity,
-        hoursSinceActivity: status.backupAge ? parseFloat(status.backupAge.toFixed(1)) : null
+        hoursSinceActivity: status.backupAge ? parseFloat(status.backupAge.toFixed(1)) : null,
+        daysSinceActivity: status.backupAge ? parseFloat((status.backupAge / 24).toFixed(1)) : null,
+        hasAnyData: status.hasAnyData,
+        hasActiveClients: status.hasActiveClients,
+        totalClients: status.totalClients || 0,
+        hasPendingWork: status.hasPendingWork
       },
       timestamp: new Date().toISOString()
     });
@@ -13215,7 +13220,11 @@ app.get('/api/admin/backup/check', authenticateApiKey, async (req, res) => {
         databaseAccessible: verification.databaseAccessible,
         recentActivity: verification.recentActivity,
         hoursSinceActivity: verification.backupAge ? parseFloat(verification.backupAge.toFixed(1)) : null,
-        hasAnyData: verification.hasAnyData
+        daysSinceActivity: verification.backupAge ? parseFloat((verification.backupAge / 24).toFixed(1)) : null,
+        hasAnyData: verification.hasAnyData,
+        hasActiveClients: verification.hasActiveClients,
+        totalClients: verification.totalClients || 0,
+        hasPendingWork: verification.hasPendingWork
       },
       actionRequired: verification.status === 'warning' || verification.status === 'error',
       recommendations: verification.status === 'warning' || verification.status === 'error' ? [
@@ -13223,7 +13232,7 @@ app.get('/api/admin/backup/check', authenticateApiKey, async (req, res) => {
         '2. Verify automatic backups are enabled',
         '3. Check if any backups exist in the last 48 hours',
         '4. If no backups exist, create a manual backup immediately',
-        '5. If system is just idle (no recent activity), this may be informational only'
+        verification.hasPendingWork ? '5. ⚠️ System has pending work - verify follow-up processor is running' : '5. If system is just idle (no recent activity), this may be informational only'
       ] : []
     });
   } catch (error) {
