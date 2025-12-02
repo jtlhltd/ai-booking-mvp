@@ -8783,23 +8783,50 @@ app.post('/api/leads/import', async (req, res) => {
     const inserted = [];
     for (const payload of leads.slice(0, 200)) {
       const phone = validateAndSanitizePhone(payload.phone);
-      if (!phone) continue;
+      if (!phone) {
+        console.error('[LEAD IMPORT] Skipping lead with invalid phone:', payload);
+        continue;
+      }
       const name = sanitizeInput(payload.name || phone, 120);
       const service = sanitizeInput(payload.service || 'Lead Follow-Up', 120);
       const source = sanitizeInput(payload.source || 'Import', 120);
-      const result = await query(`
-        INSERT INTO leads (client_key, name, phone, service, source, status)
-        VALUES ($1, $2, $3, $4, $5, 'new')
-        ON CONFLICT (client_key, phone)
-        DO UPDATE SET name = EXCLUDED.name,
-                      service = COALESCE(EXCLUDED.service, leads.service),
-                      source = COALESCE(EXCLUDED.source, leads.source)
-        RETURNING id, name, phone, service, source, status, notes
-      `, [clientKey, name, phone, service, source]);
-      if (result.rows?.[0]) {
-        inserted.push(result.rows[0]);
+      
+      console.error('[LEAD IMPORT] Inserting lead:', { clientKey, name, phone, service, source });
+      
+      try {
+        const result = await query(`
+          INSERT INTO leads (client_key, name, phone, service, source, status)
+          VALUES ($1, $2, $3, $4, $5, 'new')
+          ON CONFLICT (client_key, phone)
+          DO UPDATE SET name = EXCLUDED.name,
+                        service = COALESCE(EXCLUDED.service, leads.service),
+                        source = COALESCE(EXCLUDED.source, leads.source)
+          RETURNING id, name, phone, service, source, status, notes
+        `, [clientKey, name, phone, service, source]);
+        
+        if (result.rows?.[0]) {
+          inserted.push(result.rows[0]);
+          console.error('[LEAD IMPORT] Successfully inserted/updated lead:', result.rows[0].id);
+        } else {
+          console.error('[LEAD IMPORT] No row returned from INSERT for:', { name, phone });
+        }
+      } catch (insertError) {
+        console.error('[LEAD IMPORT] Error inserting lead:', insertError);
+        console.error('[LEAD IMPORT] Error details:', { 
+          message: insertError.message, 
+          code: insertError.code,
+          detail: insertError.detail,
+          constraint: insertError.constraint
+        });
+        // Continue with other leads even if one fails
       }
     }
+
+    console.error('[LEAD IMPORT] Final result:', { 
+      totalLeads: leads.length, 
+      inserted: inserted.length,
+      clientKey 
+    });
 
     return res.json({
       ok: true,
