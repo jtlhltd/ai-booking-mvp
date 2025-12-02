@@ -8335,6 +8335,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         FROM calls c
         JOIN leads l ON l.client_key = c.client_key AND l.phone = c.lead_phone
         WHERE c.client_key = $1
+          AND c.created_at >= l.created_at
+          AND c.created_at <= l.created_at + INTERVAL '24 hours'
         ORDER BY c.created_at DESC
         LIMIT 50
       `, [clientKey]),
@@ -8492,8 +8494,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       service: row.service || 'Consultation'
     }));
 
-    // Investment = monthly service fee (default £35, or from client config)
-    const monthlyServiceFee = client?.monthlyFee || client?.pricing?.monthlyFee || 35;
+    // Investment = monthly service fee (default £500, or from client config)
+    const monthlyServiceFee = client?.monthlyFee || client?.pricing?.monthlyFee || 500;
     const daysInPeriod = 30; // 30-day period
     const estimatedCost = Number((monthlyServiceFee * (daysInPeriod / 30)).toFixed(2)); // Pro-rated for period
     
@@ -9161,6 +9163,65 @@ app.get('/api/integration-health/:clientKey', async (req, res) => {
   }
 });
 
+// General call details endpoint
+app.get('/api/calls/:callId', async (req, res) => {
+  try {
+    const { callId } = req.params;
+    const { clientKey } = req.query;
+    
+    if (!clientKey) {
+      return res.status(400).json({ ok: false, error: 'clientKey required' });
+    }
+    
+    // Try to find call by call_id first (VAPI call ID), then by database id, then by lead_phone
+    const result = await query(`
+      SELECT call_id, id, lead_phone, status, outcome, duration, cost, transcript, 
+             summary, created_at, metadata
+      FROM calls
+      WHERE client_key = $2
+        AND (
+          call_id = $1 
+          OR id::text = $1 
+          OR lead_phone = $1
+        )
+      ORDER BY 
+        CASE 
+          WHEN call_id = $1 THEN 1
+          WHEN id::text = $1 THEN 2
+          ELSE 3
+        END,
+        created_at DESC
+      LIMIT 1
+    `, [callId, clientKey]);
+    
+    if (!result.rows || !result.rows.length) {
+      return res.status(404).json({ ok: false, error: 'Call not found' });
+    }
+    
+    const row = result.rows[0];
+    
+    res.json({
+      ok: true,
+      call: {
+        callId: row.call_id,
+        id: row.id,
+        leadPhone: row.lead_phone,
+        status: row.status,
+        outcome: row.outcome,
+        duration: row.duration,
+        cost: row.cost,
+        transcript: row.transcript,
+        summary: row.summary,
+        createdAt: row.created_at,
+        metadata: row.metadata
+      }
+    });
+  } catch (error) {
+    console.error('[CALL DETAILS ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 app.get('/api/calls/:callId/transcript', async (req, res) => {
   try {
     const { callId } = req.params;
@@ -9375,7 +9436,7 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
 
     const allCalls = await query(`
       SELECT 
-        AVG(duration)::INTEGER AS avg_duration,
+        COALESCE(AVG(CASE WHEN duration > 0 THEN duration ELSE NULL END), 0)::INTEGER AS avg_duration,
         COUNT(*) AS total_calls,
         COUNT(CASE WHEN outcome = 'booked' THEN 1 END) AS bookings
       FROM calls
