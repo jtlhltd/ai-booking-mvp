@@ -8696,24 +8696,28 @@ app.post('/api/leads/import-test', async (req, res) => {
 });
 
 app.post('/api/leads/import', async (req, res) => {
+  // CRITICAL: Log immediately to ensure we see this
+  console.error('[LEAD IMPORT API] ========== ENDPOINT HIT ==========');
+  console.error('[LEAD IMPORT API] Timestamp:', new Date().toISOString());
+  
   try {
     // Log raw request details
-    console.log('[LEAD IMPORT API] ========== REQUEST RECEIVED ==========');
-    console.log('[LEAD IMPORT API] Method:', req.method);
-    console.log('[LEAD IMPORT API] URL:', req.url);
-    console.log('[LEAD IMPORT API] Content-Type:', req.headers['content-type']);
-    console.log('[LEAD IMPORT API] Content-Length:', req.headers['content-length']);
-    console.log('[LEAD IMPORT API] Has body:', !!req.body);
-    console.log('[LEAD IMPORT API] Body type:', typeof req.body);
-    console.log('[LEAD IMPORT API] Body keys:', req.body ? Object.keys(req.body) : 'no body');
-    console.log('[LEAD IMPORT API] Full body:', JSON.stringify(req.body, null, 2));
+    console.error('[LEAD IMPORT API] ========== REQUEST RECEIVED ==========');
+    console.error('[LEAD IMPORT API] Method:', req.method);
+    console.error('[LEAD IMPORT API] URL:', req.url);
+    console.error('[LEAD IMPORT API] Content-Type:', req.headers['content-type']);
+    console.error('[LEAD IMPORT API] Content-Length:', req.headers['content-length']);
+    console.error('[LEAD IMPORT API] Has body:', !!req.body);
+    console.error('[LEAD IMPORT API] Body type:', typeof req.body);
+    console.error('[LEAD IMPORT API] Body keys:', req.body ? Object.keys(req.body) : 'no body');
+    console.error('[LEAD IMPORT API] Full body:', JSON.stringify(req.body, null, 2));
     
     // Try to extract with case-insensitive matching
     const body = req.body || {};
     const clientKey = body.clientKey || body.clientkey || body.client_key || body.ClientKey;
     const leads = body.leads || body.Leads || body.leadList || [];
     
-    console.log('[LEAD IMPORT API] Extracted values:', {
+    console.error('[LEAD IMPORT API] Extracted values:', {
       clientKey: clientKey,
       clientKeyType: typeof clientKey,
       leadsType: Array.isArray(leads) ? 'array' : typeof leads,
