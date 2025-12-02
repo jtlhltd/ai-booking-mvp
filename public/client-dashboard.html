@@ -4588,20 +4588,66 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             if (!text) return [];
             const lines = text.trim().split(/\r?\n/);
             if (lines.length < 2) return [];
-            const headers = lines.shift().split(',').map(h => h.trim().toLowerCase());
+            
+            // Parse CSV line handling quoted values
+            function parseCSVLine(line) {
+                const result = [];
+                let current = '';
+                let inQuotes = false;
+                
+                for (let i = 0; i < line.length; i++) {
+                    const char = line[i];
+                    
+                    if (char === '"') {
+                        inQuotes = !inQuotes;
+                    } else if (char === ',' && !inQuotes) {
+                        result.push(current.trim());
+                        current = '';
+                    } else {
+                        current += char;
+                    }
+                }
+                
+                result.push(current.trim());
+                return result;
+            }
+            
+            const headers = parseCSVLine(lines.shift()).map(h => h.trim().toLowerCase());
+            
+            // Helper function to find column index by multiple possible names
+            function findColumn(possibleNames) {
+                for (const name of possibleNames) {
+                    const index = headers.findIndex(h => h.includes(name.toLowerCase()));
+                    if (index !== -1) return index;
+                }
+                return -1;
+            }
+            
+            // Find column indices using flexible matching
+            const nameIdx = findColumn(['name', 'contact', 'full name', 'contact name', 'lead name', 'decision maker', 'decisionmaker']);
+            const phoneIdx = findColumn(['phone', 'mobile', 'telephone', 'tel', 'contact number', 'phone number', 'number']);
+            const serviceIdx = findColumn(['service', 'interest', 'product', 'inquiry', 'service type']);
+            const sourceIdx = findColumn(['source', 'lead source', 'campaign', 'utm_source', 'origin']);
+            
+            // Phone is required, others are optional
+            if (phoneIdx === -1) {
+                console.warn('No phone column found. Looking for: phone, mobile, telephone, tel, contact number');
+                return [];
+            }
+            
             return lines
                 .map(line => {
                     if (!line.trim()) return null;
-                    const cells = line.split(',').map(cell => cell.trim());
-                    const row = {};
-                    headers.forEach((header, idx) => {
-                        row[header] = cells[idx] || '';
-                    });
+                    const cells = parseCSVLine(line);
+                    
+                    const phone = cells[phoneIdx] || '';
+                    if (!phone) return null; // Skip rows without phone
+                    
                     return {
-                        name: row.name,
-                        phone: row.phone,
-                        service: row.service,
-                        source: row.source
+                        name: nameIdx >= 0 ? (cells[nameIdx] || '') : '',
+                        phone: phone,
+                        service: serviceIdx >= 0 ? (cells[serviceIdx] || '') : '',
+                        source: sourceIdx >= 0 ? (cells[sourceIdx] || '') : ''
                     };
                 })
                 .filter(lead => lead && lead.phone);
