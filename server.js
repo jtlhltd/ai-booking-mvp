@@ -19342,15 +19342,15 @@ async function processVapiCallFromQueue(call) {
       client
     });
     
-    if (!vapiResult || vapiResult.error) {
-      throw new Error(vapiResult?.error || 'VAPI call failed');
+    if (!vapiResult || !vapiResult.ok || vapiResult.error) {
+      throw new Error(vapiResult?.error || vapiResult?.details || 'VAPI call failed');
     }
     
     console.log('[QUEUE CALL SUCCESS]', {
       queueId: call.id,
       clientKey,
       leadPhone,
-      callId: vapiResult.id,
+      callId: vapiResult.id || 'pending',
       priority: call.priority
     });
     
