@@ -8267,7 +8267,9 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
                COUNT(*) AS total,
                COUNT(DISTINCT lead_phone) AS unique_leads_called,
                COUNT(*) FILTER (WHERE created_at >= ${sqlHoursAgo(24)}) AS last24,
-               COUNT(*) FILTER (WHERE outcome = 'booked') AS booked
+               COUNT(*) FILTER (WHERE outcome = 'booked') AS booked,
+               COUNT(*) FILTER (WHERE outcome NOT IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined') AND outcome IS NOT NULL) AS answered,
+               COUNT(*) FILTER (WHERE outcome IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined')) AS not_answered
         FROM calls
         WHERE client_key = $1
       `, [clientKey]),
@@ -8374,6 +8376,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     const last24hLeads = parseInt(leadCounts.rows?.[0]?.last24 || 0, 10);
     const totalCalls = parseInt(callCounts.rows?.[0]?.total || 0, 10); // Total call attempts (for internal tracking)
     const uniqueLeadsCalled = parseInt(callCounts.rows?.[0]?.unique_leads_called || 0, 10); // Unique leads actually called
+    const callsAnswered = parseInt(callCounts.rows?.[0]?.answered || 0, 10); // Calls that were answered
+    const callsNotAnswered = parseInt(callCounts.rows?.[0]?.not_answered || 0, 10); // Calls that weren't answered
     const bookingsFromCalls = parseInt(callCounts.rows?.[0]?.booked || 0, 10);
     
     // Use unique leads called for display (not total call attempts)
@@ -8525,6 +8529,9 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         totalCalls: displayCalls, // Show unique leads called, not total attempts
         totalCallAttempts: totalCalls, // Keep total attempts for internal use
         uniqueLeadsCalled: displayCalls,
+        callsAnswered: callsAnswered, // Calls that were actually answered
+        callsNotAnswered: callsNotAnswered, // Calls that weren't answered
+        answerRate: uniqueLeadsCalled > 0 ? Math.round((callsAnswered / uniqueLeadsCalled) * 100) : 0, // Answer rate percentage
         last24hLeads,
         conversionRate,
         successRate,

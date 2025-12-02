@@ -2950,7 +2950,18 @@
             const firstResponse = data.firstResponse || '—';
 
             document.getElementById('statusTotalLeads').textContent = totalLeads;
+            // Show calls with answered/not answered breakdown
+            const callsAnswered = data.metrics?.callsAnswered ?? 0;
+            const callsNotAnswered = data.metrics?.callsNotAnswered ?? 0;
+            const answerRate = data.metrics?.answerRate ?? 0;
+            
             document.getElementById('statusTotalCalls').textContent = totalCalls;
+            // Update hint to show answered vs not answered
+            const callsHint = callsAnswered > 0 || callsNotAnswered > 0
+                ? `${callsAnswered} answered, ${callsNotAnswered} not answered (${answerRate}% answer rate)`
+                : `${totalCalls} leads called`;
+            document.getElementById('statusHintCalls').textContent = callsHint;
+            
             document.getElementById('statusConversionRate').textContent = conversion;
             document.getElementById('statusFirstResponse').textContent = firstResponse;
 
