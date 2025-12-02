@@ -3260,9 +3260,11 @@
             const container = document.getElementById('lead-journey');
             if (!container) return;
             const totalLeads = data.totalLeads || 0;
-            const contacted = data.totalCalls || 0;
-            // Engaged = leads that were contacted but not yet booked (use actual data if available)
-            const engaged = data.engagedLeads || Math.max(0, contacted - (data.bookingsThisWeek || 0));
+            const contacted = data.totalCalls || 0; // Unique leads we've attempted to call
+            // Engaged = leads that actually answered the call (had a conversation)
+            // Use callsAnswered from metrics, or fallback to contacted minus not answered
+            const callsAnswered = data.metrics?.callsAnswered || 0;
+            const engaged = callsAnswered > 0 ? callsAnswered : (data.engagedLeads || 0);
             const booked = data.bookingsThisWeek || 0;
 
             const stages = [
