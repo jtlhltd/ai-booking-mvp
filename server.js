@@ -9233,56 +9233,93 @@ app.get('/api/calls/:callId/transcript', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'clientKey required' });
     }
     
-    console.error('[TRANSCRIPT REQUEST]', { callId, clientKey, callIdType: typeof callId });
+    if (!callId) {
+      return res.status(400).json({ ok: false, error: 'callId required' });
+    }
+    
+    console.error('[TRANSCRIPT REQUEST]', { callId, clientKey, callIdType: typeof callId, callIdLength: callId?.length });
     
     // Try to find call by call_id first (VAPI call ID), then by database id, then by lead_phone
     // callId might be a VAPI call_id (UUID) or database id (number)
-    let result;
+    let result = { rows: [] };
+    
     try {
-      // First try matching by call_id (VAPI UUID)
-      result = await query(`
-        SELECT transcript, summary, duration, created_at, call_id, id, lead_phone
-        FROM calls
-        WHERE client_key = $2
-          AND call_id = $1
-        ORDER BY created_at DESC
-        LIMIT 1
-      `, [callId, clientKey]);
-      
-      // If not found, try by database id (numeric)
-      if (!result.rows || result.rows.length === 0) {
-        const numericId = parseInt(callId, 10);
-        if (!isNaN(numericId)) {
+      // First try matching by call_id (VAPI UUID) - this is the most common case
+      if (callId && typeof callId === 'string' && callId.length > 10) {
+        try {
           result = await query(`
             SELECT transcript, summary, duration, created_at, call_id, id, lead_phone
             FROM calls
             WHERE client_key = $2
-              AND id = $1
+              AND call_id = $1
             ORDER BY created_at DESC
             LIMIT 1
-          `, [numericId, clientKey]);
+          `, [callId.trim(), clientKey]);
+          
+          console.error('[TRANSCRIPT QUERY 1]', { 
+            method: 'call_id', 
+            found: result.rows?.length || 0,
+            callId: callId.trim()
+          });
+        } catch (err) {
+          console.error('[TRANSCRIPT QUERY 1 ERROR]', err.message);
         }
       }
       
-      // If still not found, try by lead_phone as last resort
+      // If not found, try by database id (numeric)
+      if ((!result.rows || result.rows.length === 0) && callId) {
+        const numericId = parseInt(callId, 10);
+        if (!isNaN(numericId) && numericId > 0) {
+          try {
+            result = await query(`
+              SELECT transcript, summary, duration, created_at, call_id, id, lead_phone
+              FROM calls
+              WHERE client_key = $2
+                AND id = $1
+              ORDER BY created_at DESC
+              LIMIT 1
+            `, [numericId, clientKey]);
+            
+            console.error('[TRANSCRIPT QUERY 2]', { 
+              method: 'database_id', 
+              found: result.rows?.length || 0,
+              numericId
+            });
+          } catch (err) {
+            console.error('[TRANSCRIPT QUERY 2 ERROR]', err.message);
+          }
+        }
+      }
+      
+      // If still not found, try by lead_phone as last resort (unlikely but possible)
       if (!result.rows || result.rows.length === 0) {
-        result = await query(`
-          SELECT transcript, summary, duration, created_at, call_id, id, lead_phone
-          FROM calls
-          WHERE client_key = $2
-            AND lead_phone = $1
-          ORDER BY created_at DESC
-          LIMIT 1
-        `, [callId, clientKey]);
+        try {
+          result = await query(`
+            SELECT transcript, summary, duration, created_at, call_id, id, lead_phone
+            FROM calls
+            WHERE client_key = $2
+              AND lead_phone = $1
+            ORDER BY created_at DESC
+            LIMIT 1
+          `, [callId, clientKey]);
+          
+          console.error('[TRANSCRIPT QUERY 3]', { 
+            method: 'lead_phone', 
+            found: result.rows?.length || 0
+          });
+        } catch (err) {
+          console.error('[TRANSCRIPT QUERY 3 ERROR]', err.message);
+        }
       }
     } catch (queryError) {
       console.error('[TRANSCRIPT QUERY ERROR]', queryError);
-      throw queryError;
+      console.error('[TRANSCRIPT QUERY ERROR STACK]', queryError.stack);
+      return res.status(500).json({ ok: false, error: `Database query failed: ${queryError.message}` });
     }
     
-    if (!result.rows || !result.rows.length) {
+    if (!result || !result.rows || result.rows.length === 0) {
       console.error('[TRANSCRIPT NOT FOUND]', { callId, clientKey, searchedBy: 'all methods' });
-      return res.status(404).json({ ok: false, error: 'Transcript not found' });
+      return res.status(404).json({ ok: false, error: 'Call not found in database' });
     }
     
     const row = result.rows[0];
@@ -9292,7 +9329,8 @@ app.get('/api/calls/:callId/transcript', async (req, res) => {
       callId: row.call_id, 
       dbId: row.id, 
       hasTranscript: !!transcript,
-      transcriptLength: transcript?.length || 0
+      transcriptLength: transcript?.length || 0,
+      hasSummary: !!row.summary
     });
     
     if (!transcript) {
@@ -9300,7 +9338,9 @@ app.get('/api/calls/:callId/transcript', async (req, res) => {
         ok: true,
         transcript: 'Transcript not available for this call.',
         duration: row.duration,
-        timestamp: row.created_at
+        timestamp: row.created_at,
+        callId: row.call_id,
+        dbId: row.id
       });
     }
     
@@ -9313,7 +9353,7 @@ app.get('/api/calls/:callId/transcript', async (req, res) => {
   } catch (error) {
     console.error('[TRANSCRIPT ERROR]', error);
     console.error('[TRANSCRIPT ERROR STACK]', error.stack);
-    res.status(500).json({ ok: false, error: error.message });
+    res.status(500).json({ ok: false, error: error.message || 'Internal server error' });
   }
 });
 
