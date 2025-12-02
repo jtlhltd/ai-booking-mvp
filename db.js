@@ -180,6 +180,20 @@ async function initPostgres() {
     );
     CREATE INDEX IF NOT EXISTS leads_tenant_idx ON leads(client_key);
     CREATE INDEX IF NOT EXISTS leads_phone_idx ON leads(client_key, phone);
+    
+    -- Add unique constraint on (client_key, phone) for ON CONFLICT support
+    -- This allows upsert operations to prevent duplicate leads per client
+    DO $$ 
+    BEGIN 
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint 
+        WHERE conname = 'leads_client_key_phone_unique'
+      ) THEN
+        ALTER TABLE leads ADD CONSTRAINT leads_client_key_phone_unique 
+        UNIQUE (client_key, phone);
+        RAISE NOTICE 'Added unique constraint: leads_client_key_phone_unique';
+      END IF;
+    END $$;
 
     CREATE TABLE IF NOT EXISTS appointments (
       id BIGSERIAL PRIMARY KEY,
