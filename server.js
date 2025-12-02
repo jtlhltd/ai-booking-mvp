@@ -9247,6 +9247,7 @@ app.get('/api/calls/:callId/transcript', async (req, res) => {
       // First try matching by call_id (VAPI UUID) - this is the most common case
       if (callId && typeof callId === 'string' && callId.length > 10) {
         try {
+          // Try exact match first
           result = await query(`
             SELECT transcript, summary, duration, created_at, call_id, id, lead_phone
             FROM calls
@@ -9255,6 +9256,18 @@ app.get('/api/calls/:callId/transcript', async (req, res) => {
             ORDER BY created_at DESC
             LIMIT 1
           `, [callId.trim(), clientKey]);
+          
+          // If not found, try case-insensitive match (some databases might store it differently)
+          if (!result.rows || result.rows.length === 0) {
+            result = await query(`
+              SELECT transcript, summary, duration, created_at, call_id, id, lead_phone
+              FROM calls
+              WHERE client_key = $2
+                AND LOWER(call_id) = LOWER($1)
+              ORDER BY created_at DESC
+              LIMIT 1
+            `, [callId.trim(), clientKey]);
+          }
           
           console.error('[TRANSCRIPT QUERY 1]', { 
             method: 'call_id', 
@@ -9318,7 +9331,31 @@ app.get('/api/calls/:callId/transcript', async (req, res) => {
     }
     
     if (!result || !result.rows || result.rows.length === 0) {
-      console.error('[TRANSCRIPT NOT FOUND]', { callId, clientKey, searchedBy: 'all methods' });
+      // Debug: Check what calls exist for this client
+      try {
+        const debugResult = await query(`
+          SELECT call_id, id, lead_phone, status, created_at
+          FROM calls
+          WHERE client_key = $1
+          ORDER BY created_at DESC
+          LIMIT 5
+        `, [clientKey]);
+        
+        console.error('[TRANSCRIPT NOT FOUND - DEBUG]', { 
+          callId, 
+          clientKey, 
+          searchedBy: 'all methods',
+          existingCalls: debugResult.rows?.map(r => ({
+            call_id: r.call_id,
+            id: r.id,
+            lead_phone: r.lead_phone,
+            status: r.status
+          })) || []
+        });
+      } catch (debugError) {
+        console.error('[TRANSCRIPT DEBUG ERROR]', debugError);
+      }
+      
       return res.status(404).json({ ok: false, error: 'Call not found in database' });
     }
     
