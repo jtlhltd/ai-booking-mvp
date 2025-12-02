@@ -4747,26 +4747,35 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 }
                 
                 const requestBodyString = JSON.stringify(requestBody);
-                console.log('[LEAD IMPORT] Sending request:', { 
-                    clientKey: requestBody.clientKey, 
-                    leadCount: requestBody.leads.length,
-                    baseUrl: BASE_URL,
-                    endpoint: `${BASE_URL}/api/leads/import`,
-                    requestBodySize: requestBodyString.length,
-                    firstLead: requestBody.leads[0]
-                });
+                console.log('[LEAD IMPORT] ========== REQUEST DETAILS ==========');
+                console.log('[LEAD IMPORT] Full request body:', requestBody);
+                console.log('[LEAD IMPORT] Stringified body:', requestBodyString);
+                console.log('[LEAD IMPORT] Body length:', requestBodyString.length);
+                console.log('[LEAD IMPORT] Client key:', requestBody.clientKey);
+                console.log('[LEAD IMPORT] Leads count:', requestBody.leads.length);
+                console.log('[LEAD IMPORT] First lead:', requestBody.leads[0]);
+                console.log('[LEAD IMPORT] Endpoint:', `${BASE_URL}/api/leads/import`);
+                console.log('[LEAD IMPORT] Base URL:', BASE_URL);
                 
                 setImportStatus('Uploading leads...');
                 showToast('Uploading', 'Importing leads...', 'info');
                 
-                const response = await fetch(`${BASE_URL}/api/leads/import`, {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    },
-                    body: requestBodyString
-                });
+                try {
+                    const response = await fetch(`${BASE_URL}/api/leads/import`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body: requestBodyString
+                    });
+                    
+                    console.log('[LEAD IMPORT] Response received:', {
+                        status: response.status,
+                        statusText: response.statusText,
+                        ok: response.ok,
+                        headers: Object.fromEntries(response.headers.entries())
+                    });
                 
                 if (!response.ok) {
                     const errorText = await response.text();

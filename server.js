@@ -8675,6 +8675,26 @@ app.post('/api/leads/:leadId/escalate', async (req, res) => {
   }
 });
 
+// Test endpoint to debug request body issues
+app.post('/api/leads/import-test', async (req, res) => {
+  console.log('[TEST ENDPOINT] Request received');
+  console.log('[TEST ENDPOINT] Headers:', req.headers);
+  console.log('[TEST ENDPOINT] Body:', req.body);
+  console.log('[TEST ENDPOINT] Body type:', typeof req.body);
+  console.log('[TEST ENDPOINT] Body keys:', req.body ? Object.keys(req.body) : 'no body');
+  res.json({ 
+    ok: true, 
+    received: true,
+    body: req.body,
+    bodyType: typeof req.body,
+    bodyKeys: req.body ? Object.keys(req.body) : [],
+    headers: {
+      'content-type': req.headers['content-type'],
+      'content-length': req.headers['content-length']
+    }
+  });
+});
+
 app.post('/api/leads/import', async (req, res) => {
   try {
     // Log raw request details
