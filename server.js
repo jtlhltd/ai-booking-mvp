@@ -19424,6 +19424,7 @@ async function queueNewLeadsForCalling() {
       
       try {
         // Get new leads that haven't been called yet
+        // Check both call_queue (pending calls) AND calls table (completed calls)
         const newLeads = await query(`
           SELECT l.id, l.name, l.phone, l.service, l.source, l.status, l.created_at,
                  (SELECT COUNT(*) FROM call_queue cq 
@@ -19439,6 +19440,12 @@ async function queueNewLeadsForCalling() {
               WHERE cq.client_key = l.client_key 
               AND cq.lead_phone = l.phone 
               AND cq.status = 'pending'
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM calls c
+              WHERE c.client_key = l.client_key
+              AND c.lead_phone = l.phone
+              AND c.status IN ('initiated', 'in_progress', 'completed')
             )
           ORDER BY l.created_at ASC
           LIMIT 20
