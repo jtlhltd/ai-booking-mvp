@@ -4632,25 +4632,39 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             // Phone is required, others are optional
             if (phoneIdx === -1) {
                 console.warn('No phone column found. Looking for: phone, mobile, telephone, tel, contact number');
+                console.warn('Available headers:', headers);
                 return [];
             }
             
-            return lines
-                .map(line => {
+            console.log('[CSV PARSE] Column mapping:', {
+                name: nameIdx >= 0 ? headers[nameIdx] : 'not found',
+                phone: headers[phoneIdx],
+                service: serviceIdx >= 0 ? headers[serviceIdx] : 'not found',
+                source: sourceIdx >= 0 ? headers[sourceIdx] : 'not found'
+            });
+            
+            const parsedLeads = lines
+                .map((line, lineNum) => {
                     if (!line.trim()) return null;
                     const cells = parseCSVLine(line);
                     
                     const phone = cells[phoneIdx] || '';
-                    if (!phone) return null; // Skip rows without phone
+                    if (!phone || !phone.trim()) {
+                        console.warn(`[CSV PARSE] Row ${lineNum + 2}: No phone number found, skipping`);
+                        return null; // Skip rows without phone
+                    }
                     
                     return {
-                        name: nameIdx >= 0 ? (cells[nameIdx] || '') : '',
-                        phone: phone,
-                        service: serviceIdx >= 0 ? (cells[serviceIdx] || '') : '',
-                        source: sourceIdx >= 0 ? (cells[sourceIdx] || '') : ''
+                        name: nameIdx >= 0 ? (cells[nameIdx] || '').trim() : '',
+                        phone: phone.trim(),
+                        service: serviceIdx >= 0 ? (cells[serviceIdx] || '').trim() : '',
+                        source: sourceIdx >= 0 ? (cells[sourceIdx] || '').trim() : ''
                     };
                 })
-                .filter(lead => lead && lead.phone);
+                .filter(lead => lead && lead.phone && lead.phone.trim());
+            
+            console.log(`[CSV PARSE] Parsed ${parsedLeads.length} valid leads from ${lines.length} rows`);
+            return parsedLeads;
         }
 
         async function submitLeadImport(leads = []) {
@@ -4690,22 +4704,39 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     throw new Error('Client key is required. Please access the dashboard with a valid client key in the URL (?client=your-client-key)');
                 }
                 
-                setImportStatus('Uploading leads...');
-                showToast('Uploading', 'Importing leads...', 'info');
+                // Map and filter leads
+                const mappedLeads = leads.map(lead => ({
+                    name: lead.name || '',
+                    phone: lead.phone || '',
+                    service: lead.service || 'Lead Follow-Up',
+                    source: lead.source || 'Import'
+                })).filter(lead => lead.phone && lead.phone.trim()); // Only send leads with valid phone numbers
+                
+                if (!mappedLeads || mappedLeads.length === 0) {
+                    throw new Error('No valid leads found. Ensure your CSV has a "phone" column with phone numbers.');
+                }
                 
                 const requestBody = { 
                     clientKey: currentClient, 
-                    leads: leads.map(lead => ({
-                        name: lead.name || '',
-                        phone: lead.phone || '',
-                        service: lead.service || 'Lead Follow-Up',
-                        source: lead.source || 'Import'
-                    })).filter(lead => lead.phone) // Only send leads with phone numbers
+                    leads: mappedLeads
                 };
                 
-                if (!requestBody.leads || requestBody.leads.length === 0) {
-                    throw new Error('No valid leads found. Ensure your CSV has a "phone" column with phone numbers.');
+                // Validate request body before sending
+                if (!requestBody.clientKey || !requestBody.clientKey.trim()) {
+                    throw new Error('Client key is missing. Please refresh the page and try again.');
                 }
+                
+                if (!Array.isArray(requestBody.leads) || requestBody.leads.length === 0) {
+                    throw new Error('No valid leads to import. Please check your CSV file.');
+                }
+                
+                console.log('[LEAD IMPORT] Sending request:', { 
+                    clientKey: requestBody.clientKey, 
+                    leadCount: requestBody.leads.length 
+                });
+                
+                setImportStatus('Uploading leads...');
+                showToast('Uploading', 'Importing leads...', 'info');
                 
                 const response = await fetch(`${BASE_URL}/api/leads/import`, {
                     method: 'POST',
@@ -4715,11 +4746,17 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 
                 if (!response.ok) {
                     const errorText = await response.text();
+                    console.error('[LEAD IMPORT] Server error:', {
+                        status: response.status,
+                        statusText: response.statusText,
+                        errorText: errorText,
+                        requestBody: { clientKey: requestBody.clientKey, leadCount: requestBody.leads.length }
+                    });
                     let errorData;
                     try {
                         errorData = JSON.parse(errorText);
                     } catch {
-                        throw new Error(`Import failed: ${response.status} ${response.statusText}`);
+                        throw new Error(`Import failed: ${response.status} ${response.statusText}. ${errorText}`);
                     }
                     throw new Error(errorData.error || errorData.message || 'Import failed');
                 }
