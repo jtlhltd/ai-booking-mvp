@@ -8695,17 +8695,6 @@ app.post('/api/leads/import-test', async (req, res) => {
   });
 });
 
-// Middleware to log raw body for this specific route
-app.post('/api/leads/import', express.json({ limit: '10mb' }), (req, res, next) => {
-  console.error('[LEAD IMPORT MIDDLEWARE] Raw body check:', {
-    hasBody: !!req.body,
-    bodyType: typeof req.body,
-    bodyKeys: req.body ? Object.keys(req.body) : [],
-    contentType: req.headers['content-type']
-  });
-  next();
-});
-
 app.post('/api/leads/import', async (req, res) => {
   // CRITICAL: Log immediately to ensure we see this
   console.error('[LEAD IMPORT API] ========== ENDPOINT HIT ==========');
@@ -8722,18 +8711,40 @@ app.post('/api/leads/import', async (req, res) => {
     console.error('[LEAD IMPORT API] Body type:', typeof req.body);
     console.error('[LEAD IMPORT API] Body keys:', req.body ? Object.keys(req.body) : 'no body');
     console.error('[LEAD IMPORT API] Full body:', JSON.stringify(req.body, null, 2));
+    console.error('[LEAD IMPORT API] body.leads direct:', req.body?.leads);
+    console.error('[LEAD IMPORT API] body.leads type:', typeof req.body?.leads);
+    console.error('[LEAD IMPORT API] body.leads isArray:', Array.isArray(req.body?.leads));
+    console.error('[LEAD IMPORT API] body.leads constructor:', req.body?.leads?.constructor?.name);
+    if (req.body?.leads && typeof req.body.leads === 'object' && !Array.isArray(req.body.leads)) {
+      console.error('[LEAD IMPORT API] body.leads keys (if object):', Object.keys(req.body.leads));
+      console.error('[LEAD IMPORT API] body.leads stringified:', JSON.stringify(req.body.leads).substring(0, 500));
+    }
     
     // Try to extract with case-insensitive matching
     const body = req.body || {};
     const clientKey = body.clientKey || body.clientkey || body.client_key || body.ClientKey;
-    const leads = body.leads || body.Leads || body.leadList || [];
+    let leads = body.leads || body.Leads || body.leadList || [];
+    
+    // Handle case where leads might be a stringified JSON string
+    if (typeof leads === 'string') {
+      console.error('[LEAD IMPORT API] leads is a string, attempting to parse:', leads.substring(0, 200));
+      try {
+        leads = JSON.parse(leads);
+        console.error('[LEAD IMPORT API] Successfully parsed leads from string');
+      } catch (parseError) {
+        console.error('[LEAD IMPORT API] Failed to parse leads string:', parseError);
+        leads = [];
+      }
+    }
     
     console.error('[LEAD IMPORT API] Extracted values:', {
       clientKey: clientKey,
       clientKeyType: typeof clientKey,
       leadsType: Array.isArray(leads) ? 'array' : typeof leads,
       leadsLength: Array.isArray(leads) ? leads.length : 'not array',
-      leadsPreview: Array.isArray(leads) && leads.length > 0 ? leads[0] : 'no leads'
+      leadsValue: typeof leads === 'string' ? leads.substring(0, 200) : (Array.isArray(leads) ? `Array with ${leads.length} items` : JSON.stringify(leads).substring(0, 200)),
+      leadsPreview: Array.isArray(leads) && leads.length > 0 ? leads[0] : 'no leads',
+      leadsConstructor: leads?.constructor?.name
     });
     
     if (!clientKey || !Array.isArray(leads) || leads.length === 0) {
@@ -8743,6 +8754,9 @@ app.post('/api/leads/import', async (req, res) => {
       console.error('[LEAD IMPORT API] clientKeyType:', typeof clientKey);
       console.error('[LEAD IMPORT API] hasLeads:', !!leads);
       console.error('[LEAD IMPORT API] leadsIsArray:', Array.isArray(leads));
+      console.error('[LEAD IMPORT API] leadsType:', typeof leads);
+      console.error('[LEAD IMPORT API] leadsValue:', typeof leads === 'string' ? leads.substring(0, 500) : JSON.stringify(leads).substring(0, 500));
+      console.error('[LEAD IMPORT API] leadsConstructor:', leads?.constructor?.name);
       console.error('[LEAD IMPORT API] leadsLength:', Array.isArray(leads) ? leads.length : 'not array');
       console.error('[LEAD IMPORT API] Full request body:', JSON.stringify(body, null, 2));
       console.error('[LEAD IMPORT API] All body keys:', Object.keys(body));
