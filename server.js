@@ -8677,8 +8677,28 @@ app.post('/api/leads/:leadId/escalate', async (req, res) => {
 
 app.post('/api/leads/import', async (req, res) => {
   try {
+    console.log('[LEAD IMPORT API] Request received:', {
+      hasBody: !!req.body,
+      bodyType: typeof req.body,
+      bodyKeys: req.body ? Object.keys(req.body) : [],
+      contentType: req.headers['content-type'],
+      clientKey: req.body?.clientKey,
+      leadsType: Array.isArray(req.body?.leads) ? 'array' : typeof req.body?.leads,
+      leadsLength: Array.isArray(req.body?.leads) ? req.body.leads.length : 'not array',
+      rawBodyPreview: JSON.stringify(req.body).substring(0, 200)
+    });
+    
     const { clientKey, leads } = req.body || {};
+    
     if (!clientKey || !Array.isArray(leads) || leads.length === 0) {
+      console.error('[LEAD IMPORT API] Validation failed:', {
+        hasClientKey: !!clientKey,
+        clientKeyValue: clientKey,
+        hasLeads: !!leads,
+        leadsIsArray: Array.isArray(leads),
+        leadsLength: Array.isArray(leads) ? leads.length : 'not array',
+        body: req.body
+      });
       return res.status(400).json({ ok: false, error: 'Missing clientKey or leads payload' });
     }
     const inserted = [];

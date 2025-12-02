@@ -4668,7 +4668,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         }
 
         async function submitLeadImport(leads = []) {
+            console.log('[LEAD IMPORT] Starting import with leads:', leads.length);
+            
             if (!Array.isArray(leads) || !leads.length) {
+                console.warn('[LEAD IMPORT] No leads provided');
                 setImportStatus('No valid rows found in CSV', 'error');
                 return;
             }
@@ -4676,7 +4679,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             // Ensure currentClient is set
             if (!currentClient) {
                 currentClient = getClientFromURL();
+                console.log('[LEAD IMPORT] Retrieved client from URL:', currentClient);
             }
+            
+            console.log('[LEAD IMPORT] Current client:', currentClient, 'URL:', window.location.href);
             
             if (currentClient === DEMO_CLIENT_KEY) {
                 const demoLeads = leads.map((lead, idx) => ({
@@ -4723,16 +4729,31 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 
                 // Validate request body before sending
                 if (!requestBody.clientKey || !requestBody.clientKey.trim()) {
-                    throw new Error('Client key is missing. Please refresh the page and try again.');
+                    console.error('[LEAD IMPORT] Client key validation failed:', {
+                        currentClient,
+                        requestBodyClientKey: requestBody.clientKey,
+                        url: window.location.href,
+                        urlParams: new URLSearchParams(window.location.search).get('client')
+                    });
+                    throw new Error('Client key is missing. Please access the dashboard with a client key in the URL (?client=your-client-key)');
                 }
                 
                 if (!Array.isArray(requestBody.leads) || requestBody.leads.length === 0) {
+                    console.error('[LEAD IMPORT] Leads validation failed:', {
+                        mappedLeadsLength: mappedLeads.length,
+                        requestBodyLeadsLength: requestBody.leads?.length
+                    });
                     throw new Error('No valid leads to import. Please check your CSV file.');
                 }
                 
+                const requestBodyString = JSON.stringify(requestBody);
                 console.log('[LEAD IMPORT] Sending request:', { 
                     clientKey: requestBody.clientKey, 
-                    leadCount: requestBody.leads.length 
+                    leadCount: requestBody.leads.length,
+                    baseUrl: BASE_URL,
+                    endpoint: `${BASE_URL}/api/leads/import`,
+                    requestBodySize: requestBodyString.length,
+                    firstLead: requestBody.leads[0]
                 });
                 
                 setImportStatus('Uploading leads...');
@@ -4740,8 +4761,11 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 
                 const response = await fetch(`${BASE_URL}/api/leads/import`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(requestBody)
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: requestBodyString
                 });
                 
                 if (!response.ok) {
