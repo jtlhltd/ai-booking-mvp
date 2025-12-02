@@ -92,6 +92,7 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
     if (!transcript && eocrTranscript) transcript = eocrTranscript;
     
     // Build full formatted transcript from messages array (preserves conversation structure)
+    // IMPORTANT: Filter out system/instruction messages - only include actual conversation
     if (Array.isArray(body.messages) && body.messages.length > 0) {
       const formattedMessages = body.messages
         .map(m => {
@@ -99,14 +100,29 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
           const content = m?.content || m?.text || m?.message || m?.body || '';
           if (!content) return null;
           
-          // Format role labels
+          // Skip system messages, instructions, and tool/function calls
+          // These are not part of the actual conversation
+          if (role === 'system' || role === 'function' || role === 'tool') {
+            return null;
+          }
+          
+          // Skip messages that look like instructions/scripts (contain keywords like "TOOLS:", "CRITICAL:", etc.)
+          const contentUpper = content.toUpperCase();
+          if (contentUpper.includes('TOOLS:') || 
+              contentUpper.includes('CRITICAL:') || 
+              contentUpper.includes('FOLLOW THIS SCRIPT') ||
+              contentUpper.includes('DO NOT ADD YOUR OWN') ||
+              contentUpper.includes('USE ACCESS_GOOGLE_SHEET') ||
+              contentUpper.includes('USE SCHEDULE_CALLBACK')) {
+            return null;
+          }
+          
+          // Format role labels for actual conversation
           let label = 'Unknown';
-          if (role === 'assistant' || role === 'system' || role === 'ai') {
+          if (role === 'assistant' || role === 'ai') {
             label = 'AI';
           } else if (role === 'user' || role === 'customer' || role === 'caller') {
             label = 'User';
-          } else if (role === 'function' || role === 'tool') {
-            label = 'System';
           }
           
           return `${label}: ${content}`;
@@ -122,10 +138,32 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
       }
     }
     
-    // Fallback: if still no transcript, try simple message join
+    // Fallback: if still no transcript, try simple message join (filter out system/instruction messages)
     if (!transcript && Array.isArray(body.messages)) {
       const msgText = body.messages
-        .map(m => (m?.content || m?.text || m?.message || ''))
+        .map(m => {
+          const role = m?.role || m?.type || 'unknown';
+          const content = m?.content || m?.text || m?.message || '';
+          if (!content) return null;
+          
+          // Skip system messages, instructions, and tool/function calls
+          if (role === 'system' || role === 'function' || role === 'tool') {
+            return null;
+          }
+          
+          // Skip messages that look like instructions/scripts
+          const contentUpper = content.toUpperCase();
+          if (contentUpper.includes('TOOLS:') || 
+              contentUpper.includes('CRITICAL:') || 
+              contentUpper.includes('FOLLOW THIS SCRIPT') ||
+              contentUpper.includes('DO NOT ADD YOUR OWN') ||
+              contentUpper.includes('USE ACCESS_GOOGLE_SHEET') ||
+              contentUpper.includes('USE SCHEDULE_CALLBACK')) {
+            return null;
+          }
+          
+          return content;
+        })
         .filter(Boolean)
         .join(' ');
       if (msgText && msgText.length > 0) transcript = msgText;

@@ -9378,6 +9378,7 @@ app.get('/api/calls/:callId/transcript', async (req, res) => {
               let transcript = vapiCall.transcript || vapiCall.summary || null;
               
               // Build full formatted transcript from messages array if available
+              // IMPORTANT: Filter out system/instruction messages - only include actual conversation
               if (Array.isArray(vapiCall.messages) && vapiCall.messages.length > 0) {
                 const formattedMessages = vapiCall.messages
                   .map(m => {
@@ -9385,14 +9386,29 @@ app.get('/api/calls/:callId/transcript', async (req, res) => {
                     const content = m?.content || m?.text || m?.message || m?.body || '';
                     if (!content) return null;
                     
-                    // Format role labels
+                    // Skip system messages, instructions, and tool/function calls
+                    // These are not part of the actual conversation
+                    if (role === 'system' || role === 'function' || role === 'tool') {
+                      return null;
+                    }
+                    
+                    // Skip messages that look like instructions/scripts (contain keywords like "TOOLS:", "CRITICAL:", etc.)
+                    const contentUpper = content.toUpperCase();
+                    if (contentUpper.includes('TOOLS:') || 
+                        contentUpper.includes('CRITICAL:') || 
+                        contentUpper.includes('FOLLOW THIS SCRIPT') ||
+                        contentUpper.includes('DO NOT ADD YOUR OWN') ||
+                        contentUpper.includes('USE ACCESS_GOOGLE_SHEET') ||
+                        contentUpper.includes('USE SCHEDULE_CALLBACK')) {
+                      return null;
+                    }
+                    
+                    // Format role labels for actual conversation
                     let label = 'Unknown';
-                    if (role === 'assistant' || role === 'system' || role === 'ai') {
+                    if (role === 'assistant' || role === 'ai') {
                       label = 'AI';
                     } else if (role === 'user' || role === 'customer' || role === 'caller') {
                       label = 'User';
-                    } else if (role === 'function' || role === 'tool') {
-                      label = 'System';
                     }
                     
                     return `${label}: ${content}`;
