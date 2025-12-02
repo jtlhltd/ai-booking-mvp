@@ -19324,27 +19324,22 @@ async function processVapiCallFromQueue(call) {
       assistantConfig
     });
     
-    // Make VAPI call
-    const vapiResult = await makeVapiCall({
-      assistantId: assistantConfig.assistantId,
-      phoneNumberId: assistantConfig.phoneNumberId,
-      customerNumber: leadPhone,
-      maxDurationSeconds: 10,
-      metadata: {
-        tenantKey: clientKey,
-        leadPhone,
-        triggerType: callData.triggerType,
-        timestamp: new Date().toISOString(),
-        leadScore: callData.leadScore || 0,
-        leadStatus: callData.leadStatus || 'new',
-        businessHours: callData.businessHours || 'unknown',
-        retryAttempt: 0,
-        fromQueue: true,
-        queueId: call.id
-      },
-      assistantOverrides: {
-        variableValues: assistantVariables
-      }
+    // Make VAPI call using callLeadInstantly
+    const { callLeadInstantly } = await import('./lib/instant-calling.js');
+    
+    // Prepare lead object for callLeadInstantly
+    const leadForCall = {
+      phone: leadPhone,
+      name: (existingLead?.name || callData.leadName || 'Prospect').substring(0, 40), // VAPI limit: 40 chars
+      service: existingLead?.service || callData.leadService || '',
+      source: existingLead?.source || callData.leadSource || 'queue',
+      leadScore: callData.leadScore || 50
+    };
+    
+    const vapiResult = await callLeadInstantly({
+      clientKey,
+      lead: leadForCall,
+      client
     });
     
     if (!vapiResult || vapiResult.error) {
