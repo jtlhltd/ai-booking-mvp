@@ -19224,10 +19224,11 @@ async function processCallQueue() {
     const pendingCalls = await getPendingCalls(20); // Process up to 20 calls at a time
     
     if (pendingCalls.length === 0) {
+      console.log('[CALL QUEUE PROCESSOR] No pending calls found');
       return;
     }
     
-    console.log('[CALL QUEUE PROCESSOR]', { pendingCount: pendingCalls.length });
+    console.log('[CALL QUEUE PROCESSOR]', { pendingCount: pendingCalls.length, callIds: pendingCalls.map(c => c.id) });
     
     for (const call of pendingCalls) {
       try {
