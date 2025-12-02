@@ -8737,6 +8737,24 @@ app.post('/api/leads/import', async (req, res) => {
       }
     }
     
+    // Handle case where leads is an object with numeric keys (array converted to object)
+    // This can happen with certain JSON parsers or middleware
+    if (leads && typeof leads === 'object' && !Array.isArray(leads)) {
+      const keys = Object.keys(leads);
+      // Check if all keys are numeric strings (indicating it was an array)
+      const allNumericKeys = keys.length > 0 && keys.every(key => /^\d+$/.test(key));
+      if (allNumericKeys) {
+        console.error('[LEAD IMPORT API] leads is object with numeric keys, converting to array');
+        // Convert object to array by sorting keys numerically and mapping values
+        leads = keys.sort((a, b) => parseInt(a) - parseInt(b)).map(key => leads[key]);
+        console.error('[LEAD IMPORT API] Converted to array with', leads.length, 'items');
+      } else {
+        // Not a numeric-keyed object, treat as invalid
+        console.error('[LEAD IMPORT API] leads is object but not array-like, treating as invalid');
+        leads = [];
+      }
+    }
+    
     console.error('[LEAD IMPORT API] Extracted values:', {
       clientKey: clientKey,
       clientKeyType: typeof clientKey,
