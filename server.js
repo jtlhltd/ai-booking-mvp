@@ -11942,8 +11942,13 @@ function isBusinessHours(tenant = null) {
     days: [1, 2, 3, 4, 5] // Monday to Friday
   };
   
-  const isWeekday = businessHours.days.includes(day);
-  const isBusinessHour = hour >= businessHours.start && hour < businessHours.end;
+  // Ensure businessHours has the required properties
+  const days = businessHours?.days || [1, 2, 3, 4, 5]; // Default to Mon-Fri
+  const start = businessHours?.start ?? 9;
+  const end = businessHours?.end ?? 17;
+  
+  const isWeekday = Array.isArray(days) && days.includes(day);
+  const isBusinessHour = hour >= start && hour < end;
   
   return isWeekday && isBusinessHour;
 }
@@ -11959,14 +11964,19 @@ function getNextBusinessHour(tenant = null) {
     days: [1, 2, 3, 4, 5]
   };
   
+  // Ensure businessHours has the required properties
+  const days = businessHours?.days || [1, 2, 3, 4, 5]; // Default to Mon-Fri
+  const start = businessHours?.start ?? 9;
+  const end = businessHours?.end ?? 17;
+  
   let nextBusiness = new Date(tenantTime);
-  nextBusiness.setHours(businessHours.start, 0, 0, 0);
+  nextBusiness.setHours(start, 0, 0, 0);
   
   // If it's already past business hours today, move to next business day
-  if (tenantTime.getHours() >= businessHours.end || !businessHours.days.includes(tenantTime.getDay())) {
+  if (tenantTime.getHours() >= end || !Array.isArray(days) || !days.includes(tenantTime.getDay())) {
     do {
       nextBusiness.setDate(nextBusiness.getDate() + 1);
-    } while (!businessHours.days.includes(nextBusiness.getDay()));
+    } while (!Array.isArray(days) || !days.includes(nextBusiness.getDay()));
   }
   
   return nextBusiness;
