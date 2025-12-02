@@ -9356,7 +9356,61 @@ app.get('/api/calls/:callId/transcript', async (req, res) => {
         console.error('[TRANSCRIPT DEBUG ERROR]', debugError);
       }
       
-      return res.status(404).json({ ok: false, error: 'Call not found in database' });
+      // Fallback: Try to fetch transcript directly from VAPI API
+      // This handles cases where the call exists in VAPI but hasn't been saved to our DB yet
+      if (callId && callId.length > 10 && callId.includes('-')) {
+        try {
+          console.error('[TRANSCRIPT FALLBACK] Attempting to fetch from VAPI API...', { callId });
+          const VAPI_PRIVATE_KEY = process.env.VAPI_PRIVATE_KEY;
+          if (VAPI_PRIVATE_KEY) {
+            const vapiResponse = await fetch(`https://api.vapi.ai/call/${callId}`, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`,
+                'Content-Type': 'application/json'
+              }
+            });
+            
+            if (vapiResponse.ok) {
+              const vapiCall = await vapiResponse.json();
+              const transcript = vapiCall.transcript || vapiCall.summary || null;
+              
+              if (transcript) {
+                console.error('[TRANSCRIPT FALLBACK] Found transcript in VAPI API');
+                // Save it to our database for future lookups
+                try {
+                  const { upsertCall } = await import('./db.js');
+                  await upsertCall({
+                    callId: callId,
+                    clientKey: clientKey,
+                    leadPhone: vapiCall.customer?.number || '',
+                    status: vapiCall.status || 'completed',
+                    outcome: vapiCall.outcome || null,
+                    duration: vapiCall.duration || null,
+                    cost: vapiCall.cost || null,
+                    transcript: transcript,
+                    metadata: vapiCall.metadata || {}
+                  });
+                } catch (saveError) {
+                  console.error('[TRANSCRIPT FALLBACK] Failed to save to DB:', saveError);
+                }
+                
+                return res.json({
+                  ok: true,
+                  transcript: typeof transcript === 'string' ? transcript : JSON.stringify(transcript),
+                  duration: vapiCall.duration,
+                  timestamp: vapiCall.createdAt || new Date().toISOString(),
+                  source: 'vapi_api'
+                });
+              }
+            }
+          }
+        } catch (vapiError) {
+          console.error('[TRANSCRIPT FALLBACK ERROR]', vapiError);
+        }
+      }
+      
+      return res.status(404).json({ ok: false, error: 'Call not found in database or VAPI API' });
     }
     
     const row = result.rows[0];
