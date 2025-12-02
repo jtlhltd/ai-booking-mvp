@@ -4776,35 +4776,35 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         ok: response.ok,
                         headers: Object.fromEntries(response.headers.entries())
                     });
-                
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error('[LEAD IMPORT] Server error:', {
-                        status: response.status,
-                        statusText: response.statusText,
-                        errorText: errorText,
-                        requestBody: { clientKey: requestBody.clientKey, leadCount: requestBody.leads.length }
-                    });
-                    let errorData;
-                    try {
-                        errorData = JSON.parse(errorText);
-                    } catch {
-                        throw new Error(`Import failed: ${response.status} ${response.statusText}. ${errorText}`);
+                    
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        console.error('[LEAD IMPORT] Server error:', {
+                            status: response.status,
+                            statusText: response.statusText,
+                            errorText: errorText,
+                            requestBody: { clientKey: requestBody.clientKey, leadCount: requestBody.leads.length }
+                        });
+                        let errorData;
+                        try {
+                            errorData = JSON.parse(errorText);
+                        } catch {
+                            throw new Error(`Import failed: ${response.status} ${response.statusText}. ${errorText}`);
+                        }
+                        throw new Error(errorData.error || errorData.message || 'Import failed');
                     }
-                    throw new Error(errorData.error || errorData.message || 'Import failed');
-                }
-                
-                const payload = await response.json();
-                if (!payload?.ok) {
-                    throw new Error(payload.error || 'Import failed');
-                }
-                if (Array.isArray(payload.leads) && payload.leads.length) {
-                    dashboardData.recentLeads = [...payload.leads, ...(dashboardData.recentLeads || [])].slice(0, 5);
-                    renderLeads(dashboardData.recentLeads);
-                }
-                setImportStatus(`Imported ${payload.inserted} leads`, 'success');
-                showToast('Import Complete', `Successfully imported ${payload.inserted} leads`, 'success');
-            } catch (error) {
+                    
+                    const payload = await response.json();
+                    if (!payload?.ok) {
+                        throw new Error(payload.error || 'Import failed');
+                    }
+                    if (Array.isArray(payload.leads) && payload.leads.length) {
+                        dashboardData.recentLeads = [...payload.leads, ...(dashboardData.recentLeads || [])].slice(0, 5);
+                        renderLeads(dashboardData.recentLeads);
+                    }
+                    setImportStatus(`Imported ${payload.inserted} leads`, 'success');
+                    showToast('Import Complete', `Successfully imported ${payload.inserted} leads`, 'success');
+                } catch (error) {
                 console.error('Import failed', error);
                 const errorMsg = error.message || 'Unable to import leads. Please check your CSV format and try again.';
                 setImportStatus(errorMsg, 'error');
