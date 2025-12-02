@@ -8364,8 +8364,17 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
 
     const totalLeads = parseInt(leadCounts.rows?.[0]?.total || 0, 10);
     const last24hLeads = parseInt(leadCounts.rows?.[0]?.last24 || 0, 10);
-    const totalCalls = parseInt(callCounts.rows?.[0]?.total || 0, 10);
+    const totalCalls = parseInt(callCounts.rows?.[0]?.total_calls || callCounts.rows?.[0]?.total || 0, 10);
+    const uniqueLeadsCalled = parseInt(callCounts.rows?.[0]?.unique_leads_called || 0, 10);
     const bookingsFromCalls = parseInt(callCounts.rows?.[0]?.booked || 0, 10);
+    
+    console.error('[DEMO DASHBOARD] Call metrics:', {
+      clientKey,
+      totalCalls,
+      uniqueLeadsCalled,
+      totalLeads,
+      ratio: totalLeads > 0 ? (uniqueLeadsCalled / totalLeads * 100).toFixed(1) + '%' : 'N/A'
+    });
     const avgDealValue = 350;
 
     const conversionRate = totalCalls > 0 ? Math.round((bookingsFromCalls / totalCalls) * 100) : 0;
