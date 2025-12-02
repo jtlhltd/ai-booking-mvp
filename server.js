@@ -8677,28 +8677,40 @@ app.post('/api/leads/:leadId/escalate', async (req, res) => {
 
 app.post('/api/leads/import', async (req, res) => {
   try {
-    console.log('[LEAD IMPORT API] Request received:', {
-      hasBody: !!req.body,
-      bodyType: typeof req.body,
-      bodyKeys: req.body ? Object.keys(req.body) : [],
-      contentType: req.headers['content-type'],
-      clientKey: req.body?.clientKey,
-      leadsType: Array.isArray(req.body?.leads) ? 'array' : typeof req.body?.leads,
-      leadsLength: Array.isArray(req.body?.leads) ? req.body.leads.length : 'not array',
-      rawBodyPreview: JSON.stringify(req.body).substring(0, 200)
+    // Log raw request details
+    console.log('[LEAD IMPORT API] ========== REQUEST RECEIVED ==========');
+    console.log('[LEAD IMPORT API] Method:', req.method);
+    console.log('[LEAD IMPORT API] URL:', req.url);
+    console.log('[LEAD IMPORT API] Content-Type:', req.headers['content-type']);
+    console.log('[LEAD IMPORT API] Content-Length:', req.headers['content-length']);
+    console.log('[LEAD IMPORT API] Has body:', !!req.body);
+    console.log('[LEAD IMPORT API] Body type:', typeof req.body);
+    console.log('[LEAD IMPORT API] Body keys:', req.body ? Object.keys(req.body) : 'no body');
+    console.log('[LEAD IMPORT API] Full body:', JSON.stringify(req.body, null, 2));
+    
+    // Try to extract with case-insensitive matching
+    const body = req.body || {};
+    const clientKey = body.clientKey || body.clientkey || body.client_key || body.ClientKey;
+    const leads = body.leads || body.Leads || body.leadList || [];
+    
+    console.log('[LEAD IMPORT API] Extracted values:', {
+      clientKey: clientKey,
+      clientKeyType: typeof clientKey,
+      leadsType: Array.isArray(leads) ? 'array' : typeof leads,
+      leadsLength: Array.isArray(leads) ? leads.length : 'not array',
+      leadsPreview: Array.isArray(leads) && leads.length > 0 ? leads[0] : 'no leads'
     });
     
-    const { clientKey, leads } = req.body || {};
-    
     if (!clientKey || !Array.isArray(leads) || leads.length === 0) {
-      console.error('[LEAD IMPORT API] Validation failed:', {
-        hasClientKey: !!clientKey,
-        clientKeyValue: clientKey,
-        hasLeads: !!leads,
-        leadsIsArray: Array.isArray(leads),
-        leadsLength: Array.isArray(leads) ? leads.length : 'not array',
-        body: req.body
-      });
+      console.error('[LEAD IMPORT API] ========== VALIDATION FAILED ==========');
+      console.error('[LEAD IMPORT API] hasClientKey:', !!clientKey);
+      console.error('[LEAD IMPORT API] clientKeyValue:', clientKey);
+      console.error('[LEAD IMPORT API] clientKeyType:', typeof clientKey);
+      console.error('[LEAD IMPORT API] hasLeads:', !!leads);
+      console.error('[LEAD IMPORT API] leadsIsArray:', Array.isArray(leads));
+      console.error('[LEAD IMPORT API] leadsLength:', Array.isArray(leads) ? leads.length : 'not array');
+      console.error('[LEAD IMPORT API] Full request body:', JSON.stringify(body, null, 2));
+      console.error('[LEAD IMPORT API] All body keys:', Object.keys(body));
       return res.status(400).json({ ok: false, error: 'Missing clientKey or leads payload' });
     }
     const inserted = [];
