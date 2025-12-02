@@ -2540,6 +2540,14 @@
             if (!isDemoMode) {
                 // Real client - use API data directly from livePayload
                 const metrics = livePayload.metrics || {};
+                const recentCalls = livePayload.recentCalls || [];
+                console.log('[DASHBOARD MERGE] Real client mode - recentCalls from API:', {
+                    count: recentCalls.length,
+                    calls: recentCalls,
+                    livePayloadKeys: Object.keys(livePayload),
+                    hasRecentCalls: !!livePayload.recentCalls,
+                    recentCallsType: Array.isArray(recentCalls) ? 'array' : typeof recentCalls
+                });
                 return {
                     totalLeads: metrics.totalLeads || livePayload.totalLeads || 0,
                     totalCalls: metrics.totalCalls || livePayload.totalCalls || 0,
@@ -2553,7 +2561,7 @@
                     mediumPriorityLeads: metrics.mediumPriorityLeads || livePayload.mediumPriorityLeads || 0,
                     lowPriorityLeads: metrics.lowPriorityLeads || livePayload.lowPriorityLeads || 0,
                     recentLeads: livePayload.leads || [],
-                    recentCalls: livePayload.recentCalls || [],
+                    recentCalls: recentCalls,
                     appointments: livePayload.appointments || [],
                     serviceMix: livePayload.serviceMix || [],
                     touchpoints: livePayload.touchpoints || { labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], data: [0, 0, 0, 0, 0, 0, 0] },
@@ -3167,6 +3175,13 @@
                 console.warn('recent-calls container not found');
                 return;
             }
+            
+            console.log('[RENDER CALLS] Input:', {
+                callsType: typeof calls,
+                isArray: Array.isArray(calls),
+                length: Array.isArray(calls) ? calls.length : 'not array',
+                calls: calls
+            });
             
             // Only use demo calls for demo client
             let callsToShow = calls && Array.isArray(calls) && calls.length > 0 ? calls : [];
