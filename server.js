@@ -11681,9 +11681,12 @@ async function selectOptimalAssistant({ client, existingLead, isYes, isStart }) 
     const industry = client?.industry || 'general';
     const timeOfDay = new Date().getHours();
     
-    // Default configuration
-    let assistantId = client?.vapiAssistantId || VAPI_ASSISTANT_ID;
-    let phoneNumberId = client?.vapiPhoneNumberId || VAPI_PHONE_NUMBER_ID;
+    // Default configuration - use process.env directly since constants may not be defined yet
+    const DEFAULT_ASSISTANT_ID = process.env.VAPI_ASSISTANT_ID || '';
+    const DEFAULT_PHONE_NUMBER_ID = process.env.VAPI_PHONE_NUMBER_ID || '';
+    
+    let assistantId = client?.vapiAssistantId || client?.vapi?.assistantId || DEFAULT_ASSISTANT_ID;
+    let phoneNumberId = client?.vapiPhoneNumberId || client?.vapi?.phoneNumberId || DEFAULT_PHONE_NUMBER_ID;
     
     // High-value lead optimization
     if (leadScore >= 80) {
@@ -11748,16 +11751,18 @@ async function selectOptimalAssistant({ client, existingLead, isYes, isStart }) 
       });
       
       assistantId = VAPI_ASSISTANT_ID;
-      phoneNumberId = VAPI_PHONE_NUMBER_ID;
+      phoneNumberId = DEFAULT_PHONE_NUMBER_ID;
     }
     
     return { assistantId, phoneNumberId };
     
   } catch (error) {
     console.error('[ASSISTANT SELECTION ERROR]', error);
+    const DEFAULT_ASSISTANT_ID = process.env.VAPI_ASSISTANT_ID || '';
+    const DEFAULT_PHONE_NUMBER_ID = process.env.VAPI_PHONE_NUMBER_ID || '';
     return {
-      assistantId: client?.vapiAssistantId || VAPI_ASSISTANT_ID,
-      phoneNumberId: client?.vapiPhoneNumberId || VAPI_PHONE_NUMBER_ID
+      assistantId: client?.vapiAssistantId || client?.vapi?.assistantId || DEFAULT_ASSISTANT_ID,
+      phoneNumberId: client?.vapiPhoneNumberId || client?.vapi?.phoneNumberId || DEFAULT_PHONE_NUMBER_ID
     };
   }
 }
