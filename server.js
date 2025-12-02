@@ -8427,7 +8427,9 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     });
 
     const recentCalls = (recentCallRows.rows || []).map(row => ({
-      id: row.call_id || row.id, // Use call_id (VAPI ID) or database id
+      id: row.call_id || row.id, // Use call_id (VAPI ID) or database id - this is what viewTranscript uses
+      callId: row.call_id, // VAPI call ID for transcript lookup
+      dbId: row.id, // Database ID as fallback
       name: row.name || row.lead_phone,
       service: row.service || 'Lead Follow-Up',
       channel: 'AI call + SMS',
@@ -9232,6 +9234,7 @@ app.get('/api/calls/:callId/transcript', async (req, res) => {
     }
     
     // Try to find call by call_id first (VAPI call ID), then by database id, then by lead_phone
+    // callId might be a VAPI call_id (UUID) or database id (number)
     const result = await query(`
       SELECT transcript, summary, duration, created_at, call_id, id, lead_phone
       FROM calls
@@ -9239,12 +9242,13 @@ app.get('/api/calls/:callId/transcript', async (req, res) => {
         AND (
           call_id = $1 
           OR id::text = $1 
+          OR CAST(id AS TEXT) = $1
           OR lead_phone = $1
         )
       ORDER BY 
         CASE 
           WHEN call_id = $1 THEN 1
-          WHEN id::text = $1 THEN 2
+          WHEN id::text = $1 OR CAST(id AS TEXT) = $1 THEN 2
           ELSE 3
         END,
         created_at DESC
