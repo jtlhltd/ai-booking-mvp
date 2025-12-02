@@ -8882,6 +8882,55 @@ app.post('/api/leads/import', async (req, res) => {
       clientKey 
     });
 
+    // Immediately queue new leads for calling (don't wait for cron job)
+    if (inserted.length > 0) {
+      try {
+        const client = await getFullClient(clientKey);
+        if (client && client.isEnabled && client.vapi?.assistantId) {
+          const { addToCallQueue } = await import('./db.js');
+          
+          let queuedCount = 0;
+          for (const lead of inserted) {
+            try {
+              // Check if we should call now or schedule for later
+              const shouldCallNow = isBusinessHours(client);
+              const scheduledFor = shouldCallNow 
+                ? new Date() // Call immediately
+                : getNextBusinessHour(client); // Schedule for next business hour
+              
+              // New leads get high priority (8)
+              await addToCallQueue({
+                clientKey: clientKey,
+                leadPhone: lead.phone,
+                priority: 8, // High priority for new imports
+                scheduledFor: scheduledFor,
+                callType: 'vapi_call',
+                callData: {
+                  triggerType: 'new_lead_import',
+                  leadId: lead.id,
+                  leadName: lead.name,
+                  leadService: lead.service,
+                  leadSource: lead.source,
+                  leadStatus: lead.status,
+                  businessHours: shouldCallNow ? 'within' : 'outside'
+                }
+              });
+              queuedCount++;
+              console.error('[LEAD IMPORT] Immediately queued lead for calling:', lead.phone);
+            } catch (queueError) {
+              console.error('[LEAD IMPORT] Failed to queue lead:', queueError);
+            }
+          }
+          console.error(`[LEAD IMPORT] Queued ${queuedCount} leads for immediate calling`);
+        } else {
+          console.error('[LEAD IMPORT] Client not enabled or missing VAPI config, skipping immediate queue');
+        }
+      } catch (queueError) {
+        console.error('[LEAD IMPORT] Error queueing leads:', queueError);
+        // Don't fail the import if queueing fails - cron job will pick them up
+      }
+    }
+
     return res.json({
       ok: true,
       inserted: inserted.length,
