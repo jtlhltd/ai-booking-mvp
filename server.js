@@ -8343,7 +8343,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         WHERE c.client_key = $1
           AND l.created_at >= NOW() - INTERVAL '24 hours'
           AND c.created_at >= l.created_at
-          AND c.created_at <= l.created_at + INTERVAL '30 minutes'
+          AND c.created_at <= l.created_at + INTERVAL '2 hours'
           AND c.created_at >= NOW() - INTERVAL '24 hours'
         ORDER BY l.phone, c.created_at ASC
         LIMIT 100
@@ -8473,15 +8473,18 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         const callTime = new Date(row.call_created).getTime();
         if (!leadTime || !callTime || callTime <= leadTime) return null;
         const diffMinutes = (callTime - leadTime) / 60000;
-        // Only include calls that happened within 30 minutes of lead creation
-        // This excludes business hours delays and shows actual speed-to-lead performance
-        return diffMinutes <= 30 ? diffMinutes : null;
+        // Include calls that happened within 2 hours of lead creation
+        // Exclude outliers over 2 hours (likely business hours delays or system issues)
+        // This gives a realistic average while filtering out extreme delays
+        return diffMinutes <= 120 ? diffMinutes : null;
       })
       .filter(Boolean);
     const avgResponseMinutes = responseDiffs.length
       ? Math.round(responseDiffs.reduce((sum, val) => sum + val, 0) / responseDiffs.length)
-      : 0; // Default to 0 if no data
-    const firstResponse = avgResponseMinutes >= 60
+      : null; // Use null instead of 0 to distinguish "no data" from "0 minutes"
+    const firstResponse = avgResponseMinutes === null || avgResponseMinutes === undefined
+      ? '—' // Show dash if no data
+      : avgResponseMinutes >= 60
       ? `${Math.floor(avgResponseMinutes / 60)}h ${avgResponseMinutes % 60}m`
       : `${avgResponseMinutes}m`;
 
