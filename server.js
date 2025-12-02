@@ -8304,7 +8304,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         LIMIT 6
       `, [clientKey]),
       query(`
-        SELECT c.lead_phone, c.status, c.outcome, c.created_at, c.duration,
+        SELECT c.call_id, c.id, c.lead_phone, c.status, c.outcome, c.created_at, c.duration,
                l.name, l.service
         FROM calls c
         LEFT JOIN leads l ON l.client_key = c.client_key AND l.phone = c.lead_phone
@@ -8425,6 +8425,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     });
 
     const recentCalls = (recentCallRows.rows || []).map(row => ({
+      id: row.call_id || row.id, // Use call_id (VAPI ID) or database id
       name: row.name || row.lead_phone,
       service: row.service || 'Lead Follow-Up',
       channel: 'AI call + SMS',
@@ -8454,7 +8455,9 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         const leadTime = new Date(row.lead_created).getTime();
         const callTime = new Date(row.call_created).getTime();
         if (!leadTime || !callTime || callTime <= leadTime) return null;
-        return (callTime - leadTime) / 60000;
+        const diffMinutes = (callTime - leadTime) / 60000;
+        // Only include calls that happened within 24 hours of lead creation (exclude old retries)
+        return diffMinutes <= 1440 ? diffMinutes : null;
       })
       .filter(Boolean);
     const avgResponseMinutes = responseDiffs.length
@@ -8489,7 +8492,12 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       service: row.service || 'Consultation'
     }));
 
-    const estimatedCost = Number((totalCalls * 0.4).toFixed(2));
+    // Investment = monthly service fee (default £35, or from client config)
+    const monthlyServiceFee = client?.monthlyFee || client?.pricing?.monthlyFee || 35;
+    const daysInPeriod = 30; // 30-day period
+    const estimatedCost = Number((monthlyServiceFee * (daysInPeriod / 30)).toFixed(2)); // Pro-rated for period
+    
+    // Revenue = bookings * average deal value
     const estimatedRevenue = Number((weeklyBookings * avgDealValue).toFixed(2));
     const estimatedProfit = Number((estimatedRevenue - estimatedCost).toFixed(2));
     const roiMultiplier = estimatedCost > 0 ? estimatedRevenue / estimatedCost : 0;
@@ -8517,6 +8525,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       roi: {
         costs: {
           total: estimatedCost,
+          monthlyFee: monthlyServiceFee,
           perCall: totalCalls > 0 ? Number((estimatedCost / totalCalls).toFixed(2)) : 0
         },
         revenue: {
@@ -9161,12 +9170,23 @@ app.get('/api/calls/:callId/transcript', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'clientKey required' });
     }
     
+    // Try to find call by call_id first (VAPI call ID), then by database id, then by lead_phone
     const result = await query(`
-      SELECT transcript, summary, duration, created_at
+      SELECT transcript, summary, duration, created_at, call_id, id, lead_phone
       FROM calls
-      WHERE (id = $1 OR call_id = $1 OR lead_phone = $1)
-        AND client_key = $2
-      ORDER BY created_at DESC
+      WHERE client_key = $2
+        AND (
+          call_id = $1 
+          OR id::text = $1 
+          OR lead_phone = $1
+        )
+      ORDER BY 
+        CASE 
+          WHEN call_id = $1 THEN 1
+          WHEN id::text = $1 THEN 2
+          ELSE 3
+        END,
+        created_at DESC
       LIMIT 1
     `, [callId, clientKey]);
     
