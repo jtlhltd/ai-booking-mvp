@@ -9404,11 +9404,24 @@ app.get('/api/calls/:callId/transcript', async (req, res) => {
                     }
                     
                     // Format role labels for actual conversation
-                    let label = 'Unknown';
-                    if (role === 'assistant' || role === 'ai') {
-                      label = 'AI';
-                    } else if (role === 'user' || role === 'customer' || role === 'caller') {
+                    // Check role in multiple possible fields and variations
+                    const roleLower = (role || '').toLowerCase();
+                    const messageRole = m?.message?.role || m?.messageRole || role;
+                    const messageRoleLower = (messageRole || '').toLowerCase();
+                    
+                    let label = 'AI'; // Default to AI if not clearly a user message (in calls, non-user = AI)
+                    
+                    // Check for user/customer/caller roles
+                    if (roleLower === 'user' || roleLower === 'customer' || roleLower === 'caller' || 
+                        roleLower === 'human' || roleLower === 'person' ||
+                        messageRoleLower === 'user' || messageRoleLower === 'customer' || messageRoleLower === 'caller' ||
+                        messageRoleLower === 'human' || messageRoleLower === 'person') {
                       label = 'User';
+                    } 
+                    // Explicitly check for assistant/AI roles (though default is already AI)
+                    else if (roleLower === 'assistant' || roleLower === 'ai' || roleLower === 'bot' ||
+                             messageRoleLower === 'assistant' || messageRoleLower === 'ai' || messageRoleLower === 'bot') {
+                      label = 'AI';
                     }
                     
                     return `${label}: ${content}`;
