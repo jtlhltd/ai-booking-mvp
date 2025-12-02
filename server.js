@@ -19430,7 +19430,12 @@ async function queueNewLeadsForCalling() {
               }
             });
             
-            console.log(`[LEAD QUEUER] Queued lead ${lead.phone} for ${client.clientKey} (priority: ${priority})`);
+            const now = new Date();
+            const scheduledTime = new Date(scheduledFor);
+            const timeUntilCall = scheduledTime - now;
+            const minutesUntilCall = Math.floor(timeUntilCall / (1000 * 60));
+            
+            console.log(`[LEAD QUEUER] Queued lead ${lead.phone} for ${client.clientKey} (priority: ${priority}, scheduled: ${scheduledTime.toISOString()}, ${shouldCallNow ? 'immediate' : `${minutesUntilCall} minutes from now`})`);
           } catch (queueError) {
             console.error(`[LEAD QUEUER] Error queueing lead ${lead.phone}:`, queueError);
           }
