@@ -8470,12 +8470,13 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         if (!leadTime || !callTime || callTime <= leadTime) return null;
         const diffMinutes = (callTime - leadTime) / 60000;
         // Only include calls that happened within 24 hours of lead creation (exclude old retries)
-        return diffMinutes <= 1440 ? diffMinutes : null;
+        // And exclude outliers over 2 hours (likely business hours delays or system issues)
+        return diffMinutes <= 120 ? diffMinutes : null;
       })
       .filter(Boolean);
     const avgResponseMinutes = responseDiffs.length
       ? Math.round(responseDiffs.reduce((sum, val) => sum + val, 0) / responseDiffs.length)
-      : 3;
+      : 0; // Default to 0 if no data instead of 3
     const firstResponse = avgResponseMinutes >= 60
       ? `${Math.floor(avgResponseMinutes / 60)}h ${avgResponseMinutes % 60}m`
       : `${avgResponseMinutes}m`;
