@@ -8331,14 +8331,17 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         return result;
       }),
       query(`
-        SELECT l.created_at AS lead_created, c.created_at AS call_created
-        FROM calls c
-        JOIN leads l ON l.client_key = c.client_key AND l.phone = c.lead_phone
+        SELECT DISTINCT ON (l.phone) 
+               l.created_at AS lead_created, 
+               c.created_at AS call_created
+        FROM leads l
+        JOIN calls c ON c.client_key = l.client_key AND c.lead_phone = l.phone
         WHERE c.client_key = $1
+          AND l.created_at >= NOW() - INTERVAL '7 days'
           AND c.created_at >= l.created_at
           AND c.created_at <= l.created_at + INTERVAL '24 hours'
-        ORDER BY c.created_at DESC
-        LIMIT 50
+        ORDER BY l.phone, c.created_at ASC
+        LIMIT 100
       `, [clientKey]),
       query(`
         SELECT DATE_TRUNC('day', created_at) AS bucket_day,
