@@ -9373,10 +9373,50 @@ app.get('/api/calls/:callId/transcript', async (req, res) => {
             
             if (vapiResponse.ok) {
               const vapiCall = await vapiResponse.json();
-              const transcript = vapiCall.transcript || vapiCall.summary || null;
+              
+              // Try to get transcript from multiple sources
+              let transcript = vapiCall.transcript || vapiCall.summary || null;
+              
+              // Build full formatted transcript from messages array if available
+              if (Array.isArray(vapiCall.messages) && vapiCall.messages.length > 0) {
+                const formattedMessages = vapiCall.messages
+                  .map(m => {
+                    const role = m?.role || m?.type || 'unknown';
+                    const content = m?.content || m?.text || m?.message || m?.body || '';
+                    if (!content) return null;
+                    
+                    // Format role labels
+                    let label = 'Unknown';
+                    if (role === 'assistant' || role === 'system' || role === 'ai') {
+                      label = 'AI';
+                    } else if (role === 'user' || role === 'customer' || role === 'caller') {
+                      label = 'User';
+                    } else if (role === 'function' || role === 'tool') {
+                      label = 'System';
+                    }
+                    
+                    return `${label}: ${content}`;
+                  })
+                  .filter(Boolean)
+                  .join('\n\n');
+                
+                // Use formatted messages if it's longer/more complete than existing transcript
+                if (formattedMessages && formattedMessages.length > (transcript?.length || 0)) {
+                  transcript = formattedMessages;
+                } else if (!transcript && formattedMessages) {
+                  transcript = formattedMessages;
+                }
+              }
               
               if (transcript) {
-                console.error('[TRANSCRIPT FALLBACK] Found transcript in VAPI API');
+                console.error('[TRANSCRIPT FALLBACK] Found transcript in VAPI API', { 
+                  hasDirectTranscript: !!vapiCall.transcript,
+                  hasSummary: !!vapiCall.summary,
+                  hasMessages: Array.isArray(vapiCall.messages),
+                  messageCount: vapiCall.messages?.length || 0,
+                  transcriptLength: transcript.length
+                });
+                
                 // Save it to our database for future lookups
                 try {
                   const { upsertCall } = await import('./db.js');

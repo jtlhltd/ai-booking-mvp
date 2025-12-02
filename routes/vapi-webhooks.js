@@ -90,12 +90,45 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
     let transcript = body.call?.transcript || body.transcript || body.summary || '';
     const eocrTranscript = body.endOfCallReport?.transcript || body.call?.endOfCallReport?.transcript || body.end_of_call_report?.transcript;
     if (!transcript && eocrTranscript) transcript = eocrTranscript;
+    
+    // Build full formatted transcript from messages array (preserves conversation structure)
+    if (Array.isArray(body.messages) && body.messages.length > 0) {
+      const formattedMessages = body.messages
+        .map(m => {
+          const role = m?.role || m?.type || 'unknown';
+          const content = m?.content || m?.text || m?.message || m?.body || '';
+          if (!content) return null;
+          
+          // Format role labels
+          let label = 'Unknown';
+          if (role === 'assistant' || role === 'system' || role === 'ai') {
+            label = 'AI';
+          } else if (role === 'user' || role === 'customer' || role === 'caller') {
+            label = 'User';
+          } else if (role === 'function' || role === 'tool') {
+            label = 'System';
+          }
+          
+          return `${label}: ${content}`;
+        })
+        .filter(Boolean)
+        .join('\n\n');
+      
+      // Use formatted messages if it's longer/more complete than existing transcript
+      if (formattedMessages && formattedMessages.length > (transcript?.length || 0)) {
+        transcript = formattedMessages;
+      } else if (!transcript && formattedMessages) {
+        transcript = formattedMessages;
+      }
+    }
+    
+    // Fallback: if still no transcript, try simple message join
     if (!transcript && Array.isArray(body.messages)) {
       const msgText = body.messages
         .map(m => (m?.content || m?.text || m?.message || ''))
         .filter(Boolean)
         .join(' ');
-      if (msgText && msgText.length > transcript?.length) transcript = msgText;
+      if (msgText && msgText.length > 0) transcript = msgText;
     }
     const recordingUrl = body.call?.recordingUrl || body.recordingUrl || body.recording_url || '';
     const vapiMetrics = body.call?.metrics || body.metrics || {};
