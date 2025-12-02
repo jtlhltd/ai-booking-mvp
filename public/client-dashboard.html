@@ -2970,7 +2970,7 @@
             const winRate = formatPercent(data.successRate ?? 0);
 
             document.getElementById('statusHintLeads').textContent = `Last 24h: ${last24} new`;
-            document.getElementById('statusHintCalls').textContent = `${bookings} bookings locked in`;
+            // statusHintCalls already set above with answered/not answered breakdown
             document.getElementById('statusHintConversion').textContent = `Win rate: ${winRate}`;
             document.getElementById('statusHintResponse').textContent = firstResponse === '—'
                 ? 'Goal: under 5 min'
