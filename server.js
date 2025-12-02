@@ -8312,18 +8312,22 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         ORDER BY c.created_at DESC
         LIMIT 5
       `, [clientKey]).then(result => {
-        console.error('[DEMO DASHBOARD] Recent calls query result:', {
-          clientKey,
-          rowCount: result.rows?.length || 0,
-          calls: result.rows?.map(r => ({
-            phone: r.lead_phone,
-            status: r.status,
-            outcome: r.outcome,
-            name: r.name,
-            service: r.service,
-            created_at: r.created_at
-          })) || []
-        });
+        console.error('[DEMO DASHBOARD] Recent calls query result for clientKey:', clientKey);
+        console.error('[DEMO DASHBOARD] Row count:', result.rows?.length || 0);
+        if (result.rows && result.rows.length > 0) {
+          result.rows.forEach((r, i) => {
+            console.error(`[DEMO DASHBOARD] Call ${i + 1}:`, {
+              phone: r.lead_phone,
+              status: r.status,
+              outcome: r.outcome,
+              name: r.name || 'NULL',
+              service: r.service || 'NULL',
+              created_at: r.created_at
+            });
+          });
+        } else {
+          console.error('[DEMO DASHBOARD] No calls found in database for clientKey:', clientKey);
+        }
         return result;
       }),
       query(`
@@ -8421,12 +8425,16 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       timeAgo: formatTimeAgoLabel(row.created_at)
     }));
     
-    console.error('[DEMO DASHBOARD] Formatted recent calls:', {
-      clientKey,
-      rawCount: recentCallRows.rows?.length || 0,
-      formattedCount: recentCalls.length,
-      calls: recentCalls
-    });
+    console.error('[DEMO DASHBOARD] Formatted recent calls for clientKey:', clientKey);
+    console.error('[DEMO DASHBOARD] Raw count:', recentCallRows.rows?.length || 0);
+    console.error('[DEMO DASHBOARD] Formatted count:', recentCalls.length);
+    if (recentCalls.length > 0) {
+      recentCalls.forEach((call, i) => {
+        console.error(`[DEMO DASHBOARD] Formatted call ${i + 1}:`, JSON.stringify(call, null, 2));
+      });
+    } else {
+      console.error('[DEMO DASHBOARD] No formatted calls to return');
+    }
 
     const avgLeadScore = leads.length
       ? Math.round(scoreAccumulator / leads.length)
