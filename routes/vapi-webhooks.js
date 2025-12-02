@@ -100,12 +100,16 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
     const recordingUrl = body.call?.recordingUrl || body.recordingUrl || body.recording_url || '';
     const vapiMetrics = body.call?.metrics || body.metrics || {};
     
+    // Extract assistant ID from webhook payload
+    const assistantId = body.call?.assistantId || body.assistant?.id || body.assistantId || metadata.assistantId || '';
+    
     console.log('[VAPI WEBHOOK]', { 
       callId, 
       status, 
       outcome, 
       duration, 
       cost,
+      assistantId,
       hasTranscript: !!transcript,
       transcriptLength: transcript.length,
       hasRecording: !!recordingUrl,
@@ -408,11 +412,17 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
     // Prefer per-tenant configuration, fall back to env, then hardcoded test sheet
     const logisticsSheetId = tenant?.vapi?.logisticsSheetId || tenant?.gsheet_id || process.env.LOGISTICS_SHEET_ID || '1Tnll3FXtNEERYdGHTOh4VtAn90FyG6INUIU46ZbsP6g';
     
+    // Only process logistics extraction for the specific assistant ID
+    const ALLOWED_LOGISTICS_ASSISTANT_ID = 'b19a474b-49f3-474d-adb2-4aacc6ad37e7';
+    
     console.log('[LOGISTICS SHEET ID DEBUG]', {
       'tenant?.vapi?.logisticsSheetId': tenant?.vapi?.logisticsSheetId,
       'tenant?.gsheet_id': tenant?.gsheet_id,
       'process.env.LOGISTICS_SHEET_ID': process.env.LOGISTICS_SHEET_ID,
       'Final logisticsSheetId': logisticsSheetId,
+      'assistantId': assistantId,
+      'allowedAssistantId': ALLOWED_LOGISTICS_ASSISTANT_ID,
+      'assistantMatches': assistantId === ALLOWED_LOGISTICS_ASSISTANT_ID,
       'Has transcript': !!transcript,
       'Transcript length': transcript.length,
       'Status': status,
@@ -425,6 +435,12 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
     }
     if (!transcript || transcript.length < 50) {
       console.log('[LOGISTICS SKIP] No meaningful transcript available:', { hasTranscript: !!transcript, length: transcript?.length });
+    }
+    if (assistantId && assistantId !== ALLOWED_LOGISTICS_ASSISTANT_ID) {
+      console.log('[LOGISTICS SKIP] Assistant ID mismatch - not processing logistics extraction:', {
+        received: assistantId,
+        expected: ALLOWED_LOGISTICS_ASSISTANT_ID
+      });
     }
     
     // Check for structured output data from VAPI
@@ -449,15 +465,20 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
     const hasTranscript = transcript && transcript.length >= 50;
     const hasStructuredData = structuredOutput && Object.keys(structuredOutput).length > 0;
     
+    // Only proceed if assistant ID exists and matches the allowed one
+    const assistantMatches = assistantId && assistantId === ALLOWED_LOGISTICS_ASSISTANT_ID;
+    
     console.log('[LOGISTICS CONDITION CHECK]', {
       logisticsSheetId: !!logisticsSheetId,
       hasTranscript,
       transcriptLength: transcript?.length || 0,
       hasStructuredData,
-      willExtract: !!(logisticsSheetId && (hasTranscript || hasStructuredData))
+      assistantMatches,
+      assistantId,
+      willExtract: !!(logisticsSheetId && (hasTranscript || hasStructuredData) && assistantMatches)
     });
     
-    if (logisticsSheetId && (hasTranscript || hasStructuredData)) {
+    if (logisticsSheetId && (hasTranscript || hasStructuredData) && assistantMatches) {
       console.log('[LOGISTICS] STARTING EXTRACTION...');
       try {
         // Use structured output if available, otherwise fall back to transcript extraction
