@@ -8695,6 +8695,17 @@ app.post('/api/leads/import-test', async (req, res) => {
   });
 });
 
+// Middleware to log raw body for this specific route
+app.post('/api/leads/import', express.json({ limit: '10mb' }), (req, res, next) => {
+  console.error('[LEAD IMPORT MIDDLEWARE] Raw body check:', {
+    hasBody: !!req.body,
+    bodyType: typeof req.body,
+    bodyKeys: req.body ? Object.keys(req.body) : [],
+    contentType: req.headers['content-type']
+  });
+  next();
+});
+
 app.post('/api/leads/import', async (req, res) => {
   // CRITICAL: Log immediately to ensure we see this
   console.error('[LEAD IMPORT API] ========== ENDPOINT HIT ==========');
