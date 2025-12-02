@@ -19278,7 +19278,20 @@ async function processCallQueue() {
 // Process VAPI call from queue
 async function processVapiCallFromQueue(call) {
   try {
-    const callData = call.call_data ? JSON.parse(call.call_data) : {};
+    // Handle call_data - it might be a JSON string or already an object
+    let callData = {};
+    if (call.call_data) {
+      if (typeof call.call_data === 'string') {
+        try {
+          callData = JSON.parse(call.call_data);
+        } catch (e) {
+          console.error('[CALL QUEUE] Failed to parse call_data JSON:', e.message);
+          callData = {};
+        }
+      } else if (typeof call.call_data === 'object') {
+        callData = call.call_data;
+      }
+    }
     const { client_key: clientKey, lead_phone: leadPhone } = call;
     
     // Get client configuration
