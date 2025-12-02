@@ -8311,7 +8311,21 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         WHERE c.client_key = $1
         ORDER BY c.created_at DESC
         LIMIT 5
-      `, [clientKey]),
+      `, [clientKey]).then(result => {
+        console.error('[DEMO DASHBOARD] Recent calls query result:', {
+          clientKey,
+          rowCount: result.rows?.length || 0,
+          calls: result.rows?.map(r => ({
+            phone: r.lead_phone,
+            status: r.status,
+            outcome: r.outcome,
+            name: r.name,
+            service: r.service,
+            created_at: r.created_at
+          })) || []
+        });
+        return result;
+      }),
       query(`
         SELECT l.created_at AS lead_created, c.created_at AS call_created
         FROM calls c
@@ -8401,11 +8415,18 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       name: row.name || row.lead_phone,
       service: row.service || 'Lead Follow-Up',
       channel: 'AI call + SMS',
-      summary: row.outcome ? `Outcome: ${row.outcome}` : 'Call completed',
+      summary: row.outcome ? `Outcome: ${row.outcome}` : (row.status === 'initiated' ? 'Call in progress' : 'Call completed'),
       status: mapCallStatus(row.status),
       statusClass: mapStatusClass(row.status),
       timeAgo: formatTimeAgoLabel(row.created_at)
     }));
+    
+    console.error('[DEMO DASHBOARD] Formatted recent calls:', {
+      clientKey,
+      rawCount: recentCallRows.rows?.length || 0,
+      formattedCount: recentCalls.length,
+      calls: recentCalls
+    });
 
     const avgLeadScore = leads.length
       ? Math.round(scoreAccumulator / leads.length)
