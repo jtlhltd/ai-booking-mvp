@@ -8263,7 +8263,9 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         WHERE client_key = $1
       `, [clientKey]),
       query(`
-        SELECT COUNT(*) AS total,
+        SELECT 
+               COUNT(*) AS total,
+               COUNT(DISTINCT lead_phone) AS unique_leads_called,
                COUNT(*) FILTER (WHERE created_at >= ${sqlHoursAgo(24)}) AS last24,
                COUNT(*) FILTER (WHERE outcome = 'booked') AS booked
         FROM calls
@@ -8370,9 +8372,12 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
 
     const totalLeads = parseInt(leadCounts.rows?.[0]?.total || 0, 10);
     const last24hLeads = parseInt(leadCounts.rows?.[0]?.last24 || 0, 10);
-    const totalCalls = parseInt(callCounts.rows?.[0]?.total_calls || callCounts.rows?.[0]?.total || 0, 10);
-    const uniqueLeadsCalled = parseInt(callCounts.rows?.[0]?.unique_leads_called || 0, 10);
+    const totalCalls = parseInt(callCounts.rows?.[0]?.total || 0, 10); // Total call attempts (for internal tracking)
+    const uniqueLeadsCalled = parseInt(callCounts.rows?.[0]?.unique_leads_called || 0, 10); // Unique leads actually called
     const bookingsFromCalls = parseInt(callCounts.rows?.[0]?.booked || 0, 10);
+    
+    // Use unique leads called for display (not total call attempts)
+    const displayCalls = uniqueLeadsCalled || 0;
     
     console.error('[DEMO DASHBOARD] Call metrics:', {
       clientKey,
@@ -8516,7 +8521,9 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       source: 'live',
       metrics: {
         totalLeads,
-        totalCalls,
+        totalCalls: displayCalls, // Show unique leads called, not total attempts
+        totalCallAttempts: totalCalls, // Keep total attempts for internal use
+        uniqueLeadsCalled: displayCalls,
         last24hLeads,
         conversionRate,
         successRate,
