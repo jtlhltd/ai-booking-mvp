@@ -19329,17 +19329,29 @@ async function processVapiCallFromQueue(call) {
       assistantConfig
     });
     
+    // Validate phone number
+    if (!leadPhone || !leadPhone.trim()) {
+      throw new Error('Lead phone number is missing or empty');
+    }
+    
     // Make VAPI call using callLeadInstantly
     const { callLeadInstantly } = await import('./lib/instant-calling.js');
     
     // Prepare lead object for callLeadInstantly
     const leadForCall = {
-      phone: leadPhone,
+      phone: leadPhone.trim(),
       name: (existingLead?.name || callData.leadName || 'Prospect').substring(0, 40), // VAPI limit: 40 chars
       service: existingLead?.service || callData.leadService || '',
       source: existingLead?.source || callData.leadSource || 'queue',
       leadScore: callData.leadScore || 50
     };
+    
+    console.log('[QUEUE CALL] Making call:', {
+      queueId: call.id,
+      clientKey,
+      leadPhone: leadForCall.phone,
+      leadName: leadForCall.name
+    });
     
     const vapiResult = await callLeadInstantly({
       clientKey,
