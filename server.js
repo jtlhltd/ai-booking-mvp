@@ -19344,9 +19344,97 @@ async function processVapiCallFromQueue(call) {
   }
 }
 
-// Start processors (disabled to prevent crashes)
-// setInterval(processRetryQueue, 5 * 60 * 1000); // Every 5 minutes
-// setInterval(processCallQueue, 2 * 60 * 1000); // Every 2 minutes
+// Queue new leads for calling - runs every 5 minutes
+async function queueNewLeadsForCalling() {
+  try {
+    console.log('[LEAD QUEUER] Checking for new leads to queue...');
+    
+    // Get all clients
+    const clients = await listFullClients();
+    
+    for (const client of clients) {
+      if (!client.isEnabled || !client.vapi?.assistantId) {
+        continue; // Skip disabled clients or clients without VAPI config
+      }
+      
+      try {
+        // Get new leads that haven't been called yet
+        const newLeads = await query(`
+          SELECT l.id, l.name, l.phone, l.service, l.source, l.status, l.created_at,
+                 (SELECT COUNT(*) FROM call_queue cq 
+                  WHERE cq.client_key = l.client_key 
+                  AND cq.lead_phone = l.phone 
+                  AND cq.status IN ('completed', 'processing')) as call_count
+          FROM leads l
+          WHERE l.client_key = $1
+            AND l.status = 'new'
+            AND l.created_at >= NOW() - INTERVAL '7 days'
+            AND NOT EXISTS (
+              SELECT 1 FROM call_queue cq 
+              WHERE cq.client_key = l.client_key 
+              AND cq.lead_phone = l.phone 
+              AND cq.status = 'pending'
+            )
+          ORDER BY l.created_at ASC
+          LIMIT 20
+        `, [client.clientKey]);
+        
+        if (newLeads.rows.length === 0) {
+          continue;
+        }
+        
+        console.log(`[LEAD QUEUER] Found ${newLeads.rows.length} new leads for ${client.clientKey}`);
+        
+        const { addToCallQueue } = await import('./db.js');
+        
+        for (const lead of newLeads.rows) {
+          try {
+            // Check if we should call now or schedule for later
+            const shouldCallNow = isBusinessHours(client);
+            const scheduledFor = shouldCallNow 
+              ? new Date() // Call immediately
+              : getNextBusinessHour(client); // Schedule for next business hour
+            
+            // Calculate priority based on lead age and source
+            const leadAge = Math.floor((Date.now() - new Date(lead.created_at).getTime()) / (1000 * 60 * 60)); // hours
+            let priority = 5; // Default priority
+            if (leadAge < 1) priority = 8; // Very new leads get high priority
+            else if (leadAge < 24) priority = 6; // Less than 24 hours
+            else priority = 4; // Older leads
+            
+            await addToCallQueue({
+              clientKey: client.clientKey,
+              leadPhone: lead.phone,
+              priority: priority,
+              scheduledFor: scheduledFor,
+              callType: 'vapi_call',
+              callData: {
+                triggerType: 'new_lead',
+                leadId: lead.id,
+                leadName: lead.name,
+                leadService: lead.service,
+                leadSource: lead.source,
+                leadStatus: lead.status,
+                businessHours: shouldCallNow ? 'within' : 'outside'
+              }
+            });
+            
+            console.log(`[LEAD QUEUER] Queued lead ${lead.phone} for ${client.clientKey} (priority: ${priority})`);
+          } catch (queueError) {
+            console.error(`[LEAD QUEUER] Error queueing lead ${lead.phone}:`, queueError);
+          }
+        }
+      } catch (clientError) {
+        console.error(`[LEAD QUEUER] Error processing client ${client.clientKey}:`, clientError);
+      }
+    }
+  } catch (error) {
+    console.error('[LEAD QUEUER ERROR]', error);
+  }
+}
+
+// Start processors with cron jobs (better than setInterval for production)
+// These will be scheduled in the cron section below
 
 // Cold Call Bot Management Endpoints
 
@@ -22660,6 +22748,39 @@ async function startServer() {
       }
     });
     console.log('✅ Request queue processing scheduled (runs every 2 minutes)');
+    
+    // Start call queue processor (runs every 2 minutes)
+    cron.schedule('*/2 * * * *', async () => {
+      console.log('[CRON] 📞 Processing call queue...');
+      try {
+        await processCallQueue();
+      } catch (error) {
+        console.error('[CRON ERROR] Call queue processing failed:', error);
+      }
+    });
+    console.log('✅ Call queue processor scheduled (runs every 2 minutes)');
+    
+    // Start retry queue processor (runs every 5 minutes)
+    cron.schedule('*/5 * * * *', async () => {
+      console.log('[CRON] 🔄 Processing retry queue...');
+      try {
+        await processRetryQueue();
+      } catch (error) {
+        console.error('[CRON ERROR] Retry queue processing failed:', error);
+      }
+    });
+    console.log('✅ Retry queue processor scheduled (runs every 5 minutes)');
+    
+    // Start new lead queuer (runs every 5 minutes to queue new leads for calling)
+    cron.schedule('*/5 * * * *', async () => {
+      console.log('[CRON] 📋 Queueing new leads for calling...');
+      try {
+        await queueNewLeadsForCalling();
+      } catch (error) {
+        console.error('[CRON ERROR] Lead queuing failed:', error);
+      }
+    });
+    console.log('✅ New lead queuer scheduled (runs every 5 minutes)');
     
     // Dead letter queue cleanup - runs daily
     cron.schedule('0 2 * * *', async () => {
