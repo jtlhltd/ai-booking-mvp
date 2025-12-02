@@ -8337,9 +8337,10 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         FROM leads l
         JOIN calls c ON c.client_key = l.client_key AND c.lead_phone = l.phone
         WHERE c.client_key = $1
-          AND l.created_at >= NOW() - INTERVAL '7 days'
+          AND l.created_at >= NOW() - INTERVAL '24 hours'
           AND c.created_at >= l.created_at
           AND c.created_at <= l.created_at + INTERVAL '24 hours'
+          AND c.created_at >= NOW() - INTERVAL '24 hours'
         ORDER BY l.phone, c.created_at ASC
         LIMIT 100
       `, [clientKey]),
