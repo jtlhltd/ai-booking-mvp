@@ -133,40 +133,83 @@ export async function updateLogisticsRowByPhone(spreadsheetId, phone, updates) {
   const s = await getClient();
   
   try {
-    // Read all rows to find the one with matching phone
+    console.log('[UPDATE LOGISTICS] Searching for row:', {
+      phone: phone || 'MISSING',
+      callId: updates.callId || 'MISSING',
+      hasRecordingUrl: !!updates.recordingUrl,
+      hasTranscript: !!updates.transcriptSnippet
+    });
+    
+    // Read all rows to find the one with matching phone or callId
     const response = await s.spreadsheets.values.get({
       spreadsheetId,
       range: 'Sheet1!A:U'
     });
     
     const rows = response.data.values || [];
-    if (rows.length < 2) return false; // No data rows (header only)
+    console.log('[UPDATE LOGISTICS] Total rows in sheet:', rows.length);
     
-    // Find row index by phone (column D, index 3)
+    if (rows.length < 2) {
+      console.log('[UPDATE LOGISTICS] No data rows (only header)');
+      return false; // No data rows (header only)
+    }
+    
     const phoneColumnIndex = 3; // Column D (0-indexed: A=0, B=1, C=2, D=3)
+    const callIdColumnIndex = 18; // Column S (0-indexed)
     let rowIndex = -1;
     
-    for (let i = 1; i < rows.length; i++) { // Start from row 2 (skip header)
-      const rowPhone = rows[i][phoneColumnIndex] || '';
-      // Normalize phone numbers for comparison
-      const normalizedRowPhone = rowPhone.replace(/\s+/g, '').replace(/^\+/, '');
-      const normalizedSearchPhone = phone.replace(/\s+/g, '').replace(/^\+/, '');
-      
-      if (normalizedRowPhone === normalizedSearchPhone || 
-          normalizedRowPhone.endsWith(normalizedSearchPhone) ||
-          normalizedSearchPhone.endsWith(normalizedRowPhone)) {
-        // Check if this row doesn't have a Call ID yet (column S, index 18)
-        const callIdColumnIndex = 18;
+    // First, try to match by callId if provided (more reliable)
+    if (updates.callId) {
+      console.log('[UPDATE LOGISTICS] Searching by callId:', updates.callId);
+      for (let i = 1; i < rows.length; i++) {
         const existingCallId = rows[i][callIdColumnIndex] || '';
-        if (!existingCallId) {
-          rowIndex = i + 1; // +1 because Sheets uses 1-based indexing
+        const rowPhone = rows[i][phoneColumnIndex] || '';
+        console.log(`[UPDATE LOGISTICS] Row ${i + 1}: callId="${existingCallId}", phone="${rowPhone}"`);
+        
+        if (existingCallId === updates.callId) {
+          rowIndex = i + 1;
+          console.log(`[UPDATE LOGISTICS] ✅ Found match by callId at row ${rowIndex}`);
           break;
         }
       }
     }
     
+    // If no callId match, try phone number (only update rows without callId)
+    if (rowIndex === -1 && phone) {
+      console.log('[UPDATE LOGISTICS] No callId match, searching by phone:', phone);
+      const normalizedSearchPhone = phone.replace(/\s+/g, '').replace(/^\+/, '');
+      
+      for (let i = 1; i < rows.length; i++) {
+        const rowPhone = rows[i][phoneColumnIndex] || '';
+        const existingCallId = rows[i][callIdColumnIndex] || '';
+        
+        // Normalize phone numbers for comparison
+        const normalizedRowPhone = rowPhone.replace(/\s+/g, '').replace(/^\+/, '');
+        
+        if (normalizedRowPhone === normalizedSearchPhone || 
+            normalizedRowPhone.endsWith(normalizedSearchPhone) ||
+            normalizedSearchPhone.endsWith(normalizedRowPhone)) {
+          console.log(`[UPDATE LOGISTICS] Phone match found at row ${i + 1}, existing callId: "${existingCallId}"`);
+          
+          // Only update if this row doesn't have a Call ID yet
+          if (!existingCallId) {
+            rowIndex = i + 1; // +1 because Sheets uses 1-based indexing
+            console.log(`[UPDATE LOGISTICS] ✅ Found match by phone at row ${rowIndex} (no existing callId)`);
+            break;
+          } else {
+            console.log(`[UPDATE LOGISTICS] ⚠️ Skipping row ${i + 1} - already has callId: "${existingCallId}"`);
+          }
+        }
+      }
+    }
+    
     if (rowIndex === -1) {
-      console.log('[UPDATE LOGISTICS] No matching row found or row already has Call ID');
+      console.log('[UPDATE LOGISTICS] ❌ No matching row found');
+      console.log('[UPDATE LOGISTICS] Search criteria:', {
+        searchedCallId: updates.callId || 'none',
+        searchedPhone: phone || 'none',
+        totalRows: rows.length - 1
+      });
       return false;
     }
     
@@ -181,15 +224,26 @@ export async function updateLogisticsRowByPhone(spreadsheetId, phone, updates) {
     const headerMap = Object.fromEntries(LOGISTICS_HEADERS.map((h, i) => [h, i]));
     
     // Update specific columns
+    const updatesMade = [];
     if (updates.callId && headerMap['Call ID'] !== undefined) {
       currentRow[headerMap['Call ID']] = updates.callId;
+      updatesMade.push('Call ID');
     }
     if (updates.recordingUrl && headerMap['Recording URI'] !== undefined) {
       currentRow[headerMap['Recording URI']] = updates.recordingUrl;
+      updatesMade.push('Recording URI');
     }
     if (updates.transcriptSnippet && headerMap['Transcript Snippet'] !== undefined) {
       currentRow[headerMap['Transcript Snippet']] = (updates.transcriptSnippet || '').slice(0, 300);
+      updatesMade.push('Transcript Snippet');
     }
+    
+    console.log(`[UPDATE LOGISTICS] Updating row ${rowIndex} with:`, updatesMade);
+    console.log(`[UPDATE LOGISTICS] Update values:`, {
+      callId: updates.callId || 'none',
+      recordingUrl: updates.recordingUrl ? updates.recordingUrl.substring(0, 50) + '...' : 'none',
+      transcriptSnippet: updates.transcriptSnippet ? updates.transcriptSnippet.substring(0, 50) + '...' : 'none'
+    });
     
     // Write updated row back
     await s.spreadsheets.values.update({
@@ -199,7 +253,7 @@ export async function updateLogisticsRowByPhone(spreadsheetId, phone, updates) {
       requestBody: { values: [currentRow] }
     });
     
-    console.log(`[UPDATE LOGISTICS] Updated row ${rowIndex} for phone ${phone}`);
+    console.log(`[UPDATE LOGISTICS] ✅ Successfully updated row ${rowIndex} for phone ${phone || 'N/A'}`);
     return true;
   } catch (error) {
     console.error('[UPDATE LOGISTICS ERROR]', error);
