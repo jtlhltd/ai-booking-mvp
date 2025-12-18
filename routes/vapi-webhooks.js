@@ -62,6 +62,18 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
       // Normalize common fields onto body so downstream logic works unchanged
       body.call = body.call || message.call || {};
       if (!body.status && message.type) body.status = message.type;
+      
+      // Extract from artifact object (end-of-call-report format)
+      if (message.artifact) {
+        if (!body.transcript && message.artifact.transcript) {
+          body.transcript = message.artifact.transcript;
+        }
+        if (!body.recordingUrl && message.artifact.recordingUrl) {
+          body.recordingUrl = message.artifact.recordingUrl;
+        }
+      }
+      
+      // Fallback to other transcript sources
       if (!body.transcript && (message.transcript || message.data?.transcript || message.report?.transcript)) {
         body.transcript = message.transcript || message.data?.transcript || message.report?.transcript;
       }
@@ -181,7 +193,12 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
         .join(' ');
       if (msgText && msgText.length > 0) transcript = msgText;
     }
-    const recordingUrl = body.call?.recordingUrl || body.recordingUrl || body.recording_url || '';
+    // Extract recording URL from multiple possible locations, including artifact
+    const recordingUrl = body.call?.recordingUrl || 
+                        body.recordingUrl || 
+                        body.recording_url || 
+                        body.message?.artifact?.recordingUrl ||
+                        '';
     const vapiMetrics = body.call?.metrics || body.metrics || {};
     
     // Extract assistant ID from webhook payload
@@ -688,16 +705,29 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
         };
         
         console.log('[LOGISTICS SHEET DATA] Writing to sheet:', JSON.stringify(sheetData, null, 2));
+        console.log('[LOGISTICS SHEET] Call metadata for update:', {
+          callId: callId || 'MISSING',
+          recordingUrl: recordingUrl || 'MISSING',
+          transcriptLength: transcript?.length || 0,
+          phone: leadPhone || 'MISSING',
+          hasCallId: !!callId,
+          hasRecordingUrl: !!recordingUrl,
+          hasTranscript: !!transcript
+        });
         
         try {
           console.log('[LOGISTICS SHEET] Attempting to update or append to sheet:', logisticsSheetId);
           
           // First try to update existing row (created by tool call during the call)
-          const updated = await sheets.updateLogisticsRowByPhone(logisticsSheetId, leadPhone, {
+          // Try by callId first (more reliable), then fall back to phone
+          const updateData = {
             callId: callId || '',
             recordingUrl: recordingUrl || '',
             transcriptSnippet: transcript.slice(0, 500) || ''
-          });
+          };
+          console.log('[LOGISTICS SHEET] Update data:', JSON.stringify(updateData, null, 2));
+          
+          const updated = await sheets.updateLogisticsRowByPhone(logisticsSheetId, leadPhone, updateData);
           
           if (!updated) {
             // If no row found to update, append new one (fallback)
