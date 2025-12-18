@@ -203,6 +203,25 @@ export async function updateLogisticsRowByPhone(spreadsheetId, phone, updates) {
       }
     }
     
+    // If still no match and we have a callId but no phone, try to find the most recent row without a callId
+    // This handles the case where the tool call created a row during the call, but the webhook doesn't have the phone
+    if (rowIndex === -1 && updates.callId && !phone) {
+      console.log('[UPDATE LOGISTICS] No callId or phone match, searching for most recent row without callId');
+      
+      // Search from bottom to top (most recent first)
+      for (let i = rows.length - 1; i >= 1; i--) {
+        const existingCallId = rows[i][callIdColumnIndex] || '';
+        const rowPhone = rows[i][phoneColumnIndex] || '';
+        
+        // Find the first row (from bottom) that has a phone but no callId
+        if (!existingCallId && rowPhone) {
+          rowIndex = i + 1; // +1 because Sheets uses 1-based indexing
+          console.log(`[UPDATE LOGISTICS] ✅ Found most recent row without callId at row ${rowIndex} (phone: "${rowPhone}")`);
+          break;
+        }
+      }
+    }
+    
     if (rowIndex === -1) {
       console.log('[UPDATE LOGISTICS] ❌ No matching row found');
       console.log('[UPDATE LOGISTICS] Search criteria:', {
