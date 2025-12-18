@@ -63,7 +63,27 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
       body.call = body.call || message.call || {};
       if (!body.status && message.type) body.status = message.type;
       
-      // Extract from artifact object (end-of-call-report format)
+      // Extract from VAPI's ACTUAL payload structure (per VAPI Composer):
+      // - message.call.recordingUrl (NOT message.artifact.recordingUrl)
+      // - message.transcript (NOT message.artifact.transcript)
+      if (message.call) {
+        if (!body.recordingUrl && message.call.recordingUrl) {
+          body.recordingUrl = message.call.recordingUrl;
+        }
+      }
+      
+      // Extract transcript from message.transcript (top level, NOT artifact)
+      // This is the PRIMARY path for end-of-call-report webhooks
+      if (!body.transcript && message.transcript) {
+        body.transcript = message.transcript;
+      }
+      
+      // Fallback to other transcript sources (for other webhook types)
+      if (!body.transcript && (message.data?.transcript || message.report?.transcript)) {
+        body.transcript = message.data?.transcript || message.report?.transcript;
+      }
+      
+      // Last resort: check artifact (some older webhook formats may use this)
       if (message.artifact) {
         if (!body.transcript && message.artifact.transcript) {
           body.transcript = message.artifact.transcript;
@@ -73,10 +93,6 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
         }
       }
       
-      // Fallback to other transcript sources
-      if (!body.transcript && (message.transcript || message.data?.transcript || message.report?.transcript)) {
-        body.transcript = message.transcript || message.data?.transcript || message.report?.transcript;
-      }
       if (!body.structuredOutput && (message.structuredOutput || message.data?.structuredOutput)) {
         body.structuredOutput = message.structuredOutput || message.data?.structuredOutput;
       }
@@ -98,8 +114,12 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
     
     // Extract transcript and recording (NEW)
     // Capture transcript from multiple possible VAPI payload shapes
-    // Prefer explicit transcript fields, then fall back to end-of-call report or messages aggregation
-    let transcript = body.call?.transcript || body.transcript || body.summary || '';
+    // PRIMARY: message.transcript (actual VAPI format for end-of-call-report)
+    // Then fall back to other locations
+    let transcript = body.transcript || 
+                    body.message?.transcript ||
+                    body.call?.transcript || 
+                    body.summary || '';
     const eocrTranscript = body.endOfCallReport?.transcript || body.call?.endOfCallReport?.transcript || body.end_of_call_report?.transcript;
     if (!transcript && eocrTranscript) transcript = eocrTranscript;
     
@@ -193,8 +213,11 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
         .join(' ');
       if (msgText && msgText.length > 0) transcript = msgText;
     }
-    // Extract recording URL from multiple possible locations, including artifact
+    // Extract recording URL from VAPI's actual payload structure:
+    // Primary: message.call.recordingUrl (actual VAPI format)
+    // Fallbacks: other possible locations
     const recordingUrl = body.call?.recordingUrl || 
+                        body.message?.call?.recordingUrl ||
                         body.recordingUrl || 
                         body.recording_url || 
                         body.message?.artifact?.recordingUrl ||
