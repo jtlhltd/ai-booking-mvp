@@ -129,6 +129,84 @@ export async function appendLogistics(spreadsheetId, data) {
   });
 }
 
+export async function updateLogisticsRowByPhone(spreadsheetId, phone, updates) {
+  const s = await getClient();
+  
+  try {
+    // Read all rows to find the one with matching phone
+    const response = await s.spreadsheets.values.get({
+      spreadsheetId,
+      range: 'Sheet1!A:U'
+    });
+    
+    const rows = response.data.values || [];
+    if (rows.length < 2) return false; // No data rows (header only)
+    
+    // Find row index by phone (column D, index 3)
+    const phoneColumnIndex = 3; // Column D (0-indexed: A=0, B=1, C=2, D=3)
+    let rowIndex = -1;
+    
+    for (let i = 1; i < rows.length; i++) { // Start from row 2 (skip header)
+      const rowPhone = rows[i][phoneColumnIndex] || '';
+      // Normalize phone numbers for comparison
+      const normalizedRowPhone = rowPhone.replace(/\s+/g, '').replace(/^\+/, '');
+      const normalizedSearchPhone = phone.replace(/\s+/g, '').replace(/^\+/, '');
+      
+      if (normalizedRowPhone === normalizedSearchPhone || 
+          normalizedRowPhone.endsWith(normalizedSearchPhone) ||
+          normalizedSearchPhone.endsWith(normalizedRowPhone)) {
+        // Check if this row doesn't have a Call ID yet (column S, index 18)
+        const callIdColumnIndex = 18;
+        const existingCallId = rows[i][callIdColumnIndex] || '';
+        if (!existingCallId) {
+          rowIndex = i + 1; // +1 because Sheets uses 1-based indexing
+          break;
+        }
+      }
+    }
+    
+    if (rowIndex === -1) {
+      console.log('[UPDATE LOGISTICS] No matching row found or row already has Call ID');
+      return false;
+    }
+    
+    // Get current row
+    const currentRow = rows[rowIndex - 1] || [];
+    // Ensure row has all 21 columns
+    while (currentRow.length < 21) {
+      currentRow.push('');
+    }
+    
+    // Map updates to column indices
+    const headerMap = Object.fromEntries(LOGISTICS_HEADERS.map((h, i) => [h, i]));
+    
+    // Update specific columns
+    if (updates.callId && headerMap['Call ID'] !== undefined) {
+      currentRow[headerMap['Call ID']] = updates.callId;
+    }
+    if (updates.recordingUrl && headerMap['Recording URI'] !== undefined) {
+      currentRow[headerMap['Recording URI']] = updates.recordingUrl;
+    }
+    if (updates.transcriptSnippet && headerMap['Transcript Snippet'] !== undefined) {
+      currentRow[headerMap['Transcript Snippet']] = (updates.transcriptSnippet || '').slice(0, 300);
+    }
+    
+    // Write updated row back
+    await s.spreadsheets.values.update({
+      spreadsheetId,
+      range: `Sheet1!A${rowIndex}:U${rowIndex}`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [currentRow] }
+    });
+    
+    console.log(`[UPDATE LOGISTICS] Updated row ${rowIndex} for phone ${phone}`);
+    return true;
+  } catch (error) {
+    console.error('[UPDATE LOGISTICS ERROR]', error);
+    return false;
+  }
+}
+
 export async function updateLead(spreadsheetId, { leadId, rowNumber, patch }) {
   const s = await getClient();
   await ensureHeader(spreadsheetId);

@@ -690,9 +690,24 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
         console.log('[LOGISTICS SHEET DATA] Writing to sheet:', JSON.stringify(sheetData, null, 2));
         
         try {
-          console.log('[LOGISTICS SHEET] Attempting to append to sheet:', logisticsSheetId);
-          await sheets.appendLogistics(logisticsSheetId, sheetData);
-          console.log('[LOGISTICS SHEET APPEND] ✅ SUCCESS', { callId, phone: leadPhone });
+          console.log('[LOGISTICS SHEET] Attempting to update or append to sheet:', logisticsSheetId);
+          
+          // First try to update existing row (created by tool call during the call)
+          const updated = await sheets.updateLogisticsRowByPhone(logisticsSheetId, leadPhone, {
+            callId: callId || '',
+            recordingUrl: recordingUrl || '',
+            transcriptSnippet: transcript.slice(0, 500) || ''
+          });
+          
+          if (!updated) {
+            // If no row found to update, append new one (fallback)
+            console.log('[LOGISTICS SHEET] No existing row found, appending new row');
+            await sheets.appendLogistics(logisticsSheetId, sheetData);
+            console.log('[LOGISTICS SHEET APPEND] ✅ SUCCESS', { callId, phone: leadPhone });
+          } else {
+            console.log('[LOGISTICS SHEET] ✅ Updated existing row with call metadata', { callId, phone: leadPhone });
+          }
+          
           // Mark as processed to avoid duplicate rows on retries
           markProcessed(callId);
         } catch (sheetError) {
