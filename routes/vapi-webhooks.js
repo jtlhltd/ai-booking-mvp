@@ -11,14 +11,35 @@ import { verifyVapiSignature } from '../middleware/vapi-webhook-verification.js'
 const router = express.Router();
 
 // Middleware to preserve raw body for signature verification
-router.use('/webhooks/vapi', express.raw({ type: 'application/json' }), (req, res, next) => {
-  // Store raw body for signature verification
-  req.rawBody = req.body;
-  // Parse JSON body for normal processing
-  try {
-    req.body = JSON.parse(req.body.toString());
-  } catch (e) {
-    req.body = {};
+// Note: Global express.json() may have already parsed the body, so we handle both cases
+router.use('/webhooks/vapi', (req, res, next) => {
+  // If body is already parsed (from global express.json()), use it directly
+  // Otherwise, try to get raw body if available
+  if (typeof req.body === 'object' && req.body !== null && !Buffer.isBuffer(req.body)) {
+    // Body already parsed by global express.json() middleware
+    req.rawBody = Buffer.from(JSON.stringify(req.body), 'utf8');
+    // req.body is already the parsed object, so we're good
+    console.log('[VAPI WEBHOOK MIDDLEWARE] Body already parsed, using directly. Keys:', Object.keys(req.body || {}));
+  } else if (Buffer.isBuffer(req.body)) {
+    // Body is a Buffer (from express.raw() if it was used)
+    req.rawBody = req.body;
+    try {
+      const bodyString = req.body.toString('utf8');
+      if (bodyString && bodyString.length > 0) {
+        req.body = JSON.parse(bodyString);
+      } else {
+        console.error('[VAPI WEBHOOK MIDDLEWARE] Empty body string from Buffer');
+        req.body = {};
+      }
+    } catch (e) {
+      console.error('[VAPI WEBHOOK MIDDLEWARE] JSON parse error:', e.message);
+      req.body = {};
+    }
+  } else {
+    // Body might be empty or in unexpected format
+    console.error('[VAPI WEBHOOK MIDDLEWARE] Unexpected body type:', typeof req.body, 'Value:', req.body);
+    req.rawBody = Buffer.alloc(0);
+    req.body = req.body || {};
   }
   next();
 });
