@@ -328,19 +328,30 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
       outcome,
       duration,
       cost,
-      toolCallCount: Array.isArray(body.toolCalls) ? body.toolCalls.length : 0,
+      toolCallCount: Array.isArray(body.toolCalls || body.call?.toolCalls || body.message?.toolCalls) ? (body.toolCalls || body.call?.toolCalls || body.message?.toolCalls || []).length : 0,
       qualityScore: analysis.qualityScore,
       sentiment: analysis.sentiment
     });
 
     // Handle tool calls from VAPI assistant
-    if (body.toolCalls && body.toolCalls.length > 0) {
-      console.log('[VAPI WEBHOOK] Processing tool calls:', body.toolCalls.length);
+    // Check multiple possible locations for toolCalls
+    const toolCalls = body.toolCalls || body.call?.toolCalls || body.message?.toolCalls || [];
+    
+    console.log('[VAPI WEBHOOK] Tool calls check:', {
+      'body.toolCalls': !!body.toolCalls,
+      'body.call?.toolCalls': !!body.call?.toolCalls,
+      'body.message?.toolCalls': !!body.message?.toolCalls,
+      'final toolCalls length': toolCalls.length,
+      'toolCalls': toolCalls
+    });
+    
+    if (toolCalls && toolCalls.length > 0) {
+      console.log('[VAPI WEBHOOK] Processing tool calls:', toolCalls.length);
       
       // Import function handlers
       const { handleVapiFunctionCall } = await import('../lib/vapi-function-handlers.js');
       
-      for (const toolCall of body.toolCalls) {
+      for (const toolCall of toolCalls) {
         try {
           const functionName = toolCall.function.name;
           const functionArgs = JSON.parse(toolCall.function.arguments || '{}');
@@ -432,32 +443,80 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
           
           // Legacy functions (keep existing logic)
           if (toolCall.function.name === 'access_google_sheet') {
-            const args = JSON.parse(toolCall.function.arguments);
+            console.log('[VAPI WEBHOOK] Processing access_google_sheet tool call');
+            console.log('[VAPI WEBHOOK] Raw arguments:', toolCall.function.arguments);
+            console.log('[VAPI WEBHOOK] Arguments type:', typeof toolCall.function.arguments);
+            
+            // Parse arguments - handle both string and object formats
+            let args;
+            try {
+              if (typeof toolCall.function.arguments === 'string') {
+                args = JSON.parse(toolCall.function.arguments);
+              } else if (typeof toolCall.function.arguments === 'object' && toolCall.function.arguments !== null) {
+                args = toolCall.function.arguments;
+              } else {
+                console.error('[VAPI WEBHOOK] Invalid arguments format:', toolCall.function.arguments);
+                throw new Error('Invalid arguments format for access_google_sheet');
+              }
+            } catch (parseError) {
+              console.error('[VAPI WEBHOOK] Failed to parse arguments:', parseError);
+              console.error('[VAPI WEBHOOK] Arguments value:', toolCall.function.arguments);
+              throw parseError;
+            }
+            
+            console.log('[VAPI WEBHOOK] Parsed arguments:', JSON.stringify(args, null, 2));
             const { action, data } = args;
+            
+            console.log('[VAPI WEBHOOK] Extracted action:', action);
+            console.log('[VAPI WEBHOOK] Extracted data:', JSON.stringify(data, null, 2));
             
             // Get tenant configuration
             const logisticsSheetId = tenant?.vapi?.logisticsSheetId || tenant?.gsheet_id || process.env.LOGISTICS_SHEET_ID;
             
+            console.log('[VAPI WEBHOOK] Logistics sheet ID:', logisticsSheetId);
+            
             if (logisticsSheetId) {
               if (action === 'append' && data) {
+                console.log('[VAPI WEBHOOK] Appending data to sheet...');
                 // Ensure logistics headers are present
                 await sheets.ensureLogisticsHeader(logisticsSheetId);
                 
-                // Append data to sheet
+                // Append data to sheet - use the correct callId variable
                 await sheets.appendLogistics(logisticsSheetId, {
                   ...data,
-                  callId: body.id,
+                  callId: callId || '',
                   timestamp: new Date().toISOString(),
-                  businessName: metadata.businessName || 'Unknown',
-                  leadPhone: leadPhone
+                  businessName: metadata.businessName || data.businessName || 'Unknown',
+                  leadPhone: leadPhone || data.phone || ''
                 });
                 
-                console.log('[VAPI WEBHOOK] Data appended to sheet via tool call');
+                console.log('[VAPI WEBHOOK] ✅ Data appended to sheet via tool call successfully');
+              } else {
+                console.log('[VAPI WEBHOOK] Skipping append - action:', action, 'hasData:', !!data);
               }
+            } else {
+              console.error('[VAPI WEBHOOK] No logistics sheet ID configured');
             }
             
           } else if (toolCall.function.name === 'schedule_callback') {
-            const args = JSON.parse(toolCall.function.arguments);
+            console.log('[VAPI WEBHOOK] Processing schedule_callback tool call');
+            
+            // Parse arguments - handle both string and object formats
+            let args;
+            try {
+              if (typeof toolCall.function.arguments === 'string') {
+                args = JSON.parse(toolCall.function.arguments);
+              } else if (typeof toolCall.function.arguments === 'object' && toolCall.function.arguments !== null) {
+                args = toolCall.function.arguments;
+              } else {
+                console.error('[VAPI WEBHOOK] Invalid arguments format for schedule_callback');
+                throw new Error('Invalid arguments format for schedule_callback');
+              }
+            } catch (parseError) {
+              console.error('[VAPI WEBHOOK] Failed to parse schedule_callback arguments:', parseError);
+              throw parseError;
+            }
+            
             const { businessName, phone, receptionistName, reason, preferredTime, notes } = args;
             
             const callbackInboxEmail = tenant?.vapi?.callbackInboxEmail || process.env.CALLBACK_INBOX_EMAIL;
@@ -472,7 +531,7 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
                 <p><strong>Reason:</strong> ${reason}</p>
                 <p><strong>Preferred Time:</strong> ${preferredTime || 'Not specified'}</p>
                 <p><strong>Notes:</strong> ${notes || 'None'}</p>
-                <p><strong>Call ID:</strong> ${body.id}</p>
+                <p><strong>Call ID:</strong> ${callId || 'N/A'}</p>
                 <p><strong>Recording:</strong> <a href="${recordingUrl || 'N/A'}">Listen to call</a></p>
               `;
               

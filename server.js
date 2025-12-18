@@ -20087,21 +20087,55 @@ RULES:
 // VAPI Tool Handlers
 app.post('/tools/access_google_sheet', async (req, res) => {
   try {
-    console.log('[GOOGLE SHEET TOOL] Request received:', req.body);
+    console.log('[GOOGLE SHEET TOOL] Request received:', JSON.stringify(req.body, null, 2));
     
-    const { action, data, tenantKey } = req.body;
+    // Handle VAPI's tool call format: { message: { toolCallList: [{ function: { arguments: {...} } }] } }
+    // OR direct format: { action: "...", data: {...}, tenantKey: "..." }
+    let action, data, tenantKey, toolCallId;
+    
+    // Check for VAPI's message format first
+    if (req.body.message?.toolCallList?.[0]) {
+      const toolCall = req.body.message.toolCallList[0];
+      toolCallId = toolCall.id;
+      const args = typeof toolCall.function?.arguments === 'string'
+        ? JSON.parse(toolCall.function.arguments)
+        : toolCall.function?.arguments || {};
+      action = args.action || 'append';
+      data = args.data || args; // If no 'data' key, use args directly
+      tenantKey = args.tenantKey || req.body.message?.call?.assistantId || '';
+      console.log('[GOOGLE SHEET TOOL] Extracted from VAPI message format:', { action, hasData: !!data, tenantKey, toolCallId });
+    } 
+    // Check for VAPI's direct function format
+    else if (req.body.function && req.body.function.arguments) {
+      toolCallId = req.body.toolCallId || req.body.id;
+      const args = typeof req.body.function.arguments === 'string' 
+        ? JSON.parse(req.body.function.arguments)
+        : req.body.function.arguments;
+      action = args.action || 'append';
+      data = args.data || args;
+      tenantKey = args.tenantKey || '';
+      console.log('[GOOGLE SHEET TOOL] Extracted from VAPI function format:', { action, hasData: !!data, tenantKey, toolCallId });
+    } 
+    // Direct format
+    else {
+      action = req.body.action;
+      data = req.body.data;
+      tenantKey = req.body.tenantKey;
+      console.log('[GOOGLE SHEET TOOL] Using direct format:', { action, hasData: !!data, tenantKey });
+    }
     
     if (!action) {
       return res.status(400).json({ error: 'Action is required' });
     }
     
-    // Get tenant configuration
-    const tenant = await store.getTenant(tenantKey || 'logistics_client');
+    // Get tenant configuration - use getFullClient instead of getTenant
+    const tenant = await store.getFullClient(tenantKey || 'logistics_client');
     if (!tenant) {
-      return res.status(404).json({ error: 'Tenant not found' });
+      console.log('[GOOGLE SHEET TOOL] Tenant not found, using default logistics_client');
+      // Continue with default sheet ID if tenant not found
     }
     
-    const logisticsSheetId = tenant.vapi_json?.logisticsSheetId || process.env.LOGISTICS_SHEET_ID;
+    const logisticsSheetId = tenant?.vapi_json?.logisticsSheetId || tenant?.vapi?.logisticsSheetId || tenant?.gsheet_id || process.env.LOGISTICS_SHEET_ID;
     
     if (!logisticsSheetId) {
       return res.status(400).json({ error: 'Google Sheet ID not configured' });
@@ -20118,21 +20152,49 @@ app.post('/tools/access_google_sheet', async (req, res) => {
       });
       
       console.log('[GOOGLE SHEET TOOL] Data appended successfully');
-      return res.json({ 
+      
+      // Return format compatible with both VAPI and direct calls
+      const response = { 
         success: true, 
         message: 'Data appended to Google Sheet successfully',
         action: 'append'
-      });
+      };
+      
+      // If this is a VAPI tool call, return in VAPI's expected format
+      if (toolCallId || req.body.function || req.body.message) {
+        const callId = toolCallId || req.body.toolCallId || req.body.id || 'unknown';
+        return res.json({
+          results: [{
+            toolCallId: callId,
+            result: JSON.stringify(response)
+          }]
+        });
+      }
+      
+      return res.json(response);
     }
     
     if (action === 'read') {
       // Read data from sheet (basic implementation)
       const sheetData = await sheets.readSheet(logisticsSheetId);
-      return res.json({ 
+      const response = { 
         success: true, 
         data: sheetData,
         action: 'read'
-      });
+      };
+      
+      // If this is a VAPI tool call, return in VAPI's expected format
+      if (toolCallId || req.body.function || req.body.message) {
+        const callId = toolCallId || req.body.toolCallId || req.body.id || 'unknown';
+        return res.json({
+          results: [{
+            toolCallId: callId,
+            result: JSON.stringify(response)
+          }]
+        });
+      }
+      
+      return res.json(response);
     }
     
     return res.status(400).json({ error: 'Invalid action or missing data' });
@@ -20156,13 +20218,14 @@ app.post('/tools/schedule_callback', async (req, res) => {
       return res.status(400).json({ error: 'Business name, phone, and reason are required' });
     }
     
-    // Get tenant configuration
-    const tenant = await store.getTenant(tenantKey || 'logistics_client');
+    // Get tenant configuration - use getFullClient instead of getTenant
+    const tenant = await store.getFullClient(tenantKey || 'logistics_client');
     if (!tenant) {
-      return res.status(404).json({ error: 'Tenant not found' });
+      console.log('[CALLBACK TOOL] Tenant not found, using default callback inbox');
+      // Continue with default callback inbox if tenant not found
     }
     
-    const callbackInboxEmail = tenant.vapi_json?.callbackInboxEmail || process.env.CALLBACK_INBOX_EMAIL;
+    const callbackInboxEmail = tenant?.vapi_json?.callbackInboxEmail || tenant?.vapi?.callbackInboxEmail || process.env.CALLBACK_INBOX_EMAIL;
     
     if (!callbackInboxEmail) {
       return res.status(400).json({ error: 'Callback inbox email not configured' });
