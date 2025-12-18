@@ -805,6 +805,36 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
       } catch (sheetErr) {
         console.error('[LOGISTICS SHEET ERROR]', sheetErr?.message || sheetErr);
       }
+    } else if (logisticsSheetId && callId && (recordingUrl || transcript)) {
+      // Assistant ID doesn't match, but we still want to update existing rows with call metadata
+      // This handles cases where the tool call created a row but assistant ID wasn't set in webhook
+      console.log('[LOGISTICS] Assistant ID mismatch or missing, but attempting to update existing row with call metadata');
+      
+      try {
+        console.log('[LOGISTICS SHEET] Attempting to update existing row by callId:', callId);
+        
+        const updateData = {
+          callId: callId || '',
+          recordingUrl: recordingUrl || '',
+          transcriptSnippet: transcript ? transcript.slice(0, 500) : ''
+        };
+        console.log('[LOGISTICS SHEET] Update data:', JSON.stringify(updateData, null, 2));
+        
+        // Try to update by callId (phone might be empty in end-of-call webhook)
+        const updated = await sheets.updateLogisticsRowByPhone(logisticsSheetId, leadPhone || '', updateData);
+        
+        if (updated) {
+          console.log('[LOGISTICS SHEET] ✅ Updated existing row with call metadata (no assistant match)', { callId });
+          markProcessed(callId);
+        } else {
+          console.log('[LOGISTICS SHEET] No existing row found to update (no assistant match)', { callId, phone: leadPhone });
+        }
+      } catch (updateError) {
+        console.error('[LOGISTICS SHEET UPDATE ERROR] ❌ FAILED', {
+          error: updateError.message,
+          callId
+        });
+      }
     }
 
     // Handle specific outcomes
