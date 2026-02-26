@@ -1,12 +1,25 @@
 #!/usr/bin/env node
 
 /**
- * Demo Client Creator Script
+ * Client Creator Script
  * 
- * Creates/uses a reusable demo client and personalizes its Vapi assistant
- * for each prospect demo.
+ * Creates clients (demo or real) and optionally personalizes Vapi assistant for each prospect.
  * 
- * Usage: node scripts/create-demo-client.js
+ * Usage: 
+ *   Interactive: node scripts/create-demo-client.js
+ *   With args: node scripts/create-demo-client.js "Business Name" "industry" "Service1,Service2" [--real|--demo] [--no-assistant]
+ * 
+ * The script will ask:
+ *   1. If you want to create a demo or real client
+ *   2. If you want to create/update a VAPI assistant
+ * 
+ * Demo clients: Simulated bookings (no real calendar/SMS)
+ * Real clients: Actual bookings (uses real calendar and SMS)
+ * 
+ * Flags:
+ *   --real or --production: Create a real client
+ *   --demo: Create a demo client
+ *   --no-assistant: Skip VAPI assistant creation/update
  */
 
 import 'dotenv/config';
@@ -527,7 +540,7 @@ async function getOrCreateDemoClient() {
       timezone: 'Europe/London',
       locale: 'en-GB',
       isEnabled: true,
-      isDemo: true, // Mark as demo client for simulated bookings
+      isDemo: !isRealClient, // Demo clients simulate bookings, real clients use actual calendar/SMS
       booking: {
         timezone: 'Europe/London',
         defaultDurationMin: 30,
@@ -649,7 +662,7 @@ async function getOrCreateAssistant(client) {
 /**
  * Update Vapi assistant with prospect details
  */
-async function updateAssistant(assistantId, prospectData, isInteractive = true) {
+async function updateAssistant(assistantId, prospectData, isInteractive = true, skipStrictVerification = false) {
   const VAPI_PRIVATE_KEY = process.env.VAPI_PRIVATE_KEY;
   
   if (!VAPI_PRIVATE_KEY) {
@@ -1078,6 +1091,11 @@ Let's convert this lead! 🚀`;
           console.log(`✅ Updated and verified: Assistant now mentions "${prospectData.businessName}"\n`);
           updateSuccess = true;
           break;
+        } else if (skipStrictVerification) {
+          // For newly created assistants, be less strict - just check if update was accepted
+          console.log(`✅ Update accepted (verification skipped for new assistant)\n`);
+          updateSuccess = true;
+          break;
         } else {
           console.warn(`⚠️  Update may not have applied. Prompt doesn't mention "${prospectData.businessName}"`);
           console.warn(`   Current prompt starts with: ${updatedPrompt.substring(0, 150)}...`);
@@ -1362,17 +1380,48 @@ async function main() {
       dbConnected = false;
     }
     
-    // Step 1: Get or create demo client
-    const client = await getOrCreateDemoClient();
+    // Step 1: Ask if this is demo or real client (needed early to determine flow)
+    let isRealClient = false;
+    const args = process.argv.slice(2);
     
-    // Step 2: Get or create Vapi assistant
-    const assistantId = await getOrCreateAssistant(client);
+    // Check for --real or --demo flag first
+    if (args.includes('--real') || args.includes('--production')) {
+      isRealClient = true;
+    } else if (args.includes('--demo')) {
+      isRealClient = false;
+    } else if (args.length < 3) {
+      // Ask interactively if not using command line args
+      let clientTypeValid = false;
+      while (!clientTypeValid) {
+        const clientType = await question('Is this a demo client or a real client? (demo/real): ');
+        const normalized = clientType.toLowerCase().trim();
+        if (normalized === 'real' || normalized === 'r' || normalized === 'production') {
+          isRealClient = true;
+          console.log('✅ Creating REAL client (will use actual calendar and SMS)\n');
+          clientTypeValid = true;
+        } else if (normalized === 'demo' || normalized === 'd' || normalized === '') {
+          isRealClient = false;
+          console.log('✅ Creating DEMO client (simulated bookings)\n');
+          clientTypeValid = true;
+        } else {
+          console.log('❌ Please enter "demo" or "real"\n');
+        }
+      }
+    }
+    
+    // Step 2: Get or create demo client (only for demo clients)
+    let client = null;
+    let assistantId = null;
+    
+    if (!isRealClient) {
+      // For demo clients, reuse the demo client and assistant
+      client = await getOrCreateDemoClient();
+      assistantId = await getOrCreateAssistant(client);
+    }
     
     // Step 3: Get prospect details (from command line args or prompt)
     let businessName, industry, services, prospectName, location;
     let prospectData; // Will be initialized later
-    
-    const args = process.argv.slice(2);
     
     if (args.length >= 3) {
       // Use command line arguments
@@ -1394,6 +1443,7 @@ async function main() {
       if (phoneNumberArg) console.log(`Phone number: ${phoneNumberArg}`);
       if (businessHoursArg) console.log(`Business hours: ${businessHoursArg}`);
       if (timezoneArg) console.log(`Timezone: ${timezoneArg}`);
+      console.log(`Client type: ${isRealClient ? 'REAL (actual calendar/SMS)' : 'DEMO (simulated bookings)'}`);
       console.log('');
       
       // Non-interactive mode: use provided values or defaults
@@ -1582,9 +1632,70 @@ async function main() {
       console.log('\n');
     }
     
-    // Step 4: Update Vapi assistant
+    // Step 4: Ask if user wants to create/update VAPI assistant
     const isInteractive = args.length < 3;
-    await updateAssistant(assistantId, prospectData, isInteractive);
+    let createAssistant = false;
+    
+    // Check for --no-assistant flag
+    if (args.includes('--no-assistant')) {
+      createAssistant = false;
+      console.log('⏭️  Skipping VAPI assistant creation (--no-assistant flag)\n');
+    } else if (isInteractive) {
+      // Ask interactively
+      let assistantChoiceValid = false;
+      while (!assistantChoiceValid) {
+        const assistantChoice = await question('Do you want to create/update a VAPI assistant for this client? (y/n): ');
+        const normalized = assistantChoice.toLowerCase().trim();
+        if (normalized === 'y' || normalized === 'yes' || normalized === '') {
+          createAssistant = true;
+          assistantChoiceValid = true;
+        } else if (normalized === 'n' || normalized === 'no') {
+          createAssistant = false;
+          assistantChoiceValid = true;
+        } else {
+          console.log('❌ Please enter "y" or "n"\n');
+        }
+      }
+    } else {
+      // For command-line mode, default to creating assistant unless --no-assistant flag
+      createAssistant = true;
+    }
+    
+    // Step 5: Handle assistant (create new for real clients, update existing for demo clients)
+    if (createAssistant) {
+      if (isRealClient) {
+        // For real clients, create a NEW assistant by cloning from template
+        console.log('\n🤖 Creating new VAPI assistant for real client...\n');
+        const VAPI_TEMPLATE_ASSISTANT_ID = process.env.VAPI_TEMPLATE_ASSISTANT_ID;
+        if (!VAPI_TEMPLATE_ASSISTANT_ID) {
+          throw new Error('VAPI_TEMPLATE_ASSISTANT_ID environment variable is required for creating real clients');
+        }
+        
+        try {
+          const cloned = await cloneVapiAssistant(VAPI_TEMPLATE_ASSISTANT_ID, {
+            businessName: prospectData.businessName,
+            industry: prospectData.industry,
+            services: prospectData.services
+          });
+          assistantId = cloned.assistantId;
+          console.log(`✅ Created new assistant: ${assistantId}\n`);
+          
+          // Now update it with the full prospect data (skip strict verification since it's newly created)
+          await updateAssistant(assistantId, prospectData, isInteractive, true);
+        } catch (error) {
+          console.error('❌ Failed to create assistant:', error.message);
+          throw error;
+        }
+      } else {
+        // For demo clients, update the existing assistant
+        await updateAssistant(assistantId, prospectData, isInteractive);
+      }
+    } else {
+      console.log('⏭️  Skipping VAPI assistant creation/update\n');
+      if (!assistantId) {
+        assistantId = null; // No assistant for this client
+      }
+    }
     
     // Step 5: Create/update personalized client in database
     const clientKey = generateClientKey(prospectData);
@@ -1673,7 +1784,7 @@ async function main() {
       timezone: timezone,
       locale: 'en-GB',
       isEnabled: true,
-      isDemo: true, // Mark as demo client for simulated bookings
+      isDemo: !isRealClient, // Demo clients simulate bookings, real clients use actual calendar/SMS
       // Header fields
       description: description,
       tagline: tagline,
@@ -1695,15 +1806,15 @@ async function main() {
       accentColor: colors.accent,
       fontFamily: "'Inter', sans-serif",
       whiteLabel: whiteLabel,
-      // Vapi configuration
-      vapi: {
+      // Vapi configuration (only if assistant was created)
+      vapi: assistantId ? {
         assistantId: assistantId,
         phoneNumberId: null
-      },
-      vapi_json: {
+      } : null,
+      vapi_json: assistantId ? {
         assistantId: assistantId,
         phoneNumberId: null
-      },
+      } : null,
       // Booking configuration
       booking: {
         timezone: timezone,

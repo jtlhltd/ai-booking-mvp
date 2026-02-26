@@ -15253,6 +15253,7 @@ app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
     const leadName = req.body?.name || req.body?.lead?.name || req.body?.callerName || '';
     const leadSource = req.body?.source || req.body?.leadSource || '';
     const previousStatus = req.body?.previousStatus || '';
+    const leadPain = req.body?.pain || ''; // Pain/symptoms from lead form
     const intentHintParts = [
       req.body?.intent,
       req.body?.intentHint,
@@ -15311,7 +15312,8 @@ app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
           LeadPhone: e164,
           LeadService: service || '',
           LeadSource: leadSource || '',
-          PreviousStatus: previousStatus || ''
+          PreviousStatus: previousStatus || '',
+          LeadPain: leadPain || '' // Pain/symptoms the lead is experiencing
         }
       }
     };
@@ -15377,6 +15379,171 @@ app.post('/webhooks/new-lead/:clientKey', async (req, res) => {
       tenant: req.params?.clientKey || null
     });
     return res.status(500).json({ error: String(err) });
+  }
+});
+
+// Facebook Lead Ads webhook adapter → transforms Facebook format to your system format
+app.post('/webhooks/facebook-lead/:clientKey', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const facebookData = req.body;
+    
+    console.log('[FACEBOOK WEBHOOK] Received webhook for client:', clientKey);
+    console.log('[FACEBOOK WEBHOOK] Raw payload:', JSON.stringify(facebookData, null, 2));
+    
+    // Facebook sends webhooks in this format:
+    // {
+    //   "entry": [{
+    //     "changes": [{
+    //       "value": {
+    //         "leadgen_id": "123456",
+    //         "form_id": "789",
+    //         "created_time": 1234567890,
+    //         "field_data": [
+    //           {"name": "full_name", "values": ["John Doe"]},
+    //           {"name": "phone_number", "values": ["07700 900123"]},
+    //           {"name": "email", "values": ["john@example.com"]}
+    //         ]
+    //       }
+    //     }]
+    //   }]
+    // }
+    
+    // Extract data from Facebook's nested structure
+    const entry = facebookData.entry?.[0];
+    const change = entry?.changes?.[0];
+    const leadData = change?.value;
+    
+    if (!leadData) {
+      console.error('[FACEBOOK WEBHOOK] Invalid format - missing lead data');
+      return res.status(400).json({ 
+        error: 'Invalid Facebook webhook format',
+        received: Object.keys(facebookData)
+      });
+    }
+    
+    // Extract fields from field_data array
+    const fieldData = {};
+    if (Array.isArray(leadData.field_data)) {
+      leadData.field_data.forEach(field => {
+        const fieldName = field.name;
+        const fieldValue = Array.isArray(field.values) ? field.values[0] : field.value || '';
+        fieldData[fieldName] = fieldValue;
+      });
+    }
+    
+    // Map Facebook field names to your system's format
+    // Facebook uses various field names, so we check multiple possibilities
+    const phone = fieldData.phone_number || 
+                  fieldData.phone || 
+                  fieldData.mobile_number || 
+                  fieldData.phoneNumber ||
+                  '';
+    
+    const name = fieldData.full_name || 
+                 fieldData.name || 
+                 fieldData.first_name || 
+                 `${fieldData.first_name || ''} ${fieldData.last_name || ''}`.trim() ||
+                 'Facebook Lead';
+    
+    const email = fieldData.email || fieldData.email_address || '';
+    const service = fieldData.service || 
+                    fieldData.service_type || 
+                    fieldData.interested_service ||
+                    'Consultation';
+    
+    // Capture pain/symptoms - check multiple possible field names
+    const pain = fieldData.pain || 
+                 fieldData.symptoms || 
+                 fieldData.pain_they_are_suffering_from ||
+                 fieldData.suffering_from ||
+                 fieldData.condition ||
+                 fieldData.problem ||
+                 fieldData.issue ||
+                 fieldData.what_pain ||
+                 fieldData.pain_description ||
+                 '';
+    
+    // Additional fields that might be in the form
+    const notes = [
+      pain ? `Pain/Symptoms: ${pain}` : '',
+      fieldData.message || fieldData.notes || fieldData.additional_info || '',
+      fieldData.question || fieldData.custom_question || '',
+      `Facebook Form ID: ${leadData.form_id || 'unknown'}`,
+      `Facebook Lead ID: ${leadData.leadgen_id || 'unknown'}`
+    ].filter(Boolean).join(' | ');
+    
+    if (!phone) {
+      console.error('[FACEBOOK WEBHOOK] Missing phone number in lead data');
+      return res.status(400).json({ 
+        error: 'Missing phone number in Facebook lead data',
+        availableFields: Object.keys(fieldData)
+      });
+    }
+    
+    // Transform to your system's format
+    const transformedPayload = {
+      phone: phone,
+      name: name,
+      service: service,
+      source: 'Facebook Lead Ad',
+      email: email,
+      notes: notes,
+      callPurpose: 'lead_followup',
+      // Pass pain information as intent hint so AI knows what to discuss
+      intentHint: pain ? `Lead is suffering from: ${pain}. Focus on understanding their pain and offering appropriate solutions.` : 'Follow up on their inquiry and book an appointment.',
+      // Also pass as a separate field for easier access
+      pain: pain
+    };
+    
+    console.log('[FACEBOOK WEBHOOK] Transformed payload:', transformedPayload);
+    
+    // Forward to your existing endpoint by making an internal request
+    // We'll reuse the existing endpoint logic by calling it internally
+    const baseUrl = process.env.PUBLIC_BASE_URL || 
+                    process.env.BASE_URL || 
+                    `http://localhost:${process.env.PORT || 10000}`;
+    
+    // Make internal request to existing endpoint
+    const forwardResponse = await fetch(`${baseUrl}/webhooks/new-lead/${clientKey}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Internal-Request': 'true' // Flag to indicate this is an internal request
+      },
+      body: JSON.stringify(transformedPayload)
+    });
+    
+    const responseData = await forwardResponse.json().catch(() => ({ 
+      error: 'Failed to parse response' 
+    }));
+    
+    if (!forwardResponse.ok) {
+      console.error('[FACEBOOK WEBHOOK] Forward request failed:', responseData);
+      return res.status(forwardResponse.status).json({
+        error: 'Failed to process lead',
+        details: responseData,
+        transformedPayload
+      });
+    }
+    
+    console.log('[FACEBOOK WEBHOOK] Successfully processed lead:', responseData);
+    
+    return res.status(200).json({
+      success: true,
+      message: 'Facebook lead processed successfully',
+      leadId: leadData.leadgen_id,
+      callInitiated: true,
+      response: responseData
+    });
+    
+  } catch (err) {
+    console.error('[FACEBOOK WEBHOOK ERROR]', err);
+    return res.status(500).json({ 
+      error: 'Failed to process Facebook webhook',
+      details: err.message,
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
   }
 });
 
@@ -20091,30 +20258,33 @@ app.post('/tools/access_google_sheet', async (req, res) => {
     
     // Handle VAPI's tool call format: { message: { toolCallList: [{ function: { arguments: {...} } }] } }
     // OR direct format: { action: "...", data: {...}, tenantKey: "..." }
-    let action, data, tenantKey, toolCallId;
+    let action, data, tenantKey, toolCallId, callId;
     
     // Check for VAPI's message format first
     if (req.body.message?.toolCallList?.[0]) {
       const toolCall = req.body.message.toolCallList[0];
       toolCallId = toolCall.id;
+      // Extract callId from message.call.id (available during the call)
+      callId = req.body.message?.call?.id || req.body.callId || '';
       const args = typeof toolCall.function?.arguments === 'string'
         ? JSON.parse(toolCall.function.arguments)
         : toolCall.function?.arguments || {};
       action = args.action || 'append';
       data = args.data || args; // If no 'data' key, use args directly
       tenantKey = args.tenantKey || req.body.message?.call?.assistantId || '';
-      console.log('[GOOGLE SHEET TOOL] Extracted from VAPI message format:', { action, hasData: !!data, tenantKey, toolCallId });
+      console.log('[GOOGLE SHEET TOOL] Extracted from VAPI message format:', { action, hasData: !!data, tenantKey, toolCallId, callId });
     } 
     // Check for VAPI's direct function format
     else if (req.body.function && req.body.function.arguments) {
       toolCallId = req.body.toolCallId || req.body.id;
+      callId = req.body.callId || req.body.message?.call?.id || '';
       const args = typeof req.body.function.arguments === 'string' 
         ? JSON.parse(req.body.function.arguments)
         : req.body.function.arguments;
       action = args.action || 'append';
       data = args.data || args;
       tenantKey = args.tenantKey || '';
-      console.log('[GOOGLE SHEET TOOL] Extracted from VAPI function format:', { action, hasData: !!data, tenantKey, toolCallId });
+      console.log('[GOOGLE SHEET TOOL] Extracted from VAPI function format:', { action, hasData: !!data, tenantKey, toolCallId, callId });
     } 
     // Direct format
     else {
@@ -20145,9 +20315,10 @@ app.post('/tools/access_google_sheet', async (req, res) => {
       // Ensure logistics headers are present
       await sheets.ensureLogisticsHeader(logisticsSheetId);
       
-      // Append data to sheet
+      // Append data to sheet - include callId if available from webhook
       await sheets.appendLogistics(logisticsSheetId, {
         ...data,
+        callId: callId || data.callId || '', // Use callId from webhook if available
         timestamp: new Date().toISOString()
       });
       

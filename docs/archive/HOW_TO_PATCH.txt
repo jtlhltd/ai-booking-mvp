@@ -1,4 +1,0 @@
-﻿*** PATCH INSTRUCTIONS ***
-Paste the tenant normalizer after:  const app = express();
-Paste the /api/calendar/book-slot route below your /api/calendar/find-slots route.
-(If the anchors differ, do Option A.)

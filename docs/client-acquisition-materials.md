@@ -113,12 +113,17 @@ P.S. We're offering free setup and 30-day trial for salons this month.
 
 ## 📱 **LinkedIn Outreach Templates**
 
-### Template 1: Connection Request
+### Template 1: Connection Request (Generic)
 ```
 Hi [Name], I noticed you're [role] at [Company]. I help [industry] businesses automate their booking process and increase appointments by 300%. Would love to connect and share some insights!
 ```
 
-### Template 2: Follow-up Message
+### Template 2: Connection Request (Demo Offer)
+```
+Hi [Name], I help [industry] businesses convert more of their existing leads into booked appointments. Most lose 50-70% of leads due to slow follow-up. Happy to show you a quick demo of how we do it - would love to connect!
+```
+
+### Template 3: Follow-up Message
 ```
 Hi [Name], thanks for connecting! I saw [Company] is growing - that's exciting! 
 
