@@ -1,6 +1,7 @@
 // run-migration.js
 // Run database migrations for Postgres (used by Render)
 import 'dotenv/config';
+import { init } from './db.js';
 import { runMigrations } from './lib/migration-runner.js';
 
 async function main() {
@@ -12,6 +13,7 @@ async function main() {
   }
   
   try {
+    await init();
     // Use the migration runner which handles all migrations
     const result = await runMigrations();
     

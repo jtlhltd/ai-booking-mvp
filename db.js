@@ -166,6 +166,9 @@ async function initPostgres() {
       END IF;
     END $$;
 
+    -- Index for listFullClients() ORDER BY created_at DESC (prevents full table scan + sort)
+    CREATE INDEX IF NOT EXISTS idx_tenants_created_at ON tenants(created_at DESC);
+
     CREATE TABLE IF NOT EXISTS leads (
       id BIGSERIAL PRIMARY KEY,
       client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
@@ -1041,14 +1044,24 @@ function mapTenantRow(r) {
   return out;
 }
 
+// List cache: short TTL to reduce repeated full-table reads (listFullClients is hot)
+const listFullClientsCache = { data: null, expires: 0 };
+const LIST_FULL_CLIENTS_TTL = 60 * 1000; // 1 minute
+
 export async function listFullClients() {
+  if (listFullClientsCache.data !== null && Date.now() < listFullClientsCache.expires) {
+    return listFullClientsCache.data;
+  }
   const { rows } = await query(`
     SELECT client_key, display_name, timezone, locale,
            numbers_json, twilio_json, vapi_json, calendar_json, sms_templates_json, 
            white_label_config, is_enabled, created_at
     FROM tenants ORDER BY created_at DESC
   `);
-  return rows.map(mapTenantRow);
+  const data = rows.map(mapTenantRow);
+  listFullClientsCache.data = data;
+  listFullClientsCache.expires = Date.now() + LIST_FULL_CLIENTS_TTL;
+  return data;
 }
 
 // Client cache with 5-minute TTL
@@ -1094,6 +1107,9 @@ export function invalidateClientCache(clientKey) {
       clientCache.delete(key);
     }
   }
+  // Invalidate list cache so new/updated clients appear
+  listFullClientsCache.data = null;
+  listFullClientsCache.expires = 0;
 }
 
 /**
@@ -1218,6 +1234,7 @@ export async function upsertFullClient(c) {
 }
 
 export async function deleteClient(clientKey) {
+  invalidateClientCache(clientKey);
   return await query('DELETE FROM tenants WHERE client_key = $1', [clientKey]);
 }
 
