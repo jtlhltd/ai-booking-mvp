@@ -67,6 +67,26 @@ describe('Instant Calling Tests', () => {
     assertTrue(batches === 3, 'Batches calculated correctly');
     assertTrue(batches > 0, 'Has batches');
   });
+
+  test('callLeadInstantly rejects missing/empty lead phone (get customer fix)', async () => {
+    const result = await callLeadInstantly({
+      clientKey: 'test_client',
+      lead: { name: 'No Phone', phone: '' },
+      client: { client_key: 'test_client' }
+    });
+    assertTrue(result && result.ok === false, 'Returns ok: false when phone empty');
+    assertTrue(result.error === 'lead_phone_missing', 'Error is lead_phone_missing');
+  });
+
+  test('callLeadInstantly rejects null/whitespace lead phone', async () => {
+    const result = await callLeadInstantly({
+      clientKey: 'test_client',
+      lead: { name: 'Blank', phone: '   ' },
+      client: { client_key: 'test_client' }
+    });
+    assertTrue(result && result.ok === false, 'Returns ok: false when phone whitespace');
+    assertTrue(result.error === 'lead_phone_missing', 'Error is lead_phone_missing');
+  });
 });
 
 const exitCode = printSummary();

@@ -8275,6 +8275,77 @@ app.post('/api/demo/test-call', async (req, res) => {
   }
 });
 
+// Diagnostic: why dashboard shows "Result not received" — safe to open in browser or curl
+app.get('/api/demo-dashboard-debug/:clientKey', async (req, res) => {
+  const { clientKey } = req.params;
+  try {
+    const recentCallRows = await query(`
+      SELECT c.call_id, c.id, c.lead_phone, c.status, c.outcome, c.created_at, c.duration
+      FROM calls c
+      WHERE c.client_key = $1
+      ORDER BY c.created_at DESC
+      LIMIT 10
+    `, [clientKey]);
+    const rows = recentCallRows.rows || [];
+    const hasVapiKey = !!(process.env.VAPI_PRIVATE_KEY || process.env.VAPI_PUBLIC_KEY || '').trim();
+    const rowsNeedingOutcome = rows.filter(r => r.call_id && !r.outcome);
+    const vapiResults = [];
+    if (hasVapiKey && rowsNeedingOutcome.length > 0) {
+      const vapiKey = process.env.VAPI_PRIVATE_KEY || process.env.VAPI_PUBLIC_KEY || '';
+      for (const r of rowsNeedingOutcome) {
+        try {
+          const res2 = await fetch(`https://api.vapi.ai/call/${r.call_id}`, {
+            headers: { Authorization: `Bearer ${vapiKey}` }
+          });
+          const data = res2.ok ? await res2.json() : null;
+          vapiResults.push({
+            call_id: r.call_id,
+            lead_phone: r.lead_phone,
+            status: r.status,
+            vapiStatus: res2.status,
+            vapiStatusText: res2.statusText,
+            hasData: !!data,
+            dataStatus: data?.status ?? null,
+            dataEndedReason: data?.endedReason ?? null,
+            dataEndedAt: data?.endedAt ?? null,
+            dataOutcome: data?.outcome ?? null,
+            isEnded: !!(data && (
+              ['ended', 'completed', 'failed', 'canceled', 'cancelled'].includes((data.status || '').toLowerCase()) ||
+              data.endedReason || data.endedAt
+            ))
+          });
+        } catch (err) {
+          vapiResults.push({ call_id: r.call_id, error: err.message });
+        }
+      }
+    }
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      clientKey,
+      hasVapiKey,
+      recentCallsCount: rows.length,
+      rowsWithCallId: rows.filter(r => r.call_id).length,
+      rowsWithOutcome: rows.filter(r => r.outcome).length,
+      rowsNeedingOutcome: rowsNeedingOutcome.length,
+      recentCallsSummary: rows.map(r => ({
+        call_id: r.call_id ? `${String(r.call_id).slice(0, 8)}...` : null,
+        status: r.status,
+        outcome: r.outcome,
+        hasOutcome: !!r.outcome
+      })),
+      vapiFallbackResults: vapiResults,
+      hint: !hasVapiKey
+        ? 'VAPI key missing — set VAPI_PRIVATE_KEY or VAPI_PUBLIC_KEY on Render so fallback can fetch outcomes.'
+        : rowsNeedingOutcome.length === 0
+          ? 'All recent calls already have outcome, or no call_id in DB.'
+          : 'Check vapiFallbackResults: if vapiStatus !== 200 or isEnded is false, that explains "Result not received".'
+    });
+  } catch (err) {
+    console.error('[DEMO DASHBOARD DEBUG]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
   const { clientKey } = req.params;
   try {
@@ -8475,19 +8546,90 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       }
     });
 
+    // Fallback: for any call with call_id but no outcome in DB, fetch from VAPI API so dashboard shows real result
+    function mapEndedReasonToOutcome(endedReason) {
+      if (!endedReason || typeof endedReason !== 'string') return null;
+      const r = endedReason.toLowerCase();
+      if (r.includes('customer-did-not-answer') || r.includes('did-not-answer')) return 'no-answer';
+      if (r.includes('voicemail')) return 'voicemail';
+      if (r.includes('busy')) return 'busy';
+      if (r.includes('rejected') || r.includes('failed-to-connect')) return 'rejected';
+      return 'completed';
+    }
+    function isCallEnded(data) {
+      if (!data) return false;
+      const status = (data.status || '').toLowerCase();
+      if (['ended', 'completed', 'failed', 'canceled', 'cancelled'].includes(status)) return true;
+      if (data.endedReason || data.endedAt) return true;
+      return false;
+    }
+    function getDurationFromVapi(data) {
+      if (data == null) return null;
+      if (typeof data.duration === 'number' && data.duration >= 0) return Math.round(data.duration);
+      if (data.endedAt && data.startedAt) {
+        const ms = new Date(data.endedAt) - new Date(data.startedAt);
+        return ms > 0 ? Math.round(ms / 1000) : null;
+      }
+      return null;
+    }
+    const vapiKey = process.env.VAPI_PRIVATE_KEY || process.env.VAPI_PUBLIC_KEY || '';
+    const rowsNeedingOutcome = (recentCallRows.rows || []).filter(r => r.call_id && !r.outcome);
+    const vapiByCallId = new Map();
+    if (vapiKey && rowsNeedingOutcome.length > 0) {
+      const fetched = await Promise.all(rowsNeedingOutcome.map(async (r) => {
+        try {
+          const res = await fetch(`https://api.vapi.ai/call/${r.call_id}`, {
+            headers: { Authorization: `Bearer ${vapiKey}` }
+          });
+          if (!res.ok) return { call_id: r.call_id, data: null };
+          const data = await res.json();
+          return { call_id: r.call_id, data };
+        } catch {
+          return { call_id: r.call_id, data: null };
+        }
+      }));
+      fetched.forEach(({ call_id, data }) => {
+        if (data && isCallEnded(data)) {
+          vapiByCallId.set(call_id, data);
+          const row = rowsNeedingOutcome.find(r => r.call_id === call_id);
+          if (row) {
+            const outcome = data.outcome || (data.endedReason && mapEndedReasonToOutcome(data.endedReason));
+            const duration = getDurationFromVapi(data);
+            import('./db.js').then(({ upsertCall }) =>
+              upsertCall({
+                callId: call_id,
+                clientKey,
+                leadPhone: row.lead_phone,
+                status: 'ended',
+                outcome: outcome || 'completed',
+                duration,
+                cost: data.cost,
+                metadata: data.metadata || {}
+              })
+            ).catch(err => console.error('[DEMO DASHBOARD] VAPI fallback upsertCall failed:', err.message));
+          }
+        }
+      });
+    }
+
     const STALE_INITIATED_MINUTES = 15; // treat "initiated" older than this as stale (no end-of-call webhook received)
     const recentCalls = (recentCallRows.rows || []).map(row => {
-      const durationLabel = formatCallDuration(row.duration);
-      let outcomeLabel = outcomeToFriendlyLabel(row.outcome);
-      const isInitiated = (row.status || '').toLowerCase() === 'initiated';
+      const vapiData = row.call_id ? vapiByCallId.get(row.call_id) : null;
+      const effectiveOutcome = row.outcome || (vapiData && (vapiData.outcome || (vapiData.endedReason && mapEndedReasonToOutcome(vapiData.endedReason))));
+      const effectiveDuration = row.duration != null ? row.duration : (vapiData ? getDurationFromVapi(vapiData) : null);
+      const effectiveStatus = (vapiData && isCallEnded(vapiData)) ? 'ended' : row.status;
+
+      const durationLabel = formatCallDuration(effectiveDuration);
+      let outcomeLabel = outcomeToFriendlyLabel(effectiveOutcome);
+      const isInitiated = (effectiveStatus || '').toLowerCase() === 'initiated';
       const createdAt = row.created_at ? new Date(row.created_at) : null;
       const ageMinutes = createdAt ? (Date.now() - createdAt.getTime()) / 60000 : 0;
       const isStaleInitiated = isInitiated && ageMinutes > STALE_INITIATED_MINUTES;
 
       let summary = '';
-      let displayStatus = row.status;
+      let displayStatus = effectiveStatus;
       let displayOutcomeLabel = outcomeLabel;
-      if (row.outcome && outcomeLabel) {
+      if (effectiveOutcome && outcomeLabel) {
         summary = durationLabel ? `${outcomeLabel} • ${durationLabel}` : outcomeLabel;
       } else if (isStaleInitiated) {
         summary = 'Call ended — result not received (VAPI end-of-call webhook may not have been sent)';
@@ -8509,9 +8651,9 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         status: mapCallStatus(displayStatus),
         statusClass: mapStatusClass(displayStatus),
         timeAgo: formatTimeAgoLabel(row.created_at),
-        outcome: isStaleInitiated ? 'unknown' : (row.outcome || null),
+        outcome: isStaleInitiated ? 'unknown' : (effectiveOutcome || null),
         outcomeLabel: displayOutcomeLabel || null,
-        duration: row.duration != null ? row.duration : null,
+        duration: effectiveDuration != null ? effectiveDuration : null,
         durationLabel: durationLabel || null,
         rawStatus: displayStatus
       };
@@ -8589,7 +8731,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     const roiMultiplier = estimatedCost > 0 ? estimatedRevenue / estimatedCost : 0;
     const roiPercentage = roiMultiplier ? (roiMultiplier - 1) * 100 : 0;
 
-    res.json({
+    const payload = {
       ok: true,
       source: 'live',
       metrics: {
@@ -8641,7 +8783,9 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         timezone: client?.timezone || client?.booking?.timezone || 'Europe/London',
         industry: client?.industry || client?.whiteLabel?.industry || null
       }
-    });
+    };
+    res.set('Cache-Control', 'no-store, must-revalidate, max-age=0');
+    res.json(payload);
   } catch (error) {
     console.error('[DEMO DASHBOARD ERROR]', error);
     res.status(500).json({ ok: false, error: error.message });
@@ -14627,6 +14771,8 @@ app.post('/webhooks/twilio-inbound', express.urlencoded({ extended: false }), tw
           if (isStart) {
             console.log('[LEAD OPT-IN START]', { from, tenantKey });
           }
+          const webhookBaseUrl = process.env.PUBLIC_BASE_URL || process.env.RENDER_EXTERNAL_URL || 'https://ai-booking-mvp.onrender.com';
+          const serverUrl = `${String(webhookBaseUrl).replace(/\/$/, '')}/webhooks/vapi`;
           const payload = {
             assistantId,
             phoneNumberId,
@@ -14652,7 +14798,9 @@ app.post('/webhooks/twilio-inbound', express.urlencoded({ extended: false }), tw
                 isStart,
                 assistantConfig
               })
-            }
+            },
+            server: { url: serverUrl },
+            serverMessages: ['end-of-call-report', 'status-update', 'transcript', 'hang']
           };
             // Use enhanced retry logic for VAPI calls
             const vapiResult = await retryWithBackoff(async () => {
@@ -19603,6 +19751,20 @@ async function processVapiCallFromQueue(call) {
     });
     
     if (!vapiResult || !vapiResult.ok || vapiResult.error) {
+      // Record failed attempt so lead queuer doesn't re-queue this lead every 5 min (87 attempts from 10 leads)
+      const { upsertCall } = await import('./db.js');
+      const failedCallId = `failed_q${call.id}_${Date.now()}`;
+      await upsertCall({
+        callId: failedCallId,
+        clientKey,
+        leadPhone,
+        status: 'failed',
+        outcome: 'failed',
+        duration: null,
+        cost: null,
+        metadata: { reason: vapiResult?.error || vapiResult?.details, queueId: call.id, fromQueue: true },
+        retryAttempt: call.retry_attempt || 0
+      }).catch((e) => console.error('[QUEUE VAPI CALL] Failed to record failed attempt:', e.message));
       throw new Error(vapiResult?.error || vapiResult?.details || 'VAPI call failed');
     }
     
@@ -19659,7 +19821,7 @@ async function queueNewLeadsForCalling() {
               SELECT 1 FROM calls c
               WHERE c.client_key = l.client_key
               AND c.lead_phone = l.phone
-              AND c.status IN ('initiated', 'in_progress', 'completed')
+              AND c.status IN ('initiated', 'in_progress', 'completed', 'failed')
             )
           ORDER BY l.created_at ASC
           LIMIT 20
