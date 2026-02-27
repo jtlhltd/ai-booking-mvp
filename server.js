@@ -9113,28 +9113,30 @@ app.post('/api/leads/import', async (req, res) => {
     if (inserted.length > 0) {
       try {
         const client = await getFullClient(clientKey);
-        const hasVapi = !!(client?.vapi?.assistantId);
-        const isEnabled = !!client?.isEnabled;
+        const isDemoClient = clientKey === 'd2d-xpress-tom';
+        // Demo client: allow call even if DB says disabled or missing vapi (use env fallback in instant-calling)
+        const hasVapi = !!(client?.vapi?.assistantId || client?.vapiAssistantId || (isDemoClient && process.env.VAPI_ASSISTANT_ID));
+        const isEnabled = !!client?.isEnabled || isDemoClient;
         if (!client) {
           console.log('[LEAD IMPORT] No client found for', clientKey);
-        } else if (!isEnabled) {
+        } else if (!isEnabled && !isDemoClient) {
           console.log('[LEAD IMPORT] Client not enabled, skipping call/queue:', clientKey);
         } else if (!hasVapi) {
-          console.log('[LEAD IMPORT] Client missing VAPI assistantId, skipping call/queue:', clientKey);
+          console.log('[LEAD IMPORT] Client missing VAPI assistantId (and no env fallback), skipping call/queue:', clientKey);
         }
-        if (client && client.isEnabled && client.vapi?.assistantId) {
+        if (client && (client.isEnabled || isDemoClient) && (client.vapi?.assistantId || client?.vapiAssistantId || (isDemoClient && process.env.VAPI_ASSISTANT_ID))) {
           const { addToCallQueue } = await import('./db.js');
           const { callLeadInstantly } = await import('./lib/instant-calling.js');
 
-          // Temporary override: when FORCE_INSTANT_CALLS is set, call leads immediately
-          // even outside normal business hours. Otherwise, respect isBusinessHours().
+          // Temporary override: when FORCE_INSTANT_CALLS is set (or demo client), call leads immediately
           const forceEnv = (process.env.FORCE_INSTANT_CALLS || '').toString().toLowerCase();
           const forceInstantCalls = forceEnv === 'true' || forceEnv === '1' || forceEnv === 'yes';
           const inBusinessHours = isBusinessHours(client);
-          const shouldCallNow = forceInstantCalls || inBusinessHours;
+          const shouldCallNow = isDemoClient || forceInstantCalls || inBusinessHours;
           const scheduledFor = shouldCallNow ? new Date() : getNextBusinessHour(client);
           console.log('[LEAD IMPORT] Call decision:', {
             clientKey,
+            isDemoClient,
             forceInstantCalls,
             inBusinessHours,
             shouldCallNow,
