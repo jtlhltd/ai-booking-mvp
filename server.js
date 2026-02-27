@@ -9110,6 +9110,7 @@ app.post('/api/leads/import', async (req, res) => {
     });
 
     // Immediately call or queue new leads (call now = same request; else queue for cron)
+    let callSummary = { inBusinessHours: null, shouldCallNow: null, called: 0, queued: 0, reason: null };
     if (inserted.length > 0) {
       try {
         const client = await getFullClient(clientKey);
@@ -9119,20 +9120,25 @@ app.post('/api/leads/import', async (req, res) => {
         const isEnabled = !!client?.isEnabled || isDemoClient;
         if (!client) {
           console.log('[LEAD IMPORT] No client found for', clientKey);
+          callSummary.reason = 'client_not_found';
         } else if (!isEnabled && !isDemoClient) {
           console.log('[LEAD IMPORT] Client not enabled, skipping call/queue:', clientKey);
+          callSummary.reason = 'client_not_enabled';
         } else if (!hasVapi) {
           console.log('[LEAD IMPORT] Client missing VAPI assistantId (and no env fallback), skipping call/queue:', clientKey);
+          callSummary.reason = 'vapi_not_configured';
         }
         if (client && (client.isEnabled || isDemoClient) && (client.vapi?.assistantId || client?.vapiAssistantId || (isDemoClient && process.env.VAPI_ASSISTANT_ID))) {
           const { addToCallQueue } = await import('./db.js');
           const { callLeadInstantly } = await import('./lib/instant-calling.js');
 
-          // Temporary override: when FORCE_INSTANT_CALLS is set (or demo client), call leads immediately
+          // Temporary override: when FORCE_INSTANT_CALLS is set, call immediately; else respect business hours (including for demo client)
           const forceEnv = (process.env.FORCE_INSTANT_CALLS || '').toString().toLowerCase();
           const forceInstantCalls = forceEnv === 'true' || forceEnv === '1' || forceEnv === 'yes';
           const inBusinessHours = isBusinessHours(client);
-          const shouldCallNow = isDemoClient || forceInstantCalls || inBusinessHours;
+          const shouldCallNow = forceInstantCalls || inBusinessHours;
+          callSummary.inBusinessHours = inBusinessHours;
+          callSummary.shouldCallNow = shouldCallNow;
           const scheduledFor = shouldCallNow ? new Date() : getNextBusinessHour(client);
           console.log('[LEAD IMPORT] Call decision:', {
             clientKey,
@@ -9144,6 +9150,7 @@ app.post('/api/leads/import', async (req, res) => {
           });
           let queuedCount = 0;
           let calledCount = 0;
+          let lastCallError = null;
 
           for (const lead of inserted) {
             try {
@@ -9160,6 +9167,7 @@ app.post('/api/leads/import', async (req, res) => {
                   calledCount++;
                   console.log('[LEAD IMPORT] Call initiated immediately:', lead.phone, result.callId);
                 } else {
+                  lastCallError = result?.error || result?.details || 'unknown';
                   console.warn('[LEAD IMPORT] Immediate call failed, queueing for retry:', lead.phone, result?.error);
                   await addToCallQueue({
                     clientKey, leadPhone: lead.phone, priority: 8, scheduledFor: new Date(),
@@ -9179,21 +9187,33 @@ app.post('/api/leads/import', async (req, res) => {
               }
             } catch (err) {
               console.error('[LEAD IMPORT] Failed for lead:', lead.phone, err?.message);
+              lastCallError = err?.message || String(err);
             }
           }
+          callSummary.called = calledCount;
+          callSummary.queued = queuedCount;
+          if (queuedCount > 0 && calledCount === 0 && !shouldCallNow) callSummary.reason = 'outside_business_hours';
+          else if (lastCallError && calledCount === 0 && shouldCallNow) {
+            callSummary.reason = 'call_failed';
+            callSummary.error = lastCallError;
+          } else if (calledCount > 0) callSummary.reason = 'called';
           console.log('[LEAD IMPORT]', shouldCallNow ? `${calledCount} called, ${queuedCount} queued for retry` : `${queuedCount} queued for next business hour`);
         } else {
+          if (!callSummary.reason) callSummary.reason = 'client_not_enabled_or_no_vapi';
           console.log('[LEAD IMPORT] Client not enabled or missing VAPI config, skipping');
         }
       } catch (queueError) {
         console.error('[LEAD IMPORT] Error:', queueError);
+        callSummary.reason = 'error';
+        callSummary.error = queueError?.message || String(queueError);
       }
     }
 
     return res.json({
       ok: true,
       inserted: inserted.length,
-      leads: inserted.map(sanitizeLead)
+      leads: inserted.map(sanitizeLead),
+      callSummary: inserted.length > 0 ? callSummary : undefined
     });
   } catch (error) {
     console.error('[LEAD IMPORT ERROR]', error);
@@ -10787,6 +10807,25 @@ app.get('/api/health/comprehensive', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   }
+});
+
+// Call-path diagnostics: why outbound calls might not reach Vapi (no secrets)
+app.get('/api/call-status', async (req, res) => {
+  const missing = [];
+  if (!process.env.VAPI_PRIVATE_KEY) missing.push('VAPI_PRIVATE_KEY');
+  if (!process.env.VAPI_ASSISTANT_ID) missing.push('VAPI_ASSISTANT_ID');
+  if (!process.env.VAPI_PHONE_NUMBER_ID) missing.push('VAPI_PHONE_NUMBER_ID');
+  let circuitBreakerOpen = false;
+  try {
+    const { isCircuitBreakerOpen } = await import('./lib/circuit-breaker.js');
+    circuitBreakerOpen = isCircuitBreakerOpen('vapi_call');
+  } catch (_) { /* ignore */ }
+  res.json({
+    vapiConfigured: missing.length === 0,
+    missingVars: missing,
+    circuitBreakerOpen,
+    hint: missing.length ? `Set ${missing.join(', ')} so outbound calls can reach Vapi.` : (circuitBreakerOpen ? 'Circuit breaker is open; check logs for Vapi errors.' : 'Vapi env and circuit OK.')
+  });
 });
 
 app.get('/healthz', (req, res) => {

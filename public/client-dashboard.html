@@ -5038,8 +5038,28 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     dashboardData.recentLeads = [...payload.leads, ...(dashboardData.recentLeads || [])].slice(0, 5);
                     renderLeads(dashboardData.recentLeads);
                 }
-                setImportStatus(`Imported ${payload.inserted} leads`, 'success');
-                showToast('Import Complete', `Successfully imported ${payload.inserted} leads`, 'success');
+                const cs = payload.callSummary;
+                if (cs) {
+                    if (cs.reason === 'called' && cs.called > 0) {
+                        setImportStatus(`Imported ${payload.inserted} leads · Call initiated for ${cs.called}`, 'success');
+                        showToast('Import Complete', `Imported ${payload.inserted} leads. Call initiated for ${cs.called} lead(s).`, 'success');
+                    } else if (cs.reason === 'outside_business_hours' && cs.queued > 0) {
+                        setImportStatus(`Imported ${payload.inserted} leads · ${cs.queued} queued for next business hour`, 'success');
+                        showToast('Outside business hours', `${payload.inserted} leads imported. Calls will be made in the next business hour (${cs.queued} queued).`, 'info');
+                    } else if (cs.reason === 'call_failed' && cs.queued > 0) {
+                        setImportStatus(`Imported ${payload.inserted} · Call failed, ${cs.queued} queued for retry`, 'success');
+                        showToast('Call failed', `Leads imported but call failed (${payload.callSummary?.error || 'see logs'}). Queued for retry.`, 'info');
+                    } else if (cs.reason === 'vapi_not_configured' || cs.reason === 'client_not_enabled_or_no_vapi') {
+                        setImportStatus(`Imported ${payload.inserted} leads · Call skipped (VAPI not configured)`, 'success');
+                        showToast('Import complete', `${payload.inserted} leads imported. Calls skipped: VAPI not configured for this client.`, 'info');
+                    } else {
+                        setImportStatus(`Imported ${payload.inserted} leads`, 'success');
+                        showToast('Import Complete', `Successfully imported ${payload.inserted} leads`, 'success');
+                    }
+                } else {
+                    setImportStatus(`Imported ${payload.inserted} leads`, 'success');
+                    showToast('Import Complete', `Successfully imported ${payload.inserted} leads`, 'success');
+                }
             } catch (error) {
                 console.error('Import failed', error);
                 const errorMsg = error.message || 'Unable to import leads. Please check your CSV format and try again.';
