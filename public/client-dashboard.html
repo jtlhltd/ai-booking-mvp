@@ -3308,22 +3308,24 @@
                 const timeAgo = call.timeAgo || formatTimeAgo(call.timestamp || call.created_at);
                 const callId = escapeHtml(String(call.id || call.timestamp || index));
                 const callName = escapeHtml(call.name || 'Prospect');
-                const statusLabel = (call.status || '').toString().replace(/_/g, ' ') || 'completed';
-                let outcomeLabel = '';
-                if (call.summary && call.summary.startsWith('Outcome:')) {
+                const statusLabel = (call.status || call.rawStatus || '').toString().replace(/_/g, ' ') || '—';
+                let outcomeLabel = call.outcomeLabel || '';
+                if (!outcomeLabel && call.summary && call.summary.startsWith('Outcome:')) {
                     outcomeLabel = call.summary.replace('Outcome:', '').trim();
                 }
-                const outcomeKey = outcomeLabel.toLowerCase().replace(/\s+/g, '-');
-                const hasOutcome = !!outcomeLabel;
-                const outcomeLower = outcomeLabel.toLowerCase();
+                const outcomeRaw = (call.outcome || outcomeLabel || '').toLowerCase().replace(/\s+/g, '-');
+                const hasOutcome = !!(call.outcome || outcomeLabel);
+                const outcomeLower = (outcomeRaw || outcomeLabel || '').toLowerCase();
                 const wasPickedUp = hasOutcome && !/(no[- ]?answer|busy|failed|voicemail|declined|rejected)/.test(outcomeLower);
+                const durationText = call.durationLabel ? `Duration: ${call.durationLabel}` : '';
                 return `
                     <div class="activity-item">
                         <strong>${escapeHtml(call.name || 'Prospect')}</strong> • ${escapeHtml(call.channel || 'AI call')}
                         <div class="activity-meta">${escapeHtml(call.summary || 'Conversation logged')} • ${timeAgo}</div>
                         <div class="activity-tags">
                             <span class="activity-pill status-in-progress">${escapeHtml(statusLabel)}</span>
-                            ${hasOutcome ? `<span class="activity-pill outcome-${escapeHtml(outcomeKey)}">${escapeHtml(outcomeLabel)}</span>` : ''}
+                            ${durationText ? `<span class="activity-pill">${escapeHtml(durationText)}</span>` : ''}
+                            ${hasOutcome ? `<span class="activity-pill outcome-${escapeHtml(outcomeRaw)}">${escapeHtml(outcomeLabel)}</span>` : '<span class="activity-pill pickup-no">Result pending</span>'}
                             ${hasOutcome ? `<span class="activity-pill ${wasPickedUp ? 'pickup-yes' : 'pickup-no'}">${wasPickedUp ? 'Picked up' : 'No answer'}</span>` : ''}
                         </div>
                         <button class="transcript-btn" onclick="viewTranscript('${callId}', '${callName}')">📄 View Transcript</button>

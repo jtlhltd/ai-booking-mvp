@@ -8100,10 +8100,34 @@ function formatTimeAgoLabel(dateString) {
 function mapCallStatus(status) {
   const normalized = (status || '').toLowerCase();
   if (normalized.includes('book')) return 'Booked';
-  if (normalized.includes('completed')) return 'Completed';
+  if (normalized.includes('completed') || normalized === 'ended') return 'Completed';
   if (normalized.includes('pending')) return 'Awaiting reply';
   if (normalized.includes('missed')) return 'Missed call';
+  if (normalized === 'initiated') return 'In progress';
   return status || 'Live';
+}
+
+function formatCallDuration(seconds) {
+  if (seconds == null || seconds === '') return null;
+  const s = parseInt(seconds, 10);
+  if (isNaN(s) || s < 0) return null;
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return sec > 0 ? `${m}m ${sec}s` : `${m}m`;
+}
+
+function outcomeToFriendlyLabel(outcome) {
+  if (!outcome) return null;
+  const o = (outcome || '').toLowerCase();
+  if (o === 'no-answer' || o === 'no_answer') return 'No answer';
+  if (o === 'voicemail') return 'Voicemail';
+  if (o === 'busy') return 'Busy';
+  if (o === 'rejected' || o === 'declined') return 'Declined';
+  if (o === 'failed') return 'Failed';
+  if (o === 'booked') return 'Booked';
+  if (o === 'completed') return 'Picked up';
+  return outcome.replace(/-/g, ' ');
 }
 
 function mapStatusClass(status) {
@@ -8441,18 +8465,36 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       }
     });
 
-    const recentCalls = (recentCallRows.rows || []).map(row => ({
-      id: row.call_id || row.id, // Use call_id (VAPI ID) or database id - this is what viewTranscript uses
-      callId: row.call_id, // VAPI call ID for transcript lookup
-      dbId: row.id, // Database ID as fallback
-      name: row.name || row.lead_phone,
-      service: row.service || 'Lead Follow-Up',
-      channel: 'AI call + SMS',
-      summary: row.outcome ? `Outcome: ${row.outcome}` : (row.status === 'initiated' ? 'Call in progress' : 'Call completed'),
-      status: mapCallStatus(row.status),
-      statusClass: mapStatusClass(row.status),
-      timeAgo: formatTimeAgoLabel(row.created_at)
-    }));
+    const recentCalls = (recentCallRows.rows || []).map(row => {
+      const durationLabel = formatCallDuration(row.duration);
+      const outcomeLabel = outcomeToFriendlyLabel(row.outcome);
+      const isInitiated = (row.status || '').toLowerCase() === 'initiated';
+      let summary = '';
+      if (row.outcome && outcomeLabel) {
+        summary = durationLabel ? `${outcomeLabel} • ${durationLabel}` : outcomeLabel;
+      } else if (isInitiated) {
+        summary = 'Ringing — result will appear when the call ends';
+      } else {
+        summary = durationLabel ? `Call ended • ${durationLabel}` : 'Call ended';
+      }
+      return {
+        id: row.call_id || row.id,
+        callId: row.call_id,
+        dbId: row.id,
+        name: row.name || row.lead_phone,
+        service: row.service || 'Lead Follow-Up',
+        channel: 'AI call + SMS',
+        summary,
+        status: mapCallStatus(row.status),
+        statusClass: mapStatusClass(row.status),
+        timeAgo: formatTimeAgoLabel(row.created_at),
+        outcome: row.outcome || null,
+        outcomeLabel: outcomeLabel || null,
+        duration: row.duration != null ? row.duration : null,
+        durationLabel: durationLabel || null,
+        rawStatus: row.status
+      };
+    });
     
     console.error('[DEMO DASHBOARD] Formatted recent calls for clientKey:', clientKey);
     console.error('[DEMO DASHBOARD] Raw count:', recentCallRows.rows?.length || 0);
