@@ -8220,8 +8220,7 @@ app.post('/api/demo/test-call', async (req, res) => {
         clientKey,
         leadPhone: TEST_PHONE
       },
-      server: { url: serverUrl },
-      serverMessages: ['end-of-call-report', 'status-update', 'transcript', 'hang']
+      serverUrl
     };
 
     console.log('[DEMO TEST CALL] Initiating test call:', {
@@ -14806,8 +14805,7 @@ app.post('/webhooks/twilio-inbound', express.urlencoded({ extended: false }), tw
                 assistantConfig
               })
             },
-            server: { url: serverUrl },
-            serverMessages: ['end-of-call-report', 'status-update', 'transcript', 'hang']
+            serverUrl
           };
             // Use enhanced retry logic for VAPI calls
             const vapiResult = await retryWithBackoff(async () => {

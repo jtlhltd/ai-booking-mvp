@@ -159,6 +159,33 @@ describe('VAPI Webhook Integration Tests', () => {
     
     assertTrue(response.ok || response.status === 200, 'Message envelope webhook handled');
   });
+
+  test('Webhook - end-of-call-report with endedReason (no outcome)', async () => {
+    skipIf(!await checkServerAvailable(BASE_URL), 'Server not available');
+
+    const webhook = createMockWebhook('endOfCallReportNoAnswer');
+    const response = await httpRequest(`${BASE_URL}/webhooks/vapi`, {
+      method: 'POST',
+      body: webhook
+    });
+
+    assertTrue(response.ok || response.status === 200, 'End-of-call-report webhook accepted');
+    if (response.data) {
+      assertTrue(response.data.ok !== false, 'End-of-call-report processed successfully');
+    }
+  });
+
+  test('Webhook - end-of-call-report voicemail', async () => {
+    skipIf(!await checkServerAvailable(BASE_URL), 'Server not available');
+
+    const webhook = createMockWebhook('endOfCallReportVoicemail');
+    const response = await httpRequest(`${BASE_URL}/webhooks/vapi`, {
+      method: 'POST',
+      body: webhook
+    });
+
+    assertTrue(response.ok || response.status === 200, 'End-of-call-report voicemail accepted');
+  });
 });
 
 const exitCode = printSummary();

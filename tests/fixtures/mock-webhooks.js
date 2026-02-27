@@ -199,9 +199,43 @@ export function createMockWebhook(scenario = 'default') {
           recordingUrl: 'https://api.vapi.ai/recordings/test.mp3'
         }
       }
+    },
+
+    // VAPI end-of-call-report: sends endedReason, not outcome; we map to outcome in webhook
+    endOfCallReportNoAnswer: {
+      message: {
+        type: 'end-of-call-report',
+        endedReason: 'customer-did-not-answer',
+        call: {
+          id: `eoc_test_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          status: 'ended',
+          duration: 12
+        },
+        transcript: ''
+      },
+      metadata: {
+        tenantKey: 'test_client',
+        leadPhone: '+447700900111'
+      }
+    },
+
+    endOfCallReportVoicemail: {
+      message: {
+        type: 'end-of-call-report',
+        endedReason: 'voicemail',
+        call: {
+          id: `eoc_voicemail_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          status: 'ended',
+          duration: 45
+        }
+      },
+      metadata: {
+        tenantKey: 'test_client',
+        leadPhone: '+447700900222'
+      }
     }
   };
-  
+
   return scenarios[scenario] || basePayload;
 }
 
@@ -220,6 +254,8 @@ export const mockWebhookScenarios = Object.keys({
   notInterested: true,
   shortTranscript: true,
   noTranscript: true,
-  withMessageEnvelope: true
+  withMessageEnvelope: true,
+  endOfCallReportNoAnswer: true,
+  endOfCallReportVoicemail: true
 });
 

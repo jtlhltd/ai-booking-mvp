@@ -146,7 +146,23 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
     // Always return 200 to prevent VAPI from retrying
     res.status(200).json({ ok: true, received: true });
 
-    const callId = body.call?.id || body.id || body.message?.call?.id;
+    // Run all downstream processing in try/catch so failures are logged and don't cause unhandled rejection
+    (async () => {
+      try {
+        await processWebhookPayload(body, correlationId);
+      } catch (err) {
+        console.error(`[${correlationId}] [VAPI WEBHOOK] Post-200 processing error:`, err);
+        console.error(`[${correlationId}] [VAPI WEBHOOK] Stack:`, err.stack);
+      }
+    })();
+  } catch (err) {
+    console.error(`[${correlationId}] [VAPI WEBHOOK] Handler error (before 200):`, err);
+    if (!res.headersSent) res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+async function processWebhookPayload(body, correlationId) {
+    const callId = body.call?.id || body.id || body.callId || body.message?.call?.id || body.message?.callId;
     let status = body.call?.status || body.status;
     let outcome = body.call?.outcome || body.outcome;
     // If this is an end-of-call webhook but we have no outcome, derive from VAPI's endedReason
@@ -154,6 +170,9 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
     if ((!outcome || outcome === '') && endedReason) {
       outcome = mapEndedReasonToOutcome(endedReason);
       if (status === 'initiated' || !status) status = 'ended';
+      if (callId) {
+        console.log(`[${correlationId}] [VAPI WEBHOOK] End-of-call applied: callId=${callId} endedReason=${endedReason} outcome=${outcome} status=${status}`);
+      }
     }
     const duration = body.call?.duration || body.duration;
     const cost = body.call?.cost || body.cost;
@@ -371,8 +390,11 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
     
     // Skip only if we have nothing to store (no transcript, no status, no outcome/endedReason)
     if (!transcript && !status && !outcome && !endedReason) {
-      console.log('[VAPI WEBHOOK SKIP]', { reason: 'no_data', tenantKey: !!tenantKey, leadPhone: !!leadPhone });
+      console.log(`[${correlationId}] [VAPI WEBHOOK SKIP]`, { reason: 'no_data', tenantKey: !!tenantKey, leadPhone: !!leadPhone });
       return;
+    }
+    if (!callId && (outcome || status === 'ended')) {
+      console.warn(`[${correlationId}] [VAPI WEBHOOK] End-of-call data but no callId in payload - dashboard will show "Result not received". Body keys:`, Object.keys(body || {}), 'body.call:', !!body?.call, 'body.message?.call:', !!body?.message?.call);
     }
 
     // Load tenant config (per-client settings)
@@ -921,33 +943,7 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
     }
 
     // Response already sent at the beginning
-  } catch (e) {
-    console.error('[VAPI WEBHOOK ERROR]', { 
-      error: e?.message || e,
-      stack: e?.stack?.substring(0, 200)
-    });
-    
-    // Add to retry queue for failed webhook processing
-    try {
-      const { addWebhookToRetryQueue } = await import('../lib/webhook-retry.js');
-      await addWebhookToRetryQueue({
-        webhookType: 'vapi',
-        webhookUrl: '/webhooks/vapi',
-        payload: req.body,
-        headers: req.headers,
-        error: e
-      });
-      console.log('[VAPI WEBHOOK] Added failed webhook to retry queue');
-    } catch (retryError) {
-      console.error('[VAPI WEBHOOK] Failed to add to retry queue:', retryError);
-    }
-    
-    // Don't send response if headers already sent
-    if (!res.headersSent) {
-      res.status(200).json({ ok: true });
-    }
-  }
-});
+}
 
 // Update call tracking in the database
 async function updateCallTracking({ 
