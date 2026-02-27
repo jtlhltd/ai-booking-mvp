@@ -8270,8 +8270,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
                COUNT(DISTINCT lead_phone) AS unique_leads_called,
                COUNT(*) FILTER (WHERE created_at >= ${sqlHoursAgo(24)}) AS last24,
                COUNT(*) FILTER (WHERE outcome = 'booked') AS booked,
-               COUNT(*) FILTER (WHERE outcome NOT IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined') AND outcome IS NOT NULL) AS answered,
-               COUNT(*) FILTER (WHERE outcome IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined')) AS not_answered
+               COUNT(*) FILTER (WHERE outcome NOT IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected') AND outcome IS NOT NULL) AS answered,
+               COUNT(*) FILTER (WHERE outcome IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected')) AS not_answered
         FROM calls
         WHERE client_key = $1
       `, [clientKey]),

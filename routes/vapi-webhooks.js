@@ -56,6 +56,21 @@ function markProcessed(callId) {
   }
 }
 
+/** Map VAPI endedReason (docs.vapi.ai/calls/call-ended-reason) to our outcome for dashboard/analytics */
+function mapEndedReasonToOutcome(endedReason) {
+  if (!endedReason || typeof endedReason !== 'string') return null;
+  const r = endedReason.toLowerCase();
+  if (r.includes('customer-did-not-answer') || r.includes('did-not-answer')) return 'no-answer';
+  if (r.includes('customer-busy') || r.includes('busy')) return 'busy';
+  if (r === 'voicemail' || r.includes('voicemail')) return 'voicemail';
+  if (r.includes('rejected') || r.includes('declined') || r.includes('failed-to-connect') || r.includes('misdialed')) return 'rejected';
+  if (r.includes('vonage-rejected') || r.includes('twilio-reported')) return 'rejected';
+  if (r.includes('assistant-ended-call') || r.includes('customer-ended-call') || r.includes('vonage-completed')) return 'completed';
+  if (r.includes('silence-timed-out') || r.includes('exceeded-max-duration')) return 'completed';
+  if (r.includes('error') || r.includes('fault')) return 'failed';
+  return 'completed'; // default: call connected and ended somehow
+}
+
 // Enhanced VAPI webhook handler with comprehensive call tracking
 router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
   // Extract correlation ID from webhook metadata
@@ -121,14 +136,25 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
         body.recordingUrl = message.recordingUrl || message.data?.recordingUrl;
       }
       if (!body.metadata && message.metadata) body.metadata = message.metadata;
+      // VAPI end-of-call-report sends endedReason, not outcome - capture it for mapping below
+      if (message.endedReason != null) body.endedReason = message.endedReason;
+      if (message.call?.endedReason != null) body.endedReason = body.endedReason ?? message.call.endedReason;
     }
-    
+    if (body.call?.endedReason != null) body.endedReason = body.endedReason ?? body.call.endedReason;
+    if (body.endedReason == null && body.endOfCallReport?.endedReason != null) body.endedReason = body.endOfCallReport.endedReason;
+
     // Always return 200 to prevent VAPI from retrying
     res.status(200).json({ ok: true, received: true });
-    
+
     const callId = body.call?.id || body.id || body.message?.call?.id;
-    const status = body.call?.status || body.status;
-    const outcome = body.call?.outcome || body.outcome;
+    let status = body.call?.status || body.status;
+    let outcome = body.call?.outcome || body.outcome;
+    // If this is an end-of-call webhook but we have no outcome, derive from VAPI's endedReason
+    const endedReason = body.endedReason || body.call?.endedReason || body.message?.endedReason;
+    if ((!outcome || outcome === '') && endedReason) {
+      outcome = mapEndedReasonToOutcome(endedReason);
+      if (status === 'initiated' || !status) status = 'ended';
+    }
     const duration = body.call?.duration || body.duration;
     const cost = body.call?.cost || body.cost;
     const metadata = body.call?.metadata || body.metadata || {};
