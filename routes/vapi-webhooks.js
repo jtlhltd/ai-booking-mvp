@@ -294,13 +294,29 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
       return;
     }
 
-    // For logistics calls, we can extract without tenant metadata
-    // Just get phone from wherever it might be
-    // Use test_client as default since that's what VAPI sends in X-Client-Key header
-    const tenantKey = metadata.tenantKey || metadata.clientKey || 'test_client';
-    const leadPhone = metadata.leadPhone || body.customer?.number || body.call?.customer?.number || body.phone || '';
+    // Resolve tenant and lead: from metadata first, then from existing call row (for end-of-call webhooks that omit metadata)
+    let tenantKey = metadata.tenantKey || metadata.clientKey || '';
+    let leadPhone = metadata.leadPhone || body.customer?.number || body.call?.customer?.number || body.phone || '';
     const leadName = metadata.leadName || body.customer?.name || body.call?.customer?.name || '';
-    
+
+    if (callId && (!tenantKey || tenantKey === 'test_client' || !leadPhone)) {
+      try {
+        const { query } = await import('../db.js');
+        const { rows } = await query(
+          'SELECT client_key, lead_phone FROM calls WHERE call_id = $1 LIMIT 1',
+          [callId]
+        );
+        if (rows && rows[0]) {
+          if (!tenantKey || tenantKey === 'test_client') tenantKey = rows[0].client_key || tenantKey;
+          if (!leadPhone) leadPhone = rows[0].lead_phone || leadPhone;
+          console.log('[VAPI WEBHOOK] Resolved from existing call row:', { tenantKey, leadPhone });
+        }
+      } catch (e) {
+        console.warn('[VAPI WEBHOOK] Lookup by call_id failed:', e.message);
+      }
+    }
+    if (!tenantKey) tenantKey = 'test_client';
+
     console.log('[VAPI WEBHOOK] ==================== COMPLETE DEBUG ====================');
     console.log('[VAPI WEBHOOK] 🆔 CallId:', callId);
     console.log('[VAPI WEBHOOK] 🏢 TenantKey components:', {
@@ -353,9 +369,9 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
       });
     }
     
-    // Skip only if absolutely no data at all
-    if (!transcript && !status) {
-      console.log('[VAPI WEBHOOK SKIP]', { reason: 'no_transcript_or_status', tenantKey: !!tenantKey, leadPhone: !!leadPhone });
+    // Skip only if we have nothing to store (no transcript, no status, no outcome/endedReason)
+    if (!transcript && !status && !outcome && !endedReason) {
+      console.log('[VAPI WEBHOOK SKIP]', { reason: 'no_data', tenantKey: !!tenantKey, leadPhone: !!leadPhone });
       return;
     }
 

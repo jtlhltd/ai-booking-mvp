@@ -8205,13 +8205,23 @@ app.post('/api/demo/test-call', async (req, res) => {
       return res.status(500).json({ success: false, error: 'VAPI_PRIVATE_KEY not configured' });
     }
 
-    // Make VAPI call - EXACT same structure as demo creator script (line 443-449)
+    const webhookBaseUrl = process.env.PUBLIC_BASE_URL || process.env.RENDER_EXTERNAL_URL || 'https://ai-booking-mvp.onrender.com';
+    const serverUrl = `${String(webhookBaseUrl).replace(/\/$/, '')}/webhooks/vapi`;
+
+    // Make VAPI call - include server URL so end-of-call-report is sent to our webhook
     const payload = {
       assistantId: finalAssistantId,
       phoneNumberId: VAPI_PHONE_NUMBER_ID,
       customer: {
         number: TEST_PHONE
-      }
+      },
+      metadata: {
+        tenantKey: clientKey,
+        clientKey,
+        leadPhone: TEST_PHONE
+      },
+      server: { url: serverUrl },
+      serverMessages: ['end-of-call-report', 'status-update', 'transcript', 'hang']
     };
 
     console.log('[DEMO TEST CALL] Initiating test call:', {
