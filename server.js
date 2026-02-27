@@ -9778,6 +9778,7 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
       ok: true,
       avgDuration: stats.avg_duration || 0,
       successRate: stats.total_calls > 0 ? Math.round((stats.bookings / stats.total_calls) * 100) : 0,
+      totalCalls: stats.total_calls || 0,
       bestTime
     });
   } catch (error) {

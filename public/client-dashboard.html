@@ -1027,6 +1027,53 @@
             background: #fbfbff;
         }
 
+        .activity-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .activity-pill {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            border: 1px solid rgba(148,163,184,0.5);
+            background: #f4f4ff;
+            color: #475569;
+        }
+
+        .activity-pill.outcome-booked {
+            border-color: rgba(22,163,74,0.3);
+            background: rgba(22,163,74,0.06);
+            color: #166534;
+        }
+
+        .activity-pill.outcome-failed,
+        .activity-pill.outcome-no-answer,
+        .activity-pill.outcome_declined,
+        .activity-pill.outcome-rejected {
+            border-color: rgba(248,113,113,0.4);
+            background: rgba(248,113,113,0.06);
+            color: #b91c1c;
+        }
+
+        .activity-pill.outcome-voicemail {
+            border-color: rgba(234,179,8,0.4);
+            background: rgba(234,179,8,0.06);
+            color: #92400e;
+        }
+
+        .activity-pill.status-in-progress {
+            border-style: dashed;
+            border-color: rgba(59,130,246,0.5);
+            background: rgba(59,130,246,0.04);
+            color: #1d4ed8;
+        }
+
         .activity-item strong {
             color: #2f3147;
         }
@@ -3249,10 +3296,21 @@
                 const timeAgo = call.timeAgo || formatTimeAgo(call.timestamp || call.created_at);
                 const callId = escapeHtml(String(call.id || call.timestamp || index));
                 const callName = escapeHtml(call.name || 'Prospect');
+                const statusLabel = (call.status || '').toString().replace(/_/g, ' ') || 'completed';
+                let outcomeLabel = '';
+                if (call.summary && call.summary.startsWith('Outcome:')) {
+                    outcomeLabel = call.summary.replace('Outcome:', '').trim();
+                }
+                const outcomeKey = outcomeLabel.toLowerCase().replace(/\s+/g, '-');
+                const hasOutcome = !!outcomeLabel;
                 return `
                     <div class="activity-item">
                         <strong>${escapeHtml(call.name || 'Prospect')}</strong> • ${escapeHtml(call.channel || 'AI call')}
                         <div class="activity-meta">${escapeHtml(call.summary || 'Conversation logged')} • ${timeAgo}</div>
+                        <div class="activity-tags">
+                            <span class="activity-pill status-in-progress">${escapeHtml(statusLabel)}</span>
+                            ${hasOutcome ? `<span class="activity-pill outcome-${escapeHtml(outcomeKey)}">${escapeHtml(outcomeLabel)}</span>` : ''}
+                        </div>
                         <button class="transcript-btn" onclick="viewTranscript('${callId}', '${callName}')">📄 View Transcript</button>
                     </div>
                 `;
@@ -3509,6 +3567,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             if (currentClient === DEMO_CLIENT_KEY) {
                 const totalCalls = data.totalCalls || 0;
                 const bookings = data.bookingsThisWeek || 0;
+                const answered = data.callsAnswered || 0;
+                const notAnswered = data.callsNotAnswered || 0;
                 const avgDuration = Math.floor((totalCalls * 2.5) + Math.random() * 1.5);
                 const successRate = totalCalls > 0 ? Math.round((bookings / totalCalls) * 100) : 0;
                 const bestHour = '2-4pm';
@@ -3523,6 +3583,11 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         <div class="quality-label">Success Rate</div>
                         <div class="quality-value">${successRate}%</div>
                         <div class="quality-badge">bookings</div>
+                            </div>
+                    <div class="quality-metric">
+                        <div class="quality-label">Call Outcomes</div>
+                        <div class="quality-value">${answered}/${totalCalls}</div>
+                        <div class="quality-badge">answered calls</div>
                             </div>
                     <div class="quality-metric">
                         <div class="quality-label">Best Time</div>
@@ -3547,6 +3612,11 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             <div class="quality-label">Success Rate</div>
                             <div class="quality-value">${payload.successRate || 0}%</div>
                             <div class="quality-badge">bookings</div>
+                        </div>
+                        <div class="quality-metric">
+                            <div class="quality-label">Calls (7 days)</div>
+                            <div class="quality-value">${payload.totalCalls || 0}</div>
+                            <div class="quality-badge">total calls</div>
                         </div>
                         <div class="quality-metric">
                             <div class="quality-label">Best Time</div>
