@@ -1074,6 +1074,18 @@
             color: #1d4ed8;
         }
 
+        .activity-pill.pickup-yes {
+            border-color: rgba(22,163,74,0.3);
+            background: rgba(22,163,74,0.06);
+            color: #166534;
+        }
+
+        .activity-pill.pickup-no {
+            border-color: rgba(148,163,184,0.7);
+            background: rgba(148,163,184,0.08);
+            color: #4b5563;
+        }
+
         .activity-item strong {
             color: #2f3147;
         }
@@ -3303,6 +3315,8 @@
                 }
                 const outcomeKey = outcomeLabel.toLowerCase().replace(/\s+/g, '-');
                 const hasOutcome = !!outcomeLabel;
+                const outcomeLower = outcomeLabel.toLowerCase();
+                const wasPickedUp = hasOutcome && !/(no[- ]?answer|busy|failed|voicemail|declined|rejected)/.test(outcomeLower);
                 return `
                     <div class="activity-item">
                         <strong>${escapeHtml(call.name || 'Prospect')}</strong> • ${escapeHtml(call.channel || 'AI call')}
@@ -3310,6 +3324,7 @@
                         <div class="activity-tags">
                             <span class="activity-pill status-in-progress">${escapeHtml(statusLabel)}</span>
                             ${hasOutcome ? `<span class="activity-pill outcome-${escapeHtml(outcomeKey)}">${escapeHtml(outcomeLabel)}</span>` : ''}
+                            ${hasOutcome ? `<span class="activity-pill ${wasPickedUp ? 'pickup-yes' : 'pickup-no'}">${wasPickedUp ? 'Picked up' : 'No answer'}</span>` : ''}
                         </div>
                         <button class="transcript-btn" onclick="viewTranscript('${callId}', '${callName}')">📄 View Transcript</button>
                     </div>
