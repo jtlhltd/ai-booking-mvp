@@ -2038,7 +2038,28 @@
                     <div class="import-dropzone" id="leadDropzone">
                         Drag & drop CSV or <button type="button" id="leadImportButton">browse</button>
                         <small style="display:block;margin-top:6px;">Columns: name, phone, service, source</small>
-                </div>
+                    </div>
+                    <div style="margin-top:10px;">
+                        <button type="button" id="leadPasteToggle" class="export-btn secondary" style="font-size:12px;padding:4px 8px;">
+                            Or paste numbers instead
+                        </button>
+                    </div>
+                    <div id="leadPasteContainer" style="display:none;margin-top:10px;">
+                        <label for="leadPasteInput" style="display:block;font-size:12px;margin-bottom:4px;">
+                            Paste one lead per line (phone only, or name, phone, service, source)
+                        </label>
+                        <textarea
+                            id="leadPasteInput"
+                            rows="4"
+                            style="width:100%;border-radius:8px;padding:8px;font-size:12px;resize:vertical;"
+                            placeholder="+447700900123&#10;John Smith, +447700900124&#10;Jane Doe, +447700900125, Boiler service, Facebook Ads"></textarea>
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+                            <button type="button" id="leadPasteSubmit" class="export-btn" style="font-size:12px;padding:6px 10px;">
+                                Upload pasted leads
+                            </button>
+                            <small style="font-size:11px;color:var(--muted-text, #6b7280);">We’ll add them to your call queue immediately.</small>
+                        </div>
+                    </div>
                     <input type="file" id="leadImportInput" accept=".csv" style="display:none">
                     <div class="import-status" id="leadImportStatus"></div>
                 </article>
@@ -4575,6 +4596,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const input = document.getElementById('leadImportInput');
             const button = document.getElementById('leadImportButton');
             const dropzone = document.getElementById('leadDropzone');
+            const pasteToggle = document.getElementById('leadPasteToggle');
+            const pasteContainer = document.getElementById('leadPasteContainer');
+            const pasteSubmit = document.getElementById('leadPasteSubmit');
+            const pasteInput = document.getElementById('leadPasteInput');
             if (button && input) button.addEventListener('click', () => input.click());
             if (input) {
                 input.addEventListener('change', (event) => {
@@ -4601,6 +4626,28 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     if (file) handleLeadImportFile(file);
                 });
             }
+            if (pasteToggle && pasteContainer) {
+                pasteToggle.addEventListener('click', () => {
+                    const isVisible = pasteContainer.style.display === 'block';
+                    pasteContainer.style.display = isVisible ? 'none' : 'block';
+                    if (!isVisible && pasteInput) {
+                        pasteInput.focus();
+                    }
+                });
+            }
+            if (pasteSubmit && pasteInput) {
+                pasteSubmit.addEventListener('click', () => {
+                    handleLeadPaste(pasteInput.value || '');
+                });
+            }
+            if (pasteInput) {
+                pasteInput.addEventListener('keydown', (event) => {
+                    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                        event.preventDefault();
+                        handleLeadPaste(pasteInput.value || '');
+                    }
+                });
+            }
         }
 
         function handleLeadImportFile(file) {
@@ -4612,6 +4659,78 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             };
             reader.onerror = () => setImportStatus('Unable to read file', 'error');
             reader.readAsText(file);
+        }
+
+        function handleLeadPaste(rawText) {
+            const text = (rawText || '').trim();
+            if (!text) {
+                setImportStatus('Nothing to import – please paste some numbers first.', 'error');
+                return;
+            }
+
+            const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+            if (!lines.length) {
+                setImportStatus('Nothing to import – please paste some numbers first.', 'error');
+                return;
+            }
+
+            const leads = [];
+
+            for (const line of lines) {
+                if (!line) continue;
+
+                const parts = line.split(',').map(p => p.trim()).filter(Boolean);
+
+                let name = '';
+                let phone = '';
+                let service = '';
+                let source = '';
+
+                if (parts.length === 1) {
+                    // Single value: treat as phone
+                    phone = parts[0];
+                } else if (parts.length === 2) {
+                    // name, phone
+                    name = parts[0];
+                    phone = parts[1];
+                } else if (parts.length === 3) {
+                    // name, phone, service
+                    name = parts[0];
+                    phone = parts[1];
+                    service = parts[2];
+                } else if (parts.length >= 4) {
+                    // name, phone, service, source (ignore extra)
+                    name = parts[0];
+                    phone = parts[1];
+                    service = parts[2];
+                    source = parts[3];
+                }
+
+                // Fallback: if still no phone, try to detect a phone-like token in the line
+                if (!phone) {
+                    const phoneMatch = line.match(/(\+?\d[\d\s\-().]{6,})/);
+                    if (phoneMatch) {
+                        phone = phoneMatch[1].trim();
+                    }
+                }
+
+                if (!phone) continue;
+
+                leads.push({
+                    name,
+                    phone,
+                    service,
+                    source
+                });
+            }
+
+            if (!leads.length) {
+                setImportStatus('No valid phone numbers found in your pasted text.', 'error');
+                return;
+            }
+
+            console.log('[LEAD IMPORT] Parsed leads from paste:', leads.length);
+            submitLeadImport(leads);
         }
 
         function parseCsv(text) {
