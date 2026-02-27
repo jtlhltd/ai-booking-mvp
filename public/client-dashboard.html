@@ -3316,7 +3316,8 @@
                 const outcomeRaw = (call.outcome || outcomeLabel || '').toLowerCase().replace(/\s+/g, '-');
                 const hasOutcome = !!(call.outcome || outcomeLabel);
                 const outcomeLower = (outcomeRaw || outcomeLabel || '').toLowerCase();
-                const wasPickedUp = hasOutcome && !/(no[- ]?answer|busy|failed|voicemail|declined|rejected)/.test(outcomeLower);
+                const isUnknownResult = /unknown|result not received/.test(outcomeLower);
+                const wasPickedUp = hasOutcome && !isUnknownResult && !/(no[- ]?answer|busy|failed|voicemail|declined|rejected)/.test(outcomeLower);
                 const durationText = call.durationLabel ? `Duration: ${call.durationLabel}` : '';
                 return `
                     <div class="activity-item">
@@ -3326,7 +3327,7 @@
                             <span class="activity-pill status-in-progress">${escapeHtml(statusLabel)}</span>
                             ${durationText ? `<span class="activity-pill">${escapeHtml(durationText)}</span>` : ''}
                             ${hasOutcome ? `<span class="activity-pill outcome-${escapeHtml(outcomeRaw)}">${escapeHtml(outcomeLabel)}</span>` : '<span class="activity-pill pickup-no">Result pending</span>'}
-                            ${hasOutcome ? `<span class="activity-pill ${wasPickedUp ? 'pickup-yes' : 'pickup-no'}">${wasPickedUp ? 'Picked up' : 'No answer'}</span>` : ''}
+                            ${hasOutcome && !isUnknownResult ? `<span class="activity-pill ${wasPickedUp ? 'pickup-yes' : 'pickup-no'}">${wasPickedUp ? 'Picked up' : 'No answer'}</span>` : ''}
                         </div>
                         <button class="transcript-btn" onclick="viewTranscript('${callId}', '${callName}')">📄 View Transcript</button>
                     </div>

@@ -8465,13 +8465,24 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       }
     });
 
+    const STALE_INITIATED_MINUTES = 15; // treat "initiated" older than this as stale (no end-of-call webhook received)
     const recentCalls = (recentCallRows.rows || []).map(row => {
       const durationLabel = formatCallDuration(row.duration);
-      const outcomeLabel = outcomeToFriendlyLabel(row.outcome);
+      let outcomeLabel = outcomeToFriendlyLabel(row.outcome);
       const isInitiated = (row.status || '').toLowerCase() === 'initiated';
+      const createdAt = row.created_at ? new Date(row.created_at) : null;
+      const ageMinutes = createdAt ? (Date.now() - createdAt.getTime()) / 60000 : 0;
+      const isStaleInitiated = isInitiated && ageMinutes > STALE_INITIATED_MINUTES;
+
       let summary = '';
+      let displayStatus = row.status;
+      let displayOutcomeLabel = outcomeLabel;
       if (row.outcome && outcomeLabel) {
         summary = durationLabel ? `${outcomeLabel} • ${durationLabel}` : outcomeLabel;
+      } else if (isStaleInitiated) {
+        summary = 'Call ended — result not received (VAPI end-of-call webhook may not have been sent)';
+        displayStatus = 'ended';
+        displayOutcomeLabel = 'Result not received';
       } else if (isInitiated) {
         summary = 'Ringing — result will appear when the call ends';
       } else {
@@ -8485,14 +8496,14 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         service: row.service || 'Lead Follow-Up',
         channel: 'AI call + SMS',
         summary,
-        status: mapCallStatus(row.status),
-        statusClass: mapStatusClass(row.status),
+        status: mapCallStatus(displayStatus),
+        statusClass: mapStatusClass(displayStatus),
         timeAgo: formatTimeAgoLabel(row.created_at),
-        outcome: row.outcome || null,
-        outcomeLabel: outcomeLabel || null,
+        outcome: isStaleInitiated ? 'unknown' : (row.outcome || null),
+        outcomeLabel: displayOutcomeLabel || null,
         duration: row.duration != null ? row.duration : null,
         durationLabel: durationLabel || null,
-        rawStatus: row.status
+        rawStatus: displayStatus
       };
     });
     
