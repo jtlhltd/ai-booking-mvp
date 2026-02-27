@@ -9113,12 +9113,33 @@ app.post('/api/leads/import', async (req, res) => {
     if (inserted.length > 0) {
       try {
         const client = await getFullClient(clientKey);
+        const hasVapi = !!(client?.vapi?.assistantId);
+        const isEnabled = !!client?.isEnabled;
+        if (!client) {
+          console.log('[LEAD IMPORT] No client found for', clientKey);
+        } else if (!isEnabled) {
+          console.log('[LEAD IMPORT] Client not enabled, skipping call/queue:', clientKey);
+        } else if (!hasVapi) {
+          console.log('[LEAD IMPORT] Client missing VAPI assistantId, skipping call/queue:', clientKey);
+        }
         if (client && client.isEnabled && client.vapi?.assistantId) {
           const { addToCallQueue } = await import('./db.js');
           const { callLeadInstantly } = await import('./lib/instant-calling.js');
 
-          const shouldCallNow = isBusinessHours(client);
+          // Temporary override: when FORCE_INSTANT_CALLS is set, call leads immediately
+          // even outside normal business hours. Otherwise, respect isBusinessHours().
+          const forceEnv = (process.env.FORCE_INSTANT_CALLS || '').toString().toLowerCase();
+          const forceInstantCalls = forceEnv === 'true' || forceEnv === '1' || forceEnv === 'yes';
+          const inBusinessHours = isBusinessHours(client);
+          const shouldCallNow = forceInstantCalls || inBusinessHours;
           const scheduledFor = shouldCallNow ? new Date() : getNextBusinessHour(client);
+          console.log('[LEAD IMPORT] Call decision:', {
+            clientKey,
+            forceInstantCalls,
+            inBusinessHours,
+            shouldCallNow,
+            FORCE_INSTANT_CALLS: process.env.FORCE_INSTANT_CALLS ? '(set)' : '(not set)'
+          });
           let queuedCount = 0;
           let calledCount = 0;
 
@@ -9126,9 +9147,11 @@ app.post('/api/leads/import', async (req, res) => {
             try {
               if (shouldCallNow) {
                 // Call immediately in this request so user gets called within seconds
+                const leadForCall = { phone: lead.phone, name: lead.name || lead.phone, service: lead.service, source: lead.source };
+                console.log('[LEAD IMPORT] Attempting immediate call:', { phone: lead.phone, hasPhone: !!lead.phone });
                 const result = await callLeadInstantly({
                   clientKey,
-                  lead: { phone: lead.phone, name: lead.name || lead.phone, service: lead.service, source: lead.source },
+                  lead: leadForCall,
                   client
                 });
                 if (result?.ok) {
