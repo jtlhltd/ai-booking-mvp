@@ -9110,52 +9110,59 @@ app.post('/api/leads/import', async (req, res) => {
       clientKey 
     });
 
-    // Immediately queue new leads for calling (don't wait for cron job)
+    // Immediately call or queue new leads (call now = same request; else queue for cron)
     if (inserted.length > 0) {
       try {
         const client = await getFullClient(clientKey);
         if (client && client.isEnabled && client.vapi?.assistantId) {
           const { addToCallQueue } = await import('./db.js');
-          
+          const { callLeadInstantly } = await import('./lib/instant-calling.js');
+
+          const shouldCallNow = isBusinessHours(client);
+          const scheduledFor = shouldCallNow ? new Date() : getNextBusinessHour(client);
           let queuedCount = 0;
+          let calledCount = 0;
+
           for (const lead of inserted) {
             try {
-              // Check if we should call now or schedule for later
-              const shouldCallNow = isBusinessHours(client);
-              const scheduledFor = shouldCallNow 
-                ? new Date() // Call immediately
-                : getNextBusinessHour(client); // Schedule for next business hour
-              
-              // New leads get high priority (8)
-              await addToCallQueue({
-                clientKey: clientKey,
-                leadPhone: lead.phone,
-                priority: 8, // High priority for new imports
-                scheduledFor: scheduledFor,
-                callType: 'vapi_call',
-                callData: {
-                  triggerType: 'new_lead_import',
-                  leadId: lead.id,
-                  leadName: lead.name,
-                  leadService: lead.service,
-                  leadSource: lead.source,
-                  leadStatus: lead.status,
-                  businessHours: shouldCallNow ? 'within' : 'outside'
+              if (shouldCallNow) {
+                // Call immediately in this request so user gets called within seconds
+                const result = await callLeadInstantly({
+                  clientKey,
+                  lead: { phone: lead.phone, name: lead.name || lead.phone, service: lead.service, source: lead.source },
+                  client
+                });
+                if (result?.ok) {
+                  calledCount++;
+                  console.log('[LEAD IMPORT] Call initiated immediately:', lead.phone, result.callId);
+                } else {
+                  console.warn('[LEAD IMPORT] Immediate call failed, queueing for retry:', lead.phone, result?.error);
+                  await addToCallQueue({
+                    clientKey, leadPhone: lead.phone, priority: 8, scheduledFor: new Date(),
+                    callType: 'vapi_call',
+                    callData: { triggerType: 'new_lead_import', leadId: lead.id, leadName: lead.name, leadService: lead.service, leadSource: lead.source, leadStatus: lead.status, businessHours: 'within' }
+                  });
+                  queuedCount++;
                 }
-              });
-              queuedCount++;
-              console.error('[LEAD IMPORT] Immediately queued lead for calling:', lead.phone);
-            } catch (queueError) {
-              console.error('[LEAD IMPORT] Failed to queue lead:', queueError);
+              } else {
+                await addToCallQueue({
+                  clientKey, leadPhone: lead.phone, priority: 8, scheduledFor,
+                  callType: 'vapi_call',
+                  callData: { triggerType: 'new_lead_import', leadId: lead.id, leadName: lead.name, leadService: lead.service, leadSource: lead.source, leadStatus: lead.status, businessHours: 'outside' }
+                });
+                queuedCount++;
+                console.log('[LEAD IMPORT] Queued lead for next business hour:', lead.phone);
+              }
+            } catch (err) {
+              console.error('[LEAD IMPORT] Failed for lead:', lead.phone, err?.message);
             }
           }
-          console.error(`[LEAD IMPORT] Queued ${queuedCount} leads for immediate calling`);
+          console.log('[LEAD IMPORT]', shouldCallNow ? `${calledCount} called, ${queuedCount} queued for retry` : `${queuedCount} queued for next business hour`);
         } else {
-          console.error('[LEAD IMPORT] Client not enabled or missing VAPI config, skipping immediate queue');
+          console.log('[LEAD IMPORT] Client not enabled or missing VAPI config, skipping');
         }
       } catch (queueError) {
-        console.error('[LEAD IMPORT] Error queueing leads:', queueError);
-        // Don't fail the import if queueing fails - cron job will pick them up
+        console.error('[LEAD IMPORT] Error:', queueError);
       }
     }
 
