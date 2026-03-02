@@ -891,7 +891,32 @@ async function processWebhookPayload(body, correlationId) {
           console.log('[LOGISTICS SHEET] ✅ Updated existing row with call metadata (no assistant match)', { callId });
           markProcessed(callId);
         } else {
-          console.log('[LOGISTICS SHEET] No existing row found to update (no assistant match)', { callId, phone: leadPhone });
+          // No existing row found — create one so the call isn't lost
+          console.log('[LOGISTICS SHEET] No existing row found, creating new row', { callId, phone: leadPhone });
+          await sheets.appendLogistics(logisticsSheetId, {
+            businessName: tenant?.displayName || metadata?.businessName || tenantKey || 'Unknown',
+            decisionMaker: metadata?.leadName || 'Unknown',
+            phone: leadPhone || '',
+            email: '',
+            international: 'N/A',
+            mainCouriers: '',
+            frequency: 'N/A',
+            mainCountries: '',
+            exampleShipment: '',
+            exampleShipmentCost: '',
+            domesticFrequency: 'N/A',
+            ukCourier: 'N/A',
+            standardRateUpToKg: 'N/A',
+            excludingFuelVat: 'N/A',
+            singleVsMulti: 'N/A',
+            receptionistName: 'N/A',
+            callbackNeeded: false,
+            callId: callId || '',
+            recordingUrl: recordingUrl || '',
+            transcriptSnippet: transcript ? transcript.slice(0, 500) : ''
+          });
+          console.log('[LOGISTICS SHEET] ✅ Created new row (no assistant match)', { callId, phone: leadPhone });
+          markProcessed(callId);
         }
       } catch (updateError) {
         console.error('[LOGISTICS SHEET UPDATE ERROR] ❌ FAILED', {

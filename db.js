@@ -1528,6 +1528,16 @@ export async function updateCallQueueStatus(id, status) {
   `, [id, status]);
 }
 
+/** Cancel all other pending queue rows for the same client+phone (e.g. after we just completed one). */
+export async function cancelDuplicatePendingCalls(clientKey, leadPhone, excludeId) {
+  const result = await query(`
+    UPDATE call_queue
+    SET status = 'cancelled', updated_at = now()
+    WHERE client_key = $1 AND lead_phone = $2 AND status = 'pending' AND id != $3
+  `, [clientKey, leadPhone, excludeId]);
+  return result?.rowCount ?? 0;
+}
+
 export async function getCallQueueByTenant(clientKey, limit = 100) {
   const { rows } = await query(`
     SELECT * FROM call_queue 
@@ -1546,6 +1556,31 @@ export async function getCallQueueByPhone(clientKey, leadPhone, limit = 50) {
     LIMIT $3
   `, [clientKey, leadPhone, limit]);
   return rows;
+}
+
+/** Clear pending call queue rows. Optionally filter by clientKey and/or leadPhone. */
+export async function clearCallQueue({ clientKey, leadPhone } = {}) {
+  let result;
+  if (!clientKey && !leadPhone) {
+    result = await query(`DELETE FROM call_queue WHERE status = 'pending'`);
+  } else {
+    const conditions = ["status = 'pending'"];
+    const params = [];
+    let i = 1;
+    if (clientKey) {
+      conditions.push(`client_key = $${i++}`);
+      params.push(clientKey);
+    }
+    if (leadPhone) {
+      conditions.push(`lead_phone = $${i++}`);
+      params.push(leadPhone);
+    }
+    result = await query(
+      `DELETE FROM call_queue WHERE ${conditions.join(' AND ')}`,
+      params
+    );
+  }
+  return result?.rowCount ?? result?.changes ?? 0;
 }
 
 export async function cleanupOldCallQueue(daysOld = 7) {

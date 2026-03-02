@@ -8205,10 +8205,7 @@ app.post('/api/demo/test-call', async (req, res) => {
       return res.status(500).json({ success: false, error: 'VAPI_PRIVATE_KEY not configured' });
     }
 
-    const webhookBaseUrl = process.env.PUBLIC_BASE_URL || process.env.RENDER_EXTERNAL_URL || 'https://ai-booking-mvp.onrender.com';
-    const serverUrl = `${String(webhookBaseUrl).replace(/\/$/, '')}/webhooks/vapi`;
-
-    // Make VAPI call - include server URL so end-of-call-report is sent to our webhook
+    // Make VAPI call (webhook URL is set on assistant in Vapi dashboard, not on create-call)
     const payload = {
       assistantId: finalAssistantId,
       phoneNumberId: VAPI_PHONE_NUMBER_ID,
@@ -8219,8 +8216,7 @@ app.post('/api/demo/test-call', async (req, res) => {
         tenantKey: clientKey,
         clientKey,
         leadPhone: TEST_PHONE
-      },
-      serverUrl
+      }
     };
 
     console.log('[DEMO TEST CALL] Initiating test call:', {
@@ -9167,8 +9163,8 @@ app.post('/api/leads/import', async (req, res) => {
                   calledCount++;
                   console.log('[LEAD IMPORT] Call initiated immediately:', lead.phone, result.callId);
                 } else {
-                  lastCallError = result?.error || result?.details || 'unknown';
-                  console.warn('[LEAD IMPORT] Immediate call failed, queueing for retry:', lead.phone, result?.error);
+                  lastCallError = result?.details || result?.error || 'unknown';
+                  console.warn('[LEAD IMPORT] Immediate call failed, queueing for retry:', lead.phone, result?.error, result?.details);
                   await addToCallQueue({
                     clientKey, leadPhone: lead.phone, priority: 8, scheduledFor: new Date(),
                     callType: 'vapi_call',
@@ -14841,8 +14837,6 @@ app.post('/webhooks/twilio-inbound', express.urlencoded({ extended: false }), tw
           if (isStart) {
             console.log('[LEAD OPT-IN START]', { from, tenantKey });
           }
-          const webhookBaseUrl = process.env.PUBLIC_BASE_URL || process.env.RENDER_EXTERNAL_URL || 'https://ai-booking-mvp.onrender.com';
-          const serverUrl = `${String(webhookBaseUrl).replace(/\/$/, '')}/webhooks/vapi`;
           const payload = {
             assistantId,
             phoneNumberId,
@@ -14868,8 +14862,7 @@ app.post('/webhooks/twilio-inbound', express.urlencoded({ extended: false }), tw
                 isStart,
                 assistantConfig
               })
-            },
-            serverUrl
+            }
           };
             // Use enhanced retry logic for VAPI calls
             const vapiResult = await retryWithBackoff(async () => {
@@ -16760,6 +16753,24 @@ app.get('/admin/call-queue', async (req, res) => {
     });
   } catch (e) {
     console.error('[CALL QUEUE STATUS ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Admin endpoint to clear pending call queue (optional: by clientKey and/or leadPhone)
+app.post('/admin/clear-call-queue', async (req, res) => {
+  try {
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const { clearCallQueue } = await import('./db.js');
+    const { clientKey, leadPhone } = req.body || {};
+    const deleted = await clearCallQueue({ clientKey, leadPhone });
+    console.log('[CALL QUEUE CLEAR]', { clientKey: clientKey || 'all', leadPhone: leadPhone || 'all', deleted });
+    res.json({ ok: true, deleted, message: `Cleared ${deleted} pending call(s).` });
+  } catch (e) {
+    console.error('[CALL QUEUE CLEAR ERROR]', e?.message || String(e));
     res.status(500).json({ ok: false, error: String(e?.message || e) });
   }
 });
@@ -19685,7 +19696,7 @@ async function processVapiRetry(retry) {
 // Call queue processor - runs every 2 minutes to process pending calls
 async function processCallQueue() {
   try {
-    const { getPendingCalls, updateCallQueueStatus } = await import('./db.js');
+    const { getPendingCalls, updateCallQueueStatus, cancelDuplicatePendingCalls } = await import('./db.js');
     const pendingCalls = await getPendingCalls(20); // Process up to 20 calls at a time
     
     if (pendingCalls.length === 0) {
@@ -19707,6 +19718,11 @@ async function processCallQueue() {
         
         // Mark as completed
         await updateCallQueueStatus(call.id, 'completed');
+        // Cancel any other pending queue rows for same client+phone so we don't call again
+        const cancelled = await cancelDuplicatePendingCalls(call.client_key, call.lead_phone, call.id);
+        if (cancelled > 0) {
+          console.log('[CALL QUEUE PROCESSOR] Cancelled duplicate pending rows:', { client_key: call.client_key, lead_phone: call.lead_phone, cancelled });
+        }
         
       } catch (callError) {
         console.error('[CALL QUEUE PROCESSING ERROR]', {
@@ -19870,6 +19886,7 @@ async function queueNewLeadsForCalling() {
       try {
         // Get new leads that haven't been called yet
         // Check both call_queue (pending calls) AND calls table (completed calls)
+        // Also exclude leads we already queued/completed in the last 24h to avoid re-calling when webhook is delayed
         const newLeads = await query(`
           SELECT l.id, l.name, l.phone, l.service, l.source, l.status, l.created_at,
                  (SELECT COUNT(*) FROM call_queue cq 
@@ -19885,6 +19902,13 @@ async function queueNewLeadsForCalling() {
               WHERE cq.client_key = l.client_key 
               AND cq.lead_phone = l.phone 
               AND cq.status = 'pending'
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM call_queue cq2
+              WHERE cq2.client_key = l.client_key
+              AND cq2.lead_phone = l.phone
+              AND cq2.status IN ('completed', 'processing')
+              AND cq2.updated_at >= NOW() - INTERVAL '24 hours'
             )
             AND NOT EXISTS (
               SELECT 1 FROM calls c
