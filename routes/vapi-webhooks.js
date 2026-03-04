@@ -88,6 +88,10 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
   console.log(`[${correlationId}] [VAPI WEBHOOK] Timestamp:`, new Date().toISOString());
   
   try {
+    // Temporary debug: log full payload for end-of-call-report to verify analysis.structuredData
+    if (req.body?.type === 'end-of-call-report') {
+      console.log('END OF CALL PAYLOAD:', JSON.stringify(req.body, null, 2));
+    }
     console.log(`[${correlationId}] [VAPI WEBHOOK DEBUG] Raw body:`, JSON.stringify(req.body, null, 2));
     console.log(`[${correlationId}] [VAPI WEBHOOK DEBUG] Raw body type:`, typeof req.body);
     console.log(`[${correlationId}] [VAPI WEBHOOK DEBUG] Body keys:`, Object.keys(req.body || {}));
@@ -712,7 +716,12 @@ async function processWebhookPayload(body, correlationId) {
     }
     
     // Check for structured output data from VAPI
-    const structuredOutput = body.call?.structuredOutput || body.structuredOutput || body.structured_output;
+    // For end-of-call-report, structured data is at body.analysis.structuredData with exact keys
+    const analysisStructured = body.type === 'end-of-call-report' ? (body.analysis?.structuredData || {}) : {};
+    const hasAnalysisStructured = analysisStructured && Object.keys(analysisStructured).length > 0;
+    const legacyStructured = body.call?.structuredOutput || body.structuredOutput || body.structured_output;
+    // Prefer analysis.structuredData for end-of-call-report (correct path)
+    const structuredOutput = hasAnalysisStructured ? analysisStructured : legacyStructured;
     
     // Debug: Log what VAPI is sending
     console.log('[LOGISTICS DEBUG] Status received:', status);
@@ -750,10 +759,29 @@ async function processWebhookPayload(body, correlationId) {
       console.log('[LOGISTICS] STARTING EXTRACTION...');
       try {
         // Use structured output if available, otherwise fall back to transcript extraction
+        // For end-of-call-report, body.analysis.structuredData has exact keys matching LOGISTICS_HEADERS
         let extracted;
-        if (structuredOutput) {
-          console.log('[LOGISTICS] Using structured output data:', JSON.stringify(structuredOutput, null, 2));
-          // Transform structured output to match our expected format
+        if (hasAnalysisStructured) {
+          // Map from body.analysis.structuredData exact keys
+          const s = analysisStructured;
+          extracted = {
+            email: s['Email'] || '',
+            international: s['International (Y/N)'] || '',
+            mainCouriers: s['Main Couriers'] || '',
+            frequency: s['Frequency'] || '',
+            mainCountries: s['Main Countries'] || '',
+            exampleShipment: s['Example Shipment (weight x dims)'] || '',
+            exampleShipmentCost: s['Example Shipment Cost'] || '',
+            domesticFrequency: s['Domestic Frequency'] || '',
+            ukCourier: s['UK Courier'] || '',
+            standardRateUpToKg: s['Std Rate up to KG'] || '',
+            excludingFuelVat: s['Excl Fuel & VAT?'] || '',
+            singleVsMulti: s['Single vs Multi-parcel'] || ''
+          };
+          console.log('[LOGISTICS] Using analysis.structuredData (exact keys):', JSON.stringify(extracted, null, 2));
+        } else if (structuredOutput) {
+          console.log('[LOGISTICS] Using legacy structured output data:', JSON.stringify(structuredOutput, null, 2));
+          // Transform legacy structured output to match our expected format
           extracted = {
             email: structuredOutput.email || '',
             international: structuredOutput.internationalYN || '',
@@ -782,10 +810,17 @@ async function processWebhookPayload(body, correlationId) {
         }
         
         // Extract fields from structured output OR metadata/transcript
-        const businessName = structuredOutput?.businessName || metadata.businessName || '';
-        // Don't use customer.name as decision maker - only use if explicitly stated in structured output or transcript
-        const decisionMaker = structuredOutput?.decisionMaker || (transcript.match(/decision\s+maker[^\n]{0,60}?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)/i)?.[1]) || '';
-        const receptionistName = structuredOutput?.receptionistName || pickReceptionistName(transcript) || metadata.receptionistName || '';
+        // For end-of-call-report with analysis.structuredData: Business Name from call.customer.name
+        const businessName = hasAnalysisStructured
+          ? (body.call?.customer?.name || '')
+          : (structuredOutput?.businessName || metadata.businessName || '');
+        // Decision Maker from structured data (exact key) or legacy
+        const decisionMaker = hasAnalysisStructured
+          ? (analysisStructured['Decision Maker'] || '')
+          : (structuredOutput?.decisionMaker || (transcript.match(/decision\s+maker[^\n]{0,60}?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)/i)?.[1]) || '');
+        const receptionistName = hasAnalysisStructured
+          ? (analysisStructured['Receptionist Name'] || '')
+          : (structuredOutput?.receptionistName || pickReceptionistName(transcript) || metadata.receptionistName || '');
         const callbackNeeded = structuredOutput?.callbackNeeded === 'Y' || /call\s*back|transfer|not\s*available|not\s*in|back\s*later|try\s*again/i.test(transcript) && !decisionMaker;
 
         // Map all fields properly according to headers
