@@ -166,6 +166,13 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
 });
 
 async function processWebhookPayload(body, correlationId) {
+    // --- Normalize Vapi message wrapper ---
+    const msg = body.message || {};
+    if (msg.type && !body.type) body.type = msg.type;
+    if (msg.analysis && !body.analysis) body.analysis = msg.analysis;
+    if (msg.call && !body.call) body.call = msg.call;
+    // ---------------------------------------
+
     const callId = body.call?.id || body.id || body.callId || body.message?.call?.id || body.message?.callId;
     let status = body.call?.status || body.status;
     let outcome = body.call?.outcome || body.outcome;
@@ -685,7 +692,10 @@ async function processWebhookPayload(body, correlationId) {
     const logisticsSheetId = tenant?.vapi?.logisticsSheetId || tenant?.gsheet_id || process.env.LOGISTICS_SHEET_ID || '1Tnll3FXtNEERYdGHTOh4VtAn90FyG6INUIU46ZbsP6g';
     
     // Only process logistics extraction for the specific assistant ID
-    const ALLOWED_LOGISTICS_ASSISTANT_ID = 'b19a474b-49f3-474d-adb2-4aacc6ad37e7';
+    const ALLOWED_LOGISTICS_ASSISTANT_IDS = new Set([
+      'b19a474b-49f3-474d-adb2-4aacc6ad37e7', // original assistant
+      'b1ba0ad3-c519-4ab7-aa6f-9fba6516a0ee'  // Tom D2D
+    ]);
     
     console.log('[LOGISTICS SHEET ID DEBUG]', {
       'tenant?.vapi?.logisticsSheetId': tenant?.vapi?.logisticsSheetId,
@@ -693,8 +703,8 @@ async function processWebhookPayload(body, correlationId) {
       'process.env.LOGISTICS_SHEET_ID': process.env.LOGISTICS_SHEET_ID,
       'Final logisticsSheetId': logisticsSheetId,
       'assistantId': assistantId,
-      'allowedAssistantId': ALLOWED_LOGISTICS_ASSISTANT_ID,
-      'assistantMatches': assistantId === ALLOWED_LOGISTICS_ASSISTANT_ID,
+      'allowedAssistantIds': [...ALLOWED_LOGISTICS_ASSISTANT_IDS],
+      'assistantMatches': ALLOWED_LOGISTICS_ASSISTANT_IDS.has(assistantId),
       'Has transcript': !!transcript,
       'Transcript length': transcript.length,
       'Status': status,
@@ -708,16 +718,19 @@ async function processWebhookPayload(body, correlationId) {
     if (!transcript || transcript.length < 50) {
       console.log('[LOGISTICS SKIP] No meaningful transcript available:', { hasTranscript: !!transcript, length: transcript?.length });
     }
-    if (assistantId && assistantId !== ALLOWED_LOGISTICS_ASSISTANT_ID) {
+    if (assistantId && !ALLOWED_LOGISTICS_ASSISTANT_IDS.has(assistantId)) {
       console.log('[LOGISTICS SKIP] Assistant ID mismatch - not processing logistics extraction:', {
         received: assistantId,
-        expected: ALLOWED_LOGISTICS_ASSISTANT_ID
+        expected: [...ALLOWED_LOGISTICS_ASSISTANT_IDS]
       });
     }
     
     // Check for structured output data from VAPI
     // For end-of-call-report, structured data is at body.analysis.structuredData with exact keys
-    const analysisStructured = body.type === 'end-of-call-report' ? (body.analysis?.structuredData || {}) : {};
+    const analysisStructured =
+      (body.type === 'end-of-call-report' || msg.type === 'end-of-call-report')
+        ? (body.analysis?.structuredData || msg.analysis?.structuredData || {})
+        : {};
     const hasAnalysisStructured = analysisStructured && Object.keys(analysisStructured).length > 0;
     const legacyStructured = body.call?.structuredOutput || body.structuredOutput || body.structured_output;
     // Prefer analysis.structuredData for end-of-call-report (correct path)
@@ -743,7 +756,7 @@ async function processWebhookPayload(body, correlationId) {
     const hasStructuredData = structuredOutput && Object.keys(structuredOutput).length > 0;
     
     // Only proceed if assistant ID exists and matches the allowed one
-    const assistantMatches = assistantId && assistantId === ALLOWED_LOGISTICS_ASSISTANT_ID;
+    const assistantMatches = ALLOWED_LOGISTICS_ASSISTANT_IDS.has(assistantId);
     
     console.log('[LOGISTICS CONDITION CHECK]', {
       logisticsSheetId: !!logisticsSheetId,
