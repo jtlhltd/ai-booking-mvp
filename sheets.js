@@ -36,8 +36,8 @@ export const HEADERS = [
 // Logistics extraction headers (strict script fields)
 export const LOGISTICS_HEADERS = [
   'Timestamp','Business Name','Decision Maker','Phone','Email','International (Y/N)',
-  'Main Couriers','Frequency','Main Countries','Example Shipment (weight x dims)','Example Shipment Cost',
-  'Domestic Frequency','UK Courier','Std Rate up to KG','Excl Fuel & VAT?','Single vs Multi-parcel',
+  'Main Couriers','Frequency','International Shipments per Week','Main Countries','Example Shipment (weight x dims)','Example Shipment Cost',
+  'Domestic Frequency','UK Shipments per Week','UK Courier','Std Rate up to KG','Excl Fuel & VAT?','Single vs Multi-parcel',
   'Receptionist Name','Callback Needed','Call ID','Recording URI','Transcript Snippet'
 ];
 
@@ -55,7 +55,7 @@ export async function ensureLogisticsHeader(spreadsheetId) {
   const s = await getClient();
   await s.spreadsheets.values.update({
     spreadsheetId,
-    range: 'Sheet1!A1:U1',
+    range: 'Sheet1!A1:W1',
     valueInputOption: 'RAW',
     requestBody: { values: [LOGISTICS_HEADERS] }
   });
@@ -94,10 +94,12 @@ export async function appendLogistics(spreadsheetId, data) {
     'International (Y/N)': data.international || '',
     'Main Couriers': Array.isArray(data.mainCouriers) ? data.mainCouriers.join(', ') : (data.mainCouriers || ''),
     'Frequency': data.frequency || '',
+    'International Shipments per Week': data.internationalShipmentsPerWeek || '',
     'Main Countries': Array.isArray(data.mainCountries) ? data.mainCountries.join(', ') : (data.mainCountries || ''),
     'Example Shipment (weight x dims)': data.exampleShipment || '',
     'Example Shipment Cost': data.exampleShipmentCost || '',
     'Domestic Frequency': data.domesticFrequency || '',
+    'UK Shipments per Week': data.ukShipmentsPerWeek || '',
     'UK Courier': data.ukCourier || '',
     'Std Rate up to KG': data.standardRateUpToKg || '',
     'Excl Fuel & VAT?': data.excludingFuelVat || '',
@@ -122,7 +124,7 @@ export async function appendLogistics(spreadsheetId, data) {
   
   await s.spreadsheets.values.append({
     spreadsheetId,
-    range: 'Sheet1!A:U',  // Fixed: Should be A:U (21 columns), not A:T (20 columns)
+    range: 'Sheet1!A:W',  // 23 columns including International/UK Shipments per Week
     valueInputOption: 'RAW',
     insertDataOption: 'INSERT_ROWS',
     requestBody: { values: [row] }
@@ -143,7 +145,7 @@ export async function updateLogisticsRowByPhone(spreadsheetId, phone, updates) {
     // Read all rows to find the one with matching phone or callId
     const response = await s.spreadsheets.values.get({
       spreadsheetId,
-      range: 'Sheet1!A:U'
+      range: 'Sheet1!A:W'
     });
     
     const rows = response.data.values || [];
@@ -155,7 +157,7 @@ export async function updateLogisticsRowByPhone(spreadsheetId, phone, updates) {
     }
     
     const phoneColumnIndex = 3; // Column D (0-indexed: A=0, B=1, C=2, D=3)
-    const callIdColumnIndex = 18; // Column S (0-indexed)
+    const callIdColumnIndex = 20; // Column U (0-indexed) - after adding Int'l/UK Shipments per Week
     let rowIndex = -1;
     
     // First, try to match by callId if provided (more reliable)
@@ -234,8 +236,8 @@ export async function updateLogisticsRowByPhone(spreadsheetId, phone, updates) {
     
     // Get current row
     const currentRow = rows[rowIndex - 1] || [];
-    // Ensure row has all 21 columns
-    while (currentRow.length < 21) {
+    // Ensure row has all 23 columns
+    while (currentRow.length < 23) {
       currentRow.push('');
     }
     
@@ -267,7 +269,7 @@ export async function updateLogisticsRowByPhone(spreadsheetId, phone, updates) {
     // Write updated row back
     await s.spreadsheets.values.update({
       spreadsheetId,
-      range: `Sheet1!A${rowIndex}:U${rowIndex}`,
+      range: `Sheet1!A${rowIndex}:W${rowIndex}`,
       valueInputOption: 'RAW',
       requestBody: { values: [currentRow] }
     });
