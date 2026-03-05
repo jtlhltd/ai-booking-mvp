@@ -775,22 +775,24 @@ async function processWebhookPayload(body, correlationId) {
         // For end-of-call-report, body.analysis.structuredData has exact keys matching LOGISTICS_HEADERS
         let extracted;
         if (hasAnalysisStructured) {
-          // Map from body.analysis.structuredData exact keys
+          // Map from body.analysis.structuredData (VAPI schema keys) to our internal format
           const s = analysisStructured;
+          const inc = s['Includes Fuel & VAT (Y/N)'] || '';
+          const exclFromInc = inc === 'Y' ? 'N' : inc === 'N' ? 'Y' : '';
           extracted = {
             email: s['Email'] || '',
             international: s['International (Y/N)'] || '',
-            mainCouriers: s['Main Couriers'] || '',
-            frequency: s['Frequency'] || '',
+            mainCouriers: s['International Courier'] || s['Main Couriers'] || '',
+            frequency: s['International Shipments per Week'] || s['Frequency'] || '',
             internationalShipmentsPerWeek: s['International Shipments per Week'] || '',
             mainCountries: s['Main Countries'] || '',
-            exampleShipment: s['Example Shipment (weight x dims)'] || '',
+            exampleShipment: s['Example Shipment Weight'] || s['Example Shipment (weight x dims)'] || '',
             exampleShipmentCost: s['Example Shipment Cost'] || '',
-            domesticFrequency: s['Domestic Frequency'] || '',
+            domesticFrequency: s['UK Shipments per Week'] || s['Domestic Frequency'] || '',
             ukShipmentsPerWeek: s['UK Shipments per Week'] || '',
             ukCourier: s['UK Courier'] || '',
-            standardRateUpToKg: s['Std Rate up to KG'] || '',
-            excludingFuelVat: s['Excl Fuel & VAT?'] || '',
+            standardRateUpToKg: s['UK Standard Rate'] || s['Std Rate up to KG'] || '',
+            excludingFuelVat: exclFromInc || s['Excl Fuel & VAT?'] || '',
             singleVsMulti: s['Single vs Multi-parcel'] || ''
           };
           console.log('[LOGISTICS] Using analysis.structuredData (exact keys):', JSON.stringify(extracted, null, 2));
@@ -838,11 +840,11 @@ async function processWebhookPayload(body, correlationId) {
           : (structuredOutput?.receptionistName || pickReceptionistName(transcript) || metadata.receptionistName || '');
         const callbackNeeded = structuredOutput?.callbackNeeded === 'Y' || /call\s*back|transfer|not\s*available|not\s*in|back\s*later|try\s*again/i.test(transcript) && !decisionMaker;
 
-        // Map all fields properly according to headers
+        // Map all fields properly according to headers (supports both schema keys and camelCase for appendLogistics)
         const sheetData = {
           businessName: businessName || '',
-          decisionMaker: decisionMaker || '',
-          phone: leadPhone || '',
+          decisionMaker: decisionMaker || (hasAnalysisStructured ? analysisStructured['Decision Maker'] : '') || '',
+          phone: (hasAnalysisStructured ? analysisStructured['Phone Number'] : null) || leadPhone || '',
           email: extracted.email || '',
           international: extracted.international || '',
           mainCouriers: Array.isArray(extracted.mainCouriers) ? extracted.mainCouriers.join(', ') : (extracted.mainCouriers || ''),

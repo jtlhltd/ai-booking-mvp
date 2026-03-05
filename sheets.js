@@ -84,31 +84,34 @@ export async function appendLogistics(spreadsheetId, data) {
   const s = await getClient();
   await ensureLogisticsHeader(spreadsheetId);
   
-  // Map data to exact column positions using an object
+  // Map structuredData keys (VAPI schema) OR extractor keys (camelCase) to sheet columns
+  const d = data || {};
+  const inc = d['Includes Fuel & VAT (Y/N)'] ?? '';
+  const exclFromInc = inc === 'Y' ? 'N' : inc === 'N' ? 'Y' : '';
   const columnData = {
     'Timestamp': new Date().toISOString(),
-    'Business Name': data.businessName || '',
-    'Decision Maker': data.decisionMaker || '',
-    'Phone': data.phone || '',
-    'Email': data.email || '',
-    'International (Y/N)': data.international || '',
-    'Main Couriers': Array.isArray(data.mainCouriers) ? data.mainCouriers.join(', ') : (data.mainCouriers || ''),
-    'Frequency': data.frequency || '',
-    'International Shipments per Week': data.internationalShipmentsPerWeek || '',
-    'Main Countries': Array.isArray(data.mainCountries) ? data.mainCountries.join(', ') : (data.mainCountries || ''),
-    'Example Shipment (weight x dims)': data.exampleShipment || '',
-    'Example Shipment Cost': data.exampleShipmentCost || '',
-    'Domestic Frequency': data.domesticFrequency || '',
-    'UK Shipments per Week': data.ukShipmentsPerWeek || '',
-    'UK Courier': data.ukCourier || '',
-    'Std Rate up to KG': data.standardRateUpToKg || '',
-    'Excl Fuel & VAT?': data.excludingFuelVat || '',
-    'Single vs Multi-parcel': data.singleVsMulti || '',
-    'Receptionist Name': data.receptionistName || '',
-    'Callback Needed': (data.callbackNeeded === true || data.callbackNeeded === 'TRUE') ? 'TRUE' : 'FALSE',
-    'Call ID': data.callId || '',
-    'Recording URI': data.recordingUrl || '',
-    'Transcript Snippet': (data.transcriptSnippet || '').slice(0, 300)
+    'Business Name': d['Business Name'] ?? d.businessName ?? '',
+    'Decision Maker': d['Decision Maker'] ?? d.decisionMaker ?? '',
+    'Phone': d['Phone Number'] ?? d.phone ?? '',
+    'Email': d['Email'] ?? d.email ?? '',
+    'International (Y/N)': d['International (Y/N)'] ?? d.international ?? '',
+    'Main Couriers': d['International Courier'] ?? (Array.isArray(d.mainCouriers) ? d.mainCouriers.join(', ') : (d.mainCouriers ?? '')),
+    'Frequency': d['International Shipments per Week'] ?? d.frequency ?? d.internationalShipmentsPerWeek ?? '',
+    'International Shipments per Week': d['International Shipments per Week'] ?? d.internationalShipmentsPerWeek ?? '',
+    'Main Countries': d['Main Countries'] ?? (Array.isArray(d.mainCountries) ? d.mainCountries.join(', ') : (d.mainCountries ?? '')),
+    'Example Shipment (weight x dims)': d['Example Shipment Weight'] ?? d.exampleShipment ?? '',
+    'Example Shipment Cost': d['Example Shipment Cost'] ?? d.exampleShipmentCost ?? '',
+    'Domestic Frequency': d['UK Shipments per Week'] ?? d.domesticFrequency ?? d.ukShipmentsPerWeek ?? '',
+    'UK Shipments per Week': d['UK Shipments per Week'] ?? d.ukShipmentsPerWeek ?? d.domesticFrequency ?? '',
+    'UK Courier': d['UK Courier'] ?? d.ukCourier ?? '',
+    'Std Rate up to KG': d['UK Standard Rate'] ?? d.standardRateUpToKg ?? '',
+    'Excl Fuel & VAT?': exclFromInc || d.excludingFuelVat || d.exclFuelVat || '',
+    'Single vs Multi-parcel': d['Single vs Multi-parcel'] ?? d.singleVsMulti ?? d.singleVsMultiParcel ?? '',
+    'Receptionist Name': d.receptionistName ?? '',
+    'Callback Needed': (d.callbackNeeded === true || d.callbackNeeded === 'TRUE') ? 'TRUE' : 'FALSE',
+    'Call ID': d.callId ?? '',
+    'Recording URI': d.recordingUrl ?? '',
+    'Transcript Snippet': (d.transcriptSnippet ?? '').slice(0, 300)
   };
   
   // Build row array in exact header order
