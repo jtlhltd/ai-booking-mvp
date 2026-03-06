@@ -110,6 +110,10 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
         if (!body.recordingUrl && message.call.recordingUrl) {
           body.recordingUrl = message.call.recordingUrl;
         }
+        // Structured Output (artifactPlan): merge call.artifact.structuredOutputs for downstream extraction
+        if (message.call.artifact && !body.call.artifact) {
+          body.call.artifact = message.call.artifact;
+        }
       }
       
       // Extract transcript from message.transcript (top level, NOT artifact)
@@ -717,18 +721,34 @@ async function processWebhookPayload(body, correlationId) {
     }
     
     // Check for structured output data from VAPI
-    // For end-of-call-report, structured data can be at message.analysis, message.call.analysis, or body.analysis
+    // MODERN PATH (Structured Output / artifactPlan): call.artifact.structuredOutputs
+    // OLD PATH (analysisPlan.structuredDataPlan): call.analysis.structuredData
+    const callObj = body.call || msg?.call || {};
+    const artifactOutputs = callObj.artifact?.structuredOutputs
+      || body.message?.call?.artifact?.structuredOutputs
+      || body.artifact?.structuredOutputs
+      || [];
+    const artifactStructured = Array.isArray(artifactOutputs) && artifactOutputs.length > 0
+      ? (artifactOutputs[0]?.result ?? artifactOutputs[0] ?? {})
+      : {};
+    const hasArtifactStructured = artifactStructured && typeof artifactStructured === 'object' && Object.keys(artifactStructured).length > 0;
+
     const analysisStructured =
-      (body.type === 'end-of-call-report' || msg.type === 'end-of-call-report')
-        ? (body.analysis?.structuredData ?? msg.analysis?.structuredData ?? msg.call?.analysis?.structuredData ?? body.call?.analysis?.structuredData ?? {})
+      (body.type === 'end-of-call-report' || msg?.type === 'end-of-call-report')
+        ? (body.analysis?.structuredData ?? msg?.analysis?.structuredData ?? msg?.call?.analysis?.structuredData ?? body.call?.analysis?.structuredData ?? {})
         : {};
     const hasAnalysisStructured = analysisStructured && Object.keys(analysisStructured).length > 0;
     const legacyStructured = body.call?.structuredOutput || body.structuredOutput || body.structured_output;
-    // Prefer analysis.structuredData for end-of-call-report (correct path)
-    const structuredOutput = hasAnalysisStructured ? analysisStructured : legacyStructured;
+
+    // Prefer artifact.structuredOutputs (modern Structured Output), then analysis.structuredData, then legacy
+    const structuredOutput = hasArtifactStructured ? artifactStructured : (hasAnalysisStructured ? analysisStructured : legacyStructured);
     
-    // Debug: Log what VAPI is sending
+    // Debug: Log what VAPI is sending (including artifact path for Structured Output)
     console.log('[LOGISTICS DEBUG] Status received:', status);
+    if (body.type === 'end-of-call-report' || msg?.type === 'end-of-call-report') {
+      console.log('STRUCTURED OUTPUTS (artifact path):', JSON.stringify(artifactOutputs, null, 2));
+      console.log('[LOGISTICS DEBUG] call.artifact:', JSON.stringify(callObj?.artifact, null, 2));
+    }
     console.log('[LOGISTICS DEBUG] Structured output:', JSON.stringify(structuredOutput, null, 2));
     console.log('[LOGISTICS DEBUG] Transcript length:', transcript.length);
     console.log('[LOGISTICS DEBUG] Transcript present sources:', {
@@ -768,34 +788,34 @@ async function processWebhookPayload(body, correlationId) {
     }
     
     if (isEndOfCallReport && logisticsSheetId && (hasTranscript || hasStructuredData) && assistantMatches) {
-      console.log('STRUCTURED DATA RECEIVED:', JSON.stringify(analysisStructured, null, 2));
+      console.log('STRUCTURED DATA RECEIVED:', JSON.stringify(structuredOutput, null, 2));
       console.log('[LOGISTICS] STARTING EXTRACTION...');
       try {
         // Use structured output if available, otherwise fall back to transcript extraction
-        // For end-of-call-report, body.analysis.structuredData has exact keys matching LOGISTICS_HEADERS
+        // SOURCE PRIORITY: 1) artifact.structuredOutputs (modern), 2) analysis.structuredData (legacy), 3) legacy/transcript
         let extracted;
-        if (hasAnalysisStructured) {
-          // Map from body.analysis.structuredData (VAPI schema keys) to our internal format
-          const s = analysisStructured;
-          const inc = s['Includes Fuel & VAT (Y/N)'] || '';
-          const exclFromInc = inc === 'Y' ? 'N' : inc === 'N' ? 'Y' : '';
+        if (hasArtifactStructured || hasAnalysisStructured) {
+          // Map from VAPI schema keys (artifact.result / analysis.structuredData) or camelCase fallbacks
+          const s = structuredOutput;
+          const inc = s['Includes Fuel & VAT (Y/N)'] || s.includesFuelVat || '';
+          const exclFromInc = inc === 'Y' ? 'N' : inc === 'N' ? 'Y' : s['Excl Fuel & VAT?'] || s.exclFuelVAT || '';
           extracted = {
-            email: s['Email'] || '',
-            international: s['International (Y/N)'] || '',
-            mainCouriers: s['International Courier'] || s['Main Couriers'] || '',
-            frequency: s['International Shipments per Week'] || s['Frequency'] || '',
-            internationalShipmentsPerWeek: s['International Shipments per Week'] || '',
-            mainCountries: s['Main Countries'] || '',
-            exampleShipment: s['Example Shipment Weight'] || s['Example Shipment (weight x dims)'] || '',
-            exampleShipmentCost: s['Example Shipment Cost'] || '',
-            domesticFrequency: s['UK Shipments per Week'] || s['Domestic Frequency'] || '',
-            ukShipmentsPerWeek: s['UK Shipments per Week'] || '',
-            ukCourier: s['UK Courier'] || '',
-            standardRateUpToKg: s['UK Standard Rate'] || s['Std Rate up to KG'] || '',
-            excludingFuelVat: exclFromInc || s['Excl Fuel & VAT?'] || '',
-            singleVsMulti: s['Single vs Multi-parcel'] || ''
+            email: s['Email'] || s.email || '',
+            international: s['International (Y/N)'] || s.international || s.internationalYN || '',
+            mainCouriers: s['International Courier'] || s['Main Couriers'] || s.mainCouriers || (Array.isArray(s.mainCouriers) ? s.mainCouriers.join(', ') : ''),
+            frequency: s['International Shipments per Week'] || s['Frequency'] || s.frequency || '',
+            internationalShipmentsPerWeek: s['International Shipments per Week'] || s.internationalShipmentsPerWeek || '',
+            mainCountries: s['Main Countries'] || s.mainCountries || (Array.isArray(s.mainCountries) ? s.mainCountries.join(', ') : ''),
+            exampleShipment: s['Example Shipment Weight'] || s['Example Shipment (weight x dims)'] || s.exampleShipment || '',
+            exampleShipmentCost: s['Example Shipment Cost'] || s.exampleShipmentCost || '',
+            domesticFrequency: s['UK Shipments per Week'] || s['Domestic Frequency'] || s.domesticFrequency || '',
+            ukShipmentsPerWeek: s['UK Shipments per Week'] || s.ukShipmentsPerWeek || '',
+            ukCourier: s['UK Courier'] || s.ukCourier || '',
+            standardRateUpToKg: s['UK Standard Rate'] || s['Std Rate up to KG'] || s.standardRateUpToKg || '',
+            excludingFuelVat: exclFromInc || s['Excl Fuel & VAT?'] || s.exclFuelVAT || '',
+            singleVsMulti: s['Single vs Multi-parcel'] || s.singleVsMulti || s.singleVsMultiParcel || ''
           };
-          console.log('[LOGISTICS] Using analysis.structuredData (exact keys):', JSON.stringify(extracted, null, 2));
+          console.log('[LOGISTICS] Using structured output (artifact or analysis):', JSON.stringify(extracted, null, 2));
         } else if (structuredOutput) {
           console.log('[LOGISTICS] Using legacy structured output data:', JSON.stringify(structuredOutput, null, 2));
           // Transform legacy structured output to match our expected format
@@ -827,24 +847,25 @@ async function processWebhookPayload(body, correlationId) {
         }
         
         // Extract fields from structured output OR metadata/transcript
-        // For end-of-call-report with analysis.structuredData: Business Name from call.customer.name
-        const businessName = hasAnalysisStructured
+        // For end-of-call-report with structured output: Business Name from call.customer.name
+        const hasStructuredSource = hasArtifactStructured || hasAnalysisStructured;
+        const businessName = hasStructuredSource
           ? (body.call?.customer?.name || '')
           : (structuredOutput?.businessName || metadata.businessName || '');
         // Decision Maker from structured data (exact key) or legacy
-        const decisionMaker = hasAnalysisStructured
-          ? (analysisStructured['Decision Maker'] || '')
+        const decisionMaker = hasStructuredSource
+          ? (structuredOutput['Decision Maker'] || structuredOutput.decisionMaker || '')
           : (structuredOutput?.decisionMaker || (transcript.match(/decision\s+maker[^\n]{0,60}?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)/i)?.[1]) || '');
-        const receptionistName = hasAnalysisStructured
-          ? (analysisStructured['Receptionist Name'] || '')
+        const receptionistName = hasStructuredSource
+          ? (structuredOutput['Receptionist Name'] || structuredOutput.receptionistName || '')
           : (structuredOutput?.receptionistName || pickReceptionistName(transcript) || metadata.receptionistName || '');
         const callbackNeeded = structuredOutput?.callbackNeeded === 'Y' || /call\s*back|transfer|not\s*available|not\s*in|back\s*later|try\s*again/i.test(transcript) && !decisionMaker;
 
         // Map all fields properly according to headers (supports both schema keys and camelCase for appendLogistics)
         const sheetData = {
           businessName: businessName || '',
-          decisionMaker: decisionMaker || (hasAnalysisStructured ? analysisStructured['Decision Maker'] : '') || '',
-          phone: (hasAnalysisStructured ? analysisStructured['Phone Number'] : null) || leadPhone || '',
+          decisionMaker: decisionMaker || (hasStructuredSource ? (structuredOutput['Decision Maker'] || structuredOutput.decisionMaker) : '') || '',
+          phone: (hasStructuredSource ? (structuredOutput['Phone Number'] || structuredOutput.phone) : null) || leadPhone || '',
           email: extracted.email || '',
           international: extracted.international || '',
           mainCouriers: Array.isArray(extracted.mainCouriers) ? extracted.mainCouriers.join(', ') : (extracted.mainCouriers || ''),
