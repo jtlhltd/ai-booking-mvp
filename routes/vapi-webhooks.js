@@ -684,7 +684,8 @@ async function processWebhookPayload(body, correlationId) {
     // Only process logistics extraction for the specific assistant ID
     const ALLOWED_LOGISTICS_ASSISTANT_IDS = new Set([
       'b19a474b-49f3-474d-adb2-4aacc6ad37e7', // original assistant
-      'b1ba0ad3-c519-4ab7-aa6f-9fba6516a0ee'  // Tom D2D
+      'b1ba0ad3-c519-4ab7-aa6f-9fba6516a0ee', // Tom D2D (variant)
+      'b1ba0ad3-c519-4ab7-aa6f-9fba6516a8ee'  // Tom D2D (from diagnostic)
     ]);
     
     console.log('[LOGISTICS SHEET ID DEBUG]', {
