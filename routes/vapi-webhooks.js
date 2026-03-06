@@ -171,6 +171,7 @@ async function processWebhookPayload(body, correlationId) {
     if (msg.type && !body.type) body.type = msg.type;
     if (msg.analysis && !body.analysis) body.analysis = msg.analysis;
     if (msg.call && !body.call) body.call = msg.call;
+    if (msg.call?.analysis && !body.analysis) body.analysis = msg.call.analysis;
     // ---------------------------------------
 
     const callId = body.call?.id || body.id || body.callId || body.message?.call?.id || body.message?.callId;
@@ -613,20 +614,9 @@ async function processWebhookPayload(body, correlationId) {
             
             if (logisticsSheetId) {
               if (action === 'append' && data) {
-                console.log('[VAPI WEBHOOK] Appending data to sheet...');
-                // Ensure logistics headers are present
-                await sheets.ensureLogisticsHeader(logisticsSheetId);
-                
-                // Append data to sheet - use the correct callId variable
-                await sheets.appendLogistics(logisticsSheetId, {
-                  ...data,
-                  callId: callId || '',
-                  timestamp: new Date().toISOString(),
-                  businessName: metadata.businessName || data.businessName || 'Unknown',
-                  leadPhone: leadPhone || data.phone || ''
-                });
-                
-                console.log('[VAPI WEBHOOK] ✅ Data appended to sheet via tool call successfully');
+                // Do NOT append on function-call — structuredData only exists at end-of-call-report.
+                // Appending here causes partial data (from tool args) and gaps.
+                console.log('[VAPI WEBHOOK] Skipping access_google_sheet append — only append on end-of-call-report');
               } else {
                 console.log('[VAPI WEBHOOK] Skipping append - action:', action, 'hasData:', !!data);
               }
@@ -726,10 +716,10 @@ async function processWebhookPayload(body, correlationId) {
     }
     
     // Check for structured output data from VAPI
-    // For end-of-call-report, structured data is at body.analysis.structuredData with exact keys
+    // For end-of-call-report, structured data can be at message.analysis, message.call.analysis, or body.analysis
     const analysisStructured =
       (body.type === 'end-of-call-report' || msg.type === 'end-of-call-report')
-        ? (body.analysis?.structuredData || msg.analysis?.structuredData || {})
+        ? (body.analysis?.structuredData ?? msg.analysis?.structuredData ?? msg.call?.analysis?.structuredData ?? body.call?.analysis?.structuredData ?? {})
         : {};
     const hasAnalysisStructured = analysisStructured && Object.keys(analysisStructured).length > 0;
     const legacyStructured = body.call?.structuredOutput || body.structuredOutput || body.structured_output;
@@ -758,17 +748,26 @@ async function processWebhookPayload(body, correlationId) {
     // Only proceed if assistant ID exists and matches the allowed one
     const assistantMatches = ALLOWED_LOGISTICS_ASSISTANT_IDS.has(assistantId);
     
+    const isEndOfCallReport = body.type === 'end-of-call-report' || msg.type === 'end-of-call-report';
     console.log('[LOGISTICS CONDITION CHECK]', {
+      eventType: body.type || msg.type,
+      isEndOfCallReport,
       logisticsSheetId: !!logisticsSheetId,
       hasTranscript,
       transcriptLength: transcript?.length || 0,
       hasStructuredData,
       assistantMatches,
       assistantId,
-      willExtract: !!(logisticsSheetId && (hasTranscript || hasStructuredData) && assistantMatches)
+      willExtract: !!(isEndOfCallReport && logisticsSheetId && (hasTranscript || hasStructuredData) && assistantMatches)
     });
     
-    if (logisticsSheetId && (hasTranscript || hasStructuredData) && assistantMatches) {
+    // CRITICAL: Only append on end-of-call-report. structuredData only exists there.
+    if (!isEndOfCallReport) {
+      console.log('[LOGISTICS SKIP] Not end-of-call-report — structured extraction only runs on that event');
+    }
+    
+    if (isEndOfCallReport && logisticsSheetId && (hasTranscript || hasStructuredData) && assistantMatches) {
+      console.log('STRUCTURED DATA RECEIVED:', JSON.stringify(analysisStructured, null, 2));
       console.log('[LOGISTICS] STARTING EXTRACTION...');
       try {
         // Use structured output if available, otherwise fall back to transcript extraction
