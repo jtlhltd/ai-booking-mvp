@@ -114,8 +114,8 @@ export async function appendLogistics(spreadsheetId, data) {
     'Transcript Snippet': (d.transcriptSnippet ?? '').slice(0, 300)
   };
   
-  // Build row array in exact header order
-  const row = LOGISTICS_HEADERS.map(header => columnData[header] || '');
+  // Build row array in exact header order (?? 'Unknown' avoids blanks for null/undefined)
+  const row = LOGISTICS_HEADERS.map(header => columnData[header] ?? 'Unknown');
   
   console.log('[SHEETS DEBUG] Column mapping:', JSON.stringify(columnData, null, 2));
   console.log('[SHEETS DEBUG] Row being written:', JSON.stringify(row, null, 2));
