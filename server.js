@@ -8225,6 +8225,7 @@ app.post('/api/demo/test-call', async (req, res) => {
       phoneNumber: TEST_PHONE,
       phoneNumberId: VAPI_PHONE_NUMBER_ID
     });
+    console.log('[DEMO TEST CALL] POST https://api.vapi.ai/call payload:', JSON.stringify(payload, null, 2));
 
     const response = await fetch(`${VAPI_API_URL}/call`, {
       method: 'POST',
