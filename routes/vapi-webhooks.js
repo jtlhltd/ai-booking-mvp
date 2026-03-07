@@ -95,6 +95,11 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
       console.log('RAW CALL KEYS:', rawCall ? Object.keys(rawCall) : 'NO CALL');
       console.log('RAW HAS ARTIFACT FIELD:', rawCall ? 'artifact' in rawCall : 'NO CALL');
       console.log('RAW ARTIFACT VALUE:', rawCall?.artifact);
+      // VAPI diagnostic: message.call.messages count
+      const mc = rawCall?.messages;
+      const msgCount = Array.isArray(mc) ? mc.length : null;
+      const msgKeys = mc && typeof mc === 'object' && !Array.isArray(mc) ? Object.keys(mc) : null;
+      console.log('RAW message.call.messages: type=%s, length=%s, keys=%s', typeof mc, msgCount ?? 'N/A', msgKeys ? JSON.stringify(msgKeys) : 'N/A');
     }
     // Temporary debug: log full payload for end-of-call-report to verify analysis.structuredData
     if (req.body?.type === 'end-of-call-report') {
