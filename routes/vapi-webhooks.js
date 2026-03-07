@@ -795,16 +795,47 @@ async function processWebhookPayload(body, correlationId) {
       console.log('[LOGISTICS SKIP] Not end-of-call-report — structured extraction only runs on that event');
     }
     
-    if (isEndOfCallReport && logisticsSheetId && (hasTranscript || hasStructuredData) && assistantMatches) {
-      console.log('STRUCTURED DATA RECEIVED:', JSON.stringify(structuredOutput, null, 2));
+    // WORKAROUND: When artifact is suppressed, call VAPI /structured-output/run to force extraction from transcript
+    let manualStructuredOutput = null;
+    if (isEndOfCallReport && callId && hasTranscript && !hasStructuredData && process.env.VAPI_PRIVATE_KEY) {
+      try {
+        console.log('[LOGISTICS] Running manual structured extraction for call:', callId);
+        const res = await fetch('https://api.vapi.ai/structured-output/run', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.VAPI_PRIVATE_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            callIds: [callId],
+            structuredOutputId: process.env.VAPI_STRUCTURED_OUTPUT_ID || '0cff18e4-6a16-4573-a713-cc7e0fcf3e06',
+            previewEnabled: true
+          })
+        });
+        const data = await res.json();
+        console.log('[LOGISTICS] Structured Output Run Response:', JSON.stringify(data, null, 2));
+        manualStructuredOutput = data?.results?.[0]?.output ?? null;
+        if (manualStructuredOutput && typeof manualStructuredOutput === 'object' && Object.keys(manualStructuredOutput).length > 0) {
+          console.log('[LOGISTICS] MANUAL STRUCTURED RESULT:', JSON.stringify(manualStructuredOutput, null, 2));
+        }
+      } catch (err) {
+        console.error('[LOGISTICS] Structured extraction failed:', err);
+      }
+    }
+    
+    const effectiveStructuredOutput = manualStructuredOutput || structuredOutput;
+    const effectiveHasStructuredData = (manualStructuredOutput && Object.keys(manualStructuredOutput).length > 0) || hasStructuredData;
+    
+    if (isEndOfCallReport && logisticsSheetId && (hasTranscript || effectiveHasStructuredData) && assistantMatches) {
+      console.log('STRUCTURED DATA RECEIVED:', JSON.stringify(effectiveStructuredOutput, null, 2));
       console.log('[LOGISTICS] STARTING EXTRACTION...');
       try {
         // Use structured output if available, otherwise fall back to transcript extraction
-        // SOURCE PRIORITY: 1) artifact.structuredOutputs (modern), 2) analysis.structuredData (legacy), 3) legacy/transcript
+        // SOURCE PRIORITY: 1) manual API (workaround), 2) artifact, 3) analysis, 4) transcript
         let extracted;
-        if (hasArtifactStructured || hasAnalysisStructured) {
-          // Map from VAPI schema keys (artifact.result / analysis.structuredData) or camelCase fallbacks
-          const s = structuredOutput;
+        if (effectiveHasStructuredData && effectiveStructuredOutput) {
+          // Map from VAPI schema keys (artifact.result / analysis.structuredData / manual API) or camelCase fallbacks
+          const s = effectiveStructuredOutput;
           const inc = s['Includes Fuel & VAT (Y/N)'] || s.includesFuelVat || '';
           const exclFromInc = inc === 'Y' ? 'N' : inc === 'N' ? 'Y' : s['Excl Fuel & VAT?'] || s.exclFuelVAT || '';
           extracted = {
@@ -824,22 +855,22 @@ async function processWebhookPayload(body, correlationId) {
             singleVsMulti: s['Single vs Multi-parcel'] || s.singleVsMulti || s.singleVsMultiParcel || ''
           };
           console.log('[LOGISTICS] Using structured output (artifact or analysis):', JSON.stringify(extracted, null, 2));
-        } else if (structuredOutput) {
-          console.log('[LOGISTICS] Using legacy structured output data:', JSON.stringify(structuredOutput, null, 2));
+        } else if (effectiveStructuredOutput) {
+          console.log('[LOGISTICS] Using legacy structured output data:', JSON.stringify(effectiveStructuredOutput, null, 2));
           // Transform legacy structured output to match our expected format
           extracted = {
-            email: structuredOutput.email || '',
-            international: structuredOutput.internationalYN || '',
-            mainCouriers: [structuredOutput.courier1, structuredOutput.courier2, structuredOutput.courier3].filter(Boolean),
-            frequency: structuredOutput.frequency || '',
-            mainCountries: [structuredOutput.country1, structuredOutput.country2, structuredOutput.country3].filter(Boolean),
-            exampleShipment: structuredOutput.exampleShipment || '',
-            exampleShipmentCost: structuredOutput.exampleShipmentCost || '',
-            domesticFrequency: structuredOutput.domesticFrequency || '',
-            ukCourier: structuredOutput.ukCourier || '',
-            standardRateUpToKg: structuredOutput.standardRateUpToKg || '',
-            excludingFuelVat: structuredOutput.exclFuelVAT || '',
-            singleVsMulti: structuredOutput.singleVsMultiParcel || ''
+            email: effectiveStructuredOutput.email || '',
+            international: effectiveStructuredOutput.internationalYN || '',
+            mainCouriers: [effectiveStructuredOutput.courier1, effectiveStructuredOutput.courier2, effectiveStructuredOutput.courier3].filter(Boolean),
+            frequency: effectiveStructuredOutput.frequency || '',
+            mainCountries: [effectiveStructuredOutput.country1, effectiveStructuredOutput.country2, effectiveStructuredOutput.country3].filter(Boolean),
+            exampleShipment: effectiveStructuredOutput.exampleShipment || '',
+            exampleShipmentCost: effectiveStructuredOutput.exampleShipmentCost || '',
+            domesticFrequency: effectiveStructuredOutput.domesticFrequency || '',
+            ukCourier: effectiveStructuredOutput.ukCourier || '',
+            standardRateUpToKg: effectiveStructuredOutput.standardRateUpToKg || '',
+            excludingFuelVat: effectiveStructuredOutput.exclFuelVAT || '',
+            singleVsMulti: effectiveStructuredOutput.singleVsMultiParcel || ''
           };
           
           // Fill in gaps from transcript if structured output is incomplete
@@ -856,24 +887,24 @@ async function processWebhookPayload(body, correlationId) {
         
         // Extract fields from structured output OR metadata/transcript
         // For end-of-call-report with structured output: Business Name from call.customer.name
-        const hasStructuredSource = hasArtifactStructured || hasAnalysisStructured;
+        const hasStructuredSource = effectiveHasStructuredData && effectiveStructuredOutput;
         const businessName = hasStructuredSource
           ? (body.call?.customer?.name || '')
-          : (structuredOutput?.businessName || metadata.businessName || '');
+          : (effectiveStructuredOutput?.businessName || metadata.businessName || '');
         // Decision Maker from structured data (exact key) or legacy
         const decisionMaker = hasStructuredSource
-          ? (structuredOutput['Decision Maker'] || structuredOutput.decisionMaker || '')
-          : (structuredOutput?.decisionMaker || (transcript.match(/decision\s+maker[^\n]{0,60}?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)/i)?.[1]) || '');
+          ? (effectiveStructuredOutput['Decision Maker'] || effectiveStructuredOutput.decisionMaker || '')
+          : (effectiveStructuredOutput?.decisionMaker || (transcript.match(/decision\s+maker[^\n]{0,60}?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)/i)?.[1]) || '');
         const receptionistName = hasStructuredSource
-          ? (structuredOutput['Receptionist Name'] || structuredOutput.receptionistName || '')
-          : (structuredOutput?.receptionistName || pickReceptionistName(transcript) || metadata.receptionistName || '');
-        const callbackNeeded = structuredOutput?.callbackNeeded === 'Y' || /call\s*back|transfer|not\s*available|not\s*in|back\s*later|try\s*again/i.test(transcript) && !decisionMaker;
+          ? (effectiveStructuredOutput['Receptionist Name'] || effectiveStructuredOutput.receptionistName || '')
+          : (effectiveStructuredOutput?.receptionistName || pickReceptionistName(transcript) || metadata.receptionistName || '');
+        const callbackNeeded = effectiveStructuredOutput?.callbackNeeded === 'Y' || /call\s*back|transfer|not\s*available|not\s*in|back\s*later|try\s*again/i.test(transcript) && !decisionMaker;
 
         // Map all fields properly according to headers (supports both schema keys and camelCase for appendLogistics)
         const sheetData = {
           businessName: businessName || '',
-          decisionMaker: decisionMaker || (hasStructuredSource ? (structuredOutput['Decision Maker'] || structuredOutput.decisionMaker) : '') || '',
-          phone: (hasStructuredSource ? (structuredOutput['Phone Number'] || structuredOutput.phone) : null) || leadPhone || '',
+          decisionMaker: decisionMaker || (hasStructuredSource ? (effectiveStructuredOutput['Decision Maker'] || effectiveStructuredOutput.decisionMaker) : '') || '',
+          phone: (hasStructuredSource ? (effectiveStructuredOutput['Phone Number'] || effectiveStructuredOutput.phone) : null) || leadPhone || '',
           email: extracted.email || '',
           international: extracted.international || '',
           mainCouriers: Array.isArray(extracted.mainCouriers) ? extracted.mainCouriers.join(', ') : (extracted.mainCouriers || ''),
