@@ -44,6 +44,11 @@ router.use('/webhooks/vapi', (req, res, next) => {
   next();
 });
 
+// In-memory store for conversation-update messages (VAPI sends messages incrementally, not in end-of-call-report)
+// Bounded to avoid memory growth
+const callStore = new Map();
+const CALL_STORE_MAX = 200;
+
 // In-memory deduplication of processed call IDs (best-effort, survives process lifetime)
 const processedCallIds = new Set();
 function markProcessed(callId) {
@@ -54,6 +59,28 @@ function markProcessed(callId) {
     const first = processedCallIds.values().next().value;
     processedCallIds.delete(first);
   }
+}
+
+/** Format message array (from conversation-update) to transcript string */
+function formatMessagesToTranscript(messages) {
+  if (!Array.isArray(messages) || messages.length === 0) return '';
+  return messages
+    .map((m) => {
+      const role = m?.role || m?.type || 'unknown';
+      const content = m?.content || m?.text || m?.message || m?.body || '';
+      if (!content) return null;
+      if (role === 'system' || role === 'function' || role === 'tool') return null;
+      const contentUpper = (typeof content === 'string' ? content : '').toUpperCase();
+      if (contentUpper.includes('TOOLS:') || contentUpper.includes('CRITICAL:') ||
+          contentUpper.includes('FOLLOW THIS SCRIPT') || contentUpper.includes('DO NOT ADD YOUR OWN') ||
+          contentUpper.includes('USE ACCESS_GOOGLE_SHEET') || contentUpper.includes('USE SCHEDULE_CALLBACK')) return null;
+      const roleLower = (role || '').toLowerCase();
+      const label = (roleLower === 'user' || roleLower === 'customer' || roleLower === 'caller' ||
+                     roleLower === 'human' || roleLower === 'person') ? 'User' : 'AI';
+      return `${label}: ${content}`;
+    })
+    .filter(Boolean)
+    .join('\n\n');
 }
 
 /** Map VAPI endedReason (docs.vapi.ai/calls/call-ended-reason) to our outcome for dashboard/analytics */
@@ -164,6 +191,23 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
     if (body.call?.endedReason != null) body.endedReason = body.endedReason ?? body.call.endedReason;
     if (body.endedReason == null && body.endOfCallReport?.endedReason != null) body.endedReason = body.endOfCallReport.endedReason;
 
+    // conversation-update: accumulate messages for use in end-of-call-report (message.call.messages is undefined there)
+    if (body?.message?.type === 'conversation-update') {
+      const cid = body?.message?.call?.id;
+      const messages = body?.message?.messages || body?.message?.conversation;
+      if (cid && Array.isArray(messages) && messages.length > 0) {
+        if (!callStore.has(cid)) callStore.set(cid, []);
+        callStore.get(cid).push(...messages);
+        if (callStore.size > CALL_STORE_MAX) {
+          const firstKey = callStore.keys().next().value;
+          callStore.delete(firstKey);
+        }
+        console.log(`[${correlationId}] [CONVERSATION-UPDATE] Accumulated ${messages.length} msgs for ${cid}, total: ${callStore.get(cid).length}`);
+      }
+      res.status(200).json({ ok: true, received: true });
+      return;
+    }
+
     // Always return 200 to prevent VAPI from retrying
     res.status(200).json({ ok: true, received: true });
 
@@ -209,14 +253,26 @@ async function processWebhookPayload(body, correlationId) {
     
     // Extract transcript and recording (NEW)
     // Capture transcript from multiple possible VAPI payload shapes
-    // PRIMARY: message.transcript (actual VAPI format for end-of-call-report)
-    // Then fall back to other locations
+    // PRIMARY: accumulated from conversation-update (message.call.messages is undefined in end-of-call-report)
+    // FALLBACK: message.transcript, body.transcript, etc.
     let transcript = body.transcript || 
                     body.message?.transcript ||
                     body.call?.transcript || 
                     body.summary || '';
     const eocrTranscript = body.endOfCallReport?.transcript || body.call?.endOfCallReport?.transcript || body.end_of_call_report?.transcript;
     if (!transcript && eocrTranscript) transcript = eocrTranscript;
+
+    // Use accumulated messages from conversation-update (VAPI sends incrementally, not in end-of-call-report)
+    const isEndOfCallReport = body.type === 'end-of-call-report' || body.message?.type === 'end-of-call-report';
+    if (isEndOfCallReport && callId && callStore.has(callId)) {
+      const fullMessages = callStore.get(callId);
+      callStore.delete(callId);
+      const fullTranscript = formatMessagesToTranscript(fullMessages);
+      if (fullTranscript && fullTranscript.length > (transcript?.length || 0)) {
+        transcript = fullTranscript;
+        console.log(`[${correlationId}] [TRANSCRIPT] Using accumulated conversation-update transcript, length: ${transcript.length}`);
+      }
+    }
     
     // Build full formatted transcript from messages array (preserves conversation structure)
     // IMPORTANT: Filter out system/instruction messages - only include actual conversation
@@ -782,7 +838,6 @@ async function processWebhookPayload(body, correlationId) {
     // Only proceed if assistant ID exists and matches the allowed one
     const assistantMatches = ALLOWED_LOGISTICS_ASSISTANT_IDS.has(assistantId);
     
-    const isEndOfCallReport = body.type === 'end-of-call-report' || msg.type === 'end-of-call-report';
     console.log('[LOGISTICS CONDITION CHECK]', {
       eventType: body.type || msg.type,
       isEndOfCallReport,
