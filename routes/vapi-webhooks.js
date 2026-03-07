@@ -88,6 +88,14 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
   console.log(`[${correlationId}] [VAPI WEBHOOK] Timestamp:`, new Date().toISOString());
   
   try {
+    // RAW envelope debug (before any normalization) - per VAPI troubleshooting
+    console.log('RAW TYPE:', body?.message?.type || body?.type);
+    if (body?.message?.type === 'end-of-call-report') {
+      const rawCall = body?.message?.call;
+      console.log('RAW CALL KEYS:', rawCall ? Object.keys(rawCall) : 'NO CALL');
+      console.log('RAW HAS ARTIFACT FIELD:', rawCall ? 'artifact' in rawCall : 'NO CALL');
+      console.log('RAW ARTIFACT VALUE:', rawCall?.artifact);
+    }
     // Temporary debug: log full payload for end-of-call-report to verify analysis.structuredData
     if (req.body?.type === 'end-of-call-report') {
       console.log('END OF CALL PAYLOAD:', JSON.stringify(req.body, null, 2));
