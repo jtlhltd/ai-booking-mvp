@@ -944,47 +944,83 @@ async function processWebhookPayload(body, correlationId) {
           console.log('[LOGISTICS] Using transcript extraction (no structured output)');
           extracted = extractLogisticsFields(transcript);
         }
-        
-        // Extract fields from structured output OR metadata/transcript
-        // For end-of-call-report with structured output: Business Name from call.customer.name
-        const hasStructuredSource = effectiveHasStructuredData && effectiveStructuredOutput;
-        const businessName = hasStructuredSource
-          ? (body.call?.customer?.name || '')
-          : (effectiveStructuredOutput?.businessName || metadata.businessName || '');
-        // Decision Maker from structured data (exact key) or legacy
-        const decisionMaker = hasStructuredSource
-          ? (effectiveStructuredOutput['Decision Maker'] || effectiveStructuredOutput.decisionMaker || '')
-          : (effectiveStructuredOutput?.decisionMaker || (transcript.match(/decision\s+maker[^\n]{0,60}?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)/i)?.[1]) || '');
-        const receptionistName = hasStructuredSource
-          ? (effectiveStructuredOutput['Receptionist Name'] || effectiveStructuredOutput.receptionistName || '')
-          : (effectiveStructuredOutput?.receptionistName || pickReceptionistName(transcript) || metadata.receptionistName || '');
-        const callbackNeeded = effectiveStructuredOutput?.callbackNeeded === 'Y' || /call\s*back|transfer|not\s*available|not\s*in|back\s*later|try\s*again/i.test(transcript) && !decisionMaker;
 
-        // Map all fields properly according to headers (supports both schema keys and camelCase for appendLogistics)
-        const sheetData = {
-          businessName: businessName || '',
-          decisionMaker: decisionMaker || (hasStructuredSource ? (effectiveStructuredOutput['Decision Maker'] || effectiveStructuredOutput.decisionMaker) : '') || '',
-          phone: (hasStructuredSource ? (effectiveStructuredOutput['Phone Number'] || effectiveStructuredOutput.phone) : null) || leadPhone || '',
-          email: extracted.email || '',
-          international: extracted.international || '',
-          mainCouriers: Array.isArray(extracted.mainCouriers) ? extracted.mainCouriers.join(', ') : (extracted.mainCouriers || ''),
-          frequency: extracted.frequency || '',
-          internationalShipmentsPerWeek: extracted.internationalShipmentsPerWeek || '',
-          mainCountries: Array.isArray(extracted.mainCountries) ? extracted.mainCountries.join(', ') : (extracted.mainCountries || ''),
-          exampleShipment: extracted.exampleShipment || '',
-          exampleShipmentCost: extracted.exampleShipmentCost || '',
-          domesticFrequency: extracted.domesticFrequency || '',
-          ukShipmentsPerWeek: extracted.ukShipmentsPerWeek || '',
-          ukCourier: extracted.ukCourier || '',
-          standardRateUpToKg: extracted.standardRateUpToKg || '',
-          excludingFuelVat: extracted.excludingFuelVat || '',
-          singleVsMulti: extracted.singleVsMulti || '',
-          receptionistName: receptionistName || '',
-          callbackNeeded: callbackNeeded ? 'TRUE' : 'FALSE',
-          callId: callId || '',
-          recordingUrl: recordingUrl || '',
-          transcriptSnippet: transcript.slice(0, 500) || ''
-        };
+        // Prefer analysis.structuredData (from VAPI end-of-call-report) when available, fall back to extracted/transcript when missing
+        const sd = callObj?.analysis?.structuredData || body.analysis?.structuredData || {};
+        const sdHasData = sd && Object.keys(sd).length > 0;
+
+        // Prefer artifact transcript and call recordingUrl, with safe defaults for Sheets
+        const transcriptSource = String(callObj?.artifact?.transcript ?? callObj?.transcript ?? transcript || '');
+        const transcriptSnippet = transcriptSource.slice(0, 500);
+        const effectiveRecordingUrl = String(callObj?.recordingUrl ?? callObj?.artifact?.recordingUrl ?? recordingUrl || '');
+
+        let sheetData;
+
+        if (sdHasData) {
+          // Primary path: use structuredData from analysisPlan
+          sheetData = {
+            businessName: metadata.businessName || tenant?.displayName || 'Unknown',
+            decisionMaker: sd.decisionMaker ?? 'Unknown',
+            phone: sd.phone ?? leadPhone ?? 'Unknown',
+            email: sd.email ?? 'Unknown',
+            international: sd.international ?? 'Unknown',
+            mainCouriers: sd.mainCouriers ?? 'Unknown',
+            frequency: sd.frequency ?? 'Unknown',
+            internationalShipmentsPerWeek: sd.internationalShipmentsPerWeek ?? 'Unknown',
+            mainCountries: sd.mainCountries ?? 'Unknown',
+            exampleShipment: sd.exampleShipment ?? 'Unknown',
+            exampleShipmentCost: sd.exampleShipmentCost ?? 'Unknown',
+            domesticFrequency: sd.domesticFrequency ?? 'Unknown',
+            ukShipmentsPerWeek: sd.ukShipmentsPerWeek ?? 'Unknown',
+            ukCourier: sd.ukCourier ?? 'Unknown',
+            standardRateUpToKg: sd.stdRateUpToKg ?? 'Unknown',
+            excludingFuelVat: sd.exclFuelVat ?? 'Unknown',
+            singleVsMulti: sd.singleVsMultiParcel ?? 'Unknown',
+            receptionistName: sd.receptionistName ?? 'Unknown',
+            callbackNeeded: sd.callbackNeeded ? 'TRUE' : 'FALSE',
+            callId: callId || 'Unknown',
+            recordingUrl: effectiveRecordingUrl,
+            transcriptSnippet
+          };
+        } else {
+          // Fallback: derive from structuredOutput/extracted + transcript (existing behaviour)
+          const hasStructuredSource = effectiveHasStructuredData && effectiveStructuredOutput;
+          const businessName = hasStructuredSource
+            ? (body.call?.customer?.name || '')
+            : (effectiveStructuredOutput?.businessName || metadata.businessName || '');
+          const decisionMaker = hasStructuredSource
+            ? (effectiveStructuredOutput['Decision Maker'] || effectiveStructuredOutput.decisionMaker || '')
+            : (effectiveStructuredOutput?.decisionMaker || (transcript.match(/decision\s+maker[^\n]{0,60}?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)/i)?.[1]) || '');
+          const receptionistName = hasStructuredSource
+            ? (effectiveStructuredOutput['Receptionist Name'] || effectiveStructuredOutput.receptionistName || '')
+            : (effectiveStructuredOutput?.receptionistName || pickReceptionistName(transcript) || metadata.receptionistName || '');
+          const callbackNeeded = effectiveStructuredOutput?.callbackNeeded === 'Y' || /call\s*back|transfer|not\s*available|not\s*in|back\s*later|try\s*again/i.test(transcript) && !decisionMaker;
+
+          sheetData = {
+            businessName: businessName || '',
+            decisionMaker: decisionMaker || (hasStructuredSource ? (effectiveStructuredOutput['Decision Maker'] || effectiveStructuredOutput.decisionMaker) : '') || '',
+            phone: (hasStructuredSource ? (effectiveStructuredOutput['Phone Number'] || effectiveStructuredOutput.phone) : null) || leadPhone || '',
+            email: extracted.email || '',
+            international: extracted.international || '',
+            mainCouriers: Array.isArray(extracted.mainCouriers) ? extracted.mainCouriers.join(', ') : (extracted.mainCouriers || ''),
+            frequency: extracted.frequency || '',
+            internationalShipmentsPerWeek: extracted.internationalShipmentsPerWeek || '',
+            mainCountries: Array.isArray(extracted.mainCountries) ? extracted.mainCountries.join(', ') : (extracted.mainCountries || ''),
+            exampleShipment: extracted.exampleShipment || '',
+            exampleShipmentCost: extracted.exampleShipmentCost || '',
+            domesticFrequency: extracted.domesticFrequency || '',
+            ukShipmentsPerWeek: extracted.ukShipmentsPerWeek || '',
+            ukCourier: extracted.ukCourier || '',
+            standardRateUpToKg: extracted.standardRateUpToKg || '',
+            excludingFuelVat: extracted.excludingFuelVat || '',
+            singleVsMulti: extracted.singleVsMulti || '',
+            receptionistName: receptionistName || '',
+            callbackNeeded: callbackNeeded ? 'TRUE' : 'FALSE',
+            callId: callId || '',
+            recordingUrl: effectiveRecordingUrl,
+            transcriptSnippet
+          };
+        }
         
         console.log('[LOGISTICS SHEET DATA] Writing to sheet:', JSON.stringify(sheetData, null, 2));
         console.log('[LOGISTICS SHEET] Call metadata for update:', {
