@@ -950,9 +950,9 @@ async function processWebhookPayload(body, correlationId) {
         const sdHasData = sd && Object.keys(sd).length > 0;
 
         // Prefer artifact transcript and call recordingUrl, with safe defaults for Sheets
-        const transcriptSource = String(callObj?.artifact?.transcript ?? callObj?.transcript ?? transcript || '');
+        const transcriptSource = String(callObj?.artifact?.transcript ?? callObj?.transcript ?? transcript ?? '');
         const transcriptSnippet = transcriptSource.slice(0, 500);
-        const effectiveRecordingUrl = String(callObj?.recordingUrl ?? callObj?.artifact?.recordingUrl ?? recordingUrl || '');
+        const effectiveRecordingUrl = String(callObj?.recordingUrl ?? callObj?.artifact?.recordingUrl ?? recordingUrl ?? '');
 
         let sheetData;
 
