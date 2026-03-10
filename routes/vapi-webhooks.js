@@ -235,6 +235,17 @@ async function processWebhookPayload(body, correlationId) {
     if (msg.call?.analysis && !body.analysis) body.analysis = msg.call.analysis;
     // ---------------------------------------
 
+    const callObj = body.call || msg?.call || {};
+
+    // EOCR debug: prove what structuredData looks like at webhook time
+    if (body.type === 'end-of-call-report' || msg.type === 'end-of-call-report') {
+      const sd = callObj?.analysis?.structuredData ?? body.analysis?.structuredData ?? {};
+      console.log('[EOCR DEBUG] callId:', callObj?.id);
+      console.log('[EOCR DEBUG] status:', callObj?.status, 'endedAt:', callObj?.endedAt);
+      console.log('[EOCR DEBUG] structuredData:', sd);
+      console.log('[EOCR DEBUG] structuredDataKeys:', Object.keys(sd ?? {}));
+    }
+
     const callId = body.call?.id || body.id || body.callId || body.message?.call?.id || body.message?.callId;
     let status = body.call?.status || body.status;
     let outcome = body.call?.outcome || body.outcome;
@@ -1050,6 +1061,18 @@ async function processWebhookPayload(body, correlationId) {
           if (!updated) {
             // If no row found to update, append new one (fallback)
             console.log('[LOGISTICS SHEET] No existing row found, appending new row');
+            console.log('[EOCR SHEET ROW]', {
+              email: sheetData.email,
+              phone: sheetData.phone,
+              international: sheetData.international,
+              ukShipmentsPerWeek: sheetData.ukShipmentsPerWeek,
+              ukCourier: sheetData.ukCourier,
+              stdRateUpToKg: sheetData.standardRateUpToKg,
+              exclFuelVat: sheetData.excludingFuelVat,
+              singleVsMulti: sheetData.singleVsMulti,
+              receptionistName: sheetData.receptionistName,
+              callbackNeeded: sheetData.callbackNeeded
+            });
             await sheets.appendLogistics(logisticsSheetId, sheetData);
             console.log('[LOGISTICS SHEET APPEND] ✅ SUCCESS', { callId, phone: leadPhone });
           } else {
@@ -1095,7 +1118,7 @@ async function processWebhookPayload(body, correlationId) {
         console.log('[LOGISTICS SHEET] Update data:', JSON.stringify(updateData, null, 2));
         
         // Try to update by callId (phone might be empty in end-of-call webhook)
-        const updated = await sheets.updateLogisticsRowByPhone(logisticsSheetId, leadPhone || '', updateData);
+          const updated = await sheets.updateLogisticsRowByPhone(logisticsSheetId, leadPhone || '', updateData);
         
         if (updated) {
           console.log('[LOGISTICS SHEET] ✅ Updated existing row with call metadata (no assistant match)', { callId });
@@ -1103,7 +1126,7 @@ async function processWebhookPayload(body, correlationId) {
         } else {
           // No existing row found — create one so the call isn't lost
           console.log('[LOGISTICS SHEET] No existing row found, creating new row', { callId, phone: leadPhone });
-          await sheets.appendLogistics(logisticsSheetId, {
+          const fallbackRow = {
             businessName: tenant?.displayName || metadata?.businessName || tenantKey || 'Unknown',
             decisionMaker: metadata?.leadName || 'Unknown',
             phone: leadPhone || '',
@@ -1126,7 +1149,20 @@ async function processWebhookPayload(body, correlationId) {
             callId: callId || '',
             recordingUrl: recordingUrl || '',
             transcriptSnippet: transcript ? transcript.slice(0, 500) : ''
+          };
+          console.log('[EOCR SHEET ROW]', {
+            email: fallbackRow.email,
+            phone: fallbackRow.phone,
+            international: fallbackRow.international,
+            ukShipmentsPerWeek: fallbackRow.ukShipmentsPerWeek,
+            ukCourier: fallbackRow.ukCourier,
+            stdRateUpToKg: fallbackRow.standardRateUpToKg,
+            exclFuelVat: fallbackRow.excludingFuelVat,
+            singleVsMulti: fallbackRow.singleVsMulti,
+            receptionistName: fallbackRow.receptionistName,
+            callbackNeeded: fallbackRow.callbackNeeded
           });
+          await sheets.appendLogistics(logisticsSheetId, fallbackRow);
           console.log('[LOGISTICS SHEET] ✅ Created new row (no assistant match)', { callId, phone: leadPhone });
           markProcessed(callId);
         }
