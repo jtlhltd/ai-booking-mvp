@@ -803,7 +803,6 @@ async function processWebhookPayload(body, correlationId) {
     // Check for structured output data from VAPI
     // MODERN PATH (Structured Output / artifactPlan): call.artifact.structuredOutputs
     // OLD PATH (analysisPlan.structuredDataPlan): call.analysis.structuredData
-    const callObj = body.call || msg?.call || {};
     const artifactOutputs = callObj.artifact?.structuredOutputs
       || body.message?.call?.artifact?.structuredOutputs
       || body.artifact?.structuredOutputs
