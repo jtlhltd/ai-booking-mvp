@@ -67,7 +67,6 @@ export const expectedSheetData = {
     'Main Countries': 'USA, Germany',
     'Example Shipment (weight x dims)': '5kg, 30x20x15cm',
     'Example Shipment Cost': '£7',
-    'Domestic Frequency': '20 per day',
     'UK Courier': 'Royal Mail',
     'Std Rate up to KG': '2kg',
     'Excl Fuel & VAT?': 'Y',

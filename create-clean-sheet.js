@@ -20,11 +20,11 @@ async function createCleanSheet() {
     console.log('   E: Email');
     console.log('   F: International (Y/N)');
     console.log('   G: Main Couriers');
-    console.log('   H: Frequency');
+    console.log('   H: International Shipments per Week');
     console.log('   I: Main Countries');
     console.log('   J: Example Shipment (weight x dims)');
     console.log('   K: Example Shipment Cost');
-    console.log('   L: Domestic Frequency');
+    console.log('   L: UK Shipments per Week');
     console.log('   M: UK Courier');
     console.log('   N: Std Rate up to KG');
     console.log('   O: Excl Fuel & VAT?');
