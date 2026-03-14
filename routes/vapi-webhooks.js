@@ -896,7 +896,13 @@ async function processWebhookPayload(body, correlationId) {
     const effectiveStructuredOutput = manualStructuredOutput || structuredOutput;
     const effectiveHasStructuredData = (manualStructuredOutput && Object.keys(manualStructuredOutput).length > 0) || hasStructuredData;
     
-    if (isEndOfCallReport && logisticsSheetId && (hasTranscript || effectiveHasStructuredData) && assistantMatches) {
+    // Don't write to sheet when nothing was captured (no-answer, busy, declined or hung up before anything useful)
+    const noUsefulOutcome = ['no-answer', 'busy', 'declined'].includes(outcome);
+    if (noUsefulOutcome) {
+      console.log('[LOGISTICS SHEET] Skipping sheet write — outcome indicates no useful call:', outcome);
+    }
+    
+    if (isEndOfCallReport && logisticsSheetId && (hasTranscript || effectiveHasStructuredData) && assistantMatches && !noUsefulOutcome) {
       console.log('STRUCTURED DATA RECEIVED:', JSON.stringify(effectiveStructuredOutput, null, 2));
       console.log('[LOGISTICS] STARTING EXTRACTION...');
       try {
@@ -1074,12 +1080,11 @@ async function processWebhookPayload(body, correlationId) {
             });
             await sheets.appendLogistics(logisticsSheetId, sheetData);
             console.log('[LOGISTICS SHEET APPEND] ✅ SUCCESS', { callId, phone: leadPhone });
+            markProcessed(callId);
           } else {
             console.log('[LOGISTICS SHEET] ✅ Updated existing row with call metadata', { callId, phone: leadPhone });
+            markProcessed(callId);
           }
-          
-          // Mark as processed to avoid duplicate rows on retries
-          markProcessed(callId);
         } catch (sheetError) {
           console.error('[LOGISTICS SHEET APPEND ERROR] ❌ FAILED', {
             error: sheetError.message,
@@ -1101,7 +1106,7 @@ async function processWebhookPayload(body, correlationId) {
       } catch (sheetErr) {
         console.error('[LOGISTICS SHEET ERROR]', sheetErr?.message || sheetErr);
       }
-    } else if (logisticsSheetId && callId && (recordingUrl || transcript)) {
+    } else if (logisticsSheetId && callId && (recordingUrl || transcript) && !noUsefulOutcome) {
       // Assistant ID doesn't match, but we still want to update existing rows with call metadata
       // This handles cases where the tool call created a row but assistant ID wasn't set in webhook
       console.log('[LOGISTICS] Assistant ID mismatch or missing, but attempting to update existing row with call metadata');
