@@ -19546,11 +19546,18 @@ app.post('/api/leads/recall', async (req, res) => {
       }
     };
 
-    const resp = await fetch('https://api.vapi.ai/call', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    const { acquireVapiSlot, releaseVapiSlot } = await import('./lib/instant-calling.js');
+    await acquireVapiSlot();
+    let resp;
+    try {
+      resp = await fetch('https://api.vapi.ai/call', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    } finally {
+      releaseVapiSlot();
+    }
 
     const ok = resp.ok;
     console.log('[LEAD RECALL]', { clientKey, phone, vapiStatus: ok ? 'ok' : resp.status });
@@ -19666,13 +19673,20 @@ async function processVapiRetry(retry) {
       throw new Error('Client not found');
     }
     
-    // Make VAPI call
-    const vapiResult = await makeVapiCall({
-      assistantId: retryData.clientConfig?.assistantId || client.vapi?.assistantId,
-      phoneNumberId: retryData.clientConfig?.phoneNumberId || client.vapi?.phoneNumberId,
-      customerNumber: leadPhone,
-      maxDurationSeconds: 10
-    });
+    // Make VAPI call (guarded by global concurrency limiter from instant-calling)
+    const { acquireVapiSlot, releaseVapiSlot } = await import('./lib/instant-calling.js');
+    await acquireVapiSlot();
+    let vapiResult;
+    try {
+      vapiResult = await makeVapiCall({
+        assistantId: retryData.clientConfig?.assistantId || client.vapi?.assistantId,
+        phoneNumberId: retryData.clientConfig?.phoneNumberId || client.vapi?.phoneNumberId,
+        customerNumber: leadPhone,
+        maxDurationSeconds: 10
+      });
+    } finally {
+      releaseVapiSlot();
+    }
     
     if (!vapiResult || vapiResult.error) {
       throw new Error(vapiResult?.error || 'VAPI call failed');
