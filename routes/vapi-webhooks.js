@@ -942,34 +942,47 @@ async function processWebhookPayload(body, correlationId) {
             singleVsMulti: s['Single vs Multi-parcel'] || s.singleVsMulti || s.singleVsMultiParcel || ''
           };
           console.log('[LOGISTICS] Using structured output (artifact or analysis):', JSON.stringify(extracted, null, 2));
-        } else if (effectiveStructuredOutput) {
-          console.log('[LOGISTICS] Using legacy structured output data:', JSON.stringify(effectiveStructuredOutput, null, 2));
-          // Transform legacy structured output to match our expected format
-          extracted = {
-            email: effectiveStructuredOutput.email || '',
-            international: effectiveStructuredOutput.internationalYN || '',
-            mainCouriers: [effectiveStructuredOutput.courier1, effectiveStructuredOutput.courier2, effectiveStructuredOutput.courier3].filter(Boolean),
-            frequency: effectiveStructuredOutput.frequency || '',
-            mainCountries: [effectiveStructuredOutput.country1, effectiveStructuredOutput.country2, effectiveStructuredOutput.country3].filter(Boolean),
-            exampleShipment: effectiveStructuredOutput.exampleShipment || '',
-            exampleShipmentCost: effectiveStructuredOutput.exampleShipmentCost || '',
-            domesticFrequency: effectiveStructuredOutput.domesticFrequency || '',
-            ukCourier: effectiveStructuredOutput.ukCourier || '',
-            standardRateUpToKg: effectiveStructuredOutput.standardRateUpToKg || '',
-            excludingFuelVat: effectiveStructuredOutput.exclFuelVAT || '',
-            singleVsMulti: effectiveStructuredOutput.singleVsMultiParcel || ''
-          };
-          
-          // Fill in gaps from transcript if structured output is incomplete
-          const transcriptExtracted = extractLogisticsFields(transcript);
-          Object.keys(extracted).forEach(key => {
-            if (!extracted[key] && transcriptExtracted[key]) {
-              extracted[key] = transcriptExtracted[key];
-            }
-          });
         } else {
-          console.log('[LOGISTICS] Using transcript extraction (no structured output)');
-          extracted = extractLogisticsFields(transcript);
+          // Use human-only transcript for regex extraction to avoid contamination from assistant prompts/menus
+          const humanOnlyTranscript = (() => {
+            if (!transcript || typeof transcript !== 'string') return transcript;
+            const lines = transcript.split(/\r?\n/);
+            const humanLines = lines.filter(l => /^\s*User:/i.test(l) || /^\s*Caller:/i.test(l));
+            if (humanLines.length === 0) return transcript;
+            return humanLines
+              .map(l => l.replace(/^\s*(User|Caller):\s*/i, ''))
+              .join('\n');
+          })();
+
+          if (effectiveStructuredOutput) {
+            console.log('[LOGISTICS] Using legacy structured output data:', JSON.stringify(effectiveStructuredOutput, null, 2));
+            // Transform legacy structured output to match our expected format
+            extracted = {
+              email: effectiveStructuredOutput.email || '',
+              international: effectiveStructuredOutput.internationalYN || '',
+              mainCouriers: [effectiveStructuredOutput.courier1, effectiveStructuredOutput.courier2, effectiveStructuredOutput.courier3].filter(Boolean),
+              frequency: effectiveStructuredOutput.frequency || '',
+              mainCountries: [effectiveStructuredOutput.country1, effectiveStructuredOutput.country2, effectiveStructuredOutput.country3].filter(Boolean),
+              exampleShipment: effectiveStructuredOutput.exampleShipment || '',
+              exampleShipmentCost: effectiveStructuredOutput.exampleShipmentCost || '',
+              domesticFrequency: effectiveStructuredOutput.domesticFrequency || '',
+              ukCourier: effectiveStructuredOutput.ukCourier || '',
+              standardRateUpToKg: effectiveStructuredOutput.standardRateUpToKg || '',
+              excludingFuelVat: effectiveStructuredOutput.exclFuelVAT || '',
+              singleVsMulti: effectiveStructuredOutput.singleVsMultiParcel || ''
+            };
+            
+            // Fill in gaps from human transcript if structured output is incomplete
+            const transcriptExtracted = extractLogisticsFields(humanOnlyTranscript);
+            Object.keys(extracted).forEach(key => {
+              if (!extracted[key] && transcriptExtracted[key]) {
+                extracted[key] = transcriptExtracted[key];
+              }
+            });
+          } else {
+            console.log('[LOGISTICS] Using transcript extraction (no structured output)');
+            extracted = extractLogisticsFields(humanOnlyTranscript);
+          }
         }
 
         // Prefer analysis.structuredData (from VAPI end-of-call-report) when it contains real values,
