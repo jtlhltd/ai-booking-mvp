@@ -961,9 +961,22 @@ async function processWebhookPayload(body, correlationId) {
           extracted = extractLogisticsFields(transcript);
         }
 
-        // Prefer analysis.structuredData (from VAPI end-of-call-report) when available, fall back to extracted/transcript when missing
+        // Prefer analysis.structuredData (from VAPI end-of-call-report) when it contains real values,
+        // otherwise fall back to extracted/transcript. This avoids writing rows full of "Unknown".
         const sd = callObj?.analysis?.structuredData || body.analysis?.structuredData || {};
-        const sdHasData = sd && Object.keys(sd).length > 0;
+        const sdHasAnyKeys = sd && Object.keys(sd).length > 0;
+        const sdHasMeaningfulValue = (() => {
+          if (!sdHasAnyKeys) return false;
+          for (const v of Object.values(sd)) {
+            if (v == null) continue;
+            if (typeof v === 'string' && v.trim() !== '') return true;
+            if (typeof v === 'number' && Number.isFinite(v)) return true;
+            if (typeof v === 'boolean') return true;
+            if (Array.isArray(v) && v.filter(Boolean).length > 0) return true;
+            if (typeof v === 'object' && Object.keys(v).length > 0) return true;
+          }
+          return false;
+        })();
 
         // Prefer artifact transcript and call recordingUrl, with safe defaults for Sheets
         const transcriptSource = String(callObj?.artifact?.transcript ?? callObj?.transcript ?? transcript ?? '');
@@ -972,29 +985,31 @@ async function processWebhookPayload(body, correlationId) {
 
         let sheetData;
 
-        if (sdHasData) {
-          // Primary path: use structuredData from analysisPlan
+        if (sdHasMeaningfulValue) {
+          // Primary path: use structuredData from analysisPlan, but never write literal "Unknown"
+          const asStr = (v) => (v == null ? '' : String(v).trim());
+          const asJoined = (v) => Array.isArray(v) ? v.filter(Boolean).join(', ') : asStr(v);
           sheetData = {
-            businessName: metadata.businessName || tenant?.displayName || 'Unknown',
-            decisionMaker: sd.decisionMaker ?? 'Unknown',
-            phone: sd.phone ?? leadPhone ?? 'Unknown',
-            email: sd.email ?? 'Unknown',
-            international: sd.international ?? 'Unknown',
-            mainCouriers: sd.mainCouriers ?? 'Unknown',
-            frequency: sd.frequency ?? 'Unknown',
-            internationalShipmentsPerWeek: sd.internationalShipmentsPerWeek ?? 'Unknown',
-            mainCountries: sd.mainCountries ?? 'Unknown',
-            exampleShipment: sd.exampleShipment ?? 'Unknown',
-            exampleShipmentCost: sd.exampleShipmentCost ?? 'Unknown',
-            domesticFrequency: sd.domesticFrequency ?? 'Unknown',
-            ukShipmentsPerWeek: sd.ukShipmentsPerWeek ?? 'Unknown',
-            ukCourier: sd.ukCourier ?? 'Unknown',
-            standardRateUpToKg: sd.stdRateUpToKg ?? 'Unknown',
-            excludingFuelVat: sd.exclFuelVat ?? 'Unknown',
-            singleVsMulti: sd.singleVsMultiParcel ?? 'Unknown',
-            receptionistName: sd.receptionistName ?? 'Unknown',
+            businessName: metadata.businessName || tenant?.displayName || '',
+            decisionMaker: asStr(sd.decisionMaker),
+            phone: asStr(sd.phone) || (leadPhone || ''),
+            email: asStr(sd.email),
+            international: asStr(sd.international),
+            mainCouriers: asJoined(sd.mainCouriers),
+            frequency: asStr(sd.frequency),
+            internationalShipmentsPerWeek: asStr(sd.internationalShipmentsPerWeek),
+            mainCountries: asJoined(sd.mainCountries),
+            exampleShipment: asStr(sd.exampleShipment),
+            exampleShipmentCost: asStr(sd.exampleShipmentCost),
+            domesticFrequency: asStr(sd.domesticFrequency),
+            ukShipmentsPerWeek: asStr(sd.ukShipmentsPerWeek),
+            ukCourier: asStr(sd.ukCourier),
+            standardRateUpToKg: asStr(sd.stdRateUpToKg),
+            excludingFuelVat: asStr(sd.exclFuelVat),
+            singleVsMulti: asStr(sd.singleVsMultiParcel),
+            receptionistName: asStr(sd.receptionistName),
             callbackNeeded: sd.callbackNeeded ? 'TRUE' : 'FALSE',
-            callId: callId || 'Unknown',
+            callId: callId || '',
             recordingUrl: effectiveRecordingUrl,
             transcriptSnippet
           };
