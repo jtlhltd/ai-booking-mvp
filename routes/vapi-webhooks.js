@@ -906,8 +906,9 @@ async function processWebhookPayload(body, correlationId) {
     const effectiveStructuredOutput = manualStructuredOutput || structuredOutput;
     const effectiveHasStructuredData = (manualStructuredOutput && Object.keys(manualStructuredOutput).length > 0) || hasStructuredData;
     
-    // Don't write to sheet when nothing was captured (no-answer, busy, declined or hung up before anything useful)
-    const noUsefulOutcome = ['no-answer', 'busy', 'declined'].includes(outcome);
+    // Don't create sheet rows when they didn't pick up (or call couldn't connect)
+    // Note: VAPI sometimes uses "rejected" directly; we also map endedReason→outcome above.
+    const noUsefulOutcome = ['no-answer', 'busy', 'declined', 'rejected'].includes(outcome);
     if (noUsefulOutcome) {
       console.log('[LOGISTICS SHEET] Skipping sheet write — outcome indicates no useful call:', outcome);
     }
@@ -1062,6 +1063,29 @@ async function processWebhookPayload(body, correlationId) {
             transcriptSnippet
           };
         }
+
+        const hasAnyLogisticsInfo = (() => {
+          // Only treat these as "info gained". We intentionally ignore: callId/recordingUrl/transcriptSnippet/phone/businessName.
+          const fields = [
+            sheetData.decisionMaker,
+            sheetData.email,
+            sheetData.international,
+            sheetData.mainCouriers,
+            sheetData.internationalShipmentsPerWeek,
+            sheetData.mainCountries,
+            sheetData.exampleShipment,
+            sheetData.exampleShipmentCost,
+            sheetData.ukShipmentsPerWeek,
+            sheetData.ukCourier,
+            sheetData.standardRateUpToKg,
+            sheetData.excludingFuelVat,
+            sheetData.singleVsMulti,
+            sheetData.receptionistName
+          ];
+          const anyValue = fields.some(v => typeof v === 'string' ? v.trim() !== '' : !!v);
+          const callbackIsTrue = String(sheetData.callbackNeeded || '').toUpperCase() === 'TRUE';
+          return anyValue || callbackIsTrue;
+        })();
         
         console.log('[LOGISTICS SHEET DATA] Writing to sheet:', JSON.stringify(sheetData, null, 2));
         console.log('[LOGISTICS SHEET] Call metadata for update:', {
@@ -1089,23 +1113,33 @@ async function processWebhookPayload(body, correlationId) {
           const updated = await sheets.updateLogisticsRowByPhone(logisticsSheetId, leadPhone, updateData);
           
           if (!updated) {
-            // If no row found to update, append new one (fallback)
-            console.log('[LOGISTICS SHEET] No existing row found, appending new row');
-            console.log('[EOCR SHEET ROW]', {
-              email: sheetData.email,
-              phone: sheetData.phone,
-              international: sheetData.international,
-              ukShipmentsPerWeek: sheetData.ukShipmentsPerWeek,
-              ukCourier: sheetData.ukCourier,
-              stdRateUpToKg: sheetData.standardRateUpToKg,
-              exclFuelVat: sheetData.excludingFuelVat,
-              singleVsMulti: sheetData.singleVsMulti,
-              receptionistName: sheetData.receptionistName,
-              callbackNeeded: sheetData.callbackNeeded
-            });
-            await sheets.appendLogistics(logisticsSheetId, sheetData);
-            console.log('[LOGISTICS SHEET APPEND] ✅ SUCCESS', { callId, phone: leadPhone });
-            markProcessed(callId);
+            // If no row found to update, only append if we actually gained any logistics info.
+            if (!hasAnyLogisticsInfo) {
+              console.log('[LOGISTICS SHEET] Skipping append — no logistics info gained from call', {
+                callId,
+                phone: leadPhone,
+                outcome,
+                endedReason
+              });
+              markProcessed(callId);
+            } else {
+              console.log('[LOGISTICS SHEET] No existing row found, appending new row');
+              console.log('[EOCR SHEET ROW]', {
+                email: sheetData.email,
+                phone: sheetData.phone,
+                international: sheetData.international,
+                ukShipmentsPerWeek: sheetData.ukShipmentsPerWeek,
+                ukCourier: sheetData.ukCourier,
+                stdRateUpToKg: sheetData.standardRateUpToKg,
+                exclFuelVat: sheetData.excludingFuelVat,
+                singleVsMulti: sheetData.singleVsMulti,
+                receptionistName: sheetData.receptionistName,
+                callbackNeeded: sheetData.callbackNeeded
+              });
+              await sheets.appendLogistics(logisticsSheetId, sheetData);
+              console.log('[LOGISTICS SHEET APPEND] ✅ SUCCESS', { callId, phone: leadPhone });
+              markProcessed(callId);
+            }
           } else {
             console.log('[LOGISTICS SHEET] ✅ Updated existing row with call metadata', { callId, phone: leadPhone });
             markProcessed(callId);
@@ -1153,7 +1187,25 @@ async function processWebhookPayload(body, correlationId) {
           console.log('[LOGISTICS SHEET] ✅ Updated existing row with call metadata (no assistant match)', { callId });
           markProcessed(callId);
         } else {
-          // No existing row found — create one so the call isn't lost
+          // No existing row found — only create one if we actually gained any logistics info (otherwise skip)
+          const hasAnyLogisticsInfo = (() => {
+            const fields = [
+              metadata?.leadName,
+              transcript,
+              recordingUrl
+            ];
+            return fields.some(v => typeof v === 'string' ? v.trim() !== '' : !!v);
+          })();
+          if (!hasAnyLogisticsInfo) {
+            console.log('[LOGISTICS SHEET] Skipping fallback append — no logistics info gained from call', {
+              callId,
+              phone: leadPhone,
+              outcome,
+              endedReason
+            });
+            markProcessed(callId);
+            return;
+          }
           console.log('[LOGISTICS SHEET] No existing row found, creating new row', { callId, phone: leadPhone });
           const fallbackRow = {
             businessName: tenant?.displayName || metadata?.businessName || tenantKey || 'Unknown',
