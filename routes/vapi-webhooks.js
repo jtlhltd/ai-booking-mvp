@@ -258,6 +258,17 @@ async function processWebhookPayload(body, correlationId) {
         console.log(`[${correlationId}] [VAPI WEBHOOK] End-of-call applied: callId=${callId} endedReason=${endedReason} outcome=${outcome} status=${status}`);
       }
     }
+
+    // Release VAPI concurrency slot when call ends (this is what VAPI's "concurrency limit" is based on)
+    const isEndOfCallReport = body.type === 'end-of-call-report' || body.message?.type === 'end-of-call-report';
+    if (isEndOfCallReport && callId) {
+      try {
+        const { releaseVapiSlot } = await import('../lib/instant-calling.js');
+        releaseVapiSlot({ callId, reason: 'end_of_call_report' });
+      } catch (e) {
+        console.warn('[VAPI CONCURRENCY] Failed to release slot from webhook:', e?.message || e);
+      }
+    }
     const duration = body.call?.duration || body.duration;
     const cost = body.call?.cost || body.cost;
     const metadata = body.call?.metadata || body.metadata || {};
@@ -274,7 +285,6 @@ async function processWebhookPayload(body, correlationId) {
     if (!transcript && eocrTranscript) transcript = eocrTranscript;
 
     // Use accumulated messages from conversation-update (VAPI sends incrementally, not in end-of-call-report)
-    const isEndOfCallReport = body.type === 'end-of-call-report' || body.message?.type === 'end-of-call-report';
     if (isEndOfCallReport && callId && callStore.has(callId)) {
       const fullMessages = callStore.get(callId);
       callStore.delete(callId);

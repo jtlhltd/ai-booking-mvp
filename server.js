@@ -19546,7 +19546,7 @@ app.post('/api/leads/recall', async (req, res) => {
       }
     };
 
-    const { acquireVapiSlot, releaseVapiSlot } = await import('./lib/instant-calling.js');
+    const { acquireVapiSlot, releaseVapiSlot, markVapiCallActive } = await import('./lib/instant-calling.js');
     await acquireVapiSlot();
     let resp;
     try {
@@ -19555,8 +19555,16 @@ app.post('/api/leads/recall', async (req, res) => {
         headers: { 'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-    } finally {
-      releaseVapiSlot();
+      if (resp.ok) {
+        const data = await resp.clone().json().catch(() => null);
+        if (data?.id) markVapiCallActive(data.id, { ttlMs: 30 * 60 * 1000 });
+        else releaseVapiSlot({ reason: 'no_call_id' });
+      } else {
+        releaseVapiSlot({ reason: `start_failed_${resp.status}` });
+      }
+    } catch (e) {
+      releaseVapiSlot({ reason: 'start_failed' });
+      throw e;
     }
 
     const ok = resp.ok;
@@ -19674,7 +19682,7 @@ async function processVapiRetry(retry) {
     }
     
     // Make VAPI call (guarded by global concurrency limiter from instant-calling)
-    const { acquireVapiSlot, releaseVapiSlot } = await import('./lib/instant-calling.js');
+    const { acquireVapiSlot, releaseVapiSlot, markVapiCallActive } = await import('./lib/instant-calling.js');
     await acquireVapiSlot();
     let vapiResult;
     try {
@@ -19684,8 +19692,14 @@ async function processVapiRetry(retry) {
         customerNumber: leadPhone,
         maxDurationSeconds: 10
       });
-    } finally {
-      releaseVapiSlot();
+      if (vapiResult?.id) {
+        markVapiCallActive(vapiResult.id, { ttlMs: 30 * 60 * 1000 });
+      } else {
+        releaseVapiSlot({ reason: 'no_call_id' });
+      }
+    } catch (e) {
+      releaseVapiSlot({ reason: 'start_failed' });
+      throw e;
     }
     
     if (!vapiResult || vapiResult.error) {
