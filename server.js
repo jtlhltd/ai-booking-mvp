@@ -22077,28 +22077,38 @@ app.post('/admin/vapi/test-call', async (req, res) => {
       }
     }
     
-    // Make the test call
-    const callResponse = await fetch('https://api.vapi.ai/call', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${vapiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        assistantId: testAssistantId,
-        customer: {
-          number: phoneNumber,
-          name: "Test Contact"
+    // Make the test call (guarded by active-call concurrency limiter)
+    const { acquireVapiSlot, releaseVapiSlot, markVapiCallActive } = await import('./lib/instant-calling.js');
+    await acquireVapiSlot();
+    let callResponse;
+    try {
+      callResponse = await fetch('https://api.vapi.ai/call', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${vapiKey}`,
+          'Content-Type': 'application/json'
         },
-        metadata: {
-          testCall: true,
-          timestamp: new Date().toISOString()
-        }
-      })
-    });
+        body: JSON.stringify({
+          assistantId: testAssistantId,
+          customer: {
+            number: phoneNumber,
+            name: "Test Contact"
+          },
+          metadata: {
+            testCall: true,
+            timestamp: new Date().toISOString()
+          }
+        })
+      });
+    } catch (e) {
+      releaseVapiSlot({ reason: 'start_failed' });
+      throw e;
+    }
     
     if (callResponse.ok) {
       const callData = await callResponse.json();
+      if (callData?.id) markVapiCallActive(callData.id, { ttlMs: 30 * 60 * 1000 });
+      else releaseVapiSlot({ reason: 'no_call_id' });
       res.json({
         success: true,
         message: 'Test call initiated successfully',
@@ -22109,6 +22119,7 @@ app.post('/admin/vapi/test-call', async (req, res) => {
       });
     } else {
       const errorData = await callResponse.json();
+      releaseVapiSlot({ reason: `start_failed_${callResponse.status}` });
       res.status(400).json({
         success: false,
         message: 'Failed to initiate test call',
@@ -22275,29 +22286,40 @@ app.post('/admin/vapi/calls', async (req, res) => {
       requestedBy: req.ip
     });
     
-    // Make call via VAPI API
-    const vapiResponse = await fetch('https://api.vapi.ai/call', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${vapiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        assistantId,
-        phoneNumberId,
-        customer: {
-          number: customerNumber,
-          name: customerName || 'Customer'
-        }
-      })
-    });
+    // Make call via VAPI API (guarded by active-call concurrency limiter)
+    const { acquireVapiSlot, releaseVapiSlot, markVapiCallActive } = await import('./lib/instant-calling.js');
+    await acquireVapiSlot();
+    let vapiResponse;
+    try {
+      vapiResponse = await fetch('https://api.vapi.ai/call', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${vapiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          assistantId,
+          phoneNumberId,
+          customer: {
+            number: customerNumber,
+            name: customerName || 'Customer'
+          }
+        })
+      });
+    } catch (e) {
+      releaseVapiSlot({ reason: 'start_failed' });
+      throw e;
+    }
     
     if (!vapiResponse.ok) {
       const errorText = await vapiResponse.text();
+      releaseVapiSlot({ reason: `start_failed_${vapiResponse.status}` });
       throw new Error(`VAPI API error: ${vapiResponse.status} ${errorText}`);
     }
     
     const call = await vapiResponse.json();
+    if (call?.id) markVapiCallActive(call.id, { ttlMs: 30 * 60 * 1000 });
+    else releaseVapiSlot({ reason: 'no_call_id' });
     
     console.log('[VAPI CALL INITIATED]', { 
       callId: call.id,
