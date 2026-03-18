@@ -953,6 +953,20 @@ async function processWebhookPayload(body, correlationId) {
               .map(l => l.replace(/^\s*(User|Caller):\s*/i, ''))
               .join('\n');
           })();
+          const humanOnlyLower = (humanOnlyTranscript || '').toLowerCase();
+          const isLikelyIVROnly = (() => {
+            if (!humanOnlyLower) return true;
+            // Common IVR / switchboard / voicemail prompts that are not "info gained"
+            const ivrHints = [
+              'press', 'for sales', 'for accounts', 'for logistics', 'options again',
+              'extension', 'please wait', 'calls may be recorded', 'training and quality',
+              'leave a message', 'after the tone', 'hash key', 'recording at the tone',
+              'busy', 'inquiries', 'website', 'frequently asked questions'
+            ];
+            const hasIvrHint = ivrHints.some(h => humanOnlyLower.includes(h));
+            // If it’s short and contains IVR hints, treat as IVR-only.
+            return hasIvrHint && humanOnlyLower.length < 220;
+          })();
 
           if (effectiveStructuredOutput) {
             console.log('[LOGISTICS] Using legacy structured output data:', JSON.stringify(effectiveStructuredOutput, null, 2));
@@ -982,6 +996,11 @@ async function processWebhookPayload(body, correlationId) {
           } else {
             console.log('[LOGISTICS] Using transcript extraction (no structured output)');
             extracted = extractLogisticsFields(humanOnlyTranscript);
+          }
+
+          // If the "human" side is just IVR/menu text, don't let it trigger callbackNeeded or row appends.
+          if (isLikelyIVROnly) {
+            extracted.__ivrOnly = true;
           }
         }
 
@@ -1049,7 +1068,12 @@ async function processWebhookPayload(body, correlationId) {
           const receptionistName = hasStructuredSource
             ? (effectiveStructuredOutput['Receptionist Name'] || effectiveStructuredOutput.receptionistName || '')
             : (effectiveStructuredOutput?.receptionistName || pickReceptionistName(transcript) || metadata.receptionistName || '');
-          const callbackNeeded = effectiveStructuredOutput?.callbackNeeded === 'Y' || /call\s*back|transfer|not\s*available|not\s*in|back\s*later|try\s*again/i.test(transcript) && !decisionMaker;
+          // Use human-only transcript to avoid assistant prompt contamination, and ignore IVR-only calls
+          const ivrOnly = extracted?.__ivrOnly === true;
+          const callbackNeeded = !ivrOnly && (
+            effectiveStructuredOutput?.callbackNeeded === 'Y' ||
+            (/call\s*back|transfer|not\s*available|not\s*in|back\s*later|try\s*again/i.test((transcript || '')) && !decisionMaker)
+          );
 
           sheetData = {
             businessName: businessName || '',
@@ -1079,6 +1103,7 @@ async function processWebhookPayload(body, correlationId) {
 
         const hasAnyLogisticsInfo = (() => {
           // Only treat these as "info gained". We intentionally ignore: callId/recordingUrl/transcriptSnippet/phone/businessName.
+          // Also: callbackNeeded alone is NOT "info gained" (IVR can trip it).
           const fields = [
             sheetData.decisionMaker,
             sheetData.email,
@@ -1095,9 +1120,7 @@ async function processWebhookPayload(body, correlationId) {
             sheetData.singleVsMulti,
             sheetData.receptionistName
           ];
-          const anyValue = fields.some(v => typeof v === 'string' ? v.trim() !== '' : !!v);
-          const callbackIsTrue = String(sheetData.callbackNeeded || '').toUpperCase() === 'TRUE';
-          return anyValue || callbackIsTrue;
+          return fields.some(v => typeof v === 'string' ? v.trim() !== '' : !!v);
         })();
         
         console.log('[LOGISTICS SHEET DATA] Writing to sheet:', JSON.stringify(sheetData, null, 2));
