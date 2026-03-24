@@ -111,11 +111,43 @@ export async function appendLogistics(spreadsheetId, data) {
     'Recording URI': d.recordingUrl ?? '',
     'Transcript Snippet': (d.transcriptSnippet ?? '').slice(0, 300)
   };
+
+  // Hard guard: do not create a row unless at least one real logistics field is present.
+  // Ignore metadata-only fields (timestamp, call id, recording, transcript, callback flag, business name/phone).
+  const meaningfulLogisticsFields = [
+    'Decision Maker',
+    'Email',
+    'International (Y/N)',
+    'Main Couriers',
+    'International Shipments per Week',
+    'Main Countries',
+    'Example Shipment (weight x dims)',
+    'Example Shipment Cost',
+    'UK Shipments per Week',
+    'UK Courier',
+    'Std Rate up to KG',
+    'Excl Fuel & VAT?',
+    'Single vs Multi-parcel',
+    'Receptionist Name'
+  ];
+  const hasMeaningfulData = meaningfulLogisticsFields.some((field) => {
+    const raw = columnData[field];
+    if (raw == null) return false;
+    const v = String(raw).trim().toLowerCase();
+    return v !== '' && v !== 'unknown' && v !== 'n/a' && v !== 'na';
+  });
+  if (!hasMeaningfulData) {
+    console.log('[SHEETS] Skipping logistics append: no meaningful logistics data', {
+      callId: columnData['Call ID'] || '',
+      phone: columnData['Phone'] || ''
+    });
+    return { skipped: true };
+  }
   
   // Build row array — explicit handling: null, undefined, or "" → "Unknown" (no || or ?? silent fallback)
   const row = LOGISTICS_HEADERS.map(header => {
     const value = columnData[header];
-    if (value === null || value === undefined || value === '') return 'Unknown';
+    if (value === null || value === undefined || value === '') return '';
     return String(value);
   });
   

@@ -1223,64 +1223,14 @@ async function processWebhookPayload(body, correlationId) {
           console.log('[LOGISTICS SHEET] ✅ Updated existing row with call metadata (no assistant match)', { callId });
           markProcessed(callId);
         } else {
-          // No existing row found — only create one if we actually gained any logistics info (otherwise skip)
-          const hasAnyLogisticsInfo = (() => {
-            const fields = [
-              metadata?.leadName,
-              transcript,
-              recordingUrl
-            ];
-            return fields.some(v => typeof v === 'string' ? v.trim() !== '' : !!v);
-          })();
-          if (!hasAnyLogisticsInfo) {
-            console.log('[LOGISTICS SHEET] Skipping fallback append — no logistics info gained from call', {
-              callId,
-              phone: leadPhone,
-              outcome,
-              endedReason
-            });
-            markProcessed(callId);
-            return;
-          }
-          console.log('[LOGISTICS SHEET] No existing row found, creating new row', { callId, phone: leadPhone });
-          const fallbackRow = {
-            businessName: tenant?.displayName || metadata?.businessName || tenantKey || 'Unknown',
-            decisionMaker: metadata?.leadName || 'Unknown',
-            phone: leadPhone || '',
-            email: '',
-            international: 'N/A',
-            mainCouriers: '',
-            frequency: 'N/A',
-            internationalShipmentsPerWeek: '',
-            mainCountries: '',
-            exampleShipment: '',
-            exampleShipmentCost: '',
-            domesticFrequency: 'N/A',
-            ukShipmentsPerWeek: '',
-            ukCourier: 'N/A',
-            standardRateUpToKg: 'N/A',
-            excludingFuelVat: 'N/A',
-            singleVsMulti: 'N/A',
-            receptionistName: 'N/A',
-            callbackNeeded: false,
-            callId: callId || '',
-            recordingUrl: recordingUrl || '',
-            transcriptSnippet: transcript ? transcript.slice(0, 500) : ''
-          };
-          console.log('[EOCR SHEET ROW]', {
-            email: fallbackRow.email,
-            phone: fallbackRow.phone,
-            international: fallbackRow.international,
-            ukShipmentsPerWeek: fallbackRow.ukShipmentsPerWeek,
-            ukCourier: fallbackRow.ukCourier,
-            stdRateUpToKg: fallbackRow.standardRateUpToKg,
-            exclFuelVat: fallbackRow.excludingFuelVat,
-            singleVsMulti: fallbackRow.singleVsMulti,
-            receptionistName: fallbackRow.receptionistName,
-            callbackNeeded: fallbackRow.callbackNeeded
+          // Never create a brand-new row in assistant-mismatch fallback path.
+          // This path is metadata-only and caused Unknown-only rows.
+          console.log('[LOGISTICS SHEET] Skipping fallback append — no existing row and assistant mismatch', {
+            callId,
+            phone: leadPhone,
+            outcome,
+            endedReason
           });
-          await sheets.appendLogistics(logisticsSheetId, fallbackRow);
-          console.log('[LOGISTICS SHEET] ✅ Created new row (no assistant match)', { callId, phone: leadPhone });
           markProcessed(callId);
         }
       } catch (updateError) {
