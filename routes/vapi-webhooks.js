@@ -1036,6 +1036,7 @@ async function processWebhookPayload(body, correlationId) {
             businessName: metadata.businessName || tenant?.displayName || '',
             decisionMaker: asStr(sd.decisionMaker),
             phone: asStr(sd.phone) || (leadPhone || ''),
+            calledNumber: leadPhone || '',
             email: asStr(sd.email),
             international: asStr(sd.international),
             mainCouriers: asJoined(sd.mainCouriers),
@@ -1079,6 +1080,7 @@ async function processWebhookPayload(body, correlationId) {
             businessName: businessName || '',
             decisionMaker: decisionMaker || (hasStructuredSource ? (effectiveStructuredOutput['Decision Maker'] || effectiveStructuredOutput.decisionMaker) : '') || '',
             phone: (hasStructuredSource ? (effectiveStructuredOutput['Phone Number'] || effectiveStructuredOutput.phone) : null) || leadPhone || '',
+            calledNumber: leadPhone || '',
             email: extracted.email || '',
             international: extracted.international || '',
             mainCouriers: Array.isArray(extracted.mainCouriers) ? extracted.mainCouriers.join(', ') : (extracted.mainCouriers || ''),
@@ -1142,7 +1144,8 @@ async function processWebhookPayload(body, correlationId) {
           const updateData = {
             callId: callId || '',
             recordingUrl: recordingUrl || '',
-            transcriptSnippet: transcript.slice(0, 500) || ''
+            transcriptSnippet: transcript.slice(0, 500) || '',
+            calledNumber: leadPhone || ''
           };
           console.log('[LOGISTICS SHEET] Update data:', JSON.stringify(updateData, null, 2));
           
@@ -1212,7 +1215,8 @@ async function processWebhookPayload(body, correlationId) {
         const updateData = {
           callId: callId || '',
           recordingUrl: recordingUrl || '',
-          transcriptSnippet: transcript ? transcript.slice(0, 500) : ''
+          transcriptSnippet: transcript ? transcript.slice(0, 500) : '',
+          calledNumber: leadPhone || ''
         };
         console.log('[LOGISTICS SHEET] Update data:', JSON.stringify(updateData, null, 2));
         

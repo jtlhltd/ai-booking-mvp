@@ -38,7 +38,7 @@ export const LOGISTICS_HEADERS = [
   'Timestamp','Business Name','Decision Maker','Phone','Email','International (Y/N)',
   'Main Couriers','International Shipments per Week','Main Countries','Example Shipment (weight x dims)','Example Shipment Cost',
   'UK Shipments per Week','UK Courier','Std Rate up to KG','Excl Fuel & VAT?','Single vs Multi-parcel',
-  'Receptionist Name','Callback Needed','Call ID','Recording URI','Transcript Snippet'
+  'Receptionist Name','Callback Needed','Call ID','Recording URI','Transcript Snippet','Called Number'
 ];
 
 export async function ensureHeader(spreadsheetId) {
@@ -55,7 +55,7 @@ export async function ensureLogisticsHeader(spreadsheetId) {
   const s = await getClient();
   await s.spreadsheets.values.update({
     spreadsheetId,
-    range: 'Sheet1!A1:U1',
+    range: 'Sheet1!A1:V1',
     valueInputOption: 'RAW',
     requestBody: { values: [LOGISTICS_HEADERS] }
   });
@@ -89,7 +89,16 @@ export async function appendLogistics(spreadsheetId, data) {
   const inc = d['Includes Fuel & VAT (Y/N)'] ?? '';
   const exclFromInc = inc === 'Y' ? 'N' : inc === 'N' ? 'Y' : '';
   const columnData = {
-    'Timestamp': new Date().toISOString(),
+    'Timestamp': new Date().toLocaleString('en-GB', {
+      timeZone: 'Europe/London',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }),
     'Business Name': d['Business Name'] ?? d.businessName ?? '',
     'Decision Maker': d['Decision Maker'] ?? d.decisionMaker ?? '',
     'Phone': d['Phone Number'] ?? d.phone ?? '',
@@ -109,7 +118,8 @@ export async function appendLogistics(spreadsheetId, data) {
     'Callback Needed': (d.callbackNeeded === true || d.callbackNeeded === 'TRUE') ? 'TRUE' : 'FALSE',
     'Call ID': d.callId ?? '',
     'Recording URI': d.recordingUrl ?? '',
-    'Transcript Snippet': (d.transcriptSnippet ?? '').slice(0, 300)
+    'Transcript Snippet': (d.transcriptSnippet ?? '').slice(0, 300),
+    'Called Number': d.calledNumber ?? d.phone ?? ''
   };
 
   // Hard guard: do not create a row unless at least one real logistics field is present.
@@ -161,7 +171,7 @@ export async function appendLogistics(spreadsheetId, data) {
   
   await s.spreadsheets.values.append({
     spreadsheetId,
-    range: 'Sheet1!A:U',  // 21 columns after removing Frequency & Domestic Frequency
+    range: 'Sheet1!A:V',  // 22 columns including Called Number
     valueInputOption: 'RAW',
     insertDataOption: 'INSERT_ROWS',
     requestBody: { values: [row] }
@@ -182,7 +192,7 @@ export async function updateLogisticsRowByPhone(spreadsheetId, phone, updates) {
     // Read all rows to find the one with matching phone or callId
     const response = await s.spreadsheets.values.get({
       spreadsheetId,
-      range: 'Sheet1!A:U'
+      range: 'Sheet1!A:V'
     });
     
     const rows = response.data.values || [];
@@ -273,8 +283,8 @@ export async function updateLogisticsRowByPhone(spreadsheetId, phone, updates) {
     
     // Get current row
     const currentRow = rows[rowIndex - 1] || [];
-    // Ensure row has all 21 columns
-    while (currentRow.length < 21) {
+    // Ensure row has all 22 columns
+    while (currentRow.length < 22) {
       currentRow.push('');
     }
     
@@ -295,6 +305,10 @@ export async function updateLogisticsRowByPhone(spreadsheetId, phone, updates) {
       currentRow[headerMap['Transcript Snippet']] = (updates.transcriptSnippet || '').slice(0, 300);
       updatesMade.push('Transcript Snippet');
     }
+    if (updates.calledNumber && headerMap['Called Number'] !== undefined) {
+      currentRow[headerMap['Called Number']] = updates.calledNumber;
+      updatesMade.push('Called Number');
+    }
     
     console.log(`[UPDATE LOGISTICS] Updating row ${rowIndex} with:`, updatesMade);
     console.log(`[UPDATE LOGISTICS] Update values:`, {
@@ -306,7 +320,7 @@ export async function updateLogisticsRowByPhone(spreadsheetId, phone, updates) {
     // Write updated row back
     await s.spreadsheets.values.update({
       spreadsheetId,
-      range: `Sheet1!A${rowIndex}:U${rowIndex}`,
+      range: `Sheet1!A${rowIndex}:V${rowIndex}`,
       valueInputOption: 'RAW',
       requestBody: { values: [currentRow] }
     });
