@@ -2016,6 +2016,16 @@
                 <div class="status-value" id="statusTotalCalls" aria-live="polite">—</div>
                 <p class="status-hint" id="statusHintCalls">Loading...</p>
             </div>
+            <div class="status-card" title="Calls that reached a real human conversation" role="article" aria-label="Answered calls">
+                <h4 id="statusCardAnswered">Answered</h4>
+                <div class="status-value" id="statusCallsAnswered" aria-live="polite">—</div>
+                <p class="status-hint" id="statusHintAnswered">Loading...</p>
+            </div>
+            <div class="status-card" title="Calls that were not picked up or did not connect" role="article" aria-label="No pickup calls">
+                <h4 id="statusCardNoPickup">No Pickup</h4>
+                <div class="status-value" id="statusCallsNotAnswered" aria-live="polite">—</div>
+                <p class="status-hint" id="statusHintNoPickup">Loading...</p>
+            </div>
             <div class="status-card" title="Conversion rate from our follow-up" role="article" aria-label="Our conversion rate">
                 <h4 id="statusCardConversion">Our Conversion Rate</h4>
                 <div class="status-value" id="statusConversionRate" aria-live="polite">—</div>
@@ -3041,6 +3051,16 @@
                 ? `${callsAnswered} answered, ${callsNotAnswered} not answered (${answerRate}% answer rate)`
                 : `${totalCalls} leads called`;
             document.getElementById('statusHintCalls').textContent = callsHint;
+
+            // Extra D2D ops stats (answered vs no pickup)
+            const answeredEl = document.getElementById('statusCallsAnswered');
+            const answeredHintEl = document.getElementById('statusHintAnswered');
+            const noPickupEl = document.getElementById('statusCallsNotAnswered');
+            const noPickupHintEl = document.getElementById('statusHintNoPickup');
+            if (answeredEl) answeredEl.textContent = formatNumber(callsAnswered);
+            if (noPickupEl) noPickupEl.textContent = formatNumber(callsNotAnswered);
+            if (answeredHintEl) answeredHintEl.textContent = callsAnswered > 0 ? 'Reached someone' : 'No conversations yet';
+            if (noPickupHintEl) noPickupHintEl.textContent = callsNotAnswered > 0 ? 'Voicemail/IVR/no answer' : 'No missed connects';
             
             document.getElementById('statusConversionRate').textContent = conversion;
             document.getElementById('statusFirstResponse').textContent = firstResponse;
