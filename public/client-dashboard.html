@@ -12,6 +12,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         :root {
             --primary: #5c6ac4;
@@ -2105,7 +2106,7 @@
                     <h3>📤 Upload Leads</h3>
                     <p class="card-subtitle">Send us more leads to follow up on.</p>
                     <div class="import-dropzone" id="leadDropzone">
-                        Drag & drop CSV or <button type="button" id="leadImportButton">browse</button>
+                        Drag & drop CSV / Excel or <button type="button" id="leadImportButton">browse</button>
                         <small style="display:block;margin-top:6px;">Columns: name, phone, service, source</small>
                     </div>
                     <div style="margin-top:10px;">
@@ -2129,8 +2130,16 @@
                             <small style="font-size:11px;color:var(--muted-text, #6b7280);">We’ll add them to your call queue immediately.</small>
                         </div>
                     </div>
-                    <input type="file" id="leadImportInput" accept=".csv" style="display:none">
+                    <input type="file" id="leadImportInput" accept=".csv,.xlsx,.xls,.xlsm" style="display:none">
                     <div class="import-status" id="leadImportStatus"></div>
+                    <div id="leadImportPreview" style="display:none;margin-top:10px;border:1px solid rgba(0,0,0,0.08);border-radius:12px;padding:10px;background:rgba(255,255,255,0.6);">
+                        <div id="leadImportPreviewSummary" style="font-size:12px;color:var(--muted-text, #6b7280);"></div>
+                        <div id="leadImportPreviewTableWrap" style="overflow:auto;margin-top:8px;max-height:220px;"></div>
+                        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">
+                            <button type="button" id="leadImportCancel" class="export-btn secondary" style="font-size:12px;padding:6px 10px;">Cancel</button>
+                            <button type="button" id="leadImportConfirm" class="export-btn" style="font-size:12px;padding:6px 10px;">Confirm upload</button>
+                        </div>
+                    </div>
                 </article>
 
                 <article class="card">
@@ -4708,6 +4717,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const pasteContainer = document.getElementById('leadPasteContainer');
             const pasteSubmit = document.getElementById('leadPasteSubmit');
             const pasteInput = document.getElementById('leadPasteInput');
+            const preview = document.getElementById('leadImportPreview');
+            const previewConfirm = document.getElementById('leadImportConfirm');
+            const previewCancel = document.getElementById('leadImportCancel');
             if (button && input) button.addEventListener('click', () => input.click());
             if (input) {
                 input.addEventListener('change', (event) => {
@@ -4756,17 +4768,65 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     }
                 });
             }
+
+            if (previewCancel) {
+                previewCancel.addEventListener('click', () => {
+                    pendingLeadImport = null;
+                    if (preview) preview.style.display = 'none';
+                    setImportStatus('Import cancelled.', 'info');
+                });
+            }
+            if (previewConfirm) {
+                previewConfirm.addEventListener('click', () => {
+                    if (!pendingLeadImport?.leads?.length) {
+                        setImportStatus('Nothing to import.', 'error');
+                        return;
+                    }
+                    const leads = pendingLeadImport.leads;
+                    pendingLeadImport = null;
+                    if (preview) preview.style.display = 'none';
+                    submitLeadImport(leads);
+                });
+            }
         }
+
+        let pendingLeadImport = null;
 
         function handleLeadImportFile(file) {
             setImportStatus(`Processing ${file.name}...`);
+            const filename = String(file?.name || '').toLowerCase();
+            const isExcel = filename.endsWith('.xlsx') || filename.endsWith('.xls') || filename.endsWith('.xlsm');
             const reader = new FileReader();
             reader.onload = () => {
-                const leads = parseCsv(reader.result);
-                submitLeadImport(leads);
+                let parsed = null;
+                try {
+                    if (isExcel) {
+                        parsed = parseExcel(reader.result);
+                    } else {
+                        parsed = parseCsv(reader.result);
+                    }
+                } catch (e) {
+                    console.error('[LEAD IMPORT] Parse error:', e);
+                    setImportStatus(`Couldn't read ${file.name}. Please export as CSV or try again.`, 'error');
+                    return;
+                }
+
+                const leads = parsed?.leads || [];
+                const totalRows = Number(parsed?.totalRows || 0);
+                const skippedRows = Number(parsed?.skippedRows || 0);
+                const mapping = parsed?.mapping || {};
+
+                if (!leads.length) {
+                    setImportStatus('No valid rows found (missing phone numbers?)', 'error');
+                    return;
+                }
+
+                pendingLeadImport = { leads, fileName: file.name, totalRows, skippedRows, mapping };
+                renderLeadImportPreview(pendingLeadImport);
             };
             reader.onerror = () => setImportStatus('Unable to read file', 'error');
-            reader.readAsText(file);
+            if (isExcel) reader.readAsArrayBuffer(file);
+            else reader.readAsText(file);
         }
 
         function handleLeadPaste(rawText) {
@@ -4842,9 +4902,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         }
 
         function parseCsv(text) {
-            if (!text) return [];
+            if (!text) return { leads: [], totalRows: 0, skippedRows: 0, mapping: {} };
             const lines = text.trim().split(/\r?\n/);
-            if (lines.length < 2) return [];
+            if (lines.length < 2) return { leads: [], totalRows: Math.max(0, lines.length - 1), skippedRows: Math.max(0, lines.length - 1), mapping: {} };
             
             // Parse CSV line handling quoted values
             function parseCSVLine(line) {
@@ -4870,6 +4930,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
             
             const headers = parseCSVLine(lines.shift()).map(h => h.trim().toLowerCase());
+            const totalRows = lines.length;
             
             // Helper function to find column index by multiple possible names
             function findColumn(possibleNames) {
@@ -4890,16 +4951,18 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             if (phoneIdx === -1) {
                 console.warn('No phone column found. Looking for: phone, mobile, telephone, tel, contact number');
                 console.warn('Available headers:', headers);
-                return [];
+                return { leads: [], totalRows, skippedRows: totalRows, mapping: {} };
             }
             
-            console.log('[CSV PARSE] Column mapping:', {
-                name: nameIdx >= 0 ? headers[nameIdx] : 'not found',
-                phone: headers[phoneIdx],
-                service: serviceIdx >= 0 ? headers[serviceIdx] : 'not found',
-                source: sourceIdx >= 0 ? headers[sourceIdx] : 'not found'
-            });
+            const mapping = {
+                name: nameIdx >= 0 ? headers[nameIdx] : '',
+                phone: headers[phoneIdx] || '',
+                service: serviceIdx >= 0 ? headers[serviceIdx] : '',
+                source: sourceIdx >= 0 ? headers[sourceIdx] : ''
+            };
+            console.log('[CSV PARSE] Column mapping:', mapping);
             
+            let skippedRows = 0;
             const parsedLeads = lines
                 .map((line, lineNum) => {
                     if (!line.trim()) return null;
@@ -4908,6 +4971,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     const phone = cells[phoneIdx] || '';
                     if (!phone || !phone.trim()) {
                         console.warn(`[CSV PARSE] Row ${lineNum + 2}: No phone number found, skipping`);
+                        skippedRows += 1;
                         return null; // Skip rows without phone
                     }
                     
@@ -4921,7 +4985,125 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 .filter(lead => lead && lead.phone && lead.phone.trim());
             
             console.log(`[CSV PARSE] Parsed ${parsedLeads.length} valid leads from ${lines.length} rows`);
-            return parsedLeads;
+            return { leads: parsedLeads, totalRows, skippedRows, mapping };
+        }
+
+        function parseExcel(arrayBuffer) {
+            if (!arrayBuffer) return { leads: [], totalRows: 0, skippedRows: 0, mapping: {} };
+            if (typeof XLSX === 'undefined') {
+                throw new Error('XLSX library not loaded');
+            }
+            const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+            const firstSheetName = workbook.SheetNames?.[0];
+            if (!firstSheetName) return { leads: [], totalRows: 0, skippedRows: 0, mapping: {} };
+            const sheet = workbook.Sheets[firstSheetName];
+            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+            if (!Array.isArray(rows) || rows.length < 2) return { leads: [], totalRows: Math.max(0, (rows?.length || 0) - 1), skippedRows: Math.max(0, (rows?.length || 0) - 1), mapping: {} };
+
+            const rawHeaders = rows[0].map(h => String(h || '').trim());
+            const headers = rawHeaders.map(h => h.toLowerCase());
+            const totalRows = rows.length - 1;
+
+            function findColumn(possibleNames) {
+                for (const name of possibleNames) {
+                    const index = headers.findIndex(h => h.includes(name.toLowerCase()));
+                    if (index !== -1) return index;
+                }
+                return -1;
+            }
+
+            const nameIdx = findColumn(['name', 'contact', 'full name', 'contact name', 'lead name', 'decision maker', 'decisionmaker']);
+            const phoneIdx = findColumn(['phone', 'mobile', 'telephone', 'tel', 'contact number', 'phone number', 'number']);
+            const serviceIdx = findColumn(['service', 'interest', 'product', 'inquiry', 'service type']);
+            const sourceIdx = findColumn(['source', 'lead source', 'campaign', 'utm_source', 'origin']);
+
+            if (phoneIdx === -1) {
+                console.warn('[XLSX PARSE] No phone column found. Available headers:', rawHeaders);
+                return { leads: [], totalRows, skippedRows: totalRows, mapping: {} };
+            }
+
+            const mapping = {
+                name: nameIdx >= 0 ? rawHeaders[nameIdx] : '',
+                phone: rawHeaders[phoneIdx] || '',
+                service: serviceIdx >= 0 ? rawHeaders[serviceIdx] : '',
+                source: sourceIdx >= 0 ? rawHeaders[sourceIdx] : ''
+            };
+
+            let skippedRows = 0;
+            const parsedLeads = rows.slice(1).map((cells) => {
+                if (!Array.isArray(cells)) return null;
+                const phone = String(cells[phoneIdx] || '').trim();
+                if (!phone) { skippedRows += 1; return null; }
+                return {
+                    name: nameIdx >= 0 ? String(cells[nameIdx] || '').trim() : '',
+                    phone,
+                    service: serviceIdx >= 0 ? String(cells[serviceIdx] || '').trim() : '',
+                    source: sourceIdx >= 0 ? String(cells[sourceIdx] || '').trim() : ''
+                };
+            }).filter(Boolean);
+
+            console.log(`[XLSX PARSE] Parsed ${parsedLeads.length} leads from ${rows.length - 1} rows`);
+            return { leads: parsedLeads, totalRows, skippedRows, mapping };
+        }
+
+        function renderLeadImportPreview(pending) {
+            const preview = document.getElementById('leadImportPreview');
+            const summary = document.getElementById('leadImportPreviewSummary');
+            const tableWrap = document.getElementById('leadImportPreviewTableWrap');
+            if (!preview || !summary || !tableWrap) return;
+
+            const importedCount = pending?.leads?.length || 0;
+            const totalRows = pending?.totalRows || importedCount;
+            const skippedRows = pending?.skippedRows || Math.max(0, totalRows - importedCount);
+            const mapping = pending?.mapping || {};
+            const fileName = pending?.fileName || 'file';
+
+            const mappingParts = [
+                mapping.phone ? `phone → “${escapeHtml(mapping.phone)}”` : 'phone → (not detected)',
+                mapping.name ? `name → “${escapeHtml(mapping.name)}”` : null,
+                mapping.service ? `service → “${escapeHtml(mapping.service)}”` : null,
+                mapping.source ? `source → “${escapeHtml(mapping.source)}”` : null
+            ].filter(Boolean);
+
+            summary.innerHTML = `
+                <div style="font-weight:600;color:inherit;">Ready to import from ${escapeHtml(fileName)}</div>
+                <div style="margin-top:4px;">
+                    Rows: <b>${formatNumber(totalRows)}</b> · Importing: <b>${formatNumber(importedCount)}</b> · Skipped (no phone): <b>${formatNumber(skippedRows)}</b>
+                </div>
+                <div style="margin-top:4px;">Detected columns: ${mappingParts.join(' · ')}</div>
+            `;
+
+            const sample = (pending?.leads || []).slice(0, 10);
+            const rowsHtml = sample.map(l => `
+                <tr>
+                    <td style="padding:6px 8px;border-bottom:1px solid rgba(0,0,0,0.06);font-size:12px;">${escapeHtml(l.name || '')}</td>
+                    <td style="padding:6px 8px;border-bottom:1px solid rgba(0,0,0,0.06);font-size:12px;">${escapeHtml(l.phone || '')}</td>
+                    <td style="padding:6px 8px;border-bottom:1px solid rgba(0,0,0,0.06);font-size:12px;">${escapeHtml(l.service || '')}</td>
+                    <td style="padding:6px 8px;border-bottom:1px solid rgba(0,0,0,0.06);font-size:12px;">${escapeHtml(l.source || '')}</td>
+                </tr>
+            `).join('');
+
+            tableWrap.innerHTML = `
+                <table style="width:100%;border-collapse:collapse;background:rgba(255,255,255,0.75);border:1px solid rgba(0,0,0,0.06);border-radius:10px;overflow:hidden;">
+                    <thead>
+                        <tr>
+                            <th style="text-align:left;padding:8px;border-bottom:1px solid rgba(0,0,0,0.08);font-size:12px;">Name</th>
+                            <th style="text-align:left;padding:8px;border-bottom:1px solid rgba(0,0,0,0.08);font-size:12px;">Phone</th>
+                            <th style="text-align:left;padding:8px;border-bottom:1px solid rgba(0,0,0,0.08);font-size:12px;">Service</th>
+                            <th style="text-align:left;padding:8px;border-bottom:1px solid rgba(0,0,0,0.08);font-size:12px;">Source</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rowsHtml || ''}</tbody>
+                </table>
+                ${importedCount > 10 ? `<div style="margin-top:6px;font-size:11px;color:var(--muted-text, #6b7280);">Showing first 10 of ${formatNumber(importedCount)} leads.</div>` : ''}
+            `;
+
+            preview.style.display = 'block';
+            setImportStatus('Preview ready — confirm to upload.', 'info');
+        }
+
+        function escapeHtml(s) {
+            return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         }
 
         async function submitLeadImport(leads = []) {
