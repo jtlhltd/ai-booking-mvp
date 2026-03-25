@@ -103,6 +103,7 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import compression from 'compression';
 import { getDemoOverrides, formatOverridesForTelemetry, loadDemoScript } from './lib/demo-script.js';
+import { isBusinessHoursForTenant, getNextBusinessOpenForTenant } from './lib/business-hours.js';
 import { recordDemoTelemetry, readDemoTelemetry, clearDemoTelemetry, recordReceptionistTelemetry, readReceptionistTelemetry, clearReceptionistTelemetry } from './lib/demo-telemetry.js';
 import twilio from 'twilio';
 import { createHash } from 'crypto';
@@ -7874,7 +7875,7 @@ app.post('/api/import-leads/:clientKey', async (req, res) => {
     
     // AUTO-START INSTANT CALLING (if enabled or by default)
     let callResults = null;
-    if (autoStartCampaign !== false && results.imported > 0) {
+    if (autoStartCampaign !== false && results.imported > 0 && client && isBusinessHours(client)) {
       console.log(`[INSTANT CALLING] Starting immediate calls for ${results.imported} leads...`);
       
       const { processCallQueue, estimateCallTime } = await import('./lib/instant-calling.js');
@@ -7890,7 +7891,7 @@ app.post('/api/import-leads/:clientKey', async (req, res) => {
       
       // Start calling in background (don't block response)
       processCallQueue(leadsToCall, client, {
-        maxConcurrent: 5,
+        maxConcurrent: 1,
         delayBetweenCalls: 2000,
         maxCallsPerBatch: 50
       }).then(callResults => {
@@ -8978,43 +8979,54 @@ app.post('/api/leads/import-test', async (req, res) => {
  * Sequential calls share one VAPI concurrency slot; awaiting them in the import handler
  * made the dashboard upload appear to hang for the length of every call.
  */
-async function processLeadImportOutboundCalls({ clientKey, client, inserted, shouldCallNow, scheduledFor }) {
+async function processLeadImportOutboundCalls({ clientKey, client, inserted }) {
   const { addToCallQueue } = await import('./db.js');
   const { callLeadInstantly } = await import('./lib/instant-calling.js');
   let queuedCount = 0;
   let calledCount = 0;
   let lastCallError = null;
+  const queueDef = { triggerType: 'new_lead_import' };
   for (const lead of inserted) {
     try {
-      if (shouldCallNow) {
-        const leadForCall = { phone: lead.phone, name: lead.name || lead.phone, service: lead.service, source: lead.source };
-        console.log('[LEAD IMPORT][bg] Attempting immediate call:', { phone: lead.phone });
-        const result = await callLeadInstantly({
-          clientKey,
-          lead: leadForCall,
-          client
-        });
-        if (result?.ok) {
-          calledCount++;
-          console.log('[LEAD IMPORT][bg] Call initiated:', lead.phone, result.id || result.callId);
-        } else {
-          lastCallError = result?.details || result?.error || 'unknown';
-          console.warn('[LEAD IMPORT][bg] Immediate call failed, queueing for retry:', lead.phone, result?.error);
-          await addToCallQueue({
-            clientKey, leadPhone: lead.phone, priority: 8, scheduledFor: new Date(),
-            callType: 'vapi_call',
-            callData: { triggerType: 'new_lead_import', leadId: lead.id, leadName: lead.name, leadService: lead.service, leadSource: lead.source, leadStatus: lead.status, businessHours: 'within' }
-          });
-          queuedCount++;
-        }
-      } else {
+      if (!isBusinessHours(client)) {
+        const next = getNextBusinessHour(client);
         await addToCallQueue({
-          clientKey, leadPhone: lead.phone, priority: 8, scheduledFor,
+          clientKey, leadPhone: lead.phone, priority: 8, scheduledFor: next,
           callType: 'vapi_call',
-          callData: { triggerType: 'new_lead_import', leadId: lead.id, leadName: lead.name, leadService: lead.service, leadSource: lead.source, leadStatus: lead.status, businessHours: 'outside' }
+          callData: { ...queueDef, leadId: lead.id, leadName: lead.name, leadService: lead.service, leadSource: lead.source, leadStatus: lead.status, businessHours: 'outside' }
         });
         queuedCount++;
-        console.log('[LEAD IMPORT][bg] Queued for next business hour:', lead.phone);
+        console.log('[LEAD IMPORT][bg] Outside hours — queued:', lead.phone, next?.toISOString?.() || next);
+        continue;
+      }
+      const leadForCall = { phone: lead.phone, name: lead.name || lead.phone, service: lead.service, source: lead.source };
+      console.log('[LEAD IMPORT][bg] Attempting call:', { phone: lead.phone });
+      const result = await callLeadInstantly({
+        clientKey,
+        lead: leadForCall,
+        client
+      });
+      if (result?.ok) {
+        calledCount++;
+        console.log('[LEAD IMPORT][bg] Call initiated:', lead.phone, result.id || result.callId);
+      } else if (result?.error === 'outside_business_hours') {
+        const next = getNextBusinessHour(client);
+        await addToCallQueue({
+          clientKey, leadPhone: lead.phone, priority: 8, scheduledFor: next,
+          callType: 'vapi_call',
+          callData: { ...queueDef, leadId: lead.id, leadName: lead.name, leadService: lead.service, leadSource: lead.source, leadStatus: lead.status, businessHours: 'outside' }
+        });
+        queuedCount++;
+      } else {
+        lastCallError = result?.details || result?.error || 'unknown';
+        console.warn('[LEAD IMPORT][bg] Call failed, queueing for retry:', lead.phone, result?.error);
+        const retryWhen = isBusinessHours(client) ? new Date() : getNextBusinessHour(client);
+        await addToCallQueue({
+          clientKey, leadPhone: lead.phone, priority: 8, scheduledFor: retryWhen,
+          callType: 'vapi_call',
+          callData: { ...queueDef, leadId: lead.id, leadName: lead.name, leadService: lead.service, leadSource: lead.source, leadStatus: lead.status, businessHours: 'within' }
+        });
+        queuedCount++;
       }
     } catch (err) {
       console.error('[LEAD IMPORT][bg] Failed for lead:', lead.phone, err?.message);
@@ -9023,7 +9035,6 @@ async function processLeadImportOutboundCalls({ clientKey, client, inserted, sho
   }
   console.log('[LEAD IMPORT][bg] Finished outbound processing:', {
     clientKey,
-    shouldCallNow,
     calledCount,
     queuedCount,
     lastCallError: lastCallError || null
@@ -9185,21 +9196,16 @@ app.post('/api/leads/import', async (req, res) => {
         if (client && (client.isEnabled || isDemoClient) && (client.vapi?.assistantId || client?.vapiAssistantId || (isDemoClient && process.env.VAPI_ASSISTANT_ID))) {
           const { addToCallQueue } = await import('./db.js');
 
-          // Temporary override: when FORCE_INSTANT_CALLS is set, call immediately; else respect business hours (including for demo client)
-          const forceEnv = (process.env.FORCE_INSTANT_CALLS || '').toString().toLowerCase();
-          const forceInstantCalls = forceEnv === 'true' || forceEnv === '1' || forceEnv === 'yes';
           const inBusinessHours = isBusinessHours(client);
-          const shouldCallNow = forceInstantCalls || inBusinessHours;
+          const shouldCallNow = inBusinessHours;
           callSummary.inBusinessHours = inBusinessHours;
           callSummary.shouldCallNow = shouldCallNow;
           const scheduledFor = shouldCallNow ? new Date() : getNextBusinessHour(client);
           console.log('[LEAD IMPORT] Call decision:', {
             clientKey,
             isDemoClient,
-            forceInstantCalls,
             inBusinessHours,
-            shouldCallNow,
-            FORCE_INSTANT_CALLS: process.env.FORCE_INSTANT_CALLS ? '(set)' : '(not set)'
+            shouldCallNow
           });
 
           if (shouldCallNow) {
@@ -9211,7 +9217,7 @@ app.post('/api/leads/import', async (req, res) => {
             callSummary.pendingOutbound = inserted.length;
             console.log('[LEAD IMPORT] Starting outbound calls in background for', inserted.length, 'lead(s)');
             setImmediate(() => {
-              processLeadImportOutboundCalls({ clientKey, client, inserted, shouldCallNow, scheduledFor })
+              processLeadImportOutboundCalls({ clientKey, client, inserted })
                 .catch((e) => console.error('[LEAD IMPORT][bg] Unhandled:', e?.message || e));
             });
           } else {
@@ -12344,61 +12350,13 @@ function safeAsync(handler) {
   };
 }
 
-// Business hours detection
+// Business hours detection (Luxon + tenant timezone; see lib/business-hours.js)
 function isBusinessHours(tenant = null) {
-  const now = new Date();
-  const tz = tenant?.booking?.timezone || tenant?.timezone || TIMEZONE;
-  
-  // Convert to tenant timezone
-  const tenantTime = new Date(now.toLocaleString("en-US", {timeZone: tz}));
-  const hour = tenantTime.getHours();
-  const day = tenantTime.getDay(); // 0 = Sunday, 6 = Saturday
-  
-  // Default business hours: Mon-Fri 9AM-5PM
-  const businessHours = tenant?.businessHours || {
-    start: 9,
-    end: 17,
-    days: [1, 2, 3, 4, 5] // Monday to Friday
-  };
-  
-  // Ensure businessHours has the required properties
-  const days = businessHours?.days || [1, 2, 3, 4, 5]; // Default to Mon-Fri
-  const start = businessHours?.start ?? 9;
-  const end = businessHours?.end ?? 17;
-  
-  const isWeekday = Array.isArray(days) && days.includes(day);
-  const isBusinessHour = hour >= start && hour < end;
-  
-  return isWeekday && isBusinessHour;
+  return isBusinessHoursForTenant(tenant, new Date(), TIMEZONE);
 }
 
 function getNextBusinessHour(tenant = null) {
-  const now = new Date();
-  const tz = tenant?.booking?.timezone || tenant?.timezone || TIMEZONE;
-  const tenantTime = new Date(now.toLocaleString("en-US", {timeZone: tz}));
-  
-  const businessHours = tenant?.businessHours || {
-    start: 9,
-    end: 17,
-    days: [1, 2, 3, 4, 5]
-  };
-  
-  // Ensure businessHours has the required properties
-  const days = businessHours?.days || [1, 2, 3, 4, 5]; // Default to Mon-Fri
-  const start = businessHours?.start ?? 9;
-  const end = businessHours?.end ?? 17;
-  
-  let nextBusiness = new Date(tenantTime);
-  nextBusiness.setHours(start, 0, 0, 0);
-  
-  // If it's already past business hours today, move to next business day
-  if (tenantTime.getHours() >= end || !Array.isArray(days) || !days.includes(tenantTime.getDay())) {
-    do {
-      nextBusiness.setDate(nextBusiness.getDate() + 1);
-    } while (!Array.isArray(days) || !days.includes(nextBusiness.getDay()));
-  }
-  
-  return nextBusiness;
+  return getNextBusinessOpenForTenant(tenant, new Date(), TIMEZONE);
 }
 
 // Intelligent call scheduling
@@ -19547,6 +19505,14 @@ app.post('/api/leads/recall', async (req, res) => {
     const client = await getFullClient(clientKey);
     if (!client) return res.status(404).json({ ok:false, error:'unknown clientKey' });
 
+    if (!isBusinessHours(client)) {
+      return res.status(403).json({
+        ok: false,
+        error: 'outside_business_hours',
+        message: 'Outbound calls are only allowed during configured business hours.'
+      });
+    }
+
     const assistantId   = client?.vapiAssistantId   || VAPI_ASSISTANT_ID;
     const phoneNumberId = client?.vapiPhoneNumberId || VAPI_PHONE_NUMBER_ID;
 
@@ -19623,19 +19589,7 @@ app.post('/api/leads/nudge', async (req, res) => {
     const client = await getClientFromHeader(req);
     if (!client) return res.status(401).json({ ok:false, error:'missing or unknown X-Client-Key' });
 
-
-// Read a single lead by id
-app.get('/api/leads/:id', async (req, res) => {
-  try {
-    const rows = await readJson(LEADS_PATH, []);
-    const lead = rows.find(r => r.id === req.params.id);
-    if (!lead) return res.status(404).json({ ok:false, error:'lead not found' });
-    res.json({ ok:true, lead });
-  } catch (e) {
-    res.status(500).json({ ok:false, error: String(e?.message || e) });
-  }
-});
-const { id } = req.body || {};
+    const { id } = req.body || {};
     if (!id) return res.status(400).json({ ok:false, error:'lead id required' });
 
     const rows = await readJson(LEADS_PATH, []);
@@ -19661,6 +19615,18 @@ const { id } = req.body || {};
   }
 });
 
+// Read a single lead by id
+app.get('/api/leads/:id', async (req, res) => {
+  try {
+    const rows = await readJson(LEADS_PATH, []);
+    const lead = rows.find(r => r.id === req.params.id);
+    if (!lead) return res.status(404).json({ ok:false, error:'lead not found' });
+    res.json({ ok:true, lead });
+  } catch (e) {
+    res.status(500).json({ ok:false, error: String(e?.message || e) });
+  }
+});
+
 // Retry processor - runs every 5 minutes to process pending retries
 async function processRetryQueue() {
   try {
@@ -19675,6 +19641,19 @@ async function processRetryQueue() {
     
     for (const retry of pendingRetries) {
       try {
+        if (retry.retry_type === 'vapi_call' && retry.client_key) {
+          const rClient = await getFullClient(retry.client_key);
+          if (rClient && !isBusinessHours(rClient)) {
+            const next = getNextBusinessHour(rClient);
+            await query(
+              `UPDATE retry_queue SET scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
+              [next, retry.id]
+            );
+            console.log('[RETRY PROCESSOR] Deferred — outside business hours', { id: retry.id, scheduledFor: next });
+            continue;
+          }
+        }
+
         // Mark as processing
         await updateRetryStatus(retry.id, 'processing');
         
@@ -19776,12 +19755,30 @@ async function processCallQueue() {
     
     for (const call of pendingCalls) {
       try {
+        if (call.call_type === 'vapi_call') {
+          const qhClient = await getFullClient(call.client_key);
+          if (qhClient && !isBusinessHours(qhClient)) {
+            const next = getNextBusinessHour(qhClient);
+            await query(
+              `UPDATE call_queue SET scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
+              [next, call.id]
+            );
+            console.log('[CALL QUEUE PROCESSOR] Deferred — outside business hours', { id: call.id, scheduledFor: next });
+            continue;
+          }
+        }
+
         // Mark as processing
         await updateCallQueueStatus(call.id, 'processing');
         
         // Process the call based on type
         if (call.call_type === 'vapi_call') {
           await processVapiCallFromQueue(call);
+          const { rows: stRows } = await query(`SELECT status FROM call_queue WHERE id = $1`, [call.id]);
+          if (stRows?.[0]?.status === 'pending') {
+            console.log('[CALL QUEUE PROCESSOR] Item rescheduled during handler; skipping complete.', { id: call.id });
+            continue;
+          }
         }
         
         // Mark as completed
@@ -19902,6 +19899,16 @@ async function processVapiCallFromQueue(call) {
       lead: leadForCall,
       client
     });
+
+    if (vapiResult?.error === 'outside_business_hours') {
+      const next = getNextBusinessHour(client);
+      await query(
+        `UPDATE call_queue SET status = 'pending', scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
+        [next, call.id]
+      );
+      console.log('[QUEUE CALL] Deferred to business hours', { queueId: call.id, scheduledFor: next });
+      return;
+    }
     
     if (!vapiResult || !vapiResult.ok || vapiResult.error) {
       // Record failed attempt so lead queuer doesn't re-queue this lead every 5 min (87 attempts from 10 leads)
@@ -22055,6 +22062,14 @@ app.post('/admin/vapi/test-call', async (req, res) => {
     const apiKey = req.get('X-API-Key');
     if (!apiKey || apiKey !== process.env.API_KEY) {
       return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const tzTenant = { booking: { timezone: TIMEZONE } };
+    if (!isBusinessHoursForTenant(tzTenant, new Date(), TIMEZONE)) {
+      return res.status(403).json({
+        error: 'outside_business_hours',
+        message: 'Test calls are only allowed during configured business hours (use tenant timezone).'
+      });
     }
     
     const { phoneNumber, assistantId } = req.body;
