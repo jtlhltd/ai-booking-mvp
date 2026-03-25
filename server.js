@@ -8973,6 +8973,63 @@ app.post('/api/leads/import-test', async (req, res) => {
   });
 });
 
+/**
+ * Run VAPI / queue follow-up for imported leads without blocking the HTTP response.
+ * Sequential calls share one VAPI concurrency slot; awaiting them in the import handler
+ * made the dashboard upload appear to hang for the length of every call.
+ */
+async function processLeadImportOutboundCalls({ clientKey, client, inserted, shouldCallNow, scheduledFor }) {
+  const { addToCallQueue } = await import('./db.js');
+  const { callLeadInstantly } = await import('./lib/instant-calling.js');
+  let queuedCount = 0;
+  let calledCount = 0;
+  let lastCallError = null;
+  for (const lead of inserted) {
+    try {
+      if (shouldCallNow) {
+        const leadForCall = { phone: lead.phone, name: lead.name || lead.phone, service: lead.service, source: lead.source };
+        console.log('[LEAD IMPORT][bg] Attempting immediate call:', { phone: lead.phone });
+        const result = await callLeadInstantly({
+          clientKey,
+          lead: leadForCall,
+          client
+        });
+        if (result?.ok) {
+          calledCount++;
+          console.log('[LEAD IMPORT][bg] Call initiated:', lead.phone, result.id || result.callId);
+        } else {
+          lastCallError = result?.details || result?.error || 'unknown';
+          console.warn('[LEAD IMPORT][bg] Immediate call failed, queueing for retry:', lead.phone, result?.error);
+          await addToCallQueue({
+            clientKey, leadPhone: lead.phone, priority: 8, scheduledFor: new Date(),
+            callType: 'vapi_call',
+            callData: { triggerType: 'new_lead_import', leadId: lead.id, leadName: lead.name, leadService: lead.service, leadSource: lead.source, leadStatus: lead.status, businessHours: 'within' }
+          });
+          queuedCount++;
+        }
+      } else {
+        await addToCallQueue({
+          clientKey, leadPhone: lead.phone, priority: 8, scheduledFor,
+          callType: 'vapi_call',
+          callData: { triggerType: 'new_lead_import', leadId: lead.id, leadName: lead.name, leadService: lead.service, leadSource: lead.source, leadStatus: lead.status, businessHours: 'outside' }
+        });
+        queuedCount++;
+        console.log('[LEAD IMPORT][bg] Queued for next business hour:', lead.phone);
+      }
+    } catch (err) {
+      console.error('[LEAD IMPORT][bg] Failed for lead:', lead.phone, err?.message);
+      lastCallError = err?.message || String(err);
+    }
+  }
+  console.log('[LEAD IMPORT][bg] Finished outbound processing:', {
+    clientKey,
+    shouldCallNow,
+    calledCount,
+    queuedCount,
+    lastCallError: lastCallError || null
+  });
+}
+
 app.post('/api/leads/import', async (req, res) => {
   // CRITICAL: Log immediately to ensure we see this
   console.error('[LEAD IMPORT API] ========== ENDPOINT HIT ==========');
@@ -9127,7 +9184,6 @@ app.post('/api/leads/import', async (req, res) => {
         }
         if (client && (client.isEnabled || isDemoClient) && (client.vapi?.assistantId || client?.vapiAssistantId || (isDemoClient && process.env.VAPI_ASSISTANT_ID))) {
           const { addToCallQueue } = await import('./db.js');
-          const { callLeadInstantly } = await import('./lib/instant-calling.js');
 
           // Temporary override: when FORCE_INSTANT_CALLS is set, call immediately; else respect business hours (including for demo client)
           const forceEnv = (process.env.FORCE_INSTANT_CALLS || '').toString().toLowerCase();
@@ -9145,35 +9201,23 @@ app.post('/api/leads/import', async (req, res) => {
             shouldCallNow,
             FORCE_INSTANT_CALLS: process.env.FORCE_INSTANT_CALLS ? '(set)' : '(not set)'
           });
-          let queuedCount = 0;
-          let calledCount = 0;
-          let lastCallError = null;
 
-          for (const lead of inserted) {
-            try {
-              if (shouldCallNow) {
-                // Call immediately in this request so user gets called within seconds
-                const leadForCall = { phone: lead.phone, name: lead.name || lead.phone, service: lead.service, source: lead.source };
-                console.log('[LEAD IMPORT] Attempting immediate call:', { phone: lead.phone, hasPhone: !!lead.phone });
-                const result = await callLeadInstantly({
-                  clientKey,
-                  lead: leadForCall,
-                  client
-                });
-                if (result?.ok) {
-                  calledCount++;
-                  console.log('[LEAD IMPORT] Call initiated immediately:', lead.phone, result.callId);
-                } else {
-                  lastCallError = result?.details || result?.error || 'unknown';
-                  console.warn('[LEAD IMPORT] Immediate call failed, queueing for retry:', lead.phone, result?.error, result?.details);
-                  await addToCallQueue({
-                    clientKey, leadPhone: lead.phone, priority: 8, scheduledFor: new Date(),
-                    callType: 'vapi_call',
-                    callData: { triggerType: 'new_lead_import', leadId: lead.id, leadName: lead.name, leadService: lead.service, leadSource: lead.source, leadStatus: lead.status, businessHours: 'within' }
-                  });
-                  queuedCount++;
-                }
-              } else {
+          if (shouldCallNow) {
+            // Do not await VAPI in this request — concurrency is 1 and slots are held until end-of-call-report,
+            // which made multi-lead imports hang for minutes per lead from the browser's perspective.
+            callSummary.reason = 'calls_background';
+            callSummary.called = 0;
+            callSummary.queued = 0;
+            callSummary.pendingOutbound = inserted.length;
+            console.log('[LEAD IMPORT] Starting outbound calls in background for', inserted.length, 'lead(s)');
+            setImmediate(() => {
+              processLeadImportOutboundCalls({ clientKey, client, inserted, shouldCallNow, scheduledFor })
+                .catch((e) => console.error('[LEAD IMPORT][bg] Unhandled:', e?.message || e));
+            });
+          } else {
+            let queuedCount = 0;
+            for (const lead of inserted) {
+              try {
                 await addToCallQueue({
                   clientKey, leadPhone: lead.phone, priority: 8, scheduledFor,
                   callType: 'vapi_call',
@@ -9181,20 +9225,15 @@ app.post('/api/leads/import', async (req, res) => {
                 });
                 queuedCount++;
                 console.log('[LEAD IMPORT] Queued lead for next business hour:', lead.phone);
+              } catch (err) {
+                console.error('[LEAD IMPORT] Failed for lead:', lead.phone, err?.message);
               }
-            } catch (err) {
-              console.error('[LEAD IMPORT] Failed for lead:', lead.phone, err?.message);
-              lastCallError = err?.message || String(err);
             }
+            callSummary.queued = queuedCount;
+            callSummary.called = 0;
+            callSummary.reason = queuedCount > 0 ? 'outside_business_hours' : null;
+            console.log('[LEAD IMPORT]', `${queuedCount} queued for next business hour`);
           }
-          callSummary.called = calledCount;
-          callSummary.queued = queuedCount;
-          if (queuedCount > 0 && calledCount === 0 && !shouldCallNow) callSummary.reason = 'outside_business_hours';
-          else if (lastCallError && calledCount === 0 && shouldCallNow) {
-            callSummary.reason = 'call_failed';
-            callSummary.error = lastCallError;
-          } else if (calledCount > 0) callSummary.reason = 'called';
-          console.log('[LEAD IMPORT]', shouldCallNow ? `${calledCount} called, ${queuedCount} queued for retry` : `${queuedCount} queued for next business hour`);
         } else {
           if (!callSummary.reason) callSummary.reason = 'client_not_enabled_or_no_vapi';
           console.log('[LEAD IMPORT] Client not enabled or missing VAPI config, skipping');

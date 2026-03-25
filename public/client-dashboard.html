@@ -5254,6 +5254,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     } else if (cs.reason === 'vapi_not_configured' || cs.reason === 'client_not_enabled_or_no_vapi') {
                         setImportStatus(`Imported ${payload.inserted} leads · Call skipped (VAPI not configured)`, 'success');
                         showToast('Import complete', `${payload.inserted} leads imported. Calls skipped: VAPI not configured for this client.`, 'info');
+                    } else if (cs.reason === 'calls_background' && (cs.pendingOutbound ?? 0) > 0) {
+                        setImportStatus(`Imported ${payload.inserted} leads · Starting ${cs.pendingOutbound} call(s) in the background`, 'success');
+                        showToast('Import complete', `${payload.inserted} leads imported. Outbound calls are running in the background (one at a time, so this can take a while).`, 'info');
                     } else {
                         setImportStatus(`Imported ${payload.inserted} leads`, 'success');
                         showToast('Import Complete', `Successfully imported ${payload.inserted} leads`, 'success');
