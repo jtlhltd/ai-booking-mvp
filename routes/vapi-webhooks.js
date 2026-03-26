@@ -1033,7 +1033,8 @@ async function processWebhookPayload(body, correlationId) {
           const asStr = (v) => (v == null ? '' : String(v).trim());
           const asJoined = (v) => Array.isArray(v) ? v.filter(Boolean).join(', ') : asStr(v);
           sheetData = {
-            businessName: metadata.businessName || tenant?.displayName || '',
+            // Business Name = the company we called (lead). Avoid tenant key like "d2d-xpress-tom".
+            businessName: metadata.leadName || metadata.businessName || body.call?.customer?.name || tenant?.displayName || '',
             decisionMaker: asStr(sd.decisionMaker),
             phone: asStr(sd.phone) || (leadPhone || ''),
             calledNumber: leadPhone || '',
