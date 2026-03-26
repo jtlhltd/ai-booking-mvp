@@ -20004,7 +20004,7 @@ async function queueNewLeadsForCalling() {
           FROM leads l
           WHERE l.client_key = $1
             AND l.status = 'new'
-            AND l.created_at >= NOW() - INTERVAL '7 days'
+            AND l.created_at >= NOW() - INTERVAL '30 days'
             AND NOT EXISTS (
               SELECT 1 FROM call_queue cq 
               WHERE cq.client_key = l.client_key 
