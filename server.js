@@ -19631,6 +19631,22 @@ app.get('/api/leads/:id', async (req, res) => {
 async function processRetryQueue() {
   try {
     const { getPendingRetries, updateRetryStatus } = await import('./db.js');
+
+    // Self-heal: reset stale processing retries so they can be deferred/retried.
+    try {
+      const { rowCount } = await query(`
+        UPDATE retry_queue
+        SET status = 'pending', updated_at = NOW()
+        WHERE status = 'processing'
+          AND updated_at < NOW() - INTERVAL '10 minutes'
+      `);
+      if ((rowCount || 0) > 0) {
+        console.warn('[RETRY PROCESSOR] Reset stale processing rows to pending:', rowCount);
+      }
+    } catch (e) {
+      console.warn('[RETRY PROCESSOR] Failed to reset stale processing rows:', e?.message || e);
+    }
+
     const pendingRetries = await getPendingRetries(50);
     
     if (pendingRetries.length === 0) {
@@ -19744,6 +19760,23 @@ async function processVapiRetry(retry) {
 async function processCallQueue() {
   try {
     const { getPendingCalls, updateCallQueueStatus, cancelDuplicatePendingCalls } = await import('./db.js');
+
+    // Self-heal: if the server restarted mid-item, rows can get stuck in 'processing' forever.
+    // Reset anything older than 10 minutes back to 'pending' so it can be retried/deferred.
+    try {
+      const { rowCount } = await query(`
+        UPDATE call_queue
+        SET status = 'pending', updated_at = NOW()
+        WHERE status = 'processing'
+          AND updated_at < NOW() - INTERVAL '10 minutes'
+      `);
+      if ((rowCount || 0) > 0) {
+        console.warn('[CALL QUEUE PROCESSOR] Reset stale processing rows to pending:', rowCount);
+      }
+    } catch (e) {
+      console.warn('[CALL QUEUE PROCESSOR] Failed to reset stale processing rows:', e?.message || e);
+    }
+
     const pendingCalls = await getPendingCalls(20); // Process up to 20 calls at a time
     
     if (pendingCalls.length === 0) {
@@ -19989,7 +20022,15 @@ async function queueNewLeadsForCalling() {
               SELECT 1 FROM calls c
               WHERE c.client_key = l.client_key
               AND c.lead_phone = l.phone
-              AND c.status IN ('initiated', 'in_progress', 'completed', 'failed')
+              -- Never call if there is an active call
+              AND c.status IN ('initiated', 'in_progress')
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM calls c
+              WHERE c.client_key = l.client_key
+              AND c.lead_phone = l.phone
+              -- Cooldown: allow re-calling after 3 days
+              AND c.created_at >= NOW() - INTERVAL '3 days'
             )
           ORDER BY l.created_at ASC
           LIMIT 20
