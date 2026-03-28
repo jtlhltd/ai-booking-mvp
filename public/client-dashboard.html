@@ -1155,21 +1155,44 @@
         .activity-feed {
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 10px;
         }
 
         .activity-item {
-            padding: 14px 16px;
+            padding: 12px 14px;
             border-radius: 12px;
             border: 1px solid #ecefff;
             background: #fbfbff;
+        }
+
+        .activity-item-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .activity-item-main {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .activity-item-title {
+            font-size: 0.95rem;
+            line-height: 1.35;
+        }
+
+        .activity-item-title .activity-channel {
+            font-weight: 500;
+            color: var(--muted, #7a7fa4);
         }
 
         .activity-tags {
             display: flex;
             flex-wrap: wrap;
             gap: 6px;
-            margin-top: 8px;
+            margin-top: 6px;
+            align-items: center;
         }
 
         .activity-pill {
@@ -1222,6 +1245,13 @@
             border-color: rgba(148,163,184,0.7);
             background: rgba(148,163,184,0.08);
             color: #4b5563;
+        }
+
+        .activity-pill.activity-pill--pending {
+            border-style: dashed;
+            border-color: rgba(59, 130, 246, 0.45);
+            background: rgba(59, 130, 246, 0.06);
+            color: #1d4ed8;
         }
 
         .activity-item strong {
@@ -1315,6 +1345,13 @@
             cursor: pointer;
             margin-top: 6px;
             transition: all 0.2s;
+        }
+
+        .transcript-btn--compact {
+            margin-top: 0;
+            flex-shrink: 0;
+            align-self: flex-start;
+            white-space: nowrap;
         }
 
         .transcript-btn:hover {
@@ -1941,6 +1978,12 @@
 
         body[data-theme="dark"] .activity-meta {
             color: #d0d4e8;
+        }
+
+        body[data-theme="dark"] .activity-pill.activity-pill--pending {
+            border-color: rgba(124, 134, 220, 0.55);
+            background: rgba(92, 106, 196, 0.15);
+            color: #a5b4fc;
         }
 
         body[data-theme="dark"] .meta-label {
@@ -3916,6 +3959,48 @@
             `).join('');
         }
 
+        function formatActivityOutcomeDisplay(str) {
+            if (!str || str === '—') return '—';
+            return String(str)
+                .replace(/_/g, ' ')
+                .replace(/-/g, ' ')
+                .trim()
+                .split(/\s+/)
+                .filter(Boolean)
+                .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+                .join(' ');
+        }
+
+        /** Merge back-to-back rows that are the same burst (same lead, time label, outcome). */
+        function consolidateActivityCalls(calls) {
+            if (!Array.isArray(calls) || calls.length < 2) return calls;
+            const out = [];
+            const norm = (v) => String(v || '').toLowerCase().trim().replace(/\s+/g, ' ');
+            for (const c of calls) {
+                const timeAgo = c.timeAgo || formatTimeAgo(c.timestamp || c.created_at);
+                let outcomeLabel = c.outcomeLabel || '';
+                if (!outcomeLabel && c.summary && /^outcome:/i.test(c.summary)) {
+                    outcomeLabel = c.summary.replace(/^outcome:\s*/i, '').trim();
+                }
+                const outcomeKey = norm(c.outcome || outcomeLabel);
+                const statusKey = norm(c.status || c.rawStatus);
+                const nameKey = norm(c.name);
+                const key = `${nameKey}|${timeAgo}|${outcomeKey}|${statusKey}`;
+                const prev = out[out.length - 1];
+                if (prev && prev._activityDedupeKey === key) {
+                    prev._activityDedupeCount = (prev._activityDedupeCount || 1) + 1;
+                } else {
+                    out.push({
+                        ...c,
+                        timeAgo,
+                        _activityDedupeKey: key,
+                        _activityDedupeCount: 1
+                    });
+                }
+            }
+            return out;
+        }
+
         function renderCalls(calls = []) {
             const container = document.getElementById('recent-calls');
             if (!container) {
@@ -3958,32 +4043,72 @@
                 `;
                 return;
             }
+
+            if (currentClient !== DEMO_CLIENT_KEY) {
+                callsToShow = consolidateActivityCalls(callsToShow);
+            }
+
             container.innerHTML = callsToShow.map((call, index) => {
                 const timeAgo = call.timeAgo || formatTimeAgo(call.timestamp || call.created_at);
                 const callId = escapeHtml(String(call.id || call.timestamp || index));
                 const callName = escapeHtml(call.name || 'Prospect');
-                const statusLabel = (call.status || call.rawStatus || '').toString().replace(/_/g, ' ') || '—';
+                const statusLabel = (call.status || call.rawStatus || '').toString().replace(/_/g, ' ').trim();
                 let outcomeLabel = call.outcomeLabel || '';
-                if (!outcomeLabel && call.summary && call.summary.startsWith('Outcome:')) {
-                    outcomeLabel = call.summary.replace('Outcome:', '').trim();
+                if (!outcomeLabel && call.summary && /^outcome:/i.test(call.summary)) {
+                    outcomeLabel = call.summary.replace(/^outcome:\s*/i, '').trim();
                 }
-                const outcomeRaw = (call.outcome || outcomeLabel || '').toLowerCase().replace(/\s+/g, '-');
-                const hasOutcome = !!(call.outcome || outcomeLabel);
-                const outcomeLower = (outcomeRaw || outcomeLabel || '').toLowerCase();
+                const hasMachineOutcome = !!(call.outcome && String(call.outcome).trim());
+                const hasDisplayOutcome = !!(outcomeLabel && String(outcomeLabel).trim());
+                const hasOutcome = hasMachineOutcome || hasDisplayOutcome;
+                let outcomeRaw = (call.outcome || '').toLowerCase().trim().replace(/\s+/g, '-').replace(/_/g, '-') || '';
+                if (!outcomeRaw && outcomeLabel) {
+                    outcomeRaw = outcomeLabel.toLowerCase().trim().replace(/\s+/g, '-').replace(/_/g, '-');
+                }
+                if (!outcomeRaw) outcomeRaw = 'pending';
+                const outcomeLower = `${outcomeRaw} ${(outcomeLabel || '').toLowerCase()}`;
                 const isUnknownResult = /unknown|result not received/.test(outcomeLower);
                 const wasPickedUp = hasOutcome && !isUnknownResult && !/(no[- ]?answer|busy|failed|voicemail|declined|rejected)/.test(outcomeLower);
-                const durationText = call.durationLabel ? `Duration: ${call.durationLabel}` : '';
+                const primaryText = hasDisplayOutcome
+                    ? formatActivityOutcomeDisplay(outcomeLabel)
+                    : (hasMachineOutcome ? formatActivityOutcomeDisplay(call.outcome) : (statusLabel ? formatActivityOutcomeDisplay(statusLabel) : ''));
+
+                let pillLabel;
+                let pillClass;
+                if (isUnknownResult) {
+                    pillLabel = outcomeLabel ? formatActivityOutcomeDisplay(outcomeLabel) : 'Result pending';
+                    pillClass = 'activity-pill activity-pill--pending';
+                } else if (primaryText) {
+                    pillLabel = primaryText;
+                    const slug = outcomeRaw.replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, '') || 'unknown';
+                    const clsSlug = slug === 'declined' ? 'outcome_declined' : `outcome-${slug}`;
+                    pillClass = `activity-pill ${clsSlug}`;
+                } else {
+                    pillLabel = statusLabel ? formatActivityOutcomeDisplay(statusLabel) : 'Result pending';
+                    const slug = outcomeRaw.replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, '') || 'pending';
+                    pillClass = slug !== 'pending'
+                        ? `activity-pill ${slug === 'declined' ? 'outcome_declined' : `outcome-${slug}`}`
+                        : 'activity-pill activity-pill--pending';
+                }
+
+                const metaParts = [];
+                const burst = call._activityDedupeCount || 1;
+                if (burst > 1) metaParts.push(`${burst}× attempts`);
+                if (call.durationLabel) metaParts.push(call.durationLabel);
+                metaParts.push(timeAgo);
+
                 return `
                     <div class="activity-item">
-                        <strong>${escapeHtml(call.name || 'Prospect')}</strong> • ${escapeHtml(call.channel || 'AI call')}
-                        <div class="activity-meta">${escapeHtml(call.summary || 'Conversation logged')} • ${timeAgo}</div>
-                        <div class="activity-tags">
-                            <span class="activity-pill status-in-progress">${escapeHtml(statusLabel)}</span>
-                            ${durationText ? `<span class="activity-pill">${escapeHtml(durationText)}</span>` : ''}
-                            ${hasOutcome ? `<span class="activity-pill outcome-${escapeHtml(outcomeRaw)}">${escapeHtml(outcomeLabel)}</span>` : '<span class="activity-pill pickup-no">Result pending</span>'}
-                            ${hasOutcome && !isUnknownResult ? `<span class="activity-pill ${wasPickedUp ? 'pickup-yes' : 'pickup-no'}">${wasPickedUp ? 'Picked up' : 'No answer'}</span>` : ''}
+                        <div class="activity-item-row">
+                            <div class="activity-item-main">
+                                <div class="activity-item-title"><strong>${escapeHtml(call.name || 'Prospect')}</strong><span class="activity-channel"> · ${escapeHtml(call.channel || 'AI call')}</span></div>
+                                <div class="activity-meta">${escapeHtml(metaParts.join(' · '))}</div>
+                                <div class="activity-tags">
+                                    <span class="${pillClass}">${escapeHtml(pillLabel)}</span>
+                                    ${wasPickedUp ? '<span class="activity-pill pickup-yes">Picked up</span>' : ''}
+                                </div>
+                            </div>
+                            <button type="button" class="transcript-btn transcript-btn--compact" onclick="viewTranscript('${callId}', '${callName}')">Transcript</button>
                         </div>
-                        <button class="transcript-btn" onclick="viewTranscript('${callId}', '${callName}')">📄 View Transcript</button>
                     </div>
                 `;
             }).join('');
