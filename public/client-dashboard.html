@@ -244,9 +244,15 @@
             padding-top: 14px;
         }
 
+        /* Scroll inside these regions so one long list doesn’t stretch the whole row/page */
         .dashboard-grid > .card > .leads-list,
         .dashboard-grid > .card > #retry-queue,
-        .dashboard-grid > .card > #call-recordings,
+        .dashboard-grid > .card > #call-recordings {
+            flex: 0 1 auto;
+            min-height: 0;
+            max-height: min(380px, 52vh);
+        }
+
         .dashboard-grid > .card > #recent-activity,
         .dashboard-grid > .card > #call-quality,
         .dashboard-grid > .card > #lead-journey,
@@ -311,7 +317,7 @@
         }
 
         .dashboard-grid > .card.card-list {
-            min-height: min(320px, 70vh);
+            min-height: 0;
         }
 
         .card-metrics {
@@ -999,8 +1005,9 @@
             align-items: center;
             justify-content: center;
             gap: 8px;
-            flex: 1 1 auto;
-            min-height: min(200px, 26vh);
+            flex: 0 1 auto;
+            min-height: 120px;
+            max-height: 200px;
         }
 
         .import-dropzone-line {
