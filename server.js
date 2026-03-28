@@ -8727,8 +8727,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
                agg.not_answered,
                agg.outcome_pending,
                (SELECT COUNT(*)::int FROM lead_class WHERE has_ans >= 1) AS reached_leads,
-               (SELECT COUNT(*)::int FROM lead_class WHERE has_ans = 0 AND has_no >= 1) AS no_pickup_only_leads,
-               (SELECT COUNT(*)::int FROM lead_class WHERE has_ans = 0 AND has_no = 0) AS pending_only_leads
+               (SELECT COUNT(*)::int FROM lead_class WHERE has_ans = 0) AS no_pickup_only_leads,
+               0::int AS pending_only_leads
         FROM agg
       `, [clientKey]),
       query(`
@@ -8839,7 +8839,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       `, [clientKey]),
       query(`
         SELECT DATE_TRUNC('day', created_at) AS bucket_day,
-               COUNT(*) AS touchpoints
+               COUNT(*)::int AS touchpoints,
+               COUNT(DISTINCT lead_phone)::int AS unique_phones
         FROM calls
         WHERE client_key = $1
           AND created_at >= ${sqlDaysAgo(6)}
@@ -9125,17 +9126,25 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     const touchpointMap = new Map(
       (touchpointRows.rows || []).map(row => {
         const dayKey = new Date(row.bucket_day).toISOString().slice(0, 10);
-        return [dayKey, parseInt(row.touchpoints || 0, 10)];
+        return [dayKey, {
+          attempts: parseInt(row.touchpoints || 0, 10),
+          uniquePhones: parseInt(row.unique_phones || 0, 10)
+        }];
       })
     );
     const touchpointLabels = [];
     const touchpointData = [];
+    const touchpointDates = [];
+    const touchpointUniqueByDay = [];
     for (let offset = 6; offset >= 0; offset -= 1) {
       const day = new Date();
       day.setDate(day.getDate() - offset);
       const key = day.toISOString().slice(0, 10);
       touchpointLabels.push(day.toLocaleDateString('en-GB', { weekday: 'short' }));
-      touchpointData.push(touchpointMap.get(key) || 0);
+      const bucket = touchpointMap.get(key);
+      touchpointData.push(bucket?.attempts || 0);
+      touchpointUniqueByDay.push(bucket?.uniquePhones || 0);
+      touchpointDates.push(key);
     }
 
     const upcomingAppointments = (upcomingAppointmentRows.rows || []).map(row => ({
@@ -9220,7 +9229,9 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       appointments: upcomingAppointments,
       touchpoints: {
         labels: touchpointLabels,
-        data: touchpointData
+        data: touchpointData,
+        dates: touchpointDates,
+        uniqueByDay: touchpointUniqueByDay
       },
       config: {
         phone: client?.phone || client?.whiteLabel?.phone || client?.numbers?.primary || null,
