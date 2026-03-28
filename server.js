@@ -8521,22 +8521,43 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     const apptByService = new Map(
       (apptByServiceRows.rows || []).map(r => [r.service || 'General', parseInt(r.appointment_count, 10) || 0])
     );
-    const serviceMix = (serviceRows.rows || []).map(row => {
+    const mixMap = new Map();
+    for (const row of serviceRows.rows || []) {
       const name = row.service || 'General';
-      const leadCount = parseInt(row.count, 10) || 0;
-      const percent = totalLeads > 0 ? Math.round((leadCount / totalLeads) * 100) : 0;
-      const appointmentCount = apptByService.get(name) || 0;
-      const notes = appointmentCount > 0
-        ? `${appointmentCount} appointment(s) in last 7 days`
-        : '';
-      return {
+      mixMap.set(name, {
         name,
-        percent,
-        leadCount,
-        bookings: appointmentCount,
-        notes
-      };
-    });
+        leadCount: parseInt(row.count, 10) || 0,
+        appointmentCount: apptByService.get(name) || 0
+      });
+    }
+    for (const row of apptByServiceRows.rows || []) {
+      const name = row.service || 'General';
+      if (!mixMap.has(name)) {
+        mixMap.set(name, {
+          name,
+          leadCount: 0,
+          appointmentCount: parseInt(row.appointment_count, 10) || 0
+        });
+      }
+    }
+    const serviceMix = [...mixMap.values()]
+      .sort((a, b) => (b.leadCount + b.appointmentCount * 2) - (a.leadCount + a.appointmentCount * 2))
+      .slice(0, 8)
+      .map(({ name, leadCount, appointmentCount }) => {
+        const percent = totalLeads > 0 ? Math.round((leadCount / totalLeads) * 100) : 0;
+        const notes = appointmentCount > 0
+          ? `${appointmentCount} appointment(s) in last 7 days`
+          : leadCount === 0
+            ? 'Appointments only (no leads tagged with this service)'
+            : '';
+        return {
+          name,
+          percent,
+          leadCount,
+          bookings: appointmentCount,
+          notes
+        };
+      });
 
     const leads = (leadRows.rows || []).map(row => {
       const rawScore = row.lead_score;
@@ -9934,6 +9955,15 @@ app.get('/api/leads/:leadId/timeline', async (req, res) => {
     if (!clientKey) {
       return res.status(400).json({ ok: false, error: 'clientKey required' });
     }
+
+    function phoneVariantsForMatch(phone) {
+      const raw = (phone || '').trim();
+      if (!raw) return [''];
+      const e164 = normalizePhoneE164(raw, 'GB') || raw;
+      const digitsRaw = raw.replace(/\D/g, '');
+      const digitsE164 = e164.replace(/\D/g, '');
+      return [...new Set([raw, e164, digitsRaw, digitsE164].filter(v => v && String(v).length > 0))];
+    }
     
     const leadResult = await query(`
       SELECT id, name, phone, created_at, source, client_key
@@ -9948,13 +9978,14 @@ app.get('/api/leads/:leadId/timeline', async (req, res) => {
     }
     
     const lead = leadResult.rows[0];
-    
+    const phoneVars = phoneVariantsForMatch(lead.phone);
+    const callPlaceholders = phoneVars.map((_, i) => `$${i + 2}`).join(', ');
     const callsResult = await query(`
       SELECT status, outcome, created_at, duration
       FROM calls
-      WHERE lead_phone = $1 AND client_key = $2
+      WHERE client_key = $1 AND lead_phone IN (${callPlaceholders})
       ORDER BY created_at ASC
-    `, [lead.phone, clientKey]);
+    `, [clientKey, ...phoneVars]);
     
     const appointmentsResult = await query(`
       SELECT start_iso, end_iso, status, created_at
@@ -9965,14 +9996,19 @@ app.get('/api/leads/:leadId/timeline', async (req, res) => {
 
     let smsRows = { rows: [] };
     try {
+      const smsIn1 = phoneVars.map((_, i) => `$${i + 2}`).join(', ');
+      const smsIn2 = phoneVars.map((_, i) => `$${i + 2 + phoneVars.length}`).join(', ');
       const smsResult = await query(`
         SELECT channel, direction, body, status, created_at
         FROM messages
-        WHERE client_key = $2
+        WHERE client_key = $1
           AND channel = 'sms'
-          AND (to_phone = $1 OR from_phone = $1)
+          AND (
+            to_phone IN (${smsIn1})
+            OR from_phone IN (${smsIn2})
+          )
         ORDER BY created_at ASC
-      `, [lead.phone, clientKey]);
+      `, [clientKey, ...phoneVars, ...phoneVars]);
       smsRows = smsResult;
     } catch (msgErr) {
       console.warn('[TIMELINE] SMS events skipped:', msgErr.message);
@@ -18177,6 +18213,15 @@ app.post('/admin/fix-tenants', async (req, res) => {
     console.error('[TENANT FIX ERROR]', e?.message || String(e));
     res.status(500).json({ ok: false, error: String(e?.message || e) });
   }
+});
+
+// Deploy / version fingerprint (for verifying production matches git)
+app.get('/api/build', (req, res) => {
+  res.json({
+    ok: true,
+    commit: process.env.RENDER_GIT_COMMIT || process.env.GITHUB_SHA || process.env.COMMIT_REF || null,
+    serviceId: process.env.RENDER_SERVICE_ID || null
+  });
 });
 
 // Health check endpoint

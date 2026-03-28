@@ -2055,6 +2055,25 @@
                 <strong id="roiMultiplier">0x</strong>
                 <small id="roiProfit">£0 profit</small>
             </div>
+            <details id="roiSettingsWrap" class="roi-settings-panel" style="display:none;width:100%;margin-top:12px;">
+                <summary style="cursor:pointer;color:var(--muted);font-size:0.9rem;">Operator: ROI assumptions (monthly fee &amp; avg booking value)</summary>
+                <div style="margin-top:10px;display:grid;gap:10px;max-width:420px;">
+                    <p style="margin:0;font-size:0.85rem;color:var(--muted);">Uses your server <code style="font-size:0.8rem;">API_KEY</code>. Values are stored on the tenant record.</p>
+                    <label style="display:flex;flex-direction:column;gap:4px;font-size:0.85rem;">Monthly service fee (£)
+                        <input type="number" id="roiInputMonthly" min="0" step="1" style="padding:8px;border-radius:8px;border:1px solid var(--border);" />
+                    </label>
+                    <label style="display:flex;flex-direction:column;gap:4px;font-size:0.85rem;">Average booking value (£)
+                        <input type="number" id="roiInputAvgDeal" min="0" step="1" style="padding:8px;border-radius:8px;border:1px solid var(--border);" />
+                    </label>
+                    <label style="display:flex;flex-direction:column;gap:4px;font-size:0.85rem;">API key
+                        <input type="password" id="roiInputApiKey" autocomplete="off" style="padding:8px;border-radius:8px;border:1px solid var(--border);" />
+                    </label>
+                    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                        <button type="button" id="roiSaveBtn" class="export-btn secondary">Save ROI settings</button>
+                        <span id="roiSettingsMsg" style="font-size:0.85rem;color:var(--muted);"></span>
+                    </div>
+                </div>
+            </details>
         </section>
 
         <!-- PERFORMANCE & ANALYTICS SECTION -->
@@ -2062,8 +2081,8 @@
             <h2 class="section-header">📊 Performance & Analytics</h2>
             <div class="dashboard-grid">
                 <article class="card card-chart">
-                    <h3>🔄 Conversion Funnel</h3>
-                    <p class="card-subtitle" id="conversionFunnelSubtitle">How we convert your leads into bookings.</p>
+                    <h3>📊 Pipeline snapshot</h3>
+                    <p class="card-subtitle" id="conversionFunnelSubtitle">Each bar is a real count from your data. These are not sequential funnel stages—numbers do not need to decrease left to right.</p>
                     <div id="lead-journey" class="funnel"></div>
                 </article>
 
@@ -2237,6 +2256,7 @@
     </div>
 
     <div class="toast-container" id="toastContainer"></div>
+    <p id="buildFingerprint" class="build-fingerprint" aria-live="polite" style="text-align:center;font-size:11px;color:var(--muted);margin:16px 8px 24px;"></p>
 
     <div class="modal-backdrop" id="leadModal" role="dialog" aria-labelledby="modalLeadName" aria-modal="true">
         <div class="lead-modal">
@@ -2284,6 +2304,12 @@
     
     <script>
         const DEMO_CLIENT_KEY = 'demo_client';
+        const DEMO_URL_ALIASES = new Set(['demo', 'demo_client', 'demo-client', 'sandbox']);
+        function isDemoClientKey(key) {
+            if (key == null || typeof key !== 'string') return false;
+            const k = key.trim().toLowerCase();
+            return k === DEMO_CLIENT_KEY || DEMO_URL_ALIASES.has(k);
+        }
         const BASE_URL = window.location.origin;
         const THEME_KEY = 'dashboard_theme';
         
@@ -2585,12 +2611,10 @@
         
         function getClientFromURL() {
             const params = new URLSearchParams(window.location.search);
-            const clientParam = params.get('client');
-            // If no client param or it's a demo variant, use DEMO_CLIENT_KEY
-            if (!clientParam || clientParam.includes('demo') || clientParam.includes('booking')) {
+            const clientParam = (params.get('client') || '').trim();
+            if (!clientParam || isDemoClientKey(clientParam)) {
                 return DEMO_CLIENT_KEY;
             }
-            // Keep dashes - database keys use dashes, not underscores
             return clientParam;
         }
 
@@ -3128,6 +3152,80 @@
             document.getElementById('roiProfit').textContent = profitStr;
         }
 
+        function prefillRoiSettingsInputs() {
+            const m = document.getElementById('roiInputMonthly');
+            const a = document.getElementById('roiInputAvgDeal');
+            if (!m || !a) return;
+            const fee = dashboardData.roi?.costs?.monthlyFee;
+            const deal = dashboardData.roi?.revenue?.avgDealValue;
+            if (fee != null && Number.isFinite(Number(fee))) m.value = String(Math.round(Number(fee)));
+            else m.value = '';
+            if (deal != null && Number.isFinite(Number(deal))) a.value = String(Math.round(Number(deal)));
+            else a.value = '';
+        }
+
+        function initRoiSettingsPanel() {
+            const wrap = document.getElementById('roiSettingsWrap');
+            const btn = document.getElementById('roiSaveBtn');
+            if (!wrap || !btn) return;
+            if (currentClient === DEMO_CLIENT_KEY) {
+                wrap.style.display = 'none';
+                return;
+            }
+            wrap.style.display = 'block';
+            if (btn.dataset.bound === '1') return;
+            btn.dataset.bound = '1';
+            btn.addEventListener('click', () => saveRoiSettings());
+        }
+
+        async function saveRoiSettings() {
+            const monthly = document.getElementById('roiInputMonthly')?.value;
+            const avg = document.getElementById('roiInputAvgDeal')?.value;
+            const apiKeyEl = document.getElementById('roiInputApiKey');
+            const apiKey = apiKeyEl?.value?.trim();
+            const msg = document.getElementById('roiSettingsMsg');
+            if (!apiKey) {
+                if (msg) msg.textContent = 'API key required.';
+                return;
+            }
+            if (msg) msg.textContent = '';
+            try {
+                const body = {};
+                if (monthly !== '') body.monthlyFee = Number(monthly);
+                if (avg !== '') body.avgDealValue = Number(avg);
+                const res = await fetch(`${BASE_URL}/api/clients/${encodeURIComponent(currentClient)}/config`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
+                    body: JSON.stringify(body)
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
+                if (msg) msg.textContent = 'Saved. Refreshing data…';
+                if (apiKeyEl) apiKeyEl.value = '';
+                const livePayload = await fetchLiveData(currentClient);
+                if (livePayload) {
+                    dashboardData = mergeData({}, livePayload, false);
+                    renderROI(dashboardData.roi);
+                    prefillRoiSettingsInputs();
+                }
+                if (msg) msg.textContent = 'Saved.';
+            } catch (e) {
+                if (msg) msg.textContent = e.message || 'Save failed';
+            }
+        }
+
+        async function loadBuildFingerprint() {
+            const el = document.getElementById('buildFingerprint');
+            if (!el) return;
+            try {
+                const res = await fetch(`${BASE_URL}/api/build`);
+                const data = await res.json();
+                const c = data.commit;
+                el.textContent = c ? `Deploy ${String(c).slice(0, 7)}` : '';
+            } catch {
+                el.textContent = '';
+            }
+        }
 
         function renderLeads(leads = []) {
             const container = document.getElementById('leads-list');
@@ -3403,10 +3501,10 @@
             const booked = data.bookingsThisWeek || 0;
 
             const stages = [
-                { label: 'Leads', value: totalLeads, color: '#5c6ac4' },
-                { label: 'Contacted', value: contacted, color: '#764ba2' },
-                { label: 'Engaged', value: engaged, color: '#667eea' },
-                { label: 'Booked', value: booked, color: '#1b5e20' }
+                { label: 'Total leads', value: totalLeads, color: '#5c6ac4' },
+                { label: 'Leads we called', value: contacted, color: '#764ba2' },
+                { label: 'Answered conversations', value: engaged, color: '#667eea' },
+                { label: 'Appointments (7 days)', value: booked, color: '#1b5e20' }
             ];
 
             const maxValue = Math.max(...stages.map(s => s.value), 1);
@@ -3468,9 +3566,7 @@
             contentEl.textContent = 'Loading transcript...';
             modal.classList.add('open');
 
-            // Always show demo transcripts in demo mode
-            const isDemo = !currentClient || currentClient === DEMO_CLIENT_KEY || currentClient === 'demo_client' || 
-                          (typeof currentClient === 'string' && (currentClient.includes('demo') || currentClient.includes('booking')));
+            const isDemo = !currentClient || currentClient === DEMO_CLIENT_KEY || isDemoClientKey(currentClient);
             
             if (isDemo) {
                 // Show realistic demo transcripts based on call ID
@@ -4255,6 +4351,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             renderRecentActivity(dashboardData);
             const roiData = dashboardData.roi || { costs: { total: 0, perCall: 0 }, revenue: { total: 0, bookings: 0, avgDealValue: 0 }, roi: { profit: 0, multiplier: 0, percentage: 0 } };
             renderROI(roiData);
+            prefillRoiSettingsInputs();
+            initRoiSettingsPanel();
+            loadBuildFingerprint();
             renderLeadJourney(dashboardData);
             renderLeads(dashboardData.recentLeads || []);
             renderAppointments(dashboardData.appointments || []);
@@ -4299,6 +4398,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         renderRecentActivity(dashboardData);
                         const roiData = dashboardData.roi || { costs: { total: 0, perCall: 0 }, revenue: { total: 0, bookings: 0, avgDealValue: 0 }, roi: { profit: 0, multiplier: 0, percentage: 0 } };
                         renderROI(roiData);
+                        prefillRoiSettingsInputs();
                         await renderActiveIndicator(dashboardData);
                         renderLeadJourney(dashboardData);
                         renderLeads(dashboardData.recentLeads || []);
@@ -4559,13 +4659,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             // Show button for demo clients or clients with isDemo flag
             // Also check if client has a VAPI assistant ID (likely a demo)
             const hasAssistantId = fullConfig?.vapi?.assistantId || fullConfig?.assistantId;
-            const isDemo = clientKey === DEMO_CLIENT_KEY || 
-                         clientKey === 'demo_client' ||
-                         clientKey === 'demo-client' ||
-                         clientKey?.includes('demo') || 
-                         clientKey?.includes('booking') ||
-                         fullConfig?.isDemo === true ||
-                         (typeof clientKey === 'string' && (clientKey.includes('demo') || clientKey.includes('booking')));
+            const isDemo = clientKey === DEMO_CLIENT_KEY ||
+                         isDemoClientKey(clientKey) ||
+                         fullConfig?.isDemo === true;
 
             console.log('[TEST CALL] Client check:', {
                 clientKey,
@@ -5136,10 +5232,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
             preview.style.display = 'block';
             setImportStatus('Preview ready — confirm to upload.', 'info');
-        }
-
-        function escapeHtml(s) {
-            return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         }
 
         async function submitLeadImport(leads = []) {
