@@ -3076,27 +3076,35 @@
             const firstResponse = data.firstResponse || '—';
 
             document.getElementById('statusTotalLeads').textContent = totalLeads;
-            // Show calls with answered/not answered breakdown
             const callsAnswered = data.metrics?.callsAnswered ?? 0;
             const callsNotAnswered = data.metrics?.callsNotAnswered ?? 0;
+            const callsOutcomePending = data.metrics?.callsOutcomePending ?? 0;
             const answerRate = data.metrics?.answerRate ?? 0;
             
             document.getElementById('statusTotalCalls').textContent = totalCalls;
-            // Update hint to show answered vs not answered
-            const callsHint = callsAnswered > 0 || callsNotAnswered > 0
-                ? `${callsAnswered} answered, ${callsNotAnswered} not answered (${answerRate}% answer rate)`
-                : `${totalCalls} leads called`;
+            const parts = [];
+            if (callsAnswered > 0) parts.push(`${callsAnswered} answered`);
+            if (callsNotAnswered > 0) parts.push(`${callsNotAnswered} no pickup`);
+            if (callsOutcomePending > 0) parts.push(`${callsOutcomePending} outcome pending`);
+            const callsHint = parts.length
+                ? `${parts.join(' • ')}${answerRate > 0 ? ` (${answerRate}% answer rate)` : ''}`
+                : `${totalCalls} unique leads called`;
             document.getElementById('statusHintCalls').textContent = callsHint;
 
-            // Extra D2D ops stats (answered vs no pickup)
             const answeredEl = document.getElementById('statusCallsAnswered');
             const answeredHintEl = document.getElementById('statusHintAnswered');
             const noPickupEl = document.getElementById('statusCallsNotAnswered');
             const noPickupHintEl = document.getElementById('statusHintNoPickup');
             if (answeredEl) answeredEl.textContent = formatNumber(callsAnswered);
             if (noPickupEl) noPickupEl.textContent = formatNumber(callsNotAnswered);
-            if (answeredHintEl) answeredHintEl.textContent = callsAnswered > 0 ? 'Reached someone' : 'No conversations yet';
-            if (noPickupHintEl) noPickupHintEl.textContent = callsNotAnswered > 0 ? 'Voicemail/IVR/no answer' : 'No missed connects';
+            if (answeredHintEl) {
+                answeredHintEl.textContent = callsOutcomePending > 0
+                    ? 'Includes duration/transcript when VAPI outcome missing'
+                    : (callsAnswered > 0 ? 'Reached someone' : 'No conversations yet');
+            }
+            if (noPickupHintEl) {
+                noPickupHintEl.textContent = callsNotAnswered > 0 ? 'Voicemail/IVR/no answer' : 'No missed connects';
+            }
             
             document.getElementById('statusConversionRate').textContent = conversion;
             document.getElementById('statusFirstResponse').textContent = firstResponse;
@@ -3109,7 +3117,7 @@
             // statusHintCalls already set above with answered/not answered breakdown
             document.getElementById('statusHintConversion').textContent = `Win rate: ${winRate}`;
             document.getElementById('statusHintResponse').textContent = firstResponse === '—'
-                ? 'Goal: under 5 min'
+                ? 'Avg first call after lead (30-day window) — no qualifying pairs yet'
                 : `Current: ${firstResponse}`;
         }
 

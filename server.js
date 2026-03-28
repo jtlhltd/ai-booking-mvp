@@ -8373,8 +8373,49 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
                COUNT(DISTINCT lead_phone) AS unique_leads_called,
                COUNT(*) FILTER (WHERE created_at >= ${sqlHoursAgo(24)}) AS last24,
                COUNT(*) FILTER (WHERE outcome = 'booked') AS booked,
-               COUNT(*) FILTER (WHERE outcome NOT IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected') AND outcome IS NOT NULL) AS answered,
-               COUNT(*) FILTER (WHERE outcome IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected')) AS not_answered
+               COUNT(*) FILTER (WHERE
+                 (outcome IS NOT NULL AND outcome NOT IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected'))
+                 OR (
+                   outcome IS NULL
+                   AND (
+                     (COALESCE(duration, 0) >= 20 AND LOWER(TRIM(COALESCE(status, ''))) IN ('ended', 'completed', 'finished'))
+                     OR (COALESCE(transcript, '') <> '' AND LENGTH(TRIM(COALESCE(transcript, ''))) > 40)
+                     OR (COALESCE(recording_url, '') <> '')
+                   )
+                 )
+               ) AS answered,
+               COUNT(*) FILTER (WHERE
+                 outcome IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected')
+                 OR (
+                   outcome IS NULL
+                   AND (
+                     LOWER(TRIM(COALESCE(status, ''))) IN (
+                       'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
+                     )
+                     OR (
+                       LOWER(TRIM(COALESCE(status, ''))) IN ('ended', 'completed', 'finished')
+                       AND COALESCE(duration, 0) > 0
+                       AND COALESCE(duration, 0) < 12
+                     )
+                   )
+                 )
+               ) AS not_answered,
+               COUNT(*) FILTER (WHERE
+                 outcome IS NULL
+                 AND COALESCE(duration, 0) < 20
+                 AND (transcript IS NULL OR LENGTH(TRIM(COALESCE(transcript, ''))) <= 40)
+                 AND (recording_url IS NULL OR recording_url = '')
+                 AND NOT (
+                   LOWER(TRIM(COALESCE(status, ''))) IN (
+                     'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
+                   )
+                   OR (
+                     LOWER(TRIM(COALESCE(status, ''))) IN ('ended', 'completed', 'finished')
+                     AND COALESCE(duration, 0) > 0
+                     AND COALESCE(duration, 0) < 12
+                   )
+                 )
+               ) AS outcome_pending
         FROM calls
         WHERE client_key = $1
       `, [clientKey]),
@@ -8456,12 +8497,11 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         FROM leads l
         JOIN calls c ON c.client_key = l.client_key AND c.lead_phone = l.phone
         WHERE c.client_key = $1
-          AND l.created_at >= NOW() - INTERVAL '24 hours'
+          AND l.created_at >= NOW() - INTERVAL '30 days'
           AND c.created_at >= l.created_at
-          AND c.created_at <= l.created_at + INTERVAL '2 hours'
-          AND c.created_at >= NOW() - INTERVAL '24 hours'
+          AND c.created_at <= l.created_at + INTERVAL '48 hours'
         ORDER BY l.phone, c.created_at ASC
-        LIMIT 100
+        LIMIT 500
       `, [clientKey]),
       query(`
         SELECT DATE_TRUNC('day', created_at) AS bucket_day,
@@ -8491,8 +8531,9 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     const last24hLeads = parseInt(leadCounts.rows?.[0]?.last24 || 0, 10);
     const totalCalls = parseInt(callCounts.rows?.[0]?.total || 0, 10); // Total call attempts (for internal tracking)
     const uniqueLeadsCalled = parseInt(callCounts.rows?.[0]?.unique_leads_called || 0, 10); // Unique leads actually called
-    const callsAnswered = parseInt(callCounts.rows?.[0]?.answered || 0, 10); // Calls that were answered
-    const callsNotAnswered = parseInt(callCounts.rows?.[0]?.not_answered || 0, 10); // Calls that weren't answered
+    const callsAnswered = parseInt(callCounts.rows?.[0]?.answered || 0, 10);
+    const callsNotAnswered = parseInt(callCounts.rows?.[0]?.not_answered || 0, 10);
+    const callsOutcomePending = parseInt(callCounts.rows?.[0]?.outcome_pending || 0, 10);
     const bookingsFromCalls = parseInt(callCounts.rows?.[0]?.booked || 0, 10);
     
     // Use unique leads called for display (not total call attempts)
@@ -8726,10 +8767,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         const callTime = new Date(row.call_created).getTime();
         if (!leadTime || !callTime || callTime <= leadTime) return null;
         const diffMinutes = (callTime - leadTime) / 60000;
-        // Include calls that happened within 2 hours of lead creation
-        // Exclude outliers over 2 hours (likely business hours delays or system issues)
-        // This gives a realistic average while filtering out extreme delays
-        return diffMinutes <= 120 ? diffMinutes : null;
+        // First call within 48h of lead creation; exclude extreme delays
+        return diffMinutes <= 2880 ? diffMinutes : null;
       })
       .filter(Boolean);
     const avgResponseMinutes = responseDiffs.length
@@ -8791,9 +8830,10 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         totalCalls: displayCalls, // Show unique leads called, not total attempts
         totalCallAttempts: totalCalls, // Keep total attempts for internal use
         uniqueLeadsCalled: displayCalls,
-        callsAnswered: callsAnswered, // Calls that were actually answered
-        callsNotAnswered: callsNotAnswered, // Calls that weren't answered
-        answerRate: uniqueLeadsCalled > 0 ? Math.round((callsAnswered / uniqueLeadsCalled) * 100) : 0, // Answer rate percentage
+        callsAnswered,
+        callsNotAnswered,
+        callsOutcomePending,
+        answerRate: uniqueLeadsCalled > 0 ? Math.round((callsAnswered / uniqueLeadsCalled) * 100) : 0,
         last24hLeads,
         conversionRate,
         successRate,
