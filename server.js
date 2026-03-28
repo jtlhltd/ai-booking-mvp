@@ -10651,7 +10651,7 @@ app.get('/api/export/:type', async (req, res) => {
 });
 
 // API endpoint for dashboard call quality metrics (7-day window; aligns with main dashboard “answered” heuristics)
-app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix: 'call-quality:v4:' }), async (req, res) => {
+app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix: 'call-quality:v5:' }), async (req, res) => {
   try {
     const { clientKey } = req.params;
 
@@ -10783,7 +10783,7 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
 
     const reachRate = totalCalls > 0 ? Math.min(100, Math.round((answeredAttempts / totalCalls) * 100)) : 0;
     const bookingRate = totalCalls > 0 ? Math.min(100, Math.round((bookingNumerator / totalCalls) * 100)) : 0;
-    const outcomeLoggedPct = totalCalls > 0 ? Math.min(100, Math.round((withOutcome / totalCalls) * 100)) : 0;
+    const outcomesLoggedPct = totalCalls > 0 ? Math.min(100, Math.round((withOutcome / totalCalls) * 100)) : 0;
     const attemptsPerLead = uniqueLeads > 0 ? Math.round((totalCalls / uniqueLeads) * 10) / 10 : null;
 
     res.json({
