@@ -271,6 +271,10 @@
             justify-content: center;
         }
 
+        .dashboard-grid > .card.card-upload-leads #leadImportStatus:empty {
+            display: none;
+        }
+
         .thin-scroll {
             scrollbar-width: thin;
             scrollbar-color: rgba(92, 106, 196, 0.35) transparent;
@@ -764,10 +768,22 @@
 
         .lead-meta {
             display: flex;
-            justify-content: space-between;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
             font-size: 0.9rem;
             color: #7b7f9f;
             margin-top: 6px;
+        }
+
+        .lead-meta-phone {
+            font-variant-numeric: tabular-nums;
+            word-break: break-all;
+        }
+
+        .lead-meta-service {
+            font-size: 0.82rem;
+            color: #8b90b0;
         }
 
         .lead-footer {
@@ -981,7 +997,10 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            justify-content: center;
             gap: 8px;
+            flex: 1 1 auto;
+            min-height: min(200px, 26vh);
         }
 
         .import-dropzone-line {
@@ -2245,6 +2264,10 @@
 
         body[data-theme="dark"] .lead-meta {
             color: #d0d4e8;
+        }
+
+        body[data-theme="dark"] .lead-meta-service {
+            color: #a8b4d4;
         }
 
         body[data-theme="dark"] .lead-new-badge {
@@ -4196,8 +4219,8 @@ ${actionsRow}
                         ${showNewBadge ? '<span class="lead-new-badge" aria-label="New lead">New</span>' : ''}
                     </div>
                     <div class="lead-meta">
-                        <span>${escapeHtml(lead.phone || lead.email || '')}</span>
-                        <span>${escapeHtml(lead.service || 'General')}</span>
+                        <span class="lead-meta-phone">${escapeHtml(lead.phone || lead.email || '')}</span>
+                        <span class="lead-meta-service">${escapeHtml(lead.service || 'General')}</span>
                     </div>
                     <div class="lead-footer${hideStatusPill ? ' lead-footer--actions-only' : ''}">
                         ${statusBlock}
