@@ -2973,7 +2973,7 @@
                 <div class="status-value" id="statusTotalLeads" aria-live="polite">—</div>
                 <p class="status-hint" id="statusHintLeads">Loading...</p>
                 </div>
-            <div class="status-card" id="statusBarCallsCard" title="Unique phone numbers dialed and how they split (reached, no pickup, unclear)" role="article" aria-label="Dial coverage and outcomes">
+            <div class="status-card" id="statusBarCallsCard" title="Unique phone numbers dialed and how they split (reached, no pickup, no clear outcome)" role="article" aria-label="Dial coverage and outcomes">
                 <h4 id="statusCardCalls">Calls We've Made</h4>
                 <div class="status-value" id="statusTotalCalls" aria-live="polite">—</div>
                 <p class="status-hint" id="statusHintCalls">Loading...</p>
@@ -4073,8 +4073,8 @@ ${actionsRow}
             const conversionFunnelSubtitle = document.getElementById('conversionFunnelSubtitle');
             if (conversionFunnelSubtitle) {
                 conversionFunnelSubtitle.textContent = isTomOutreachDashboard(currentClient)
-                    ? `Engagement snapshot for ${businessName} — each dialed number is exactly one of: reached, no pickup, or unclear (see Calls tile for the sum).`
-                    : `Independent counts for ${businessName} — not a strict funnel. Reached / no pickup / unclear partition unique numbers dialed (Calls tile shows the math).`;
+                    ? `Engagement snapshot for ${businessName} — each dialed number is exactly one of: reached, no pickup, or no clear outcome yet (see Calls tile).`
+                    : `Independent counts for ${businessName} — not a strict funnel. Reached / no pickup / no clear outcome partition unique numbers dialed (Calls tile shows the math).`;
             }
             
             const weeklyActivitySubtitle = document.getElementById('weeklyActivitySubtitle');
@@ -4221,7 +4221,7 @@ ${actionsRow}
             const sumLeads = callsAnswered + callsNotAnswered + pendingLeadsOnly;
             const sumsOk = uniqDial > 0 && sumLeads === uniqDial;
             const partitionLine = uniqDial > 0
-                ? `${formatNumber(callsAnswered)} reached + ${formatNumber(callsNotAnswered)} no pickup + ${formatNumber(pendingLeadsOnly)} unclear = ${formatNumber(uniqDial)} unique`
+                ? `${formatNumber(callsAnswered)} reached + ${formatNumber(callsNotAnswered)} no pickup + ${formatNumber(pendingLeadsOnly)} no clear outcome = ${formatNumber(uniqDial)} unique`
                 : '';
             const tooltipParts = [];
             if (partitionLine) {
@@ -4242,6 +4242,11 @@ ${actionsRow}
                 hintLines.push('No outbound dials yet');
             }
             if (partitionLine) hintLines.push(partitionLine);
+            if (pendingLeadsOnly > 0) {
+                hintLines.push(
+                    '“No clear outcome” = we dialed that number, but every row is ambiguous: not enough in status, duration, transcript, or outcome to call it a connect or a miss.'
+                );
+            }
             if (ansAttempts != null && noAttempts != null) {
                 hintLines.push(
                     `${formatNumber(ansAttempts)} rows with conv. signal · ${formatNumber(noAttempts)} miss rows (retries count)`
@@ -4267,7 +4272,7 @@ ${actionsRow}
             }
             if (noPickupHintEl) {
                 noPickupHintEl.textContent = callsNotAnswered > 0
-                    ? '≥1 classified miss, never a hit\n(unclear-only numbers count under Calls tile)'
+                    ? '≥1 classified miss, never a hit\n(numbers with only “no clear outcome” dials stay in the Calls tile sum, not here)'
                     : 'No numbers in this bucket yet';
             }
 
@@ -4350,7 +4355,7 @@ ${actionsRow}
 
             const foot = tom
                 ? `<strong>How to read this:</strong> “Outbound dials” counts every attempt (retries add up). “Unique numbers” is distinct phones we tried in that window. “Unique leads dialed (all time)” is how many contacts have been called at least once.`
-                : `<strong>How to read this:</strong> 24-hour figures use a rolling window. All-time dials include retries. Reached + awaiting classification + no-pickup-only partition unique numbers dialed (status bar). Response time is mean minutes from lead created to first outbound dial (recent leads sample).`;
+                : `<strong>How to read this:</strong> 24-hour figures use a rolling window. All-time dials include retries. Reached + no clear outcome + no-pickup-only partition unique numbers dialed (status bar). Response time is mean minutes from lead created to first outbound dial (recent leads sample).`;
 
             container.innerHTML = `
                 <div class="activity-split-heading">Last 24 hours</div>
@@ -4397,9 +4402,9 @@ ${actionsRow}
                         <div class="activity-metric-hint">Reached ÷ unique leads dialed (all time).</div>
                     </div>
                     <div class="activity-metric">
-                        <div class="activity-metric-label">Awaiting classification</div>
+                        <div class="activity-metric-label">No clear outcome</div>
                         <div class="activity-metric-value">${formatNumber(pendingClassify)}</div>
-                        <div class="activity-metric-hint">Numbers called but pickup unclear (e.g. status still open).</div>
+                        <div class="activity-metric-hint">Dialed, but no row yet reads as a clear connect or miss.</div>
                     </div>
                 </div>
                 <div class="activity-rhythm-block activity-rhythm-block--solo">
