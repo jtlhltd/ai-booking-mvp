@@ -5118,12 +5118,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const attempts = m.totalCallAttempts || data.totalCalls || 48;
                 const answeredAtt = Math.min(attempts, Math.max(12, Math.floor(attempts * 0.42)));
                 const noPick = Math.min(attempts, Math.max(5, Math.floor(attempts * 0.38)));
-                const long60 = Math.min(attempts, Math.max(2, Math.floor(attempts * 0.12)));
                 const uniqueLeads = Math.min(attempts, Math.max(8, Math.floor(attempts * 0.35)));
                 const avgSec = attempts > 0 ? 42 : 0;
                 const reach = attempts > 0 ? Math.round((answeredAtt / attempts) * 100) : 0;
                 const noPickRate = attempts > 0 ? Math.round((noPick / attempts) * 100) : 0;
-                const longRate = attempts > 0 ? Math.round((long60 / attempts) * 100) : 0;
                 const medianSec = attempts > 0 ? 31 : 0;
                 const perLead = uniqueLeads > 0 ? Math.round((attempts / uniqueLeads) * 10) / 10 : null;
                 const bestHour = '14:00–16:00';
@@ -5140,9 +5138,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         <div class="quality-badge">miss-style rows ÷ attempts (7d)</div>
                     </div>
                     <div class="quality-metric">
-                        <div class="quality-label">Talks ≥ 60s</div>
-                        <div class="quality-value">${formatNumber(long60)}</div>
-                        <div class="quality-badge">${longRate}% of attempts · deeper engagement</div>
+                        <div class="quality-label">Conversation rows</div>
+                        <div class="quality-value">${formatNumber(answeredAtt)}</div>
+                        <div class="quality-badge">${reach}% of attempts · same rules as Reach rate</div>
                     </div>
                     <div class="quality-metric">
                         <div class="quality-label">Avg duration</div>
@@ -5186,8 +5184,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     const total = payload.totalCalls || 0;
                     const reach = payload.reachRate ?? 0;
                     const noPickRate = payload.noPickupRate ?? 0;
-                    const long60 = payload.longTalks60 ?? 0;
-                    const longRate = payload.longTalkRate ?? 0;
+                    const convRows = payload.answeredAttempts7d ?? 0;
                     const uniq = payload.uniqueLeadsDialed7d ?? 0;
                     const medianSec = payload.medianDurationSeconds ?? 0;
                     const perLead = payload.attemptsPerLead;
@@ -5208,9 +5205,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             <div class="quality-badge">miss-style rows ÷ attempts (7d)</div>
                         </div>
                         <div class="quality-metric">
-                            <div class="quality-label">Talks ≥ 60s</div>
-                            <div class="quality-value">${formatNumber(long60)}</div>
-                            <div class="quality-badge">${longRate}% of attempts · longer conversations</div>
+                            <div class="quality-label">Conversation rows</div>
+                            <div class="quality-value">${formatNumber(convRows)}</div>
+                            <div class="quality-badge">${reach}% of attempts · same rules as Reach rate</div>
                         </div>
                         <div class="quality-metric">
                             <div class="quality-label">Avg duration</div>
