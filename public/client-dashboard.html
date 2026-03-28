@@ -2099,6 +2099,87 @@
             margin-top: 2px;
         }
 
+        .retry-due-chip .retry-due-relative {
+            display: block;
+            font-weight: 600;
+            font-size: 0.72rem;
+            color: #9a3412;
+            opacity: 0.92;
+            margin-top: 4px;
+            letter-spacing: 0.01em;
+        }
+
+        .retry-due-chip--late {
+            background: rgba(198, 40, 40, 0.1);
+            border-color: rgba(185, 28, 28, 0.45);
+            color: #991b1b;
+        }
+
+        .retry-due-chip--late span {
+            color: #b91c1c;
+        }
+
+        .retry-due-chip--late .retry-due-relative {
+            color: #b91c1c;
+        }
+
+        .retry-queue-bar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 8px 14px;
+            padding: 10px 12px;
+            margin-bottom: 12px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, rgba(92,106,196,0.08), rgba(58,74,159,0.05));
+            border: 1px solid rgba(92,106,196,0.14);
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+        }
+
+        .retry-queue-bar strong {
+            color: var(--primary);
+            font-size: 1rem;
+        }
+
+        .retry-queue-bar-hint {
+            font-size: 0.75rem;
+            opacity: 0.9;
+        }
+
+        .retry-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px 8px;
+            margin-top: 2px;
+        }
+
+        .retry-badge {
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            padding: 4px 8px;
+            border-radius: 6px;
+            background: rgba(92, 106, 196, 0.1);
+            color: #4338ca;
+            border: 1px solid rgba(92, 106, 196, 0.2);
+        }
+
+        .retry-badge--queue {
+            background: rgba(245, 166, 35, 0.12);
+            color: #9a3412;
+            border-color: rgba(217, 119, 6, 0.28);
+        }
+
+        .retry-badge--kind {
+            text-transform: none;
+            letter-spacing: 0.02em;
+            font-weight: 600;
+            font-size: 0.72rem;
+        }
+
         .retry-item-actions {
             display: flex;
             flex-wrap: wrap;
@@ -2848,6 +2929,39 @@
             color: #fde68a;
         }
 
+        body[data-theme="dark"] .retry-due-chip--late {
+            background: rgba(248, 113, 113, 0.12);
+            border-color: rgba(248, 113, 113, 0.4);
+            color: #fecaca;
+        }
+
+        body[data-theme="dark"] .retry-due-chip--late span,
+        body[data-theme="dark"] .retry-due-chip--late .retry-due-relative {
+            color: #fecaca;
+        }
+
+        body[data-theme="dark"] .retry-queue-bar {
+            background: linear-gradient(135deg, rgba(124,134,220,0.12), rgba(58,74,159,0.08));
+            border-color: rgba(124,134,220,0.25);
+            color: #b4bbd4;
+        }
+
+        body[data-theme="dark"] .retry-queue-bar strong {
+            color: #a8b4ff;
+        }
+
+        body[data-theme="dark"] .retry-badge {
+            background: rgba(124, 134, 220, 0.14);
+            color: #c7d2fe;
+            border-color: rgba(124, 134, 220, 0.3);
+        }
+
+        body[data-theme="dark"] .retry-badge--queue {
+            background: rgba(245, 166, 35, 0.12);
+            color: #fcd34d;
+            border-color: rgba(251, 191, 36, 0.35);
+        }
+
         body[data-theme="dark"] .retry-action-btn {
             background: rgba(37, 43, 61, 0.9);
             border-color: rgba(124, 134, 220, 0.45);
@@ -3459,33 +3573,96 @@
             return false;
         }
 
+        function formatRetryPhoneTail(phone) {
+            const d = retryNormalizeDigits(phone);
+            if (d.length < 4) return '';
+            return `···${d.slice(-4)}`;
+        }
+
+        function isRetryScheduledOverdue(iso) {
+            if (!iso) return false;
+            const t = new Date(iso).getTime();
+            return Number.isFinite(t) && t < Date.now() - 90 * 1000;
+        }
+
+        /** Relative time until/since scheduled_for (server / browser local clock). */
+        function formatRetryRelative(iso) {
+            if (!iso) return '';
+            const t = new Date(iso).getTime();
+            if (!Number.isFinite(t)) return '';
+            const diffMs = t - Date.now();
+            const absMin = Math.round(Math.abs(diffMs) / 60000);
+            if (diffMs < -120000) {
+                if (absMin < 60) return `${absMin} min late`;
+                const h = Math.floor(absMin / 60);
+                const m = absMin % 60;
+                return m > 0 ? `${h}h ${m}m late` : `${h}h late`;
+            }
+            if (diffMs <= 120000) return 'Due now';
+            if (absMin < 60) return `in ${absMin} min`;
+            const h = Math.floor(absMin / 60);
+            const m = absMin % 60;
+            if (h < 36) return m > 0 ? `in ${h}h ${m}m` : `in ${h}h`;
+            const d = Math.floor(absMin / (60 * 24));
+            return `in ${d} day${d === 1 ? '' : 's'}`;
+        }
+
         function renderRetryQueueRow(lead, options = {}) {
             const isDemo = !!options.isDemo;
             const src = lead.source || '';
             const isQueuedCall = src === 'call_queue';
             const displayName = lead.name || 'Prospect';
             const phone = (lead.phone && String(lead.phone).trim()) || '';
+            const scheduledIso = lead.scheduledFor || null;
+            const overdue = !isDemo && isRetryScheduledOverdue(scheduledIso);
+            const relative = !isDemo && scheduledIso ? formatRetryRelative(scheduledIso) : '';
+            const sourceLabel = lead.sourceLabel || (isQueuedCall ? 'Call queue' : 'Retry queue');
+            const kindLabel = lead.kindLabel || (isQueuedCall ? 'Outbound call' : 'Follow-up');
             const metaParts = [];
             if (isDemo) {
                 metaParts.push(`Attempt ${Number(lead.attempts) || 0}`);
             } else if (isQueuedCall) {
                 metaParts.push(lead.reason || 'Outbound call queued');
             } else {
-                metaParts.push(`Attempt ${Number(lead.attempts) || 0}/${Number(lead.maxAttempts) || 0}`);
+                metaParts.push(lead.reason || 'Scheduled follow-up');
             }
-            if (phone && !retryTitleIsSamePhone(displayName, phone)) {
+            const tail = formatRetryPhoneTail(phone);
+            if (tail && !retryTitleIsSamePhone(displayName, phone)) {
+                metaParts.push(tail);
+            } else if (phone && !retryTitleIsSamePhone(displayName, phone) && !tail) {
                 metaParts.push(phone);
             }
             const meta = metaParts.map((p) => escapeHtml(p)).join(' • ');
+            let attemptBadge = '';
+            if (isDemo) {
+                attemptBadge = `Attempt ${Number(lead.attempts) || 0}`;
+            } else if (isQueuedCall) {
+                attemptBadge = 'First slot';
+            } else {
+                const a = Number(lead.attempts) || 0;
+                const m = Number(lead.maxAttempts) || 0;
+                attemptBadge = m > 0 ? `Retry ${a} / ${m}` : `Retry ${a}`;
+            }
             const chipLabel = isDemo ? 'Due' : (isQueuedCall ? 'Due' : 'Retry');
             const chipValue = escapeHtml(lead.nextRetry || '—');
+            const chipExtra = relative ? `<span class="retry-due-relative">${escapeHtml(relative)}</span>` : '';
+            const chipClass = `retry-due-chip${overdue ? ' retry-due-chip--late' : ''}`;
+            const longWhen = !isDemo && lead.nextRetryLong ? String(lead.nextRetryLong) : (lead.nextRetry || '');
+            const cardTitleParts = [
+                longWhen,
+                lead.reason || '',
+                kindLabel,
+                sourceLabel,
+                phone ? `Copy: ${phone}` : ''
+            ].filter(Boolean);
+            const cardTitle = escapeHtml(cardTitleParts.join(' · '));
             const dataSrc = isDemo ? '' : ` data-retry-source="${escapeHtml(src)}"`;
             const journeyDisplay = escapeHtml(displayName);
             const journeyBtn = phone
-                ? `<button type="button" class="retry-action-btn" data-retry-journey="1" data-retry-phone="${escapeHtml(phone)}" data-retry-display="${journeyDisplay}">Journey</button>`
+                ? `<button type="button" class="retry-action-btn" data-retry-journey="1" data-retry-phone="${escapeHtml(phone)}" data-retry-display="${journeyDisplay}" aria-label="Open journey timeline for ${journeyDisplay}">Journey</button>`
                 : '';
             const copyBtn = phone
-                ? `<button type="button" class="retry-action-btn" data-retry-copy="${escapeHtml(phone)}">Copy #</button>`
+                ? `<button type="button" class="retry-action-btn" data-retry-copy="${escapeHtml(phone)}" aria-label="Copy phone number">Copy #</button>`
                 : '';
             const actionsRow = (journeyBtn || copyBtn)
                 ? `                                <div class="retry-item-actions">
@@ -3494,19 +3671,32 @@
                                 </div>`
                 : '';
             return `
-                        <div class="retry-item"${dataSrc}>
+                        <div class="retry-item"${dataSrc} title="${cardTitle}">
                             <div class="retry-item-accent" aria-hidden="true"></div>
                             <div class="retry-item-inner">
                                 <div class="retry-item-top">
                                     <div class="retry-item-text">
                                         <div class="retry-name">${escapeHtml(displayName)}</div>
                                         <div class="retry-meta">${meta}</div>
+                                        <div class="retry-badges">
+                                            <span class="retry-badge retry-badge--queue">${escapeHtml(sourceLabel)}</span>
+                                            <span class="retry-badge retry-badge--kind">${escapeHtml(kindLabel)}</span>
+                                            <span class="retry-badge">${escapeHtml(attemptBadge)}</span>
+                                        </div>
                                     </div>
-                                    <div class="retry-due-chip">${chipLabel}<span>${chipValue}</span></div>
+                                    <div class="${chipClass}">${chipLabel}<span>${chipValue}</span>${chipExtra}</div>
                                 </div>
 ${actionsRow}
                             </div>
                         </div>`;
+        }
+
+        function renderRetryQueueBar(count, isDemo) {
+            if (!count || count < 1) return '';
+            const hint = isDemo
+                ? 'Demo sample rows'
+                : 'Soonest first · next 7 days · your browser local time for “late / in …”';
+            return `<div class="retry-queue-bar" role="status"><span><strong>${formatNumber(count)}</strong> in queue</span><span class="retry-queue-bar-hint">${escapeHtml(hint)}</span></div>`;
         }
 
         function isSafeHttpUrl(url) {
@@ -4216,7 +4406,9 @@ ${actionsRow}
             }
             
             const retryQueueSubtitle = document.getElementById('retryQueueSubtitle');
-            if (retryQueueSubtitle) retryQueueSubtitle.textContent = `Leads we're retrying for ${businessName} after initial contact.`;
+            if (retryQueueSubtitle) {
+                retryQueueSubtitle.textContent = `Scheduled retries and outbound slots for ${businessName} (next 7 days, soonest first). Hover a card for full date and number.`;
+            }
             
             const callRecordingsSubtitle = document.getElementById('callRecordingsSubtitle');
             if (callRecordingsSubtitle) callRecordingsSubtitle.textContent = `Listen to recent calls we made for ${businessName}.`;
@@ -5618,7 +5810,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     nextRetry: idx === 0 ? 'Today, 2pm' : idx === 1 ? 'Today, 4pm' : 'Tomorrow, 10am'
                 }));
 
-                container.innerHTML = retryLeads.map((lead) => renderRetryQueueRow(lead, { isDemo: true })).join('');
+                container.innerHTML = renderRetryQueueBar(retryLeads.length, true)
+                    + retryLeads.map((lead) => renderRetryQueueRow(lead, { isDemo: true })).join('');
                 return;
             }
 
@@ -5649,7 +5842,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     seenRetryKeys.add(key);
                     return true;
                 });
-                container.innerHTML = dedupedRetries.map((lead) => renderRetryQueueRow(lead)).join('');
+                container.innerHTML = renderRetryQueueBar(dedupedRetries.length, false)
+                    + dedupedRetries.map((lead) => renderRetryQueueRow(lead)).join('');
             } catch (error) {
                 console.error('Failed to load retry queue', error);
                 showError(container, 'Unable to load retry queue. Please refresh the page.', () => renderRetryQueue(data));

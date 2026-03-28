@@ -11077,14 +11077,45 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
       console.warn('[RETRY QUEUE API] call_queue optional read failed:', cqErr?.message || cqErr);
     }
 
+    const retryKindLabel = (source, retryType) => {
+      const isCallQueue = source === 'call_queue';
+      if (isCallQueue) return 'Outbound call';
+      const t = String(retryType || '').toLowerCase().trim();
+      if (t === 'vapi_call' || t === 'call') return 'Voice retry';
+      if (t === 'sms') return 'SMS follow-up';
+      if (t === 'email') return 'Email follow-up';
+      if (!t) return 'Follow-up';
+      return t.replace(/_/g, ' ');
+    };
+
     const mapRow = (row) => {
       const sched = row.scheduled_for ? new Date(row.scheduled_for) : null;
       const schedOk = sched && !Number.isNaN(sched.getTime());
       const isCallQueue = row.source === 'call_queue';
+      const nextRetryShort = schedOk
+        ? sched.toLocaleString('en-GB', {
+          weekday: 'short',
+          hour: 'numeric',
+          minute: '2-digit'
+        })
+        : 'Scheduled';
+      const nextRetryLong = schedOk
+        ? sched.toLocaleString('en-GB', {
+          weekday: 'short',
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit'
+        })
+        : '';
       return {
         id: isCallQueue ? `cq-${row.id}` : `rq-${row.id}`,
         dbId: row.id,
         source: row.source,
+        sourceLabel: isCallQueue ? 'Call queue' : 'Retry queue',
+        retryType: row.retry_type || null,
+        kindLabel: retryKindLabel(row.source, row.retry_type),
         name: row.name || 'Prospect',
         phone: row.lead_phone,
         attempts: isCallQueue ? 0 : row.retry_attempt,
@@ -11095,13 +11126,8 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
             ? 'Follow-up call scheduled'
             : (row.retry_reason || 'Scheduled follow-up')),
         scheduledFor: row.scheduled_for,
-        nextRetry: schedOk
-          ? sched.toLocaleString('en-GB', {
-            weekday: 'short',
-            hour: 'numeric',
-            minute: '2-digit'
-          })
-          : 'Scheduled'
+        nextRetry: nextRetryShort,
+        nextRetryLong
       };
     };
 
