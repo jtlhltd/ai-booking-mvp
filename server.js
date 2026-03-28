@@ -10651,7 +10651,7 @@ app.get('/api/export/:type', async (req, res) => {
 });
 
 // API endpoint for dashboard call quality metrics (7-day window; aligns with main dashboard “answered” heuristics)
-app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix: 'call-quality:v6:' }), async (req, res) => {
+app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix: 'call-quality:v7:' }), async (req, res) => {
   try {
     const { clientKey } = req.params;
 
@@ -10710,7 +10710,6 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
         COUNT(*) FILTER (WHERE outcome::text = 'booked')::int AS bookings_from_calls,
         COUNT(*) FILTER (WHERE is_answered)::int AS answered_attempts,
         COUNT(*) FILTER (WHERE is_no_pickup)::int AS no_pickup_attempts,
-        COUNT(*) FILTER (WHERE outcome IS NOT NULL AND BTRIM(COALESCE(outcome::text, '')) <> '')::int AS with_outcome,
         COUNT(*) FILTER (WHERE COALESCE(duration, 0) >= 60)::int AS long_talks_60
       FROM flags
     `, [clientKey]);
@@ -10731,7 +10730,6 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
             )
           )::int AS answered_attempts,
           COUNT(*) FILTER (WHERE outcome::text IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected'))::int AS no_pickup_attempts,
-          COUNT(*) FILTER (WHERE outcome IS NOT NULL AND BTRIM(COALESCE(outcome::text, '')) <> '')::int AS with_outcome,
           COUNT(*) FILTER (WHERE COALESCE(duration, 0) >= 60)::int AS long_talks_60
         FROM calls
         WHERE client_key = $1
@@ -10777,12 +10775,26 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
       console.warn('[CALL QUALITY] activeDialDays skipped:', adErr?.message || adErr);
     }
 
+    let medianDurationSeconds = 0;
+    try {
+      const medRows = await query(`
+        SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration::double precision) AS m
+        FROM calls
+        WHERE client_key = $1
+          AND created_at >= NOW() - INTERVAL '7 days'
+          AND COALESCE(duration, 0) > 0
+      `, [clientKey]);
+      const raw = medRows.rows?.[0]?.m;
+      medianDurationSeconds = raw != null && Number.isFinite(Number(raw)) ? Math.round(Number(raw)) : 0;
+    } catch (medErr) {
+      console.warn('[CALL QUALITY] median duration skipped:', medErr?.message || medErr);
+    }
+
     const bookingsFromCalls = parseInt(stats.bookings_from_calls || 0, 10);
     const totalCalls = parseInt(stats.total_calls || 0, 10);
     const uniqueLeads = parseInt(stats.unique_leads || 0, 10);
     const answeredAttempts = parseInt(stats.answered_attempts || 0, 10);
     const noPickupAttempts = parseInt(stats.no_pickup_attempts || 0, 10);
-    const withOutcome = parseInt(stats.with_outcome || 0, 10);
     const longTalks60 = parseInt(stats.long_talks_60 || 0, 10);
     const avgSec = parseFloat(stats.avg_duration_sec) || 0;
     const bookingNumerator = Math.max(bookingsFromCalls, appts7d);
@@ -10801,12 +10813,12 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
     const bookingRate = totalCalls > 0 ? Math.min(100, Math.round((bookingNumerator / totalCalls) * 100)) : 0;
     const noPickupRate = totalCalls > 0 ? Math.min(100, Math.round((noPickupAttempts / totalCalls) * 100)) : 0;
     const longTalkRate = totalCalls > 0 ? Math.min(100, Math.round((longTalks60 / totalCalls) * 100)) : 0;
-    const outcomesLoggedPct = totalCalls > 0 ? Math.min(100, Math.round((withOutcome / totalCalls) * 100)) : 0;
     const attemptsPerLead = uniqueLeads > 0 ? Math.round((totalCalls / uniqueLeads) * 10) / 10 : null;
 
     res.json({
       ok: true,
       avgDurationSeconds: Math.round(avgSec),
+      medianDurationSeconds,
       totalCalls,
       uniqueLeadsDialed7d: uniqueLeads,
       answeredAttempts7d: answeredAttempts,
@@ -10820,7 +10832,6 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
       appointments7d: appts7d,
       bookingRate,
       successRate: bookingRate,
-      outcomesLoggedPct,
       attemptsPerLead,
       bestTime,
       bestTimeDialCount

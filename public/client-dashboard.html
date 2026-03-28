@@ -5124,7 +5124,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const reach = attempts > 0 ? Math.round((answeredAtt / attempts) * 100) : 0;
                 const noPickRate = attempts > 0 ? Math.round((noPick / attempts) * 100) : 0;
                 const longRate = attempts > 0 ? Math.round((long60 / attempts) * 100) : 0;
-                const outCov = attempts > 0 ? 72 : 0;
+                const medianSec = attempts > 0 ? 31 : 0;
                 const perLead = uniqueLeads > 0 ? Math.round((attempts / uniqueLeads) * 10) / 10 : null;
                 const bestHour = '14:00–16:00';
                 const activeDays = 5;
@@ -5160,9 +5160,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         <div class="quality-badge">${perLead != null ? `~${perLead} attempts / lead` : 'distinct numbers'}</div>
                     </div>
                     <div class="quality-metric">
-                        <div class="quality-label">Outcome logged</div>
-                        <div class="quality-value">${outCov}%</div>
-                        <div class="quality-badge">call rows with outcome set</div>
+                        <div class="quality-label">Median duration</div>
+                        <div class="quality-value">${formatAvgCallSeconds(medianSec)}</div>
+                        <div class="quality-badge">typical length when duration &gt; 0</div>
                     </div>
                     <div class="quality-metric">
                         <div class="quality-label">Active dial days</div>
@@ -5189,7 +5189,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     const long60 = payload.longTalks60 ?? 0;
                     const longRate = payload.longTalkRate ?? 0;
                     const uniq = payload.uniqueLeadsDialed7d ?? 0;
-                    const outPct = payload.outcomesLoggedPct ?? 0;
+                    const medianSec = payload.medianDurationSeconds ?? 0;
                     const perLead = payload.attemptsPerLead;
                     const peakN = payload.bestTimeDialCount || 0;
                     const activeDays = Math.min(7, Math.max(0, Number(payload.activeDialDays) || 0));
@@ -5228,9 +5228,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             <div class="quality-badge">${perLead != null ? `~${perLead} attempts / lead` : 'distinct numbers'}</div>
                         </div>
                         <div class="quality-metric">
-                            <div class="quality-label">Outcome logged</div>
-                            <div class="quality-value">${outPct}%</div>
-                            <div class="quality-badge">call rows with outcome set</div>
+                            <div class="quality-label">Median duration</div>
+                            <div class="quality-value">${formatAvgCallSeconds(medianSec)}</div>
+                            <div class="quality-badge">typical length when duration &gt; 0 (less skewed than avg)</div>
                         </div>
                         <div class="quality-metric">
                             <div class="quality-label">Active dial days</div>
