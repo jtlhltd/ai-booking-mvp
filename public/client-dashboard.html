@@ -769,6 +769,15 @@
             display: flex;
         }
 
+        /* Stack nested modals: Journey (timeline) above lead detail; transcript above Journey so “View transcript” is readable */
+        #timelineModal.modal-backdrop {
+            z-index: 1100;
+        }
+
+        #transcriptModal.modal-backdrop {
+            z-index: 1200;
+        }
+
         .lead-modal {
             background: var(--surface);
             border-radius: 20px;
