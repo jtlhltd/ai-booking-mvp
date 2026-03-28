@@ -10651,7 +10651,7 @@ app.get('/api/export/:type', async (req, res) => {
 });
 
 // API endpoint for dashboard call quality metrics (7-day window; aligns with main dashboard “answered” heuristics)
-app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix: 'call-quality:v8:' }), async (req, res) => {
+app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix: 'call-quality:v9:' }), async (req, res) => {
   try {
     const { clientKey } = req.params;
 
@@ -10788,6 +10788,101 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
       console.warn('[CALL QUALITY] median duration skipped:', medErr?.message || medErr);
     }
 
+    let avgCallsToFirstPickup = null;
+    let leadsWithFirstPickup7d = 0;
+    try {
+      const atpRows = await query(`
+        WITH windowed AS (
+          SELECT * FROM calls
+          WHERE client_key = $1
+            AND created_at >= NOW() - INTERVAL '7 days'
+        ),
+        flags AS (
+          SELECT
+            lead_phone,
+            ROW_NUMBER() OVER (PARTITION BY lead_phone ORDER BY created_at ASC) AS rn,
+            (
+              (outcome IS NOT NULL AND outcome::text NOT IN (
+                'no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected'
+              ))
+              OR (
+                outcome IS NULL AND (
+                  (COALESCE(duration, 0) >= 20 AND LOWER(TRIM(COALESCE(status::text, ''))) IN ('ended', 'completed', 'finished'))
+                  OR (
+                    COALESCE(duration, 0) >= 40
+                    AND LOWER(TRIM(COALESCE(status::text, ''))) NOT IN (
+                      'failed', 'busy', 'no-answer', 'canceled', 'cancelled',
+                      'declined', 'rejected', 'voicemail'
+                    )
+                  )
+                  OR (COALESCE(transcript::text, '') <> '' AND LENGTH(TRIM(COALESCE(transcript::text, ''))) > 40)
+                  OR (COALESCE(recording_url::text, '') <> '')
+                )
+              )
+            ) AS is_pickup
+          FROM windowed
+        ),
+        first_pick AS (
+          SELECT lead_phone, MIN(rn) AS attempts_to_first_pickup
+          FROM flags
+          WHERE is_pickup
+          GROUP BY lead_phone
+        )
+        SELECT
+          COUNT(*)::int AS lead_count,
+          AVG(attempts_to_first_pickup::numeric) AS avg_attempts
+        FROM first_pick
+      `, [clientKey]);
+      const ar = atpRows.rows?.[0];
+      leadsWithFirstPickup7d = parseInt(ar?.lead_count || 0, 10);
+      const rawAvg = ar?.avg_attempts;
+      if (leadsWithFirstPickup7d > 0 && rawAvg != null && Number.isFinite(Number(rawAvg))) {
+        avgCallsToFirstPickup = Math.round(Number(rawAvg) * 10) / 10;
+      }
+    } catch (atpErr) {
+      console.warn('[CALL QUALITY] avg calls to pickup skipped:', atpErr?.message || atpErr);
+      try {
+        const simpleAtp = await query(`
+          WITH windowed AS (
+            SELECT * FROM calls
+            WHERE client_key = $1
+              AND created_at >= NOW() - INTERVAL '7 days'
+          ),
+          flags AS (
+            SELECT
+              lead_phone,
+              ROW_NUMBER() OVER (PARTITION BY lead_phone ORDER BY created_at ASC) AS rn,
+              (
+                COALESCE(duration, 0) >= 20
+                OR (
+                  outcome IS NOT NULL
+                  AND outcome::text NOT IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected')
+                )
+              ) AS is_pickup
+            FROM windowed
+          ),
+          first_pick AS (
+            SELECT lead_phone, MIN(rn) AS attempts_to_first_pickup
+            FROM flags
+            WHERE is_pickup
+            GROUP BY lead_phone
+          )
+          SELECT
+            COUNT(*)::int AS lead_count,
+            AVG(attempts_to_first_pickup::numeric) AS avg_attempts
+          FROM first_pick
+        `, [clientKey]);
+        const ar = simpleAtp.rows?.[0];
+        leadsWithFirstPickup7d = parseInt(ar?.lead_count || 0, 10);
+        const rawAvg = ar?.avg_attempts;
+        if (leadsWithFirstPickup7d > 0 && rawAvg != null && Number.isFinite(Number(rawAvg))) {
+          avgCallsToFirstPickup = Math.round(Number(rawAvg) * 10) / 10;
+        }
+      } catch (e2) {
+        console.warn('[CALL QUALITY] avg calls to pickup fallback failed:', e2?.message || e2);
+      }
+    }
+
     const bookingsFromCalls = parseInt(stats.bookings_from_calls || 0, 10);
     const totalCalls = parseInt(stats.total_calls || 0, 10);
     const uniqueLeads = parseInt(stats.unique_leads || 0, 10);
@@ -10807,8 +10902,8 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
     }
 
     const reachRate = totalCalls > 0 ? Math.min(100, Math.round((answeredAttempts / totalCalls) * 100)) : 0;
+    const pickupRate = reachRate;
     const bookingRate = totalCalls > 0 ? Math.min(100, Math.round((bookingNumerator / totalCalls) * 100)) : 0;
-    const noPickupRate = totalCalls > 0 ? Math.min(100, Math.round((noPickupAttempts / totalCalls) * 100)) : 0;
     const attemptsPerLead = uniqueLeads > 0 ? Math.round((totalCalls / uniqueLeads) * 10) / 10 : null;
 
     res.json({
@@ -10819,9 +10914,11 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
       uniqueLeadsDialed7d: uniqueLeads,
       answeredAttempts7d: answeredAttempts,
       noPickupAttempts7d: noPickupAttempts,
-      noPickupRate,
       activeDialDays,
+      pickupRate,
       reachRate,
+      avgCallsToFirstPickup,
+      leadsWithFirstPickup7d,
       bookingsFromCalls,
       appointments7d: appts7d,
       bookingRate,

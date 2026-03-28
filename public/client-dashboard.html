@@ -4054,7 +4054,7 @@ ${actionsRow}
             const callQualitySubtitle = document.getElementById('callQualitySubtitle');
             if (callQualitySubtitle) {
                 callQualitySubtitle.textContent = isTomOutreachDashboard(currentClient)
-                    ? `Last 7 days of outbound dials for ${businessName}: reach, talk time, and dial patterns (server time).`
+                    ? `Last 7 days of outbound dials for ${businessName}: pick-up rate, persistence, talk time, and dial patterns (server time).`
                     : `How effective our calls are for ${businessName} (7-day window).`;
             }
             
@@ -4278,7 +4278,7 @@ ${actionsRow}
             const convHint = document.getElementById('statusHintConversion');
             if (convHint) {
                 convHint.textContent = isTomOutreachDashboard(currentClient)
-                    ? `Booking/appt rate: ${winRate} — booked outcome or new appt vs unique leads dialed (see Call Quality for reach)`
+                    ? `Booking/appt rate: ${winRate} — booked outcome or new appt vs unique leads dialed (see Call Quality for pick-up stats)`
                     : `Win rate: ${winRate}`;
             }
             const respN = data.metrics?.firstResponseSampleSize;
@@ -5117,30 +5117,30 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const m = data.metrics || {};
                 const attempts = m.totalCallAttempts || data.totalCalls || 48;
                 const answeredAtt = Math.min(attempts, Math.max(12, Math.floor(attempts * 0.42)));
-                const noPick = Math.min(attempts, Math.max(5, Math.floor(attempts * 0.38)));
                 const uniqueLeads = Math.min(attempts, Math.max(8, Math.floor(attempts * 0.35)));
                 const avgSec = attempts > 0 ? 42 : 0;
                 const reach = attempts > 0 ? Math.round((answeredAtt / attempts) * 100) : 0;
-                const noPickRate = attempts > 0 ? Math.round((noPick / attempts) * 100) : 0;
+                const avgToPickup = 2.3;
+                const leadsPickupDemo = 18;
                 const medianSec = attempts > 0 ? 31 : 0;
                 const perLead = uniqueLeads > 0 ? Math.round((attempts / uniqueLeads) * 10) / 10 : null;
                 const bestHour = '14:00–16:00';
                 const activeDays = 5;
                 container.innerHTML = `
                     <div class="quality-metric">
-                        <div class="quality-label">Reach rate</div>
+                        <div class="quality-label">Pick up rate</div>
                         <div class="quality-value">${reach}%</div>
-                        <div class="quality-badge">conversation signal ÷ attempts (7d)</div>
+                        <div class="quality-badge">conversation signal ÷ dial attempts (7d)</div>
                     </div>
                     <div class="quality-metric">
-                        <div class="quality-label">No-pickup rate</div>
-                        <div class="quality-value">${noPickRate}%</div>
-                        <div class="quality-badge">miss-style rows ÷ attempts (7d)</div>
+                        <div class="quality-label">Avg calls to pick up</div>
+                        <div class="quality-value">${avgToPickup.toFixed(1)}</div>
+                        <div class="quality-badge">mean dials until first pickup · ${formatNumber(leadsPickupDemo)} leads (demo)</div>
                     </div>
                     <div class="quality-metric">
                         <div class="quality-label">Conversation rows</div>
                         <div class="quality-value">${formatNumber(answeredAtt)}</div>
-                        <div class="quality-badge">${reach}% of attempts · same rules as Reach rate</div>
+                        <div class="quality-badge">${reach}% of attempts · same signal as Pick up rate</div>
                     </div>
                     <div class="quality-metric">
                         <div class="quality-label">Avg duration</div>
@@ -5182,9 +5182,16 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 if (response.ok && payload?.ok) {
                     const sec = payload.avgDurationSeconds ?? payload.avgDuration;
                     const total = payload.totalCalls || 0;
-                    const reach = payload.reachRate ?? 0;
-                    const noPickRate = payload.noPickupRate ?? 0;
+                    const pickup = payload.pickupRate ?? payload.reachRate ?? 0;
                     const convRows = payload.answeredAttempts7d ?? 0;
+                    const avgToPickup = payload.avgCallsToFirstPickup;
+                    const leadsPickup = payload.leadsWithFirstPickup7d ?? 0;
+                    const avgPickupDisplay = avgToPickup != null && Number.isFinite(Number(avgToPickup))
+                        ? Number(avgToPickup).toFixed(1)
+                        : '—';
+                    const avgPickupBadge = (avgToPickup != null && leadsPickup > 0)
+                        ? `mean dials until first pickup · ${formatNumber(leadsPickup)} leads in 7d`
+                        : 'no first pickup in window yet';
                     const uniq = payload.uniqueLeadsDialed7d ?? 0;
                     const medianSec = payload.medianDurationSeconds ?? 0;
                     const perLead = payload.attemptsPerLead;
@@ -5195,19 +5202,19 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         : 'by hour of day';
                     container.innerHTML = `
                         <div class="quality-metric">
-                            <div class="quality-label">Reach rate</div>
-                            <div class="quality-value">${reach}%</div>
-                            <div class="quality-badge">conversation signal ÷ attempts (7d)</div>
+                            <div class="quality-label">Pick up rate</div>
+                            <div class="quality-value">${pickup}%</div>
+                            <div class="quality-badge">conversation signal ÷ dial attempts (7d)</div>
                         </div>
                         <div class="quality-metric">
-                            <div class="quality-label">No-pickup rate</div>
-                            <div class="quality-value">${noPickRate}%</div>
-                            <div class="quality-badge">miss-style rows ÷ attempts (7d)</div>
+                            <div class="quality-label">Avg calls to pick up</div>
+                            <div class="quality-value">${avgPickupDisplay}</div>
+                            <div class="quality-badge">${avgPickupBadge}</div>
                         </div>
                         <div class="quality-metric">
                             <div class="quality-label">Conversation rows</div>
                             <div class="quality-value">${formatNumber(convRows)}</div>
-                            <div class="quality-badge">${reach}% of attempts · same rules as Reach rate</div>
+                            <div class="quality-badge">${pickup}% of attempts · same signal as Pick up rate</div>
                         </div>
                         <div class="quality-metric">
                             <div class="quality-label">Avg duration</div>
