@@ -10046,11 +10046,14 @@ app.get('/api/calls/:callId/transcript', async (req, res) => {
 
 app.get('/api/leads/:leadId/timeline', async (req, res) => {
   try {
-    const { leadId } = req.params;
+    const leadIdRaw = decodeURIComponent(req.params.leadId || '').trim();
     const { clientKey } = req.query;
     
     if (!clientKey) {
       return res.status(400).json({ ok: false, error: 'clientKey required' });
+    }
+    if (!leadIdRaw) {
+      return res.status(400).json({ ok: false, error: 'leadId required' });
     }
 
     function phoneVariantsForMatch(phone) {
@@ -10062,13 +10065,14 @@ app.get('/api/leads/:leadId/timeline', async (req, res) => {
       return [...new Set([raw, e164, digitsRaw, digitsE164].filter(v => v && String(v).length > 0))];
     }
     
+    // id is numeric in DB; route param is text — CAST avoids Postgres "operator does not exist: text = bigint"
     const leadResult = await query(`
       SELECT id, name, phone, created_at, source, client_key
       FROM leads
-      WHERE (id = $1 OR phone = $1) AND client_key = $2
+      WHERE (CAST(id AS TEXT) = $1 OR phone = $1) AND client_key = $2
       ORDER BY created_at DESC
       LIMIT 1
-    `, [leadId, clientKey]);
+    `, [leadIdRaw, clientKey]);
     
     if (!leadResult.rows || !leadResult.rows.length) {
       return res.status(404).json({ ok: false, error: 'Lead not found or access denied' });
