@@ -4130,7 +4130,7 @@ ${actionsRow}
             const weeklyActivitySubtitle = document.getElementById('weeklyActivitySubtitle');
             if (weeklyActivitySubtitle) {
                 weeklyActivitySubtitle.textContent = isTomOutreachDashboard(currentClient)
-                    ? `Daily outbound attempts (last 7 days) for ${businessName}. Point at a bar for mix, durations, reach, voicemail, and week share. Retries can exceed unique leads dialed.`
+                    ? `Daily outbound attempts (last 7 days) for ${businessName}. Point at a bar for durations, reach, voicemail, and week share. Retries can exceed unique leads dialed.`
                     : `Daily call attempts (last 7 days) for ${businessName}. Point at a bar for detailed per-day stats. Retries inflate totals vs unique leads dialed.`;
             }
             
@@ -4667,15 +4667,11 @@ ${actionsRow}
                 return {
                     attempts: v,
                     uniquePhones: u,
-                    signalRows: v > 0 ? Math.max(1, Math.round(v * 0.42)) : 0,
-                    missRows: v > 0 ? Math.max(1, Math.round(v * 0.48)) : 0,
-                    pendingRows: 0,
                     bookedRows: 0,
                     voicemailRows: v > 0 ? Math.max(0, Math.round(v * 0.08)) : 0,
                     avgDurationSec: v > 0 ? 38 : 0,
                     maxDurationSec: v > 0 ? 120 : 0,
-                    uniqueReached: v > 0 && u > 0 ? Math.max(1, Math.round(u * 0.36)) : 0,
-                    uniqueMissLeads: v > 0 && u > 0 ? Math.max(1, Math.round(u * 0.55)) : 0
+                    uniqueReached: v > 0 && u > 0 ? Math.max(1, Math.round(u * 0.36)) : 0
                 };
             });
         }
@@ -4719,11 +4715,6 @@ ${actionsRow}
                     if (repeatDials > 0) {
                         lines.push(`${formatNumber(repeatDials)} repeat dial${repeatDials === 1 ? '' : 's'} (extra attempts to numbers already tried that day)`);
                     }
-                    lines.push('That day — row mix');
-                    lines.push(
-                        `${formatNumber(d.signalRows ?? 0)} conv.-signal rows · ${formatNumber(d.missRows ?? 0)} miss rows`
-                        + ((d.pendingRows ?? 0) > 0 ? ` · ${formatNumber(d.pendingRows)} ambiguous` : '')
-                    );
                     const av = formatWeeklyDuration(d.avgDurationSec);
                     if (av) {
                         lines.push(`Avg duration (rows with length): ${av}`);
@@ -4738,9 +4729,7 @@ ${actionsRow}
                     if ((d.voicemailRows ?? 0) > 0) {
                         lines.push(`${formatNumber(d.voicemailRows)} voicemail row${d.voicemailRows === 1 ? '' : 's'}`);
                     }
-                    lines.push(
-                        `${formatNumber(d.uniqueReached ?? 0)} numbers reached (≥1 signal) · ${formatNumber(d.uniqueMissLeads ?? 0)} with a miss row`
-                    );
+                    lines.push(`${formatNumber(d.uniqueReached ?? 0)} numbers reached (≥1 signal)`);
                 }
                 tooltipEl.innerHTML = lines.map((line, i) =>
                     `<span class="weekly-chart-tooltip-line${i > 0 ? ' weekly-chart-tooltip-line--muted' : ''}">${escapeHtml(line)}</span>`
@@ -4839,7 +4828,7 @@ ${actionsRow}
             const weeklySub = document.getElementById('weeklyActivitySubtitle');
             if (weeklySub) {
                 weeklySub.textContent = isTomOutreachDashboard(currentClient)
-                    ? 'Bar height = outbound attempts that day. Point at a bar for mix, durations, reach, voicemail, and share of the week.'
+                    ? 'Bar height = outbound attempts that day. Point at a bar for durations, reach, voicemail, and share of the week.'
                     : 'Bar height = call attempts that day. Point at a bar for detailed stats. Retries inflate totals vs unique leads dialed.';
             }
         }

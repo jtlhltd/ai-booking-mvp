@@ -8860,23 +8860,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
                   OR (COALESCE(recording_url, '') <> '')
                 )
               )
-            ) AS is_answered,
-            (
-              outcome IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected')
-              OR (
-                outcome IS NULL
-                AND (
-                  LOWER(TRIM(COALESCE(status, ''))) IN (
-                    'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
-                  )
-                  OR (
-                    LOWER(TRIM(COALESCE(status, ''))) IN ('ended', 'completed', 'finished')
-                    AND COALESCE(duration, 0) > 0
-                    AND COALESCE(duration, 0) < 12
-                  )
-                )
-              )
-            ) AS is_not_answered
+            ) AS is_answered
           FROM calls
           WHERE client_key = $1
             AND created_at >= ${sqlDaysAgo(6)}
@@ -8885,15 +8869,11 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
           bucket_day,
           COUNT(*)::int AS touchpoints,
           COUNT(DISTINCT lead_phone)::int AS unique_phones,
-          COUNT(*) FILTER (WHERE is_answered)::int AS answered_rows,
-          COUNT(*) FILTER (WHERE is_not_answered)::int AS not_answered_rows,
-          COUNT(*) FILTER (WHERE NOT is_answered AND NOT is_not_answered)::int AS pending_rows,
           COUNT(*) FILTER (WHERE outcome = 'booked')::int AS booked_rows,
           COUNT(*) FILTER (WHERE LOWER(TRIM(COALESCE(outcome::text, ''))) = 'voicemail')::int AS voicemail_rows,
           COALESCE(ROUND(AVG(CASE WHEN COALESCE(duration, 0) > 0 THEN duration::numeric END)), 0)::int AS avg_duration_sec,
           COALESCE(MAX(CASE WHEN COALESCE(duration, 0) > 0 THEN duration END), 0)::int AS max_duration_sec,
-          COUNT(DISTINCT CASE WHEN is_answered THEN lead_phone END)::int AS unique_reached,
-          COUNT(DISTINCT CASE WHEN is_not_answered THEN lead_phone END)::int AS unique_miss_leads
+          COUNT(DISTINCT CASE WHEN is_answered THEN lead_phone END)::int AS unique_reached
         FROM daily
         GROUP BY bucket_day
       `, [clientKey]),
@@ -9180,30 +9160,22 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         return [dayKey, {
           attempts: parseInt(row.touchpoints || 0, 10),
           uniquePhones: parseInt(row.unique_phones || 0, 10),
-          signalRows: parseInt(row.answered_rows || 0, 10),
-          missRows: parseInt(row.not_answered_rows || 0, 10),
-          pendingRows: parseInt(row.pending_rows || 0, 10),
           bookedRows: parseInt(row.booked_rows || 0, 10),
           voicemailRows: parseInt(row.voicemail_rows || 0, 10),
           avgDurationSec: Math.max(0, parseInt(row.avg_duration_sec || 0, 10)),
           maxDurationSec: Math.max(0, parseInt(row.max_duration_sec || 0, 10)),
-          uniqueReached: parseInt(row.unique_reached || 0, 10),
-          uniqueMissLeads: parseInt(row.unique_miss_leads || 0, 10)
+          uniqueReached: parseInt(row.unique_reached || 0, 10)
         }];
       })
     );
     const emptyDayBucket = () => ({
       attempts: 0,
       uniquePhones: 0,
-      signalRows: 0,
-      missRows: 0,
-      pendingRows: 0,
       bookedRows: 0,
       voicemailRows: 0,
       avgDurationSec: 0,
       maxDurationSec: 0,
-      uniqueReached: 0,
-      uniqueMissLeads: 0
+      uniqueReached: 0
     });
     const touchpointLabels = [];
     const touchpointData = [];
