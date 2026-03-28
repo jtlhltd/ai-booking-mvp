@@ -593,6 +593,11 @@
             color: var(--primary);
         }
 
+        /* D2D Xpress (Tom): hide booking-calendar KPIs and related chrome */
+        body.tom-outreach-dashboard .tom-hide-for-outreach {
+            display: none !important;
+        }
+
         .leads-list {
             display: flex;
             flex-direction: column;
@@ -2050,7 +2055,7 @@
                 <div class="status-value" id="statusCallsNotAnswered" aria-live="polite">—</div>
                 <p class="status-hint" id="statusHintNoPickup">Loading...</p>
             </div>
-            <div class="status-card" title="Conversion rate from our follow-up" role="article" aria-label="Our conversion rate">
+            <div class="status-card tom-hide-for-outreach" title="Conversion rate from our follow-up" role="article" aria-label="Our conversion rate">
                 <h4 id="statusCardConversion">Our Conversion Rate</h4>
                 <div class="status-value" id="statusConversionRate" aria-live="polite">—</div>
                 <p class="status-hint" id="statusHintConversion">Loading...</p>
@@ -2104,17 +2109,17 @@
             <h2 class="section-header">📊 Performance & Analytics</h2>
             <div class="dashboard-grid">
                 <article class="card card-chart">
-                    <h3>📊 Pipeline snapshot</h3>
+                    <h3 id="pipelineSnapshotHeading">📊 Pipeline snapshot</h3>
                     <p class="card-subtitle" id="conversionFunnelSubtitle">Each bar is a real count from your data. These are not sequential funnel stages—numbers do not need to decrease left to right.</p>
                     <div id="lead-journey" class="funnel"></div>
                 </article>
 
                 <article class="card card-chart">
                     <h3>📊 Weekly Activity</h3>
-                    <p class="card-subtitle" id="weeklyActivitySubtitle">Calls and bookings we made this week.</p>
+                    <p class="card-subtitle" id="weeklyActivitySubtitle">Outbound call attempts by day (last 7 days).</p>
                     <div id="performance-chart">
                         <div class="chart" id="chartBars"></div>
-                        <p class="chart-value" id="chartSummary">18 bookings we made this week</p>
+                        <p class="chart-value" id="chartSummary">Outbound attempts (last 7 days)</p>
                 </div>
                     <div class="export-buttons">
                         <button class="export-btn secondary" onclick="exportData('calls')">📥 Export</button>
@@ -2124,7 +2129,7 @@
 
                 <article class="card">
                     <h3>📊 Call Quality</h3>
-                    <p class="card-subtitle">How effective our calls are.</p>
+                    <p class="card-subtitle" id="callQualitySubtitle">How effective our calls are.</p>
                     <div id="call-quality" class="call-quality-grid"></div>
                 </article>
                 </div>
@@ -2202,7 +2207,7 @@
                     <div id="recent-activity" class="activity-grid"></div>
                 </article>
 
-                <article class="card card-list">
+                <article class="card card-list tom-hide-for-outreach">
                     <h3>📅 Upcoming Appointments</h3>
                     <p class="card-subtitle" id="appointmentsSubtitle">Appointments we booked for you.</p>
                     <div id="upcoming-appointments" class="appt-list"></div>
@@ -2225,7 +2230,7 @@
             <div class="dashboard-grid">
                 <article class="card">
                     <h3>🔌 Integrations</h3>
-                    <p class="card-subtitle">Everything connected to handle your bookings.</p>
+                    <p class="card-subtitle" id="integrationsCardSubtitle">Everything connected to handle your bookings.</p>
                     <div id="system-status" class="status-compact">
                         <div class="metric-row">
                             <span class="metric-label">Lead number</span>
@@ -2245,7 +2250,7 @@
                         </div>
                     </div>
                     <div id="integration-health" class="integration-list"></div>
-                    <div id="calendar-details" class="calendar-details"></div>
+                    <div id="calendar-details" class="calendar-details tom-hide-for-outreach"></div>
                 </article>
             </div>
         </section>
@@ -2333,8 +2338,17 @@
             const k = key.trim().toLowerCase();
             return k === DEMO_CLIENT_KEY || DEMO_URL_ALIASES.has(k);
         }
-        /** Tom's tenant: ROI / service-fee framing is not used on this dashboard */
+        /** Tom's tenant: ROI + booking-oriented KPIs and copy are not used */
         const TOM_DASH_CLIENT_KEY = 'd2d-xpress-tom';
+        const TOM_OUTREACH_WORKFLOW_STEPS = [
+            { icon: '📥', title: 'Leads received', desc: 'Contacts arrive from your lists, uploads, and integrations.' },
+            { icon: '📞', title: 'Outbound calls', desc: 'We dial according to your hours and priorities and log every attempt.' },
+            { icon: '📊', title: 'Outcomes tracked', desc: 'Reach, no pickup, and conversation signals stay visible here.' },
+            { icon: '🔄', title: 'Follow-ups scheduled', desc: 'Retries queue after voicemail, busy, or no-answer when configured.' }
+        ];
+        function isTomOutreachDashboard(clientKey) {
+            return clientKey === TOM_DASH_CLIENT_KEY;
+        }
         function shouldShowRoiPanel(clientKey) {
             return clientKey !== TOM_DASH_CLIENT_KEY;
         }
@@ -2344,6 +2358,11 @@
             const show = shouldShowRoiPanel(clientKey);
             el.style.display = show ? '' : 'none';
             el.setAttribute('aria-hidden', show ? 'false' : 'true');
+        }
+        function applyTomOutreachDashboardMode(clientKey) {
+            const on = isTomOutreachDashboard(clientKey);
+            document.body.classList.toggle('tom-outreach-dashboard', on);
+            if (on) document.title = 'Client Dashboard — D2D Xpress Outreach';
         }
         const BASE_URL = window.location.origin;
         const THEME_KEY = 'dashboard_theme';
@@ -2839,7 +2858,10 @@
                 }
             }
             if (clientDescEl) {
-                if (hasClientConfig && config.description) {
+                if (isTomOutreachDashboard(config.key)) {
+                    clientDescEl.textContent = `Live outreach for ${businessName} — calls, outcomes, and follow-ups.`;
+                    clientDescEl.dataset.fromConfig = 'tom-outreach';
+                } else if (hasClientConfig && config.description) {
                     clientDescEl.textContent = config.description;
                     clientDescEl.dataset.fromConfig = 'true'; // Mark as set from config
                 } else {
@@ -2847,7 +2869,9 @@
                 }
             }
             if (clientTaglineEl) {
-                if (hasClientConfig && config.tagline) {
+                if (isTomOutreachDashboard(config.key)) {
+                    clientTaglineEl.textContent = `Outbound dialling and engagement metrics for ${businessName}.`;
+                } else if (hasClientConfig && config.tagline) {
                     clientTaglineEl.textContent = config.tagline;
                 } else {
                     clientTaglineEl.textContent = messaging.tagline;
@@ -2876,7 +2900,9 @@
             }
             
             // Store messaging for workflow rendering
-            config.customWorkflow = messaging.workflow;
+            config.customWorkflow = isTomOutreachDashboard(config.key)
+                ? TOM_OUTREACH_WORKFLOW_STEPS
+                : messaging.workflow;
             
             // Personalize all dashboard text with business name
             personalizeDashboard(businessName);
@@ -2988,7 +3014,9 @@
             if (statusCardCalls) statusCardCalls.textContent = `Calls We've Made for ${businessName}`;
             
             const statusCardConversion = document.getElementById('statusCardConversion');
-            if (statusCardConversion) statusCardConversion.textContent = `${businessName}'s Conversion Rate`;
+            if (statusCardConversion && !isTomOutreachDashboard(currentClient)) {
+                statusCardConversion.textContent = `${businessName}'s Conversion Rate`;
+            }
             
             const statusCardResponse = document.getElementById('statusCardResponse');
             if (statusCardResponse) statusCardResponse.textContent = `${businessName}: lead → first call`;
@@ -3006,13 +3034,19 @@
             
             // Update card subtitles
             const callQualitySubtitle = document.getElementById('callQualitySubtitle');
-            if (callQualitySubtitle) callQualitySubtitle.textContent = `How effective our calls are for ${businessName}.`;
+            if (callQualitySubtitle) {
+                callQualitySubtitle.textContent = isTomOutreachDashboard(currentClient)
+                    ? `Call length, reach, and engagement signals for ${businessName} — not appointment counts.`
+                    : `How effective our calls are for ${businessName}.`;
+            }
             
             const recentLeadsSubtitle = document.getElementById('recentLeadsSubtitle');
             if (recentLeadsSubtitle) recentLeadsSubtitle.textContent = `Leads we're actively following up on for ${businessName}.`;
             
             const appointmentsSubtitle = document.getElementById('appointmentsSubtitle');
-            if (appointmentsSubtitle) appointmentsSubtitle.textContent = `Appointments we booked for ${businessName}.`;
+            if (appointmentsSubtitle && !isTomOutreachDashboard(currentClient)) {
+                appointmentsSubtitle.textContent = `Appointments we booked for ${businessName}.`;
+            }
             
             const activityFeedSubtitle = document.getElementById('activityFeedSubtitle');
             if (activityFeedSubtitle) activityFeedSubtitle.textContent = `Real-time conversations ${businessName}'s concierge is having with leads.`;
@@ -3020,12 +3054,16 @@
             // Update more card subtitles
             const conversionFunnelSubtitle = document.getElementById('conversionFunnelSubtitle');
             if (conversionFunnelSubtitle) {
-                conversionFunnelSubtitle.textContent = `Independent counts for ${businessName} — not a strict funnel. “Answered” = unique leads with a conversation signal.`;
+                conversionFunnelSubtitle.textContent = isTomOutreachDashboard(currentClient)
+                    ? `Engagement snapshot for ${businessName} — leads, dials, and answered conversations (independent counts, not funnel stages).`
+                    : `Independent counts for ${businessName} — not a strict funnel. “Answered” = unique leads with a conversation signal.`;
             }
             
             const weeklyActivitySubtitle = document.getElementById('weeklyActivitySubtitle');
             if (weeklyActivitySubtitle) {
-                weeklyActivitySubtitle.textContent = `Daily call attempts (last 7 days) for ${businessName}. Retries make totals higher than unique leads dialed.`;
+                weeklyActivitySubtitle.textContent = isTomOutreachDashboard(currentClient)
+                    ? `Daily outbound attempts (last 7 days) for ${businessName}. Retries can exceed unique leads dialed.`
+                    : `Daily call attempts (last 7 days) for ${businessName}. Retries make totals higher than unique leads dialed.`;
             }
             
             const todaysActivitySubtitle = document.getElementById('todaysActivitySubtitle');
@@ -3041,7 +3079,21 @@
             // (Don't overwrite the actual description from the API)
             const clientDescription = document.getElementById('clientDescription');
             if (clientDescription && !clientDescription.dataset.fromConfig) {
-                clientDescription.textContent = `See what we're doing for ${businessName} - calls, follow-ups, and bookings`;
+                clientDescription.textContent = isTomOutreachDashboard(currentClient)
+                    ? `See what we're doing for ${businessName} — calls, follow-ups, and engagement.`
+                    : `See what we're doing for ${businessName} - calls, follow-ups, and bookings`;
+            }
+
+            const integrationsSub = document.getElementById('integrationsCardSubtitle');
+            if (integrationsSub) {
+                integrationsSub.textContent = isTomOutreachDashboard(currentClient)
+                    ? `Channels connected for ${businessName}'s outreach (SMS, voice, calendar where used).`
+                    : `Everything connected to handle your bookings.`;
+            }
+
+            const pipelineH = document.getElementById('pipelineSnapshotHeading');
+            if (pipelineH) {
+                pipelineH.textContent = isTomOutreachDashboard(currentClient) ? '📊 Engagement snapshot' : '📊 Pipeline snapshot';
             }
         }
         
@@ -3173,7 +3225,12 @@
 
             document.getElementById('statusHintLeads').textContent = `Last 24h: ${last24} new`;
             // statusHintCalls already set above with answered/not answered breakdown
-            document.getElementById('statusHintConversion').textContent = `Win rate: ${winRate}`;
+            const convHint = document.getElementById('statusHintConversion');
+            if (convHint) {
+                convHint.textContent = isTomOutreachDashboard(currentClient)
+                    ? `Engagement rate: ${winRate} (positive call outcomes in your data)`
+                    : `Win rate: ${winRate}`;
+            }
             const respN = data.metrics?.firstResponseSampleSize;
             document.getElementById('statusHintResponse').textContent = firstResponse === '—'
                 ? 'Mean minutes: lead created → first dial (30d leads, first call within 48h). No matching lead↔call pairs yet.'
@@ -3183,6 +3240,12 @@
         function renderRecentActivity(data) {
             const container = document.getElementById('recent-activity');
             if (!container) return;
+            const tom = isTomOutreachDashboard(currentClient);
+            const bookingBlock = tom ? '' : `
+                <div class="activity-metric">
+                    <div class="activity-metric-label">Bookings</div>
+                    <div class="activity-metric-value">${formatNumber(data.bookingsThisWeek || 0)}</div>
+                    </div>`;
             container.innerHTML = `
                 <div class="activity-metric">
                     <div class="activity-metric-label">New Leads</div>
@@ -3191,11 +3254,7 @@
                 <div class="activity-metric">
                     <div class="activity-metric-label">Calls Made</div>
                     <div class="activity-metric-value">${formatNumber(data.totalCalls || 0)}</div>
-                    </div>
-                <div class="activity-metric">
-                    <div class="activity-metric-label">Bookings</div>
-                    <div class="activity-metric-value">${formatNumber(data.bookingsThisWeek || 0)}</div>
-                    </div>
+                    </div>${bookingBlock}
                 <div class="activity-metric">
                     <div class="activity-metric-label">Response Time</div>
                     <div class="activity-metric-value" style="font-size: 1.3rem;">${data.firstResponse || '—'}</div>
@@ -3339,6 +3398,10 @@
         function renderAppointments(appointments = []) {
             const container = document.getElementById('upcoming-appointments');
             if (!container) return;
+            if (isTomOutreachDashboard(currentClient)) {
+                container.innerHTML = '';
+                return;
+            }
             // Use current clientBusinessName (updated by personalizeDashboard)
             const businessName = clientBusinessName || 'Your Business';
             if (!Array.isArray(appointments) || !appointments.length) {
@@ -3388,7 +3451,9 @@
             }
             const weeklySub = document.getElementById('weeklyActivitySubtitle');
             if (weeklySub) {
-                weeklySub.textContent = 'Bar height = call attempts that day. Totals differ from “unique leads called” when there are retries.';
+                weeklySub.textContent = isTomOutreachDashboard(currentClient)
+                    ? 'Bar height = outbound call attempts that day. Retries can make totals higher than unique leads dialed.'
+                    : 'Bar height = call attempts that day. Totals differ from “unique leads called” when there are retries.';
             }
         }
 
@@ -3579,13 +3644,20 @@
             const engagedRaw = m.uniqueLeadsAnswered ?? m.callsAnswered ?? 0;
             const engaged = Math.min(engagedRaw, contacted || engagedRaw);
             const booked = data.bookingsThisWeek || 0;
+            const tom = isTomOutreachDashboard(currentClient);
 
-            const stages = [
-                { label: 'Total leads', value: totalLeads, color: '#5c6ac4' },
-                { label: 'Leads we called', value: contacted, color: '#764ba2' },
-                { label: 'Answered conversations', value: engaged, color: '#667eea' },
-                { label: 'Appointments (7 days)', value: booked, color: '#1b5e20' }
-            ];
+            const stages = tom
+                ? [
+                    { label: 'Total leads', value: totalLeads, color: '#5c6ac4' },
+                    { label: 'Leads we called', value: contacted, color: '#764ba2' },
+                    { label: 'Answered conversations', value: engaged, color: '#667eea' }
+                ]
+                : [
+                    { label: 'Total leads', value: totalLeads, color: '#5c6ac4' },
+                    { label: 'Leads we called', value: contacted, color: '#764ba2' },
+                    { label: 'Answered conversations', value: engaged, color: '#667eea' },
+                    { label: 'Appointments (7 days)', value: booked, color: '#1b5e20' }
+                ];
 
             const maxValue = Math.max(...stages.map(s => s.value), 1);
             container.innerHTML = stages.map(stage => {
@@ -3834,6 +3906,11 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const payload = await response.json();
                 if (response.ok && payload?.ok) {
                     const sec = payload.avgDurationSeconds ?? payload.avgDuration;
+                    const tomQ = isTomOutreachDashboard(currentClient);
+                    const successBadge = tomQ
+                        ? 'logged outcomes'
+                        : 'appts &amp; booked calls';
+                    const successLabel = tomQ ? 'Engagement rate' : 'Success Rate';
                     container.innerHTML = `
                         <div class="quality-metric">
                             <div class="quality-label">Avg Duration</div>
@@ -3841,9 +3918,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             <div class="quality-badge">from call length</div>
                         </div>
                         <div class="quality-metric">
-                            <div class="quality-label">Success Rate</div>
+                            <div class="quality-label">${successLabel}</div>
                             <div class="quality-value">${payload.successRate || 0}%</div>
-                            <div class="quality-badge">appts &amp; booked calls</div>
+                            <div class="quality-badge">${successBadge}</div>
                         </div>
                         <div class="quality-metric">
                             <div class="quality-label">Calls (7 days)</div>
@@ -4073,6 +4150,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         async function renderCalendarDetails(data) {
             const container = document.getElementById('calendar-details');
             if (!container) return;
+            if (isTomOutreachDashboard(currentClient)) {
+                container.innerHTML = '';
+                return;
+            }
 
             if (currentClient === DEMO_CLIENT_KEY) {
                 const lastSync = new Date(Date.now() - 5 * 60 * 1000);
@@ -4260,6 +4341,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         async function initDashboard() {
             currentClient = getClientFromURL();
             applyRoiPanelVisibility(currentClient);
+            applyTomOutreachDashboardMode(currentClient);
 
             // Fetch client config from API if not demo
             let clientConfig = null;
