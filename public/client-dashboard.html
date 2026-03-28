@@ -45,6 +45,11 @@
             font-family: inherit;
         }
         
+        /* Slightly smaller than browser default so ~1× zoom matches typical “comfortable” density */
+        html {
+            font-size: 93.75%;
+        }
+
         body, html {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             min-height: 100vh;
@@ -62,13 +67,13 @@
         .container {
             max-width: 1320px;
             margin: 0 auto;
-            padding: 40px 28px 72px;
+            padding: 28px 24px 56px;
         }
         
         .header {
             background: var(--surface);
             border-radius: 20px;
-            padding: 28px 32px;
+            padding: 20px 24px;
             box-shadow: var(--card-shadow);
             border-left: 6px solid var(--primary);
             border: 1px solid rgba(92,106,196,0.15);
@@ -77,7 +82,7 @@
         .client-info {
             display: flex;
             justify-content: space-between;
-            gap: 24px;
+            gap: 18px;
             flex-wrap: wrap;
             align-items: center;
         }
@@ -85,13 +90,13 @@
         .client-brand {
             display: flex;
             align-items: center;
-            gap: 18px;
+            gap: 14px;
         }
         
         .client-logo {
-            width: 60px;
-            height: 60px;
-            border-radius: 16px;
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -101,19 +106,21 @@
         }
         
         .client-details h1 {
-            font-size: 2.3rem;
+            font-size: 2rem;
             color: var(--primary);
-            margin-bottom: 6px;
+            margin-bottom: 4px;
+            line-height: 1.15;
         }
         
         .client-details p {
             color: var(--muted);
-            font-size: 1rem;
-            margin-top: 4px;
+            font-size: 0.94rem;
+            margin-top: 3px;
+            line-height: 1.45;
         }
 
         .status-chip {
-            padding: 10px 20px;
+            padding: 8px 16px;
             border-radius: 999px;
             font-weight: 600;
             background: rgba(92, 106, 196, 0.1);
@@ -126,16 +133,16 @@
         }
 
         .client-meta {
-            margin-top: 18px;
+            margin-top: 14px;
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 12px;
+            gap: 10px;
         }
 
         .meta-item {
             background: var(--light);
             border-radius: 12px;
-            padding: 12px 16px;
+            padding: 10px 14px;
         }
 
         .meta-label {
@@ -163,15 +170,15 @@
 
         .status-bar {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-            gap: 22px;
-            margin: 30px 0;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin: 18px 0 22px;
         }
 
         .status-card {
             background: rgba(255, 255, 255, 0.96);
-            border-radius: 18px;
-            padding: 18px 16px 30px;
+            border-radius: 16px;
+            padding: 14px 14px 22px;
             box-shadow: var(--card-shadow);
             text-align: center;
             border: 1px solid rgba(92,106,196,0.1);
@@ -187,11 +194,11 @@
         .status-card h4 {
             text-transform: uppercase;
             letter-spacing: 0.15em;
-            font-size: 0.75rem;
+            font-size: 0.72rem;
             color: #8c8fab;
             margin: 0;
             line-height: 1.22;
-            min-height: 3.3em;
+            min-height: 2.85em;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -199,10 +206,10 @@
         }
 
         .status-value {
-            font-size: 2rem;
+            font-size: 1.65rem;
             font-weight: 700;
             color: var(--primary);
-            line-height: 1.12;
+            line-height: 1.1;
             flex-shrink: 0;
             font-variant-numeric: tabular-nums;
             padding-bottom: 2px;
@@ -211,25 +218,25 @@
         .status-hint {
             margin: 0;
             margin-top: auto;
-            font-size: 0.8rem;
-            line-height: 1.55;
+            font-size: 0.78rem;
+            line-height: 1.5;
             color: #8c8fab;
             white-space: pre-line;
-            padding: 10px 8px 12px;
+            padding: 8px 6px 10px;
             overflow-wrap: break-word;
             word-wrap: break-word;
         }
 
         .dashboard-section {
-            margin-bottom: 48px;
+            margin-bottom: 36px;
         }
 
         .section-header {
-            font-size: 1.5rem;
+            font-size: 1.35rem;
             font-weight: 700;
             color: var(--primary);
-            margin-bottom: 20px;
-            padding-bottom: 12px;
+            margin-bottom: 16px;
+            padding-bottom: 10px;
             border-bottom: 2px solid rgba(92,106,196,0.15);
             position: relative;
         }
@@ -247,8 +254,8 @@
 
         .dashboard-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-            gap: 22px;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 18px;
             align-items: stretch;
         }
 
@@ -388,8 +395,8 @@
         }
 
         .card-metrics > .card-subtitle {
-            margin-top: -4px;
-            margin-bottom: 22px;
+            margin-top: -3px;
+            margin-bottom: 18px;
         }
 
         .card-fullwidth {
@@ -790,8 +797,8 @@
         
         .card {
             background: var(--surface);
-            border-radius: 18px;
-            padding: 24px 24px 26px;
+            border-radius: 16px;
+            padding: 20px 20px 22px;
             box-shadow: var(--card-shadow);
             border: 1px solid rgba(92,106,196,0.08);
             transition: transform 0.25s ease, box-shadow 0.25s ease;
@@ -821,8 +828,8 @@
         }
         
         .card h3 {
-            margin-bottom: 12px;
-            font-size: 1.2rem;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
             color: var(--text);
             display: flex;
             align-items: center;
@@ -830,10 +837,10 @@
         }
 
         .card-subtitle {
-            margin-top: -6px;
-            margin-bottom: 22px;
-            font-size: 0.92rem;
-            line-height: 1.5;
+            margin-top: -5px;
+            margin-bottom: 18px;
+            font-size: 0.88rem;
+            line-height: 1.48;
             color: #7a7da0;
         }
 
@@ -1259,15 +1266,15 @@
         }
 
         .roi-panel {
-            margin-bottom: 24px;
-            border-radius: 20px;
-            padding: 22px;
+            margin-bottom: 18px;
+            border-radius: 16px;
+            padding: 16px 18px;
             background: linear-gradient(135deg, #667eea, #764ba2);
             color: #fff;
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-            gap: 18px;
-            box-shadow: 0 15px 35px rgba(51, 65, 145, 0.4);
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 14px;
+            box-shadow: 0 12px 28px rgba(51, 65, 145, 0.38);
         }
 
         .roi-metric span {
@@ -1279,8 +1286,9 @@
 
         .roi-metric strong {
             display: block;
-            font-size: 2rem;
-            margin-top: 6px;
+            font-size: 1.6rem;
+            margin-top: 4px;
+            line-height: 1.15;
         }
 
         .roi-metric small {
@@ -1458,7 +1466,7 @@
         }
 
         .card-weekly-activity .card-subtitle {
-            margin-bottom: 18px;
+            margin-bottom: 14px;
         }
 
         .activity-feed {
@@ -1752,12 +1760,12 @@
         .active-indicator {
             background: linear-gradient(135deg, #1b5e20, #2e7d32);
             color: #fff;
-            padding: 12px 18px;
-            border-radius: 12px;
-            margin-bottom: 20px;
+            padding: 10px 14px;
+            border-radius: 10px;
+            margin-bottom: 14px;
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
             box-shadow: 0 4px 12px rgba(27,94,32,0.3);
         }
 
@@ -1789,12 +1797,12 @@
 
         .active-indicator-title {
             font-weight: 600;
-            font-size: 0.9rem;
-            margin-bottom: 2px;
+            font-size: 0.85rem;
+            margin-bottom: 1px;
         }
 
         .active-indicator-subtitle {
-            font-size: 0.75rem;
+            font-size: 0.72rem;
             opacity: 0.9;
         }
 
