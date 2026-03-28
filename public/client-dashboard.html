@@ -1450,7 +1450,51 @@
 
         .timeline-meta {
             font-size: 0.8rem;
-            color: #7a7fa4;
+            color: #5c6178;
+            line-height: 1.45;
+        }
+
+        .timeline-submeta {
+            font-size: 0.75rem;
+            color: #9a9eb8;
+            margin-top: 6px;
+        }
+
+        .timeline-preview {
+            font-size: 0.78rem;
+            color: #4a4d63;
+            margin-top: 8px;
+            padding: 8px 10px;
+            background: rgba(92, 106, 196, 0.06);
+            border-radius: 8px;
+            border-left: 3px solid rgba(92, 106, 196, 0.35);
+            line-height: 1.4;
+        }
+
+        .timeline-actions {
+            margin-top: 8px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .timeline-actions a,
+        .timeline-actions button {
+            font-size: 0.78rem;
+            padding: 4px 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(92, 106, 196, 0.35);
+            background: rgba(92, 106, 196, 0.08);
+            color: var(--primary);
+            cursor: pointer;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .timeline-actions a:hover,
+        .timeline-actions button:hover {
+            background: rgba(92, 106, 196, 0.15);
         }
 
 
@@ -1816,6 +1860,16 @@
 
         body[data-theme="dark"] .timeline-meta {
             color: #d0d4e8;
+        }
+
+        body[data-theme="dark"] .timeline-submeta {
+            color: #9aa3c4;
+        }
+
+        body[data-theme="dark"] .timeline-preview {
+            color: #e2e6f5;
+            background: rgba(92, 106, 196, 0.12);
+            border-left-color: rgba(124, 134, 220, 0.6);
         }
 
         body[data-theme="dark"] .modal-backdrop {
@@ -2376,6 +2430,11 @@
             const div = document.createElement('div');
             div.textContent = String(text);
             return div.innerHTML;
+        }
+
+        function isSafeHttpUrl(url) {
+            if (!url || typeof url !== 'string') return false;
+            return /^https?:\/\//i.test(url.trim());
         }
         
         // Industry-specific color schemes
@@ -4047,15 +4106,40 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     contentEl.innerHTML = '<div class="empty-state-message">No events recorded for this lead yet.</div>';
                     return;
                 }
-                contentEl.innerHTML = items.map(item => `
+                contentEl.innerHTML = items.map((item) => {
+                    const sub = item.subdetail
+                        ? `${escapeHtml(item.subdetail)} · ${formatTimeAgo(item.time)}`
+                        : formatTimeAgo(item.time);
+                    const rec = item.recordingUrl && isSafeHttpUrl(item.recordingUrl)
+                        ? `<a href="${escapeHtml(item.recordingUrl.trim())}" target="_blank" rel="noopener noreferrer">Open recording</a>`
+                        : '';
+                    const tr = item.callId
+                        ? `<button type="button" class="timeline-transcript-btn" data-timeline-call="${escapeHtml(String(item.callId))}">View transcript</button>`
+                        : '';
+                    const actInner = rec + tr;
+                    const actionsBlock = actInner ? `<div class="timeline-actions">${actInner}</div>` : '';
+                    const tp = item.transcriptPreview
+                        ? `<div class="timeline-preview" title="Transcript excerpt"><strong>Transcript:</strong> ${escapeHtml(item.transcriptPreview)}</div>`
+                        : '';
+                    return `
                 <div class="timeline-item">
                     <div class="timeline-dot"></div>
                     <div class="timeline-content">
                         <div class="timeline-title">${escapeHtml(item.icon || '')} ${escapeHtml(item.event || 'Event')}</div>
-                        <div class="timeline-meta">${escapeHtml(item.detail || '')} • ${formatTimeAgo(item.time)}</div>
+                        <div class="timeline-meta">${escapeHtml(item.detail || '—')}</div>
+                        ${tp}
+                        <div class="timeline-submeta">${sub}</div>
+                        ${actionsBlock}
                     </div>
                 </div>
-            `).join('');
+            `;
+                }).join('');
+                contentEl.querySelectorAll('.timeline-transcript-btn').forEach((btn) => {
+                    btn.addEventListener('click', () => {
+                        const id = btn.getAttribute('data-timeline-call');
+                        if (id) viewTranscript(id, name);
+                    });
+                });
             } catch (err) {
                 console.error('Timeline load failed', err);
                 contentEl.innerHTML = '<div class="empty-state-message">Could not load timeline. Please try again.</div>';

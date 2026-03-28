@@ -10086,7 +10086,16 @@ app.get('/api/leads/:leadId/timeline', async (req, res) => {
       ? `c.lead_phone IN (${callPlaceholders})`
       : 'FALSE';
     const callsResult = await query(`
-      SELECT c.status, c.outcome, c.created_at, c.duration
+      SELECT c.status,
+             c.outcome,
+             c.created_at,
+             c.duration,
+             c.call_id,
+             c.recording_url,
+             c.sentiment,
+             c.quality_score,
+             c.retry_attempt,
+             LEFT(COALESCE(c.transcript, ''), 320) AS transcript_snippet
       FROM calls c
       WHERE c.client_key = $1
         AND (
@@ -10129,29 +10138,83 @@ app.get('/api/leads/:leadId/timeline', async (req, res) => {
     
     const timeline = [];
     
+    const fmtWhen = (d) => {
+      const dt = d ? new Date(d) : null;
+      if (!dt || Number.isNaN(dt.getTime())) return null;
+      return dt.toLocaleString('en-GB', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      });
+    };
+
+    const phoneTail = (() => {
+      const d = String(lead.phone || '').replace(/\D/g, '');
+      if (d.length >= 4) return d.slice(-4);
+      return null;
+    })();
+
     timeline.push({
       event: 'Lead received',
       icon: '📥',
-      detail: `Added via ${lead.source || 'import'}`,
+      detail: `Source: ${lead.source || 'import'}${phoneTail ? ` · phone …${phoneTail}` : ''}`,
+      subdetail: fmtWhen(lead.created_at),
       time: lead.created_at
     });
-    
+
     (callsResult.rows || []).forEach((call, idx) => {
+      const friendlyOutcome = outcomeToFriendlyLabel(call.outcome);
+      const durationLabel = formatCallDuration(call.duration);
+      const statusLine = mapCallStatus(call.status);
+      const st = (call.status || '').toLowerCase();
+      const bits = [];
+      if (friendlyOutcome) bits.push(friendlyOutcome);
+      else if (call.outcome) bits.push(String(call.outcome).replace(/-/g, ' '));
+      else if (['ended', 'completed'].includes(st) && !call.outcome) {
+        bits.push('Ended (no outcome stored yet)');
+      } else bits.push(statusLine || 'Logged');
+      if (durationLabel) bits.push(`duration ${durationLabel}`);
+      if (call.status && !['ended', 'completed', 'failed', 'canceled', 'cancelled'].includes(st)) {
+        bits.push(`line status: ${call.status}`);
+      }
+      const ra = call.retry_attempt != null ? parseInt(call.retry_attempt, 10) : 0;
+      if (Number.isFinite(ra) && ra > 0) bits.push(`retry #${ra}`);
+      if (call.sentiment && String(call.sentiment).trim()) {
+        bits.push(`sentiment: ${String(call.sentiment).trim()}`);
+      }
+      const qs = call.quality_score != null ? Number(call.quality_score) : null;
+      if (qs != null && Number.isFinite(qs)) bits.push(`quality ${Math.round(qs)}/100`);
+      let rec = call.recording_url && String(call.recording_url).trim();
+      if (rec && !/^https?:\/\//i.test(rec)) rec = null;
+      const snip = String(call.transcript_snippet || '').replace(/\s+/g, ' ').trim();
+      const transcriptPreview = snip.length > 0 ? (snip.length >= 300 ? `${snip.slice(0, 297)}…` : snip) : null;
       timeline.push({
-        event: idx === 0 ? 'AI call initiated' : `Follow-up call ${idx + 1}`,
+        event: idx === 0 ? 'First outbound call' : `Outbound call ${idx + 1}`,
         icon: '📞',
-        detail: call.outcome ? `Outcome: ${call.outcome}` : 'Call completed',
-        time: call.created_at
+        detail: bits.join(' · '),
+        subdetail: fmtWhen(call.created_at),
+        time: call.created_at,
+        callId: call.call_id || null,
+        recordingUrl: rec || null,
+        transcriptPreview
       });
     });
 
     (smsRows.rows || []).forEach((msg) => {
       const outbound = (msg.direction || '').toLowerCase() === 'outbound';
-      const preview = (msg.body && String(msg.body).trim()) ? String(msg.body).trim().slice(0, 160) : (msg.status || 'SMS');
+      const preview = (msg.body && String(msg.body).trim()) ? String(msg.body).trim().slice(0, 200) : (msg.status || 'SMS');
+      const smsBits = [preview];
+      if (msg.status && String(msg.status).trim()) smsBits.push(`delivery: ${String(msg.status).trim()}`);
       timeline.push({
         event: outbound ? 'SMS sent' : 'SMS received',
         icon: '💬',
-        detail: preview,
+        detail: smsBits.join(' · '),
+        subdetail: fmtWhen(msg.created_at),
         time: msg.created_at
       });
     });
@@ -10172,6 +10235,7 @@ app.get('/api/leads/:leadId/timeline', async (req, res) => {
         event,
         icon: '📅',
         detail,
+        subdetail: fmtWhen(appt.created_at),
         time: appt.created_at
       });
     });
@@ -10182,7 +10246,11 @@ app.get('/api/leads/:leadId/timeline', async (req, res) => {
       ok: true,
       timeline: timeline.map(item => ({
         ...item,
-        time: new Date(item.time).toISOString()
+        time: new Date(item.time).toISOString(),
+        subdetail: item.subdetail || null,
+        callId: item.callId || undefined,
+        recordingUrl: item.recordingUrl || undefined,
+        transcriptPreview: item.transcriptPreview || undefined
       }))
     });
   } catch (error) {
