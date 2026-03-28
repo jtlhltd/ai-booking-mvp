@@ -8272,8 +8272,18 @@ function inferTimelinePickupStatus(call) {
   };
 }
 
+/** Same key resolution as other Vapi server calls (Render often has one of these names). */
+function timelineVapiAuthKey() {
+  return (
+    process.env.VAPI_PRIVATE_KEY ||
+    process.env.VAPI_API_KEY ||
+    process.env.VAPI_PUBLIC_KEY ||
+    ''
+  ).trim();
+}
+
 async function fetchVapiCallSnapshotForTimeline(callId) {
-  const key = process.env.VAPI_PRIVATE_KEY;
+  const key = timelineVapiAuthKey();
   if (!key || !callId || String(callId).trim().length < 10) return null;
   try {
     const res = await fetch(
@@ -10327,7 +10337,7 @@ app.get('/api/leads/:leadId/timeline', async (req, res) => {
     }
 
     const vapiHintsByCallId = {};
-    if (process.env.VAPI_PRIVATE_KEY && (callsResult.rows || []).length) {
+    if (timelineVapiAuthKey() && (callsResult.rows || []).length) {
       const needHydration = (callsResult.rows || []).filter((c) => {
         const st = (c.status || '').toLowerCase();
         if (st !== 'initiated' || !c.call_id) return false;
