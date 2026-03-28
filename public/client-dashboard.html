@@ -1530,30 +1530,103 @@
 
         .retry-item {
             display: flex;
+            align-items: stretch;
+            border-radius: 12px;
+            overflow: hidden;
+            background: rgba(245, 166, 35, 0.08);
+            border: 1px solid rgba(245, 166, 35, 0.22);
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+        }
+
+        .retry-item-accent {
+            width: 4px;
+            flex-shrink: 0;
+            background: linear-gradient(180deg, #f5a623, #d97706);
+        }
+
+        .retry-item-inner {
+            flex: 1;
+            min-width: 0;
+            padding: 12px 14px 12px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .retry-item-top {
+            display: flex;
+            flex-wrap: wrap;
             justify-content: space-between;
-            align-items: center;
-            padding: 10px 14px;
-            background: rgba(245,166,35,0.1);
-            border-radius: 8px;
-            border-left: 3px solid #f5a623;
+            align-items: flex-start;
+            gap: 10px;
+        }
+
+        .retry-item-text {
+            flex: 1;
+            min-width: 0;
         }
 
         .retry-name {
             font-weight: 600;
             color: #2f3147;
-            font-size: 0.9rem;
+            font-size: 0.95rem;
+            line-height: 1.3;
         }
 
         .retry-meta {
-            font-size: 0.75rem;
-            color: #7a7fa4;
+            font-size: 0.78rem;
+            color: #6b7194;
+            margin-top: 4px;
+            line-height: 1.4;
+        }
+
+        .retry-due-chip {
+            flex-shrink: 0;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+            padding: 6px 11px;
+            border-radius: 999px;
+            background: rgba(245, 166, 35, 0.16);
+            color: #9a3412;
+            border: 1px solid rgba(217, 119, 6, 0.35);
+            line-height: 1.2;
+            text-align: right;
+        }
+
+        .retry-due-chip span {
+            display: block;
+            font-weight: 600;
+            text-transform: none;
+            font-size: 0.85rem;
+            letter-spacing: 0;
+            color: #c2410c;
             margin-top: 2px;
         }
 
-        .retry-status {
-            font-size: 0.75rem;
-            color: #f5a623;
+        .retry-item-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .retry-action-btn {
+            border: 1px solid rgba(92, 106, 196, 0.35);
+            background: rgba(255, 255, 255, 0.85);
+            color: var(--primary);
+            padding: 5px 11px;
+            border-radius: 8px;
+            font-size: 0.76rem;
             font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s ease, border-color 0.15s ease;
+        }
+
+        .retry-action-btn:hover {
+            background: rgba(92, 106, 196, 0.1);
+            border-color: var(--primary);
         }
 
         .timeline-modal {
@@ -2175,8 +2248,8 @@
         }
 
         body[data-theme="dark"] .retry-item {
-            background: #252b3d;
-            border-color: rgba(92,106,196,0.5);
+            background: rgba(245, 166, 35, 0.08);
+            border-color: rgba(245, 166, 35, 0.35);
         }
 
         body[data-theme="dark"] .retry-item strong {
@@ -2188,7 +2261,27 @@
         }
 
         body[data-theme="dark"] .retry-meta {
-            color: #d0d4e8;
+            color: #b4bbd4;
+        }
+
+        body[data-theme="dark"] .retry-due-chip {
+            background: rgba(245, 166, 35, 0.15);
+            border-color: rgba(251, 191, 36, 0.4);
+            color: #fcd34d;
+        }
+
+        body[data-theme="dark"] .retry-due-chip span {
+            color: #fde68a;
+        }
+
+        body[data-theme="dark"] .retry-action-btn {
+            background: rgba(37, 43, 61, 0.9);
+            border-color: rgba(124, 134, 220, 0.45);
+            color: #a5b4fc;
+        }
+
+        body[data-theme="dark"] .retry-action-btn:hover {
+            background: rgba(92, 106, 196, 0.2);
         }
 
         body[data-theme="dark"] .appt-item {
@@ -2701,6 +2794,71 @@
             const div = document.createElement('div');
             div.textContent = String(text);
             return div.innerHTML;
+        }
+
+        function retryNormalizeDigits(str) {
+            return String(str || '').replace(/\D/g, '');
+        }
+
+        /** True when the visible title is the same number as `phone` (avoids duplicate lines). */
+        function retryTitleIsSamePhone(title, phone) {
+            const dTitle = retryNormalizeDigits(title);
+            const dPhone = retryNormalizeDigits(phone);
+            if (!dPhone || dPhone.length < 7) return false;
+            if (dTitle === dPhone) return true;
+            if (dTitle.length >= dPhone.length && dTitle.endsWith(dPhone)) return true;
+            if (dPhone.length >= dTitle.length && dPhone.endsWith(dTitle)) return true;
+            return false;
+        }
+
+        function renderRetryQueueRow(lead, options = {}) {
+            const isDemo = !!options.isDemo;
+            const src = lead.source || '';
+            const isQueuedCall = src === 'call_queue';
+            const displayName = lead.name || 'Prospect';
+            const phone = (lead.phone && String(lead.phone).trim()) || '';
+            const metaParts = [];
+            if (isDemo) {
+                metaParts.push(`Attempt ${Number(lead.attempts) || 0}`);
+            } else if (isQueuedCall) {
+                metaParts.push(lead.reason || 'Outbound call queued');
+            } else {
+                metaParts.push(`Attempt ${Number(lead.attempts) || 0}/${Number(lead.maxAttempts) || 0}`);
+            }
+            if (phone && !retryTitleIsSamePhone(displayName, phone)) {
+                metaParts.push(phone);
+            }
+            const meta = metaParts.map((p) => escapeHtml(p)).join(' • ');
+            const chipLabel = isDemo ? 'Due' : (isQueuedCall ? 'Due' : 'Retry');
+            const chipValue = escapeHtml(lead.nextRetry || '—');
+            const dataSrc = isDemo ? '' : ` data-retry-source="${escapeHtml(src)}"`;
+            const journeyDisplay = escapeHtml(displayName);
+            const journeyBtn = phone
+                ? `<button type="button" class="retry-action-btn" data-retry-journey="1" data-retry-phone="${escapeHtml(phone)}" data-retry-display="${journeyDisplay}">Journey</button>`
+                : '';
+            const copyBtn = phone
+                ? `<button type="button" class="retry-action-btn" data-retry-copy="${escapeHtml(phone)}">Copy #</button>`
+                : '';
+            const actionsRow = (journeyBtn || copyBtn)
+                ? `                                <div class="retry-item-actions">
+                                    ${journeyBtn}
+                                    ${copyBtn}
+                                </div>`
+                : '';
+            return `
+                        <div class="retry-item"${dataSrc}>
+                            <div class="retry-item-accent" aria-hidden="true"></div>
+                            <div class="retry-item-inner">
+                                <div class="retry-item-top">
+                                    <div class="retry-item-text">
+                                        <div class="retry-name">${escapeHtml(displayName)}</div>
+                                        <div class="retry-meta">${meta}</div>
+                                    </div>
+                                    <div class="retry-due-chip">${chipLabel}<span>${chipValue}</span></div>
+                                </div>
+${actionsRow}
+                            </div>
+                        </div>`;
         }
 
         function isSafeHttpUrl(url) {
@@ -4464,15 +4622,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     nextRetry: idx === 0 ? 'Today, 2pm' : idx === 1 ? 'Today, 4pm' : 'Tomorrow, 10am'
                 }));
 
-                container.innerHTML = retryLeads.map(lead => `
-                    <div class="retry-item">
-                        <div>
-                            <div class="retry-name">${escapeHtml(lead.name)}</div>
-                            <div class="retry-meta">Attempt ${lead.attempts} • ${escapeHtml(lead.phone || '')}</div>
-                            </div>
-                        <div class="retry-status">Retrying ${escapeHtml(lead.nextRetry)}</div>
-                        </div>
-                `).join('');
+                container.innerHTML = retryLeads.map((lead) => renderRetryQueueRow(lead, { isDemo: true })).join('');
                 return;
             }
 
@@ -4494,23 +4644,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     `;
                     return;
                 }
-                container.innerHTML = payload.retries.map(lead => {
-                    const src = lead.source || '';
-                    const isQueuedCall = src === 'call_queue';
-                    const meta = isQueuedCall
-                        ? `${escapeHtml(lead.reason || 'Outbound call queued')} • ${escapeHtml(lead.phone || '')}`
-                        : `Attempt ${Number(lead.attempts) || 0}/${Number(lead.maxAttempts) || 0} • ${escapeHtml(lead.phone || '')}`;
-                    const whenLabel = isQueuedCall ? 'Due' : 'Retrying';
-                    return `
-                        <div class="retry-item" data-retry-source="${escapeHtml(src)}">
-                            <div>
-                                <div class="retry-name">${escapeHtml(lead.name || 'Prospect')}</div>
-                                <div class="retry-meta">${meta}</div>
-                    </div>
-                            <div class="retry-status">${whenLabel} ${escapeHtml(lead.nextRetry || '')}</div>
-                        </div>
-                    `;
-                }).join('');
+                container.innerHTML = payload.retries.map((lead) => renderRetryQueueRow(lead)).join('');
             } catch (error) {
                 console.error('Failed to load retry queue', error);
                 showError(container, 'Unable to load retry queue. Please refresh the page.', () => renderRetryQueue(data));
@@ -5545,6 +5679,61 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             if (timelineBackdrop) {
                 timelineBackdrop.addEventListener('click', (event) => {
                     if (event.target === timelineBackdrop) closeTimelineModal();
+                });
+            }
+
+            const retryQueueRoot = document.getElementById('retry-queue');
+            if (retryQueueRoot && retryQueueRoot.dataset.retryDelegation !== '1') {
+                retryQueueRoot.dataset.retryDelegation = '1';
+                retryQueueRoot.addEventListener('click', (e) => {
+                    const journeyBtn = e.target.closest('[data-retry-journey]');
+                    if (journeyBtn) {
+                        e.preventDefault();
+                        const p = journeyBtn.getAttribute('data-retry-phone');
+                        const n = journeyBtn.getAttribute('data-retry-display') || p;
+                        if (p) viewLeadTimeline(p, n);
+                        return;
+                    }
+                    const copyEl = e.target.closest('[data-retry-copy]');
+                    if (copyEl) {
+                        e.preventDefault();
+                        const phone = copyEl.getAttribute('data-retry-copy');
+                        if (!phone) return;
+                        const done = () => showToast('Copied', 'Phone number copied to clipboard', 'success');
+                        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                            navigator.clipboard.writeText(phone).then(done).catch(() => {
+                                try {
+                                    const ta = document.createElement('textarea');
+                                    ta.value = phone;
+                                    ta.setAttribute('readonly', '');
+                                    ta.style.position = 'fixed';
+                                    ta.style.left = '-9999px';
+                                    document.body.appendChild(ta);
+                                    ta.select();
+                                    document.execCommand('copy');
+                                    document.body.removeChild(ta);
+                                    done();
+                                } catch (_) {
+                                    showToast('Copy failed', 'Could not copy to clipboard', 'error');
+                                }
+                            });
+                        } else {
+                            try {
+                                const ta = document.createElement('textarea');
+                                ta.value = phone;
+                                ta.setAttribute('readonly', '');
+                                ta.style.position = 'fixed';
+                                ta.style.left = '-9999px';
+                                document.body.appendChild(ta);
+                                ta.select();
+                                document.execCommand('copy');
+                                document.body.removeChild(ta);
+                                done();
+                            } catch (_) {
+                                showToast('Copy failed', 'Could not copy to clipboard', 'error');
+                            }
+                        }
+                    }
                 });
             }
         }
