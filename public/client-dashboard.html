@@ -2973,18 +2973,18 @@
                 <div class="status-value" id="statusTotalLeads" aria-live="polite">—</div>
                 <p class="status-hint" id="statusHintLeads">Loading...</p>
                 </div>
-            <div class="status-card" id="statusBarCallsCard" title="Calls your concierge has made" role="article" aria-label="Calls we've made">
+            <div class="status-card" id="statusBarCallsCard" title="Unique phone numbers dialed and how they split (reached, no pickup, unclear)" role="article" aria-label="Dial coverage and outcomes">
                 <h4 id="statusCardCalls">Calls We've Made</h4>
                 <div class="status-value" id="statusTotalCalls" aria-live="polite">—</div>
                 <p class="status-hint" id="statusHintCalls">Loading...</p>
             </div>
-            <div class="status-card" title="Calls that reached a real human conversation" role="article" aria-label="Answered calls">
-                <h4 id="statusCardAnswered">Answered</h4>
+            <div class="status-card" id="statusBarAnsweredCard" title="Unique numbers with at least one conversation-style dial" role="article" aria-label="Reached leads">
+                <h4 id="statusCardAnswered">Reached</h4>
                 <div class="status-value" id="statusCallsAnswered" aria-live="polite">—</div>
                 <p class="status-hint" id="statusHintAnswered">Loading...</p>
             </div>
-            <div class="status-card" title="Calls that were not picked up or did not connect" role="article" aria-label="No pickup calls">
-                <h4 id="statusCardNoPickup">No Pickup</h4>
+            <div class="status-card" id="statusBarNoPickupCard" title="Unique numbers with a classified miss but no conversation signal" role="article" aria-label="No pickup leads">
+                <h4 id="statusCardNoPickup">No pickup</h4>
                 <div class="status-value" id="statusCallsNotAnswered" aria-live="polite">—</div>
                 <p class="status-hint" id="statusHintNoPickup">Loading...</p>
             </div>
@@ -4073,8 +4073,8 @@ ${actionsRow}
             const conversionFunnelSubtitle = document.getElementById('conversionFunnelSubtitle');
             if (conversionFunnelSubtitle) {
                 conversionFunnelSubtitle.textContent = isTomOutreachDashboard(currentClient)
-                    ? `Engagement snapshot for ${businessName} — leads, dials, and answered conversations (independent counts, not funnel stages).`
-                    : `Independent counts for ${businessName} — not a strict funnel. “Answered” = unique leads with a conversation signal.`;
+                    ? `Engagement snapshot for ${businessName} — each dialed number is exactly one of: reached, no pickup, or unclear (see Calls tile for the sum).`
+                    : `Independent counts for ${businessName} — not a strict funnel. Reached / no pickup / unclear partition unique numbers dialed (Calls tile shows the math).`;
             }
             
             const weeklyActivitySubtitle = document.getElementById('weeklyActivitySubtitle');
@@ -4211,44 +4211,41 @@ ${actionsRow}
             document.getElementById('statusTotalLeads').textContent = totalLeads;
             const callsAnswered = data.metrics?.callsAnswered ?? 0;
             const callsNotAnswered = data.metrics?.callsNotAnswered ?? 0;
-            const callsOutcomePending = data.metrics?.callsOutcomePending ?? 0;
             const pendingLeadsOnly = data.metrics?.uniqueLeadsPendingOnly ?? 0;
             const ansAttempts = data.metrics?.callsAnsweredAttempts;
             const noAttempts = data.metrics?.callsNotAnsweredAttempts;
             const answerRate = data.metrics?.answerRate ?? 0;
             
             document.getElementById('statusTotalCalls').textContent = totalCalls;
-            const parts = [];
-            if (callsAnswered > 0) parts.push(`${callsAnswered} reached (any conv.)`);
-            if (callsNotAnswered > 0) parts.push(`${callsNotAnswered} no-pickup only`);
-            if (pendingLeadsOnly > 0) parts.push(`${pendingLeadsOnly} outcome unclear`);
-            const uniqDial = data.metrics?.uniqueLeadsCalled ?? data.totalCalls ?? 0;
+            const uniqDial = Number(data.metrics?.uniqueLeadsCalled ?? data.totalCalls ?? 0) || 0;
             const sumLeads = callsAnswered + callsNotAnswered + pendingLeadsOnly;
-            const sumNote = uniqDial > 0 && sumLeads === uniqDial ? ' — adds to unique leads dialed' : '';
-            if (ansAttempts != null && noAttempts != null) {
-                parts.push(`${ansAttempts} answered attempts · ${noAttempts} miss attempts (call rows)`);
+            const sumsOk = uniqDial > 0 && sumLeads === uniqDial;
+            const partitionLine = uniqDial > 0
+                ? `${formatNumber(callsAnswered)} reached + ${formatNumber(callsNotAnswered)} no pickup + ${formatNumber(pendingLeadsOnly)} unclear = ${formatNumber(uniqDial)} unique`
+                : '';
+            const tooltipParts = [];
+            if (partitionLine) {
+                tooltipParts.push(partitionLine + (sumsOk ? '' : ' — buckets do not sum (unexpected)'));
             }
-            const detailTitle = parts.length
-                ? `${parts.join(' • ')}${sumNote}${answerRate > 0 ? ` · ${answerRate}% reached` : ''}`
-                : `${totalCalls} unique leads called`;
+            if (ansAttempts != null && noAttempts != null) {
+                tooltipParts.push(`${ansAttempts} signal rows · ${noAttempts} miss rows (retries count)`);
+            }
+            const detailTitle = tooltipParts.length
+                ? tooltipParts.join(' · ')
+                : (uniqDial > 0 ? `${formatNumber(uniqDial)} unique numbers dialed` : 'No outbound dials yet');
             const hintLines = [];
             if (totalCallsNum > 0) {
                 hintLines.push(
-                    `${formatNumber(totalCallsNum)} unique dialed${answerRate > 0 ? ` · ${answerRate}% reached` : ''}`
+                    `${formatNumber(totalCallsNum)} unique numbers dialed (all time)${answerRate > 0 ? ` · ${answerRate}% reached` : ''}`
                 );
             } else {
-                hintLines.push(`${totalCalls} unique leads called`);
+                hintLines.push('No outbound dials yet');
             }
+            if (partitionLine) hintLines.push(partitionLine);
             if (ansAttempts != null && noAttempts != null) {
                 hintLines.push(
-                    `${formatNumber(ansAttempts)} conv. · ${formatNumber(noAttempts)} misses (all rows)`
+                    `${formatNumber(ansAttempts)} rows with conv. signal · ${formatNumber(noAttempts)} miss rows (retries count)`
                 );
-            } else if (callsAnswered > 0 || callsNotAnswered > 0 || pendingLeadsOnly > 0) {
-                const bits = [];
-                if (callsAnswered > 0) bits.push(`${formatNumber(callsAnswered)} reached`);
-                if (callsNotAnswered > 0) bits.push(`${formatNumber(callsNotAnswered)} no pickup`);
-                if (pendingLeadsOnly > 0) bits.push(`${formatNumber(pendingLeadsOnly)} unclear`);
-                if (bits.length) hintLines.push(bits.join(' · '));
             }
             const callsHint = hintLines.join('\n');
             document.getElementById('statusHintCalls').textContent = callsHint;
@@ -4264,14 +4261,27 @@ ${actionsRow}
             if (answeredEl) answeredEl.textContent = formatNumber(callsAnswered);
             if (noPickupEl) noPickupEl.textContent = formatNumber(callsNotAnswered);
             if (answeredHintEl) {
-                answeredHintEl.textContent = (pendingLeadsOnly > 0 || callsOutcomePending > 0)
-                    ? '≥1 call with a conversation signal\n(duration, transcript, or outcome)'
-                    : (callsAnswered > 0 ? 'At least one connected-style call' : 'No conversations yet');
+                answeredHintEl.textContent = callsAnswered > 0
+                    ? '≥1 dial classified as a conversation\n(duration, transcript, or outcome)'
+                    : 'No numbers in this bucket yet';
             }
             if (noPickupHintEl) {
                 noPickupHintEl.textContent = callsNotAnswered > 0
-                    ? 'Never reached on any dial\n(excl. leads with a conv. call)'
-                    : 'No leads in this bucket';
+                    ? '≥1 classified miss, never a hit\n(unclear-only numbers count under Calls tile)'
+                    : 'No numbers in this bucket yet';
+            }
+
+            const answeredCard = document.getElementById('statusBarAnsweredCard');
+            if (answeredCard) {
+                answeredCard.title = callsAnswered > 0
+                    ? `${formatNumber(callsAnswered)} unique numbers with a conversation signal (subset of dialed; see Calls tile for partition)`
+                    : 'No reached numbers yet';
+            }
+            const noPickupCard = document.getElementById('statusBarNoPickupCard');
+            if (noPickupCard) {
+                noPickupCard.title = callsNotAnswered > 0
+                    ? `${formatNumber(callsNotAnswered)} unique numbers with only miss-style rows, no conversation signal`
+                    : 'No no-pickup-only numbers';
             }
             
             document.getElementById('statusConversionRate').textContent = conversion;
@@ -4281,7 +4291,14 @@ ${actionsRow}
             const bookings = formatNumber(data.bookingsThisWeek ?? 0);
             const winRate = formatPercent(data.successRate ?? 0);
 
-            document.getElementById('statusHintLeads').textContent = `Last 24h: ${last24} new`;
+            const leadTotalNum = data.totalLeads != null && Number.isFinite(Number(data.totalLeads))
+                ? Number(data.totalLeads)
+                : NaN;
+            let leadsHint = `Last 24h: ${last24} new`;
+            if (Number.isFinite(leadTotalNum) && leadTotalNum > 0 && uniqDial > 0 && leadTotalNum !== uniqDial) {
+                leadsHint += `\n${formatNumber(leadTotalNum)} in CRM · ${formatNumber(uniqDial)} with ≥1 dial`;
+            }
+            document.getElementById('statusHintLeads').textContent = leadsHint;
             // statusHintCalls already set above with answered/not answered breakdown
             const convHint = document.getElementById('statusHintConversion');
             if (convHint) {
@@ -4333,7 +4350,7 @@ ${actionsRow}
 
             const foot = tom
                 ? `<strong>How to read this:</strong> “Outbound dials” counts every attempt (retries add up). “Unique numbers” is distinct phones we tried in that window. “Unique leads dialed (all time)” is how many contacts have been called at least once.`
-                : `<strong>How to read this:</strong> 24-hour figures use a rolling window. All-time dials include retries. Response time is mean minutes from lead created to first outbound dial (recent leads sample).`;
+                : `<strong>How to read this:</strong> 24-hour figures use a rolling window. All-time dials include retries. Reached + awaiting classification + no-pickup-only partition unique numbers dialed (status bar). Response time is mean minutes from lead created to first outbound dial (recent leads sample).`;
 
             container.innerHTML = `
                 <div class="activity-split-heading">Last 24 hours</div>
@@ -4903,12 +4920,12 @@ ${actionsRow}
                 ? [
                     { label: 'Total leads', value: totalLeads, color: '#5c6ac4' },
                     { label: 'Leads we called', value: contacted, color: '#764ba2' },
-                    { label: 'Answered conversations', value: engaged, color: '#667eea' }
+                    { label: 'Reached (unique)', value: engaged, color: '#667eea' }
                 ]
                 : [
                     { label: 'Total leads', value: totalLeads, color: '#5c6ac4' },
                     { label: 'Leads we called', value: contacted, color: '#764ba2' },
-                    { label: 'Answered conversations', value: engaged, color: '#667eea' },
+                    { label: 'Reached (unique)', value: engaged, color: '#667eea' },
                     { label: 'Appointments (7 days)', value: booked, color: '#1b5e20' }
                 ];
 
