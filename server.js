@@ -8100,6 +8100,18 @@ function formatTimeAgoLabel(dateString) {
   return `${days}d ago`;
 }
 
+/** Live activity feed: only mention SMS when tenant has Twilio fields set (twilio_json → client.sms). */
+function activityFeedChannelLabel(client) {
+  const sms = client?.sms && typeof client.sms === 'object' ? client.sms : {};
+  const hasSmsConfig = !!(
+    sms.messagingServiceSid ||
+    sms.fromNumber ||
+    sms.accountSid ||
+    sms.authToken
+  );
+  return hasSmsConfig ? 'AI call + SMS' : 'AI call';
+}
+
 function mapCallStatus(status) {
   const normalized = (status || '').toLowerCase();
   if (normalized.includes('book')) return 'Booked';
@@ -8623,7 +8635,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
   try {
     // Get client config first
     const client = await getFullClient(clientKey);
-    
+    const activityChannel = activityFeedChannelLabel(client);
+
     const [
       leadCounts,
       callCounts,
@@ -9066,7 +9079,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         dbId: row.id,
         name: row.name || row.lead_phone,
         service: row.service || 'Lead Follow-Up',
-        channel: 'AI call + SMS',
+        channel: activityChannel,
         summary,
         status: mapCallStatus(displayStatus),
         statusClass: mapStatusClass(displayStatus),
@@ -9238,6 +9251,13 @@ app.get('/api/events/:clientKey', async (req, res) => {
 
   let isClosed = false;
   let lastSent = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+  let activityChannel = 'AI call';
+  try {
+    const streamClient = await getFullClient(clientKey);
+    activityChannel = activityFeedChannelLabel(streamClient);
+  } catch {
+    /* default AI call */
+  }
 
   const sendRecentCalls = async () => {
     if (isClosed) return;
@@ -9258,7 +9278,7 @@ app.get('/api/events/:clientKey', async (req, res) => {
         const payload = {
           name: row.name || row.lead_phone,
           service: row.service || 'Lead Follow-Up',
-          channel: 'AI call + SMS',
+          channel: activityChannel,
           summary: row.outcome ? `Outcome: ${row.outcome}` : 'Call completed',
           status: mapCallStatus(row.status),
           statusClass: mapStatusClass(row.status),
