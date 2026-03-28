@@ -11031,7 +11031,20 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
         ORDER BY l.created_at DESC NULLS LAST
         LIMIT 1)`;
 
-    const result = await query(`
+    const RETRY_QUEUE_PREVIEW_LIMIT = 15;
+
+    const rqWhere = `
+      WHERE rq.client_key = $1
+        AND LOWER(TRIM(COALESCE(rq.status, ''))) = 'pending'
+        AND rq.scheduled_for <= NOW() + INTERVAL '7 days'`;
+    const cqWhere = `
+      WHERE cq.client_key = $1
+        AND LOWER(TRIM(COALESCE(cq.status, ''))) = 'pending'
+        AND cq.call_type = 'vapi_call'
+        AND cq.scheduled_for <= NOW() + INTERVAL '7 days'`;
+
+    const [result, rqCountRes, callQ, cqCountRes] = await Promise.all([
+      query(`
       SELECT 
         rq.id,
         rq.lead_phone,
@@ -11044,16 +11057,12 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
         'retry_queue'::text AS source,
         ${leadNameSubquery('rq', 'lead_phone')} AS name
       FROM retry_queue rq
-      WHERE rq.client_key = $1
-        AND LOWER(TRIM(COALESCE(rq.status, ''))) = 'pending'
-        AND rq.scheduled_for <= NOW() + INTERVAL '7 days'
+      ${rqWhere}
       ORDER BY rq.scheduled_for ASC
-      LIMIT 15
-    `, [clientKey]);
-
-    let callQ = { rows: [] };
-    try {
-      callQ = await query(`
+      LIMIT ${RETRY_QUEUE_PREVIEW_LIMIT}
+    `, [clientKey]),
+      query(`SELECT COUNT(*)::int AS n FROM retry_queue rq ${rqWhere}`, [clientKey]),
+      query(`
         SELECT 
           cq.id,
           cq.lead_phone,
@@ -11066,16 +11075,19 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
           'call_queue'::text AS source,
           ${leadNameSubquery('cq', 'lead_phone')} AS name
         FROM call_queue cq
-        WHERE cq.client_key = $1
-          AND LOWER(TRIM(COALESCE(cq.status, ''))) = 'pending'
-          AND cq.call_type = 'vapi_call'
-          AND cq.scheduled_for <= NOW() + INTERVAL '7 days'
+        ${cqWhere}
         ORDER BY cq.scheduled_for ASC
-        LIMIT 15
-      `, [clientKey]);
-    } catch (cqErr) {
-      console.warn('[RETRY QUEUE API] call_queue optional read failed:', cqErr?.message || cqErr);
-    }
+        LIMIT ${RETRY_QUEUE_PREVIEW_LIMIT}
+      `, [clientKey]).catch((cqErr) => {
+        console.warn('[RETRY QUEUE API] call_queue optional read failed:', cqErr?.message || cqErr);
+        return { rows: [] };
+      }),
+      query(`SELECT COUNT(*)::int AS n FROM call_queue cq ${cqWhere}`, [clientKey]).catch(() => ({ rows: [{ n: 0 }] }))
+    ]);
+
+    const rqTotal = parseInt(rqCountRes.rows?.[0]?.n || 0, 10);
+    const cqTotal = parseInt(cqCountRes.rows?.[0]?.n || 0, 10);
+    const totalInWindow = rqTotal + cqTotal;
 
     const retryKindLabel = (source, retryType) => {
       const isCallQueue = source === 'call_queue';
@@ -11133,11 +11145,16 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
 
     const merged = [...(result.rows || []).map(mapRow), ...(callQ.rows || []).map(mapRow)]
       .sort((a, b) => new Date(a.scheduledFor) - new Date(b.scheduledFor))
-      .slice(0, 15);
+      .slice(0, RETRY_QUEUE_PREVIEW_LIMIT);
 
     res.json({
       ok: true,
-      retries: merged
+      retries: merged,
+      previewLimit: RETRY_QUEUE_PREVIEW_LIMIT,
+      shown: merged.length,
+      totalInWindow: totalInWindow,
+      retryQueuePending7d: rqTotal,
+      callQueuePending7d: cqTotal
     });
   } catch (error) {
     console.error('[RETRY QUEUE ERROR]', error);

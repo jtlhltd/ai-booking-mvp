@@ -3691,12 +3691,27 @@ ${actionsRow}
                         </div>`;
         }
 
-        function renderRetryQueueBar(count, isDemo) {
-            if (!count || count < 1) return '';
-            const hint = isDemo
-                ? 'Demo sample rows'
-                : 'Soonest first · next 7 days · your browser local time for “late / in …”';
-            return `<div class="retry-queue-bar" role="status"><span><strong>${formatNumber(count)}</strong> in queue</span><span class="retry-queue-bar-hint">${escapeHtml(hint)}</span></div>`;
+        function renderRetryQueueBar(shown, isDemo, opts = {}) {
+            if (!shown || shown < 1) return '';
+            if (isDemo) {
+                return `<div class="retry-queue-bar" role="status"><span><strong>${formatNumber(shown)}</strong> demo rows</span><span class="retry-queue-bar-hint">Sample data only</span></div>`;
+            }
+            const total = opts.totalInWindow;
+            const cap = opts.previewLimit != null ? opts.previewLimit : 15;
+            let mainHtml;
+            if (total != null && total > shown) {
+                mainHtml = `<strong>${formatNumber(shown)}</strong> shown · <strong>${formatNumber(total)}</strong> total rows in next 7 days`;
+            } else if (total != null) {
+                mainHtml = `<strong>${formatNumber(shown)}</strong> total in next 7 days`;
+            } else {
+                mainHtml = `<strong>${formatNumber(shown)}</strong> in queue`;
+            }
+            const hintParts = ['Soonest first · scroll to see all loaded rows'];
+            if (total != null && total > shown) {
+                hintParts.push(`list capped at ${formatNumber(cap)} after merging call + retry queues`);
+            }
+            hintParts.push('“late / in …” vs your browser clock');
+            return `<div class="retry-queue-bar" role="status"><span>${mainHtml}</span><span class="retry-queue-bar-hint">${escapeHtml(hintParts.join(' · '))}</span></div>`;
         }
 
         function isSafeHttpUrl(url) {
@@ -4407,7 +4422,7 @@ ${actionsRow}
             
             const retryQueueSubtitle = document.getElementById('retryQueueSubtitle');
             if (retryQueueSubtitle) {
-                retryQueueSubtitle.textContent = `Scheduled retries and outbound slots for ${businessName} (next 7 days, soonest first). Hover a card for full date and number.`;
+                retryQueueSubtitle.textContent = `Pending retries + outbound call slots for ${businessName}, scheduled within the next 7 days. The card list is a preview (soonest first, merged queues). Hover a row for full date and number.`;
             }
             
             const callRecordingsSubtitle = document.getElementById('callRecordingsSubtitle');
@@ -5842,7 +5857,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     seenRetryKeys.add(key);
                     return true;
                 });
-                container.innerHTML = renderRetryQueueBar(dedupedRetries.length, false)
+                container.innerHTML = renderRetryQueueBar(dedupedRetries.length, false, {
+                    totalInWindow: payload.totalInWindow,
+                    previewLimit: payload.previewLimit
+                })
                     + dedupedRetries.map((lead) => renderRetryQueueRow(lead)).join('');
             } catch (error) {
                 console.error('Failed to load retry queue', error);
