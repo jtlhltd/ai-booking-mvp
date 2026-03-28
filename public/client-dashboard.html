@@ -171,12 +171,17 @@
         .status-card {
             background: rgba(255, 255, 255, 0.96);
             border-radius: 18px;
-            padding: 18px;
+            padding: 16px 14px 22px;
             box-shadow: var(--card-shadow);
             text-align: center;
             border: 1px solid rgba(92,106,196,0.1);
             position: relative;
-            overflow: hidden;
+            overflow: visible;
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 6px;
+            min-height: 0;
         }
 
         .status-card h4 {
@@ -184,19 +189,32 @@
             letter-spacing: 0.15em;
             font-size: 0.75rem;
             color: #8c8fab;
-            margin-bottom: 10px;
+            margin: 0;
+            line-height: 1.22;
+            min-height: 3.3em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
         }
 
         .status-value {
             font-size: 2rem;
             font-weight: 700;
             color: var(--primary);
+            line-height: 1.1;
+            flex-shrink: 0;
+            font-variant-numeric: tabular-nums;
         }
 
         .status-hint {
-            margin-top: 6px;
-            font-size: 0.85rem;
+            margin: 0;
+            margin-top: auto;
+            font-size: 0.8rem;
+            line-height: 1.5;
             color: #8c8fab;
+            white-space: pre-line;
+            padding: 8px 2px 2px;
         }
 
         .dashboard-section {
@@ -294,7 +312,7 @@
             overflow-x: hidden;
             -webkit-overflow-scrolling: touch;
             overscroll-behavior: contain;
-            padding-bottom: 14px;
+            padding-bottom: 24px;
         }
 
         .dashboard-grid > .card > #call-quality,
@@ -366,6 +384,11 @@
             min-height: 0;
         }
 
+        .card-metrics > .card-subtitle {
+            margin-top: -4px;
+            margin-bottom: 22px;
+        }
+
         .card-fullwidth {
             grid-column: 1 / -1;
         }
@@ -429,35 +452,61 @@
             padding: 8px 0 4px;
         }
 
-        /* 6-col rhythm: 3×(span 2) and 2×(span 3) share column lines; solo tile matches ⅓ width */
+        /* Stacked row blocks avoid flat-grid auto-placement bugs (solo tile overlap) */
         .activity-grid.activity-grid--rhythm {
-            grid-template-columns: repeat(6, minmax(0, 1fr));
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 0;
+            padding: 6px 0 4px;
+        }
+
+        .activity-rhythm-block {
+            display: grid;
             gap: 14px;
-            padding: 8px 0 6px;
-            align-items: start;
+            width: 100%;
+            box-sizing: border-box;
         }
 
-        .activity-grid.activity-grid--rhythm .activity-metric--third {
-            grid-column: span 2;
+        .activity-rhythm-block--3 {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            align-items: stretch;
         }
 
-        .activity-grid.activity-grid--rhythm .activity-metric--half {
-            grid-column: span 3;
+        .activity-rhythm-block--2 {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            align-items: stretch;
         }
 
-        .activity-grid.activity-grid--rhythm .activity-metric--solo {
-            grid-column: 3 / span 2;
+        .activity-rhythm-block--solo {
+            display: flex;
+            justify-content: center;
+            margin-top: 2px;
+        }
+
+        .activity-rhythm-block--solo .activity-metric {
+            flex: 0 1 auto;
+            width: 100%;
+            max-width: min(100%, calc((100% - 28px) / 3));
+        }
+
+        .activity-rhythm-block--solo .activity-metric-hint {
+            margin-top: 10px;
+            padding-top: 0;
         }
 
         .activity-metric {
             text-align: left;
-            padding: 14px 16px;
+            padding: 14px 16px 16px;
             background: rgba(92,106,196,0.06);
             border-radius: 12px;
             border: 1px solid rgba(92,106,196,0.12);
             box-sizing: border-box;
-            min-height: 0;
+            min-height: min-content;
             overflow: visible;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
         }
 
         .activity-metric-label {
@@ -467,7 +516,7 @@
             letter-spacing: 0.04em;
             color: #6b7194;
             margin-bottom: 6px;
-            line-height: 1.25;
+            line-height: 1.3;
         }
 
         .activity-metric-value {
@@ -476,24 +525,29 @@
             color: var(--primary);
             font-variant-numeric: tabular-nums;
             line-height: 1.15;
+            flex-shrink: 0;
         }
 
         .activity-metric-hint {
             font-size: 0.74rem;
             color: var(--muted, #7a7fa4);
-            margin-top: 8px;
-            line-height: 1.45;
+            margin-top: auto;
+            padding-top: 10px;
+            margin-bottom: 0;
+            line-height: 1.5;
+            align-self: stretch;
         }
 
         .activity-split-heading {
-            grid-column: 1 / -1;
+            width: 100%;
+            box-sizing: border-box;
             font-size: 0.7rem;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.07em;
             color: #6b7194;
-            margin: 6px 0 0;
-            padding-top: 12px;
+            margin: 16px 0 10px;
+            padding-top: 14px;
             border-top: 1px solid rgba(92, 106, 196, 0.14);
         }
 
@@ -501,14 +555,16 @@
             border-top: none;
             padding-top: 0;
             margin-top: 0;
+            margin-bottom: 10px;
         }
 
         .activity-footnote {
-            grid-column: 1 / -1;
+            width: 100%;
+            box-sizing: border-box;
             font-size: 0.78rem;
             color: var(--muted, #7a7fa4);
             line-height: 1.45;
-            margin-top: 10px;
+            margin-top: 16px;
             padding: 12px 14px;
             background: rgba(92, 106, 196, 0.05);
             border-radius: 10px;
@@ -2642,13 +2698,16 @@
             }
 
             .activity-grid.activity-grid--rhythm {
+                display: flex;
+            }
+
+            .activity-rhythm-block--3,
+            .activity-rhythm-block--2 {
                 grid-template-columns: 1fr;
             }
 
-            .activity-grid.activity-grid--rhythm .activity-metric--third,
-            .activity-grid.activity-grid--rhythm .activity-metric--half,
-            .activity-grid.activity-grid--rhythm .activity-metric--solo {
-                grid-column: 1 / -1;
+            .activity-rhythm-block--solo .activity-metric {
+                max-width: 100%;
             }
             
             .priority-visual {
@@ -2790,7 +2849,7 @@
                 <div class="status-value" id="statusTotalLeads" aria-live="polite">—</div>
                 <p class="status-hint" id="statusHintLeads">Loading...</p>
                 </div>
-            <div class="status-card" title="Calls your concierge has made" role="article" aria-label="Calls we've made">
+            <div class="status-card" id="statusBarCallsCard" title="Calls your concierge has made" role="article" aria-label="Calls we've made">
                 <h4 id="statusCardCalls">Calls We've Made</h4>
                 <div class="status-value" id="statusTotalCalls" aria-live="polite">—</div>
                 <p class="status-hint" id="statusHintCalls">Loading...</p>
@@ -4010,6 +4069,10 @@ ${actionsRow}
         function updateStatusBar(data) {
             const totalLeads = formatNumber(data.totalLeads);
             const totalCalls = formatNumber(data.totalCalls);
+            const totalCallsNum =
+                data.totalCalls != null && Number.isFinite(Number(data.totalCalls))
+                    ? Number(data.totalCalls)
+                    : 0;
             const conversion = formatPercent(data.conversionRate);
             const firstResponse = data.firstResponse || '—';
 
@@ -4033,10 +4096,34 @@ ${actionsRow}
             if (ansAttempts != null && noAttempts != null) {
                 parts.push(`${ansAttempts} answered attempts · ${noAttempts} miss attempts (call rows)`);
             }
-            const callsHint = parts.length
+            const detailTitle = parts.length
                 ? `${parts.join(' • ')}${sumNote}${answerRate > 0 ? ` · ${answerRate}% reached` : ''}`
                 : `${totalCalls} unique leads called`;
+            const hintLines = [];
+            if (totalCallsNum > 0) {
+                hintLines.push(
+                    `${formatNumber(totalCallsNum)} unique dialed${answerRate > 0 ? ` · ${answerRate}% reached` : ''}`
+                );
+            } else {
+                hintLines.push(`${totalCalls} unique leads called`);
+            }
+            if (ansAttempts != null && noAttempts != null) {
+                hintLines.push(
+                    `${formatNumber(ansAttempts)} conv. attempts · ${formatNumber(noAttempts)} miss rows`
+                );
+            } else if (callsAnswered > 0 || callsNotAnswered > 0 || pendingLeadsOnly > 0) {
+                const bits = [];
+                if (callsAnswered > 0) bits.push(`${formatNumber(callsAnswered)} reached`);
+                if (callsNotAnswered > 0) bits.push(`${formatNumber(callsNotAnswered)} no pickup`);
+                if (pendingLeadsOnly > 0) bits.push(`${formatNumber(pendingLeadsOnly)} unclear`);
+                if (bits.length) hintLines.push(bits.join(' · '));
+            }
+            const callsHint = hintLines.join('\n');
             document.getElementById('statusHintCalls').textContent = callsHint;
+            const callsCardEl = document.getElementById('statusBarCallsCard');
+            if (callsCardEl) {
+                callsCardEl.title = detailTitle.length > 480 ? `${detailTitle.slice(0, 477)}…` : detailTitle;
+            }
 
             const answeredEl = document.getElementById('statusCallsAnswered');
             const answeredHintEl = document.getElementById('statusHintAnswered');
@@ -4071,9 +4158,12 @@ ${actionsRow}
                     : `Win rate: ${winRate}`;
             }
             const respN = data.metrics?.firstResponseSampleSize;
-            document.getElementById('statusHintResponse').textContent = firstResponse === '—'
-                ? 'Mean minutes: lead created → first dial (30d leads, first call within 48h). No matching lead↔call pairs yet.'
-                : `Mean ${firstResponse} to first dial${respN != null && respN > 0 ? ` · ${respN} leads in sample` : ''}`;
+            document.getElementById('statusHintResponse').textContent =
+                firstResponse === '—'
+                    ? 'No matching lead↔call pairs in the sample yet.\n30d leads, first call within 48h of creation.'
+                    : respN != null && respN > 0
+                        ? `Mean ${firstResponse} to first dial\n${formatNumber(respN)} leads in sample`
+                        : `Mean ${firstResponse} to first dial`;
         }
 
         function renderRecentActivity(data) {
@@ -4100,10 +4190,12 @@ ${actionsRow}
             const bookingsSection = !tom
                 ? `
                 <div class="activity-split-heading">Bookings (7 days)</div>
-                <div class="activity-metric activity-metric--third activity-metric--solo">
-                    <div class="activity-metric-label">Bookings logged</div>
-                    <div class="activity-metric-value">${formatNumber(data.bookingsThisWeek || 0)}</div>
-                    <div class="activity-metric-hint">From appointments and “booked” call outcomes.</div>
+                <div class="activity-rhythm-block activity-rhythm-block--solo">
+                    <div class="activity-metric">
+                        <div class="activity-metric-label">Bookings logged</div>
+                        <div class="activity-metric-value">${formatNumber(data.bookingsThisWeek || 0)}</div>
+                        <div class="activity-metric-hint">From appointments and “booked” call outcomes.</div>
+                    </div>
                 </div>`
                 : '';
 
@@ -4113,52 +4205,60 @@ ${actionsRow}
 
             container.innerHTML = `
                 <div class="activity-split-heading">Last 24 hours</div>
-                <div class="activity-metric activity-metric--third">
-                    <div class="activity-metric-label">New leads</div>
-                    <div class="activity-metric-value">${formatNumber(last24Leads)}</div>
-                    <div class="activity-metric-hint">Added to your pipeline in the rolling day.</div>
-                </div>
-                <div class="activity-metric activity-metric--third">
-                    <div class="activity-metric-label">Outbound dials</div>
-                    <div class="activity-metric-value">${formatNumber(callsLast24h)}</div>
-                    <div class="activity-metric-hint">Every call attempt (includes retries).</div>
-                </div>
-                <div class="activity-metric activity-metric--third">
-                    <div class="activity-metric-label">Unique numbers dialed</div>
-                    <div class="activity-metric-value">${formatNumber(uniqueLast24)}</div>
-                    <div class="activity-metric-hint">Distinct phones we tried at least once.</div>
+                <div class="activity-rhythm-block activity-rhythm-block--3">
+                    <div class="activity-metric">
+                        <div class="activity-metric-label">New leads</div>
+                        <div class="activity-metric-value">${formatNumber(last24Leads)}</div>
+                        <div class="activity-metric-hint">Added to your pipeline in the rolling day.</div>
+                    </div>
+                    <div class="activity-metric">
+                        <div class="activity-metric-label">Outbound dials</div>
+                        <div class="activity-metric-value">${formatNumber(callsLast24h)}</div>
+                        <div class="activity-metric-hint">Every call attempt (includes retries).</div>
+                    </div>
+                    <div class="activity-metric">
+                        <div class="activity-metric-label">Unique numbers dialed</div>
+                        <div class="activity-metric-value">${formatNumber(uniqueLast24)}</div>
+                        <div class="activity-metric-hint">Distinct phones we tried at least once.</div>
+                    </div>
                 </div>
                 <div class="activity-split-heading">All-time dialing</div>
-                <div class="activity-metric activity-metric--half">
-                    <div class="activity-metric-label">Unique leads dialed</div>
-                    <div class="activity-metric-value">${formatNumber(uniqueDialedAT)}</div>
-                    <div class="activity-metric-hint">Contacts with at least one outbound attempt.</div>
-                </div>
-                <div class="activity-metric activity-metric--half">
-                    <div class="activity-metric-label">Total dial attempts</div>
-                    <div class="activity-metric-value">${dialAT != null ? formatNumber(dialAT) : '—'}</div>
-                    <div class="activity-metric-hint">All rows in call history; retries increase this.</div>
+                <div class="activity-rhythm-block activity-rhythm-block--2">
+                    <div class="activity-metric">
+                        <div class="activity-metric-label">Unique leads dialed</div>
+                        <div class="activity-metric-value">${formatNumber(uniqueDialedAT)}</div>
+                        <div class="activity-metric-hint">Contacts with at least one outbound attempt.</div>
+                    </div>
+                    <div class="activity-metric">
+                        <div class="activity-metric-label">Total dial attempts</div>
+                        <div class="activity-metric-value">${dialAT != null ? formatNumber(dialAT) : '—'}</div>
+                        <div class="activity-metric-hint">All rows in call history; retries increase this.</div>
+                    </div>
                 </div>
                 <div class="activity-split-heading">Reach &amp; speed</div>
-                <div class="activity-metric activity-metric--third">
-                    <div class="activity-metric-label">Leads reached</div>
-                    <div class="activity-metric-value">${formatNumber(reached)}</div>
-                    <div class="activity-metric-hint">Unique numbers with a connected-call signal in data.</div>
+                <div class="activity-rhythm-block activity-rhythm-block--3">
+                    <div class="activity-metric">
+                        <div class="activity-metric-label">Leads reached</div>
+                        <div class="activity-metric-value">${formatNumber(reached)}</div>
+                        <div class="activity-metric-hint">Unique numbers with a connected-call signal in data.</div>
+                    </div>
+                    <div class="activity-metric">
+                        <div class="activity-metric-label">Answer / connect rate</div>
+                        <div class="activity-metric-value">${uniqueDialedAT > 0 ? `${answerRate}%` : '—'}</div>
+                        <div class="activity-metric-hint">Reached ÷ unique leads dialed (all time).</div>
+                    </div>
+                    <div class="activity-metric">
+                        <div class="activity-metric-label">Awaiting classification</div>
+                        <div class="activity-metric-value">${formatNumber(pendingClassify)}</div>
+                        <div class="activity-metric-hint">Numbers called but pickup unclear (e.g. status still open).</div>
+                    </div>
                 </div>
-                <div class="activity-metric activity-metric--third">
-                    <div class="activity-metric-label">Answer / connect rate</div>
-                    <div class="activity-metric-value">${uniqueDialedAT > 0 ? `${answerRate}%` : '—'}</div>
-                    <div class="activity-metric-hint">Reached ÷ unique leads dialed (all time).</div>
-                </div>
-                <div class="activity-metric activity-metric--third">
-                    <div class="activity-metric-label">Awaiting classification</div>
-                    <div class="activity-metric-value">${formatNumber(pendingClassify)}</div>
-                    <div class="activity-metric-hint">Numbers called but pickup unclear (e.g. status still open).</div>
-                </div>
-                <div class="activity-metric activity-metric--third activity-metric--solo">
-                    <div class="activity-metric-label">Avg. time to first dial</div>
-                    <div class="activity-metric-value">${escapeHtml(resp)}</div>
-                    <div class="activity-metric-hint">${respN != null && respN > 0 ? `Based on ${formatNumber(respN)} recent lead→call pairs.` : 'Mean minutes after lead creation (when we have pairs).'}</div>
+                <div class="activity-rhythm-block activity-rhythm-block--solo">
+                    <div class="activity-metric">
+                        <div class="activity-metric-label">Avg. time to first dial</div>
+                        <div class="activity-metric-value">${escapeHtml(resp)}</div>
+                        <div class="activity-metric-hint">${respN != null && respN > 0 ? `Based on ${formatNumber(respN)} recent lead→call pairs.` : 'Mean minutes after lead creation (when we have pairs).'}</div>
+                    </div>
                 </div>
                 ${bookingsSection}
                 <div class="activity-footnote">${foot}</div>
