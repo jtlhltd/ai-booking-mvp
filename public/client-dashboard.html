@@ -2443,8 +2443,8 @@
                 </div>
         </section>
 
-        <!-- SYSTEM STATUS SECTION -->
-        <section class="dashboard-section">
+        <!-- SYSTEM STATUS SECTION (hidden for D2D Xpress / Tom outreach dashboard) -->
+        <section class="dashboard-section tom-hide-for-outreach">
             <h2 class="section-header">⚙️ System Status</h2>
             <div class="dashboard-grid">
                 <article class="card">
@@ -3706,6 +3706,7 @@
 
 
         async function renderSystemStatus(config) {
+            if (isTomOutreachDashboard(currentClient)) return;
             const statusPhoneEl = document.getElementById('statusPhone');
             const statusCoverageEl = document.getElementById('statusCoverage');
             if (statusPhoneEl) statusPhoneEl.textContent = config.phone || 'Not supplied';
@@ -5853,6 +5854,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         }
 
         async function loadIntegrationHealth(clientKey) {
+            if (isTomOutreachDashboard(clientKey)) return;
             if (clientKey === DEMO_CLIENT_KEY) {
                 renderIntegrationStatus(DEMO_INTEGRATIONS);
                 return;
