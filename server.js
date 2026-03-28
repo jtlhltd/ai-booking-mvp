@@ -8379,6 +8379,9 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
                    outcome IS NULL
                    AND (
                      (COALESCE(duration, 0) >= 20 AND LOWER(TRIM(COALESCE(status, ''))) IN ('ended', 'completed', 'finished'))
+                     OR (COALESCE(duration, 0) >= 40 AND LOWER(TRIM(COALESCE(status, ''))) NOT IN (
+                       'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
+                     ))
                      OR (COALESCE(transcript, '') <> '' AND LENGTH(TRIM(COALESCE(transcript, ''))) > 40)
                      OR (COALESCE(recording_url, '') <> '')
                    )
