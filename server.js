@@ -8708,6 +8708,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
                agg.total,
                agg.unique_leads_called,
                agg.last24,
+               (SELECT COUNT(DISTINCT cr.lead_phone)::int FROM call_row cr WHERE cr.created_at >= ${sqlHoursAgo(24)}) AS unique_leads_called_last24,
                agg.booked,
                agg.answered,
                agg.not_answered,
@@ -8858,6 +8859,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     const uniqueLeadsPendingOnly = parseInt(callCounts.rows?.[0]?.pending_only_leads || 0, 10);
     const callsOutcomePending = parseInt(callCounts.rows?.[0]?.outcome_pending || 0, 10);
     const bookingsFromCalls = parseInt(callCounts.rows?.[0]?.booked || 0, 10);
+    const callsLast24h = parseInt(callCounts.rows?.[0]?.last24 || 0, 10);
+    const uniqueLeadsCalledLast24 = parseInt(callCounts.rows?.[0]?.unique_leads_called_last24 || 0, 10);
     
     // Use unique leads called for display (not total call attempts)
     const displayCalls = uniqueLeadsCalled || 0;
@@ -9153,8 +9156,11 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       source: 'live',
       metrics: {
         totalLeads,
-        totalCalls: displayCalls, // Show unique leads called, not total attempts
-        totalCallAttempts: totalCalls, // Keep total attempts for internal use
+        totalCalls: displayCalls, // Unique leads with ≥1 outbound dial (all time)
+        dialAttemptsAllTime: totalCalls, // Every outbound attempt row (retries count)
+        callsLast24h,
+        uniqueLeadsCalledLast24,
+        totalCallAttempts: totalCalls, // legacy alias
         uniqueLeadsCalled: displayCalls,
         callsAnswered: uniqueLeadsAnswered,
         callsNotAnswered: uniqueLeadsNoPickup,

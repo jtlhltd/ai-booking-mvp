@@ -304,29 +304,72 @@
 
         .activity-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 16px;
-            padding: 8px 0;
+            grid-template-columns: repeat(auto-fill, minmax(152px, 1fr));
+            gap: 12px;
+            padding: 8px 0 4px;
         }
 
         .activity-metric {
-            text-align: center;
-            padding: 16px;
+            text-align: left;
+            padding: 12px 14px;
             background: rgba(92,106,196,0.06);
             border-radius: 12px;
             border: 1px solid rgba(92,106,196,0.12);
         }
 
         .activity-metric-label {
-            font-size: 0.85rem;
-            color: #7a7fa4;
-            margin-bottom: 8px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: #6b7194;
+            margin-bottom: 6px;
+            line-height: 1.25;
         }
 
         .activity-metric-value {
-            font-size: 1.8rem;
+            font-size: 1.5rem;
             font-weight: 700;
             color: var(--primary);
+            font-variant-numeric: tabular-nums;
+            line-height: 1.15;
+        }
+
+        .activity-metric-hint {
+            font-size: 0.72rem;
+            color: var(--muted, #7a7fa4);
+            margin-top: 6px;
+            line-height: 1.35;
+        }
+
+        .activity-split-heading {
+            grid-column: 1 / -1;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            color: #6b7194;
+            margin: 6px 0 0;
+            padding-top: 12px;
+            border-top: 1px solid rgba(92, 106, 196, 0.14);
+        }
+
+        .activity-split-heading:first-child {
+            border-top: none;
+            padding-top: 0;
+            margin-top: 0;
+        }
+
+        .activity-footnote {
+            grid-column: 1 / -1;
+            font-size: 0.78rem;
+            color: var(--muted, #7a7fa4);
+            line-height: 1.45;
+            margin-top: 4px;
+            padding: 10px 12px;
+            background: rgba(92, 106, 196, 0.05);
+            border-radius: 10px;
+            border: 1px dashed rgba(92, 106, 196, 0.22);
         }
 
         .status-compact {
@@ -2031,6 +2074,26 @@
             border-top-color: rgba(92, 106, 196, 0.25);
         }
 
+        body[data-theme="dark"] .activity-metric {
+            background: rgba(92, 106, 196, 0.1);
+            border-color: rgba(92, 106, 196, 0.28);
+        }
+
+        body[data-theme="dark"] .activity-metric-label,
+        body[data-theme="dark"] .activity-split-heading {
+            color: #9aa3c4;
+        }
+
+        body[data-theme="dark"] .activity-metric-hint,
+        body[data-theme="dark"] .activity-footnote {
+            color: #b4bbd4;
+        }
+
+        body[data-theme="dark"] .activity-footnote {
+            background: rgba(92, 106, 196, 0.08);
+            border-color: rgba(92, 106, 196, 0.35);
+        }
+
         body[data-theme="dark"] .modal-backdrop {
             background: rgba(0, 0, 0, 0.85);
         }
@@ -2955,6 +3018,9 @@
                     totalLeads: metrics.totalLeads || livePayload.totalLeads || 0,
                     totalCalls: metrics.totalCalls || livePayload.totalCalls || 0,
                     last24hLeads: metrics.last24hLeads || livePayload.last24hLeads || 0,
+                    callsLast24h: metrics.callsLast24h ?? livePayload.callsLast24h ?? 0,
+                    uniqueLeadsCalledLast24: metrics.uniqueLeadsCalledLast24 ?? livePayload.uniqueLeadsCalledLast24 ?? 0,
+                    dialAttemptsAllTime: metrics.dialAttemptsAllTime ?? metrics.totalCallAttempts ?? livePayload.dialAttemptsAllTime ?? null,
                     conversionRate: metrics.conversionRate || livePayload.conversionRate || 0,
                     successRate: metrics.successRate || livePayload.successRate || 0,
                     firstResponse: metrics.firstResponse || livePayload.firstResponse || '—',
@@ -3014,6 +3080,9 @@
                 totalLeads: metrics.totalLeads ?? base.totalLeads,
                 totalCalls: metrics.totalCalls ?? base.totalCalls,
                 last24hLeads: metrics.last24hLeads ?? base.last24hLeads,
+                callsLast24h: metrics.callsLast24h ?? base.callsLast24h ?? 0,
+                uniqueLeadsCalledLast24: metrics.uniqueLeadsCalledLast24 ?? base.uniqueLeadsCalledLast24 ?? 0,
+                dialAttemptsAllTime: metrics.dialAttemptsAllTime ?? metrics.totalCallAttempts ?? base.dialAttemptsAllTime ?? null,
                 conversionRate: metrics.conversionRate ?? base.conversionRate,
                 successRate: metrics.successRate ?? base.successRate,
                 firstResponse: metrics.firstResponse ?? base.firstResponse,
@@ -3291,7 +3360,11 @@
             }
             
             const todaysActivitySubtitle = document.getElementById('todaysActivitySubtitle');
-            if (todaysActivitySubtitle) todaysActivitySubtitle.textContent = `What we accomplished for ${businessName} in the last 24 hours.`;
+            if (todaysActivitySubtitle) {
+                todaysActivitySubtitle.textContent = isTomOutreachDashboard(currentClient)
+                    ? `Rolling 24-hour outreach, all-time dialing totals, and reach metrics for ${businessName}.`
+                    : `Rolling 24 hours, all-time dialing, and how fast we reach new leads for ${businessName}.`;
+            }
             
             const retryQueueSubtitle = document.getElementById('retryQueueSubtitle');
             if (retryQueueSubtitle) retryQueueSubtitle.textContent = `Leads we're retrying for ${businessName} after initial contact.`;
@@ -3465,24 +3538,88 @@
             const container = document.getElementById('recent-activity');
             if (!container) return;
             const tom = isTomOutreachDashboard(currentClient);
-            const bookingBlock = tom ? '' : `
+            const m = data.metrics || {};
+            const n = (v, fb = 0) => {
+                const x = v != null ? Number(v) : NaN;
+                return Number.isFinite(x) ? x : fb;
+            };
+            const last24Leads = n(data.last24hLeads ?? m.last24hLeads);
+            const callsLast24h = n(data.callsLast24h ?? m.callsLast24h);
+            const uniqueLast24 = n(data.uniqueLeadsCalledLast24 ?? m.uniqueLeadsCalledLast24);
+            const dialATRaw = data.dialAttemptsAllTime ?? m.dialAttemptsAllTime ?? m.totalCallAttempts;
+            const dialAT = dialATRaw != null && Number.isFinite(Number(dialATRaw)) ? n(dialATRaw) : null;
+            const uniqueDialedAT = n(data.totalCalls ?? m.totalCalls);
+            const reached = n(m.uniqueLeadsAnswered);
+            const answerRate = n(m.answerRate);
+            const pendingClassify = n(m.uniqueLeadsPendingOnly);
+            const resp = data.firstResponse || m.firstResponse || '—';
+            const respN = m.firstResponseSampleSize;
+
+            const bookingsSection = !tom
+                ? `
+                <div class="activity-split-heading">Bookings (7 days)</div>
                 <div class="activity-metric">
-                    <div class="activity-metric-label">Bookings</div>
+                    <div class="activity-metric-label">Bookings logged</div>
                     <div class="activity-metric-value">${formatNumber(data.bookingsThisWeek || 0)}</div>
-                    </div>`;
+                    <div class="activity-metric-hint">From appointments and “booked” call outcomes.</div>
+                </div>`
+                : '';
+
+            const foot = tom
+                ? `<strong>How to read this:</strong> “Outbound dials” counts every attempt (retries add up). “Unique numbers” is distinct phones we tried in that window. “Unique leads dialed (all time)” is how many contacts have been called at least once.`
+                : `<strong>How to read this:</strong> 24-hour figures use a rolling window. All-time dials include retries. Response time is mean minutes from lead created to first outbound dial (recent leads sample).`;
+
             container.innerHTML = `
+                <div class="activity-split-heading">Last 24 hours</div>
                 <div class="activity-metric">
-                    <div class="activity-metric-label">New Leads</div>
-                    <div class="activity-metric-value">${formatNumber(data.last24hLeads || 0)}</div>
-                    </div>
+                    <div class="activity-metric-label">New leads</div>
+                    <div class="activity-metric-value">${formatNumber(last24Leads)}</div>
+                    <div class="activity-metric-hint">Added to your pipeline in the rolling day.</div>
+                </div>
                 <div class="activity-metric">
-                    <div class="activity-metric-label">Calls Made</div>
-                    <div class="activity-metric-value">${formatNumber(data.totalCalls || 0)}</div>
-                    </div>${bookingBlock}
+                    <div class="activity-metric-label">Outbound dials</div>
+                    <div class="activity-metric-value">${formatNumber(callsLast24h)}</div>
+                    <div class="activity-metric-hint">Every call attempt (includes retries).</div>
+                </div>
                 <div class="activity-metric">
-                    <div class="activity-metric-label">Response Time</div>
-                    <div class="activity-metric-value" style="font-size: 1.3rem;">${data.firstResponse || '—'}</div>
-                    </div>
+                    <div class="activity-metric-label">Unique numbers dialed</div>
+                    <div class="activity-metric-value">${formatNumber(uniqueLast24)}</div>
+                    <div class="activity-metric-hint">Distinct phones we tried at least once.</div>
+                </div>
+                <div class="activity-split-heading">All-time dialing</div>
+                <div class="activity-metric">
+                    <div class="activity-metric-label">Unique leads dialed</div>
+                    <div class="activity-metric-value">${formatNumber(uniqueDialedAT)}</div>
+                    <div class="activity-metric-hint">Contacts with at least one outbound attempt.</div>
+                </div>
+                <div class="activity-metric">
+                    <div class="activity-metric-label">Total dial attempts</div>
+                    <div class="activity-metric-value">${dialAT != null ? formatNumber(dialAT) : '—'}</div>
+                    <div class="activity-metric-hint">All rows in call history; retries increase this.</div>
+                </div>
+                <div class="activity-split-heading">Reach &amp; speed</div>
+                <div class="activity-metric">
+                    <div class="activity-metric-label">Leads reached</div>
+                    <div class="activity-metric-value">${formatNumber(reached)}</div>
+                    <div class="activity-metric-hint">Unique numbers with a connected-call signal in data.</div>
+                </div>
+                <div class="activity-metric">
+                    <div class="activity-metric-label">Answer / connect rate</div>
+                    <div class="activity-metric-value">${uniqueDialedAT > 0 ? `${answerRate}%` : '—'}</div>
+                    <div class="activity-metric-hint">Reached ÷ unique leads dialed (all time).</div>
+                </div>
+                <div class="activity-metric">
+                    <div class="activity-metric-label">Awaiting classification</div>
+                    <div class="activity-metric-value">${formatNumber(pendingClassify)}</div>
+                    <div class="activity-metric-hint">Numbers called but pickup unclear (e.g. status still open).</div>
+                </div>
+                <div class="activity-metric">
+                    <div class="activity-metric-label">Avg. time to first dial</div>
+                    <div class="activity-metric-value" style="font-size:1.25rem;">${escapeHtml(resp)}</div>
+                    <div class="activity-metric-hint">${respN != null && respN > 0 ? `Based on ${formatNumber(respN)} recent lead→call pairs.` : 'Mean minutes after lead creation (when we have pairs).'}</div>
+                </div>
+                ${bookingsSection}
+                <div class="activity-footnote">${foot}</div>
             `;
         }
 
