@@ -3696,19 +3696,22 @@ ${actionsRow}
             if (isDemo) {
                 return `<div class="retry-queue-bar" role="status"><span><strong>${formatNumber(shown)}</strong> demo rows</span><span class="retry-queue-bar-hint">Sample data only</span></div>`;
             }
-            const total = opts.totalInWindow;
-            const cap = opts.previewLimit != null ? opts.previewLimit : 15;
+            const total = opts.totalPending != null ? opts.totalPending : opts.totalInWindow;
+            const cap = opts.listCap != null ? opts.listCap : (opts.previewLimit != null ? opts.previewLimit : 500);
+            const truncated = !!opts.truncated;
             let mainHtml;
-            if (total != null && total > shown) {
-                mainHtml = `<strong>${formatNumber(shown)}</strong> shown · <strong>${formatNumber(total)}</strong> total rows in next 7 days`;
+            if (total != null && truncated) {
+                mainHtml = `<strong>${formatNumber(shown)}</strong> listed · <strong>${formatNumber(total)}</strong> pending in database`;
+            } else if (total != null && total === shown) {
+                mainHtml = `<strong>${formatNumber(shown)}</strong> pending (full queue on screen)`;
             } else if (total != null) {
-                mainHtml = `<strong>${formatNumber(shown)}</strong> total in next 7 days`;
+                mainHtml = `<strong>${formatNumber(shown)}</strong> listed · <strong>${formatNumber(total)}</strong> pending`;
             } else {
                 mainHtml = `<strong>${formatNumber(shown)}</strong> in queue`;
             }
-            const hintParts = ['Soonest first · scroll to see all loaded rows'];
-            if (total != null && total > shown) {
-                hintParts.push(`list capped at ${formatNumber(cap)} after merging call + retry queues`);
+            const hintParts = ['Soonest scheduled first · scroll the card'];
+            if (truncated) {
+                hintParts.push(`UI loads up to ${formatNumber(cap)} rows; rest still pending in DB`);
             }
             hintParts.push('“late / in …” vs your browser clock');
             return `<div class="retry-queue-bar" role="status"><span>${mainHtml}</span><span class="retry-queue-bar-hint">${escapeHtml(hintParts.join(' · '))}</span></div>`;
@@ -4422,7 +4425,7 @@ ${actionsRow}
             
             const retryQueueSubtitle = document.getElementById('retryQueueSubtitle');
             if (retryQueueSubtitle) {
-                retryQueueSubtitle.textContent = `Pending retries + outbound call slots for ${businessName}, scheduled within the next 7 days. The card list is a preview (soonest first, merged queues). Hover a row for full date and number.`;
+                retryQueueSubtitle.textContent = `All pending retries and outbound call slots for ${businessName} (retry queue + call queue), soonest first. Hover a row for the full scheduled time and phone number.`;
             }
             
             const callRecordingsSubtitle = document.getElementById('callRecordingsSubtitle');
@@ -5839,11 +5842,15 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     return;
                 }
                 if (!payload.retries || payload.retries.length === 0) {
+                    const subEl = document.getElementById('retryQueueSubtitle');
+                    if (subEl && clientBusinessName) {
+                        subEl.textContent = `No pending retries or outbound call slots for ${clientBusinessName} right now. After no-answer, busy, or voicemail we usually schedule another attempt.`;
+                    }
                     container.innerHTML = `
                             <div class="empty-state" style="padding: 20px;">
                                 <span class="empty-state-icon">✅</span>
                                 <div class="empty-state-title">All caught up!</div>
-                                <div class="empty-state-message">No follow-up retries or queued outbound calls in the next 7 days. After no-answer, busy, or voicemail we schedule the next attempt (often ~24h out).</div>
+                                <div class="empty-state-message">No pending follow-ups or outbound call slots right now. After no-answer, busy, or voicemail we usually schedule another attempt.</div>
                         </div>
                     `;
                     return;
@@ -5857,9 +5864,17 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     seenRetryKeys.add(key);
                     return true;
                 });
+                const listCap = payload.listCap ?? payload.previewLimit ?? 500;
+                const subEl = document.getElementById('retryQueueSubtitle');
+                if (subEl && clientBusinessName) {
+                    subEl.textContent = `All pending retries and outbound call slots for ${clientBusinessName} (retry queue + call queue), soonest first. The list shows up to ${formatNumber(listCap)} soonest rows; the bar above compares that to total pending in the database. Hover a row for full date and number.`;
+                }
                 container.innerHTML = renderRetryQueueBar(dedupedRetries.length, false, {
-                    totalInWindow: payload.totalInWindow,
-                    previewLimit: payload.previewLimit
+                    totalPending: payload.totalPending ?? payload.totalInWindow,
+                    listCap,
+                    previewLimit: payload.previewLimit,
+                    truncated: payload.truncated === true,
+                    totalInWindow: payload.totalInWindow
                 })
                     + dedupedRetries.map((lead) => renderRetryQueueRow(lead)).join('');
             } catch (error) {
