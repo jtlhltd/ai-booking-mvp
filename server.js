@@ -534,6 +534,8 @@ app.get('/tenant-dashboard', (req, res) => {
 });
 
 app.get('/client-dashboard', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.setHeader('Pragma', 'no-cache');
   res.sendFile(path.join(process.cwd(), 'public', 'client-dashboard.html'));
 });
 
@@ -8133,7 +8135,11 @@ function outcomeToFriendlyLabel(outcome) {
 
 /** Lead timeline: did a human pick up? (distinct from raw DB status / missing webhooks) */
 function inferTimelinePickupStatus(call) {
-  const outcome = (call.outcome || '').toLowerCase().trim().replace(/_/g, '-');
+  let outcome = (call.outcome || '').toLowerCase().trim().replace(/_/g, '-');
+  // Some pipelines mirror line status into outcome; ignore for pickup inference
+  if (outcome === 'initiated' || outcome === 'in-progress' || outcome === 'ringing' || outcome === 'queued') {
+    outcome = '';
+  }
   const status = (call.status || '').toLowerCase().trim();
   const durRaw = call.duration != null ? parseInt(call.duration, 10) : NaN;
   const durNum = Number.isFinite(durRaw) && durRaw >= 0 ? durRaw : null;
@@ -10329,7 +10335,10 @@ app.get('/api/leads/:leadId/timeline', async (req, res) => {
     });
     
     timeline.sort((a, b) => new Date(a.time) - new Date(b.time));
-    
+
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.setHeader('Pragma', 'no-cache');
+
     res.json({
       ok: true,
       timeline: timeline.map((item) => {

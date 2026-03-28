@@ -4136,7 +4136,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
             try {
                 const url = `${BASE_URL}/api/leads/${encodeURIComponent(leadId)}/timeline?clientKey=${encodeURIComponent(currentClient)}`;
-                const res = await fetch(url);
+                const res = await fetch(url, { cache: 'no-store' });
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok || !data.ok) {
                     contentEl.innerHTML = `<div class="empty-state-message">${escapeHtml(data.error || 'Could not load timeline.')}</div>`;
