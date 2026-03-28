@@ -2984,10 +2984,14 @@
             
             // Update more card subtitles
             const conversionFunnelSubtitle = document.getElementById('conversionFunnelSubtitle');
-            if (conversionFunnelSubtitle) conversionFunnelSubtitle.textContent = `How we convert ${businessName}'s leads into bookings.`;
+            if (conversionFunnelSubtitle) {
+                conversionFunnelSubtitle.textContent = `Independent counts for ${businessName} — not a strict funnel. “Answered” = unique leads with a conversation signal.`;
+            }
             
             const weeklyActivitySubtitle = document.getElementById('weeklyActivitySubtitle');
-            if (weeklyActivitySubtitle) weeklyActivitySubtitle.textContent = `Calls and bookings we made for ${businessName} this week.`;
+            if (weeklyActivitySubtitle) {
+                weeklyActivitySubtitle.textContent = `Daily call attempts (last 7 days) for ${businessName}. Retries make totals higher than unique leads dialed.`;
+            }
             
             const todaysActivitySubtitle = document.getElementById('todaysActivitySubtitle');
             if (todaysActivitySubtitle) todaysActivitySubtitle.textContent = `What we accomplished for ${businessName} in the last 24 hours.`;
@@ -3048,6 +3052,14 @@
             }).format(numeric);
         }
 
+        function formatAvgCallSeconds(sec) {
+            const s = Number(sec) || 0;
+            if (s <= 0) return '—';
+            if (s < 90) return `${Math.round(s)}s avg`;
+            const min = s / 60;
+            return min < 10 ? `${min.toFixed(1)} min avg` : `${Math.round(min)} min avg`;
+        }
+
         function formatTimeAgo(dateString) {
             if (!dateString) return 'just now';
             try {
@@ -3079,15 +3091,20 @@
             const callsAnswered = data.metrics?.callsAnswered ?? 0;
             const callsNotAnswered = data.metrics?.callsNotAnswered ?? 0;
             const callsOutcomePending = data.metrics?.callsOutcomePending ?? 0;
+            const ansAttempts = data.metrics?.callsAnsweredAttempts;
+            const noAttempts = data.metrics?.callsNotAnsweredAttempts;
             const answerRate = data.metrics?.answerRate ?? 0;
             
             document.getElementById('statusTotalCalls').textContent = totalCalls;
             const parts = [];
-            if (callsAnswered > 0) parts.push(`${callsAnswered} answered`);
-            if (callsNotAnswered > 0) parts.push(`${callsNotAnswered} no pickup`);
-            if (callsOutcomePending > 0) parts.push(`${callsOutcomePending} outcome pending`);
+            if (callsAnswered > 0) parts.push(`${callsAnswered} leads reached`);
+            if (callsNotAnswered > 0) parts.push(`${callsNotAnswered} leads no pickup`);
+            if (callsOutcomePending > 0) parts.push(`${callsOutcomePending} calls outcome pending`);
+            if (ansAttempts != null && noAttempts != null && (ansAttempts > callsAnswered || noAttempts > callsNotAnswered)) {
+                parts.push(`${ansAttempts} conv. attempts / ${noAttempts} miss attempts`);
+            }
             const callsHint = parts.length
-                ? `${parts.join(' • ')}${answerRate > 0 ? ` (${answerRate}% answer rate)` : ''}`
+                ? `${parts.join(' • ')}${answerRate > 0 ? ` (${answerRate}% of leads)` : ''}`
                 : `${totalCalls} unique leads called`;
             document.getElementById('statusHintCalls').textContent = callsHint;
 
@@ -3313,10 +3330,17 @@
                 <div class="chart-bar" style="height:${(value / max) * 100}%;" data-label="${labels[idx] || ''}"></div>
             `).join('');
             document.getElementById('chartBars').innerHTML = bars;
-            const totalCalls = totals.reduce((sum,v)=>sum+v,0);
-            // Use current clientBusinessName (updated by personalizeDashboard)
+            const attempts7d = totals.reduce((sum, v) => sum + v, 0);
+            const uniqueDial = data.metrics?.uniqueLeadsCalled ?? data.totalCalls ?? 0;
             const businessName = clientBusinessName || 'Your Business';
-            document.getElementById('chartSummary').textContent = `${totalCalls} call${totalCalls !== 1 ? 's' : ''} we made for ${businessName} this week`;
+            const summaryEl = document.getElementById('chartSummary');
+            if (summaryEl) {
+                summaryEl.textContent = `${formatNumber(attempts7d)} outbound attempts (last 7 days) · ${formatNumber(uniqueDial)} unique leads dialed (all time) · ${businessName}`;
+            }
+            const weeklySub = document.getElementById('weeklyActivitySubtitle');
+            if (weeklySub) {
+                weeklySub.textContent = 'Bar height = call attempts that day. Totals differ from “unique leads called” when there are retries.';
+            }
         }
 
         function formatAppointmentTime(isoDate) {
@@ -3501,11 +3525,10 @@
             const container = document.getElementById('lead-journey');
             if (!container) return;
             const totalLeads = data.totalLeads || 0;
-            const contacted = data.totalCalls || 0; // Unique leads we've attempted to call
-            // Engaged = leads that actually answered the call (had a conversation)
-            // Use callsAnswered from metrics, or fallback to contacted minus not answered
-            const callsAnswered = data.metrics?.callsAnswered || 0;
-            const engaged = callsAnswered > 0 ? callsAnswered : (data.engagedLeads || 0);
+            const contacted = data.totalCalls || 0;
+            const m = data.metrics || {};
+            const engagedRaw = m.uniqueLeadsAnswered ?? m.callsAnswered ?? 0;
+            const engaged = Math.min(engagedRaw, contacted || engagedRaw);
             const booked = data.bookingsThisWeek || 0;
 
             const stages = [
@@ -3725,35 +3748,34 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             if (!container) return;
 
             if (currentClient === DEMO_CLIENT_KEY) {
-                const totalCalls = data.totalCalls || 0;
+                const m = data.metrics || {};
+                const totalCalls = m.totalCallAttempts || data.totalCalls || 0;
                 const bookings = data.bookingsThisWeek || 0;
-                const answered = data.callsAnswered || 0;
-                const notAnswered = data.callsNotAnswered || 0;
-                const avgDuration = Math.floor((totalCalls * 2.5) + Math.random() * 1.5);
+                const answered = m.callsAnswered || 0;
+                const avgSec = totalCalls > 0 ? Math.min(240, 35 + Math.floor(totalCalls % 40)) : 0;
                 const successRate = totalCalls > 0 ? Math.round((bookings / totalCalls) * 100) : 0;
-                const bestHour = '2-4pm';
-                    
-                    container.innerHTML = `
+                const bestHour = '14:00–16:00';
+                container.innerHTML = `
                     <div class="quality-metric">
                         <div class="quality-label">Avg Duration</div>
-                        <div class="quality-value">${avgDuration}m</div>
-                        <div class="quality-badge">per call</div>
-                            </div>
+                        <div class="quality-value">${formatAvgCallSeconds(avgSec)}</div>
+                        <div class="quality-badge">DB stores seconds</div>
+                    </div>
                     <div class="quality-metric">
                         <div class="quality-label">Success Rate</div>
                         <div class="quality-value">${successRate}%</div>
-                        <div class="quality-badge">bookings</div>
-                            </div>
+                        <div class="quality-badge">bookings / attempts</div>
+                    </div>
                     <div class="quality-metric">
-                        <div class="quality-label">Call Outcomes</div>
-                        <div class="quality-value">${answered}/${totalCalls}</div>
-                        <div class="quality-badge">answered calls</div>
-                            </div>
+                        <div class="quality-label">Leads reached</div>
+                        <div class="quality-value">${answered}/${data.totalCalls || 0}</div>
+                        <div class="quality-badge">unique leads</div>
+                    </div>
                     <div class="quality-metric">
                         <div class="quality-label">Best Time</div>
                         <div class="quality-value">${bestHour}</div>
-                        <div class="quality-badge">to call</div>
-                            </div>
+                        <div class="quality-badge">peak volume</div>
+                    </div>
                 `;
                 return;
             }
@@ -3762,26 +3784,27 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const response = await fetch(`${BASE_URL}/api/call-quality/${currentClient}`);
                 const payload = await response.json();
                 if (response.ok && payload?.ok) {
+                    const sec = payload.avgDurationSeconds ?? payload.avgDuration;
                     container.innerHTML = `
                         <div class="quality-metric">
                             <div class="quality-label">Avg Duration</div>
-                            <div class="quality-value">${payload.avgDuration || 0}m</div>
-                            <div class="quality-badge">per call</div>
-                            </div>
+                            <div class="quality-value">${formatAvgCallSeconds(sec)}</div>
+                            <div class="quality-badge">from call length</div>
+                        </div>
                         <div class="quality-metric">
                             <div class="quality-label">Success Rate</div>
                             <div class="quality-value">${payload.successRate || 0}%</div>
-                            <div class="quality-badge">bookings</div>
+                            <div class="quality-badge">appts &amp; booked calls</div>
                         </div>
                         <div class="quality-metric">
                             <div class="quality-label">Calls (7 days)</div>
                             <div class="quality-value">${payload.totalCalls || 0}</div>
-                            <div class="quality-badge">total calls</div>
+                            <div class="quality-badge">all attempts</div>
                         </div>
                         <div class="quality-metric">
                             <div class="quality-label">Best Time</div>
-                            <div class="quality-value">${payload.bestTime || '—'}</div>
-                            <div class="quality-badge">to call</div>
+                            <div class="quality-value">${escapeHtml(payload.bestTime || '—')}</div>
+                            <div class="quality-badge">peak volume</div>
                         </div>
                     `;
                 }

@@ -8368,59 +8368,59 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         WHERE client_key = $1
       `, [clientKey]),
       query(`
-        SELECT 
+        WITH call_row AS (
+          SELECT
+            lead_phone,
+            outcome,
+            duration,
+            status,
+            transcript,
+            recording_url,
+            created_at,
+            (
+              (outcome IS NOT NULL AND outcome NOT IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected'))
+              OR (
+                outcome IS NULL
+                AND (
+                  (COALESCE(duration, 0) >= 20 AND LOWER(TRIM(COALESCE(status, ''))) IN ('ended', 'completed', 'finished'))
+                  OR (COALESCE(duration, 0) >= 40 AND LOWER(TRIM(COALESCE(status, ''))) NOT IN (
+                    'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
+                  ))
+                  OR (COALESCE(transcript, '') <> '' AND LENGTH(TRIM(COALESCE(transcript, ''))) > 40)
+                  OR (COALESCE(recording_url, '') <> '')
+                )
+              )
+            ) AS is_answered,
+            (
+              outcome IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected')
+              OR (
+                outcome IS NULL
+                AND (
+                  LOWER(TRIM(COALESCE(status, ''))) IN (
+                    'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
+                  )
+                  OR (
+                    LOWER(TRIM(COALESCE(status, ''))) IN ('ended', 'completed', 'finished')
+                    AND COALESCE(duration, 0) > 0
+                    AND COALESCE(duration, 0) < 12
+                  )
+                )
+              )
+            ) AS is_not_answered
+          FROM calls
+          WHERE client_key = $1
+        )
+        SELECT
                COUNT(*) AS total,
                COUNT(DISTINCT lead_phone) AS unique_leads_called,
                COUNT(*) FILTER (WHERE created_at >= ${sqlHoursAgo(24)}) AS last24,
                COUNT(*) FILTER (WHERE outcome = 'booked') AS booked,
-               COUNT(*) FILTER (WHERE
-                 (outcome IS NOT NULL AND outcome NOT IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected'))
-                 OR (
-                   outcome IS NULL
-                   AND (
-                     (COALESCE(duration, 0) >= 20 AND LOWER(TRIM(COALESCE(status, ''))) IN ('ended', 'completed', 'finished'))
-                     OR (COALESCE(duration, 0) >= 40 AND LOWER(TRIM(COALESCE(status, ''))) NOT IN (
-                       'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
-                     ))
-                     OR (COALESCE(transcript, '') <> '' AND LENGTH(TRIM(COALESCE(transcript, ''))) > 40)
-                     OR (COALESCE(recording_url, '') <> '')
-                   )
-                 )
-               ) AS answered,
-               COUNT(*) FILTER (WHERE
-                 outcome IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected')
-                 OR (
-                   outcome IS NULL
-                   AND (
-                     LOWER(TRIM(COALESCE(status, ''))) IN (
-                       'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
-                     )
-                     OR (
-                       LOWER(TRIM(COALESCE(status, ''))) IN ('ended', 'completed', 'finished')
-                       AND COALESCE(duration, 0) > 0
-                       AND COALESCE(duration, 0) < 12
-                     )
-                   )
-                 )
-               ) AS not_answered,
-               COUNT(*) FILTER (WHERE
-                 outcome IS NULL
-                 AND COALESCE(duration, 0) < 20
-                 AND (transcript IS NULL OR LENGTH(TRIM(COALESCE(transcript, ''))) <= 40)
-                 AND (recording_url IS NULL OR recording_url = '')
-                 AND NOT (
-                   LOWER(TRIM(COALESCE(status, ''))) IN (
-                     'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
-                   )
-                   OR (
-                     LOWER(TRIM(COALESCE(status, ''))) IN ('ended', 'completed', 'finished')
-                     AND COALESCE(duration, 0) > 0
-                     AND COALESCE(duration, 0) < 12
-                   )
-                 )
-               ) AS outcome_pending
-        FROM calls
-        WHERE client_key = $1
+               COUNT(*) FILTER (WHERE is_answered) AS answered,
+               COUNT(DISTINCT CASE WHEN is_answered THEN lead_phone END) AS answered_leads,
+               COUNT(*) FILTER (WHERE is_not_answered) AS not_answered,
+               COUNT(DISTINCT CASE WHEN is_not_answered THEN lead_phone END) AS not_answered_leads,
+               COUNT(*) FILTER (WHERE outcome IS NULL AND NOT is_answered AND NOT is_not_answered) AS outcome_pending
+        FROM call_row
       `, [clientKey]),
       query(`
         SELECT COUNT(*) AS total,
@@ -8534,8 +8534,10 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     const last24hLeads = parseInt(leadCounts.rows?.[0]?.last24 || 0, 10);
     const totalCalls = parseInt(callCounts.rows?.[0]?.total || 0, 10); // Total call attempts (for internal tracking)
     const uniqueLeadsCalled = parseInt(callCounts.rows?.[0]?.unique_leads_called || 0, 10); // Unique leads actually called
-    const callsAnswered = parseInt(callCounts.rows?.[0]?.answered || 0, 10);
-    const callsNotAnswered = parseInt(callCounts.rows?.[0]?.not_answered || 0, 10);
+    const callsAnsweredAttempts = parseInt(callCounts.rows?.[0]?.answered || 0, 10);
+    const callsNotAnsweredAttempts = parseInt(callCounts.rows?.[0]?.not_answered || 0, 10);
+    const uniqueLeadsAnswered = parseInt(callCounts.rows?.[0]?.answered_leads || 0, 10);
+    const uniqueLeadsNoPickup = parseInt(callCounts.rows?.[0]?.not_answered_leads || 0, 10);
     const callsOutcomePending = parseInt(callCounts.rows?.[0]?.outcome_pending || 0, 10);
     const bookingsFromCalls = parseInt(callCounts.rows?.[0]?.booked || 0, 10);
     
@@ -8559,9 +8561,12 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     const avgDealValue = avgDealConfigured ? avgDealRaw : null;
 
     const conversionRate = totalCalls > 0 ? Math.round((bookingsFromCalls / totalCalls) * 100) : 0;
-    const successRate = totalCalls > 0 ? ((bookingsFromCalls / totalCalls) * 100).toFixed(0) : 0;
 
     const weeklyBookings = parseInt(bookingStats.rows?.[0]?.total || 0, 10);
+    const bookingNumerator = Math.max(bookingsFromCalls, weeklyBookings);
+    const successRate = uniqueLeadsCalled > 0
+      ? ((bookingNumerator / uniqueLeadsCalled) * 100).toFixed(0)
+      : (totalCalls > 0 ? ((bookingNumerator / totalCalls) * 100).toFixed(0) : '0');
     const apptByService = new Map(
       (apptByServiceRows.rows || []).map(r => [r.service || 'General', parseInt(r.appointment_count, 10) || 0])
     );
@@ -8833,10 +8838,14 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         totalCalls: displayCalls, // Show unique leads called, not total attempts
         totalCallAttempts: totalCalls, // Keep total attempts for internal use
         uniqueLeadsCalled: displayCalls,
-        callsAnswered,
-        callsNotAnswered,
+        callsAnswered: uniqueLeadsAnswered,
+        callsNotAnswered: uniqueLeadsNoPickup,
+        callsAnsweredAttempts,
+        callsNotAnsweredAttempts,
+        uniqueLeadsAnswered,
+        uniqueLeadsNoPickup,
         callsOutcomePending,
-        answerRate: uniqueLeadsCalled > 0 ? Math.round((callsAnswered / uniqueLeadsCalled) * 100) : 0,
+        answerRate: uniqueLeadsCalled > 0 ? Math.round((uniqueLeadsAnswered / uniqueLeadsCalled) * 100) : 0,
         last24hLeads,
         conversionRate,
         successRate,
@@ -10190,46 +10199,60 @@ app.get('/api/export/:type', async (req, res) => {
 });
 
 // API endpoint for dashboard call quality metrics (simplified)
-app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix: 'call-quality:' }), async (req, res) => {
+app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix: 'call-quality:v2:' }), async (req, res) => {
   try {
     const { clientKey } = req.params;
-    const result = await query(`
-      SELECT 
-        EXTRACT(HOUR FROM created_at)::INTEGER AS hour_of_day,
-        COUNT(CASE WHEN outcome = 'booked' THEN 1 END) AS bookings
-      FROM calls
-      WHERE client_key = $1
-        AND created_at >= NOW() - INTERVAL '7 days'
-      GROUP BY EXTRACT(HOUR FROM created_at)
-      ORDER BY bookings DESC
-      LIMIT 1
-    `, [clientKey]);
 
     const allCalls = await query(`
       SELECT 
-        COALESCE(AVG(CASE WHEN duration > 0 THEN duration ELSE NULL END), 0)::INTEGER AS avg_duration,
-        COUNT(*) AS total_calls,
-        COUNT(CASE WHEN outcome = 'booked' THEN 1 END) AS bookings
+        COALESCE(AVG(CASE WHEN COALESCE(duration, 0) > 0 THEN duration::numeric ELSE NULL END), 0) AS avg_duration_sec,
+        COUNT(*)::int AS total_calls,
+        COUNT(*) FILTER (WHERE outcome = 'booked')::int AS bookings_from_calls
       FROM calls
       WHERE client_key = $1
         AND created_at >= NOW() - INTERVAL '7 days'
     `, [clientKey]);
 
+    const apptCount = await query(`
+      SELECT COUNT(*)::int AS n
+      FROM appointments
+      WHERE client_key = $1
+        AND created_at >= NOW() - INTERVAL '7 days'
+    `, [clientKey]);
+
+    const peakHour = await query(`
+      SELECT EXTRACT(HOUR FROM created_at)::int AS hour_of_day,
+             COUNT(*)::int AS cnt
+      FROM calls
+      WHERE client_key = $1
+        AND created_at >= NOW() - INTERVAL '7 days'
+      GROUP BY 1
+      ORDER BY cnt DESC
+      LIMIT 1
+    `, [clientKey]);
+
     const stats = allCalls.rows?.[0] || {};
-    const bestHourRow = result.rows?.[0];
-    const bestHour = bestHourRow?.hour_of_day;
-    const bestHourEnd = bestHour ? bestHour + 2 : null;
-    
-    // Only show best time if we have actual booking data
-    const bestTime = bestHourRow && bestHourRow.bookings > 0 
-      ? `${String(bestHour).padStart(2, '0')}:00-${String(bestHourEnd).padStart(2, '0')}:00`
-      : '—';
+    const appts7d = parseInt(apptCount.rows?.[0]?.n || 0, 10);
+    const bookingsFromCalls = parseInt(stats.bookings_from_calls || 0, 10);
+    const totalCalls = parseInt(stats.total_calls || 0, 10);
+    const avgSec = parseFloat(stats.avg_duration_sec) || 0;
+    const bookingNumerator = Math.max(bookingsFromCalls, appts7d);
+
+    const peak = peakHour.rows?.[0];
+    let bestTime = '—';
+    if (peak && peak.hour_of_day != null && Number(peak.cnt) > 0) {
+      const h = Number(peak.hour_of_day);
+      const end = (h + 2) % 24;
+      bestTime = `${String(h).padStart(2, '0')}:00–${String(end).padStart(2, '0')}:00 (peak volume)`;
+    }
 
     res.json({
       ok: true,
-      avgDuration: stats.avg_duration || 0,
-      successRate: stats.total_calls > 0 ? Math.round((stats.bookings / stats.total_calls) * 100) : 0,
-      totalCalls: stats.total_calls || 0,
+      avgDurationSeconds: Math.round(avgSec),
+      totalCalls,
+      bookingsFromCalls,
+      appointments7d: appts7d,
+      successRate: totalCalls > 0 ? Math.min(100, Math.round((bookingNumerator / totalCalls) * 100)) : 0,
       bestTime
     });
   } catch (error) {
