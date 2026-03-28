@@ -10651,11 +10651,13 @@ app.get('/api/export/:type', async (req, res) => {
 });
 
 // API endpoint for dashboard call quality metrics (7-day window; aligns with main dashboard “answered” heuristics)
-app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix: 'call-quality:v3:' }), async (req, res) => {
+app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix: 'call-quality:v4:' }), async (req, res) => {
   try {
     const { clientKey } = req.params;
 
-    const allCalls = await query(`
+    let stats = {};
+    try {
+      const allCalls = await query(`
       WITH windowed AS (
         SELECT *
         FROM calls
@@ -10708,16 +10710,46 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
         COUNT(*) FILTER (WHERE outcome::text = 'booked')::int AS bookings_from_calls,
         COUNT(*) FILTER (WHERE is_answered)::int AS answered_attempts,
         COUNT(*) FILTER (WHERE is_no_pickup)::int AS no_pickup_attempts,
-        COUNT(*) FILTER (WHERE outcome IS NOT NULL AND BTRIM(outcome::text) <> '')::int AS with_outcome
+        COUNT(*) FILTER (WHERE outcome IS NOT NULL AND BTRIM(COALESCE(outcome::text, '')) <> '')::int AS with_outcome
       FROM flags
     `, [clientKey]);
+      stats = allCalls.rows?.[0] || {};
+    } catch (primaryErr) {
+      console.error('[CALL QUALITY] primary aggregate failed, using fallback:', primaryErr?.message || primaryErr);
+      const simple = await query(`
+        SELECT
+          COUNT(*)::int AS total_calls,
+          COUNT(DISTINCT lead_phone)::int AS unique_leads,
+          COALESCE(AVG(CASE WHEN COALESCE(duration, 0) > 0 THEN duration::numeric END), 0) AS avg_duration_sec,
+          COUNT(*) FILTER (WHERE COALESCE(outcome::text, '') = 'booked')::int AS bookings_from_calls,
+          COUNT(*) FILTER (WHERE
+            COALESCE(duration, 0) >= 20
+            OR (
+              outcome IS NOT NULL
+              AND outcome::text NOT IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected')
+            )
+          )::int AS answered_attempts,
+          COUNT(*) FILTER (WHERE outcome::text IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected'))::int AS no_pickup_attempts,
+          COUNT(*) FILTER (WHERE outcome IS NOT NULL AND BTRIM(COALESCE(outcome::text, '')) <> '')::int AS with_outcome
+        FROM calls
+        WHERE client_key = $1
+          AND created_at >= NOW() - INTERVAL '7 days'
+      `, [clientKey]);
+      stats = simple.rows?.[0] || {};
+    }
 
-    const apptCount = await query(`
+    let appts7d = 0;
+    try {
+      const apptCount = await query(`
       SELECT COUNT(*)::int AS n
       FROM appointments
       WHERE client_key = $1
         AND created_at >= NOW() - INTERVAL '7 days'
     `, [clientKey]);
+      appts7d = parseInt(apptCount.rows?.[0]?.n || 0, 10);
+    } catch (apptErr) {
+      console.warn('[CALL QUALITY] appointments count skipped:', apptErr?.message || apptErr);
+    }
 
     const peakHour = await query(`
       SELECT EXTRACT(HOUR FROM created_at)::int AS hour_of_day,
@@ -10730,8 +10762,6 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
       LIMIT 1
     `, [clientKey]);
 
-    const stats = allCalls.rows?.[0] || {};
-    const appts7d = parseInt(apptCount.rows?.[0]?.n || 0, 10);
     const bookingsFromCalls = parseInt(stats.bookings_from_calls || 0, 10);
     const totalCalls = parseInt(stats.total_calls || 0, 10);
     const uniqueLeads = parseInt(stats.unique_leads || 0, 10);

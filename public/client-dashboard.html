@@ -5212,10 +5212,14 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             <div class="quality-badge">${bestBadge}</div>
                         </div>
                     `;
+                } else {
+                    const errMsg = (payload && payload.error) ? String(payload.error) : `HTTP ${response.status}`;
+                    console.warn('Call quality API not ok:', errMsg, payload);
+                    showError(container, `Could not load call quality: ${escapeHtml(errMsg)}`, () => renderCallQuality(dashboardData));
                 }
             } catch (error) {
                 console.error('Failed to load call quality', error);
-                showError(container, 'Unable to load call quality metrics. Please refresh the page.', () => location.reload());
+                showError(container, 'Unable to load call quality metrics. Please refresh the page.', () => renderCallQuality(dashboardData));
             }
         }
 
