@@ -8838,12 +8838,63 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         LIMIT 500
       `, [clientKey]),
       query(`
-        SELECT DATE_TRUNC('day', created_at) AS bucket_day,
-               COUNT(*)::int AS touchpoints,
-               COUNT(DISTINCT lead_phone)::int AS unique_phones
-        FROM calls
-        WHERE client_key = $1
-          AND created_at >= ${sqlDaysAgo(6)}
+        WITH daily AS (
+          SELECT
+            DATE_TRUNC('day', created_at) AS bucket_day,
+            lead_phone,
+            outcome,
+            duration,
+            status,
+            transcript,
+            recording_url,
+            (
+              (outcome IS NOT NULL AND outcome NOT IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected'))
+              OR (
+                outcome IS NULL
+                AND (
+                  (COALESCE(duration, 0) >= 20 AND LOWER(TRIM(COALESCE(status, ''))) IN ('ended', 'completed', 'finished'))
+                  OR (COALESCE(duration, 0) >= 40 AND LOWER(TRIM(COALESCE(status, ''))) NOT IN (
+                    'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
+                  ))
+                  OR (COALESCE(transcript, '') <> '' AND LENGTH(TRIM(COALESCE(transcript, ''))) > 40)
+                  OR (COALESCE(recording_url, '') <> '')
+                )
+              )
+            ) AS is_answered,
+            (
+              outcome IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected')
+              OR (
+                outcome IS NULL
+                AND (
+                  LOWER(TRIM(COALESCE(status, ''))) IN (
+                    'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
+                  )
+                  OR (
+                    LOWER(TRIM(COALESCE(status, ''))) IN ('ended', 'completed', 'finished')
+                    AND COALESCE(duration, 0) > 0
+                    AND COALESCE(duration, 0) < 12
+                  )
+                )
+              )
+            ) AS is_not_answered
+          FROM calls
+          WHERE client_key = $1
+            AND created_at >= ${sqlDaysAgo(6)}
+        )
+        SELECT
+          bucket_day,
+          COUNT(*)::int AS touchpoints,
+          COUNT(DISTINCT lead_phone)::int AS unique_phones,
+          COUNT(*) FILTER (WHERE is_answered)::int AS answered_rows,
+          COUNT(*) FILTER (WHERE is_not_answered)::int AS not_answered_rows,
+          COUNT(*) FILTER (WHERE NOT is_answered AND NOT is_not_answered)::int AS pending_rows,
+          COUNT(*) FILTER (WHERE outcome = 'booked')::int AS booked_rows,
+          COUNT(*) FILTER (WHERE LOWER(TRIM(COALESCE(outcome::text, ''))) = 'voicemail')::int AS voicemail_rows,
+          COALESCE(ROUND(AVG(CASE WHEN COALESCE(duration, 0) > 0 THEN duration::numeric END)), 0)::int AS avg_duration_sec,
+          COALESCE(MAX(CASE WHEN COALESCE(duration, 0) > 0 THEN duration END), 0)::int AS max_duration_sec,
+          COUNT(DISTINCT CASE WHEN is_answered THEN lead_phone END)::int AS unique_reached,
+          COUNT(DISTINCT CASE WHEN is_not_answered THEN lead_phone END)::int AS unique_miss_leads
+        FROM daily
         GROUP BY bucket_day
       `, [clientKey]),
       query(`
@@ -9128,23 +9179,48 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         const dayKey = new Date(row.bucket_day).toISOString().slice(0, 10);
         return [dayKey, {
           attempts: parseInt(row.touchpoints || 0, 10),
-          uniquePhones: parseInt(row.unique_phones || 0, 10)
+          uniquePhones: parseInt(row.unique_phones || 0, 10),
+          signalRows: parseInt(row.answered_rows || 0, 10),
+          missRows: parseInt(row.not_answered_rows || 0, 10),
+          pendingRows: parseInt(row.pending_rows || 0, 10),
+          bookedRows: parseInt(row.booked_rows || 0, 10),
+          voicemailRows: parseInt(row.voicemail_rows || 0, 10),
+          avgDurationSec: Math.max(0, parseInt(row.avg_duration_sec || 0, 10)),
+          maxDurationSec: Math.max(0, parseInt(row.max_duration_sec || 0, 10)),
+          uniqueReached: parseInt(row.unique_reached || 0, 10),
+          uniqueMissLeads: parseInt(row.unique_miss_leads || 0, 10)
         }];
       })
     );
+    const emptyDayBucket = () => ({
+      attempts: 0,
+      uniquePhones: 0,
+      signalRows: 0,
+      missRows: 0,
+      pendingRows: 0,
+      bookedRows: 0,
+      voicemailRows: 0,
+      avgDurationSec: 0,
+      maxDurationSec: 0,
+      uniqueReached: 0,
+      uniqueMissLeads: 0
+    });
     const touchpointLabels = [];
     const touchpointData = [];
     const touchpointDates = [];
     const touchpointUniqueByDay = [];
+    const touchpointByDay = [];
     for (let offset = 6; offset >= 0; offset -= 1) {
       const day = new Date();
       day.setDate(day.getDate() - offset);
       const key = day.toISOString().slice(0, 10);
       touchpointLabels.push(day.toLocaleDateString('en-GB', { weekday: 'short' }));
       const bucket = touchpointMap.get(key);
-      touchpointData.push(bucket?.attempts || 0);
-      touchpointUniqueByDay.push(bucket?.uniquePhones || 0);
+      const merged = bucket ? { ...emptyDayBucket(), ...bucket } : emptyDayBucket();
+      touchpointData.push(merged.attempts);
+      touchpointUniqueByDay.push(merged.uniquePhones);
       touchpointDates.push(key);
+      touchpointByDay.push(merged);
     }
 
     const upcomingAppointments = (upcomingAppointmentRows.rows || []).map(row => ({
@@ -9231,7 +9307,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         labels: touchpointLabels,
         data: touchpointData,
         dates: touchpointDates,
-        uniqueByDay: touchpointUniqueByDay
+        uniqueByDay: touchpointUniqueByDay,
+        byDay: touchpointByDay
       },
       config: {
         phone: client?.phone || client?.whiteLabel?.phone || client?.numbers?.primary || null,
