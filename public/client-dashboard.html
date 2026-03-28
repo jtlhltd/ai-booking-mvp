@@ -2657,10 +2657,11 @@
                     successRate: metrics.successRate || livePayload.successRate || 0,
                     firstResponse: metrics.firstResponse || livePayload.firstResponse || '—',
                     bookingsThisWeek: metrics.bookingsThisWeek || livePayload.bookingsThisWeek || 0,
-                    avgLeadScore: metrics.avgLeadScore || livePayload.avgLeadScore || 0,
-                    highPriorityLeads: metrics.highPriorityLeads || livePayload.highPriorityLeads || 0,
-                    mediumPriorityLeads: metrics.mediumPriorityLeads || livePayload.mediumPriorityLeads || 0,
-                    lowPriorityLeads: metrics.lowPriorityLeads || livePayload.lowPriorityLeads || 0,
+                    avgLeadScore: metrics.avgLeadScore ?? livePayload.avgLeadScore ?? null,
+                    highPriorityLeads: metrics.highPriorityLeads ?? livePayload.highPriorityLeads ?? 0,
+                    mediumPriorityLeads: metrics.mediumPriorityLeads ?? livePayload.mediumPriorityLeads ?? 0,
+                    lowPriorityLeads: metrics.lowPriorityLeads ?? livePayload.lowPriorityLeads ?? 0,
+                    metrics: livePayload.metrics || metrics,
                     recentLeads: livePayload.leads || [],
                     recentCalls: recentCalls,
                     appointments: livePayload.appointments || [],
@@ -2719,6 +2720,7 @@
                 highPriorityLeads: metrics.highPriorityLeads ?? base.highPriorityLeads,
                 mediumPriorityLeads: metrics.mediumPriorityLeads ?? base.mediumPriorityLeads,
                 lowPriorityLeads: metrics.lowPriorityLeads ?? base.lowPriorityLeads,
+                metrics: livePayload.metrics || metrics || base.metrics,
                 recentLeads: mergedLeads.slice(0, 10), // Keep top 10
                 serviceMix: Array.isArray(livePayload.serviceMix) && livePayload.serviceMix.length ? livePayload.serviceMix : base.serviceMix,
                 recentCalls: Array.isArray(livePayload.recentCalls) && livePayload.recentCalls.length ? livePayload.recentCalls : base.recentCalls,
@@ -3012,8 +3014,9 @@
         }
 
         function formatCurrency(value) {
+            if (value === null || value === undefined || value === '') return '—';
             const numeric = Number(value);
-            if (!Number.isFinite(numeric)) return '£0';
+            if (!Number.isFinite(numeric)) return '—';
             return new Intl.NumberFormat('en-GB', {
                 style: 'currency',
                 currency: 'GBP',
@@ -3112,9 +3115,17 @@
         function renderROI(roi = {}) {
             document.getElementById('roiSpend').textContent = formatCurrency(roi.costs?.total);
             document.getElementById('roiRevenue').textContent = formatCurrency(roi.revenue?.total);
-            document.getElementById('roiBookings').textContent = `${formatNumber(roi.revenue?.bookings ?? 0)} bookings`;
-            document.getElementById('roiMultiplier').textContent = `${(roi.roi?.multiplier ?? 0).toFixed(1)}x`;
-            document.getElementById('roiProfit').textContent = `${formatCurrency(roi.roi?.profit ?? 0)} profit`;
+            const bookings = roi.revenue?.bookings ?? 0;
+            const avgDeal = roi.revenue?.avgDealValue;
+            const bookingLine = `${formatNumber(bookings)} bookings${avgDeal != null && Number.isFinite(Number(avgDeal)) ? ` × ${formatCurrency(avgDeal)}` : ''}`;
+            document.getElementById('roiBookings').textContent = bookingLine;
+            const mult = roi.roi?.multiplier;
+            document.getElementById('roiMultiplier').textContent = mult != null && Number.isFinite(Number(mult)) ? `${Number(mult).toFixed(1)}x` : '—';
+            const profit = roi.roi?.profit;
+            const profitStr = profit != null && Number.isFinite(Number(profit))
+                ? `${formatCurrency(profit)} profit`
+                : '—';
+            document.getElementById('roiProfit').textContent = profitStr;
         }
 
 
@@ -3137,8 +3148,6 @@
             dashboardData.recentLeads = leads;
             currentLeads = leads.slice(0, 5);
             container.innerHTML = currentLeads.map((lead, index) => {
-                const leadId = escapeHtml(String(lead.id || lead.phone || index));
-                const leadName = escapeHtml(lead.name || 'Prospect');
                 return `
                 <div class="lead-item" data-lead-index="${index}" role="button" tabindex="0">
                     <div class="lead-name">${escapeHtml(lead.name || 'Prospect')}</div>
@@ -3147,7 +3156,7 @@
                         <span>${escapeHtml(lead.service || 'General')}</span>
                     </div>
                     <div class="lead-status">${escapeHtml(lead.status || 'In follow-up')}</div>
-                    <button class="timeline-btn" onclick="event.stopPropagation(); viewLeadTimeline('${leadId}', '${leadName}')">📊 View Timeline</button>
+                    <button type="button" class="timeline-btn" data-timeline-index="${index}">📊 View Timeline</button>
                 </div>
             `;
             }).join('');
@@ -3756,25 +3765,37 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             contentEl.innerHTML = 'Loading timeline...';
             modal.classList.add('open');
 
-            // ALWAYS show demo timeline - no conditions, no API calls
-            const now = new Date();
-            const timeline = [
-                { event: 'Lead received', time: new Date(now - 2 * 60 * 60 * 1000), icon: '📥', detail: 'Added via CSV import' },
-                { event: 'AI call initiated', time: new Date(now - 100 * 60 * 1000), icon: '📞', detail: 'Called within 5 minutes' },
-                { event: 'SMS follow-up sent', time: new Date(now - 90 * 60 * 1000), icon: '💬', detail: 'Scheduled for tomorrow' },
-                { event: 'Engagement detected', time: new Date(now - 60 * 60 * 1000), icon: '✨', detail: 'Showed interest in consultation' },
-                { event: 'Appointment booked', time: new Date(now - 30 * 60 * 1000), icon: '📅', detail: 'Booked for next Tuesday, 2pm' }
-            ];
+            if (!currentClient) {
+                contentEl.innerHTML = '<div class="empty-state-message">Client not loaded.</div>';
+                return;
+            }
 
-            contentEl.innerHTML = timeline.map(item => `
+            try {
+                const url = `${BASE_URL}/api/leads/${encodeURIComponent(leadId)}/timeline?clientKey=${encodeURIComponent(currentClient)}`;
+                const res = await fetch(url);
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data.ok) {
+                    contentEl.innerHTML = `<div class="empty-state-message">${escapeHtml(data.error || 'Could not load timeline.')}</div>`;
+                    return;
+                }
+                const items = Array.isArray(data.timeline) ? data.timeline : [];
+                if (!items.length) {
+                    contentEl.innerHTML = '<div class="empty-state-message">No events recorded for this lead yet.</div>';
+                    return;
+                }
+                contentEl.innerHTML = items.map(item => `
                 <div class="timeline-item">
                     <div class="timeline-dot"></div>
                     <div class="timeline-content">
-                        <div class="timeline-title">${item.icon} ${item.event}</div>
-                        <div class="timeline-meta">${item.detail} • ${formatTimeAgo(item.time.toISOString())}</div>
+                        <div class="timeline-title">${escapeHtml(item.icon || '')} ${escapeHtml(item.event || 'Event')}</div>
+                        <div class="timeline-meta">${escapeHtml(item.detail || '')} • ${formatTimeAgo(item.time)}</div>
                     </div>
                 </div>
             `).join('');
+            } catch (err) {
+                console.error('Timeline load failed', err);
+                contentEl.innerHTML = '<div class="empty-state-message">Could not load timeline. Please try again.</div>';
+            }
         }
         
         function closeTimelineModal() {
@@ -3977,6 +3998,17 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         openLeadModal(item.dataset.leadIndex);
                     }
                 });
+                const timelineBtn = item.querySelector('.timeline-btn[data-timeline-index]');
+                if (timelineBtn) {
+                    timelineBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const idx = Number(timelineBtn.dataset.timelineIndex);
+                        const lead = currentLeads[idx];
+                        if (!lead) return;
+                        const lid = lead.id != null ? String(lead.id) : String(lead.phone || idx);
+                        viewLeadTimeline(lid, lead.name || 'Prospect');
+                    });
+                }
             });
         }
 
@@ -4170,7 +4202,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     successRate: 0,
                     firstResponse: '—',
                     bookingsThisWeek: 0,
-                    avgLeadScore: 0,
+                    avgLeadScore: null,
                     highPriorityLeads: 0,
                     mediumPriorityLeads: 0,
                     lowPriorityLeads: 0,
@@ -4179,7 +4211,11 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     appointments: [],
                     serviceMix: [],
                     touchpoints: { labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], data: [0, 0, 0, 0, 0, 0, 0] },
-                    roi: { costs: { total: 0, perCall: 0 }, revenue: { total: 0, bookings: 0, avgDealValue: 0 }, roi: { profit: 0, multiplier: 0, percentage: 0 } }
+                    roi: {
+                        costs: { total: null, monthlyFee: null, perCall: null },
+                        revenue: { total: null, bookings: 0, avgDealValue: null },
+                        roi: { profit: null, multiplier: null, percentage: null }
+                    }
                 };
                 const banner = document.getElementById('demoBanner');
                 if (banner) banner.style.display = 'none';

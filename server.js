@@ -8354,6 +8354,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       callCounts,
       bookingStats,
       serviceRows,
+      apptByServiceRows,
       leadRows,
       recentCallRows,
       responseRows,
@@ -8393,6 +8394,16 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         GROUP BY service
         ORDER BY count DESC
         LIMIT 5
+      `, [clientKey]),
+      query(`
+        SELECT COALESCE(l.service, 'General') AS service,
+               COUNT(*)::int AS appointment_count
+        FROM appointments a
+        LEFT JOIN leads l ON l.id = a.lead_id AND l.client_key = a.client_key
+        WHERE a.client_key = $1
+          AND a.created_at >= ${sqlDaysAgo(7)}
+        GROUP BY COALESCE(l.service, 'General')
+        ORDER BY appointment_count DESC
       `, [clientKey]),
       query(`
         SELECT l.id,
@@ -8494,26 +8505,43 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       totalLeads,
       ratio: totalLeads > 0 ? (uniqueLeadsCalled / totalLeads * 100).toFixed(1) + '%' : 'N/A'
     });
-    const avgDealValue = 350;
+
+    const wl = client?.whiteLabel || {};
+    const monthlyFeeRaw = Number(wl.monthlyFee ?? wl.pricing?.monthlyFee ?? client?.monthlyFee ?? client?.pricing?.monthlyFee);
+    const avgDealRaw = Number(wl.avgDealValue ?? wl.pricing?.avgDealValue ?? client?.avgDealValue ?? client?.pricing?.avgDealValue);
+    const monthlyServiceFeeConfigured = Number.isFinite(monthlyFeeRaw) && monthlyFeeRaw >= 0;
+    const avgDealConfigured = Number.isFinite(avgDealRaw) && avgDealRaw > 0;
+    const monthlyServiceFee = monthlyServiceFeeConfigured ? monthlyFeeRaw : null;
+    const avgDealValue = avgDealConfigured ? avgDealRaw : null;
 
     const conversionRate = totalCalls > 0 ? Math.round((bookingsFromCalls / totalCalls) * 100) : 0;
     const successRate = totalCalls > 0 ? ((bookingsFromCalls / totalCalls) * 100).toFixed(0) : 0;
 
     const weeklyBookings = parseInt(bookingStats.rows?.[0]?.total || 0, 10);
+    const apptByService = new Map(
+      (apptByServiceRows.rows || []).map(r => [r.service || 'General', parseInt(r.appointment_count, 10) || 0])
+    );
     const serviceMix = (serviceRows.rows || []).map(row => {
-      const percent = totalLeads > 0 ? Math.round((row.count / totalLeads) * 100) : 0;
+      const name = row.service || 'General';
+      const leadCount = parseInt(row.count, 10) || 0;
+      const percent = totalLeads > 0 ? Math.round((leadCount / totalLeads) * 100) : 0;
+      const appointmentCount = apptByService.get(name) || 0;
+      const notes = appointmentCount > 0
+        ? `${appointmentCount} appointment(s) in last 7 days`
+        : '';
       return {
-        name: row.service || 'General',
-        percent: percent,
-        bookings: Math.max(1, Math.round((percent / 100) * weeklyBookings)),
-        notes: percent > 34 ? 'Primary workflow' : 'Running in parallel'
+        name,
+        percent,
+        leadCount,
+        bookings: appointmentCount,
+        notes
       };
     });
 
     const leads = (leadRows.rows || []).map(row => {
-      const derivedScore = typeof row.lead_score === 'number'
-        ? row.lead_score
-        : 70 + Math.floor(Math.random() * 20);
+      const rawScore = row.lead_score;
+      const numScore = rawScore == null ? NaN : Number(rawScore);
+      const derivedScore = Number.isFinite(numScore) ? numScore : null;
       return {
         id: row.id,
         name: row.name || row.phone,
@@ -8531,8 +8559,11 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     let mediumPriorityLeads = 0;
     let lowPriorityLeads = 0;
     let scoreAccumulator = 0;
+    let scoredLeadCount = 0;
     leads.forEach(lead => {
-      const score = lead.score ?? 75;
+      const score = lead.score;
+      if (typeof score !== 'number' || !Number.isFinite(score)) return;
+      scoredLeadCount += 1;
       scoreAccumulator += score;
       if (score >= 85) {
         highPriorityLeads += 1;
@@ -8542,6 +8573,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         lowPriorityLeads += 1;
       }
     });
+    const avgLeadScore = scoredLeadCount > 0 ? Math.round(scoreAccumulator / scoredLeadCount) : null;
 
     // Fallback: for any call with call_id but no outcome in DB, fetch from VAPI API so dashboard shows real result
     function mapEndedReasonToOutcome(endedReason) {
@@ -8667,10 +8699,6 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       console.error('[DEMO DASHBOARD] No formatted calls to return');
     }
 
-    const avgLeadScore = leads.length
-      ? Math.round(scoreAccumulator / leads.length)
-      : 85;
-
     const responseDiffs = (responseRows.rows || [])
       .map(row => {
         const leadTime = new Date(row.lead_created).getTime();
@@ -8717,16 +8745,22 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       service: row.service || 'Consultation'
     }));
 
-    // Investment = monthly service fee (default £500, or from client config)
-    const monthlyServiceFee = client?.monthlyFee || client?.pricing?.monthlyFee || 500;
-    const daysInPeriod = 30; // 30-day period
-    const estimatedCost = Number((monthlyServiceFee * (daysInPeriod / 30)).toFixed(2)); // Pro-rated for period
-    
-    // Revenue = bookings * average deal value
-    const estimatedRevenue = Number((weeklyBookings * avgDealValue).toFixed(2));
-    const estimatedProfit = Number((estimatedRevenue - estimatedCost).toFixed(2));
-    const roiMultiplier = estimatedCost > 0 ? estimatedRevenue / estimatedCost : 0;
-    const roiPercentage = roiMultiplier ? (roiMultiplier - 1) * 100 : 0;
+    const daysInPeriod = 30;
+    const estimatedCost = monthlyServiceFee != null
+      ? Number((monthlyServiceFee * (daysInPeriod / 30)).toFixed(2))
+      : null;
+    const estimatedRevenue = avgDealValue != null
+      ? Number((weeklyBookings * avgDealValue).toFixed(2))
+      : null;
+    const estimatedProfit = estimatedCost != null && estimatedRevenue != null
+      ? Number((estimatedRevenue - estimatedCost).toFixed(2))
+      : null;
+    const roiMultiplier = estimatedCost > 0 && estimatedRevenue != null
+      ? estimatedRevenue / estimatedCost
+      : null;
+    const roiPercentage = roiMultiplier != null && roiMultiplier > 0
+      ? (roiMultiplier - 1) * 100
+      : null;
 
     const payload = {
       ok: true,
@@ -8756,7 +8790,9 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         costs: {
           total: estimatedCost,
           monthlyFee: monthlyServiceFee,
-          perCall: totalCalls > 0 ? Number((estimatedCost / totalCalls).toFixed(2)) : 0
+          perCall: estimatedCost != null && totalCalls > 0
+            ? Number((estimatedCost / totalCalls).toFixed(2))
+            : null
         },
         revenue: {
           total: estimatedRevenue,
@@ -8765,8 +8801,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         },
         roi: {
           profit: estimatedProfit,
-          multiplier: Number(roiMultiplier.toFixed(1)),
-          percentage: Number(roiPercentage.toFixed(0))
+          multiplier: roiMultiplier != null ? Number(roiMultiplier.toFixed(1)) : null,
+          percentage: roiPercentage != null ? Number(roiPercentage.toFixed(0)) : null
         }
       },
       appointments: upcomingAppointments,
@@ -8775,9 +8811,9 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         data: touchpointData
       },
       config: {
-        phone: client?.phone || client?.whiteLabel?.phone || client?.numbers?.primary || '+44 20 3880 1234',
-        businessHours: client?.businessHours || client?.whiteLabel?.businessHours || client?.booking?.businessHours || '8am - 8pm, 7 days/week',
-        timezone: client?.timezone || client?.booking?.timezone || 'Europe/London',
+        phone: client?.phone || client?.whiteLabel?.phone || client?.numbers?.primary || null,
+        businessHours: client?.businessHours || client?.whiteLabel?.businessHours || client?.booking?.businessHours || null,
+        timezone: client?.timezone || client?.booking?.timezone || null,
         industry: client?.industry || client?.whiteLabel?.industry || null
       }
     };
@@ -9926,6 +9962,21 @@ app.get('/api/leads/:leadId/timeline', async (req, res) => {
       WHERE lead_id = $1 AND client_key = $2
       ORDER BY created_at ASC
     `, [lead.id, clientKey]);
+
+    let smsRows = { rows: [] };
+    try {
+      const smsResult = await query(`
+        SELECT channel, direction, body, status, created_at
+        FROM messages
+        WHERE client_key = $2
+          AND channel = 'sms'
+          AND (to_phone = $1 OR from_phone = $1)
+        ORDER BY created_at ASC
+      `, [lead.phone, clientKey]);
+      smsRows = smsResult;
+    } catch (msgErr) {
+      console.warn('[TIMELINE] SMS events skipped:', msgErr.message);
+    }
     
     const timeline = [];
     
@@ -9944,13 +9995,34 @@ app.get('/api/leads/:leadId/timeline', async (req, res) => {
         time: call.created_at
       });
     });
+
+    (smsRows.rows || []).forEach((msg) => {
+      const outbound = (msg.direction || '').toLowerCase() === 'outbound';
+      const preview = (msg.body && String(msg.body).trim()) ? String(msg.body).trim().slice(0, 160) : (msg.status || 'SMS');
+      timeline.push({
+        event: outbound ? 'SMS sent' : 'SMS received',
+        icon: '💬',
+        detail: preview,
+        time: msg.created_at
+      });
+    });
     
     (appointmentsResult.rows || []).forEach((appt, idx) => {
       const startDate = new Date(appt.start_iso);
+      const st = (appt.status || '').toLowerCase();
+      const isCancelled = st.includes('cancel');
+      const isNoShow = st.includes('no_show') || st.includes('no-show');
+      let event = idx === 0 ? 'Appointment booked' : 'Appointment updated';
+      if (isCancelled) event = 'Appointment cancelled';
+      else if (isNoShow) event = 'Appointment (no-show)';
+      let detail = `${startDate.toLocaleString('en-GB')} • ${appt.status || 'booked'}`;
+      if (!isCancelled && !isNoShow) {
+        detail = `Scheduled for ${startDate.toLocaleString('en-GB')}`;
+      }
       timeline.push({
-        event: idx === 0 ? 'Appointment booked' : 'Appointment updated',
+        event,
         icon: '📅',
-        detail: `Booked for ${startDate.toLocaleString('en-GB')}`,
+        detail,
         time: appt.created_at
       });
     });

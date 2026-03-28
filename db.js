@@ -1037,6 +1037,14 @@ function mapTenantRow(r) {
   } else if (out.booking && out.booking.businessHours) {
     out.businessHours = out.booking.businessHours;
   }
+
+  if (whiteLabel.pricing && typeof whiteLabel.pricing === 'object') {
+    out.pricing = { ...whiteLabel.pricing };
+    if (whiteLabel.pricing.monthlyFee != null) out.monthlyFee = whiteLabel.pricing.monthlyFee;
+    if (whiteLabel.pricing.avgDealValue != null) out.avgDealValue = whiteLabel.pricing.avgDealValue;
+  }
+  if (whiteLabel.monthlyFee != null) out.monthlyFee = whiteLabel.monthlyFee;
+  if (whiteLabel.avgDealValue != null) out.avgDealValue = whiteLabel.avgDealValue;
   
   // Also set name for compatibility (same as displayName)
   out.name = out.displayName;
