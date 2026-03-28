@@ -8488,9 +8488,23 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       `, [clientKey]),
       query(`
         SELECT c.call_id, c.id, c.lead_phone, c.status, c.outcome, c.created_at, c.duration,
-               l.name, l.service
+               lm.name, lm.service
         FROM calls c
-        LEFT JOIN leads l ON l.client_key = c.client_key AND l.phone = c.lead_phone
+        LEFT JOIN LATERAL (
+          SELECT l.name, l.service
+          FROM leads l
+          WHERE l.client_key = c.client_key
+            AND (
+              l.phone = c.lead_phone
+              OR (
+                LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
+                AND RIGHT(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), 10)
+                  = RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
+              )
+            )
+          ORDER BY l.created_at DESC NULLS LAST
+          LIMIT 1
+        ) lm ON true
         WHERE c.client_key = $1
         ORDER BY c.created_at DESC
         LIMIT 5
