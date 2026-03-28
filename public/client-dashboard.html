@@ -60,9 +60,9 @@
         }
         
         .container {
-            max-width: 1200px;
+            max-width: 1320px;
             margin: 0 auto;
-            padding: 40px 20px 72px;
+            padding: 40px 28px 72px;
         }
         
         .header {
@@ -163,7 +163,7 @@
 
         .status-bar {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
             gap: 22px;
             margin: 30px 0;
         }
@@ -171,7 +171,7 @@
         .status-card {
             background: rgba(255, 255, 255, 0.96);
             border-radius: 18px;
-            padding: 16px 14px 22px;
+            padding: 18px 16px 30px;
             box-shadow: var(--card-shadow);
             text-align: center;
             border: 1px solid rgba(92,106,196,0.1);
@@ -180,7 +180,7 @@
             display: flex;
             flex-direction: column;
             align-items: stretch;
-            gap: 6px;
+            gap: 8px;
             min-height: 0;
         }
 
@@ -202,19 +202,22 @@
             font-size: 2rem;
             font-weight: 700;
             color: var(--primary);
-            line-height: 1.1;
+            line-height: 1.12;
             flex-shrink: 0;
             font-variant-numeric: tabular-nums;
+            padding-bottom: 2px;
         }
 
         .status-hint {
             margin: 0;
             margin-top: auto;
             font-size: 0.8rem;
-            line-height: 1.5;
+            line-height: 1.55;
             color: #8c8fab;
             white-space: pre-line;
-            padding: 8px 2px 2px;
+            padding: 10px 8px 12px;
+            overflow-wrap: break-word;
+            word-wrap: break-word;
         }
 
         .dashboard-section {
@@ -788,7 +791,7 @@
         .card {
             background: var(--surface);
             border-radius: 18px;
-            padding: 22px;
+            padding: 24px 24px 26px;
             box-shadow: var(--card-shadow);
             border: 1px solid rgba(92,106,196,0.08);
             transition: transform 0.25s ease, box-shadow 0.25s ease;
@@ -818,7 +821,7 @@
         }
         
         .card h3 {
-            margin-bottom: 18px;
+            margin-bottom: 12px;
             font-size: 1.2rem;
             color: var(--text);
             display: flex;
@@ -827,9 +830,10 @@
         }
 
         .card-subtitle {
-            margin-top: -10px;
-            margin-bottom: 16px;
+            margin-top: -6px;
+            margin-bottom: 22px;
             font-size: 0.92rem;
+            line-height: 1.5;
             color: #7a7da0;
         }
 
@@ -1454,7 +1458,7 @@
         }
 
         .card-weekly-activity .card-subtitle {
-            margin-bottom: 6px;
+            margin-bottom: 18px;
         }
 
         .activity-feed {
@@ -2785,7 +2789,7 @@
                 padding: 20px 16px;
             }
             .card {
-                padding: 16px;
+                padding: 18px 16px 22px;
             }
         }
     </style>
@@ -4109,7 +4113,7 @@ ${actionsRow}
             }
             if (ansAttempts != null && noAttempts != null) {
                 hintLines.push(
-                    `${formatNumber(ansAttempts)} conv. attempts · ${formatNumber(noAttempts)} miss rows`
+                    `${formatNumber(ansAttempts)} conv. · ${formatNumber(noAttempts)} misses (all rows)`
                 );
             } else if (callsAnswered > 0 || callsNotAnswered > 0 || pendingLeadsOnly > 0) {
                 const bits = [];
@@ -4133,12 +4137,12 @@ ${actionsRow}
             if (noPickupEl) noPickupEl.textContent = formatNumber(callsNotAnswered);
             if (answeredHintEl) {
                 answeredHintEl.textContent = (pendingLeadsOnly > 0 || callsOutcomePending > 0)
-                    ? '≥1 call with conversation signal (duration/transcript/outcome)'
+                    ? '≥1 call with a conversation signal\n(duration, transcript, or outcome)'
                     : (callsAnswered > 0 ? 'At least one connected-style call' : 'No conversations yet');
             }
             if (noPickupHintEl) {
                 noPickupHintEl.textContent = callsNotAnswered > 0
-                    ? 'Never reached on any dial (excl. leads with a conv. call)'
+                    ? 'Never reached on any dial\n(excl. leads with a conv. call)'
                     : 'No leads in this bucket';
             }
             
