@@ -3902,7 +3902,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
 
             try {
-                const response = await fetch(`${BASE_URL}/api/retry-queue/${currentClient}`);
+                const response = await fetch(`${BASE_URL}/api/retry-queue/${currentClient}`, { cache: 'no-store' });
                 const payload = await response.json().catch(() => ({}));
                 if (!response.ok || !payload?.ok) {
                     const errMsg = payload?.error || `Could not load retry queue (${response.status})`;
@@ -3914,20 +3914,28 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             <div class="empty-state" style="padding: 20px;">
                                 <span class="empty-state-icon">✅</span>
                                 <div class="empty-state-title">All caught up!</div>
-                                <div class="empty-state-message">No pending retries in the next 24 hours — or none scheduled yet.</div>
+                                <div class="empty-state-message">No follow-up retries or queued outbound calls in the next 7 days. After no-answer, busy, or voicemail we schedule the next attempt (often ~24h out).</div>
                         </div>
                     `;
                     return;
                 }
-                container.innerHTML = payload.retries.map(lead => `
-                        <div class="retry-item">
+                container.innerHTML = payload.retries.map(lead => {
+                    const src = lead.source || '';
+                    const isQueuedCall = src === 'call_queue';
+                    const meta = isQueuedCall
+                        ? `${escapeHtml(lead.reason || 'Outbound call queued')} • ${escapeHtml(lead.phone || '')}`
+                        : `Attempt ${Number(lead.attempts) || 0}/${Number(lead.maxAttempts) || 0} • ${escapeHtml(lead.phone || '')}`;
+                    const whenLabel = isQueuedCall ? 'Due' : 'Retrying';
+                    return `
+                        <div class="retry-item" data-retry-source="${escapeHtml(src)}">
                             <div>
                                 <div class="retry-name">${escapeHtml(lead.name || 'Prospect')}</div>
-                                <div class="retry-meta">Attempt ${Number(lead.attempts) || 0}/${Number(lead.maxAttempts) || 0} • ${escapeHtml(lead.phone || '')}</div>
+                                <div class="retry-meta">${meta}</div>
                     </div>
-                            <div class="retry-status">Retrying ${escapeHtml(lead.nextRetry || '')}</div>
+                            <div class="retry-status">${whenLabel} ${escapeHtml(lead.nextRetry || '')}</div>
                         </div>
-                    `).join('');
+                    `;
+                }).join('');
             } catch (error) {
                 console.error('Failed to load retry queue', error);
                 showError(container, 'Unable to load retry queue. Please refresh the page.', () => renderRetryQueue(data));

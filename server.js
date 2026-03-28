@@ -10318,10 +10318,26 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
   }
 });
 
-// API endpoint for retry queue
-app.get('/api/retry-queue/:clientKey', cacheMiddleware({ ttl: 30000, keyPrefix: 'retry-queue:' }), async (req, res) => {
+// API endpoint for retry queue (pending follow-up rows + outbound calls waiting in call_queue)
+// No response cache: queue changes often; cached empty responses made the dashboard look "broken".
+app.get('/api/retry-queue/:clientKey', async (req, res) => {
   try {
     const { clientKey } = req.params;
+    res.set('Cache-Control', 'no-store');
+    const leadNameSubquery = (alias, phoneCol) => `
+      (SELECT l.name FROM leads l
+        WHERE l.client_key = ${alias}.client_key
+          AND (
+            l.phone = ${alias}.${phoneCol}
+            OR (
+              LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
+              AND RIGHT(regexp_replace(COALESCE(${alias}.${phoneCol}, ''), '[^0-9]', '', 'g'), 10)
+                = RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
+            )
+          )
+        ORDER BY l.created_at DESC NULLS LAST
+        LIMIT 1)`;
+
     const result = await query(`
       SELECT 
         rq.id,
@@ -10332,38 +10348,59 @@ app.get('/api/retry-queue/:clientKey', cacheMiddleware({ ttl: 30000, keyPrefix: 
         rq.retry_attempt,
         rq.max_retries,
         rq.status,
-        (
-          SELECT l.name FROM leads l
-          WHERE l.client_key = rq.client_key
-            AND (
-              l.phone = rq.lead_phone
-              OR (
-                LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
-                AND RIGHT(regexp_replace(COALESCE(rq.lead_phone, ''), '[^0-9]', '', 'g'), 10)
-                  = RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
-              )
-            )
-          ORDER BY l.created_at DESC NULLS LAST
-          LIMIT 1
-        ) AS name
+        'retry_queue'::text AS source,
+        ${leadNameSubquery('rq', 'lead_phone')} AS name
       FROM retry_queue rq
       WHERE rq.client_key = $1
-        AND rq.status = 'pending'
-        AND rq.scheduled_for <= NOW() + INTERVAL '24 hours'
+        AND LOWER(TRIM(COALESCE(rq.status, ''))) = 'pending'
+        AND rq.scheduled_for <= NOW() + INTERVAL '7 days'
       ORDER BY rq.scheduled_for ASC
-      LIMIT 10
+      LIMIT 15
     `, [clientKey]);
 
-    const retries = (result.rows || []).map((row) => {
+    let callQ = { rows: [] };
+    try {
+      callQ = await query(`
+        SELECT 
+          cq.id,
+          cq.lead_phone,
+          cq.call_type AS retry_type,
+          'call_queue'::text AS retry_reason,
+          cq.scheduled_for,
+          0 AS retry_attempt,
+          1 AS max_retries,
+          cq.status,
+          'call_queue'::text AS source,
+          ${leadNameSubquery('cq', 'lead_phone')} AS name
+        FROM call_queue cq
+        WHERE cq.client_key = $1
+          AND LOWER(TRIM(COALESCE(cq.status, ''))) = 'pending'
+          AND cq.call_type = 'vapi_call'
+          AND cq.scheduled_for <= NOW() + INTERVAL '7 days'
+        ORDER BY cq.scheduled_for ASC
+        LIMIT 15
+      `, [clientKey]);
+    } catch (cqErr) {
+      console.warn('[RETRY QUEUE API] call_queue optional read failed:', cqErr?.message || cqErr);
+    }
+
+    const mapRow = (row) => {
       const sched = row.scheduled_for ? new Date(row.scheduled_for) : null;
       const schedOk = sched && !Number.isNaN(sched.getTime());
+      const isCallQueue = row.source === 'call_queue';
       return {
-        id: row.id,
+        id: isCallQueue ? `cq-${row.id}` : `rq-${row.id}`,
+        dbId: row.id,
+        source: row.source,
         name: row.name || 'Prospect',
         phone: row.lead_phone,
-        attempts: row.retry_attempt,
-        maxAttempts: row.max_retries,
-        reason: row.retry_reason || 'Call failed',
+        attempts: isCallQueue ? 0 : row.retry_attempt,
+        maxAttempts: isCallQueue ? 1 : row.max_retries,
+        reason: isCallQueue
+          ? 'Outbound call queued'
+          : (typeof row.retry_reason === 'string' && row.retry_reason.startsWith('follow_up_')
+            ? 'Follow-up call scheduled'
+            : (row.retry_reason || 'Scheduled follow-up')),
         scheduledFor: row.scheduled_for,
         nextRetry: schedOk
           ? sched.toLocaleString('en-GB', {
@@ -10373,11 +10410,15 @@ app.get('/api/retry-queue/:clientKey', cacheMiddleware({ ttl: 30000, keyPrefix: 
           })
           : 'Scheduled'
       };
-    });
+    };
+
+    const merged = [...(result.rows || []).map(mapRow), ...(callQ.rows || []).map(mapRow)]
+      .sort((a, b) => new Date(a.scheduledFor) - new Date(b.scheduledFor))
+      .slice(0, 15);
 
     res.json({
       ok: true,
-      retries
+      retries: merged
     });
   } catch (error) {
     console.error('[RETRY QUEUE ERROR]', error);
