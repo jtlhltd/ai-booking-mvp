@@ -67,10 +67,11 @@
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
         
+        /* Capped width: ultra-wide viewports were stretching cards into short, wide strips */
         .container {
-            max-width: min(1820px, 98%);
+            max-width: min(1320px, 96%);
             margin: 0 auto;
-            padding: 16px max(12px, 1.2vw) 32px;
+            padding: 18px max(14px, 2vw) 36px;
         }
         
         .header {
@@ -137,15 +138,19 @@
 
         .client-meta {
             margin-top: 12px;
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-            gap: 8px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            max-width: 920px;
         }
 
         .meta-item {
             background: var(--light);
             border-radius: 10px;
-            padding: 9px 13px;
+            padding: 10px 14px;
+            flex: 1 1 200px;
+            max-width: 280px;
+            min-width: 0;
         }
 
         .meta-label {
@@ -172,16 +177,17 @@
         }
 
         .status-bar {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-            gap: 10px;
-            margin: 11px 0 13px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 12px;
+            margin: 12px 0 14px;
         }
 
         .status-card {
             background: rgba(255, 255, 255, 0.96);
             border-radius: 12px;
-            padding: 10px 9px 14px;
+            padding: 12px 12px 16px;
             box-shadow: var(--card-shadow);
             text-align: center;
             border: 1px solid rgba(92,106,196,0.1);
@@ -192,6 +198,9 @@
             align-items: stretch;
             gap: 8px;
             min-height: 0;
+            flex: 1 1 168px;
+            max-width: 252px;
+            min-width: 0;
         }
 
         .status-card h4 {
@@ -257,8 +266,8 @@
 
         .dashboard-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(255px, 1fr));
-            gap: 12px;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 14px;
             align-items: stretch;
         }
 
@@ -271,16 +280,16 @@
 
         /* Same fixed row height: lists scroll inside; avoids lopsided columns */
         .dashboard-section--balanced-row .dashboard-grid > .card {
-            height: min(48vh, 448px);
-            max-height: min(48vh, 448px);
+            height: min(52vh, 500px);
+            max-height: min(52vh, 500px);
             overflow: hidden;
             box-sizing: border-box;
         }
 
         /* Today’s Activity + neighbors need more vertical room for metric copy */
         .dashboard-section--operations-row.dashboard-section--balanced-row .dashboard-grid > .card {
-            height: min(54vh, 572px);
-            max-height: min(54vh, 572px);
+            height: min(58vh, 640px);
+            max-height: min(58vh, 640px);
         }
 
         .dashboard-section--balanced-row .dashboard-grid > .card > .leads-list,
@@ -342,7 +351,7 @@
 
         .dashboard-grid > .card.card-weekly-activity .chart {
             flex: 1 1 auto;
-            min-height: 90px;
+            min-height: 112px;
         }
 
         .dashboard-grid > .card.card-upload-leads .upload-paste-row {
@@ -378,11 +387,11 @@
         }
 
         .card-chart {
-            min-height: 162px;
+            min-height: 200px;
         }
 
         .card-visual {
-            min-height: 148px;
+            min-height: 176px;
         }
 
         .card-list {
@@ -1373,12 +1382,13 @@
 
         .chart {
             display: flex;
-            gap: 7px;
+            gap: 10px;
             align-items: flex-end;
-            justify-content: stretch;
-            height: 96px;
-            padding: 9px 7px 24px;
-            margin: 0;
+            justify-content: center;
+            height: 118px;
+            max-width: min(100%, 520px);
+            margin: 0 auto;
+            padding: 10px 12px 28px;
             border-radius: 14px;
             background: linear-gradient(180deg, rgba(92, 106, 196, 0.07), rgba(92, 106, 196, 0.02));
             border: 1px solid rgba(92, 106, 196, 0.1);
@@ -1386,8 +1396,9 @@
         }
 
         .chart-bar {
-            flex: 1;
-            min-width: 0;
+            flex: 1 1 32px;
+            max-width: 56px;
+            min-width: 24px;
             border-radius: 10px 10px 6px 6px;
             background: linear-gradient(180deg, rgba(92, 106, 196, 0.92), rgba(58, 74, 159, 0.88));
             position: relative;
@@ -1403,7 +1414,7 @@
         .chart-bar::after {
             content: attr(data-label);
             position: absolute;
-            bottom: -20px;
+            bottom: -22px;
             left: 50%;
             transform: translateX(-50%);
             font-size: 0.78rem;
@@ -1614,13 +1625,13 @@
         .funnel {
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            padding: 4px 0;
+            gap: 12px;
+            padding: 6px 0;
         }
 
         .funnel-stage {
             position: relative;
-            padding: 10px 14px;
+            padding: 14px 16px;
             border-radius: 10px;
             background: linear-gradient(135deg, rgba(92,106,196,0.08), rgba(58,74,159,0.08));
             border: 1px solid rgba(92,106,196,0.15);
@@ -1701,11 +1712,13 @@
 
         .forecast-chart {
             display: flex;
-            gap: 7px;
+            gap: 8px;
             align-items: flex-end;
-            height: 148px;
-            padding: 9px 5px;
-            margin-top: 11px;
+            justify-content: center;
+            height: 168px;
+            max-width: min(100%, 560px);
+            margin: 11px auto 0;
+            padding: 10px 8px;
         }
 
         .forecast-bar {
@@ -1816,6 +1829,8 @@
             grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
             gap: 12px;
             padding: 8px 0;
+            max-width: 400px;
+            margin: 0 auto;
         }
 
         .quality-metric {
@@ -2752,7 +2767,12 @@
                 align-items: flex-start;
             }
             .status-bar {
-                grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+                justify-content: stretch;
+            }
+
+            .status-card {
+                max-width: none;
+                flex: 1 1 calc(50% - 8px);
             }
             .dashboard-grid {
                 grid-template-columns: 1fr;
@@ -2768,8 +2788,12 @@
                 width: 100%;
                 justify-content: center;
             }
-            .chart, .forecast-chart {
-                height: 88px;
+            .chart {
+                height: 100px;
+            }
+
+            .forecast-chart {
+                height: 120px;
             }
             .funnel {
                 gap: 10px;
@@ -2788,11 +2812,34 @@
 
             .dashboard-section--balanced-row .dashboard-grid > .card {
                 height: auto;
-                max-height: min(85vh, 448px);
+                max-height: min(85vh, 500px);
             }
 
             .dashboard-section--operations-row.dashboard-section--balanced-row .dashboard-grid > .card {
-                max-height: min(90vh, 572px);
+                max-height: min(90vh, 640px);
+            }
+
+            .meta-item {
+                max-width: none;
+                flex: 1 1 100%;
+            }
+
+            .chart {
+                max-width: 100%;
+            }
+
+            .forecast-chart {
+                max-width: 100%;
+            }
+
+            .chart-bar {
+                max-width: none;
+                flex: 1;
+                min-width: 0;
+            }
+
+            .call-quality-grid {
+                max-width: none;
             }
 
             .container {
