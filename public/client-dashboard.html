@@ -45,9 +45,12 @@
             font-family: inherit;
         }
         
-        /* Below default 16px so 100% browser zoom feels like a normal app density; still scales with user font prefs */
+        /*
+         * ~58.6% ≈ 87.5% × 0.67 so 100% browser zoom matches the prior “67% zoom” visual density
+         * (still a % of user font size for accessibility).
+         */
         html {
-            font-size: 87.5%;
+            font-size: 58.6%;
         }
 
         body, html {
@@ -65,15 +68,15 @@
         }
         
         .container {
-            max-width: min(1540px, 100%);
+            max-width: min(1680px, 100%);
             margin: 0 auto;
-            padding: 22px max(14px, 2.5vw) 44px;
+            padding: 15px max(10px, 1.8vw) 30px;
         }
         
         .header {
             background: var(--surface);
-            border-radius: 16px;
-            padding: 16px 20px;
+            border-radius: 14px;
+            padding: 11px 14px;
             box-shadow: var(--card-shadow);
             border-left: 6px solid var(--primary);
             border: 1px solid rgba(92,106,196,0.15);
@@ -94,9 +97,9 @@
         }
         
         .client-logo {
-            width: 46px;
-            height: 46px;
-            border-radius: 12px;
+            width: 31px;
+            height: 31px;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -170,15 +173,15 @@
 
         .status-bar {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(176px, 1fr));
-            gap: 12px;
-            margin: 14px 0 16px;
+            grid-template-columns: repeat(auto-fit, minmax(152px, 1fr));
+            gap: 8px;
+            margin: 10px 0 11px;
         }
 
         .status-card {
             background: rgba(255, 255, 255, 0.96);
-            border-radius: 14px;
-            padding: 12px 10px 18px;
+            border-radius: 12px;
+            padding: 8px 7px 12px;
             box-shadow: var(--card-shadow);
             text-align: center;
             border: 1px solid rgba(92,106,196,0.1);
@@ -254,8 +257,8 @@
 
         .dashboard-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(272px, 1fr));
-            gap: 14px;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 10px;
             align-items: stretch;
         }
 
@@ -268,16 +271,16 @@
 
         /* Same fixed row height: lists scroll inside; avoids lopsided columns */
         .dashboard-section--balanced-row .dashboard-grid > .card {
-            height: min(68vh, 620px);
-            max-height: min(68vh, 620px);
+            height: min(46vh, 415px);
+            max-height: min(46vh, 415px);
             overflow: hidden;
             box-sizing: border-box;
         }
 
         /* Today’s Activity + neighbors need more vertical room for metric copy */
         .dashboard-section--operations-row.dashboard-section--balanced-row .dashboard-grid > .card {
-            height: min(78vh, 800px);
-            max-height: min(78vh, 800px);
+            height: min(52vh, 535px);
+            max-height: min(52vh, 535px);
         }
 
         .dashboard-section--balanced-row .dashboard-grid > .card > .leads-list,
@@ -296,8 +299,8 @@
 
         .dashboard-section--balanced-row .card-upload-leads .import-dropzone {
             flex: 1 1 auto;
-            min-height: 120px;
-            max-height: min(280px, 34vh);
+            min-height: 80px;
+            max-height: min(188px, 23vh);
         }
 
         .dashboard-grid > .card > .export-buttons {
@@ -322,7 +325,7 @@
             overflow-x: hidden;
             -webkit-overflow-scrolling: touch;
             overscroll-behavior: contain;
-            padding-bottom: 24px;
+            padding-bottom: 16px;
         }
 
         .dashboard-grid > .card > #call-quality,
@@ -339,7 +342,7 @@
 
         .dashboard-grid > .card.card-weekly-activity .chart {
             flex: 1 1 auto;
-            min-height: 120px;
+            min-height: 80px;
         }
 
         .dashboard-grid > .card.card-upload-leads .upload-paste-row {
@@ -375,11 +378,11 @@
         }
 
         .card-chart {
-            min-height: 220px;
+            min-height: 148px;
         }
 
         .card-visual {
-            min-height: 200px;
+            min-height: 134px;
         }
 
         .card-list {
@@ -797,8 +800,8 @@
         
         .card {
             background: var(--surface);
-            border-radius: 14px;
-            padding: 16px 16px 18px;
+            border-radius: 12px;
+            padding: 11px 11px 12px;
             box-shadow: var(--card-shadow);
             border: 1px solid rgba(92,106,196,0.08);
             transition: transform 0.25s ease, box-shadow 0.25s ease;
@@ -1266,15 +1269,15 @@
         }
 
         .roi-panel {
-            margin-bottom: 14px;
-            border-radius: 14px;
-            padding: 12px 16px;
+            margin-bottom: 9px;
+            border-radius: 12px;
+            padding: 8px 11px;
             background: linear-gradient(135deg, #667eea, #764ba2);
             color: #fff;
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 14px;
-            box-shadow: 0 12px 28px rgba(51, 65, 145, 0.38);
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 9px;
+            box-shadow: 0 8px 19px rgba(51, 65, 145, 0.38);
         }
 
         .roi-metric span {
@@ -1368,11 +1371,11 @@
 
         .chart {
             display: flex;
-            gap: 8px;
+            gap: 6px;
             align-items: flex-end;
             justify-content: stretch;
-            height: 128px;
-            padding: 12px 8px 30px;
+            height: 86px;
+            padding: 8px 6px 22px;
             margin: 0;
             border-radius: 14px;
             background: linear-gradient(180deg, rgba(92, 106, 196, 0.07), rgba(92, 106, 196, 0.02));
@@ -1398,7 +1401,7 @@
         .chart-bar::after {
             content: attr(data-label);
             position: absolute;
-            bottom: -24px;
+            bottom: -18px;
             left: 50%;
             transform: translateX(-50%);
             font-size: 0.78rem;
@@ -1696,11 +1699,11 @@
 
         .forecast-chart {
             display: flex;
-            gap: 8px;
+            gap: 6px;
             align-items: flex-end;
-            height: 200px;
-            padding: 12px 6px;
-            margin-top: 16px;
+            height: 134px;
+            padding: 8px 4px;
+            margin-top: 11px;
         }
 
         .forecast-bar {
@@ -1760,12 +1763,12 @@
         .active-indicator {
             background: linear-gradient(135deg, #1b5e20, #2e7d32);
             color: #fff;
-            padding: 8px 12px;
-            border-radius: 10px;
-            margin-bottom: 12px;
+            padding: 5px 8px;
+            border-radius: 8px;
+            margin-bottom: 8px;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             box-shadow: 0 4px 12px rgba(27,94,32,0.3);
         }
 
@@ -2764,7 +2767,7 @@
                 justify-content: center;
             }
             .chart, .forecast-chart {
-                height: 120px;
+                height: 80px;
             }
             .funnel {
                 gap: 10px;
@@ -2783,21 +2786,21 @@
 
             .dashboard-section--balanced-row .dashboard-grid > .card {
                 height: auto;
-                max-height: min(85vh, 620px);
+                max-height: min(85vh, 415px);
             }
 
             .dashboard-section--operations-row.dashboard-section--balanced-row .dashboard-grid > .card {
-                max-height: min(90vh, 760px);
+                max-height: min(90vh, 535px);
             }
 
             .container {
-                padding: 18px 12px 40px;
+                padding: 12px 10px 28px;
             }
             .header {
-                padding: 20px 16px;
+                padding: 14px 12px;
             }
             .card {
-                padding: 18px 16px 22px;
+                padding: 12px 12px 15px;
             }
         }
     </style>
