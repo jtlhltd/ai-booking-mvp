@@ -1008,34 +1008,105 @@
 
         .chart {
             display: flex;
-            gap: 12px;
+            gap: 10px;
             align-items: flex-end;
-            height: 180px;
-            padding: 8px 6px;
+            justify-content: stretch;
+            height: 150px;
+            padding: 16px 10px 36px;
+            margin: 0;
+            border-radius: 14px;
+            background: linear-gradient(180deg, rgba(92, 106, 196, 0.07), rgba(92, 106, 196, 0.02));
+            border: 1px solid rgba(92, 106, 196, 0.1);
+            box-sizing: border-box;
         }
 
         .chart-bar {
             flex: 1;
-            border-radius: 8px 8px 4px 4px;
-            background: linear-gradient(180deg, rgba(92,106,196,0.85), rgba(58,74,159,0.85));
+            min-width: 0;
+            border-radius: 10px 10px 6px 6px;
+            background: linear-gradient(180deg, rgba(92, 106, 196, 0.92), rgba(58, 74, 159, 0.88));
             position: relative;
+            transition: filter 0.15s ease, transform 0.15s ease;
+            box-shadow: 0 2px 8px rgba(58, 74, 159, 0.15);
+        }
+
+        .chart-bar:hover {
+            filter: brightness(1.06);
+            transform: translateY(-1px);
         }
 
         .chart-bar::after {
             content: attr(data-label);
             position: absolute;
-            bottom: -22px;
+            bottom: -28px;
             left: 50%;
             transform: translateX(-50%);
-            font-size: 0.85rem;
-            color: #8c8fab;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: #6b7194;
+            letter-spacing: 0.02em;
+            white-space: nowrap;
         }
 
-        .chart-value {
-            text-align: center;
-            margin-top: 8px;
-            font-size: 0.9rem;
-            color: #616484;
+        .weekly-chart-wrap {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
+
+        .weekly-chart-summary {
+            margin-top: 1.35rem;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(92, 106, 196, 0.14);
+        }
+
+        .weekly-stat-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px 28px;
+            align-items: flex-start;
+        }
+
+        .weekly-stat {
+            flex: 1 1 140px;
+            min-width: 120px;
+            font-size: 0.95rem;
+            color: var(--text, #2f3147);
+            line-height: 1.35;
+        }
+
+        .weekly-stat strong {
+            font-variant-numeric: tabular-nums;
+            font-size: 1.15rem;
+            color: var(--primary, #5c6ac4);
+            font-weight: 700;
+        }
+
+        .weekly-stat-hint {
+            display: block;
+            margin-top: 4px;
+            font-size: 0.78rem;
+            font-weight: 500;
+            color: var(--muted, #7a7fa4);
+            line-height: 1.3;
+        }
+
+        .weekly-stat-brand {
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px dashed rgba(92, 106, 196, 0.12);
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--muted, #7a7fa4);
+            letter-spacing: 0.03em;
+        }
+
+        .card-weekly-activity .export-buttons {
+            margin-top: 16px;
+        }
+
+        .card-weekly-activity .card-subtitle {
+            margin-bottom: 6px;
         }
 
         .activity-feed {
@@ -1934,6 +2005,32 @@
             border-left-color: rgba(124, 134, 220, 0.6);
         }
 
+        body[data-theme="dark"] .chart {
+            background: linear-gradient(180deg, rgba(92, 106, 196, 0.12), rgba(92, 106, 196, 0.04));
+            border-color: rgba(92, 106, 196, 0.25);
+        }
+
+        body[data-theme="dark"] .chart-bar::after {
+            color: #9aa3c4;
+        }
+
+        body[data-theme="dark"] .weekly-chart-summary {
+            border-top-color: rgba(92, 106, 196, 0.35);
+        }
+
+        body[data-theme="dark"] .weekly-stat {
+            color: #e8eaf4;
+        }
+
+        body[data-theme="dark"] .weekly-stat-hint,
+        body[data-theme="dark"] .weekly-stat-brand {
+            color: #9aa3c4;
+        }
+
+        body[data-theme="dark"] .weekly-stat-brand {
+            border-top-color: rgba(92, 106, 196, 0.25);
+        }
+
         body[data-theme="dark"] .modal-backdrop {
             background: rgba(0, 0, 0, 0.85);
         }
@@ -2230,16 +2327,22 @@
                     <div id="lead-journey" class="funnel"></div>
                 </article>
 
-                <article class="card card-chart">
+                <article class="card card-chart card-weekly-activity">
                     <h3>📊 Weekly Activity</h3>
                     <p class="card-subtitle" id="weeklyActivitySubtitle">Outbound call attempts by day (last 7 days).</p>
-                    <div id="performance-chart">
-                        <div class="chart" id="chartBars"></div>
-                        <p class="chart-value" id="chartSummary">Outbound attempts (last 7 days)</p>
-                </div>
+                    <div id="performance-chart" class="weekly-chart-wrap">
+                        <div class="chart" id="chartBars" role="img" aria-label="Outbound call attempts by weekday"></div>
+                        <div class="weekly-chart-summary" id="chartSummary">
+                            <div class="weekly-stat-row">
+                                <div class="weekly-stat"><strong>—</strong> outbound attempts<span class="weekly-stat-hint">Last 7 days</span></div>
+                                <div class="weekly-stat"><strong>—</strong> unique leads dialed<span class="weekly-stat-hint">All time</span></div>
+                            </div>
+                            <div class="weekly-stat-brand">—</div>
+                        </div>
+                    </div>
                     <div class="export-buttons">
                         <button class="export-btn secondary" onclick="exportData('calls')">📥 Export</button>
-            </div>
+                    </div>
                 </article>
 
 
@@ -3559,16 +3662,26 @@
             const totals = chartSource.data;
             const labels = chartSource.labels?.length === totals.length ? chartSource.labels : fallbackLabels;
             const max = Math.max(...totals, 1);
-            const bars = totals.map((value, idx) => `
-                <div class="chart-bar" style="height:${(value / max) * 100}%;" data-label="${labels[idx] || ''}"></div>
-            `).join('');
+            const bars = totals.map((value, idx) => {
+                const pct = max > 0 ? (value / max) * 100 : 0;
+                const h = value > 0 ? Math.max(pct, 6) : 0;
+                const day = escapeHtml(String(labels[idx] || ''));
+                const tip = `${formatNumber(value)} attempt${value === 1 ? '' : 's'} · ${day}`;
+                return `<div class="chart-bar" style="height:${h}%;" data-label="${day}" title="${escapeHtml(tip)}"></div>`;
+            }).join('');
             document.getElementById('chartBars').innerHTML = bars;
             const attempts7d = totals.reduce((sum, v) => sum + v, 0);
             const uniqueDial = data.metrics?.uniqueLeadsCalled ?? data.totalCalls ?? 0;
             const businessName = clientBusinessName || 'Your Business';
             const summaryEl = document.getElementById('chartSummary');
             if (summaryEl) {
-                summaryEl.textContent = `${formatNumber(attempts7d)} outbound attempts (last 7 days) · ${formatNumber(uniqueDial)} unique leads dialed (all time) · ${businessName}`;
+                summaryEl.innerHTML = `
+                    <div class="weekly-stat-row">
+                        <div class="weekly-stat"><strong>${formatNumber(attempts7d)}</strong> outbound attempts<span class="weekly-stat-hint">Last 7 days (includes retries)</span></div>
+                        <div class="weekly-stat"><strong>${formatNumber(uniqueDial)}</strong> unique leads dialed<span class="weekly-stat-hint">All time</span></div>
+                    </div>
+                    <div class="weekly-stat-brand">${escapeHtml(businessName)}</div>
+                `;
             }
             const weeklySub = document.getElementById('weeklyActivitySubtitle');
             if (weeklySub) {
