@@ -10651,7 +10651,7 @@ app.get('/api/export/:type', async (req, res) => {
 });
 
 // API endpoint for dashboard call quality metrics (7-day window; aligns with main dashboard “answered” heuristics)
-app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix: 'call-quality:v9:' }), async (req, res) => {
+app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix: 'call-quality:v10:' }), async (req, res) => {
   try {
     const { clientKey } = req.params;
 
@@ -10709,7 +10709,8 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
         COALESCE(AVG(CASE WHEN COALESCE(duration, 0) > 0 THEN duration::numeric END), 0) AS avg_duration_sec,
         COUNT(*) FILTER (WHERE outcome::text = 'booked')::int AS bookings_from_calls,
         COUNT(*) FILTER (WHERE is_answered)::int AS answered_attempts,
-        COUNT(*) FILTER (WHERE is_no_pickup)::int AS no_pickup_attempts
+        COUNT(*) FILTER (WHERE is_no_pickup)::int AS no_pickup_attempts,
+        COUNT(*) FILTER (WHERE LOWER(TRIM(COALESCE(outcome::text, ''))) = 'voicemail')::int AS voicemail_attempts
       FROM flags
     `, [clientKey]);
       stats = allCalls.rows?.[0] || {};
@@ -10728,7 +10729,8 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
               AND outcome::text NOT IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected')
             )
           )::int AS answered_attempts,
-          COUNT(*) FILTER (WHERE outcome::text IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected'))::int AS no_pickup_attempts
+          COUNT(*) FILTER (WHERE outcome::text IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected'))::int AS no_pickup_attempts,
+          COUNT(*) FILTER (WHERE LOWER(TRIM(COALESCE(outcome::text, ''))) = 'voicemail')::int AS voicemail_attempts
         FROM calls
         WHERE client_key = $1
           AND created_at >= NOW() - INTERVAL '7 days'
@@ -10760,17 +10762,28 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
       LIMIT 1
     `, [clientKey]);
 
-    let activeDialDays = 0;
+    let peakWeekdayLabel = '—';
+    let peakWeekdayDialCount = 0;
     try {
-      const adRows = await query(`
-        SELECT COUNT(DISTINCT (created_at::date))::int AS n
+      const dowRows = await query(`
+        SELECT EXTRACT(ISODOW FROM created_at)::int AS isodow,
+               COUNT(*)::int AS cnt
         FROM calls
         WHERE client_key = $1
           AND created_at >= NOW() - INTERVAL '7 days'
+        GROUP BY 1
+        ORDER BY cnt DESC, isodow ASC
+        LIMIT 1
       `, [clientKey]);
-      activeDialDays = parseInt(adRows.rows?.[0]?.n || 0, 10);
-    } catch (adErr) {
-      console.warn('[CALL QUALITY] activeDialDays skipped:', adErr?.message || adErr);
+      const dr = dowRows.rows?.[0];
+      const isoLabels = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      const d = parseInt(dr?.isodow, 10);
+      if (dr && Number(dr.cnt) > 0 && d >= 1 && d <= 7) {
+        peakWeekdayLabel = isoLabels[d] || '—';
+        peakWeekdayDialCount = parseInt(dr.cnt, 10) || 0;
+      }
+    } catch (dowErr) {
+      console.warn('[CALL QUALITY] peak weekday skipped:', dowErr?.message || dowErr);
     }
 
     let medianDurationSeconds = 0;
@@ -10888,6 +10901,7 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
     const uniqueLeads = parseInt(stats.unique_leads || 0, 10);
     const answeredAttempts = parseInt(stats.answered_attempts || 0, 10);
     const noPickupAttempts = parseInt(stats.no_pickup_attempts || 0, 10);
+    const voicemailAttempts = parseInt(stats.voicemail_attempts || 0, 10);
     const avgSec = parseFloat(stats.avg_duration_sec) || 0;
     const bookingNumerator = Math.max(bookingsFromCalls, appts7d);
 
@@ -10905,6 +10919,7 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
     const pickupRate = reachRate;
     const bookingRate = totalCalls > 0 ? Math.min(100, Math.round((bookingNumerator / totalCalls) * 100)) : 0;
     const attemptsPerLead = uniqueLeads > 0 ? Math.round((totalCalls / uniqueLeads) * 10) / 10 : null;
+    const voicemailRate = totalCalls > 0 ? Math.min(100, Math.round((voicemailAttempts / totalCalls) * 100)) : 0;
 
     res.json({
       ok: true,
@@ -10914,7 +10929,10 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
       uniqueLeadsDialed7d: uniqueLeads,
       answeredAttempts7d: answeredAttempts,
       noPickupAttempts7d: noPickupAttempts,
-      activeDialDays,
+      voicemailAttempts,
+      voicemailRate,
+      peakWeekdayLabel,
+      peakWeekdayDialCount,
       pickupRate,
       reachRate,
       avgCallsToFirstPickup,

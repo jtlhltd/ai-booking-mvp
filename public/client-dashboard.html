@@ -4169,6 +4169,14 @@ ${actionsRow}
             return min < 10 ? `${min.toFixed(1)} min avg` : `${Math.round(min)} min avg`;
         }
 
+        function formatMedianCallSeconds(sec) {
+            const s = Number(sec) || 0;
+            if (s <= 0) return '—';
+            if (s < 90) return `${Math.round(s)}s median`;
+            const min = s / 60;
+            return min < 10 ? `${min.toFixed(1)} min median` : `${Math.round(min)} min median`;
+        }
+
         function formatTimeAgo(dateString) {
             if (!dateString) return 'just now';
             try {
@@ -5125,7 +5133,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const medianSec = attempts > 0 ? 31 : 0;
                 const perLead = uniqueLeads > 0 ? Math.round((attempts / uniqueLeads) * 10) / 10 : null;
                 const bestHour = '14:00–16:00';
-                const activeDays = 5;
+                const voicemailPct = 22;
+                const vmDemo = Math.max(1, Math.round(attempts * (voicemailPct / 100)));
+                const peakDay = 'Thu';
+                const peakDayDials = 14;
                 container.innerHTML = `
                     <div class="quality-metric">
                         <div class="quality-label">Pick up rate</div>
@@ -5138,9 +5149,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         <div class="quality-badge">mean dials until first pickup · ${formatNumber(leadsPickupDemo)} leads (demo)</div>
                     </div>
                     <div class="quality-metric">
-                        <div class="quality-label">Conversation rows</div>
-                        <div class="quality-value">${formatNumber(answeredAtt)}</div>
-                        <div class="quality-badge">${reach}% of attempts · same signal as Pick up rate</div>
+                        <div class="quality-label">Voicemail %</div>
+                        <div class="quality-value">${voicemailPct}%</div>
+                        <div class="quality-badge">${formatNumber(vmDemo)} attempts with outcome voicemail (demo)</div>
                     </div>
                     <div class="quality-metric">
                         <div class="quality-label">Avg duration</div>
@@ -5159,13 +5170,13 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     </div>
                     <div class="quality-metric">
                         <div class="quality-label">Median duration</div>
-                        <div class="quality-value">${formatAvgCallSeconds(medianSec)}</div>
+                        <div class="quality-value">${formatMedianCallSeconds(medianSec)}</div>
                         <div class="quality-badge">typical length when duration &gt; 0</div>
                     </div>
                     <div class="quality-metric">
-                        <div class="quality-label">Active dial days</div>
-                        <div class="quality-value">${activeDays} / 7</div>
-                        <div class="quality-badge">days with ≥1 outbound row</div>
+                        <div class="quality-label">Peak weekday</div>
+                        <div class="quality-value">${peakDay}</div>
+                        <div class="quality-badge">most dials that day in 7d (${formatNumber(peakDayDials)} demo)</div>
                     </div>
                     <div class="quality-metric">
                         <div class="quality-label">Busiest dial window</div>
@@ -5183,7 +5194,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     const sec = payload.avgDurationSeconds ?? payload.avgDuration;
                     const total = payload.totalCalls || 0;
                     const pickup = payload.pickupRate ?? payload.reachRate ?? 0;
-                    const convRows = payload.answeredAttempts7d ?? 0;
+                    const vmRate = Math.min(100, Math.max(0, Number(payload.voicemailRate) || 0));
+                    const vmAttempts = Math.max(0, Number(payload.voicemailAttempts) || 0);
                     const avgToPickup = payload.avgCallsToFirstPickup;
                     const leadsPickup = payload.leadsWithFirstPickup7d ?? 0;
                     const avgPickupDisplay = avgToPickup != null && Number.isFinite(Number(avgToPickup))
@@ -5196,7 +5208,14 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     const medianSec = payload.medianDurationSeconds ?? 0;
                     const perLead = payload.attemptsPerLead;
                     const peakN = payload.bestTimeDialCount || 0;
-                    const activeDays = Math.min(7, Math.max(0, Number(payload.activeDialDays) || 0));
+                    const peakDayLabel = (payload.peakWeekdayLabel && String(payload.peakWeekdayLabel).trim()) || '—';
+                    const peakDowN = Math.max(0, Number(payload.peakWeekdayDialCount) || 0);
+                    const vmBadge = total > 0
+                        ? `${formatNumber(vmAttempts)} attempts with outcome voicemail (7d)`
+                        : 'no dial attempts in window';
+                    const peakDowBadge = peakDowN > 0
+                        ? `most dials that weekday in 7d (${formatNumber(peakDowN)})`
+                        : 'no weekday pattern yet';
                     const bestBadge = peakN > 0
                         ? `Most attempts in 7d (${formatNumber(peakN)} dials)`
                         : 'by hour of day';
@@ -5212,9 +5231,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             <div class="quality-badge">${avgPickupBadge}</div>
                         </div>
                         <div class="quality-metric">
-                            <div class="quality-label">Conversation rows</div>
-                            <div class="quality-value">${formatNumber(convRows)}</div>
-                            <div class="quality-badge">${pickup}% of attempts · same signal as Pick up rate</div>
+                            <div class="quality-label">Voicemail %</div>
+                            <div class="quality-value">${total > 0 ? `${vmRate}%` : '—'}</div>
+                            <div class="quality-badge">${vmBadge}</div>
                         </div>
                         <div class="quality-metric">
                             <div class="quality-label">Avg duration</div>
@@ -5233,13 +5252,13 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         </div>
                         <div class="quality-metric">
                             <div class="quality-label">Median duration</div>
-                            <div class="quality-value">${formatAvgCallSeconds(medianSec)}</div>
+                            <div class="quality-value">${formatMedianCallSeconds(medianSec)}</div>
                             <div class="quality-badge">typical length when duration &gt; 0 (less skewed than avg)</div>
                         </div>
                         <div class="quality-metric">
-                            <div class="quality-label">Active dial days</div>
-                            <div class="quality-value">${activeDays} / 7</div>
-                            <div class="quality-badge">calendar days with ≥1 attempt</div>
+                            <div class="quality-label">Peak weekday</div>
+                            <div class="quality-value">${escapeHtml(peakDayLabel)}</div>
+                            <div class="quality-badge">${peakDowBadge}</div>
                         </div>
                         <div class="quality-metric">
                             <div class="quality-label">Busiest dial window</div>
