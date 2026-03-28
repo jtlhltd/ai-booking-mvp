@@ -8131,6 +8131,96 @@ function outcomeToFriendlyLabel(outcome) {
   return outcome.replace(/-/g, ' ');
 }
 
+/** Lead timeline: did a human pick up? (distinct from raw DB status / missing webhooks) */
+function inferTimelinePickupStatus(call) {
+  const outcome = (call.outcome || '').toLowerCase().trim().replace(/_/g, '-');
+  const status = (call.status || '').toLowerCase().trim();
+  const durRaw = call.duration != null ? parseInt(call.duration, 10) : NaN;
+  const durNum = Number.isFinite(durRaw) && durRaw >= 0 ? durRaw : null;
+  const snip = String(call.transcript_snippet || '').trim();
+  const snipLen = snip.replace(/\s/g, '').length;
+  const hasRec = !!(call.recording_url && String(call.recording_url).trim());
+
+  const noHuman = new Set(['no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected', 'cancelled', 'canceled']);
+  if (outcome && noHuman.has(outcome)) {
+    const friendly = outcomeToFriendlyLabel(call.outcome);
+    return {
+      status: 'no',
+      headline: 'They did not pick up',
+      reason: friendly || outcome.replace(/-/g, ' ')
+    };
+  }
+
+  if (outcome === 'booked' || outcome === 'completed' || (outcome && !noHuman.has(outcome))) {
+    return {
+      status: 'yes',
+      headline: 'They picked up',
+      reason: outcomeToFriendlyLabel(call.outcome) || outcome.replace(/-/g, ' ')
+    };
+  }
+
+  if (status === 'initiated') {
+    const created = call.created_at ? new Date(call.created_at).getTime() : 0;
+    const ageMin = created ? (Date.now() - created) / 60000 : 999;
+    if (ageMin > 15) {
+      return {
+        status: 'unknown',
+        headline: 'Pickup unknown',
+        reason: 'Call was started but we never got hang-up/outcome (often a missing end-of-call webhook).'
+      };
+    }
+    return {
+      status: 'unknown',
+      headline: 'Pickup unknown',
+      reason: 'Still connecting or webhook not received yet (line shows initiated).'
+    };
+  }
+
+  const endedLike = status === 'ended' || status === 'completed';
+  if (endedLike) {
+    if (durNum != null && durNum >= 15) {
+      return {
+        status: 'yes',
+        headline: 'They picked up',
+        reason: `Connected about ${formatCallDuration(durNum)} (no outcome stored).`
+      };
+    }
+    if (snipLen > 40 || hasRec) {
+      return {
+        status: 'yes',
+        headline: 'They picked up',
+        reason: hasRec ? 'Recording on file.' : 'Conversation text captured.'
+      };
+    }
+    if (durNum != null && durNum > 0 && durNum < 12) {
+      return {
+        status: 'no',
+        headline: 'They did not pick up',
+        reason: `Very short ring (${formatCallDuration(durNum)}).`
+      };
+    }
+    return {
+      status: 'unknown',
+      headline: 'Pickup unknown',
+      reason: 'Call ended in our logs but no outcome, duration, or transcript yet.'
+    };
+  }
+
+  if (status === 'failed' || status === 'cancelled' || status === 'canceled') {
+    return {
+      status: 'no',
+      headline: 'They did not pick up',
+      reason: mapCallStatus(call.status)
+    };
+  }
+
+  return {
+    status: 'unknown',
+    headline: 'Pickup unknown',
+    reason: mapCallStatus(call.status) || 'Not enough data yet.'
+  };
+}
+
 function mapStatusClass(status) {
   const normalized = (status || '').toLowerCase();
   if (normalized.includes('book')) return 'success';
@@ -10168,19 +10258,12 @@ app.get('/api/leads/:leadId/timeline', async (req, res) => {
     });
 
     (callsResult.rows || []).forEach((call, idx) => {
-      const friendlyOutcome = outcomeToFriendlyLabel(call.outcome);
+      const pickup = inferTimelinePickupStatus(call);
       const durationLabel = formatCallDuration(call.duration);
-      const statusLine = mapCallStatus(call.status);
       const st = (call.status || '').toLowerCase();
-      const bits = [];
-      if (friendlyOutcome) bits.push(friendlyOutcome);
-      else if (call.outcome) bits.push(String(call.outcome).replace(/-/g, ' '));
-      else if (['ended', 'completed'].includes(st) && !call.outcome) {
-        bits.push('Ended (no outcome stored yet)');
-      } else bits.push(statusLine || 'Logged');
-      if (durationLabel) bits.push(`duration ${durationLabel}`);
-      if (call.status && !['ended', 'completed', 'failed', 'canceled', 'cancelled'].includes(st)) {
-        bits.push(`line status: ${call.status}`);
+      const bits = [pickup.reason];
+      if (durationLabel && !pickup.reason.includes(durationLabel)) {
+        bits.push(`length ${durationLabel}`);
       }
       const ra = call.retry_attempt != null ? parseInt(call.retry_attempt, 10) : 0;
       if (Number.isFinite(ra) && ra > 0) bits.push(`retry #${ra}`);
@@ -10189,6 +10272,9 @@ app.get('/api/leads/:leadId/timeline', async (req, res) => {
       }
       const qs = call.quality_score != null ? Number(call.quality_score) : null;
       if (qs != null && Number.isFinite(qs)) bits.push(`quality ${Math.round(qs)}/100`);
+      if (call.status && st === 'initiated') {
+        bits.push(`raw status: ${call.status}`);
+      }
       let rec = call.recording_url && String(call.recording_url).trim();
       if (rec && !/^https?:\/\//i.test(rec)) rec = null;
       const snip = String(call.transcript_snippet || '').replace(/\s+/g, ' ').trim();
@@ -10201,7 +10287,9 @@ app.get('/api/leads/:leadId/timeline', async (req, res) => {
         time: call.created_at,
         callId: call.call_id || null,
         recordingUrl: rec || null,
-        transcriptPreview
+        transcriptPreview,
+        pickupStatus: pickup.status,
+        pickupHeadline: pickup.headline
       });
     });
 
@@ -10244,14 +10332,19 @@ app.get('/api/leads/:leadId/timeline', async (req, res) => {
     
     res.json({
       ok: true,
-      timeline: timeline.map(item => ({
-        ...item,
-        time: new Date(item.time).toISOString(),
-        subdetail: item.subdetail || null,
-        callId: item.callId || undefined,
-        recordingUrl: item.recordingUrl || undefined,
-        transcriptPreview: item.transcriptPreview || undefined
-      }))
+      timeline: timeline.map((item) => {
+        const row = {
+          ...item,
+          time: new Date(item.time).toISOString(),
+          subdetail: item.subdetail || null,
+          callId: item.callId || undefined,
+          recordingUrl: item.recordingUrl || undefined,
+          transcriptPreview: item.transcriptPreview || undefined
+        };
+        if (item.pickupStatus) row.pickupStatus = item.pickupStatus;
+        if (item.pickupHeadline) row.pickupHeadline = item.pickupHeadline;
+        return row;
+      })
     });
   } catch (error) {
     console.error('[TIMELINE ERROR]', error);
