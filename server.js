@@ -8166,19 +8166,64 @@ function inferTimelinePickupStatus(call) {
   }
 
   if (status === 'initiated') {
+    // Often stuck here when the "call ended" webhook never ran — still use anything we captured.
+    if (durNum != null && durNum >= 15) {
+      return {
+        status: 'yes',
+        headline: 'They picked up',
+        reason: `Connected about ${formatCallDuration(durNum)} (status never left “initiated”; final webhook likely missing).`
+      };
+    }
+    if (durNum != null && durNum >= 10 && durNum < 15) {
+      return {
+        status: 'yes',
+        headline: 'They picked up',
+        reason: `Short connection (${formatCallDuration(durNum)}); likely answered but status never left initiated.`
+      };
+    }
+    const qsInit = call.quality_score != null ? Number(call.quality_score) : null;
+    const hasSentiment = call.sentiment != null && String(call.sentiment).trim().length > 0;
+    if (hasSentiment || (qsInit != null && Number.isFinite(qsInit))) {
+      return {
+        status: 'yes',
+        headline: 'They picked up',
+        reason: hasSentiment
+          ? `Post-call analysis saved (${String(call.sentiment).trim()} sentiment); status still shows initiated.`
+          : `Quality score saved (${Math.round(qsInit)}/100); status still shows initiated.`
+      };
+    }
+    // Shorter snippet threshold than “ended” rows — partial transcripts still imply a conversation.
+    const snipOkInit = snipLen > 25;
+    if (snipOkInit || hasRec) {
+      return {
+        status: 'yes',
+        headline: 'They picked up',
+        reason: hasRec
+          ? 'Recording on file (status still “initiated”; hang-up event may not have synced).'
+          : 'Conversation text on file (status still “initiated”; hang-up event may not have synced).'
+      };
+    }
+    if (durNum != null && durNum > 0 && durNum < 12) {
+      return {
+        status: 'no',
+        headline: 'They did not pick up',
+        reason: `Very short ring (${formatCallDuration(durNum)}); call never progressed past initiated.`
+      };
+    }
     const created = call.created_at ? new Date(call.created_at).getTime() : 0;
     const ageMin = created ? (Date.now() - created) / 60000 : 999;
     if (ageMin > 15) {
       return {
         status: 'unknown',
         headline: 'Pickup unknown',
-        reason: 'Call was started but we never got hang-up/outcome (often a missing end-of-call webhook).'
+        reason:
+          'No usable duration, transcript snippet, or recording on this row — we cannot tell if someone answered. Check the transcript/recording links or your telephony webhooks.'
       };
     }
     return {
       status: 'unknown',
       headline: 'Pickup unknown',
-      reason: 'Still connecting or webhook not received yet (line shows initiated).'
+      reason: 'Still connecting or first webhook not received yet (line shows initiated).'
     };
   }
 
@@ -10278,9 +10323,6 @@ app.get('/api/leads/:leadId/timeline', async (req, res) => {
       }
       const qs = call.quality_score != null ? Number(call.quality_score) : null;
       if (qs != null && Number.isFinite(qs)) bits.push(`quality ${Math.round(qs)}/100`);
-      if (call.status && st === 'initiated') {
-        bits.push(`raw status: ${call.status}`);
-      }
       let rec = call.recording_url && String(call.recording_url).trim();
       if (rec && !/^https?:\/\//i.test(rec)) rec = null;
       const snip = String(call.transcript_snippet || '').replace(/\s+/g, ' ').trim();
