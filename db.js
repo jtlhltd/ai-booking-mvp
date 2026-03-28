@@ -351,6 +351,12 @@ async function initPostgres() {
     CREATE INDEX IF NOT EXISTS retry_queue_scheduled_idx ON retry_queue(scheduled_for);
     CREATE INDEX IF NOT EXISTS retry_queue_status_idx ON retry_queue(status);
     CREATE INDEX IF NOT EXISTS retry_queue_phone_idx ON retry_queue(client_key, lead_phone);
+    -- Pending work due soon (processWebhookRetryQueue, getPendingRetries, follow-ups)
+    CREATE INDEX IF NOT EXISTS retry_queue_pending_scheduled_idx ON retry_queue (scheduled_for ASC) WHERE status = 'pending';
+    -- Prefix LIKE 'webhook_%' + pending (lib/webhook-retry.js)
+    CREATE INDEX IF NOT EXISTS retry_queue_pending_type_pattern_idx ON retry_queue (retry_type varchar_pattern_ops) WHERE status = 'pending';
+    -- Stale processing reset: WHERE status = 'processing' AND updated_at < ...
+    CREATE INDEX IF NOT EXISTS retry_queue_processing_updated_idx ON retry_queue (updated_at) WHERE status = 'processing';
 
     CREATE TABLE IF NOT EXISTS call_queue (
       id BIGSERIAL PRIMARY KEY,
@@ -369,6 +375,8 @@ async function initPostgres() {
     CREATE INDEX IF NOT EXISTS call_queue_status_idx ON call_queue(status);
     CREATE INDEX IF NOT EXISTS call_queue_priority_idx ON call_queue(priority);
     CREATE INDEX IF NOT EXISTS call_queue_phone_idx ON call_queue(client_key, lead_phone);
+    CREATE INDEX IF NOT EXISTS call_queue_pending_scheduled_idx ON call_queue (scheduled_for ASC) WHERE status = 'pending';
+    CREATE INDEX IF NOT EXISTS call_queue_processing_updated_idx ON call_queue (updated_at) WHERE status = 'processing';
 
     CREATE TABLE IF NOT EXISTS cost_tracking (
       id BIGSERIAL PRIMARY KEY,
