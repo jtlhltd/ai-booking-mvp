@@ -58,10 +58,10 @@
         }
         
         /*
-         * 85% root: compact layout with readable type between 80% and 90%.
+         * ~76% root: less “zoomed” than 85% while rem tokens keep labels/KPIs legible.
          */
         html {
-            font-size: 85%;
+            font-size: 76%;
         }
 
         body, html {
@@ -79,11 +79,11 @@
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
         
-        /* Capped width: ultra-wide viewports were stretching cards into short, wide strips */
+        /* Wider max-width on large screens = less empty margin; still capped so cards stay scannable */
         .container {
-            max-width: min(1320px, 96%);
+            max-width: min(1520px, 97%);
             margin: 0 auto;
-            padding: 20px max(14px, 2vw) 40px;
+            padding: 16px max(12px, 1.5vw) 32px;
         }
         
         .header {
