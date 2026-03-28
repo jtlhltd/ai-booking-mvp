@@ -231,11 +231,20 @@
             align-items: stretch;
         }
 
+        /* Short lists (retry, recordings) shouldn’t leave a tall empty card because a sibling is capped */
+        .dashboard-grid--natural {
+            align-items: start;
+        }
+
         .dashboard-grid > .card {
             display: flex;
             flex-direction: column;
             min-height: 0;
             height: 100%;
+        }
+
+        .dashboard-grid--natural > .card {
+            height: auto;
         }
 
         .dashboard-grid > .card > .export-buttons {
@@ -1721,8 +1730,8 @@
         .retry-queue {
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            padding: 8px 0;
+            gap: 14px;
+            padding: 4px 0 6px;
             overflow-y: auto;
         }
 
@@ -1749,10 +1758,10 @@
         .retry-item-inner {
             flex: 1;
             min-width: 0;
-            padding: 12px 14px 12px 12px;
+            padding: 14px 16px 16px 14px;
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: 10px;
         }
 
         .retry-item-top {
@@ -1776,10 +1785,10 @@
         }
 
         .retry-meta {
-            font-size: 0.78rem;
+            font-size: 0.8rem;
             color: #6b7194;
-            margin-top: 4px;
-            line-height: 1.4;
+            margin-top: 6px;
+            line-height: 1.45;
         }
 
         .retry-due-chip {
@@ -1810,17 +1819,18 @@
         .retry-item-actions {
             display: flex;
             flex-wrap: wrap;
-            gap: 8px;
+            gap: 10px;
             align-items: center;
+            padding-top: 2px;
         }
 
         .retry-action-btn {
             border: 1px solid rgba(92, 106, 196, 0.35);
             background: rgba(255, 255, 255, 0.85);
             color: var(--primary);
-            padding: 5px 11px;
+            padding: 7px 14px;
             border-radius: 8px;
-            font-size: 0.76rem;
+            font-size: 0.78rem;
             font-weight: 600;
             cursor: pointer;
             transition: background 0.15s ease, border-color 0.15s ease;
@@ -1974,7 +1984,7 @@
         #call-recordings {
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 12px;
             overflow-y: auto;
             padding-right: 2px;
             -webkit-overflow-scrolling: touch;
@@ -1987,8 +1997,8 @@
         .recording-item {
             display: flex;
             align-items: center;
-            gap: 12px;
-            padding: 12px 14px;
+            gap: 14px;
+            padding: 14px 16px;
             background: #f4f5f8;
             border: 1px solid rgba(92, 106, 196, 0.1);
             border-radius: 12px;
@@ -2033,18 +2043,18 @@
         }
 
         .recording-meta {
-            font-size: 0.75rem;
+            font-size: 0.78rem;
             color: #7a7fa4;
-            margin-top: 2px;
-            line-height: 1.4;
+            margin-top: 5px;
+            line-height: 1.45;
         }
 
         .recording-transcript-btn {
             flex-shrink: 0;
             margin-left: auto;
-            font-size: 0.76rem;
+            font-size: 0.78rem;
             font-weight: 600;
-            padding: 6px 12px;
+            padding: 7px 14px;
             border-radius: 8px;
             border: 1px solid rgba(92, 106, 196, 0.35);
             background: rgba(92, 106, 196, 0.08);
@@ -2819,7 +2829,7 @@
         <!-- LEAD MANAGEMENT SECTION -->
         <section class="dashboard-section">
             <h2 class="section-header">👥 Lead Management</h2>
-            <div class="dashboard-grid">
+            <div class="dashboard-grid dashboard-grid--natural">
 
                 <article class="card card-list">
                     <h3>📋 Recent Leads</h3>
@@ -2884,7 +2894,7 @@
         <!-- OPERATIONS SECTION -->
         <section class="dashboard-section">
             <h2 class="section-header">⚡ Daily Operations</h2>
-            <div class="dashboard-grid">
+            <div class="dashboard-grid dashboard-grid--natural">
                 <article class="card card-metrics">
                     <h3>📈 Today's Activity</h3>
                     <p class="card-subtitle" id="todaysActivitySubtitle">What we accomplished in the last 24 hours.</p>
