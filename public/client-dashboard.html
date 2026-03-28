@@ -228,7 +228,70 @@
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
             gap: 22px;
-            align-items: start;
+            align-items: stretch;
+        }
+
+        .dashboard-grid > .card {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            height: 100%;
+        }
+
+        .dashboard-grid > .card > .export-buttons {
+            margin-top: auto;
+            flex-shrink: 0;
+            padding-top: 14px;
+        }
+
+        .dashboard-grid > .card > .leads-list,
+        .dashboard-grid > .card > #retry-queue,
+        .dashboard-grid > .card > #call-recordings,
+        .dashboard-grid > .card > #recent-activity,
+        .dashboard-grid > .card > #call-quality,
+        .dashboard-grid > .card > #lead-journey,
+        .dashboard-grid > .card > .appt-list,
+        .dashboard-grid > .card > .weekly-chart-wrap {
+            flex: 1 1 auto;
+            min-height: 0;
+        }
+
+        .dashboard-grid > .card.card-weekly-activity .weekly-chart-wrap {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .dashboard-grid > .card.card-weekly-activity .chart {
+            flex: 1 1 auto;
+            min-height: 150px;
+        }
+
+        .dashboard-grid > .card.card-upload-leads .upload-paste-row {
+            display: flex;
+            justify-content: center;
+        }
+
+        .thin-scroll {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(92, 106, 196, 0.35) transparent;
+        }
+
+        .thin-scroll::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        .thin-scroll::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .thin-scroll::-webkit-scrollbar-thumb {
+            background: rgba(92, 106, 196, 0.28);
+            border-radius: 6px;
+        }
+
+        .thin-scroll::-webkit-scrollbar-thumb:hover {
+            background: rgba(92, 106, 196, 0.45);
         }
 
         .card-chart {
@@ -240,11 +303,15 @@
         }
 
         .card-list {
-            min-height: 300px;
+            min-height: 0;
+        }
+
+        .dashboard-grid > .card.card-list {
+            min-height: min(320px, 70vh);
         }
 
         .card-metrics {
-            min-height: 200px;
+            min-height: 0;
         }
 
         .card-fullwidth {
@@ -371,6 +438,29 @@
             background: rgba(92, 106, 196, 0.05);
             border-radius: 10px;
             border: 1px dashed rgba(92, 106, 196, 0.22);
+        }
+
+        .activity-metric-group {
+            grid-column: 1 / -1;
+            display: grid;
+            gap: 12px;
+        }
+
+        .activity-metric-group.cols-2 {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .activity-metric-group.cols-3 {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .activity-metric-group.cols-1 {
+            grid-template-columns: 1fr;
+        }
+
+        .activity-metric--solo {
+            max-width: min(100%, 300px);
+            justify-self: center;
         }
 
         .status-compact {
@@ -645,15 +735,18 @@
         .leads-list {
             display: flex;
             flex-direction: column;
-            gap: 12px;
-            max-height: 320px;
+            gap: 10px;
             overflow-y: auto;
+        }
+
+        .leads-list.thin-scroll {
+            padding-right: 2px;
         }
 
         .lead-item {
             border: 1px solid #eef0fb;
             border-radius: 12px;
-            padding: 14px;
+            padding: 12px;
             background: #f9f9ff;
             cursor: pointer;
             transition: transform 0.2s ease, border-color 0.2s ease;
@@ -677,9 +770,21 @@
             margin-top: 6px;
         }
 
+        .lead-footer {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .lead-footer--actions-only {
+            justify-content: flex-end;
+        }
+
         .lead-status {
             display: inline-block;
-            margin-top: 8px;
             padding: 4px 10px;
             border-radius: 999px;
             font-size: 0.75rem;
@@ -977,6 +1082,7 @@
             display: flex;
             flex-direction: column;
             gap: 12px;
+            overflow-y: auto;
         }
 
         .appt-item {
@@ -1570,6 +1676,14 @@
             font-size: 1.4rem;
             font-weight: 700;
             color: var(--primary);
+            line-height: 1.2;
+        }
+
+        .quality-value--schedule {
+            font-size: 1.05rem;
+            font-weight: 700;
+            line-height: 1.25;
+            word-break: break-word;
         }
 
         .quality-badge {
@@ -1583,6 +1697,11 @@
             flex-direction: column;
             gap: 10px;
             padding: 8px 0;
+            overflow-y: auto;
+        }
+
+        .retry-queue.thin-scroll {
+            padding-right: 2px;
         }
 
         .retry-item {
@@ -1830,10 +1949,13 @@
             display: flex;
             flex-direction: column;
             gap: 10px;
-            max-height: min(440px, 58vh);
             overflow-y: auto;
-            padding-right: 4px;
+            padding-right: 2px;
             -webkit-overflow-scrolling: touch;
+        }
+
+        #call-recordings.thin-scroll {
+            padding-right: 2px;
         }
 
         .recording-item {
@@ -1952,7 +2074,8 @@
             border-radius: 5px;
             font-size: 0.75rem;
             cursor: pointer;
-            margin-top: 4px;
+            margin-top: 0;
+            flex-shrink: 0;
             transition: all 0.2s;
         }
 
@@ -2480,6 +2603,17 @@
             .lead-item {
                 padding: 10px;
             }
+
+            .activity-metric-group.cols-2,
+            .activity-metric-group.cols-3 {
+                grid-template-columns: 1fr;
+            }
+
+            .activity-metric--solo {
+                max-width: 100%;
+                justify-self: stretch;
+            }
+
             .container {
                 padding: 20px 12px 48px;
             }
@@ -2660,7 +2794,7 @@
                 <article class="card card-list">
                     <h3>📋 Recent Leads</h3>
                     <p class="card-subtitle" id="recentLeadsSubtitle">Leads we're actively following up on.</p>
-                    <div id="leads-list" class="leads-list"></div>
+                    <div id="leads-list" class="leads-list thin-scroll"></div>
                     <div class="export-buttons">
                         <button class="export-btn secondary" onclick="exportData('leads')">📥 Export</button>
             </div>
@@ -2712,7 +2846,7 @@
                 <article class="card">
                     <h3>🔄 Retry Queue</h3>
                     <p class="card-subtitle" id="retryQueueSubtitle">Leads we're retrying after initial contact.</p>
-                    <div id="retry-queue" class="retry-queue"></div>
+                    <div id="retry-queue" class="retry-queue thin-scroll"></div>
                 </article>
             </div>
         </section>
@@ -2724,13 +2858,13 @@
                 <article class="card card-metrics">
                     <h3>📈 Today's Activity</h3>
                     <p class="card-subtitle" id="todaysActivitySubtitle">What we accomplished in the last 24 hours.</p>
-                    <div id="recent-activity" class="activity-grid"></div>
+                    <div id="recent-activity" class="activity-grid thin-scroll"></div>
                 </article>
 
                 <article class="card card-list tom-hide-for-outreach">
                     <h3>📅 Upcoming Appointments</h3>
                     <p class="card-subtitle" id="appointmentsSubtitle">Appointments we booked for you.</p>
-                    <div id="upcoming-appointments" class="appt-list"></div>
+                    <div id="upcoming-appointments" class="appt-list thin-scroll"></div>
                     <div class="export-buttons">
                         <button class="export-btn secondary" onclick="exportData('appointments')">📥 Export</button>
             </div>
@@ -2739,7 +2873,7 @@
                 <article class="card card-list">
                     <h3>🎙️ Call Recordings</h3>
                     <p class="card-subtitle" id="callRecordingsSubtitle">Listen to recent calls we made.</p>
-                    <div id="call-recordings"></div>
+                    <div id="call-recordings" class="thin-scroll"></div>
                 </article>
                 </div>
         </section>
@@ -3861,10 +3995,12 @@ ${actionsRow}
             const bookingsSection = !tom
                 ? `
                 <div class="activity-split-heading">Bookings (7 days)</div>
-                <div class="activity-metric">
-                    <div class="activity-metric-label">Bookings logged</div>
-                    <div class="activity-metric-value">${formatNumber(data.bookingsThisWeek || 0)}</div>
-                    <div class="activity-metric-hint">From appointments and “booked” call outcomes.</div>
+                <div class="activity-metric-group cols-1">
+                    <div class="activity-metric">
+                        <div class="activity-metric-label">Bookings logged</div>
+                        <div class="activity-metric-value">${formatNumber(data.bookingsThisWeek || 0)}</div>
+                        <div class="activity-metric-hint">From appointments and “booked” call outcomes.</div>
+                    </div>
                 </div>`
                 : '';
 
@@ -3874,52 +4010,60 @@ ${actionsRow}
 
             container.innerHTML = `
                 <div class="activity-split-heading">Last 24 hours</div>
-                <div class="activity-metric">
-                    <div class="activity-metric-label">New leads</div>
-                    <div class="activity-metric-value">${formatNumber(last24Leads)}</div>
-                    <div class="activity-metric-hint">Added to your pipeline in the rolling day.</div>
-                </div>
-                <div class="activity-metric">
-                    <div class="activity-metric-label">Outbound dials</div>
-                    <div class="activity-metric-value">${formatNumber(callsLast24h)}</div>
-                    <div class="activity-metric-hint">Every call attempt (includes retries).</div>
-                </div>
-                <div class="activity-metric">
-                    <div class="activity-metric-label">Unique numbers dialed</div>
-                    <div class="activity-metric-value">${formatNumber(uniqueLast24)}</div>
-                    <div class="activity-metric-hint">Distinct phones we tried at least once.</div>
+                <div class="activity-metric-group cols-3">
+                    <div class="activity-metric">
+                        <div class="activity-metric-label">New leads</div>
+                        <div class="activity-metric-value">${formatNumber(last24Leads)}</div>
+                        <div class="activity-metric-hint">Added to your pipeline in the rolling day.</div>
+                    </div>
+                    <div class="activity-metric">
+                        <div class="activity-metric-label">Outbound dials</div>
+                        <div class="activity-metric-value">${formatNumber(callsLast24h)}</div>
+                        <div class="activity-metric-hint">Every call attempt (includes retries).</div>
+                    </div>
+                    <div class="activity-metric">
+                        <div class="activity-metric-label">Unique numbers dialed</div>
+                        <div class="activity-metric-value">${formatNumber(uniqueLast24)}</div>
+                        <div class="activity-metric-hint">Distinct phones we tried at least once.</div>
+                    </div>
                 </div>
                 <div class="activity-split-heading">All-time dialing</div>
-                <div class="activity-metric">
-                    <div class="activity-metric-label">Unique leads dialed</div>
-                    <div class="activity-metric-value">${formatNumber(uniqueDialedAT)}</div>
-                    <div class="activity-metric-hint">Contacts with at least one outbound attempt.</div>
-                </div>
-                <div class="activity-metric">
-                    <div class="activity-metric-label">Total dial attempts</div>
-                    <div class="activity-metric-value">${dialAT != null ? formatNumber(dialAT) : '—'}</div>
-                    <div class="activity-metric-hint">All rows in call history; retries increase this.</div>
+                <div class="activity-metric-group cols-2">
+                    <div class="activity-metric">
+                        <div class="activity-metric-label">Unique leads dialed</div>
+                        <div class="activity-metric-value">${formatNumber(uniqueDialedAT)}</div>
+                        <div class="activity-metric-hint">Contacts with at least one outbound attempt.</div>
+                    </div>
+                    <div class="activity-metric">
+                        <div class="activity-metric-label">Total dial attempts</div>
+                        <div class="activity-metric-value">${dialAT != null ? formatNumber(dialAT) : '—'}</div>
+                        <div class="activity-metric-hint">All rows in call history; retries increase this.</div>
+                    </div>
                 </div>
                 <div class="activity-split-heading">Reach &amp; speed</div>
-                <div class="activity-metric">
-                    <div class="activity-metric-label">Leads reached</div>
-                    <div class="activity-metric-value">${formatNumber(reached)}</div>
-                    <div class="activity-metric-hint">Unique numbers with a connected-call signal in data.</div>
+                <div class="activity-metric-group cols-3">
+                    <div class="activity-metric">
+                        <div class="activity-metric-label">Leads reached</div>
+                        <div class="activity-metric-value">${formatNumber(reached)}</div>
+                        <div class="activity-metric-hint">Unique numbers with a connected-call signal in data.</div>
+                    </div>
+                    <div class="activity-metric">
+                        <div class="activity-metric-label">Answer / connect rate</div>
+                        <div class="activity-metric-value">${uniqueDialedAT > 0 ? `${answerRate}%` : '—'}</div>
+                        <div class="activity-metric-hint">Reached ÷ unique leads dialed (all time).</div>
+                    </div>
+                    <div class="activity-metric">
+                        <div class="activity-metric-label">Awaiting classification</div>
+                        <div class="activity-metric-value">${formatNumber(pendingClassify)}</div>
+                        <div class="activity-metric-hint">Numbers called but pickup unclear (e.g. status still open).</div>
+                    </div>
                 </div>
-                <div class="activity-metric">
-                    <div class="activity-metric-label">Answer / connect rate</div>
-                    <div class="activity-metric-value">${uniqueDialedAT > 0 ? `${answerRate}%` : '—'}</div>
-                    <div class="activity-metric-hint">Reached ÷ unique leads dialed (all time).</div>
-                </div>
-                <div class="activity-metric">
-                    <div class="activity-metric-label">Awaiting classification</div>
-                    <div class="activity-metric-value">${formatNumber(pendingClassify)}</div>
-                    <div class="activity-metric-hint">Numbers called but pickup unclear (e.g. status still open).</div>
-                </div>
-                <div class="activity-metric">
-                    <div class="activity-metric-label">Avg. time to first dial</div>
-                    <div class="activity-metric-value" style="font-size:1.25rem;">${escapeHtml(resp)}</div>
-                    <div class="activity-metric-hint">${respN != null && respN > 0 ? `Based on ${formatNumber(respN)} recent lead→call pairs.` : 'Mean minutes after lead creation (when we have pairs).'}</div>
+                <div class="activity-metric-group cols-1">
+                    <div class="activity-metric activity-metric--solo">
+                        <div class="activity-metric-label">Avg. time to first dial</div>
+                        <div class="activity-metric-value">${escapeHtml(resp)}</div>
+                        <div class="activity-metric-hint">${respN != null && respN > 0 ? `Based on ${formatNumber(respN)} recent lead→call pairs.` : 'Mean minutes after lead creation (when we have pairs).'}</div>
+                    </div>
                 </div>
                 ${bookingsSection}
                 <div class="activity-footnote">${foot}</div>
@@ -4040,6 +4184,11 @@ ${actionsRow}
             container.innerHTML = currentLeads.map((lead, index) => {
                 const st = (lead.status || '').trim().toLowerCase();
                 const showNewBadge = st === 'new' || st.startsWith('new ');
+                const statusRaw = (lead.status || 'In follow-up').trim();
+                const hideStatusPill = showNewBadge && /^new(\s|$)/i.test(statusRaw);
+                const statusBlock = hideStatusPill
+                    ? ''
+                    : `<span class="lead-status">${escapeHtml(statusRaw)}</span>`;
                 return `
                 <div class="lead-item" data-lead-index="${index}" role="button" tabindex="0">
                     <div class="lead-name-row">
@@ -4050,8 +4199,10 @@ ${actionsRow}
                         <span>${escapeHtml(lead.phone || lead.email || '')}</span>
                         <span>${escapeHtml(lead.service || 'General')}</span>
                     </div>
-                    <div class="lead-status">${escapeHtml(lead.status || 'In follow-up')}</div>
-                    <button type="button" class="timeline-btn" data-timeline-index="${index}" aria-label="View timeline for ${escapeHtml(lead.name || 'lead')}">📊 View Timeline</button>
+                    <div class="lead-footer${hideStatusPill ? ' lead-footer--actions-only' : ''}">
+                        ${statusBlock}
+                        <button type="button" class="timeline-btn" data-timeline-index="${index}" aria-label="View timeline for ${escapeHtml(lead.name || 'lead')}">📊 View Timeline</button>
+                    </div>
                 </div>
             `;
             }).join('');
@@ -4669,7 +4820,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     </div>
                     <div class="quality-metric">
                         <div class="quality-label">Best Time</div>
-                        <div class="quality-value">${bestHour}</div>
+                        <div class="quality-value quality-value--schedule">${bestHour}</div>
                         <div class="quality-badge">peak volume</div>
                     </div>
                 `;
@@ -4704,7 +4855,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         </div>
                         <div class="quality-metric">
                             <div class="quality-label">Best Time</div>
-                            <div class="quality-value">${escapeHtml(payload.bestTime || '—')}</div>
+                            <div class="quality-value quality-value--schedule">${escapeHtml(payload.bestTime || '—')}</div>
                             <div class="quality-badge">peak volume</div>
                         </div>
                     `;
@@ -4763,7 +4914,16 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     `;
                     return;
                 }
-                container.innerHTML = payload.retries.map((lead) => renderRetryQueueRow(lead)).join('');
+                const seenRetryKeys = new Set();
+                const dedupedRetries = (payload.retries || []).filter((r) => {
+                    const digits = retryNormalizeDigits(r.phone);
+                    const sched = r.scheduledFor != null ? String(r.scheduledFor) : String(r.nextRetry || '');
+                    const key = digits.length >= 8 ? `${digits}|${sched}` : `${r.id || r.dbId || ''}`;
+                    if (seenRetryKeys.has(key)) return false;
+                    seenRetryKeys.add(key);
+                    return true;
+                });
+                container.innerHTML = dedupedRetries.map((lead) => renderRetryQueueRow(lead)).join('');
             } catch (error) {
                 console.error('Failed to load retry queue', error);
                 showError(container, 'Unable to load retry queue. Please refresh the page.', () => renderRetryQueue(data));
