@@ -8484,7 +8484,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
           ON le.client_key = l.client_key AND le.lead_phone = l.phone
         WHERE l.client_key = $1
         ORDER BY l.created_at DESC
-        LIMIT 6
+        LIMIT 10
       `, [clientKey]),
       query(`
         SELECT c.call_id, c.id, c.lead_phone, c.status, c.outcome, c.created_at, c.duration,
@@ -10062,13 +10062,25 @@ app.get('/api/leads/:leadId/timeline', async (req, res) => {
     
     const lead = leadResult.rows[0];
     const phoneVars = phoneVariantsForMatch(lead.phone);
+    const leadPhoneParamIndex = phoneVars.length > 0 ? phoneVars.length + 2 : 2;
     const callPlaceholders = phoneVars.map((_, i) => `$${i + 2}`).join(', ');
+    const inClause = phoneVars.length > 0
+      ? `c.lead_phone IN (${callPlaceholders})`
+      : 'FALSE';
     const callsResult = await query(`
-      SELECT status, outcome, created_at, duration
-      FROM calls
-      WHERE client_key = $1 AND lead_phone IN (${callPlaceholders})
-      ORDER BY created_at ASC
-    `, [clientKey, ...phoneVars]);
+      SELECT c.status, c.outcome, c.created_at, c.duration
+      FROM calls c
+      WHERE c.client_key = $1
+        AND (
+          ${inClause}
+          OR (
+            LENGTH(regexp_replace(COALESCE($${leadPhoneParamIndex}::text, ''), '[^0-9]', '', 'g')) >= 10
+            AND RIGHT(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), 10)
+              = RIGHT(regexp_replace(COALESCE($${leadPhoneParamIndex}::text, ''), '[^0-9]', '', 'g'), 10)
+          )
+        )
+      ORDER BY c.created_at ASC
+    `, phoneVars.length > 0 ? [clientKey, ...phoneVars, lead.phone] : [clientKey, lead.phone]);
     
     const appointmentsResult = await query(`
       SELECT start_iso, end_iso, status, created_at
@@ -10306,9 +10318,21 @@ app.get('/api/retry-queue/:clientKey', cacheMiddleware({ ttl: 30000, keyPrefix: 
         rq.retry_attempt,
         rq.max_retries,
         rq.status,
-        l.name
+        (
+          SELECT l.name FROM leads l
+          WHERE l.client_key = rq.client_key
+            AND (
+              l.phone = rq.lead_phone
+              OR (
+                LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
+                AND RIGHT(regexp_replace(COALESCE(rq.lead_phone, ''), '[^0-9]', '', 'g'), 10)
+                  = RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
+              )
+            )
+          ORDER BY l.created_at DESC NULLS LAST
+          LIMIT 1
+        ) AS name
       FROM retry_queue rq
-      LEFT JOIN leads l ON l.client_key = rq.client_key AND l.phone = rq.lead_phone
       WHERE rq.client_key = $1
         AND rq.status = 'pending'
         AND rq.scheduled_for <= NOW() + INTERVAL '24 hours'
@@ -10316,20 +10340,26 @@ app.get('/api/retry-queue/:clientKey', cacheMiddleware({ ttl: 30000, keyPrefix: 
       LIMIT 10
     `, [clientKey]);
 
-    const retries = (result.rows || []).map(row => ({
-      id: row.id,
-      name: row.name || 'Prospect',
-      phone: row.lead_phone,
-      attempts: row.retry_attempt,
-      maxAttempts: row.max_retries,
-      reason: row.retry_reason || 'Call failed',
-      scheduledFor: row.scheduled_for,
-      nextRetry: new Date(row.scheduled_for).toLocaleString('en-GB', {
-        weekday: 'short',
-        hour: 'numeric',
-        minute: '2-digit'
-      })
-    }));
+    const retries = (result.rows || []).map((row) => {
+      const sched = row.scheduled_for ? new Date(row.scheduled_for) : null;
+      const schedOk = sched && !Number.isNaN(sched.getTime());
+      return {
+        id: row.id,
+        name: row.name || 'Prospect',
+        phone: row.lead_phone,
+        attempts: row.retry_attempt,
+        maxAttempts: row.max_retries,
+        reason: row.retry_reason || 'Call failed',
+        scheduledFor: row.scheduled_for,
+        nextRetry: schedOk
+          ? sched.toLocaleString('en-GB', {
+            weekday: 'short',
+            hour: 'numeric',
+            minute: '2-digit'
+          })
+          : 'Scheduled'
+      };
+    });
 
     res.json({
       ok: true,
