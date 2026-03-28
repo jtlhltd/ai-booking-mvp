@@ -1433,7 +1433,7 @@
             position: relative;
             transition: filter 0.15s ease, transform 0.15s ease;
             box-shadow: 0 2px 8px rgba(58, 74, 159, 0.15);
-            cursor: help;
+            cursor: pointer;
         }
 
         .chart-bar:hover {
@@ -2945,7 +2945,7 @@
                 max-width: none;
                 flex: 1;
                 min-width: 0;
-                cursor: help;
+                cursor: pointer;
             }
 
             .call-quality-grid {
@@ -3101,8 +3101,7 @@
                     <h3>📊 Weekly Activity</h3>
                     <p class="card-subtitle" id="weeklyActivitySubtitle">Outbound call attempts by day (last 7 days).</p>
                     <div id="performance-chart" class="weekly-chart-wrap">
-                        <div id="weeklyChartTooltip" class="weekly-chart-tooltip" role="tooltip" hidden aria-hidden="true"></div>
-                        <div class="chart" id="chartBars" role="img" aria-label="Outbound call attempts by weekday. Hover a bar for details."></div>
+                        <div class="chart" id="chartBars" role="img" aria-label="Outbound call attempts by weekday. Point at a bar for a detail popup."></div>
                         <div class="weekly-chart-summary" id="chartSummary">
                             <div class="weekly-stat-row">
                                 <div class="weekly-stat"><strong>—</strong> outbound attempts<span class="weekly-stat-hint">Last 7 days</span></div>
@@ -4131,8 +4130,8 @@ ${actionsRow}
             const weeklyActivitySubtitle = document.getElementById('weeklyActivitySubtitle');
             if (weeklyActivitySubtitle) {
                 weeklyActivitySubtitle.textContent = isTomOutreachDashboard(currentClient)
-                    ? `Daily outbound attempts (last 7 days) for ${businessName}. Hover a bar for counts, unique numbers, and share of the week. Retries can exceed unique leads dialed.`
-                    : `Daily call attempts (last 7 days) for ${businessName}. Hover a bar for details. Retries inflate totals vs unique leads dialed.`;
+                    ? `Daily outbound attempts (last 7 days) for ${businessName}. Point at a bar for counts, unique numbers, and share of the week. Retries can exceed unique leads dialed.`
+                    : `Daily call attempts (last 7 days) for ${businessName}. Point at a bar for a detail popup. Retries inflate totals vs unique leads dialed.`;
             }
             
             const todaysActivitySubtitle = document.getElementById('todaysActivitySubtitle');
@@ -4755,7 +4754,7 @@ ${actionsRow}
                 const pct = max > 0 ? (value / max) * 100 : 0;
                 const h = value > 0 ? Math.max(pct, 6) : 0;
                 const day = escapeHtml(String(labels[idx] || ''));
-                const aria = `${formatNumber(value)} outbound attempts on ${day}. Hover for breakdown.`;
+                const aria = `${formatNumber(value)} outbound attempts on ${day}. Point here for day breakdown.`;
                 return `<div class="chart-bar" style="height:${h}%;" data-idx="${idx}" data-label="${day}" aria-label="${escapeHtml(aria)}"></div>`;
             }).join('');
             const chartBarsEl = document.getElementById('chartBars');
@@ -4780,8 +4779,8 @@ ${actionsRow}
             const weeklySub = document.getElementById('weeklyActivitySubtitle');
             if (weeklySub) {
                 weeklySub.textContent = isTomOutreachDashboard(currentClient)
-                    ? 'Bar height = outbound attempts that day. Hover a bar for counts, unique numbers, and share of the week. Retries inflate totals vs unique leads dialed.'
-                    : 'Bar height = call attempts that day. Hover a bar for details. Retries inflate totals vs unique leads dialed.';
+                    ? 'Bar height = outbound attempts that day. Point at a bar for counts, unique numbers, and share of the week. Retries inflate totals vs unique leads dialed.'
+                    : 'Bar height = call attempts that day. Point at a bar for a popup with details. Retries inflate totals vs unique leads dialed.';
             }
         }
 
@@ -7258,6 +7257,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
         }
     </script>
+    <!-- Tooltip lives on body so it is not clipped by dashboard cards (overflow: hidden). -->
+    <div id="weeklyChartTooltip" class="weekly-chart-tooltip" role="tooltip" hidden aria-hidden="true"></div>
 </body>
 </html>
 
