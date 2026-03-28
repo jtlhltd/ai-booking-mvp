@@ -228,6 +228,7 @@
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
             gap: 22px;
+            align-items: start;
         }
 
         .card-chart {
@@ -860,6 +861,53 @@
             border-radius: 8px;
             margin-left: 6px;
             cursor: pointer;
+        }
+
+        .card-upload-leads h3 {
+            margin-bottom: 10px;
+        }
+
+        .card-upload-leads .card-subtitle {
+            margin-bottom: 12px;
+        }
+
+        .card-upload-leads .import-dropzone {
+            padding: 14px 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .import-dropzone-line {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 6px 8px;
+            color: var(--muted);
+        }
+
+        .import-dropzone-hint {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--muted);
+            line-height: 1.4;
+        }
+
+        .import-dropzone-hint strong {
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .upload-paste-row {
+            margin-top: 12px;
+        }
+
+        .upload-paste-toggle {
+            font-size: 0.8rem;
+            padding: 6px 12px;
+            border-radius: 999px;
         }
 
         .import-status {
@@ -2576,15 +2624,18 @@
             </div>
                 </article>
 
-                <article class="card">
+                <article class="card card-upload-leads">
                     <h3>📤 Upload Leads</h3>
                     <p class="card-subtitle">Send us more leads to follow up on.</p>
                     <div class="import-dropzone" id="leadDropzone">
-                        Drag & drop CSV / Excel or <button type="button" id="leadImportButton">browse</button>
-                        <small style="display:block;margin-top:6px;">Columns: name, phone, service, source</small>
+                        <div class="import-dropzone-line">
+                            <span>Drag & drop CSV / Excel or</span>
+                            <button type="button" id="leadImportButton">browse</button>
+                        </div>
+                        <span class="import-dropzone-hint">Columns: <strong>name</strong>, <strong>phone</strong>, <strong>service</strong>, <strong>source</strong></span>
                     </div>
-                    <div style="margin-top:10px;">
-                        <button type="button" id="leadPasteToggle" class="export-btn secondary" style="font-size:12px;padding:4px 8px;">
+                    <div class="upload-paste-row">
+                        <button type="button" id="leadPasteToggle" class="export-btn secondary upload-paste-toggle">
                             Or paste numbers instead
                         </button>
                     </div>
