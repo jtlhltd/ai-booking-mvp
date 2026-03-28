@@ -2032,8 +2032,8 @@
                 <div class="status-value" id="statusConversionRate" aria-live="polite">—</div>
                 <p class="status-hint" id="statusHintConversion">Loading...</p>
             </div>
-            <div class="status-card" title="How fast we respond to your leads" role="article" aria-label="Our response time">
-                <h4 id="statusCardResponse">Our Response Time</h4>
+            <div class="status-card" title="Mean minutes from when a lead is created to our first outbound call. Uses leads from the last 30 days; only pairs where the first call is within 48 hours. Phone numbers matched exactly or by last 10 digits." role="article" aria-label="Our response time">
+                <h4 id="statusCardResponse">Lead → first call time</h4>
                 <div class="status-value" id="statusFirstResponse" aria-live="polite">—</div>
                 <p class="status-hint" id="statusHintResponse">Loading...</p>
             </div>
@@ -2956,7 +2956,7 @@
             if (statusCardConversion) statusCardConversion.textContent = `${businessName}'s Conversion Rate`;
             
             const statusCardResponse = document.getElementById('statusCardResponse');
-            if (statusCardResponse) statusCardResponse.textContent = `${businessName}'s Response Time`;
+            if (statusCardResponse) statusCardResponse.textContent = `${businessName}: lead → first call`;
             
             // Update ROI panel
             const roiRevenueLabel = document.getElementById('roiRevenueLabel');
@@ -3091,20 +3091,24 @@
             const callsAnswered = data.metrics?.callsAnswered ?? 0;
             const callsNotAnswered = data.metrics?.callsNotAnswered ?? 0;
             const callsOutcomePending = data.metrics?.callsOutcomePending ?? 0;
+            const pendingLeadsOnly = data.metrics?.uniqueLeadsPendingOnly ?? 0;
             const ansAttempts = data.metrics?.callsAnsweredAttempts;
             const noAttempts = data.metrics?.callsNotAnsweredAttempts;
             const answerRate = data.metrics?.answerRate ?? 0;
             
             document.getElementById('statusTotalCalls').textContent = totalCalls;
             const parts = [];
-            if (callsAnswered > 0) parts.push(`${callsAnswered} leads reached`);
-            if (callsNotAnswered > 0) parts.push(`${callsNotAnswered} leads no pickup`);
-            if (callsOutcomePending > 0) parts.push(`${callsOutcomePending} calls outcome pending`);
-            if (ansAttempts != null && noAttempts != null && (ansAttempts > callsAnswered || noAttempts > callsNotAnswered)) {
-                parts.push(`${ansAttempts} conv. attempts / ${noAttempts} miss attempts`);
+            if (callsAnswered > 0) parts.push(`${callsAnswered} reached (any conv.)`);
+            if (callsNotAnswered > 0) parts.push(`${callsNotAnswered} no-pickup only`);
+            if (pendingLeadsOnly > 0) parts.push(`${pendingLeadsOnly} outcome unclear`);
+            const uniqDial = data.metrics?.uniqueLeadsCalled ?? data.totalCalls ?? 0;
+            const sumLeads = callsAnswered + callsNotAnswered + pendingLeadsOnly;
+            const sumNote = uniqDial > 0 && sumLeads === uniqDial ? ' — adds to unique leads dialed' : '';
+            if (ansAttempts != null && noAttempts != null) {
+                parts.push(`${ansAttempts} answered attempts · ${noAttempts} miss attempts (call rows)`);
             }
             const callsHint = parts.length
-                ? `${parts.join(' • ')}${answerRate > 0 ? ` (${answerRate}% of leads)` : ''}`
+                ? `${parts.join(' • ')}${sumNote}${answerRate > 0 ? ` · ${answerRate}% reached` : ''}`
                 : `${totalCalls} unique leads called`;
             document.getElementById('statusHintCalls').textContent = callsHint;
 
@@ -3115,12 +3119,14 @@
             if (answeredEl) answeredEl.textContent = formatNumber(callsAnswered);
             if (noPickupEl) noPickupEl.textContent = formatNumber(callsNotAnswered);
             if (answeredHintEl) {
-                answeredHintEl.textContent = callsOutcomePending > 0
-                    ? 'Includes duration/transcript when VAPI outcome missing'
-                    : (callsAnswered > 0 ? 'Reached someone' : 'No conversations yet');
+                answeredHintEl.textContent = (pendingLeadsOnly > 0 || callsOutcomePending > 0)
+                    ? '≥1 call with conversation signal (duration/transcript/outcome)'
+                    : (callsAnswered > 0 ? 'At least one connected-style call' : 'No conversations yet');
             }
             if (noPickupHintEl) {
-                noPickupHintEl.textContent = callsNotAnswered > 0 ? 'Voicemail/IVR/no answer' : 'No missed connects';
+                noPickupHintEl.textContent = callsNotAnswered > 0
+                    ? 'Never reached on any dial (excl. leads with a conv. call)'
+                    : 'No leads in this bucket';
             }
             
             document.getElementById('statusConversionRate').textContent = conversion;
@@ -3133,9 +3139,10 @@
             document.getElementById('statusHintLeads').textContent = `Last 24h: ${last24} new`;
             // statusHintCalls already set above with answered/not answered breakdown
             document.getElementById('statusHintConversion').textContent = `Win rate: ${winRate}`;
+            const respN = data.metrics?.firstResponseSampleSize;
             document.getElementById('statusHintResponse').textContent = firstResponse === '—'
-                ? 'Avg first call after lead (30-day window) — no qualifying pairs yet'
-                : `Current: ${firstResponse}`;
+                ? 'Mean minutes: lead created → first dial (30d leads, first call within 48h). No matching lead↔call pairs yet.'
+                : `Mean ${firstResponse} to first dial${respN != null && respN > 0 ? ` · ${respN} leads in sample` : ''}`;
         }
 
         function renderRecentActivity(data) {

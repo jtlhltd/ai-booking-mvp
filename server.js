@@ -8409,18 +8409,38 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
             ) AS is_not_answered
           FROM calls
           WHERE client_key = $1
+        ),
+        lead_class AS (
+          SELECT
+            lead_phone,
+            MAX(CASE WHEN is_answered THEN 1 ELSE 0 END) AS has_ans,
+            MAX(CASE WHEN is_not_answered THEN 1 ELSE 0 END) AS has_no
+          FROM call_row
+          GROUP BY lead_phone
+        ),
+        agg AS (
+          SELECT
+            COUNT(*) AS total,
+            COUNT(DISTINCT lead_phone) AS unique_leads_called,
+            COUNT(*) FILTER (WHERE created_at >= ${sqlHoursAgo(24)}) AS last24,
+            COUNT(*) FILTER (WHERE outcome = 'booked') AS booked,
+            COUNT(*) FILTER (WHERE is_answered) AS answered,
+            COUNT(*) FILTER (WHERE is_not_answered) AS not_answered,
+            COUNT(*) FILTER (WHERE outcome IS NULL AND NOT is_answered AND NOT is_not_answered) AS outcome_pending
+          FROM call_row
         )
         SELECT
-               COUNT(*) AS total,
-               COUNT(DISTINCT lead_phone) AS unique_leads_called,
-               COUNT(*) FILTER (WHERE created_at >= ${sqlHoursAgo(24)}) AS last24,
-               COUNT(*) FILTER (WHERE outcome = 'booked') AS booked,
-               COUNT(*) FILTER (WHERE is_answered) AS answered,
-               COUNT(DISTINCT CASE WHEN is_answered THEN lead_phone END) AS answered_leads,
-               COUNT(*) FILTER (WHERE is_not_answered) AS not_answered,
-               COUNT(DISTINCT CASE WHEN is_not_answered THEN lead_phone END) AS not_answered_leads,
-               COUNT(*) FILTER (WHERE outcome IS NULL AND NOT is_answered AND NOT is_not_answered) AS outcome_pending
-        FROM call_row
+               agg.total,
+               agg.unique_leads_called,
+               agg.last24,
+               agg.booked,
+               agg.answered,
+               agg.not_answered,
+               agg.outcome_pending,
+               (SELECT COUNT(*)::int FROM lead_class WHERE has_ans >= 1) AS reached_leads,
+               (SELECT COUNT(*)::int FROM lead_class WHERE has_ans = 0 AND has_no >= 1) AS no_pickup_only_leads,
+               (SELECT COUNT(*)::int FROM lead_class WHERE has_ans = 0 AND has_no = 0) AS pending_only_leads
+        FROM agg
       `, [clientKey]),
       query(`
         SELECT COUNT(*) AS total,
@@ -8498,7 +8518,15 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
                l.created_at AS lead_created, 
                c.created_at AS call_created
         FROM leads l
-        JOIN calls c ON c.client_key = l.client_key AND c.lead_phone = l.phone
+        JOIN calls c ON c.client_key = l.client_key
+          AND (
+            c.lead_phone = l.phone
+            OR (
+              LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
+              AND RIGHT(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), 10)
+                = RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
+            )
+          )
         WHERE c.client_key = $1
           AND l.created_at >= NOW() - INTERVAL '30 days'
           AND c.created_at >= l.created_at
@@ -8536,8 +8564,9 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     const uniqueLeadsCalled = parseInt(callCounts.rows?.[0]?.unique_leads_called || 0, 10); // Unique leads actually called
     const callsAnsweredAttempts = parseInt(callCounts.rows?.[0]?.answered || 0, 10);
     const callsNotAnsweredAttempts = parseInt(callCounts.rows?.[0]?.not_answered || 0, 10);
-    const uniqueLeadsAnswered = parseInt(callCounts.rows?.[0]?.answered_leads || 0, 10);
-    const uniqueLeadsNoPickup = parseInt(callCounts.rows?.[0]?.not_answered_leads || 0, 10);
+    const uniqueLeadsAnswered = parseInt(callCounts.rows?.[0]?.reached_leads || 0, 10);
+    const uniqueLeadsNoPickup = parseInt(callCounts.rows?.[0]?.no_pickup_only_leads || 0, 10);
+    const uniqueLeadsPendingOnly = parseInt(callCounts.rows?.[0]?.pending_only_leads || 0, 10);
     const callsOutcomePending = parseInt(callCounts.rows?.[0]?.outcome_pending || 0, 10);
     const bookingsFromCalls = parseInt(callCounts.rows?.[0]?.booked || 0, 10);
     
@@ -8844,6 +8873,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         callsNotAnsweredAttempts,
         uniqueLeadsAnswered,
         uniqueLeadsNoPickup,
+        uniqueLeadsPendingOnly,
         callsOutcomePending,
         answerRate: uniqueLeadsCalled > 0 ? Math.round((uniqueLeadsAnswered / uniqueLeadsCalled) * 100) : 0,
         last24hLeads,
@@ -8851,6 +8881,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         successRate,
         avgLeadScore,
         firstResponse,
+        firstResponseSampleSize: responseDiffs.length,
         bookingsThisWeek: weeklyBookings,
         highPriorityLeads,
         mediumPriorityLeads,
