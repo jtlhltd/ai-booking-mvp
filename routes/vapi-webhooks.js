@@ -1256,7 +1256,7 @@ async function processWebhookPayload(body, correlationId) {
         bookingEnd: body.bookingEnd || body.slotEnd || '',
         metadata
       });
-    } else if (outcome === 'no-answer' || outcome === 'busy' || outcome === 'declined') {
+    } else if (outcome === 'no-answer' || outcome === 'busy' || outcome === 'declined' || outcome === 'voicemail') {
       await handleFailedCall({
         tenantKey,
         leadPhone,
@@ -1265,7 +1265,7 @@ async function processWebhookPayload(body, correlationId) {
         metadata
       });
       
-      // Schedule automated follow-up sequence
+      // Schedule automated follow-up sequence (voicemail was missing — retries never queued for VM-only outcomes)
       const { scheduleFollowUps } = await import('../lib/follow-up-sequences.js');
       await scheduleFollowUps({
         clientKey: tenantKey,
@@ -1497,29 +1497,9 @@ async function handleFailedCall({ tenantKey, leadPhone, callId, reason, metadata
       tenantKey,
       leadPhone,
       callId,
-      reason
+      reason,
+      note: 'Follow-up rows are created by scheduleFollowUps() after this handler (retry_queue + dashboard Retry Queue).'
     });
-
-    // Implement retry logic for failed calls
-    const retryableReasons = ['no-answer', 'busy'];
-    if (retryableReasons.includes(reason)) {
-      // Schedule a retry call (implement retry queue)
-      console.log('[SCHEDULE RETRY]', {
-        tenantKey,
-        leadPhone,
-        callId,
-        reason,
-        retryAfter: '2 hours' // Configurable retry delay
-      });
-    }
-
-    // Update lead status
-    // await store.leads.updateCallStatus(leadPhone, {
-    //   status: 'call_failed',
-    //   lastCallId: callId,
-    //   lastCallReason: reason,
-    //   nextRetryAt: retryableReasons.includes(reason) ? new Date(Date.now() + 2 * 60 * 60 * 1000) : null
-    // });
   } catch (error) {
     console.error('[FAILED CALL ERROR]', error);
   }

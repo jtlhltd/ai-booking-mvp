@@ -1455,6 +1455,7 @@ export async function getPendingRetries(limit = 100) {
   const { rows } = await query(`
     SELECT * FROM retry_queue 
     WHERE status = 'pending' AND scheduled_for <= now()
+      AND retry_type = 'vapi_call'
     ORDER BY scheduled_for ASC
     LIMIT $1
   `, [limit]);
