@@ -1826,20 +1826,32 @@
         }
 
 
+        #call-recordings {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: min(440px, 58vh);
+            overflow-y: auto;
+            padding-right: 4px;
+            -webkit-overflow-scrolling: touch;
+        }
+
         .recording-item {
             display: flex;
             align-items: center;
             gap: 12px;
-            padding: 10px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            margin-bottom: 8px;
+            padding: 12px 14px;
+            background: #f4f5f8;
+            border: 1px solid rgba(92, 106, 196, 0.1);
+            border-radius: 12px;
+            flex-shrink: 0;
         }
 
         .recording-controls {
             display: flex;
             gap: 8px;
             align-items: center;
+            flex-shrink: 0;
         }
 
         .play-btn {
@@ -1876,6 +1888,26 @@
             font-size: 0.75rem;
             color: #7a7fa4;
             margin-top: 2px;
+            line-height: 1.4;
+        }
+
+        .recording-transcript-btn {
+            flex-shrink: 0;
+            margin-left: auto;
+            font-size: 0.76rem;
+            font-weight: 600;
+            padding: 6px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(92, 106, 196, 0.35);
+            background: rgba(92, 106, 196, 0.08);
+            color: var(--primary);
+            cursor: pointer;
+            transition: background 0.15s ease, border-color 0.15s ease;
+        }
+
+        .recording-transcript-btn:hover {
+            background: rgba(92, 106, 196, 0.14);
+            border-color: var(--primary);
         }
 
         .calendar-details {
@@ -2361,6 +2393,16 @@
 
         body[data-theme="dark"] .recording-meta {
             color: #d0d4e8 !important;
+        }
+
+        body[data-theme="dark"] .recording-transcript-btn {
+            background: rgba(124, 134, 220, 0.12);
+            border-color: rgba(124, 134, 220, 0.45);
+            color: #a5b4fc;
+        }
+
+        body[data-theme="dark"] .recording-transcript-btn:hover {
+            background: rgba(124, 134, 220, 0.22);
         }
 
         body[data-theme="dark"] .appt-service {
@@ -4189,6 +4231,23 @@ ${actionsRow}
                 .join(' ');
         }
 
+        /** Seconds for display; treats large round values as ms (e.g. Vapi). */
+        function normalizeRecordingDurationSeconds(raw) {
+            let s = Number(raw);
+            if (!Number.isFinite(s) || s <= 0) return null;
+            if (s > 100000 && s % 1000 === 0) s = Math.round(s / 1000);
+            return Math.round(s);
+        }
+
+        /** m:ss, or em dash when unknown / zero. */
+        function formatRecordingDurationLabel(raw) {
+            const s = normalizeRecordingDurationSeconds(raw);
+            if (s == null) return '—';
+            const m = Math.floor(s / 60);
+            const sec = s % 60;
+            return `${m}:${String(sec).padStart(2, '0')}`;
+        }
+
         /** Merge back-to-back rows that are the same burst (same lead, time label, outcome). */
         function consolidateActivityCalls(calls) {
             if (!Array.isArray(calls) || calls.length < 2) return calls;
@@ -4792,6 +4851,36 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         }
 
 
+        function renderRecordingRowHtml({
+            name,
+            outcomeLabel,
+            timeLabel,
+            durationLabel,
+            recordingUrl,
+            transcriptCallId
+        }) {
+            const displayName = name || 'Prospect';
+            const safeNameAttr = escapeHtml(displayName);
+            const url = (recordingUrl && String(recordingUrl).trim()) || '';
+            const tid = transcriptCallId != null && String(transcriptCallId).trim() !== ''
+                ? String(transcriptCallId).trim()
+                : '';
+            const transcriptBtn = tid
+                ? `<button type="button" class="recording-transcript-btn" data-rec-transcript="1" data-rec-call-id="${escapeHtml(tid)}" data-rec-name="${safeNameAttr}">Transcript</button>`
+                : '';
+            return `
+                    <div class="recording-item">
+                        <div class="recording-controls">
+                            <button type="button" class="play-btn" data-rec-play="1" data-rec-url="${escapeHtml(url)}" data-rec-name="${safeNameAttr}" title="Open recording" aria-label="Open recording">▶</button>
+                        </div>
+                        <div class="recording-info">
+                            <div class="recording-name">${safeNameAttr}</div>
+                            <div class="recording-meta">${escapeHtml(outcomeLabel)} • ${escapeHtml(timeLabel)} • ${escapeHtml(durationLabel)}</div>
+                        </div>
+                        ${transcriptBtn}
+                    </div>`;
+        }
+
         async function renderCallRecordings(calls = []) {
             const container = document.getElementById('call-recordings');
             if (!container) return;
@@ -4808,22 +4897,29 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     return;
                 }
 
-                container.innerHTML = calls.slice(0, 3).map((call, index) => `
-                    <div class="recording-item">
-                        <div class="recording-controls">
-                            <button class="play-btn" onclick="playRecording('${call.id || index}', '${call.name || 'Prospect'}')" title="Play recording">▶</button>
-                            </div>
-                        <div class="recording-info">
-                            <div class="recording-name">${call.name || 'Prospect'}</div>
-                            <div class="recording-meta">${call.summary || 'Call completed'} • ${call.timeAgo || formatTimeAgo(call.created_at || '')} • ${Math.floor(Math.random() * 3 + 2)} min</div>
-                                </div>
-                            </div>
-                `).join('');
+                container.innerHTML = calls.slice(0, 5).map((call, index) => {
+                    const head = (call.summary || 'Completed').split(/[•·]/)[0]?.trim() || 'Completed';
+                    const outcomeLabel = formatActivityOutcomeDisplay(head);
+                    const timeLabel = call.timeAgo || formatTimeAgo(call.created_at || '') || 'Recently';
+                    const fakeSec = 95 + index * 37;
+                    const durationLabel = formatRecordingDurationLabel(fakeSec);
+                    return renderRecordingRowHtml({
+                        name: call.name,
+                        outcomeLabel,
+                        timeLabel,
+                        durationLabel,
+                        recordingUrl: '',
+                        transcriptCallId: call.id != null ? call.id : `demo-${index + 1}`
+                    });
+                }).join('');
                 return;
             }
 
             try {
-                const response = await fetch(`${BASE_URL}/api/call-recordings/${currentClient}`);
+                const response = await fetch(
+                    `${BASE_URL}/api/call-recordings/${encodeURIComponent(currentClient)}?limit=12`,
+                    { cache: 'no-store' }
+                );
                 const payload = await response.json();
                 if (response.ok && payload?.ok) {
                     if (!payload.recordings || payload.recordings.length === 0) {
@@ -4836,38 +4932,23 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         `;
                         return;
                     }
-                    container.innerHTML = payload.recordings.map(recording => {
-                        const durationMin = Math.floor((recording.duration || 0) / 60);
-                        const durationSec = (recording.duration || 0) % 60;
-                        return `
-                            <div class="recording-item">
-                                <div class="recording-controls">
-                                    <button class="play-btn" onclick="playRecording('${recording.id}', '${recording.name}', '${recording.recordingUrl || ''}')" title="Play recording">▶</button>
-                            </div>
-                                <div class="recording-info">
-                                    <div class="recording-name">${recording.name}</div>
-                                    <div class="recording-meta">${recording.outcome || 'Call completed'} • ${recording.timeAgo || 'Recently'} • ${durationMin}:${String(durationSec).padStart(2, '0')}</div>
-                        </div>
-                            </div>
-                        `;
+                    container.innerHTML = payload.recordings.map((recording) => {
+                        const outcomeLabel = formatActivityOutcomeDisplay(recording.outcome || 'completed');
+                        const timeLabel = recording.timeAgo || 'Recently';
+                        const durationLabel = formatRecordingDurationLabel(recording.duration);
+                        const transcriptCallId = recording.callId || String(recording.id);
+                        return renderRecordingRowHtml({
+                            name: recording.name,
+                            outcomeLabel,
+                            timeLabel,
+                            durationLabel,
+                            recordingUrl: recording.recordingUrl,
+                            transcriptCallId
+                        });
                     }).join('');
                 }
             } catch (error) {
                 console.error('Failed to load call recordings', error);
-            }
-        }
-
-        function playRecording(callId, name, recordingUrl) {
-            if (currentClient === DEMO_CLIENT_KEY) {
-                showToast('Recording Playback', `Demo recording for ${name} would play here`, 'info');
-                return;
-            }
-            
-            if (recordingUrl) {
-                window.open(recordingUrl, '_blank');
-                showToast('Playing Recording', `Opening recording for ${name}...`, 'info');
-            } else {
-                showToast('Recording Unavailable', `Recording URL not found for ${name}`, 'warning');
             }
         }
 
@@ -5793,6 +5874,37 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                                 showToast('Copy failed', 'Could not copy to clipboard', 'error');
                             }
                         }
+                    }
+                });
+            }
+
+            const recRoot = document.getElementById('call-recordings');
+            if (recRoot && recRoot.dataset.recDelegation !== '1') {
+                recRoot.dataset.recDelegation = '1';
+                recRoot.addEventListener('click', (e) => {
+                    const playBtn = e.target.closest('[data-rec-play]');
+                    if (playBtn) {
+                        e.preventDefault();
+                        const url = (playBtn.getAttribute('data-rec-url') || '').trim();
+                        const name = playBtn.getAttribute('data-rec-name') || 'Prospect';
+                        if (currentClient === DEMO_CLIENT_KEY || isDemoClientKey(currentClient)) {
+                            showToast('Recording Playback', `Demo recording for ${name} would play here`, 'info');
+                            return;
+                        }
+                        if (url && /^https?:\/\//i.test(url)) {
+                            window.open(url, '_blank', 'noopener,noreferrer');
+                            showToast('Playing Recording', `Opening recording for ${name}…`, 'info');
+                        } else {
+                            showToast('Recording Unavailable', `No audio URL for ${name}`, 'warning');
+                        }
+                        return;
+                    }
+                    const trBtn = e.target.closest('[data-rec-transcript]');
+                    if (trBtn) {
+                        e.preventDefault();
+                        const id = trBtn.getAttribute('data-rec-call-id');
+                        const name = trBtn.getAttribute('data-rec-name') || 'Prospect';
+                        if (id) viewTranscript(id, name);
                     }
                 });
             }

@@ -10919,17 +10919,24 @@ app.get('/api/call-recordings/:clientKey', cacheMiddleware({ ttl: 120000, keyPre
       LIMIT $2
     `, [clientKey, limit]);
 
-    const recordings = (result.rows || []).map(row => ({
-      id: row.id,
-      callId: row.call_id,
-      name: row.name || 'Prospect',
-      phone: row.lead_phone,
-      recordingUrl: row.recording_url,
-      duration: row.duration || 0,
-      outcome: row.outcome || 'completed',
-      createdAt: row.created_at,
-      timeAgo: formatTimeAgoLabel(row.created_at)
-    }));
+    const recordings = (result.rows || []).map((row) => {
+      let dur = Number(row.duration);
+      if (Number.isFinite(dur) && dur > 100000 && dur % 1000 === 0) {
+        dur = Math.round(dur / 1000);
+      }
+      if (!Number.isFinite(dur) || dur < 0) dur = 0;
+      return {
+        id: row.id,
+        callId: row.call_id,
+        name: row.name || 'Prospect',
+        phone: row.lead_phone,
+        recordingUrl: row.recording_url,
+        duration: dur,
+        outcome: row.outcome || 'completed',
+        createdAt: row.created_at,
+        timeAgo: formatTimeAgoLabel(row.created_at)
+      };
+    });
 
     res.json({
       ok: true,
