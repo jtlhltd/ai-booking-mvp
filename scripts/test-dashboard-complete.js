@@ -162,7 +162,8 @@ async function runTests(clientKey) {
     logTest('Call quality loaded', true);
     results.passed++;
     const quality = qualityTest.data;
-    logTest('Has avgDuration', typeof quality.avgDuration === 'number', `Value: ${quality.avgDuration}m`);
+    const avgSec = quality.avgDurationSeconds ?? quality.avgDuration;
+    logTest('Has avg duration (sec)', typeof avgSec === 'number', `Value: ${avgSec}s`);
     logTest('Has successRate', typeof quality.successRate === 'number', `Value: ${quality.successRate}%`);
   } else {
     logTest('Call quality loaded', false, qualityTest.error || `Status: ${qualityTest.status}`);

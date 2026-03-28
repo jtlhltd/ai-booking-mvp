@@ -1865,11 +1865,11 @@
 
         .call-quality-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 14px;
-            padding: 12px 0 16px;
-            max-width: 400px;
-            margin: 0 auto;
+            grid-template-columns: repeat(auto-fit, minmax(138px, 1fr));
+            gap: 10px;
+            padding: 10px 0 14px;
+            max-width: none;
+            margin: 0;
         }
 
         .quality-metric {
@@ -4042,8 +4042,8 @@ ${actionsRow}
             const callQualitySubtitle = document.getElementById('callQualitySubtitle');
             if (callQualitySubtitle) {
                 callQualitySubtitle.textContent = isTomOutreachDashboard(currentClient)
-                    ? `Call length, reach, and engagement signals for ${businessName} — not appointment counts.`
-                    : `How effective our calls are for ${businessName}.`;
+                    ? `Last 7 days of outbound dials for ${businessName}: reach, bookings/appts, and outcome coverage (server time).`
+                    : `How effective our calls are for ${businessName} (7-day window).`;
             }
             
             const recentLeadsSubtitle = document.getElementById('recentLeadsSubtitle');
@@ -4266,7 +4266,7 @@ ${actionsRow}
             const convHint = document.getElementById('statusHintConversion');
             if (convHint) {
                 convHint.textContent = isTomOutreachDashboard(currentClient)
-                    ? `Engagement rate: ${winRate} (positive call outcomes in your data)`
+                    ? `Booking/appt rate: ${winRate} — booked outcome or new appt vs unique leads dialed (see Call Quality for reach)`
                     : `Win rate: ${winRate}`;
             }
             const respN = data.metrics?.firstResponseSampleSize;
@@ -5103,32 +5103,53 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
             if (currentClient === DEMO_CLIENT_KEY) {
                 const m = data.metrics || {};
-                const totalCalls = m.totalCallAttempts || data.totalCalls || 0;
-                const bookings = data.bookingsThisWeek || 0;
-                const answered = m.callsAnswered || 0;
-                const avgSec = totalCalls > 0 ? Math.min(240, 35 + Math.floor(totalCalls % 40)) : 0;
-                const successRate = totalCalls > 0 ? Math.round((bookings / totalCalls) * 100) : 0;
+                const attempts = m.totalCallAttempts || data.totalCalls || 48;
+                const answeredAtt = Math.min(attempts, Math.max(12, Math.floor(attempts * 0.42)));
+                const uniqueLeads = Math.min(attempts, Math.max(8, Math.floor(attempts * 0.35)));
+                const avgSec = attempts > 0 ? 42 : 0;
+                const reach = attempts > 0 ? Math.round((answeredAtt / attempts) * 100) : 0;
+                const bookRate = attempts > 0 ? 14 : 0;
+                const outCov = attempts > 0 ? 72 : 0;
+                const perLead = uniqueLeads > 0 ? Math.round((attempts / uniqueLeads) * 10) / 10 : null;
                 const bestHour = '14:00–16:00';
+                const tomQ = isTomOutreachDashboard(currentClient);
+                const bookLabel = tomQ ? 'Booked / appt rate' : 'Success rate';
+                const bookBadge = tomQ ? 'booked row or new appt ÷ attempts' : 'bookings / attempts';
                 container.innerHTML = `
                     <div class="quality-metric">
-                        <div class="quality-label">Avg Duration</div>
+                        <div class="quality-label">Reach rate</div>
+                        <div class="quality-value">${reach}%</div>
+                        <div class="quality-badge">conversation signal ÷ attempts (7d)</div>
+                    </div>
+                    <div class="quality-metric">
+                        <div class="quality-label">${bookLabel}</div>
+                        <div class="quality-value">${bookRate}%</div>
+                        <div class="quality-badge">${bookBadge}</div>
+                    </div>
+                    <div class="quality-metric">
+                        <div class="quality-label">Avg duration</div>
                         <div class="quality-value">${formatAvgCallSeconds(avgSec)}</div>
-                        <div class="quality-badge">DB stores seconds</div>
+                        <div class="quality-badge">rows with duration &gt; 0</div>
                     </div>
                     <div class="quality-metric">
-                        <div class="quality-label">Success Rate</div>
-                        <div class="quality-value">${successRate}%</div>
-                        <div class="quality-badge">bookings / attempts</div>
+                        <div class="quality-label">Dial attempts</div>
+                        <div class="quality-value">${formatNumber(attempts)}</div>
+                        <div class="quality-badge">last 7 days</div>
                     </div>
                     <div class="quality-metric">
-                        <div class="quality-label">Leads reached</div>
-                        <div class="quality-value">${answered}/${data.totalCalls || 0}</div>
-                        <div class="quality-badge">unique leads</div>
+                        <div class="quality-label">Unique leads</div>
+                        <div class="quality-value">${formatNumber(uniqueLeads)}</div>
+                        <div class="quality-badge">${perLead != null ? `~${perLead} attempts / lead` : 'distinct numbers'}</div>
                     </div>
                     <div class="quality-metric">
-                        <div class="quality-label">Best Time</div>
+                        <div class="quality-label">Outcome logged</div>
+                        <div class="quality-value">${outCov}%</div>
+                        <div class="quality-badge">call rows with outcome set</div>
+                    </div>
+                    <div class="quality-metric">
+                        <div class="quality-label">Busiest dial window</div>
                         <div class="quality-value quality-value--schedule">${bestHour}</div>
-                        <div class="quality-badge">peak volume</div>
+                        <div class="quality-badge">most attempts in this 2h block</div>
                     </div>
                 `;
                 return;
@@ -5140,30 +5161,55 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 if (response.ok && payload?.ok) {
                     const sec = payload.avgDurationSeconds ?? payload.avgDuration;
                     const tomQ = isTomOutreachDashboard(currentClient);
-                    const successBadge = tomQ
-                        ? 'logged outcomes'
+                    const total = payload.totalCalls || 0;
+                    const reach = payload.reachRate ?? 0;
+                    const bookRate = payload.bookingRate ?? payload.successRate ?? 0;
+                    const uniq = payload.uniqueLeadsDialed7d ?? 0;
+                    const outPct = payload.outcomesLoggedPct ?? 0;
+                    const perLead = payload.attemptsPerLead;
+                    const peakN = payload.bestTimeDialCount || 0;
+                    const bookLabel = tomQ ? 'Booked / appt rate' : 'Success rate';
+                    const bookBadge = tomQ
+                        ? 'booked outcome or new appt ÷ attempts'
                         : 'appts &amp; booked calls';
-                    const successLabel = tomQ ? 'Engagement rate' : 'Success Rate';
+                    const bestBadge = peakN > 0
+                        ? `Most attempts in 7d (${formatNumber(peakN)} dials)`
+                        : 'by hour of day';
                     container.innerHTML = `
                         <div class="quality-metric">
-                            <div class="quality-label">Avg Duration</div>
+                            <div class="quality-label">Reach rate</div>
+                            <div class="quality-value">${reach}%</div>
+                            <div class="quality-badge">conversation signal ÷ attempts (7d)</div>
+                        </div>
+                        <div class="quality-metric">
+                            <div class="quality-label">${bookLabel}</div>
+                            <div class="quality-value">${bookRate}%</div>
+                            <div class="quality-badge">${bookBadge}</div>
+                        </div>
+                        <div class="quality-metric">
+                            <div class="quality-label">Avg duration</div>
                             <div class="quality-value">${formatAvgCallSeconds(sec)}</div>
-                            <div class="quality-badge">from call length</div>
+                            <div class="quality-badge">rows with duration &gt; 0</div>
                         </div>
                         <div class="quality-metric">
-                            <div class="quality-label">${successLabel}</div>
-                            <div class="quality-value">${payload.successRate || 0}%</div>
-                            <div class="quality-badge">${successBadge}</div>
+                            <div class="quality-label">Dial attempts</div>
+                            <div class="quality-value">${formatNumber(total)}</div>
+                            <div class="quality-badge">last 7 days</div>
                         </div>
                         <div class="quality-metric">
-                            <div class="quality-label">Calls (7 days)</div>
-                            <div class="quality-value">${payload.totalCalls || 0}</div>
-                            <div class="quality-badge">all attempts</div>
+                            <div class="quality-label">Unique leads</div>
+                            <div class="quality-value">${formatNumber(uniq)}</div>
+                            <div class="quality-badge">${perLead != null ? `~${perLead} attempts / lead` : 'distinct numbers'}</div>
                         </div>
                         <div class="quality-metric">
-                            <div class="quality-label">Best Time</div>
+                            <div class="quality-label">Outcome logged</div>
+                            <div class="quality-value">${outPct}%</div>
+                            <div class="quality-badge">call rows with outcome set</div>
+                        </div>
+                        <div class="quality-metric">
+                            <div class="quality-label">Busiest dial window</div>
                             <div class="quality-value quality-value--schedule">${escapeHtml(payload.bestTime || '—')}</div>
-                            <div class="quality-badge">peak volume</div>
+                            <div class="quality-badge">${bestBadge}</div>
                         </div>
                     `;
                 }

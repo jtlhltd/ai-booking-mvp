@@ -10650,19 +10650,66 @@ app.get('/api/export/:type', async (req, res) => {
   }
 });
 
-// API endpoint for dashboard call quality metrics (simplified)
-app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix: 'call-quality:v2:' }), async (req, res) => {
+// API endpoint for dashboard call quality metrics (7-day window; aligns with main dashboard “answered” heuristics)
+app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix: 'call-quality:v3:' }), async (req, res) => {
   try {
     const { clientKey } = req.params;
 
     const allCalls = await query(`
-      SELECT 
-        COALESCE(AVG(CASE WHEN COALESCE(duration, 0) > 0 THEN duration::numeric ELSE NULL END), 0) AS avg_duration_sec,
+      WITH windowed AS (
+        SELECT *
+        FROM calls
+        WHERE client_key = $1
+          AND created_at >= NOW() - INTERVAL '7 days'
+      ),
+      flags AS (
+        SELECT *,
+          (
+            (outcome IS NOT NULL AND outcome::text NOT IN (
+              'no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected'
+            ))
+            OR (
+              outcome IS NULL AND (
+                (COALESCE(duration, 0) >= 20 AND LOWER(TRIM(COALESCE(status::text, ''))) IN ('ended', 'completed', 'finished'))
+                OR (
+                  COALESCE(duration, 0) >= 40
+                  AND LOWER(TRIM(COALESCE(status::text, ''))) NOT IN (
+                    'failed', 'busy', 'no-answer', 'canceled', 'cancelled',
+                    'declined', 'rejected', 'voicemail'
+                  )
+                )
+                OR (COALESCE(transcript::text, '') <> '' AND LENGTH(TRIM(COALESCE(transcript::text, ''))) > 40)
+                OR (COALESCE(recording_url::text, '') <> '')
+              )
+            )
+          ) AS is_answered,
+          (
+            outcome::text IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected')
+            OR (
+              outcome IS NULL AND (
+                LOWER(TRIM(COALESCE(status::text, ''))) IN (
+                  'failed', 'busy', 'no-answer', 'canceled', 'cancelled',
+                  'declined', 'rejected', 'voicemail'
+                )
+                OR (
+                  LOWER(TRIM(COALESCE(status::text, ''))) IN ('ended', 'completed', 'finished')
+                  AND COALESCE(duration, 0) > 0
+                  AND COALESCE(duration, 0) < 12
+                )
+              )
+            )
+          ) AS is_no_pickup
+        FROM windowed
+      )
+      SELECT
         COUNT(*)::int AS total_calls,
-        COUNT(*) FILTER (WHERE outcome = 'booked')::int AS bookings_from_calls
-      FROM calls
-      WHERE client_key = $1
-        AND created_at >= NOW() - INTERVAL '7 days'
+        COUNT(DISTINCT lead_phone)::int AS unique_leads,
+        COALESCE(AVG(CASE WHEN COALESCE(duration, 0) > 0 THEN duration::numeric END), 0) AS avg_duration_sec,
+        COUNT(*) FILTER (WHERE outcome::text = 'booked')::int AS bookings_from_calls,
+        COUNT(*) FILTER (WHERE is_answered)::int AS answered_attempts,
+        COUNT(*) FILTER (WHERE is_no_pickup)::int AS no_pickup_attempts,
+        COUNT(*) FILTER (WHERE outcome IS NOT NULL AND BTRIM(outcome::text) <> '')::int AS with_outcome
+      FROM flags
     `, [clientKey]);
 
     const apptCount = await query(`
@@ -10687,25 +10734,44 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
     const appts7d = parseInt(apptCount.rows?.[0]?.n || 0, 10);
     const bookingsFromCalls = parseInt(stats.bookings_from_calls || 0, 10);
     const totalCalls = parseInt(stats.total_calls || 0, 10);
+    const uniqueLeads = parseInt(stats.unique_leads || 0, 10);
+    const answeredAttempts = parseInt(stats.answered_attempts || 0, 10);
+    const noPickupAttempts = parseInt(stats.no_pickup_attempts || 0, 10);
+    const withOutcome = parseInt(stats.with_outcome || 0, 10);
     const avgSec = parseFloat(stats.avg_duration_sec) || 0;
     const bookingNumerator = Math.max(bookingsFromCalls, appts7d);
 
     const peak = peakHour.rows?.[0];
     let bestTime = '—';
+    let bestTimeDialCount = 0;
     if (peak && peak.hour_of_day != null && Number(peak.cnt) > 0) {
       const h = Number(peak.hour_of_day);
       const end = (h + 2) % 24;
-      bestTime = `${String(h).padStart(2, '0')}:00–${String(end).padStart(2, '0')}:00 (peak volume)`;
+      bestTime = `${String(h).padStart(2, '0')}:00–${String(end).padStart(2, '0')}:00`;
+      bestTimeDialCount = parseInt(peak.cnt, 10) || 0;
     }
+
+    const reachRate = totalCalls > 0 ? Math.min(100, Math.round((answeredAttempts / totalCalls) * 100)) : 0;
+    const bookingRate = totalCalls > 0 ? Math.min(100, Math.round((bookingNumerator / totalCalls) * 100)) : 0;
+    const outcomeLoggedPct = totalCalls > 0 ? Math.min(100, Math.round((withOutcome / totalCalls) * 100)) : 0;
+    const attemptsPerLead = uniqueLeads > 0 ? Math.round((totalCalls / uniqueLeads) * 10) / 10 : null;
 
     res.json({
       ok: true,
       avgDurationSeconds: Math.round(avgSec),
       totalCalls,
+      uniqueLeadsDialed7d: uniqueLeads,
+      answeredAttempts7d: answeredAttempts,
+      noPickupAttempts7d: noPickupAttempts,
+      reachRate,
       bookingsFromCalls,
       appointments7d: appts7d,
-      successRate: totalCalls > 0 ? Math.min(100, Math.round((bookingNumerator / totalCalls) * 100)) : 0,
-      bestTime
+      bookingRate,
+      successRate: bookingRate,
+      outcomesLoggedPct,
+      attemptsPerLead,
+      bestTime,
+      bestTimeDialCount
     });
   } catch (error) {
     console.error('[CALL QUALITY ERROR]', error);
