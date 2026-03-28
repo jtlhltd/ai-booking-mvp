@@ -8272,6 +8272,55 @@ function inferTimelinePickupStatus(call) {
   };
 }
 
+async function fetchVapiCallSnapshotForTimeline(callId) {
+  const key = process.env.VAPI_PRIVATE_KEY;
+  if (!key || !callId || String(callId).trim().length < 10) return null;
+  try {
+    const res = await fetch(
+      `https://api.vapi.ai/call/${encodeURIComponent(String(callId).trim())}`,
+      { headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' } }
+    );
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+/** Map Vapi GET /call/:id JSON into fields inferTimelinePickupStatus already understands. */
+function vapiCallSnapshotToTimelineHints(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') return {};
+  const hints = {};
+  let dur =
+    typeof snapshot.duration === 'number' && snapshot.duration >= 0
+      ? Math.round(snapshot.duration)
+      : null;
+  if (dur == null && snapshot.endedAt && snapshot.startedAt) {
+    const ms = new Date(snapshot.endedAt) - new Date(snapshot.startedAt);
+    if (ms > 0) dur = Math.round(ms / 1000);
+  }
+  if (dur != null && dur >= 0) hints.duration = dur;
+  let tr = snapshot.transcript || snapshot.summary || null;
+  if (!tr && Array.isArray(snapshot.messages) && snapshot.messages.length > 0) {
+    const parts = [];
+    for (const m of snapshot.messages) {
+      const role = String(m?.role || m?.type || '').toLowerCase();
+      if (role === 'system' || role === 'function' || role === 'tool') continue;
+      const content = m?.content || m?.text || m?.message || m?.body || '';
+      if (content) parts.push(String(content));
+    }
+    tr = parts.length ? parts.join(' ') : null;
+  }
+  if (tr && String(tr).trim()) {
+    hints.transcript_snippet = String(tr).trim().slice(0, 320);
+  }
+  const rec = snapshot.recordingUrl || snapshot.stereoRecordingUrl;
+  if (rec && String(rec).trim() && /^https?:\/\//i.test(String(rec).trim())) {
+    hints.recording_url = String(rec).trim();
+  }
+  return hints;
+}
+
 function mapStatusClass(status) {
   const normalized = (status || '').toLowerCase();
   if (normalized.includes('book')) return 'success';
@@ -10276,6 +10325,23 @@ app.get('/api/leads/:leadId/timeline', async (req, res) => {
     } catch (msgErr) {
       console.warn('[TIMELINE] SMS events skipped:', msgErr.message);
     }
+
+    const vapiHintsByCallId = {};
+    if (process.env.VAPI_PRIVATE_KEY && (callsResult.rows || []).length) {
+      const needHydration = (callsResult.rows || []).filter((c) => {
+        const st = (c.status || '').toLowerCase();
+        if (st !== 'initiated' || !c.call_id) return false;
+        return inferTimelinePickupStatus(c).status === 'unknown';
+      });
+      const maxVapi = 15;
+      await Promise.all(
+        needHydration.slice(0, maxVapi).map(async (c) => {
+          const snap = await fetchVapiCallSnapshotForTimeline(c.call_id);
+          const h = vapiCallSnapshotToTimelineHints(snap);
+          if (Object.keys(h).length) vapiHintsByCallId[String(c.call_id)] = h;
+        })
+      );
+    }
     
     const timeline = [];
     
@@ -10309,8 +10375,10 @@ app.get('/api/leads/:leadId/timeline', async (req, res) => {
     });
 
     (callsResult.rows || []).forEach((call, idx) => {
-      const pickup = inferTimelinePickupStatus(call);
-      const durationLabel = formatCallDuration(call.duration);
+      const hints = vapiHintsByCallId[String(call.call_id || '')] || {};
+      const merged = { ...call, ...hints };
+      const pickup = inferTimelinePickupStatus(merged);
+      const durationLabel = formatCallDuration(merged.duration);
       const st = (call.status || '').toLowerCase();
       const bits = [pickup.reason];
       if (durationLabel && !pickup.reason.includes(durationLabel)) {
@@ -10323,9 +10391,9 @@ app.get('/api/leads/:leadId/timeline', async (req, res) => {
       }
       const qs = call.quality_score != null ? Number(call.quality_score) : null;
       if (qs != null && Number.isFinite(qs)) bits.push(`quality ${Math.round(qs)}/100`);
-      let rec = call.recording_url && String(call.recording_url).trim();
+      let rec = merged.recording_url && String(merged.recording_url).trim();
       if (rec && !/^https?:\/\//i.test(rec)) rec = null;
-      const snip = String(call.transcript_snippet || '').replace(/\s+/g, ' ').trim();
+      const snip = String(merged.transcript_snippet || '').replace(/\s+/g, ' ').trim();
       const transcriptPreview = snip.length > 0 ? (snip.length >= 300 ? `${snip.slice(0, 297)}…` : snip) : null;
       timeline.push({
         event: idx === 0 ? 'First outbound call' : `Outbound call ${idx + 1}`,
