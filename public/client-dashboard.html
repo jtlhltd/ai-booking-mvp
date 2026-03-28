@@ -26,6 +26,16 @@
             --surface: #ffffff;
             --text: #2b2e3b;
             --muted: #6f7390;
+            --text-secondary: #5a5d72;
+            --text-tertiary: #6b6f86;
+            /* Rem scale (inherits html %); keep captions ≥0.78rem for legibility */
+            --fs-caption: 0.78rem;
+            --fs-small: 0.82rem;
+            --fs-sub: 0.9rem;
+            --fs-body: 0.94rem;
+            --fs-card-title: 1.06rem;
+            --fs-section: 1.28rem;
+            --fs-display: 1.8rem;
             --brand-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
 
@@ -33,6 +43,8 @@
             --surface: #252b3d;
             --text: #ffffff;
             --muted: #d0d4e8;
+            --text-secondary: #c4c8e0;
+            --text-tertiary: #a8adc8;
             --light: #2a3145;
             background: radial-gradient(circle at top, #1f2640, #0f1324);
             color: var(--text);
@@ -57,8 +69,9 @@
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             min-height: 100vh;
             background: linear-gradient(135deg, #eef2ff 0%, #e3ebff 40%, #fef9ff 100%);
-            color: #2b2e3b;
+            color: var(--text);
             line-height: 1.5;
+            font-weight: 400;
             font-feature-settings: 'cv02', 'cv03', 'cv04';
         }
 
@@ -110,17 +123,20 @@
         }
         
         .client-details h1 {
-            font-size: 1.75rem;
+            font-size: var(--fs-display);
+            font-weight: 700;
             color: var(--primary);
             margin-bottom: 2px;
             line-height: 1.12;
+            letter-spacing: -0.02em;
         }
         
         .client-details p {
-            color: var(--muted);
-            font-size: 0.9rem;
+            color: var(--text-secondary);
+            font-size: var(--fs-body);
+            font-weight: 500;
             margin-top: 2px;
-            line-height: 1.42;
+            line-height: 1.48;
         }
 
         .status-chip {
@@ -155,15 +171,17 @@
 
         .meta-label {
             text-transform: uppercase;
-            font-size: 0.75rem;
-            letter-spacing: 0.1em;
-            color: #8c8fab;
+            font-size: var(--fs-caption);
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            color: var(--text-tertiary);
             margin-bottom: 6px;
         }
 
         .meta-value {
             font-weight: 600;
-            color: #2f3147;
+            font-size: var(--fs-sub);
+            color: var(--text);
         }
 
         .demo-banner {
@@ -205,11 +223,12 @@
 
         .status-card h4 {
             text-transform: uppercase;
-            letter-spacing: 0.14em;
-            font-size: 0.68rem;
-            color: #8c8fab;
+            letter-spacing: 0.08em;
+            font-size: var(--fs-caption);
+            font-weight: 600;
+            color: var(--text-tertiary);
             margin: 0;
-            line-height: 1.2;
+            line-height: 1.25;
             min-height: 2.75em;
             display: flex;
             align-items: center;
@@ -218,7 +237,7 @@
         }
 
         .status-value {
-            font-size: 1.45rem;
+            font-size: 1.4rem;
             font-weight: 700;
             color: var(--primary);
             line-height: 1.08;
@@ -230,9 +249,10 @@
         .status-hint {
             margin: 0;
             margin-top: auto;
-            font-size: 0.74rem;
-            line-height: 1.45;
-            color: #8c8fab;
+            font-size: var(--fs-small);
+            font-weight: 500;
+            line-height: 1.48;
+            color: var(--text-secondary);
             white-space: pre-line;
             padding: 8px 4px 4px;
             overflow-wrap: break-word;
@@ -244,9 +264,10 @@
         }
 
         .section-header {
-            font-size: 1.22rem;
+            font-size: var(--fs-section);
             font-weight: 700;
             color: var(--primary);
+            letter-spacing: -0.01em;
             margin-bottom: 14px;
             padding-bottom: 10px;
             border-bottom: 2px solid rgba(92,106,196,0.15);
@@ -532,17 +553,17 @@
         }
 
         .activity-metric-label {
-            font-size: 0.72rem;
-            font-weight: 600;
+            font-size: var(--fs-caption);
+            font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.04em;
-            color: #6b7194;
+            letter-spacing: 0.05em;
+            color: var(--text-tertiary);
             margin-bottom: 6px;
             line-height: 1.3;
         }
 
         .activity-metric-value {
-            font-size: 1.5rem;
+            font-size: 1.45rem;
             font-weight: 700;
             color: var(--primary);
             font-variant-numeric: tabular-nums;
@@ -551,8 +572,9 @@
         }
 
         .activity-metric-hint {
-            font-size: 0.74rem;
-            color: var(--muted, #7a7fa4);
+            font-size: var(--fs-small);
+            font-weight: 500;
+            color: var(--text-secondary);
             margin-top: auto;
             padding-top: 10px;
             margin-bottom: 0;
@@ -563,11 +585,11 @@
         .activity-split-heading {
             width: 100%;
             box-sizing: border-box;
-            font-size: 0.7rem;
+            font-size: var(--fs-caption);
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.07em;
-            color: #6b7194;
+            letter-spacing: 0.06em;
+            color: var(--text-tertiary);
             margin: 16px 0 10px;
             padding-top: 14px;
             border-top: 1px solid rgba(92, 106, 196, 0.14);
@@ -583,9 +605,10 @@
         .activity-footnote {
             width: 100%;
             box-sizing: border-box;
-            font-size: 0.78rem;
-            color: var(--muted, #7a7fa4);
-            line-height: 1.45;
+            font-size: var(--fs-small);
+            font-weight: 500;
+            color: var(--text-secondary);
+            line-height: 1.5;
             margin-top: 16px;
             padding: 12px 14px;
             background: rgba(92, 106, 196, 0.05);
@@ -620,10 +643,11 @@
             bottom: 20px;
             right: 20px;
             background: var(--surface);
-            padding: 8px 14px;
+            padding: 10px 16px;
             border-radius: 20px;
-            font-size: 0.85rem;
-            color: var(--muted);
+            font-size: var(--fs-sub);
+            font-weight: 500;
+            color: var(--text-secondary);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
             border: 1px solid rgba(92,106,196,0.1);
             z-index: 100;
@@ -841,19 +865,22 @@
         
         .card h3 {
             margin-bottom: 12px;
-            font-size: 1.02rem;
+            font-size: var(--fs-card-title);
+            font-weight: 700;
             color: var(--text);
             display: flex;
             align-items: center;
             gap: 8px;
+            letter-spacing: -0.01em;
         }
 
         .card-subtitle {
             margin-top: -4px;
             margin-bottom: 18px;
-            font-size: 0.84rem;
-            line-height: 1.45;
-            color: #7a7da0;
+            font-size: var(--fs-sub);
+            font-weight: 500;
+            line-height: 1.5;
+            color: var(--text-secondary);
         }
 
         .metric-row {
@@ -1417,9 +1444,9 @@
             bottom: -26px;
             left: 50%;
             transform: translateX(-50%);
-            font-size: 0.78rem;
+            font-size: var(--fs-small);
             font-weight: 600;
-            color: #6b7194;
+            color: var(--text-secondary);
             letter-spacing: 0.02em;
             white-space: nowrap;
         }
@@ -1446,35 +1473,36 @@
         .weekly-stat {
             flex: 1 1 140px;
             min-width: 120px;
-            font-size: 0.95rem;
-            color: var(--text, #2f3147);
-            line-height: 1.35;
+            font-size: 1rem;
+            font-weight: 500;
+            color: var(--text);
+            line-height: 1.4;
         }
 
         .weekly-stat strong {
             font-variant-numeric: tabular-nums;
-            font-size: 1.15rem;
-            color: var(--primary, #5c6ac4);
+            font-size: 1.08rem;
+            color: var(--primary);
             font-weight: 700;
         }
 
         .weekly-stat-hint {
             display: block;
             margin-top: 4px;
-            font-size: 0.78rem;
+            font-size: var(--fs-small);
             font-weight: 500;
-            color: var(--muted, #7a7fa4);
-            line-height: 1.3;
+            color: var(--text-secondary);
+            line-height: 1.35;
         }
 
         .weekly-stat-brand {
             margin-top: 12px;
             padding-top: 10px;
             border-top: 1px dashed rgba(92, 106, 196, 0.12);
-            font-size: 0.82rem;
+            font-size: var(--fs-small);
             font-weight: 600;
-            color: var(--muted, #7a7fa4);
-            letter-spacing: 0.03em;
+            color: var(--text-secondary);
+            letter-spacing: 0.02em;
         }
 
         .card-weekly-activity .export-buttons {
@@ -1638,8 +1666,9 @@
         }
 
         .funnel-label {
+            font-size: var(--fs-sub);
             font-weight: 600;
-            color: #2f3147;
+            color: var(--text);
             margin-bottom: 10px;
             display: flex;
             justify-content: space-between;
@@ -1662,8 +1691,9 @@
         }
 
         .funnel-percent {
-            font-size: 0.75rem;
-            color: #7a7fa4;
+            font-size: var(--fs-caption);
+            font-weight: 500;
+            color: var(--text-secondary);
             margin-left: 8px;
         }
 
@@ -1841,28 +1871,30 @@
         }
 
         .quality-label {
-            font-size: 0.75rem;
-            color: #7a7fa4;
+            font-size: var(--fs-small);
+            font-weight: 600;
+            color: var(--text-secondary);
             margin-bottom: 6px;
         }
 
         .quality-value {
-            font-size: 1.2rem;
+            font-size: 1.12rem;
             font-weight: 700;
             color: var(--primary);
             line-height: 1.15;
         }
 
         .quality-value--schedule {
-            font-size: 1.05rem;
+            font-size: 1rem;
             font-weight: 700;
             line-height: 1.25;
             word-break: break-word;
         }
 
         .quality-badge {
-            font-size: 0.7rem;
-            color: #7a7fa4;
+            font-size: var(--fs-caption);
+            font-weight: 500;
+            color: var(--text-secondary);
             margin-top: 4px;
         }
 
