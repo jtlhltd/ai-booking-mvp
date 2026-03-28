@@ -246,6 +246,12 @@
             box-sizing: border-box;
         }
 
+        /* Today’s Activity + neighbors need more vertical room for metric copy */
+        .dashboard-section--operations-row.dashboard-section--balanced-row .dashboard-grid > .card {
+            height: min(84vh, 900px);
+            max-height: min(84vh, 900px);
+        }
+
         .dashboard-section--balanced-row .dashboard-grid > .card > .leads-list,
         .dashboard-section--balanced-row .dashboard-grid > .card > #retry-queue,
         .dashboard-section--balanced-row .dashboard-grid > .card > #call-recordings,
@@ -280,6 +286,15 @@
         .dashboard-section--balanced-row .dashboard-grid > .card > .export-buttons .export-btn {
             flex: 1;
             justify-content: center;
+        }
+
+        /* Was missing: parent card overflow:hidden clipped this block */
+        #recent-activity.activity-grid {
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+            padding-bottom: 14px;
         }
 
         .dashboard-grid > .card > #call-quality,
@@ -414,30 +429,24 @@
             padding: 8px 0 4px;
         }
 
-        /* 12-column rhythm: 3×4, 2×6, and centered solo line up vertically */
+        /* 6-col rhythm: 3×(span 2) and 2×(span 3) share column lines; solo tile matches ⅓ width */
         .activity-grid.activity-grid--rhythm {
-            grid-template-columns: repeat(12, minmax(0, 1fr));
+            grid-template-columns: repeat(6, minmax(0, 1fr));
             gap: 14px;
             padding: 8px 0 6px;
+            align-items: start;
         }
 
-        .activity-grid.activity-grid--rhythm .activity-metric--w4 {
-            grid-column: span 4;
+        .activity-grid.activity-grid--rhythm .activity-metric--third {
+            grid-column: span 2;
         }
 
-        .activity-grid.activity-grid--rhythm .activity-metric--w6 {
-            grid-column: span 6;
+        .activity-grid.activity-grid--rhythm .activity-metric--half {
+            grid-column: span 3;
         }
 
-        .activity-grid.activity-grid--rhythm .activity-solo-row {
-            grid-column: 1 / -1;
-            display: flex;
-            justify-content: center;
-        }
-
-        .activity-grid.activity-grid--rhythm .activity-solo-row .activity-metric {
-            width: 100%;
-            max-width: 320px;
+        .activity-grid.activity-grid--rhythm .activity-metric--solo {
+            grid-column: 3 / span 2;
         }
 
         .activity-metric {
@@ -446,8 +455,9 @@
             background: rgba(92,106,196,0.06);
             border-radius: 12px;
             border: 1px solid rgba(92,106,196,0.12);
-            min-height: 102px;
             box-sizing: border-box;
+            min-height: 0;
+            overflow: visible;
         }
 
         .activity-metric-label {
@@ -469,10 +479,10 @@
         }
 
         .activity-metric-hint {
-            font-size: 0.72rem;
+            font-size: 0.74rem;
             color: var(--muted, #7a7fa4);
-            margin-top: 6px;
-            line-height: 1.35;
+            margin-top: 8px;
+            line-height: 1.45;
         }
 
         .activity-split-heading {
@@ -498,8 +508,8 @@
             font-size: 0.78rem;
             color: var(--muted, #7a7fa4);
             line-height: 1.45;
-            margin-top: 4px;
-            padding: 10px 12px;
+            margin-top: 10px;
+            padding: 12px 14px;
             background: rgba(92, 106, 196, 0.05);
             border-radius: 10px;
             border: 1px dashed rgba(92, 106, 196, 0.22);
@@ -2631,8 +2641,13 @@
                 grid-template-columns: 1fr;
             }
 
-            .activity-grid.activity-grid--rhythm .activity-metric--w4,
-            .activity-grid.activity-grid--rhythm .activity-metric--w6 {
+            .activity-grid.activity-grid--rhythm {
+                grid-template-columns: 1fr;
+            }
+
+            .activity-grid.activity-grid--rhythm .activity-metric--third,
+            .activity-grid.activity-grid--rhythm .activity-metric--half,
+            .activity-grid.activity-grid--rhythm .activity-metric--solo {
                 grid-column: 1 / -1;
             }
             
@@ -2698,6 +2713,10 @@
             .dashboard-section--balanced-row .dashboard-grid > .card {
                 height: auto;
                 max-height: min(85vh, 680px);
+            }
+
+            .dashboard-section--operations-row.dashboard-section--balanced-row .dashboard-grid > .card {
+                max-height: min(92vh, 860px);
             }
 
             .container {
@@ -2938,7 +2957,7 @@
         </section>
 
         <!-- OPERATIONS SECTION -->
-        <section class="dashboard-section dashboard-section--balanced-row">
+        <section class="dashboard-section dashboard-section--balanced-row dashboard-section--operations-row">
             <h2 class="section-header">⚡ Daily Operations</h2>
             <div class="dashboard-grid">
                 <article class="card card-metrics">
@@ -4081,12 +4100,10 @@ ${actionsRow}
             const bookingsSection = !tom
                 ? `
                 <div class="activity-split-heading">Bookings (7 days)</div>
-                <div class="activity-solo-row">
-                    <div class="activity-metric">
-                        <div class="activity-metric-label">Bookings logged</div>
-                        <div class="activity-metric-value">${formatNumber(data.bookingsThisWeek || 0)}</div>
-                        <div class="activity-metric-hint">From appointments and “booked” call outcomes.</div>
-                    </div>
+                <div class="activity-metric activity-metric--third activity-metric--solo">
+                    <div class="activity-metric-label">Bookings logged</div>
+                    <div class="activity-metric-value">${formatNumber(data.bookingsThisWeek || 0)}</div>
+                    <div class="activity-metric-hint">From appointments and “booked” call outcomes.</div>
                 </div>`
                 : '';
 
@@ -4096,54 +4113,52 @@ ${actionsRow}
 
             container.innerHTML = `
                 <div class="activity-split-heading">Last 24 hours</div>
-                <div class="activity-metric activity-metric--w4">
+                <div class="activity-metric activity-metric--third">
                     <div class="activity-metric-label">New leads</div>
                     <div class="activity-metric-value">${formatNumber(last24Leads)}</div>
                     <div class="activity-metric-hint">Added to your pipeline in the rolling day.</div>
                 </div>
-                <div class="activity-metric activity-metric--w4">
+                <div class="activity-metric activity-metric--third">
                     <div class="activity-metric-label">Outbound dials</div>
                     <div class="activity-metric-value">${formatNumber(callsLast24h)}</div>
                     <div class="activity-metric-hint">Every call attempt (includes retries).</div>
                 </div>
-                <div class="activity-metric activity-metric--w4">
+                <div class="activity-metric activity-metric--third">
                     <div class="activity-metric-label">Unique numbers dialed</div>
                     <div class="activity-metric-value">${formatNumber(uniqueLast24)}</div>
                     <div class="activity-metric-hint">Distinct phones we tried at least once.</div>
                 </div>
                 <div class="activity-split-heading">All-time dialing</div>
-                <div class="activity-metric activity-metric--w6">
+                <div class="activity-metric activity-metric--half">
                     <div class="activity-metric-label">Unique leads dialed</div>
                     <div class="activity-metric-value">${formatNumber(uniqueDialedAT)}</div>
                     <div class="activity-metric-hint">Contacts with at least one outbound attempt.</div>
                 </div>
-                <div class="activity-metric activity-metric--w6">
+                <div class="activity-metric activity-metric--half">
                     <div class="activity-metric-label">Total dial attempts</div>
                     <div class="activity-metric-value">${dialAT != null ? formatNumber(dialAT) : '—'}</div>
                     <div class="activity-metric-hint">All rows in call history; retries increase this.</div>
                 </div>
                 <div class="activity-split-heading">Reach &amp; speed</div>
-                <div class="activity-metric activity-metric--w4">
+                <div class="activity-metric activity-metric--third">
                     <div class="activity-metric-label">Leads reached</div>
                     <div class="activity-metric-value">${formatNumber(reached)}</div>
                     <div class="activity-metric-hint">Unique numbers with a connected-call signal in data.</div>
                 </div>
-                <div class="activity-metric activity-metric--w4">
+                <div class="activity-metric activity-metric--third">
                     <div class="activity-metric-label">Answer / connect rate</div>
                     <div class="activity-metric-value">${uniqueDialedAT > 0 ? `${answerRate}%` : '—'}</div>
                     <div class="activity-metric-hint">Reached ÷ unique leads dialed (all time).</div>
                 </div>
-                <div class="activity-metric activity-metric--w4">
+                <div class="activity-metric activity-metric--third">
                     <div class="activity-metric-label">Awaiting classification</div>
                     <div class="activity-metric-value">${formatNumber(pendingClassify)}</div>
                     <div class="activity-metric-hint">Numbers called but pickup unclear (e.g. status still open).</div>
                 </div>
-                <div class="activity-solo-row">
-                    <div class="activity-metric">
-                        <div class="activity-metric-label">Avg. time to first dial</div>
-                        <div class="activity-metric-value">${escapeHtml(resp)}</div>
-                        <div class="activity-metric-hint">${respN != null && respN > 0 ? `Based on ${formatNumber(respN)} recent lead→call pairs.` : 'Mean minutes after lead creation (when we have pairs).'}</div>
-                    </div>
+                <div class="activity-metric activity-metric--third activity-metric--solo">
+                    <div class="activity-metric-label">Avg. time to first dial</div>
+                    <div class="activity-metric-value">${escapeHtml(resp)}</div>
+                    <div class="activity-metric-hint">${respN != null && respN > 0 ? `Based on ${formatNumber(respN)} recent lead→call pairs.` : 'Mean minutes after lead creation (when we have pairs).'}</div>
                 </div>
                 ${bookingsSection}
                 <div class="activity-footnote">${foot}</div>
