@@ -2039,7 +2039,7 @@
             </div>
         </section>
 
-        <section class="roi-panel">
+        <section class="roi-panel" id="roiPanel" aria-hidden="false">
             <div class="roi-metric">
                 <span>Your Investment (30d)</span>
                 <strong id="roiSpend">£0</strong>
@@ -2309,6 +2309,18 @@
             if (key == null || typeof key !== 'string') return false;
             const k = key.trim().toLowerCase();
             return k === DEMO_CLIENT_KEY || DEMO_URL_ALIASES.has(k);
+        }
+        /** Tom's tenant: ROI / service-fee framing is not used on this dashboard */
+        const TOM_DASH_CLIENT_KEY = 'd2d-xpress-tom';
+        function shouldShowRoiPanel(clientKey) {
+            return clientKey !== TOM_DASH_CLIENT_KEY;
+        }
+        function applyRoiPanelVisibility(clientKey) {
+            const el = document.getElementById('roiPanel');
+            if (!el) return;
+            const show = shouldShowRoiPanel(clientKey);
+            el.style.display = show ? '' : 'none';
+            el.setAttribute('aria-hidden', show ? 'false' : 'true');
         }
         const BASE_URL = window.location.origin;
         const THEME_KEY = 'dashboard_theme';
@@ -3200,7 +3212,7 @@
             const wrap = document.getElementById('roiSettingsWrap');
             const btn = document.getElementById('roiSaveBtn');
             if (!wrap || !btn) return;
-            if (currentClient === DEMO_CLIENT_KEY) {
+            if (currentClient === DEMO_CLIENT_KEY || !shouldShowRoiPanel(currentClient)) {
                 wrap.style.display = 'none';
                 return;
             }
@@ -3237,8 +3249,10 @@
                 const livePayload = await fetchLiveData(currentClient);
                 if (livePayload) {
                     dashboardData = mergeData({}, livePayload, false);
-                    renderROI(dashboardData.roi);
-                    prefillRoiSettingsInputs();
+                    if (shouldShowRoiPanel(currentClient)) {
+                        renderROI(dashboardData.roi);
+                        prefillRoiSettingsInputs();
+                    }
                 }
                 if (msg) msg.textContent = 'Saved.';
             } catch (e) {
@@ -4206,7 +4220,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
         async function initDashboard() {
             currentClient = getClientFromURL();
-            
+            applyRoiPanelVisibility(currentClient);
+
             // Fetch client config from API if not demo
             let clientConfig = null;
             if (currentClient !== DEMO_CLIENT_KEY) {
@@ -4387,10 +4402,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             // Render critical data first (non-blocking)
             updateStatusBar(dashboardData);
             renderRecentActivity(dashboardData);
-            const roiData = dashboardData.roi || { costs: { total: 0, perCall: 0 }, revenue: { total: 0, bookings: 0, avgDealValue: 0 }, roi: { profit: 0, multiplier: 0, percentage: 0 } };
-            renderROI(roiData);
-            prefillRoiSettingsInputs();
-            initRoiSettingsPanel();
+            if (shouldShowRoiPanel(currentClient)) {
+                const roiData = dashboardData.roi || { costs: { total: 0, perCall: 0 }, revenue: { total: 0, bookings: 0, avgDealValue: 0 }, roi: { profit: 0, multiplier: 0, percentage: 0 } };
+                renderROI(roiData);
+                prefillRoiSettingsInputs();
+                initRoiSettingsPanel();
+            }
             loadBuildFingerprint();
             renderLeadJourney(dashboardData);
             renderLeads(dashboardData.recentLeads || []);
@@ -4434,9 +4451,11 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         dashboardData = mergeData(dashboardData, refreshPayload);
                         updateStatusBar(dashboardData);
                         renderRecentActivity(dashboardData);
-                        const roiData = dashboardData.roi || { costs: { total: 0, perCall: 0 }, revenue: { total: 0, bookings: 0, avgDealValue: 0 }, roi: { profit: 0, multiplier: 0, percentage: 0 } };
-                        renderROI(roiData);
-                        prefillRoiSettingsInputs();
+                        if (shouldShowRoiPanel(currentClient)) {
+                            const roiData = dashboardData.roi || { costs: { total: 0, perCall: 0 }, revenue: { total: 0, bookings: 0, avgDealValue: 0 }, roi: { profit: 0, multiplier: 0, percentage: 0 } };
+                            renderROI(roiData);
+                            prefillRoiSettingsInputs();
+                        }
                         await renderActiveIndicator(dashboardData);
                         renderLeadJourney(dashboardData);
                         renderLeads(dashboardData.recentLeads || []);
