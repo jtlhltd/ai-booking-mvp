@@ -2483,8 +2483,8 @@
             </article>
         </section>
 
-        <!-- WORKFLOW SECTION -->
-        <section class="dashboard-section">
+        <!-- WORKFLOW SECTION (hidden for D2D Xpress / Tom outreach dashboard) -->
+        <section class="dashboard-section tom-hide-for-outreach">
             <article class="card card-fullwidth">
                 <h3>📋 How We Handle Everything For You</h3>
                 <p class="card-subtitle">Your done-for-you workflow - this is what we do automatically every day.</p>
@@ -3853,6 +3853,7 @@
         }
 
         function renderWorkflow(steps = []) {
+            if (isTomOutreachDashboard(currentClient)) return;
             const container = document.getElementById('workflow');
             if (!container) return;
             if (!Array.isArray(steps) || steps.length === 0) {
