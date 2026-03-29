@@ -6482,7 +6482,7 @@ ${actionsRow}
                 pushDatum('Streak', escapeHtml(`${burst} outbound dials grouped here`), false);
             }
             const hasRec = call.hasRecording === true || !!(call.recordingUrl && String(call.recordingUrl).trim());
-            if (hasRec) pushDatum('Recording', 'Available in this row', false);
+            if (hasRec) pushDatum('Recording', 'Available', false);
             if (pipeLabel && activityPipeAddsLiveContext(pipeLabel, outcomePillText)) {
                 pushDatum('Line', escapeHtml(pipeLabel), false);
             }
