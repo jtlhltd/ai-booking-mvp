@@ -3559,7 +3559,7 @@
 
                 <article class="card card-list">
                     <h3>🎙️ Call Recordings</h3>
-                    <p class="card-subtitle" id="callRecordingsSubtitle">Recent calls with a saved recording. Search, filter, and play or open in a new tab.</p>
+                    <p class="card-subtitle" id="callRecordingsSubtitle">Recent calls with a saved recording. Audio plays via our server; each row shows exact time plus “time ago”. Open in a new tab if needed.</p>
                     <div id="callRecordingsBarHost" style="display:none"></div>
                     <div id="callRecordingsToolbar" class="dashboard-list-toolbar" style="display:none">
                         <input type="search" id="callRecordingsSearchInput" class="dashboard-list-search" placeholder="Search name, phone, outcome…" autocomplete="off" enterkeyhint="search">
@@ -4610,7 +4610,7 @@ ${actionsRow}
             
             const callRecordingsSubtitle = document.getElementById('callRecordingsSubtitle');
             if (callRecordingsSubtitle) {
-                callRecordingsSubtitle.textContent = `Recent calls with a saved recording for ${businessName}. Search and filter below; inline player when the host allows it. Open in a new tab if audio does not play.`;
+                callRecordingsSubtitle.textContent = `Recent calls with a saved recording for ${businessName}. Playback is proxied through our app so the player works; each line shows the exact call time and time ago. Use Download / open for the original file if you prefer.`;
             }
             
             // Update description - but only if it hasn't been set from client config
@@ -5594,6 +5594,21 @@ ${actionsRow}
             return `${m}:${String(sec).padStart(2, '0')}`;
         }
 
+        /** Absolute call time for recordings list (distinguish multiple calls per lead). */
+        function formatRecordingDateTime(iso) {
+            if (!iso) return '';
+            const d = new Date(iso);
+            if (Number.isNaN(d.getTime())) return '';
+            return d.toLocaleString('en-GB', {
+                weekday: 'short',
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit'
+            });
+        }
+
         /** Merge back-to-back rows that are the same burst (same lead, time label, outcome). */
         function consolidateActivityCalls(calls) {
             if (!Array.isArray(calls) || calls.length < 2) return calls;
@@ -6389,8 +6404,14 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
         function recordingCallMatchesSearch(rec, q) {
             if (!q) return true;
-            const hay = [rec.name, rec.phone, rec.outcome, rec.timeAgo, formatActivityOutcomeDisplay(rec.outcome || '')]
-                .map((x) => String(x || '')).join(' ').toLowerCase();
+            const hay = [
+                rec.name,
+                rec.phone,
+                rec.outcome,
+                rec.timeAgo,
+                formatActivityOutcomeDisplay(rec.outcome || ''),
+                formatRecordingDateTime(rec.createdAt)
+            ].map((x) => String(x || '')).join(' ').toLowerCase();
             return hay.includes(q);
         }
 
@@ -6439,10 +6460,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
         function renderRecordingRowHtml({
             name,
-            outcomeLabel,
-            timeLabel,
-            durationLabel,
+            metaLine,
             recordingUrl,
+            audioStreamSrc,
             transcriptCallId,
             leadId,
             leadPhone,
@@ -6451,17 +6471,17 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const displayName = name || 'Prospect';
             const safeNameAttr = escapeHtml(displayName);
             const url = (recordingUrl && String(recordingUrl).trim()) || '';
+            const streamSrc = (audioStreamSrc && String(audioStreamSrc).trim()) || '';
             const tid = transcriptCallId != null && String(transcriptCallId).trim() !== ''
                 ? String(transcriptCallId).trim()
                 : '';
             const transcriptBtn = tid
                 ? `<button type="button" class="recording-transcript-btn" data-rec-transcript="1" data-rec-call-id="${escapeHtml(tid)}" data-rec-name="${safeNameAttr}">Transcript</button>`
                 : '';
-            const httpsAudio = url && /^https:\/\//i.test(url);
             const anyHttp = url && /^https?:\/\//i.test(url);
             let controlsHtml = '';
-            if (httpsAudio && !isDemo) {
-                controlsHtml = `<audio class="recording-audio" controls preload="metadata" src="${escapeHtml(url)}"></audio>`;
+            if (streamSrc && !isDemo) {
+                controlsHtml = `<audio class="recording-audio" controls preload="metadata" src="${escapeHtml(streamSrc)}"></audio>`;
             } else if (anyHttp) {
                 controlsHtml = `<button type="button" class="play-btn" data-rec-play="1" data-rec-url="${escapeHtml(url)}" data-rec-name="${safeNameAttr}" title="Open recording" aria-label="Open recording">▶</button>`;
             } else {
@@ -6481,12 +6501,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 ? `<button type="button" class="recording-action-btn" data-rec-copy="${escapeHtml(phone)}">Copy #</button>`
                 : '';
             return `
-                    <div class="recording-item">
+                    <div class="recording-item" title="${escapeHtml(metaLine || '')}">
                         <div class="recording-item-main">
                             <div class="recording-controls">${controlsHtml}</div>
                             <div class="recording-info">
                                 <div class="recording-name">${safeNameAttr}</div>
-                                <div class="recording-meta">${escapeHtml(outcomeLabel)} • ${escapeHtml(timeLabel)} • ${escapeHtml(durationLabel)}</div>
+                                <div class="recording-meta">${escapeHtml(metaLine || '')}</div>
                             </div>
                         </div>
                         <div class="recording-actions">
@@ -6558,15 +6578,21 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
             container.innerHTML = filtered.map((recording) => {
                 const outcomeLabel = formatActivityOutcomeDisplay(recording.outcome || 'completed');
-                const timeLabel = recording.timeAgo || 'Recently';
+                const rel = recording.timeAgo || 'Recently';
+                const abs = formatRecordingDateTime(recording.createdAt);
+                const timePart = abs ? `${abs} · ${rel}` : rel;
                 const durationLabel = formatRecordingDurationLabel(recording.duration);
+                const metaLine = `${outcomeLabel} · ${timePart} · ${durationLabel}`;
                 const transcriptCallId = recording.callId || String(recording.id);
+                const rawUrl = (recording.recordingUrl && String(recording.recordingUrl).trim()) || '';
+                const audioStreamSrc = !isDemo && recording.id != null && rawUrl
+                    ? `${BASE_URL}/api/call-recordings/${encodeURIComponent(currentClient)}/stream/${encodeURIComponent(String(recording.id))}`
+                    : '';
                 return renderRecordingRowHtml({
                     name: recording.name,
-                    outcomeLabel,
-                    timeLabel,
-                    durationLabel,
+                    metaLine,
                     recordingUrl: recording.recordingUrl,
+                    audioStreamSrc,
                     transcriptCallId,
                     leadId: recording.leadId,
                     leadPhone: recording.phone,
@@ -6614,6 +6640,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         recordingUrl: '',
                         duration: 95 + index * 37,
                         outcome,
+                        createdAt: call.created_at || new Date(Date.now() - (index + 1) * 86400000).toISOString(),
                         timeAgo: call.timeAgo || formatTimeAgo(call.created_at || '') || 'Recently'
                     };
                 });
