@@ -678,18 +678,6 @@
             line-height: 1.45;
         }
 
-        .activity-quiet-banner {
-            font-size: var(--fs-small);
-            font-weight: 500;
-            color: var(--text-secondary);
-            margin: 0 0 14px;
-            padding: 10px 12px;
-            background: rgba(92, 106, 196, 0.06);
-            border-radius: 10px;
-            border: 1px solid rgba(92, 106, 196, 0.16);
-            line-height: 1.5;
-        }
-
         .activity-inline-help {
             display: inline-flex;
             align-items: center;
@@ -2545,16 +2533,122 @@
 
         .recording-item-main {
             display: flex;
-            align-items: center;
-            gap: 14px;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 10px;
             flex: 1;
             min-width: 0;
         }
 
-        .recording-audio {
-            max-width: min(200px, 42vw);
-            height: 34px;
-            vertical-align: middle;
+        .recording-player {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            min-width: 0;
+            padding: 10px 12px;
+            background: rgba(255, 255, 255, 0.65);
+            border: 1px solid rgba(92, 106, 196, 0.14);
+            border-radius: 10px;
+            box-sizing: border-box;
+        }
+
+        .recording-play-toggle {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.95rem;
+            line-height: 1;
+            flex-shrink: 0;
+            transition: background 0.2s, transform 0.15s;
+        }
+
+        .recording-play-toggle:hover {
+            background: var(--secondary);
+            transform: scale(1.05);
+        }
+
+        .recording-play-toggle:focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
+        }
+
+        .recording-player-track {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .recording-seek {
+            width: 100%;
+            height: 6px;
+            margin: 0;
+            cursor: pointer;
+            accent-color: var(--primary);
+            -webkit-appearance: none;
+            appearance: none;
+            background: transparent;
+        }
+
+        .recording-seek::-webkit-slider-runnable-track {
+            height: 6px;
+            border-radius: 999px;
+            background: rgba(92, 106, 196, 0.2);
+        }
+
+        .recording-seek::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            margin-top: -4px;
+            border-radius: 50%;
+            background: var(--primary);
+            border: 2px solid #fff;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .recording-seek::-moz-range-track {
+            height: 6px;
+            border-radius: 999px;
+            background: rgba(92, 106, 196, 0.2);
+        }
+
+        .recording-seek::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--primary);
+            border: 2px solid #fff;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .recording-times {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+            color: #5c6194;
+        }
+
+        .recording-time-sep {
+            font-weight: 500;
+            opacity: 0.75;
+        }
+
+        .recording-audio-el {
+            display: none;
         }
 
         .recording-actions {
@@ -2877,12 +2971,6 @@
             border-color: rgba(124, 134, 220, 0.55);
             background: rgba(92, 106, 196, 0.15);
             color: #a5b4fc;
-        }
-
-        body[data-theme="dark"] .activity-quiet-banner {
-            background: rgba(92, 106, 196, 0.12);
-            border-color: rgba(124, 134, 220, 0.35);
-            color: #d0d4e8;
         }
 
         body[data-theme="dark"] .activity-inline-help {
@@ -3219,6 +3307,23 @@
 
         body[data-theme="dark"] .recording-transcript-btn:hover {
             background: rgba(124, 134, 220, 0.22);
+        }
+
+        body[data-theme="dark"] .recording-player {
+            background: rgba(0, 0, 0, 0.2);
+            border-color: rgba(124, 134, 220, 0.28);
+        }
+
+        body[data-theme="dark"] .recording-times {
+            color: #c7d2fe;
+        }
+
+        body[data-theme="dark"] .recording-seek::-webkit-slider-runnable-track {
+            background: rgba(124, 134, 220, 0.25);
+        }
+
+        body[data-theme="dark"] .recording-seek::-moz-range-track {
+            background: rgba(124, 134, 220, 0.25);
         }
 
         body[data-theme="dark"] .appt-service {
@@ -4943,12 +5048,6 @@ ${actionsRow}
                 ? `<div class="activity-as-of">Rolling last 24 hours (${actTz.replace(/_/g, ' ')}) · snapshot ${escapeHtml(formatActivitySnapshot(asOfIso, actTz))}</div>`
                 : '';
 
-            const quietDay = last24Leads === 0 && callsLast24h === 0 && uniqueLast24 === 0
-                && (uniqueDialedAT > 0 || (dialAT != null && dialAT > 0));
-            const quietBanner = quietDay
-                ? `<div class="activity-quiet-banner" role="status">No leads or outbound dials in the rolling 24 hours (${actTz.replace(/_/g, ' ')}). Totals below still include all-time activity—quiet stretches are normal between batches.</div>`
-                : '';
-
             const tomHelpTitle = 'Outbound dials counts every attempt (retries add up). Unique numbers is distinct phones we tried in that window. Unique leads dialed (all time) is how many contacts have been called at least once.';
             const last24Heading = tom
                 ? `Last 24 hours <button type="button" class="activity-inline-help" aria-label="How to read these metrics" title="${escapeHtml(tomHelpTitle)}">?</button>`
@@ -5001,7 +5100,6 @@ ${actionsRow}
                         <div class="activity-metric-hint">Distinct phones we tried at least once.</div>
                     </div>
                 </div>
-                ${quietBanner}
                 <div class="activity-split-heading">Last 24 hours (reach)</div>
                 <div class="activity-rhythm-block activity-rhythm-block--3">
                     <div class="activity-metric">
@@ -5728,6 +5826,111 @@ ${actionsRow}
                 year: 'numeric',
                 hour: 'numeric',
                 minute: '2-digit'
+            });
+        }
+
+        /** m:ss for in-player scrubber labels. */
+        function formatAudioClock(sec) {
+            if (!Number.isFinite(sec) || sec < 0) return '0:00';
+            const m = Math.floor(sec / 60);
+            const s = Math.floor(sec % 60);
+            return `${m}:${String(s).padStart(2, '0')}`;
+        }
+
+        function updateRecordingPlayerUi(player, audio) {
+            const btn = player.querySelector('.recording-play-toggle');
+            const range = player.querySelector('.recording-seek');
+            const cur = player.querySelector('.recording-time-cur');
+            const dur = player.querySelector('.recording-time-dur');
+            const d = audio.duration;
+            const seeking = player.dataset.recSeeking === '1';
+            if (Number.isFinite(d) && d > 0) {
+                if (dur) dur.textContent = formatAudioClock(d);
+                if (!seeking && range) {
+                    const v = Math.round((audio.currentTime / d) * 1000);
+                    range.value = String(v);
+                    range.setAttribute('aria-valuenow', String(v));
+                }
+                if (cur) cur.textContent = formatAudioClock(audio.currentTime);
+            } else {
+                if (dur) dur.textContent = '—';
+                if (cur) cur.textContent = '0:00';
+            }
+            if (btn) {
+                btn.setAttribute('aria-label', audio.paused ? 'Play recording' : 'Pause recording');
+                btn.textContent = audio.paused ? '▶' : '⏸';
+            }
+        }
+
+        function pauseOtherRecordingAudios(except) {
+            document.querySelectorAll('#call-recordings audio.recording-audio-el').forEach((a) => {
+                if (a !== except) {
+                    a.pause();
+                    const p = a.closest('.recording-player');
+                    if (p) updateRecordingPlayerUi(p, a);
+                }
+            });
+        }
+
+        function bindRecordingPlayersIn(container) {
+            if (!container) return;
+            container.querySelectorAll('.recording-player').forEach((player) => {
+                const audio = player.querySelector('audio.recording-audio-el');
+                if (!audio) return;
+                const range = player.querySelector('.recording-seek');
+                const btn = player.querySelector('.recording-play-toggle');
+
+                audio.addEventListener('loadedmetadata', () => updateRecordingPlayerUi(player, audio));
+                audio.addEventListener('timeupdate', () => updateRecordingPlayerUi(player, audio));
+                audio.addEventListener('durationchange', () => updateRecordingPlayerUi(player, audio));
+                audio.addEventListener('ended', () => {
+                    audio.currentTime = 0;
+                    updateRecordingPlayerUi(player, audio);
+                });
+                audio.addEventListener('play', () => {
+                    pauseOtherRecordingAudios(audio);
+                    updateRecordingPlayerUi(player, audio);
+                });
+                audio.addEventListener('pause', () => updateRecordingPlayerUi(player, audio));
+
+                if (range) {
+                    range.addEventListener('pointerdown', (e) => {
+                        player.dataset.recSeeking = '1';
+                        try {
+                            range.setPointerCapture(e.pointerId);
+                        } catch (_) { /* ignore */ }
+                    });
+                    range.addEventListener('pointerup', (e) => {
+                        player.dataset.recSeeking = '0';
+                        try {
+                            range.releasePointerCapture(e.pointerId);
+                        } catch (_) { /* ignore */ }
+                        updateRecordingPlayerUi(player, audio);
+                    });
+                    range.addEventListener('pointercancel', () => {
+                        player.dataset.recSeeking = '0';
+                        updateRecordingPlayerUi(player, audio);
+                    });
+                    range.addEventListener('input', () => {
+                        const dur = audio.duration;
+                        if (!Number.isFinite(dur) || dur <= 0) return;
+                        audio.currentTime = (parseFloat(range.value) / 1000) * dur;
+                        const cur = player.querySelector('.recording-time-cur');
+                        if (cur) cur.textContent = formatAudioClock(audio.currentTime);
+                    });
+                }
+                if (btn) {
+                    btn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        if (audio.paused) {
+                            pauseOtherRecordingAudios(audio);
+                            audio.play().catch(() => showToast('Playback failed', 'Could not play audio', 'error'));
+                        } else {
+                            audio.pause();
+                        }
+                    });
+                }
+                updateRecordingPlayerUi(player, audio);
             });
         }
 
@@ -6603,7 +6806,17 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const anyHttp = url && /^https?:\/\//i.test(url);
             let controlsHtml = '';
             if (streamSrc && !isDemo) {
-                controlsHtml = `<audio class="recording-audio" controls preload="metadata" src="${escapeHtml(streamSrc)}"></audio>`;
+                controlsHtml = `
+                    <div class="recording-player">
+                        <audio preload="metadata" class="recording-audio-el" src="${escapeHtml(streamSrc)}"></audio>
+                        <button type="button" class="recording-play-toggle" aria-label="Play recording">▶</button>
+                        <div class="recording-player-track">
+                            <input type="range" class="recording-seek" min="0" max="1000" value="0" step="1" aria-valuemin="0" aria-valuemax="1000" aria-valuenow="0" aria-label="Playback position" />
+                            <div class="recording-times">
+                                <span class="recording-time-cur">0:00</span><span class="recording-time-sep"> / </span><span class="recording-time-dur">—</span>
+                            </div>
+                        </div>
+                    </div>`;
             } else if (anyHttp) {
                 controlsHtml = `<button type="button" class="play-btn" data-rec-play="1" data-rec-url="${escapeHtml(url)}" data-rec-name="${safeNameAttr}" title="Open recording" aria-label="Open recording">▶</button>`;
             } else {
@@ -6625,11 +6838,11 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             return `
                     <div class="recording-item" title="${escapeHtml(metaLine || '')}">
                         <div class="recording-item-main">
-                            <div class="recording-controls">${controlsHtml}</div>
                             <div class="recording-info">
                                 <div class="recording-name">${safeNameAttr}</div>
                                 <div class="recording-meta">${escapeHtml(metaLine || '')}</div>
                             </div>
+                            <div class="recording-controls">${controlsHtml}</div>
                         </div>
                         <div class="recording-actions">
                             ${transcriptBtn}
@@ -6721,6 +6934,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     isDemo
                 });
             }).join('');
+            bindRecordingPlayersIn(container);
         }
 
         async function renderCallRecordings(calls = []) {
