@@ -1647,41 +1647,19 @@
             margin-bottom: 18px;
         }
 
+        /* Full list height — scroll the page, not a short inner pane */
         .activity-feed {
             display: flex;
             flex-direction: column;
-            gap: 22px;
+            gap: 28px;
         }
 
         #activityFeedSubtitle {
             max-width: 56ch;
             line-height: 1.45;
             font-size: 0.9rem;
-            margin-bottom: 14px;
+            margin-bottom: 18px;
             color: var(--text-secondary);
-        }
-
-        .activity-feed--scrollable {
-            max-height: min(62vh, 640px);
-            overflow-y: auto;
-            overflow-x: hidden;
-            padding-right: 4px;
-            margin-right: -2px;
-            scrollbar-width: thin;
-            scrollbar-color: rgba(92, 106, 196, 0.35) transparent;
-        }
-
-        .activity-feed--scrollable::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        .activity-feed--scrollable::-webkit-scrollbar-thumb {
-            background: rgba(92, 106, 196, 0.3);
-            border-radius: 999px;
-        }
-
-        .activity-feed--scrollable::-webkit-scrollbar-track {
-            background: transparent;
         }
 
         .activity-feed-heading {
@@ -1721,8 +1699,8 @@
         }
 
         .activity-item {
-            padding: 22px 24px;
-            border-radius: 16px;
+            padding: 28px 26px;
+            border-radius: 18px;
             border: 1px solid #ecefff;
             background: #fbfbff;
             box-sizing: border-box;
@@ -1749,7 +1727,7 @@
             display: flex;
             flex-direction: column;
             align-items: stretch;
-            gap: 18px;
+            gap: 22px;
         }
 
         .activity-item-main {
@@ -1759,7 +1737,7 @@
         }
 
         .activity-item-title {
-            font-size: 1.08rem;
+            font-size: 1.125rem;
             line-height: 1.5;
         }
 
@@ -1774,7 +1752,7 @@
             display: flex;
             flex-wrap: wrap;
             gap: 10px;
-            margin-top: 12px;
+            margin-top: 14px;
             align-items: center;
         }
 
@@ -1843,10 +1821,10 @@
         }
 
         .activity-meta {
-            margin-top: 10px;
+            margin-top: 12px;
             color: #8b8fb0;
-            font-size: 1rem;
-            line-height: 1.55;
+            font-size: 1.0625rem;
+            line-height: 1.6;
         }
 
         .workflow-list {
@@ -2010,10 +1988,10 @@
             align-items: center;
             justify-content: flex-start;
             flex-wrap: wrap;
-            gap: 12px;
+            gap: 14px;
             width: 100%;
-            padding-top: 18px;
-            margin-top: 4px;
+            padding-top: 22px;
+            margin-top: 6px;
             border-top: 1px solid rgba(92, 106, 196, 0.1);
             box-sizing: border-box;
         }
@@ -3092,14 +3070,6 @@
             border-top-color: rgba(124, 134, 220, 0.22);
         }
 
-        body[data-theme="dark"] .activity-feed--scrollable {
-            scrollbar-color: rgba(165, 180, 252, 0.35) transparent;
-        }
-
-        body[data-theme="dark"] .activity-feed--scrollable::-webkit-scrollbar-thumb {
-            background: rgba(165, 180, 252, 0.28);
-        }
-
         body[data-theme="dark"] .transcript-btn {
             background: rgba(92, 106, 196, 0.15);
             border-color: rgba(124, 134, 220, 0.45);
@@ -3577,7 +3547,11 @@
                 gap: 10px;
             }
             .activity-item {
-                padding: 20px 16px;
+                padding: 24px 18px;
+            }
+
+            .activity-feed {
+                gap: 22px;
             }
             .lead-item {
                 padding: 10px;
@@ -3955,7 +3929,7 @@
                         <button type="button" class="recording-chip" data-act-outcome="failed">Failed / busy</button>
                     </div>
                 </div>
-                <div id="recent-calls" class="activity-feed activity-feed--scrollable"></div>
+                <div id="recent-calls" class="activity-feed"></div>
             </article>
         </section>
 
