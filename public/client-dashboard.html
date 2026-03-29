@@ -4051,9 +4051,6 @@
                     <div class="client-logo" id="clientLogo">✨</div>
                     <div class="client-details">
                         <h1 id="clientName">Your Concierge Dashboard</h1>
-                        <p id="clientDescription">See what we're doing for you — calls, follow-ups, and outcomes.</p>
-                        <p id="clientTagline">We work your leads with fast outbound coverage and clear reporting.</p>
-                        <p id="clientSubtitle" style="font-size: var(--fs-body); color: var(--muted); margin-top: 8px; display: none;"></p>
                     </div>
                 </div>
                 <div style="display:flex; align-items:center; gap:12px;">
@@ -5201,8 +5198,6 @@ ${actionsRow}
             // Update header content (with null checks)
             // Only use values from actual client config, not CLIENT_CONFIG mock data
             const clientNameEl = document.getElementById('clientName');
-            const clientDescEl = document.getElementById('clientDescription');
-            const clientTaglineEl = document.getElementById('clientTagline');
             const clientStatusEl = document.getElementById('clientStatus');
             
             // Only set name if it's from actual client config
@@ -5215,46 +5210,12 @@ ${actionsRow}
                         : 'Your Concierge Dashboard';
                 }
             }
-            if (clientDescEl) {
-                if (isTomOutreachDashboard(config.key)) {
-                    clientDescEl.textContent = `Live outreach for ${businessName} — calls, outcomes, and follow-ups.`;
-                    clientDescEl.dataset.fromConfig = 'tom-outreach';
-                } else if (hasClientConfig && config.description) {
-                    clientDescEl.textContent = config.description;
-                    clientDescEl.dataset.fromConfig = 'true'; // Mark as set from config
-                } else {
-                    clientDescEl.textContent = messaging.description;
-                }
-            }
-            if (clientTaglineEl) {
-                if (isTomOutreachDashboard(config.key)) {
-                    clientTaglineEl.textContent = `Outbound dialling and engagement metrics for ${businessName}.`;
-                } else if (hasClientConfig && config.tagline) {
-                    clientTaglineEl.textContent = config.tagline;
-                } else {
-                    clientTaglineEl.textContent = messaging.tagline;
-                }
-            }
             if (clientStatusEl) {
                 if (hasClientConfig && config.status) {
                     clientStatusEl.textContent = config.status;
                 } else {
                     clientStatusEl.textContent = 'Live';
                 }
-            }
-            
-            // Add industry-specific subtitle (only if industry is actually configured)
-            const subtitleEl = document.getElementById('clientSubtitle');
-            if (subtitleEl && industry && industry !== 'demo' && hasClientConfig) {
-                const industryNames = {
-                    dental: 'Dental Practice',
-                    fitness: 'Fitness & Training',
-                    beauty: 'Beauty Salon',
-                    legal: 'Legal Practice',
-                    medical: 'Medical Practice'
-                };
-                subtitleEl.textContent = industryNames[industry.toLowerCase()] || industry;
-                subtitleEl.style.display = 'block';
             }
             
             // Store messaging for workflow rendering
@@ -5459,15 +5420,6 @@ ${actionsRow}
                 callRecordingsSubtitle.textContent = `Recent calls with a saved recording for ${businessName}. Playback is proxied through our app so the player works; each line shows the exact call time and time ago. Use Download / open for the original file if you prefer.`;
             }
             
-            // Update description - but only if it hasn't been set from client config
-            // (Don't overwrite the actual description from the API)
-            const clientDescription = document.getElementById('clientDescription');
-            if (clientDescription && !clientDescription.dataset.fromConfig) {
-                clientDescription.textContent = isTomOutreachDashboard(currentClient)
-                    ? `See what we're doing for ${businessName} — calls, follow-ups, and engagement.`
-                    : `See what we're doing for ${businessName} - calls, follow-ups, and bookings`;
-            }
-
             const integrationsSub = document.getElementById('integrationsCardSubtitle');
             if (integrationsSub) {
                 integrationsSub.textContent = isTomOutreachDashboard(currentClient)
