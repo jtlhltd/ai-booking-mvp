@@ -9756,21 +9756,20 @@ app.post('/api/leads/import', async (req, res) => {
     if (inserted.length > 0) {
       try {
         const client = await getFullClient(clientKey);
-        const isDemoClient = clientKey === 'd2d-xpress-tom';
-        // Demo client: allow call even if DB says disabled or missing vapi (use env fallback in instant-calling)
-        const hasVapi = !!(client?.vapi?.assistantId || client?.vapiAssistantId || (isDemoClient && process.env.VAPI_ASSISTANT_ID));
-        const isEnabled = !!client?.isEnabled || isDemoClient;
+        const tomOutboundRelaxedImport = clientKey === 'd2d-xpress-tom';
+        const hasVapi = !!(client?.vapi?.assistantId || client?.vapiAssistantId || (tomOutboundRelaxedImport && process.env.VAPI_ASSISTANT_ID));
+        const isEnabled = !!client?.isEnabled || tomOutboundRelaxedImport;
         if (!client) {
           console.log('[LEAD IMPORT] No client found for', clientKey);
           callSummary.reason = 'client_not_found';
-        } else if (!isEnabled && !isDemoClient) {
+        } else if (!isEnabled && !tomOutboundRelaxedImport) {
           console.log('[LEAD IMPORT] Client not enabled, skipping call/queue:', clientKey);
           callSummary.reason = 'client_not_enabled';
         } else if (!hasVapi) {
           console.log('[LEAD IMPORT] Client missing VAPI assistantId (and no env fallback), skipping call/queue:', clientKey);
           callSummary.reason = 'vapi_not_configured';
         }
-        if (client && (client.isEnabled || isDemoClient) && (client.vapi?.assistantId || client?.vapiAssistantId || (isDemoClient && process.env.VAPI_ASSISTANT_ID))) {
+        if (client && (client.isEnabled || tomOutboundRelaxedImport) && (client.vapi?.assistantId || client?.vapiAssistantId || (tomOutboundRelaxedImport && process.env.VAPI_ASSISTANT_ID))) {
           const { addToCallQueue } = await import('./db.js');
 
           const inBusinessHours = isBusinessHours(client);
@@ -9780,7 +9779,7 @@ app.post('/api/leads/import', async (req, res) => {
           const scheduledFor = shouldCallNow ? new Date() : getNextBusinessHour(client);
           console.log('[LEAD IMPORT] Call decision:', {
             clientKey,
-            isDemoClient,
+            tomOutboundRelaxedImport,
             inBusinessHours,
             shouldCallNow
           });

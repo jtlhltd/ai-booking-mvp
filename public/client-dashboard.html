@@ -4581,6 +4581,7 @@ ${actionsRow}
             };
         }
 
+        /** Sandbox-only seed metrics / lists (?client=demo_client or demo aliases). Never loaded for d2d-xpress-tom or other live tenants. */
         const DEMO_DATA = {
             totalLeads: 48,
             totalCalls: 36,
@@ -4633,9 +4634,38 @@ ${actionsRow}
             { name: 'Google Calendar', status: 'active', detail: 'Auto-booking in sync' },
             { name: 'Slack Digest', status: 'warning', detail: 'Add webhook to enable daily summary' }
         ];
+
+        /** Real tenants (including Tom / d2d-xpress-tom): start empty until /api/demo-dashboard/:key returns. DEMO_DATA is only for ?client=demo_client (and demo URL aliases). */
+        function createEmptyDashboardData() {
+            return {
+                totalLeads: 0,
+                totalCalls: 0,
+                last24hLeads: 0,
+                conversionRate: 0,
+                successRate: 0,
+                firstResponse: '—',
+                bookingsThisWeek: 0,
+                avgLeadScore: null,
+                highPriorityLeads: 0,
+                mediumPriorityLeads: 0,
+                lowPriorityLeads: 0,
+                metrics: {},
+                recentLeadsListCap: RECENT_LEADS_DASHBOARD_CAP,
+                recentLeads: [],
+                recentCalls: [],
+                appointments: [],
+                serviceMix: [],
+                touchpoints: { labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], data: [0, 0, 0, 0, 0, 0, 0] },
+                roi: {
+                    costs: { total: null, monthlyFee: null, perCall: null },
+                    revenue: { total: null, bookings: 0, avgDealValue: null },
+                    roi: { profit: null, multiplier: null, percentage: null }
+                }
+            };
+        }
         
         let currentClient = null;
-        let dashboardData = { ...DEMO_DATA };
+        let dashboardData = createEmptyDashboardData();
         let currentLeads = [];
         /** Full recent-leads array from API (search filters a view; modal uses indices into this). */
         let recentLeadsAllRows = [];
@@ -4695,8 +4725,8 @@ ${actionsRow}
         function mergeData(base = {}, livePayload, isDemoClient = false) {
             if (!livePayload) return base;
             
-            // For real clients, use live payload data directly (don't merge with demo data)
-            // Only merge if we're in demo mode and want to preserve imported leads
+            // For real clients (every tenant except sandbox demo_client), use API payload only — no Sarah Patel–style seed data.
+            // Demo merge path: sandbox URL or leads explicitly tagged "(demo)" in status.
             const isDemoMode = isDemoClient || (base.totalLeads > 0 && base.recentLeads && base.recentLeads.length > 0 && base.recentLeads.some(l => l.status && l.status.includes('(demo)')));
             
             if (!isDemoMode) {
@@ -7864,31 +7894,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 document.getElementById('demoBanner').style.display = 'block';
                 stopLiveEvents();
             } else {
-                // For real clients, start with empty structure - will be populated from API
-                dashboardData = {
-                    totalLeads: 0,
-                    totalCalls: 0,
-                    last24hLeads: 0,
-                    conversionRate: 0,
-                    successRate: 0,
-                    firstResponse: '—',
-                    bookingsThisWeek: 0,
-                    avgLeadScore: null,
-                    highPriorityLeads: 0,
-                    mediumPriorityLeads: 0,
-                    lowPriorityLeads: 0,
-                    recentLeadsListCap: RECENT_LEADS_DASHBOARD_CAP,
-                    recentLeads: [],
-                    recentCalls: [],
-                    appointments: [],
-                    serviceMix: [],
-                    touchpoints: { labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], data: [0, 0, 0, 0, 0, 0, 0] },
-                    roi: {
-                        costs: { total: null, monthlyFee: null, perCall: null },
-                        revenue: { total: null, bookings: 0, avgDealValue: null },
-                        roi: { profit: null, multiplier: null, percentage: null }
-                    }
-                };
+                dashboardData = createEmptyDashboardData();
                 const banner = document.getElementById('demoBanner');
                 if (banner) banner.style.display = 'none';
             }
@@ -7938,7 +7944,11 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             renderChart(config, dashboardData);
             const callsToRender = dashboardData.recentCalls || [];
             renderCalls(callsToRender);
-            renderWorkflow(config.customWorkflow || config.workflow || CLIENT_CONFIG.demo_client.workflow);
+            renderWorkflow(
+                isTomOutreachDashboard(currentClient)
+                    ? []
+                    : (config.customWorkflow || config.workflow || CLIENT_CONFIG.demo_client.workflow)
+            );
             
             // Load async data in parallel (non-blocking)
             Promise.all([
