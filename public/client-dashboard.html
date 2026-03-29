@@ -1651,6 +1651,7 @@
             display: flex;
             flex-direction: column;
             gap: 12px;
+            align-items: stretch;
         }
 
         /* Capped list: scroll inside the card; page stays shorter */
@@ -1663,6 +1664,7 @@
             scrollbar-width: auto;
             scrollbar-color: rgba(92, 106, 196, 0.45) rgba(92, 106, 196, 0.08);
             scroll-behavior: smooth;
+            overscroll-behavior: contain;
         }
 
         .activity-feed--scrollable::-webkit-scrollbar {
@@ -1730,13 +1732,15 @@
             font-size: 0.8rem;
         }
 
+        /* Do not use overflow-x: hidden alone — spec pairs it with visible y and forces overflow-y: auto on the card (nested scrollbars). */
         .activity-item {
             padding: 14px 16px;
             border-radius: 12px;
             border: 1px solid #ecefff;
             background: #fbfbff;
             box-sizing: border-box;
-            overflow-x: hidden;
+            flex-shrink: 0;
+            overflow: visible;
         }
 
         .activity-item--edge-neutral {
@@ -1773,6 +1777,8 @@
         .activity-item-title {
             font-size: 1rem;
             line-height: 1.4;
+            overflow-wrap: anywhere;
+            word-break: break-word;
         }
 
         .activity-item-title .activity-channel {
