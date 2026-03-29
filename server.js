@@ -11281,32 +11281,103 @@ app.get('/api/next-actions/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
   }
 });
 
-// API endpoint for call recordings
-app.get('/api/call-recordings/:clientKey', cacheMiddleware({ ttl: 120000, keyPrefix: 'recordings:' }), async (req, res) => {
+// API endpoint for call recordings (no cache — list should feel current)
+app.get('/api/call-recordings/:clientKey', async (req, res) => {
   try {
     const { clientKey } = req.params;
-    const limit = parseInt(req.query.limit) || 5;
-    
-    const result = await query(`
-      SELECT 
-        c.id,
-        c.call_id,
-        c.lead_phone,
-        c.recording_url,
-        c.duration,
-        c.outcome,
-        c.created_at,
-        l.name
-      FROM calls c
-      LEFT JOIN leads l ON l.client_key = c.client_key AND l.phone = c.lead_phone
-      WHERE c.client_key = $1
-        AND c.recording_url IS NOT NULL
-        AND c.recording_url != ''
-      ORDER BY c.created_at DESC
-      LIMIT $2
-    `, [clientKey, limit]);
+    res.set('Cache-Control', 'no-store, must-revalidate');
+    const limitRaw = parseInt(String(req.query.limit || ''), 10);
+    const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 50, 1), 100);
 
-    const recordings = (result.rows || []).map((row) => {
+    const [countRes, result] = await Promise.all([
+      query(`
+        SELECT COUNT(*)::int AS n
+        FROM calls c
+        WHERE c.client_key = $1
+          AND c.recording_url IS NOT NULL
+          AND TRIM(c.recording_url) <> ''
+      `, [clientKey]),
+      query(`
+        SELECT
+          c.id,
+          c.call_id,
+          c.lead_phone,
+          c.recording_url,
+          c.duration,
+          c.outcome,
+          c.created_at,
+          lm.lead_id,
+          lm.name
+        FROM calls c
+        LEFT JOIN LATERAL (
+          SELECT l.id AS lead_id, l.name
+          FROM leads l
+          WHERE l.client_key = c.client_key
+            AND (
+              l.phone = c.lead_phone
+              OR (
+                LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
+                AND RIGHT(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), 10)
+                  = RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
+              )
+            )
+          ORDER BY l.created_at DESC NULLS LAST
+          LIMIT 1
+        ) lm ON true
+        WHERE c.client_key = $1
+          AND c.recording_url IS NOT NULL
+          AND TRIM(c.recording_url) <> ''
+        ORDER BY c.created_at DESC
+        LIMIT $2
+      `, [clientKey, limit])
+    ]);
+
+    const totalWithRecordings = parseInt(countRes.rows?.[0]?.n || 0, 10) || 0;
+    const rows = [...(result.rows || [])];
+
+    function vapiDurationSeconds(data) {
+      if (data == null) return null;
+      if (typeof data.duration === 'number' && data.duration >= 0) return Math.round(data.duration);
+      if (data.endedAt && data.startedAt) {
+        const ms = new Date(data.endedAt) - new Date(data.startedAt);
+        return ms > 0 ? Math.round(ms / 1000) : null;
+      }
+      return null;
+    }
+    function vapiCallEnded(data) {
+      if (!data) return false;
+      const status = (data.status || '').toLowerCase();
+      if (['ended', 'completed', 'failed', 'canceled', 'cancelled'].includes(status)) return true;
+      if (data.endedReason || data.endedAt) return true;
+      return false;
+    }
+
+    const vapiKey = process.env.VAPI_PRIVATE_KEY || process.env.VAPI_PUBLIC_KEY || '';
+    const needDuration = rows.filter((r) => r.call_id && (!Number(r.duration) || Number(r.duration) <= 0)).slice(0, 15);
+    if (vapiKey && needDuration.length > 0) {
+      await Promise.all(needDuration.map(async (r) => {
+        try {
+          const vRes = await fetch(`https://api.vapi.ai/call/${r.call_id}`, {
+            headers: { Authorization: `Bearer ${vapiKey}` }
+          });
+          if (!vRes.ok) return;
+          const data = await vRes.json();
+          if (!vapiCallEnded(data)) return;
+          const dur = vapiDurationSeconds(data);
+          if (dur == null || dur <= 0) return;
+          await query(
+            `UPDATE calls SET duration = $1, updated_at = now() WHERE client_key = $2 AND call_id = $3`,
+            [dur, clientKey, r.call_id]
+          );
+          const hit = rows.find((x) => x.call_id === r.call_id);
+          if (hit) hit.duration = dur;
+        } catch (e) {
+          console.warn('[CALL RECORDINGS] VAPI duration backfill skipped:', r.call_id, e?.message || e);
+        }
+      }));
+    }
+
+    const recordings = rows.map((row) => {
       let dur = Number(row.duration);
       if (Number.isFinite(dur) && dur > 100000 && dur % 1000 === 0) {
         dur = Math.round(dur / 1000);
@@ -11315,6 +11386,7 @@ app.get('/api/call-recordings/:clientKey', cacheMiddleware({ ttl: 120000, keyPre
       return {
         id: row.id,
         callId: row.call_id,
+        leadId: row.lead_id != null ? row.lead_id : null,
         name: row.name || 'Prospect',
         phone: row.lead_phone,
         recordingUrl: row.recording_url,
@@ -11327,7 +11399,9 @@ app.get('/api/call-recordings/:clientKey', cacheMiddleware({ ttl: 120000, keyPre
 
     res.json({
       ok: true,
-      recordings
+      recordings,
+      totalWithRecordings,
+      limit
     });
   } catch (error) {
     console.error('[CALL RECORDINGS ERROR]', error);

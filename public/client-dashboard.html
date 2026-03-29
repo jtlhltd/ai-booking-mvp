@@ -325,6 +325,7 @@
         }
 
         .dashboard-section--balanced-row .dashboard-grid > .card > #retryQueueBarHost,
+        .dashboard-section--balanced-row .dashboard-grid > .card > #callRecordingsBarHost,
         .dashboard-section--balanced-row .dashboard-grid > .card > .dashboard-list-toolbar {
             flex-shrink: 0;
         }
@@ -2421,8 +2422,9 @@
 
         .recording-item {
             display: flex;
-            align-items: center;
-            gap: 14px;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 12px 14px;
             padding: 14px 16px;
             background: #f4f5f8;
             border: 1px solid rgba(92, 106, 196, 0.1);
@@ -2491,6 +2493,91 @@
         .recording-transcript-btn:hover {
             background: rgba(92, 106, 196, 0.14);
             border-color: var(--primary);
+        }
+
+        .recording-item-main {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .recording-audio {
+            max-width: min(200px, 42vw);
+            height: 34px;
+            vertical-align: middle;
+        }
+
+        .recording-actions {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 6px;
+            flex: 1 1 100%;
+            max-width: 100%;
+        }
+
+        .recording-action-btn,
+        .recording-open-link {
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 6px 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(92, 106, 196, 0.35);
+            background: rgba(92, 106, 196, 0.08);
+            color: var(--primary);
+            cursor: pointer;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+
+        .recording-open-link:hover {
+            background: rgba(92, 106, 196, 0.15);
+        }
+
+        .recording-outcome-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .recording-chip {
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 5px 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(92, 106, 196, 0.25);
+            background: rgba(92, 106, 196, 0.06);
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+
+        .recording-chip--active {
+            border-color: rgba(92, 106, 196, 0.55);
+            background: rgba(92, 106, 196, 0.14);
+            color: var(--primary);
+        }
+
+        body[data-theme="dark"] .recording-chip {
+            border-color: rgba(124, 134, 220, 0.45);
+            background: rgba(92, 106, 196, 0.12);
+            color: #d0d4e8;
+        }
+
+        body[data-theme="dark"] .recording-chip--active {
+            border-color: rgba(165, 180, 252, 0.6);
+            background: rgba(92, 106, 196, 0.22);
+            color: #e8ebff;
+        }
+
+        body[data-theme="dark"] .recording-action-btn,
+        body[data-theme="dark"] .recording-open-link {
+            border-color: rgba(124, 134, 220, 0.45);
+            background: rgba(92, 106, 196, 0.15);
+            color: #a5b4fc;
         }
 
         .calendar-details {
@@ -3472,7 +3559,19 @@
 
                 <article class="card card-list">
                     <h3>🎙️ Call Recordings</h3>
-                    <p class="card-subtitle" id="callRecordingsSubtitle">Listen to recent calls we made.</p>
+                    <p class="card-subtitle" id="callRecordingsSubtitle">Recent calls with a saved recording. Search, filter, and play or open in a new tab.</p>
+                    <div id="callRecordingsBarHost" style="display:none"></div>
+                    <div id="callRecordingsToolbar" class="dashboard-list-toolbar" style="display:none">
+                        <input type="search" id="callRecordingsSearchInput" class="dashboard-list-search" placeholder="Search name, phone, outcome…" autocomplete="off" enterkeyhint="search">
+                        <div class="recording-outcome-chips" id="callRecordingsOutcomeChips" role="group" aria-label="Filter by outcome">
+                            <button type="button" class="recording-chip recording-chip--active" data-rec-outcome="all">All</button>
+                            <button type="button" class="recording-chip" data-rec-outcome="voicemail">Voicemail</button>
+                            <button type="button" class="recording-chip" data-rec-outcome="booked">Booked</button>
+                            <button type="button" class="recording-chip" data-rec-outcome="no-answer">No answer</button>
+                            <button type="button" class="recording-chip" data-rec-outcome="completed">Completed</button>
+                        </div>
+                        <span id="callRecordingsSearchHint" class="dashboard-search-hint" hidden></span>
+                    </div>
                     <div id="call-recordings" class="thin-scroll"></div>
                 </article>
                 </div>
@@ -4079,6 +4178,9 @@ ${actionsRow}
         let recentLeadsAllRows = [];
         let retryQueueRowsAll = [];
         let retryQueueBarState = { shown: 0, isDemo: false, opts: {} };
+        let callRecordingsAll = [];
+        let callRecordingsMeta = { totalWithRecordings: 0, limit: 50, isDemo: false };
+        let callRecordingsOutcomeFilter = 'all';
         let liveEventSource = null;
         
         function getClientFromURL() {
@@ -4507,7 +4609,9 @@ ${actionsRow}
             }
             
             const callRecordingsSubtitle = document.getElementById('callRecordingsSubtitle');
-            if (callRecordingsSubtitle) callRecordingsSubtitle.textContent = `Listen to recent calls we made for ${businessName}.`;
+            if (callRecordingsSubtitle) {
+                callRecordingsSubtitle.textContent = `Recent calls with a saved recording for ${businessName}. Search and filter below; inline player when the host allows it. Open in a new tab if audio does not play.`;
+            }
             
             // Update description - but only if it hasn't been set from client config
             // (Don't overwrite the actual description from the API)
@@ -5481,10 +5585,10 @@ ${actionsRow}
             return Math.round(s);
         }
 
-        /** m:ss, or em dash when unknown / zero. */
+        /** m:ss, or plain language when unknown / zero (call recordings card). */
         function formatRecordingDurationLabel(raw) {
             const s = normalizeRecordingDurationSeconds(raw);
-            if (s == null) return '—';
+            if (s == null) return 'Duration unknown';
             const m = Math.floor(s / 60);
             const sec = s % 60;
             return `${m}:${String(sec).padStart(2, '0')}`;
@@ -6273,13 +6377,76 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         }
 
 
+        function recordingMatchesOutcomeChip(outcome, chip) {
+            if (!chip || chip === 'all') return true;
+            const o = String(outcome || '').toLowerCase();
+            if (chip === 'voicemail') return o.includes('voicemail');
+            if (chip === 'booked') return o.includes('book');
+            if (chip === 'no-answer') return o.includes('no-answer') || o.includes('no_answer') || o.includes('no answer');
+            if (chip === 'completed') return o === 'completed';
+            return true;
+        }
+
+        function recordingCallMatchesSearch(rec, q) {
+            if (!q) return true;
+            const hay = [rec.name, rec.phone, rec.outcome, rec.timeAgo, formatActivityOutcomeDisplay(rec.outcome || '')]
+                .map((x) => String(x || '')).join(' ').toLowerCase();
+            return hay.includes(q);
+        }
+
+        function setCallRecordingsChromeVisible(visible) {
+            const bar = document.getElementById('callRecordingsBarHost');
+            const tool = document.getElementById('callRecordingsToolbar');
+            if (bar) bar.style.display = visible ? '' : 'none';
+            if (tool) tool.style.display = visible ? '' : 'none';
+        }
+
+        function renderCallRecordingsBar(opts = {}) {
+            const {
+                matchCount,
+                returned,
+                total,
+                limit,
+                isDemo,
+                filterActive
+            } = opts;
+            if (isDemo) {
+                const t = filterActive
+                    ? `<strong>${formatNumber(matchCount)}</strong> matches · demo`
+                    : `<strong>${formatNumber(returned)}</strong> demo recordings`;
+                return `<div class="retry-queue-bar" role="status"><span>${t}</span></div>`;
+            }
+            let inner;
+            if (filterActive) {
+                inner = `<strong>${formatNumber(matchCount)}</strong> matches · <strong>${formatNumber(returned)}</strong> in this load`;
+                if (total != null) inner += ` · <strong>${formatNumber(total)}</strong> with audio in CRM`;
+            } else {
+                inner = `<strong>${formatNumber(returned)}</strong> loaded`;
+                if (total != null) inner += ` · <strong>${formatNumber(total)}</strong> with audio in CRM`;
+                if (total != null && total > returned && returned >= limit) {
+                    inner += ` · cap ${formatNumber(limit)}`;
+                }
+            }
+            return `<div class="retry-queue-bar" role="status"><span>${inner}</span></div>`;
+        }
+
+        function syncCallRecordingsOutcomeChips() {
+            document.querySelectorAll('#callRecordingsOutcomeChips .recording-chip').forEach((btn) => {
+                const k = btn.getAttribute('data-rec-outcome') || 'all';
+                btn.classList.toggle('recording-chip--active', k === callRecordingsOutcomeFilter);
+            });
+        }
+
         function renderRecordingRowHtml({
             name,
             outcomeLabel,
             timeLabel,
             durationLabel,
             recordingUrl,
-            transcriptCallId
+            transcriptCallId,
+            leadId,
+            leadPhone,
+            isDemo
         }) {
             const displayName = name || 'Prospect';
             const safeNameAttr = escapeHtml(displayName);
@@ -6290,25 +6457,138 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const transcriptBtn = tid
                 ? `<button type="button" class="recording-transcript-btn" data-rec-transcript="1" data-rec-call-id="${escapeHtml(tid)}" data-rec-name="${safeNameAttr}">Transcript</button>`
                 : '';
+            const httpsAudio = url && /^https:\/\//i.test(url);
+            const anyHttp = url && /^https?:\/\//i.test(url);
+            let controlsHtml = '';
+            if (httpsAudio && !isDemo) {
+                controlsHtml = `<audio class="recording-audio" controls preload="metadata" src="${escapeHtml(url)}"></audio>`;
+            } else if (anyHttp) {
+                controlsHtml = `<button type="button" class="play-btn" data-rec-play="1" data-rec-url="${escapeHtml(url)}" data-rec-name="${safeNameAttr}" title="Open recording" aria-label="Open recording">▶</button>`;
+            } else {
+                controlsHtml = `<button type="button" class="play-btn" data-rec-play="1" data-rec-url="" data-rec-name="${safeNameAttr}" title="No recording URL" aria-label="No recording" disabled style="opacity:0.45;cursor:not-allowed">▶</button>`;
+            }
+            const openLink = anyHttp && !isDemo
+                ? `<a class="recording-open-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" download>Download / open</a>`
+                : '';
+            const phone = (leadPhone && String(leadPhone).trim()) || '';
+            const journeyKey = leadId != null && String(leadId).trim() !== ''
+                ? String(leadId).trim()
+                : phone;
+            const journeyBtn = !isDemo && journeyKey
+                ? `<button type="button" class="recording-action-btn" data-rec-journey="1" data-rec-lead="${escapeHtml(journeyKey)}" data-rec-name="${safeNameAttr}">Journey</button>`
+                : '';
+            const copyBtn = !isDemo && phone
+                ? `<button type="button" class="recording-action-btn" data-rec-copy="${escapeHtml(phone)}">Copy #</button>`
+                : '';
             return `
                     <div class="recording-item">
-                        <div class="recording-controls">
-                            <button type="button" class="play-btn" data-rec-play="1" data-rec-url="${escapeHtml(url)}" data-rec-name="${safeNameAttr}" title="Open recording" aria-label="Open recording">▶</button>
+                        <div class="recording-item-main">
+                            <div class="recording-controls">${controlsHtml}</div>
+                            <div class="recording-info">
+                                <div class="recording-name">${safeNameAttr}</div>
+                                <div class="recording-meta">${escapeHtml(outcomeLabel)} • ${escapeHtml(timeLabel)} • ${escapeHtml(durationLabel)}</div>
+                            </div>
                         </div>
-                        <div class="recording-info">
-                            <div class="recording-name">${safeNameAttr}</div>
-                            <div class="recording-meta">${escapeHtml(outcomeLabel)} • ${escapeHtml(timeLabel)} • ${escapeHtml(durationLabel)}</div>
+                        <div class="recording-actions">
+                            ${transcriptBtn}
+                            ${journeyBtn}
+                            ${copyBtn}
+                            ${openLink}
                         </div>
-                        ${transcriptBtn}
                     </div>`;
+        }
+
+        function repaintCallRecordingsList() {
+            const container = document.getElementById('call-recordings');
+            const barHost = document.getElementById('callRecordingsBarHost');
+            if (!container) return;
+            const searchEl = document.getElementById('callRecordingsSearchInput');
+            const hint = document.getElementById('callRecordingsSearchHint');
+            const q = (searchEl && searchEl.value) ? searchEl.value.trim().toLowerCase() : '';
+            const filterActive = !!q || (callRecordingsOutcomeFilter && callRecordingsOutcomeFilter !== 'all');
+
+            if (!callRecordingsAll.length) {
+                if (hint) {
+                    hint.textContent = '';
+                    hint.hidden = true;
+                }
+                return;
+            }
+
+            const filtered = callRecordingsAll.filter((rec) =>
+                recordingMatchesOutcomeChip(rec.outcome, callRecordingsOutcomeFilter)
+                && recordingCallMatchesSearch(rec, q)
+            );
+            const returned = callRecordingsAll.length;
+            const total = callRecordingsMeta.totalWithRecordings;
+            const limit = callRecordingsMeta.limit || 50;
+            const isDemo = !!callRecordingsMeta.isDemo;
+
+            if (barHost) {
+                barHost.innerHTML = renderCallRecordingsBar({
+                    matchCount: filtered.length,
+                    returned,
+                    total,
+                    limit,
+                    isDemo,
+                    filterActive
+                });
+            }
+            if (hint) {
+                if (filterActive) {
+                    hint.textContent = `${formatNumber(filtered.length)} match${filtered.length === 1 ? '' : 'es'}`;
+                    hint.hidden = false;
+                } else {
+                    hint.textContent = '';
+                    hint.hidden = true;
+                }
+            }
+            syncCallRecordingsOutcomeChips();
+
+            if (filterActive && !filtered.length) {
+                container.innerHTML = `
+                    <div class="empty-state" style="padding: 16px 12px;">
+                        <span class="empty-state-icon">🔍</span>
+                        <div class="empty-state-title">No matches</div>
+                        <div class="empty-state-message">Try another search or outcome filter.</div>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = filtered.map((recording) => {
+                const outcomeLabel = formatActivityOutcomeDisplay(recording.outcome || 'completed');
+                const timeLabel = recording.timeAgo || 'Recently';
+                const durationLabel = formatRecordingDurationLabel(recording.duration);
+                const transcriptCallId = recording.callId || String(recording.id);
+                return renderRecordingRowHtml({
+                    name: recording.name,
+                    outcomeLabel,
+                    timeLabel,
+                    durationLabel,
+                    recordingUrl: recording.recordingUrl,
+                    transcriptCallId,
+                    leadId: recording.leadId,
+                    leadPhone: recording.phone,
+                    isDemo
+                });
+            }).join('');
         }
 
         async function renderCallRecordings(calls = []) {
             const container = document.getElementById('call-recordings');
+            const barHost = document.getElementById('callRecordingsBarHost');
             if (!container) return;
 
             if (currentClient === DEMO_CLIENT_KEY) {
+                callRecordingsOutcomeFilter = 'all';
+                const searchEl = document.getElementById('callRecordingsSearchInput');
+                if (searchEl) searchEl.value = '';
                 if (!calls.length) {
+                    callRecordingsAll = [];
+                    callRecordingsMeta = { totalWithRecordings: 0, limit: 5, isDemo: true };
+                    if (barHost) barHost.innerHTML = '';
+                    setCallRecordingsChromeVisible(false);
                     container.innerHTML = `
                         <div class="empty-state" style="padding: 20px;">
                             <span class="empty-state-icon">🎙️</span>
@@ -6319,32 +6599,53 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     return;
                 }
 
-                container.innerHTML = calls.slice(0, 5).map((call, index) => {
-                    const head = (call.summary || 'Completed').split(/[•·]/)[0]?.trim() || 'Completed';
-                    const outcomeLabel = formatActivityOutcomeDisplay(head);
-                    const timeLabel = call.timeAgo || formatTimeAgo(call.created_at || '') || 'Recently';
-                    const fakeSec = 95 + index * 37;
-                    const durationLabel = formatRecordingDurationLabel(fakeSec);
-                    return renderRecordingRowHtml({
+                callRecordingsAll = calls.slice(0, 8).map((call, index) => {
+                    const sum = String(call.summary || '').toLowerCase();
+                    let outcome = 'completed';
+                    if (sum.includes('voicemail')) outcome = 'voicemail';
+                    else if (sum.includes('book')) outcome = 'booked';
+                    else if (sum.includes('no answer') || sum.includes('no-answer')) outcome = 'no-answer';
+                    return {
+                        id: call.id != null ? call.id : index,
+                        callId: call.callId || call.id || `demo-${index + 1}`,
+                        leadId: null,
                         name: call.name,
-                        outcomeLabel,
-                        timeLabel,
-                        durationLabel,
+                        phone: call.lead_phone || call.phone || '',
                         recordingUrl: '',
-                        transcriptCallId: call.id != null ? call.id : `demo-${index + 1}`
-                    });
-                }).join('');
+                        duration: 95 + index * 37,
+                        outcome,
+                        timeAgo: call.timeAgo || formatTimeAgo(call.created_at || '') || 'Recently'
+                    };
+                });
+                callRecordingsMeta = {
+                    totalWithRecordings: callRecordingsAll.length,
+                    limit: callRecordingsAll.length,
+                    isDemo: true
+                };
+                setCallRecordingsChromeVisible(true);
+                repaintCallRecordingsList();
                 return;
             }
 
             try {
                 const response = await fetch(
-                    `${BASE_URL}/api/call-recordings/${encodeURIComponent(currentClient)}?limit=12`,
+                    `${BASE_URL}/api/call-recordings/${encodeURIComponent(currentClient)}?limit=80`,
                     { cache: 'no-store' }
                 );
                 const payload = await response.json();
+                callRecordingsOutcomeFilter = 'all';
+                const si = document.getElementById('callRecordingsSearchInput');
+                if (si) si.value = '';
                 if (response.ok && payload?.ok) {
                     if (!payload.recordings || payload.recordings.length === 0) {
+                        callRecordingsAll = [];
+                        callRecordingsMeta = {
+                            totalWithRecordings: payload.totalWithRecordings || 0,
+                            limit: payload.limit || 80,
+                            isDemo: false
+                        };
+                        if (barHost) barHost.innerHTML = '';
+                        setCallRecordingsChromeVisible(false);
                         container.innerHTML = `
                             <div class="empty-state" style="padding: 20px;">
                                 <span class="empty-state-icon">🎙️</span>
@@ -6354,20 +6655,14 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         `;
                         return;
                     }
-                    container.innerHTML = payload.recordings.map((recording) => {
-                        const outcomeLabel = formatActivityOutcomeDisplay(recording.outcome || 'completed');
-                        const timeLabel = recording.timeAgo || 'Recently';
-                        const durationLabel = formatRecordingDurationLabel(recording.duration);
-                        const transcriptCallId = recording.callId || String(recording.id);
-                        return renderRecordingRowHtml({
-                            name: recording.name,
-                            outcomeLabel,
-                            timeLabel,
-                            durationLabel,
-                            recordingUrl: recording.recordingUrl,
-                            transcriptCallId
-                        });
-                    }).join('');
+                    callRecordingsAll = payload.recordings;
+                    callRecordingsMeta = {
+                        totalWithRecordings: payload.totalWithRecordings ?? payload.recordings.length,
+                        limit: payload.limit || 80,
+                        isDemo: false
+                    };
+                    setCallRecordingsChromeVisible(true);
+                    repaintCallRecordingsList();
                 }
             } catch (error) {
                 console.error('Failed to load call recordings', error);
@@ -7144,6 +7439,21 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 retryInput.dataset.searchBound = '1';
                 retryInput.addEventListener('input', () => repaintRetryQueueList());
             }
+            const crInput = document.getElementById('callRecordingsSearchInput');
+            if (crInput && !crInput.dataset.searchBound) {
+                crInput.dataset.searchBound = '1';
+                crInput.addEventListener('input', () => repaintCallRecordingsList());
+            }
+            const chipRoot = document.getElementById('callRecordingsOutcomeChips');
+            if (chipRoot && !chipRoot.dataset.searchBound) {
+                chipRoot.dataset.searchBound = '1';
+                chipRoot.addEventListener('click', (e) => {
+                    const btn = e.target.closest('[data-rec-outcome]');
+                    if (!btn) return;
+                    callRecordingsOutcomeFilter = btn.getAttribute('data-rec-outcome') || 'all';
+                    repaintCallRecordingsList();
+                });
+            }
         }
 
         function initThemeToggle() {
@@ -7323,6 +7633,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     const playBtn = e.target.closest('[data-rec-play]');
                     if (playBtn) {
                         e.preventDefault();
+                        if (playBtn.disabled) return;
                         const url = (playBtn.getAttribute('data-rec-url') || '').trim();
                         const name = playBtn.getAttribute('data-rec-name') || 'Prospect';
                         if (currentClient === DEMO_CLIENT_KEY || isDemoClientKey(currentClient)) {
@@ -7334,6 +7645,55 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             showToast('Playing Recording', `Opening recording for ${name}…`, 'info');
                         } else {
                             showToast('Recording Unavailable', `No audio URL for ${name}`, 'warning');
+                        }
+                        return;
+                    }
+                    const jBtn = e.target.closest('[data-rec-journey]');
+                    if (jBtn) {
+                        e.preventDefault();
+                        const lid = jBtn.getAttribute('data-rec-lead');
+                        const n = jBtn.getAttribute('data-rec-name') || 'Prospect';
+                        if (lid) viewLeadTimeline(lid, n);
+                        return;
+                    }
+                    const copyBtn = e.target.closest('[data-rec-copy]');
+                    if (copyBtn) {
+                        e.preventDefault();
+                        const phone = copyBtn.getAttribute('data-rec-copy') || '';
+                        if (!phone) return;
+                        const done = () => showToast('Copied', 'Phone number copied', 'success');
+                        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                            navigator.clipboard.writeText(phone).then(done).catch(() => {
+                                try {
+                                    const ta = document.createElement('textarea');
+                                    ta.value = phone;
+                                    ta.setAttribute('readonly', '');
+                                    ta.style.position = 'fixed';
+                                    ta.style.left = '-9999px';
+                                    document.body.appendChild(ta);
+                                    ta.select();
+                                    document.execCommand('copy');
+                                    document.body.removeChild(ta);
+                                    done();
+                                } catch (_) {
+                                    showToast('Copy failed', 'Could not copy to clipboard', 'error');
+                                }
+                            });
+                        } else {
+                            try {
+                                const ta = document.createElement('textarea');
+                                ta.value = phone;
+                                ta.setAttribute('readonly', '');
+                                ta.style.position = 'fixed';
+                                ta.style.left = '-9999px';
+                                document.body.appendChild(ta);
+                                ta.select();
+                                document.execCommand('copy');
+                                document.body.removeChild(ta);
+                                done();
+                            } catch (_) {
+                                showToast('Copy failed', 'Could not copy to clipboard', 'error');
+                            }
                         }
                         return;
                     }
