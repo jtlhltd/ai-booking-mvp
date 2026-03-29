@@ -8135,6 +8135,27 @@ function formatCallDuration(seconds) {
   return sec > 0 ? `${m}m ${sec}s` : `${m}m`;
 }
 
+/** Short plain text for live activity feed (avoid huge payloads). */
+function truncateActivityFeedText(str, maxLen = 220) {
+  const s = String(str || '').replace(/\s+/g, ' ').trim();
+  if (!s) return '';
+  if (s.length <= maxLen) return s;
+  return `${s.slice(0, maxLen - 1).trim()}…`;
+}
+
+function formatVapiEndedReasonDisplay(reason) {
+  if (reason == null || reason === '') return '';
+  return String(reason)
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[-_.]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
+
 function outcomeToFriendlyLabel(outcome) {
   if (!outcome) return null;
   const o = (outcome || '').toLowerCase();
@@ -8801,6 +8822,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       `, [clientKey]),
       query(`
         SELECT c.call_id, c.id, c.lead_phone, c.status, c.outcome, c.created_at, c.duration, c.recording_url,
+               c.transcript, c.retry_attempt,
                lm.name, lm.service
         FROM calls c
         LEFT JOIN LATERAL (
@@ -9114,6 +9136,9 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       const effectiveStatus = (vapiData && isCallEnded(vapiData)) ? 'ended' : row.status;
 
       const durationLabel = formatCallDuration(effectiveDuration);
+      const transcriptPreview = truncateActivityFeedText(row.transcript);
+      const endedReasonDisplay = formatVapiEndedReasonDisplay(vapiData?.endedReason);
+      const retryAttempt = row.retry_attempt != null ? Math.max(0, parseInt(row.retry_attempt, 10) || 0) : 0;
       let outcomeLabel = outcomeToFriendlyLabel(effectiveOutcome);
       const isInitiated = (effectiveStatus || '').toLowerCase() === 'initiated';
       const createdAt = row.created_at ? new Date(row.created_at) : null;
@@ -9154,7 +9179,11 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         outcomeLabel: displayOutcomeLabel || null,
         duration: effectiveDuration != null ? effectiveDuration : null,
         durationLabel: durationLabel || null,
-        rawStatus: displayStatus
+        rawStatus: displayStatus,
+        transcriptPreview: transcriptPreview || null,
+        endedReason: endedReasonDisplay || null,
+        retryAttempt,
+        hasRecording: !!(row.recording_url && String(row.recording_url).trim())
       };
     });
     
@@ -9368,6 +9397,7 @@ app.get('/api/events/:clientKey', async (req, res) => {
     try {
       const recentCallRows = await query(`
         SELECT c.call_id, c.id, c.lead_phone, c.status, c.outcome, c.created_at, c.duration, c.recording_url,
+               c.transcript, c.retry_attempt,
                l.name, l.service
         FROM calls c
         LEFT JOIN leads l ON l.client_key = c.client_key AND l.phone = c.lead_phone
@@ -9384,6 +9414,8 @@ app.get('/api/events/:clientKey', async (req, res) => {
         const summary = row.outcome
           ? (durationLabel ? `${friendly || row.outcome} • ${durationLabel}` : (friendly || `Outcome: ${row.outcome}`))
           : (durationLabel ? `Call ended • ${durationLabel}` : 'Call completed');
+        const transcriptPreview = truncateActivityFeedText(row.transcript);
+        const retryAttempt = row.retry_attempt != null ? Math.max(0, parseInt(row.retry_attempt, 10) || 0) : 0;
         const payload = {
           id: row.call_id || row.id,
           callId: row.call_id,
@@ -9404,7 +9436,11 @@ app.get('/api/events/:clientKey', async (req, res) => {
           durationLabel: durationLabel || null,
           recordingUrl: row.recording_url && String(row.recording_url).trim()
             ? String(row.recording_url).trim()
-            : null
+            : null,
+          transcriptPreview: transcriptPreview || null,
+          endedReason: null,
+          retryAttempt,
+          hasRecording: !!(row.recording_url && String(row.recording_url).trim())
         };
         res.write(`data: ${JSON.stringify(payload)}\n\n`);
       }

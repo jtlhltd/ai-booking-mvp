@@ -1904,6 +1904,11 @@
             line-height: 1.45;
         }
 
+        .activity-datum-muted {
+            color: #8b90b0;
+            font-weight: 500;
+        }
+
         .activity-item-datum--wide .activity-datum-value {
             white-space: pre-wrap;
             word-break: break-word;
@@ -3224,6 +3229,10 @@
 
         body[data-theme="dark"] .activity-datum-value {
             color: #d8dcfa;
+        }
+
+        body[data-theme="dark"] .activity-datum-muted {
+            color: #a8adc8;
         }
 
         body[data-theme="dark"] .activity-feed-live-badge {
@@ -6404,8 +6413,39 @@ ${actionsRow}
             return '';
         }
 
-        function buildActivityDetailsBlockHtml(call) {
+        function activityFeedSummaryRedundantWithPill(summary, pillText) {
+            const s = String(summary || '').replace(/\s+/g, ' ').trim().toLowerCase();
+            const p = String(pillText || '').replace(/\s+/g, ' ').trim().toLowerCase();
+            if (!s) return true;
+            if (!p) return false;
+            if (s === p) return true;
+            if (s.startsWith(`${p} •`) || s.startsWith(`${p},`)) return true;
+            const head = s.split('•')[0].trim();
+            if (head === p) return true;
+            return false;
+        }
+
+        function activityPipeAddsLiveContext(pipeLabel, pillText) {
+            const pl = String(pipeLabel || '').toLowerCase();
+            if (!pl) return false;
+            if (/\b(initiated|progress|ringing|queued|dialing|connecting)\b/.test(pl)) return true;
+            const pi = String(pillText || '').toLowerCase();
+            if (!pi) return true;
+            const pn = pi.replace(/[^a-z0-9]+/g, '');
+            const ln = pl.replace(/[^a-z0-9]+/g, '');
+            if (ln === pn) return false;
+            return true;
+        }
+
+        /** Live feed: when the call happened, duration, target, signals — not a repeat of the outcome pill. */
+        function buildActivityDetailsBlockHtml(call, outcomePillText) {
             if (!call) return '';
+            const timeAgo = call.timeAgo || formatTimeAgo(call.timestamp || call.created_at);
+            const absWhen = formatRecordingDateTime(call.createdAt || call.timestamp || call.created_at);
+            const whenHtml = absWhen
+                ? `${escapeHtml(absWhen)}${timeAgo ? ` <span class="activity-datum-muted">· ${escapeHtml(timeAgo)}</span>` : ''}`
+                : (timeAgo ? escapeHtml(timeAgo) : '');
+
             const serviceStr = (call.service && String(call.service).trim()) || '';
             let phoneRaw = (call.leadPhone && String(call.leadPhone).trim()) || '';
             if (!phoneRaw && call.name) {
@@ -6413,11 +6453,16 @@ ${actionsRow}
                 if (nd.length >= 10) phoneRaw = String(call.name).trim();
             }
             const masked = formatActivityMaskedPhone(phoneRaw);
-            const summaryStr = (call.summary && String(call.summary).trim()) || '';
-            const rawStat = formatActivityPipeStatusLabel(call.rawStatus);
-            const mappedStat = formatActivityPipeStatusLabel(call.status);
-            const statusDisplay = rawStat || mappedStat;
+            const dur = (call.durationLabel && String(call.durationLabel).trim()) || '';
+            const retryN = call.retryAttempt != null ? Math.max(0, Number(call.retryAttempt) || 0) : 0;
+            const endedReason = (call.endedReason && String(call.endedReason).trim()) || '';
+            const transcriptPrev = (call.transcriptPreview && String(call.transcriptPreview).trim()) || '';
             const refLbl = activityCallRefLabel(call);
+            const summaryStr = (call.summary && String(call.summary).trim()) || '';
+            const pipeLabel = formatActivityPipeStatusLabel(call.rawStatus)
+                || formatActivityPipeStatusLabel(call.status);
+
+            const burst = call._activityDedupeCount || 1;
 
             const cells = [];
             const pushDatum = (label, innerHtml, wide) => {
@@ -6427,11 +6472,29 @@ ${actionsRow}
                     `<span class="activity-datum-value">${innerHtml}</span></div>`
                 );
             };
-            if (serviceStr) pushDatum('Service', escapeHtml(serviceStr), false);
-            if (masked) pushDatum('Number', `<span class="activity-datum-mono">${escapeHtml(masked)}</span>`, false);
-            if (statusDisplay) pushDatum('Call status', escapeHtml(statusDisplay), false);
-            if (refLbl) pushDatum('Reference', `<span class="activity-datum-mono">${escapeHtml(refLbl)}</span>`, false);
-            if (summaryStr) pushDatum('Summary', escapeHtml(summaryStr), true);
+
+            if (whenHtml) pushDatum('When', whenHtml, true);
+            if (dur) pushDatum('Talk time', escapeHtml(dur), false);
+            if (masked) pushDatum('Dialed', `<span class="activity-datum-mono">${escapeHtml(masked)}</span>`, false);
+            if (serviceStr) pushDatum('List / service', escapeHtml(serviceStr), false);
+            if (retryN > 0) pushDatum('Retry dial', escapeHtml(`#${retryN + 1} on this lead`), false);
+            if (burst > 1) {
+                pushDatum('Streak', escapeHtml(`${burst} outbound dials grouped here`), false);
+            }
+            const hasRec = call.hasRecording === true || !!(call.recordingUrl && String(call.recordingUrl).trim());
+            if (hasRec) pushDatum('Recording', 'Available in this row', false);
+            if (pipeLabel && activityPipeAddsLiveContext(pipeLabel, outcomePillText)) {
+                pushDatum('Line', escapeHtml(pipeLabel), false);
+            }
+            if (endedReason) pushDatum('End reason', escapeHtml(endedReason), true);
+            if (transcriptPrev) {
+                const tr = escapeHtml(transcriptPrev);
+                pushDatum('Transcript excerpt', tr, true);
+            }
+            if (refLbl) pushDatum('Call id', `<span class="activity-datum-mono">${escapeHtml(refLbl)}</span>`, false);
+            if (summaryStr && !activityFeedSummaryRedundantWithPill(summaryStr, outcomePillText)) {
+                pushDatum('Note', escapeHtml(summaryStr), true);
+            }
 
             if (!cells.length) return '';
             return `<div class="activity-item-details"><div class="activity-item-details-grid">${cells.join('')}</div></div>`;
@@ -6501,13 +6564,14 @@ ${actionsRow}
             });
 
             if (callsToShow.length === 0 && currentClient === DEMO_CLIENT_KEY) {
+                const ago = (m) => new Date(Date.now() - m * 60 * 1000).toISOString();
                 callsToShow = [
-                    { id: 'demo-1', callId: 'demo-call-1', dbId: 9001, name: 'Sarah Patel', leadPhone: '+447700900111', service: 'Lead Follow-Up', summary: 'Booked Tuesday 2:30pm — calendar invite sent to prospect.', channel: 'Phone', timeAgo: '2 min ago', outcome: 'booked', outcomeLabel: 'Booked', status: 'Ended', rawStatus: 'ended', durationLabel: '3m 12s' },
-                    { id: 'demo-2', callId: 'demo-call-2', dbId: 9002, name: 'Marcus Flynn', leadPhone: '+447700900222', service: 'Appointment Booking', summary: 'Requested reschedule; SMS follow-up with three slot options.', channel: 'SMS → Call', timeAgo: '9 min ago', outcome: 'completed', outcomeLabel: 'Picked up', status: 'Ended', rawStatus: 'ended', durationLabel: '4m 05s' },
-                    { id: 'demo-3', callId: 'demo-call-3', dbId: 9003, name: 'Laura Chen', leadPhone: '+447700900333', service: 'Calendar Integration', summary: 'Synced booking with Google Calendar; reminder email queued.', channel: 'Webhook sync', timeAgo: '25 min ago', outcome: 'completed', outcomeLabel: 'Completed', status: 'Ended', rawStatus: 'ended', durationLabel: '2m 40s' },
-                    { id: 'demo-4', callId: 'demo-call-4', dbId: 9004, name: 'Rick Alvarez', leadPhone: '+447700900444', service: 'Lead Follow-Up', summary: 'Moved appointment to Thursday; internal notes updated.', channel: 'Phone', timeAgo: '42 min ago', outcome: 'booked', outcomeLabel: 'Booked', status: 'Ended', rawStatus: 'ended', durationLabel: '5m 01s' },
-                    { id: 'demo-5', callId: 'demo-call-5', dbId: 9005, name: 'Alex Rivera', leadPhone: '+447700900555', service: 'Lead Follow-Up', summary: 'Left voicemail — callback task created for next business day.', channel: 'Phone', timeAgo: '1h ago', outcome: 'voicemail', outcomeLabel: 'Voicemail', status: 'Ended', rawStatus: 'ended', durationLabel: '0m 48s' },
-                    { id: 'demo-6', callId: 'demo-call-6', dbId: 9006, name: 'Jordan Lee', leadPhone: '+447700900666', service: 'Lead Follow-Up', summary: 'No answer on first attempt; queued for retry per your cadence.', channel: 'Phone', timeAgo: '2h ago', outcome: 'no-answer', outcomeLabel: 'No answer', status: 'Ended', rawStatus: 'ended', durationLabel: '—' }
+                    { id: 'demo-1', callId: 'demo-call-1', dbId: 9001, name: 'Sarah Patel', leadPhone: '+447700900111', service: 'Lead Follow-Up', summary: 'Booked Tuesday 2:30pm — calendar invite sent to prospect.', channel: 'Phone', timeAgo: '2 min ago', createdAt: ago(2), outcome: 'booked', outcomeLabel: 'Booked', status: 'Ended', rawStatus: 'ended', durationLabel: '3m 12s', transcriptPreview: 'User confirmed Tuesday 2:30pm works; sending calendar invite now.', endedReason: 'Assistant ended call after confirmation', retryAttempt: 0, hasRecording: true },
+                    { id: 'demo-2', callId: 'demo-call-2', dbId: 9002, name: 'Marcus Flynn', leadPhone: '+447700900222', service: 'Campaign A', summary: 'Requested reschedule; SMS follow-up with three slot options.', channel: 'SMS → Call', timeAgo: '9 min ago', createdAt: ago(9), outcome: 'completed', outcomeLabel: 'Picked up', status: 'Ended', rawStatus: 'ended', durationLabel: '4m 05s', transcriptPreview: 'Happy to move it — afternoon is better. Text me three windows?', endedReason: null, retryAttempt: 1, hasRecording: true },
+                    { id: 'demo-3', callId: 'demo-call-3', dbId: 9003, name: 'Laura Chen', leadPhone: '+447700900333', service: 'Inbound callback', summary: 'Webhook ping — result will sync to CRM.', channel: 'Webhook sync', timeAgo: '25 min ago', createdAt: ago(25), outcome: 'completed', outcomeLabel: 'Completed', status: 'Ended', rawStatus: 'ended', durationLabel: '2m 40s', retryAttempt: 0, hasRecording: false },
+                    { id: 'demo-4', callId: 'demo-call-4', dbId: 9004, name: 'Rick Alvarez', leadPhone: '+447700900444', service: 'Lead Follow-Up', summary: 'Moved appointment to Thursday; internal notes updated.', channel: 'Phone', timeAgo: '42 min ago', createdAt: ago(42), outcome: 'booked', outcomeLabel: 'Booked', status: 'Ended', rawStatus: 'ended', durationLabel: '5m 01s', retryAttempt: 0, hasRecording: true },
+                    { id: 'demo-5', callId: 'demo-call-5', dbId: 9005, name: 'Alex Rivera', leadPhone: '+447700900555', service: 'Lead Follow-Up', summary: 'Left voicemail — callback task created for next business day.', channel: 'Phone', timeAgo: '1h ago', createdAt: ago(60), outcome: 'voicemail', outcomeLabel: 'Voicemail', status: 'Ended', rawStatus: 'ended', durationLabel: '0m 48s', endedReason: 'Voicemail', transcriptPreview: 'Hi Alex, returning your web enquiry — call me back on this number.', retryAttempt: 0, hasRecording: true },
+                    { id: 'demo-6', callId: 'demo-call-6', dbId: 9006, name: 'Jordan Lee', leadPhone: '+447700900666', service: 'Lead Follow-Up', channel: 'Phone', timeAgo: '2h ago', createdAt: ago(120), outcome: 'no-answer', outcomeLabel: 'No answer', status: 'Ended', rawStatus: 'ended', durationLabel: '—', endedReason: 'Customer did not answer', retryAttempt: 2, hasRecording: false }
                 ];
             }
 
@@ -6591,12 +6655,6 @@ ${actionsRow}
                         : 'activity-pill activity-pill--pending';
                 }
 
-                const metaParts = [];
-                const burst = call._activityDedupeCount || 1;
-                if (burst > 1) metaParts.push(`${burst}× attempts`);
-                if (call.durationLabel) metaParts.push(call.durationLabel);
-                metaParts.push(timeAgo);
-
                 let edgeClass = 'activity-item--edge-neutral';
                 if (isUnknownResult) {
                     edgeClass = 'activity-item--edge-neutral';
@@ -6619,19 +6677,18 @@ ${actionsRow}
                 const recLinkHtml = recHref
                     ? `<a class="recording-open-link" href="${escapeHtml(recHref)}" target="_blank" rel="noopener noreferrer" aria-label="Open call recording">Recording</a>`
                     : '';
-                const detailsBlockHtml = buildActivityDetailsBlockHtml(call);
+                const detailsBlockHtml = buildActivityDetailsBlockHtml(call, pillLabel);
 
                 return `
                     <div class="activity-item ${edgeClass}"${rowTitleAttr}>
                         <div class="activity-item-row">
                             <div class="activity-item-main">
                                 <div class="activity-item-title"><strong>${escapeHtml(call.name || 'Prospect')}</strong><span class="activity-channel"> · ${escapeHtml(call.channel || 'AI call')}</span></div>
-                                ${detailsBlockHtml}
-                                <div class="activity-meta">${escapeHtml(metaParts.join(' · '))}</div>
                                 <div class="activity-tags">
                                     <span class="${pillClass}"${pillTitleAttr}>${escapeHtml(pillLabel)}</span>
                                     ${wasPickedUp ? '<span class="activity-pill pickup-yes">Picked up</span>' : ''}
                                 </div>
+                                ${detailsBlockHtml}
                             </div>
                             <div class="activity-item-actions">
                                 ${recLinkHtml}
