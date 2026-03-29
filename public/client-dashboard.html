@@ -1650,11 +1650,18 @@
         .activity-feed {
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 16px;
+        }
+
+        #activityFeedSubtitle {
+            max-width: 72ch;
+            line-height: 1.6;
+            font-size: 0.9375rem;
+            margin-bottom: 16px;
         }
 
         .activity-feed--scrollable {
-            max-height: min(52vh, 480px);
+            max-height: min(58vh, 560px);
             overflow-y: auto;
             overflow-x: hidden;
             padding-right: 4px;
@@ -1699,16 +1706,17 @@
         }
 
         .activity-feed-toolbar {
-            margin-bottom: 10px;
+            margin-bottom: 14px;
         }
 
         .activity-feed-toolbar .recording-outcome-chips {
             margin-top: 0;
+            gap: 8px;
         }
 
         .activity-item {
-            padding: 12px 14px;
-            border-radius: 12px;
+            padding: 18px 20px;
+            border-radius: 14px;
             border: 1px solid #ecefff;
             background: #fbfbff;
             box-sizing: border-box;
@@ -1733,19 +1741,20 @@
 
         .activity-item-row {
             display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 12px;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 14px;
         }
 
         .activity-item-main {
             flex: 1;
             min-width: 0;
+            width: 100%;
         }
 
         .activity-item-title {
-            font-size: 0.95rem;
-            line-height: 1.35;
+            font-size: 1.02rem;
+            line-height: 1.45;
         }
 
         .activity-item-title .activity-channel {
@@ -1758,21 +1767,22 @@
         .activity-tags {
             display: flex;
             flex-wrap: wrap;
-            gap: 6px;
-            margin-top: 6px;
+            gap: 8px;
+            margin-top: 10px;
             align-items: center;
         }
 
         .activity-pill {
             display: inline-flex;
             align-items: center;
-            padding: 2px 8px;
+            padding: 6px 12px;
             border-radius: 999px;
-            font-size: 0.75rem;
-            font-weight: 500;
+            font-size: 0.8125rem;
+            font-weight: 600;
             border: 1px solid rgba(148,163,184,0.5);
             background: #f4f4ff;
             color: #475569;
+            line-height: 1.25;
         }
 
         .activity-pill.outcome-booked {
@@ -1827,9 +1837,10 @@
         }
 
         .activity-meta {
-            margin-top: 4px;
+            margin-top: 8px;
             color: #8b8fb0;
-            font-size: 0.9rem;
+            font-size: 0.9375rem;
+            line-height: 1.5;
         }
 
         .workflow-list {
@@ -1991,10 +2002,28 @@
             flex-shrink: 0;
             display: flex;
             align-items: center;
-            justify-content: flex-end;
+            justify-content: flex-start;
             flex-wrap: wrap;
-            gap: 8px;
-            padding-top: 1px;
+            gap: 10px;
+            width: 100%;
+            padding-top: 14px;
+            margin-top: 2px;
+            border-top: 1px solid rgba(92, 106, 196, 0.1);
+            box-sizing: border-box;
+        }
+
+        .activity-item-actions .transcript-btn--compact,
+        .activity-item-actions .recording-open-link {
+            min-height: 40px;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .activity-item-actions .recording-open-link {
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
         }
 
         .transcript-modal {
@@ -3048,6 +3077,10 @@
             border-color: rgba(92,106,196,0.5);
         }
 
+        body[data-theme="dark"] .activity-item-actions {
+            border-top-color: rgba(124, 134, 220, 0.22);
+        }
+
         body[data-theme="dark"] .activity-feed--scrollable {
             scrollbar-color: rgba(165, 180, 252, 0.35) transparent;
         }
@@ -3533,7 +3566,7 @@
                 gap: 10px;
             }
             .activity-item {
-                padding: 12px;
+                padding: 16px 14px;
             }
             .lead-item {
                 padding: 10px;
