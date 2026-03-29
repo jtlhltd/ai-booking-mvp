@@ -8637,6 +8637,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
   const { clientKey } = req.params;
   /** Max rows returned for Recent Leads card (full list for typical tenants; keep in sync with client-dashboard RECENT_LEADS_DASHBOARD_CAP). */
   const RECENT_LEADS_DASHBOARD_CAP = 5000;
+  /** Live Activity Feed rows (keep in sync with client-dashboard ACTIVITY_FEED_DISPLAY_CAP). */
+  const RECENT_CALLS_FEED_CAP = 40;
   try {
     // Get client config first
     const client = await getFullClient(clientKey);
@@ -8798,7 +8800,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         LIMIT ${RECENT_LEADS_DASHBOARD_CAP}
       `, [clientKey]),
       query(`
-        SELECT c.call_id, c.id, c.lead_phone, c.status, c.outcome, c.created_at, c.duration,
+        SELECT c.call_id, c.id, c.lead_phone, c.status, c.outcome, c.created_at, c.duration, c.recording_url,
                lm.name, lm.service
         FROM calls c
         LEFT JOIN LATERAL (
@@ -8818,7 +8820,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         ) lm ON true
         WHERE c.client_key = $1
         ORDER BY c.created_at DESC
-        LIMIT 5
+        LIMIT ${RECENT_CALLS_FEED_CAP}
       `, [clientKey]).then(result => {
         console.error('[DEMO DASHBOARD] Recent calls query result for clientKey:', clientKey);
         console.error('[DEMO DASHBOARD] Row count:', result.rows?.length || 0);
@@ -9144,6 +9146,9 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         statusClass: mapStatusClass(displayStatus),
         timeAgo: formatTimeAgoLabel(row.created_at),
         createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
+        recordingUrl: row.recording_url && String(row.recording_url).trim()
+          ? String(row.recording_url).trim()
+          : null,
         outcome: isStaleInitiated ? 'unknown' : (effectiveOutcome || null),
         outcomeLabel: displayOutcomeLabel || null,
         duration: effectiveDuration != null ? effectiveDuration : null,
@@ -9361,7 +9366,7 @@ app.get('/api/events/:clientKey', async (req, res) => {
     if (isClosed) return;
     try {
       const recentCallRows = await query(`
-        SELECT c.lead_phone, c.status, c.outcome, c.created_at,
+        SELECT c.call_id, c.id, c.lead_phone, c.status, c.outcome, c.created_at, c.duration, c.recording_url,
                l.name, l.service
         FROM calls c
         LEFT JOIN leads l ON l.client_key = c.client_key AND l.phone = c.lead_phone
@@ -9373,14 +9378,30 @@ app.get('/api/events/:clientKey', async (req, res) => {
 
       for (const row of recentCallRows.rows || []) {
         lastSent = row.created_at;
+        const friendly = outcomeToFriendlyLabel(row.outcome);
+        const durationLabel = formatCallDuration(row.duration);
+        const summary = row.outcome
+          ? (durationLabel ? `${friendly || row.outcome} • ${durationLabel}` : (friendly || `Outcome: ${row.outcome}`))
+          : (durationLabel ? `Call ended • ${durationLabel}` : 'Call completed');
         const payload = {
+          id: row.call_id || row.id,
+          callId: row.call_id,
+          dbId: row.id,
           name: row.name || row.lead_phone,
           service: row.service || 'Lead Follow-Up',
           channel: activityChannel,
-          summary: row.outcome ? `Outcome: ${row.outcome}` : 'Call completed',
+          summary,
           status: mapCallStatus(row.status),
           statusClass: mapStatusClass(row.status),
-          timestamp: row.created_at
+          timestamp: row.created_at,
+          createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
+          outcome: row.outcome || null,
+          outcomeLabel: friendly || null,
+          duration: row.duration != null ? row.duration : null,
+          durationLabel: durationLabel || null,
+          recordingUrl: row.recording_url && String(row.recording_url).trim()
+            ? String(row.recording_url).trim()
+            : null
         };
         res.write(`data: ${JSON.stringify(payload)}\n\n`);
       }

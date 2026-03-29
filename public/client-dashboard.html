@@ -1676,6 +1676,36 @@
             background: transparent;
         }
 
+        .activity-feed-heading {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px 12px;
+            margin: 0 0 8px;
+            font-size: inherit;
+        }
+
+        .activity-feed-live-badge {
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: rgba(34, 197, 94, 0.14);
+            color: #15803d;
+            border: 1px solid rgba(34, 197, 94, 0.38);
+            line-height: 1.2;
+        }
+
+        .activity-feed-toolbar {
+            margin-bottom: 10px;
+        }
+
+        .activity-feed-toolbar .recording-outcome-chips {
+            margin-top: 0;
+        }
+
         .activity-item {
             padding: 12px 14px;
             border-radius: 12px;
@@ -1961,6 +1991,9 @@
             flex-shrink: 0;
             display: flex;
             align-items: center;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+            gap: 8px;
             padding-top: 1px;
         }
 
@@ -3039,6 +3072,12 @@
             color: #ffffff;
         }
 
+        body[data-theme="dark"] .activity-feed-live-badge {
+            background: rgba(34, 197, 94, 0.18);
+            color: #86efac;
+            border-color: rgba(34, 197, 94, 0.45);
+        }
+
         body[data-theme="dark"] .activity-meta {
             color: #d0d4e8;
         }
@@ -3857,8 +3896,21 @@
         <!-- LIVE ACTIVITY SECTION -->
         <section class="dashboard-section">
             <article class="card card-fullwidth">
-                <h3>🗓️ Live Activity Feed</h3>
+                <h3 class="activity-feed-heading">
+                    <span>🗓️ Live Activity Feed</span>
+                    <span id="activityFeedLiveBadge" class="activity-feed-live-badge" hidden>Live</span>
+                </h3>
                 <p class="card-subtitle" id="activityFeedSubtitle">Latest outbound calls, newest first. Relative times — hover a row for the exact start time. This list is not limited to the last 24 hours (see Today’s Activity for rolling windows).</p>
+                <div id="activityFeedToolbar" class="dashboard-list-toolbar activity-feed-toolbar">
+                    <div class="recording-outcome-chips" id="activityFeedOutcomeChips" role="group" aria-label="Filter activity by outcome">
+                        <button type="button" class="recording-chip recording-chip--active" data-act-outcome="all">All</button>
+                        <button type="button" class="recording-chip" data-act-outcome="booked">Booked</button>
+                        <button type="button" class="recording-chip" data-act-outcome="voicemail">Voicemail</button>
+                        <button type="button" class="recording-chip" data-act-outcome="no-answer">No answer</button>
+                        <button type="button" class="recording-chip" data-act-outcome="completed">Completed</button>
+                        <button type="button" class="recording-chip" data-act-outcome="failed">Failed / busy</button>
+                    </div>
+                </div>
                 <div id="recent-calls" class="activity-feed activity-feed--scrollable"></div>
             </article>
         </section>
@@ -3935,6 +3987,11 @@
         const RECENT_LEADS_DASHBOARD_CAP = 5000;
         /** Must match server dashboard rolling window / touchpoint bucketing. */
         const DASHBOARD_ACTIVITY_TZ = 'Europe/London';
+        /** Sync with server.js RECENT_CALLS_FEED_CAP (recent calls query LIMIT). */
+        const ACTIVITY_FEED_DISPLAY_CAP = 40;
+        let activityFeedOutcomeFilter = 'all';
+        let activityFeedLastPushAt = 0;
+        let activityFeedLiveBadgeTimer = null;
         const DEMO_URL_ALIASES = new Set(['demo', 'demo_client', 'demo-client', 'sandbox']);
         function isDemoClientKey(key) {
             if (key == null || typeof key !== 'string') return false;
@@ -4513,7 +4570,9 @@ ${actionsRow}
                     lowPriorityLeads: metrics.lowPriorityLeads ?? livePayload.lowPriorityLeads ?? 0,
                     metrics: livePayload.metrics || metrics,
                     recentLeads: livePayload.leads || [],
-                    recentCalls: recentCalls,
+                    recentCalls: Array.isArray(recentCalls)
+                        ? recentCalls.slice(0, ACTIVITY_FEED_DISPLAY_CAP)
+                        : recentCalls,
                     appointments: livePayload.appointments || [],
                     serviceMix: livePayload.serviceMix || [],
                     touchpoints: livePayload.touchpoints || { labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], data: [0, 0, 0, 0, 0, 0, 0] },
@@ -4579,7 +4638,12 @@ ${actionsRow}
                 metrics: livePayload.metrics || metrics || base.metrics,
                 recentLeads: mergedLeads.slice(0, RECENT_LEADS_DASHBOARD_CAP),
                 serviceMix: Array.isArray(livePayload.serviceMix) && livePayload.serviceMix.length ? livePayload.serviceMix : base.serviceMix,
-                recentCalls: Array.isArray(livePayload.recentCalls) && livePayload.recentCalls.length ? livePayload.recentCalls : base.recentCalls,
+                recentCalls: (() => {
+                    const rawRc = Array.isArray(livePayload.recentCalls) && livePayload.recentCalls.length
+                        ? livePayload.recentCalls
+                        : (Array.isArray(base.recentCalls) ? base.recentCalls : []);
+                    return rawRc.slice(0, ACTIVITY_FEED_DISPLAY_CAP);
+                })(),
                 touchpoints: livePayload.touchpoints && Array.isArray(livePayload.touchpoints.data)
                     ? livePayload.touchpoints
                     : base.touchpoints,
@@ -4833,7 +4897,7 @@ ${actionsRow}
             const activityFeedSubtitle = document.getElementById('activityFeedSubtitle');
             if (activityFeedSubtitle) {
                 const tzLabel = DASHBOARD_ACTIVITY_TZ.replace(/_/g, ' ');
-                activityFeedSubtitle.textContent = `Latest calls for ${businessName}, newest first. Relative times (${tzLabel}); hover a row for exact start. Not limited to 24 hours — use Today’s Activity for rolling outreach metrics. Retries can show as “3× attempts” on one line.`;
+                activityFeedSubtitle.textContent = `Latest calls for ${businessName}, newest first (up to ${ACTIVITY_FEED_DISPLAY_CAP} loaded). Relative times (${tzLabel}); hover a row for exact start. Not limited to 24 hours — use Today’s Activity for rolling outreach metrics. Filter chips narrow by outcome; “Live” appears for ~1 minute after a new call arrives via live sync.`;
             }
             
             // Update more card subtitles
@@ -6043,34 +6107,116 @@ ${actionsRow}
             return out;
         }
 
-        function renderCalls(calls = []) {
+        function activityCallMatchesOutcomeChip(call, chip) {
+            if (!chip || chip === 'all') return true;
+            const parts = [
+                call.outcome,
+                call.outcomeLabel,
+                call.summary,
+                call.status,
+                call.rawStatus
+            ]
+                .filter((v) => v != null && String(v).trim() !== '')
+                .map((v) => String(v).toLowerCase())
+                .join(' ');
+            if (chip === 'booked') return /\bbooked\b/.test(parts);
+            if (chip === 'voicemail') return parts.includes('voicemail');
+            if (chip === 'no-answer') return parts.includes('no-answer') || parts.includes('no answer');
+            if (chip === 'completed') {
+                return (
+                    (parts.includes('completed') || parts.includes('picked up')) &&
+                    !parts.includes('no-answer') &&
+                    !parts.includes('no answer') &&
+                    !parts.includes('failed') &&
+                    !parts.includes('booked')
+                );
+            }
+            if (chip === 'failed') {
+                return (
+                    parts.includes('failed') ||
+                    parts.includes('rejected') ||
+                    parts.includes('declined') ||
+                    parts.includes('busy')
+                );
+            }
+            return true;
+        }
+
+        function buildActivityRecordingHref(call) {
+            if (!call || currentClient === DEMO_CLIENT_KEY || isDemoClientKey(currentClient)) return '';
+            const raw = (call.recordingUrl && String(call.recordingUrl).trim()) || '';
+            if (!raw) return '';
+            if (/^https?:\/\//i.test(raw)) return raw;
+            const dbId = call.dbId != null ? call.dbId : null;
+            if (dbId == null) return '';
+            return `${BASE_URL}/api/call-recordings/${encodeURIComponent(currentClient)}/stream/${encodeURIComponent(String(dbId))}`;
+        }
+
+        function updateActivityFeedLiveBadge() {
+            const el = document.getElementById('activityFeedLiveBadge');
+            if (!el) return;
+            if (currentClient === DEMO_CLIENT_KEY || isDemoClientKey(currentClient) || !liveEventSource) {
+                el.hidden = true;
+                return;
+            }
+            const age = Date.now() - activityFeedLastPushAt;
+            el.hidden = age >= 60000;
+        }
+
+        function initActivityFeedChips() {
+            const host = document.getElementById('activityFeedOutcomeChips');
+            if (!host || host.dataset.bound === '1') return;
+            host.dataset.bound = '1';
+            host.addEventListener('click', (e) => {
+                const btn = e.target.closest('[data-act-outcome]');
+                if (!btn) return;
+                activityFeedOutcomeFilter = btn.getAttribute('data-act-outcome') || 'all';
+                host.querySelectorAll('[data-act-outcome]').forEach((b) => {
+                    b.classList.toggle('recording-chip--active', b === btn);
+                });
+                renderCalls();
+            });
+        }
+
+        function syncActivityFeedChips() {
+            const host = document.getElementById('activityFeedOutcomeChips');
+            if (!host) return;
+            host.querySelectorAll('[data-act-outcome]').forEach((btn) => {
+                const k = btn.getAttribute('data-act-outcome') || 'all';
+                btn.classList.toggle('recording-chip--active', k === activityFeedOutcomeFilter);
+            });
+        }
+
+        function renderCalls(callsOverride) {
             const container = document.getElementById('recent-calls');
             if (!container) {
                 console.warn('recent-calls container not found');
                 return;
             }
-            
+
+            const explicitList = arguments.length > 0;
+            let callsToShow = explicitList
+                ? (Array.isArray(callsOverride) ? callsOverride : [])
+                : (dashboardData.recentCalls || []);
+
             console.log('[RENDER CALLS] Input:', {
-                callsType: typeof calls,
-                isArray: Array.isArray(calls),
-                length: Array.isArray(calls) ? calls.length : 'not array',
-                calls: calls
+                explicitList,
+                length: callsToShow.length,
+                filter: activityFeedOutcomeFilter
             });
-            
-            // Only use demo calls for demo client
-            let callsToShow = calls && Array.isArray(calls) && calls.length > 0 ? calls : [];
-            
-            // Fallback to demo calls ONLY if it's the demo client
+
             if (callsToShow.length === 0 && currentClient === DEMO_CLIENT_KEY) {
                 callsToShow = [
-                    { id: 'demo-1', name: 'Sarah Patel', summary: 'Booked Tuesday 2:30pm via AI call', channel: 'Phone', timeAgo: '2 min ago' },
-                    { id: 'demo-2', name: 'Marcus Flynn', summary: 'Requested reschedule • SMS follow-up sent', channel: 'SMS → Call', timeAgo: '9 min ago' },
-                    { id: 'demo-3', name: 'Laura Chen', summary: 'Synced with Google Calendar • reminder scheduled', channel: 'Webhook sync', timeAgo: '25 min ago' },
-                    { id: 'demo-4', name: 'Rick Alvarez', summary: 'Moved to Thursday • calendar updated', channel: 'Phone', timeAgo: '42 min ago' }
+                    { id: 'demo-1', name: 'Sarah Patel', summary: 'Booked Tuesday 2:30pm via AI call', channel: 'Phone', timeAgo: '2 min ago', outcome: 'booked', outcomeLabel: 'Booked' },
+                    { id: 'demo-2', name: 'Marcus Flynn', summary: 'Requested reschedule • SMS follow-up sent', channel: 'SMS → Call', timeAgo: '9 min ago', outcome: 'completed', outcomeLabel: 'Picked up' },
+                    { id: 'demo-3', name: 'Laura Chen', summary: 'Synced with Google Calendar • reminder scheduled', channel: 'Webhook sync', timeAgo: '25 min ago', outcome: 'completed', outcomeLabel: 'Completed' },
+                    { id: 'demo-4', name: 'Rick Alvarez', summary: 'Moved to Thursday • calendar updated', channel: 'Phone', timeAgo: '42 min ago', outcome: 'booked', outcomeLabel: 'Booked' },
+                    { id: 'demo-5', name: 'Alex Rivera', summary: 'Left voicemail — callback scheduled', channel: 'Phone', timeAgo: '1h ago', outcome: 'voicemail', outcomeLabel: 'Voicemail' },
+                    { id: 'demo-6', name: 'Jordan Lee', summary: 'No answer on first attempt', channel: 'Phone', timeAgo: '2h ago', outcome: 'no-answer', outcomeLabel: 'No answer' }
                 ];
             }
-            
-            if (!callsToShow || !callsToShow.length) {
+
+            if (!callsToShow.length) {
                 container.innerHTML = `
                     <div class="empty-state">
                         <span class="empty-state-icon">📞</span>
@@ -6083,14 +6229,29 @@ ${actionsRow}
                     </div>
                     </div>
                 `;
+                syncActivityFeedChips();
                 return;
             }
 
+            let working = callsToShow.filter((c) => activityCallMatchesOutcomeChip(c, activityFeedOutcomeFilter));
             if (currentClient !== DEMO_CLIENT_KEY) {
-                callsToShow = consolidateActivityCalls(callsToShow);
+                working = consolidateActivityCalls(working);
             }
 
-            container.innerHTML = callsToShow.map((call, index) => {
+            syncActivityFeedChips();
+
+            if (!working.length) {
+                container.innerHTML = `
+                    <div class="empty-state" style="padding: 20px 12px;">
+                        <span class="empty-state-icon">🔍</span>
+                        <div class="empty-state-title">No matching calls</div>
+                        <div class="empty-state-message">Try another outcome filter, or choose All.</div>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = working.map((call, index) => {
                 const timeAgo = call.timeAgo || formatTimeAgo(call.timestamp || call.created_at);
                 const transcriptId = String(call.callId || call.id || call.dbId || call.timestamp || index);
                 const transcriptIdJs = JSON.stringify(transcriptId);
@@ -6159,6 +6320,11 @@ ${actionsRow}
                     ? ` title="${escapeHtml(issueHint)}"`
                     : '';
 
+                const recHref = buildActivityRecordingHref(call);
+                const recLinkHtml = recHref
+                    ? `<a class="recording-open-link" href="${escapeHtml(recHref)}" target="_blank" rel="noopener noreferrer" aria-label="Open call recording">Recording</a>`
+                    : '';
+
                 return `
                     <div class="activity-item ${edgeClass}"${rowTitleAttr}>
                         <div class="activity-item-row">
@@ -6171,6 +6337,7 @@ ${actionsRow}
                                 </div>
                             </div>
                             <div class="activity-item-actions">
+                                ${recLinkHtml}
                                 <button type="button" class="transcript-btn transcript-btn--compact" onclick="viewTranscript(${transcriptIdJs}, ${transcriptNameJs})" aria-label="View call transcript">Transcript</button>
                             </div>
                         </div>
@@ -7295,6 +7462,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 return;
             }
             if (liveEventSource) liveEventSource.close();
+            if (activityFeedLiveBadgeTimer) {
+                clearInterval(activityFeedLiveBadgeTimer);
+                activityFeedLiveBadgeTimer = null;
+            }
+            activityFeedLastPushAt = 0;
+            updateActivityFeedLiveBadge();
             liveEventSource = new EventSource(`${BASE_URL}/api/events/${clientKey}`);
             liveEventSource.onmessage = (event) => {
                 if (!event.data) return;
@@ -7309,25 +7482,41 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 stopLiveEvents();
                 setTimeout(() => startLiveEvents(clientKey), 10000);
             };
+            activityFeedLiveBadgeTimer = setInterval(updateActivityFeedLiveBadge, 4000);
         }
 
         function stopLiveEvents() {
+            if (activityFeedLiveBadgeTimer) {
+                clearInterval(activityFeedLiveBadgeTimer);
+                activityFeedLiveBadgeTimer = null;
+            }
             if (liveEventSource) {
                 liveEventSource.close();
                 liveEventSource = null;
             }
+            updateActivityFeedLiveBadge();
         }
 
         function handleLiveEvent(call) {
             if (!call) return;
-            call.timeAgo = formatTimeAgo(call.timestamp || call.created_at);
-            dashboardData.recentCalls = [call, ...(dashboardData.recentCalls || [])].slice(0, 5);
-            renderCalls(dashboardData.recentCalls);
+            call.timeAgo = call.timeAgo || formatTimeAgo(call.timestamp || call.created_at);
+            activityFeedLastPushAt = Date.now();
+            updateActivityFeedLiveBadge();
+            const cap = ACTIVITY_FEED_DISPLAY_CAP;
+            const list = [...(dashboardData.recentCalls || [])];
+            const nid = String(call.callId || call.id || '').trim();
+            const next = nid
+                ? [call, ...list.filter((c) => String(c.callId || c.id || '').trim() !== nid)]
+                : [call, ...list];
+            dashboardData.recentCalls = next.slice(0, cap);
+            renderCalls();
             showToast('New Call Logged', `${call.name || 'Prospect'}: ${call.summary || 'Call completed'}`, 'info');
         }
 
         async function initDashboard() {
             currentClient = getClientFromURL();
+            activityFeedOutcomeFilter = 'all';
+            initActivityFeedChips();
             applyRoiPanelVisibility(currentClient);
             applyTomOutreachDashboardMode(currentClient);
 
