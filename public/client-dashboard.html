@@ -1867,6 +1867,53 @@
             line-height: 1.45;
         }
 
+        .activity-item-details {
+            margin-top: 10px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            background: rgba(92, 106, 196, 0.06);
+            border: 1px solid rgba(92, 106, 196, 0.1);
+        }
+
+        .activity-item-details-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px 18px;
+            align-items: start;
+        }
+
+        .activity-item-datum--wide {
+            grid-column: 1 / -1;
+        }
+
+        .activity-datum-label {
+            display: block;
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.07em;
+            color: #8b90b0;
+            margin-bottom: 3px;
+        }
+
+        .activity-datum-value {
+            display: block;
+            font-size: 0.84rem;
+            font-weight: 500;
+            color: #4b4f6a;
+            line-height: 1.45;
+        }
+
+        .activity-item-datum--wide .activity-datum-value {
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .activity-datum-mono {
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 0.02em;
+        }
+
         .workflow-list {
             list-style: none;
             display: flex;
@@ -2058,6 +2105,10 @@
         }
 
         @media (max-width: 640px) {
+            .activity-item-details-grid {
+                grid-template-columns: 1fr;
+            }
+
             .activity-item-row {
                 flex-direction: column;
             }
@@ -3160,6 +3211,19 @@
 
         body[data-theme="dark"] .activity-item strong {
             color: #ffffff;
+        }
+
+        body[data-theme="dark"] .activity-item-details {
+            background: rgba(92, 106, 196, 0.12);
+            border-color: rgba(124, 134, 220, 0.22);
+        }
+
+        body[data-theme="dark"] .activity-datum-label {
+            color: #a8adc8;
+        }
+
+        body[data-theme="dark"] .activity-datum-value {
+            color: #d8dcfa;
         }
 
         body[data-theme="dark"] .activity-feed-live-badge {
@@ -4499,10 +4563,10 @@ ${actionsRow}
                     notes: `${service} bookings`
                 })),
                 recentCalls: [
-                    { id: 'demo-1', name: 'Sarah Patel', summary: `Booked ${primaryService} via AI call`, channel: 'Phone', timeAgo: '2 min ago' },
-                    { id: 'demo-2', name: 'Marcus Flynn', summary: `Requested reschedule • SMS follow-up sent`, channel: 'SMS → Call', timeAgo: '9 min ago' },
-                    { id: 'demo-3', name: 'Laura Chen', summary: `Synced with calendar • reminder scheduled`, channel: 'Webhook sync', timeAgo: '25 min ago' },
-                    { id: 'demo-4', name: 'Rick Alvarez', summary: `Moved appointment • calendar updated`, channel: 'Phone', timeAgo: '42 min ago' }
+                    { id: 'demo-1', callId: 'pdemo-1', dbId: 9101, name: 'Sarah Patel', leadPhone: '+447700900111', service: primaryService, summary: `Booked ${primaryService} via AI call — slot confirmed and invite sent.`, channel: 'Phone', timeAgo: '2 min ago', outcome: 'booked', outcomeLabel: 'Booked', status: 'Ended', rawStatus: 'ended', durationLabel: '3m 12s' },
+                    { id: 'demo-2', callId: 'pdemo-2', dbId: 9102, name: 'Marcus Flynn', leadPhone: '+447700900222', service: primaryService, summary: 'Requested reschedule • SMS follow-up sent with afternoon options.', channel: 'SMS → Call', timeAgo: '9 min ago', outcome: 'completed', outcomeLabel: 'Picked up', status: 'Ended', rawStatus: 'ended', durationLabel: '4m 05s' },
+                    { id: 'demo-3', callId: 'pdemo-3', dbId: 9103, name: 'Laura Chen', leadPhone: '+447700900333', service: primaryService, summary: 'Synced with calendar • reminder scheduled for 24h before.', channel: 'Webhook sync', timeAgo: '25 min ago', outcome: 'completed', outcomeLabel: 'Completed', status: 'Ended', rawStatus: 'ended', durationLabel: '2m 40s' },
+                    { id: 'demo-4', callId: 'pdemo-4', dbId: 9104, name: 'Rick Alvarez', leadPhone: '+447700900444', service: primaryService, summary: 'Moved appointment • calendar updated for all attendees.', channel: 'Phone', timeAgo: '42 min ago', outcome: 'booked', outcomeLabel: 'Booked', status: 'Ended', rawStatus: 'ended', durationLabel: '5m 01s' }
                 ],
                 appointments: [
                     { id: 101, name: 'Isla Brown', service: primaryService, start: new Date(Date.now() + 60 * 60 * 1000).toISOString(), status: 'booked' },
@@ -4546,10 +4610,10 @@ ${actionsRow}
                 { name: 'Calendar Integration', percent: 20, notes: 'Multi-calendar sync' }
             ],
             recentCalls: [
-                { id: 'demo-1', name: 'Sarah Patel', summary: 'Booked Tuesday 2:30pm via AI call', channel: 'Phone', timeAgo: '2 min ago' },
-                { id: 'demo-2', name: 'Marcus Flynn', summary: 'Requested reschedule • SMS follow-up sent', channel: 'SMS → Call', timeAgo: '9 min ago' },
-                { id: 'demo-3', name: 'Laura Chen', summary: 'Synced with Google Calendar • reminder scheduled', channel: 'Webhook sync', timeAgo: '25 min ago' },
-                { id: 'demo-4', name: 'Rick Alvarez', summary: 'Moved to Thursday • calendar updated', channel: 'Phone', timeAgo: '42 min ago' }
+                { id: 'demo-1', callId: 'static-demo-1', dbId: 9201, name: 'Sarah Patel', leadPhone: '+447700900111', service: 'AI Strategy Session', summary: 'Booked Tuesday 2:30pm via AI call — confirmation SMS delivered.', channel: 'Phone', timeAgo: '2 min ago', outcome: 'booked', outcomeLabel: 'Booked', status: 'Ended', rawStatus: 'ended', durationLabel: '3m 12s' },
+                { id: 'demo-2', callId: 'static-demo-2', dbId: 9202, name: 'Marcus Flynn', leadPhone: '+447700900222', service: 'Follow-up Call', summary: 'Requested reschedule • SMS follow-up sent with three time windows.', channel: 'SMS → Call', timeAgo: '9 min ago', outcome: 'completed', outcomeLabel: 'Picked up', status: 'Ended', rawStatus: 'ended', durationLabel: '4m 05s' },
+                { id: 'demo-3', callId: 'static-demo-3', dbId: 9203, name: 'Laura Chen', leadPhone: '+447700900333', service: 'Calendar Integration', summary: 'Synced with Google Calendar • reminder scheduled for prospect.', channel: 'Webhook sync', timeAgo: '25 min ago', outcome: 'completed', outcomeLabel: 'Completed', status: 'Ended', rawStatus: 'ended', durationLabel: '2m 40s' },
+                { id: 'demo-4', callId: 'static-demo-4', dbId: 9204, name: 'Rick Alvarez', leadPhone: '+447700900444', service: 'AI Concierge Setup', summary: 'Moved to Thursday • calendar updated; team notified in Slack.', channel: 'Phone', timeAgo: '42 min ago', outcome: 'booked', outcomeLabel: 'Booked', status: 'Ended', rawStatus: 'ended', durationLabel: '5m 01s' }
             ],
             appointments: [
                 { id: 101, name: 'Isla Brown', service: 'AI Strategy Session', start: new Date(Date.now() + 60 * 60 * 1000).toISOString(), status: 'booked' },
@@ -6236,6 +6300,69 @@ ${actionsRow}
             return true;
         }
 
+        function formatActivityMaskedPhone(phone) {
+            const raw = String(phone || '').trim();
+            if (!raw) return '';
+            const digits = raw.replace(/\D/g, '');
+            if (digits.length >= 4) return `···${digits.slice(-4)}`;
+            return digits.length > 0 ? '···' : '';
+        }
+
+        function formatActivityPipeStatusLabel(raw) {
+            const s = String(raw || '').trim();
+            if (!s) return '';
+            return s
+                .replace(/[-_]+/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .split(' ')
+                .filter(Boolean)
+                .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+                .join(' ');
+        }
+
+        function activityCallRefLabel(call) {
+            if (!call) return '';
+            const cid = call.callId != null ? String(call.callId).trim() : '';
+            if (cid.length > 10) return `${cid.slice(0, 8)}…`;
+            if (cid) return cid;
+            if (call.dbId != null && call.dbId !== '') return `#${call.dbId}`;
+            return '';
+        }
+
+        function buildActivityDetailsBlockHtml(call) {
+            if (!call) return '';
+            const serviceStr = (call.service && String(call.service).trim()) || '';
+            let phoneRaw = (call.leadPhone && String(call.leadPhone).trim()) || '';
+            if (!phoneRaw && call.name) {
+                const nd = String(call.name).replace(/\D/g, '');
+                if (nd.length >= 10) phoneRaw = String(call.name).trim();
+            }
+            const masked = formatActivityMaskedPhone(phoneRaw);
+            const summaryStr = (call.summary && String(call.summary).trim()) || '';
+            const rawStat = formatActivityPipeStatusLabel(call.rawStatus);
+            const mappedStat = formatActivityPipeStatusLabel(call.status);
+            const statusDisplay = rawStat || mappedStat;
+            const refLbl = activityCallRefLabel(call);
+
+            const cells = [];
+            const pushDatum = (label, innerHtml, wide) => {
+                cells.push(
+                    `<div class="activity-item-datum${wide ? ' activity-item-datum--wide' : ''}">` +
+                    `<span class="activity-datum-label">${escapeHtml(label)}</span>` +
+                    `<span class="activity-datum-value">${innerHtml}</span></div>`
+                );
+            };
+            if (serviceStr) pushDatum('Service', escapeHtml(serviceStr), false);
+            if (masked) pushDatum('Number', `<span class="activity-datum-mono">${escapeHtml(masked)}</span>`, false);
+            if (statusDisplay) pushDatum('Call status', escapeHtml(statusDisplay), false);
+            if (refLbl) pushDatum('Reference', `<span class="activity-datum-mono">${escapeHtml(refLbl)}</span>`, false);
+            if (summaryStr) pushDatum('Summary', escapeHtml(summaryStr), true);
+
+            if (!cells.length) return '';
+            return `<div class="activity-item-details"><div class="activity-item-details-grid">${cells.join('')}</div></div>`;
+        }
+
         function buildActivityRecordingHref(call) {
             if (!call || currentClient === DEMO_CLIENT_KEY || isDemoClientKey(currentClient)) return '';
             const raw = (call.recordingUrl && String(call.recordingUrl).trim()) || '';
@@ -6301,12 +6428,12 @@ ${actionsRow}
 
             if (callsToShow.length === 0 && currentClient === DEMO_CLIENT_KEY) {
                 callsToShow = [
-                    { id: 'demo-1', name: 'Sarah Patel', summary: 'Booked Tuesday 2:30pm via AI call', channel: 'Phone', timeAgo: '2 min ago', outcome: 'booked', outcomeLabel: 'Booked' },
-                    { id: 'demo-2', name: 'Marcus Flynn', summary: 'Requested reschedule • SMS follow-up sent', channel: 'SMS → Call', timeAgo: '9 min ago', outcome: 'completed', outcomeLabel: 'Picked up' },
-                    { id: 'demo-3', name: 'Laura Chen', summary: 'Synced with Google Calendar • reminder scheduled', channel: 'Webhook sync', timeAgo: '25 min ago', outcome: 'completed', outcomeLabel: 'Completed' },
-                    { id: 'demo-4', name: 'Rick Alvarez', summary: 'Moved to Thursday • calendar updated', channel: 'Phone', timeAgo: '42 min ago', outcome: 'booked', outcomeLabel: 'Booked' },
-                    { id: 'demo-5', name: 'Alex Rivera', summary: 'Left voicemail — callback scheduled', channel: 'Phone', timeAgo: '1h ago', outcome: 'voicemail', outcomeLabel: 'Voicemail' },
-                    { id: 'demo-6', name: 'Jordan Lee', summary: 'No answer on first attempt', channel: 'Phone', timeAgo: '2h ago', outcome: 'no-answer', outcomeLabel: 'No answer' }
+                    { id: 'demo-1', callId: 'demo-call-1', dbId: 9001, name: 'Sarah Patel', leadPhone: '+447700900111', service: 'Lead Follow-Up', summary: 'Booked Tuesday 2:30pm — calendar invite sent to prospect.', channel: 'Phone', timeAgo: '2 min ago', outcome: 'booked', outcomeLabel: 'Booked', status: 'Ended', rawStatus: 'ended', durationLabel: '3m 12s' },
+                    { id: 'demo-2', callId: 'demo-call-2', dbId: 9002, name: 'Marcus Flynn', leadPhone: '+447700900222', service: 'Appointment Booking', summary: 'Requested reschedule; SMS follow-up with three slot options.', channel: 'SMS → Call', timeAgo: '9 min ago', outcome: 'completed', outcomeLabel: 'Picked up', status: 'Ended', rawStatus: 'ended', durationLabel: '4m 05s' },
+                    { id: 'demo-3', callId: 'demo-call-3', dbId: 9003, name: 'Laura Chen', leadPhone: '+447700900333', service: 'Calendar Integration', summary: 'Synced booking with Google Calendar; reminder email queued.', channel: 'Webhook sync', timeAgo: '25 min ago', outcome: 'completed', outcomeLabel: 'Completed', status: 'Ended', rawStatus: 'ended', durationLabel: '2m 40s' },
+                    { id: 'demo-4', callId: 'demo-call-4', dbId: 9004, name: 'Rick Alvarez', leadPhone: '+447700900444', service: 'Lead Follow-Up', summary: 'Moved appointment to Thursday; internal notes updated.', channel: 'Phone', timeAgo: '42 min ago', outcome: 'booked', outcomeLabel: 'Booked', status: 'Ended', rawStatus: 'ended', durationLabel: '5m 01s' },
+                    { id: 'demo-5', callId: 'demo-call-5', dbId: 9005, name: 'Alex Rivera', leadPhone: '+447700900555', service: 'Lead Follow-Up', summary: 'Left voicemail — callback task created for next business day.', channel: 'Phone', timeAgo: '1h ago', outcome: 'voicemail', outcomeLabel: 'Voicemail', status: 'Ended', rawStatus: 'ended', durationLabel: '0m 48s' },
+                    { id: 'demo-6', callId: 'demo-call-6', dbId: 9006, name: 'Jordan Lee', leadPhone: '+447700900666', service: 'Lead Follow-Up', summary: 'No answer on first attempt; queued for retry per your cadence.', channel: 'Phone', timeAgo: '2h ago', outcome: 'no-answer', outcomeLabel: 'No answer', status: 'Ended', rawStatus: 'ended', durationLabel: '—' }
                 ];
             }
 
@@ -6418,12 +6545,14 @@ ${actionsRow}
                 const recLinkHtml = recHref
                     ? `<a class="recording-open-link" href="${escapeHtml(recHref)}" target="_blank" rel="noopener noreferrer" aria-label="Open call recording">Recording</a>`
                     : '';
+                const detailsBlockHtml = buildActivityDetailsBlockHtml(call);
 
                 return `
                     <div class="activity-item ${edgeClass}"${rowTitleAttr}>
                         <div class="activity-item-row">
                             <div class="activity-item-main">
                                 <div class="activity-item-title"><strong>${escapeHtml(call.name || 'Prospect')}</strong><span class="activity-channel"> · ${escapeHtml(call.channel || 'AI call')}</span></div>
+                                ${detailsBlockHtml}
                                 <div class="activity-meta">${escapeHtml(metaParts.join(' · '))}</div>
                                 <div class="activity-tags">
                                     <span class="${pillClass}"${pillTitleAttr}>${escapeHtml(pillLabel)}</span>
