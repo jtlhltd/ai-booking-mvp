@@ -635,6 +635,10 @@
         .activity-split-heading {
             width: 100%;
             box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 6px;
             font-size: var(--fs-caption);
             font-weight: 700;
             text-transform: uppercase;
@@ -664,6 +668,50 @@
             background: rgba(92, 106, 196, 0.05);
             border-radius: 10px;
             border: 1px dashed rgba(92, 106, 196, 0.22);
+        }
+
+        .activity-as-of {
+            font-size: var(--fs-small);
+            font-weight: 500;
+            color: var(--text-tertiary);
+            margin: -4px 0 12px;
+            line-height: 1.45;
+        }
+
+        .activity-quiet-banner {
+            font-size: var(--fs-small);
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin: 0 0 14px;
+            padding: 10px 12px;
+            background: rgba(92, 106, 196, 0.06);
+            border-radius: 10px;
+            border: 1px solid rgba(92, 106, 196, 0.16);
+            line-height: 1.5;
+        }
+
+        .activity-inline-help {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.15em;
+            height: 1.15em;
+            margin-left: 6px;
+            padding: 0;
+            border: 1px solid rgba(92, 106, 196, 0.35);
+            border-radius: 50%;
+            background: rgba(92, 106, 196, 0.08);
+            color: var(--text-secondary);
+            font-size: 0.72em;
+            font-weight: 700;
+            line-height: 1;
+            cursor: help;
+            vertical-align: 0.15em;
+        }
+
+        .activity-inline-help:hover {
+            background: rgba(92, 106, 196, 0.14);
+            color: var(--primary);
         }
 
         .activity-metric-group {
@@ -2831,6 +2879,23 @@
             color: #a5b4fc;
         }
 
+        body[data-theme="dark"] .activity-quiet-banner {
+            background: rgba(92, 106, 196, 0.12);
+            border-color: rgba(124, 134, 220, 0.35);
+            color: #d0d4e8;
+        }
+
+        body[data-theme="dark"] .activity-inline-help {
+            border-color: rgba(124, 134, 220, 0.45);
+            background: rgba(92, 106, 196, 0.18);
+            color: #c7d2fe;
+        }
+
+        body[data-theme="dark"] .activity-inline-help:hover {
+            background: rgba(92, 106, 196, 0.28);
+            color: #e0e7ff;
+        }
+
         body[data-theme="dark"] .meta-label {
             color: #d0d4e8;
         }
@@ -4269,7 +4334,8 @@ ${actionsRow}
                     appointments: livePayload.appointments || [],
                     serviceMix: livePayload.serviceMix || [],
                     touchpoints: livePayload.touchpoints || { labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], data: [0, 0, 0, 0, 0, 0, 0] },
-                    roi: livePayload.roi || { costs: { total: 0, perCall: 0 }, revenue: { total: 0, bookings: 0, avgDealValue: 0 }, roi: { profit: 0, multiplier: 0, percentage: 0 } }
+                    roi: livePayload.roi || { costs: { total: 0, perCall: 0 }, revenue: { total: 0, bookings: 0, avgDealValue: 0 }, roi: { profit: 0, multiplier: 0, percentage: 0 } },
+                    activityAsOfIso: livePayload.activityAsOfIso || metrics.activityAsOfIso || null
                 };
             }
             
@@ -4336,7 +4402,8 @@ ${actionsRow}
                 appointments: Array.isArray(livePayload.appointments) && livePayload.appointments.length
                     ? livePayload.appointments
                     : base.appointments,
-                roi: livePayload.roi ? livePayload.roi : base.roi
+                roi: livePayload.roi ? livePayload.roi : base.roi,
+                activityAsOfIso: livePayload.activityAsOfIso ?? base.activityAsOfIso ?? null
             };
         }
 
@@ -4836,6 +4903,12 @@ ${actionsRow}
                         : `Mean ${firstResponse} to first dial`;
         }
 
+        function formatActivitySnapshot(iso) {
+            const d = new Date(iso);
+            if (Number.isNaN(d.getTime())) return '';
+            return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+        }
+
         function renderRecentActivity(data) {
             const container = document.getElementById('recent-activity');
             if (!container) return;
@@ -4854,8 +4927,38 @@ ${actionsRow}
             const reached = n(m.uniqueLeadsAnswered);
             const answerRate = n(m.answerRate);
             const noPickupUnique = n(m.uniqueLeadsNoPickup);
+            const reachedLast24 = n(m.uniqueLeadsReachedLast24);
+            const noPickupLast24 = n(m.uniqueLeadsNoPickupLast24);
+            const answerRateLast24 = n(m.answerRateLast24);
             const resp = data.firstResponse || m.firstResponse || '—';
             const respN = m.firstResponseSampleSize;
+
+            const asOfIso = data.activityAsOfIso || m.activityAsOfIso || null;
+            const asOfLine = asOfIso
+                ? `<div class="activity-as-of">Rolling window uses server time · snapshot ${escapeHtml(formatActivitySnapshot(asOfIso))}</div>`
+                : '';
+
+            const quietDay = last24Leads === 0 && callsLast24h === 0 && uniqueLast24 === 0
+                && (uniqueDialedAT > 0 || (dialAT != null && dialAT > 0));
+            const quietBanner = quietDay
+                ? `<div class="activity-quiet-banner" role="status">No leads or outbound dials in the last 24 hours. Totals below still include all-time activity—quiet stretches are normal between batches.</div>`
+                : '';
+
+            const tomHelpTitle = 'Outbound dials counts every attempt (retries add up). Unique numbers is distinct phones we tried in that window. Unique leads dialed (all time) is how many contacts have been called at least once.';
+            const last24Heading = tom
+                ? `Last 24 hours <button type="button" class="activity-inline-help" aria-label="How to read these metrics" title="${escapeHtml(tomHelpTitle)}">?</button>`
+                : 'Last 24 hours';
+
+            const firstDialBlock = !tom
+                ? `
+                <div class="activity-rhythm-block activity-rhythm-block--solo">
+                    <div class="activity-metric">
+                        <div class="activity-metric-label">Avg. time to first dial</div>
+                        <div class="activity-metric-value">${escapeHtml(resp)}</div>
+                        <div class="activity-metric-hint">${respN != null && respN > 0 ? `Based on ${formatNumber(respN)} recent lead→call pairs.` : 'Mean minutes after lead creation (when we have pairs).'}</div>
+                    </div>
+                </div>`
+                : '';
 
             const bookingsSection = !tom
                 ? `
@@ -4870,11 +4973,12 @@ ${actionsRow}
                 : '';
 
             const foot = tom
-                ? `<strong>How to read this:</strong> “Outbound dials” counts every attempt (retries add up). “Unique numbers” is distinct phones we tried in that window. “Unique leads dialed (all time)” is how many contacts have been called at least once.`
+                ? 'Rolling 24h window (server clock). Hover the ? on “Last 24 hours” for full definitions.'
                 : `<strong>How to read this:</strong> 24-hour figures use a rolling window. All-time dials include retries. Reached + no pickup partition unique numbers dialed (ambiguous rows = no pickup). Response time is mean minutes from lead created to first outbound dial (recent leads sample).`;
 
             container.innerHTML = `
-                <div class="activity-split-heading">Last 24 hours</div>
+                ${asOfLine}
+                <div class="activity-split-heading">${last24Heading}</div>
                 <div class="activity-rhythm-block activity-rhythm-block--3">
                     <div class="activity-metric">
                         <div class="activity-metric-label">New leads</div>
@@ -4890,6 +4994,25 @@ ${actionsRow}
                         <div class="activity-metric-label">Unique numbers dialed</div>
                         <div class="activity-metric-value">${formatNumber(uniqueLast24)}</div>
                         <div class="activity-metric-hint">Distinct phones we tried at least once.</div>
+                    </div>
+                </div>
+                ${quietBanner}
+                <div class="activity-split-heading">Last 24 hours (reach)</div>
+                <div class="activity-rhythm-block activity-rhythm-block--3">
+                    <div class="activity-metric">
+                        <div class="activity-metric-label">Leads reached</div>
+                        <div class="activity-metric-value">${formatNumber(reachedLast24)}</div>
+                        <div class="activity-metric-hint">Unique numbers with a connect signal in this window.</div>
+                    </div>
+                    <div class="activity-metric">
+                        <div class="activity-metric-label">Connect rate (24h)</div>
+                        <div class="activity-metric-value">${uniqueLast24 > 0 ? `${answerRateLast24}%` : '—'}</div>
+                        <div class="activity-metric-hint">Reached ÷ unique numbers dialed (last 24h).</div>
+                    </div>
+                    <div class="activity-metric">
+                        <div class="activity-metric-label">No pickup (unique)</div>
+                        <div class="activity-metric-value">${formatNumber(noPickupLast24)}</div>
+                        <div class="activity-metric-hint">Dialed in window with no connect signal yet.</div>
                     </div>
                 </div>
                 <div class="activity-split-heading">All-time dialing</div>
@@ -4923,13 +5046,7 @@ ${actionsRow}
                         <div class="activity-metric-hint">Not reached; ambiguous rows count here.</div>
                     </div>
                 </div>
-                <div class="activity-rhythm-block activity-rhythm-block--solo">
-                    <div class="activity-metric">
-                        <div class="activity-metric-label">Avg. time to first dial</div>
-                        <div class="activity-metric-value">${escapeHtml(resp)}</div>
-                        <div class="activity-metric-hint">${respN != null && respN > 0 ? `Based on ${formatNumber(respN)} recent lead→call pairs.` : 'Mean minutes after lead creation (when we have pairs).'}</div>
-                    </div>
-                </div>
+                ${firstDialBlock}
                 ${bookingsSection}
                 <div class="activity-footnote">${foot}</div>
             `;

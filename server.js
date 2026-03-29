@@ -8730,7 +8730,16 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
                agg.outcome_pending,
                (SELECT COUNT(*)::int FROM lead_class WHERE has_ans >= 1) AS reached_leads,
                (SELECT COUNT(*)::int FROM lead_class WHERE has_ans = 0) AS no_pickup_only_leads,
-               0::int AS pending_only_leads
+               0::int AS pending_only_leads,
+               (SELECT COUNT(DISTINCT cr.lead_phone)::int FROM call_row cr
+                 WHERE cr.created_at >= ${sqlHoursAgo(24)} AND cr.is_answered) AS unique_reached_last24,
+               (SELECT COUNT(*)::int FROM (
+                   SELECT cr.lead_phone
+                   FROM call_row cr
+                   WHERE cr.created_at >= ${sqlHoursAgo(24)}
+                   GROUP BY cr.lead_phone
+                   HAVING MAX(CASE WHEN cr.is_answered THEN 1 ELSE 0 END) = 0
+                 ) u) AS unique_no_pickup_last24
         FROM agg
       `, [clientKey]),
       query(`
@@ -8908,7 +8917,12 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     const bookingsFromCalls = parseInt(callCounts.rows?.[0]?.booked || 0, 10);
     const callsLast24h = parseInt(callCounts.rows?.[0]?.last24 || 0, 10);
     const uniqueLeadsCalledLast24 = parseInt(callCounts.rows?.[0]?.unique_leads_called_last24 || 0, 10);
-    
+    const uniqueLeadsReachedLast24 = parseInt(callCounts.rows?.[0]?.unique_reached_last24 || 0, 10);
+    const uniqueLeadsNoPickupLast24 = parseInt(callCounts.rows?.[0]?.unique_no_pickup_last24 || 0, 10);
+    const answerRateLast24 = uniqueLeadsCalledLast24 > 0
+      ? Math.round((uniqueLeadsReachedLast24 / uniqueLeadsCalledLast24) * 100)
+      : 0;
+
     // Use unique leads called for display (not total call attempts)
     const displayCalls = uniqueLeadsCalled || 0;
     
@@ -9243,6 +9257,9 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         uniqueLeadsNoPickup,
         uniqueLeadsPendingOnly,
         callsOutcomePending,
+        uniqueLeadsReachedLast24,
+        uniqueLeadsNoPickupLast24,
+        answerRateLast24,
         answerRate: uniqueLeadsCalled > 0 ? Math.round((uniqueLeadsAnswered / uniqueLeadsCalled) * 100) : 0,
         last24hLeads,
         conversionRate,
@@ -9290,7 +9307,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         businessHours: client?.businessHours || client?.whiteLabel?.businessHours || client?.booking?.businessHours || null,
         timezone: client?.timezone || client?.booking?.timezone || null,
         industry: client?.industry || client?.whiteLabel?.industry || null
-      }
+      },
+      activityAsOfIso: new Date().toISOString()
     };
     res.set('Cache-Control', 'no-store, must-revalidate, max-age=0');
     res.json(payload);
