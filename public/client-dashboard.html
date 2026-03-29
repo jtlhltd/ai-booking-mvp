@@ -6391,54 +6391,21 @@ ${actionsRow}
             return digits.length > 0 ? '···' : '';
         }
 
-        function formatActivityPipeStatusLabel(raw) {
-            const s = String(raw || '').trim();
-            if (!s) return '';
-            return s
-                .replace(/[-_]+/g, ' ')
-                .replace(/\s+/g, ' ')
-                .trim()
-                .split(' ')
-                .filter(Boolean)
-                .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-                .join(' ');
-        }
-
-        function activityCallRefLabel(call) {
-            if (!call) return '';
-            const cid = call.callId != null ? String(call.callId).trim() : '';
-            if (cid.length > 10) return `${cid.slice(0, 8)}…`;
-            if (cid) return cid;
-            if (call.dbId != null && call.dbId !== '') return `#${call.dbId}`;
-            return '';
-        }
-
-        function activityFeedSummaryRedundantWithPill(summary, pillText) {
-            const s = String(summary || '').replace(/\s+/g, ' ').trim().toLowerCase();
-            const p = String(pillText || '').replace(/\s+/g, ' ').trim().toLowerCase();
-            if (!s) return true;
-            if (!p) return false;
-            if (s === p) return true;
-            if (s.startsWith(`${p} •`) || s.startsWith(`${p},`)) return true;
-            const head = s.split('•')[0].trim();
-            if (head === p) return true;
+        /** True when opening the transcript modal should show real content (API or demo script). */
+        function activityCallHasTranscript(call) {
+            if (!call) return false;
+            if (call.transcriptPreview && String(call.transcriptPreview).trim()) return true;
+            if (!currentClient || currentClient === DEMO_CLIENT_KEY || isDemoClientKey(currentClient)) {
+                const tid = String(call.callId || call.id || '').trim();
+                const demoKey = tid.replace(/^demo-call-/, 'demo-');
+                const withScript = new Set(['demo-1', 'demo-2', 'demo-3', 'demo-4', 'demo-5']);
+                return withScript.has(demoKey) || withScript.has(tid);
+            }
             return false;
         }
 
-        function activityPipeAddsLiveContext(pipeLabel, pillText) {
-            const pl = String(pipeLabel || '').toLowerCase();
-            if (!pl) return false;
-            if (/\b(initiated|progress|ringing|queued|dialing|connecting)\b/.test(pl)) return true;
-            const pi = String(pillText || '').toLowerCase();
-            if (!pi) return true;
-            const pn = pi.replace(/[^a-z0-9]+/g, '');
-            const ln = pl.replace(/[^a-z0-9]+/g, '');
-            if (ln === pn) return false;
-            return true;
-        }
-
-        /** Live feed: when the call happened, duration, target, signals — not a repeat of the outcome pill. */
-        function buildActivityDetailsBlockHtml(call, outcomePillText) {
+        /** Live feed: when, duration, number — media actions are separate buttons. */
+        function buildActivityDetailsBlockHtml(call) {
             if (!call) return '';
             const timeAgo = call.timeAgo || formatTimeAgo(call.timestamp || call.created_at);
             const absWhen = formatRecordingDateTime(call.createdAt || call.timestamp || call.created_at);
@@ -6446,7 +6413,6 @@ ${actionsRow}
                 ? `${escapeHtml(absWhen)}${timeAgo ? ` <span class="activity-datum-muted">· ${escapeHtml(timeAgo)}</span>` : ''}`
                 : (timeAgo ? escapeHtml(timeAgo) : '');
 
-            const serviceStr = (call.service && String(call.service).trim()) || '';
             let phoneRaw = (call.leadPhone && String(call.leadPhone).trim()) || '';
             if (!phoneRaw && call.name) {
                 const nd = String(call.name).replace(/\D/g, '');
@@ -6454,15 +6420,6 @@ ${actionsRow}
             }
             const masked = formatActivityMaskedPhone(phoneRaw);
             const dur = (call.durationLabel && String(call.durationLabel).trim()) || '';
-            const retryN = call.retryAttempt != null ? Math.max(0, Number(call.retryAttempt) || 0) : 0;
-            const endedReason = (call.endedReason && String(call.endedReason).trim()) || '';
-            const transcriptPrev = (call.transcriptPreview && String(call.transcriptPreview).trim()) || '';
-            const refLbl = activityCallRefLabel(call);
-            const summaryStr = (call.summary && String(call.summary).trim()) || '';
-            const pipeLabel = formatActivityPipeStatusLabel(call.rawStatus)
-                || formatActivityPipeStatusLabel(call.status);
-
-            const burst = call._activityDedupeCount || 1;
 
             const cells = [];
             const pushDatum = (label, innerHtml, wide) => {
@@ -6473,30 +6430,15 @@ ${actionsRow}
                 );
             };
 
-            if (whenHtml) pushDatum('When', whenHtml, true);
-            if (dur) pushDatum('Talk time', escapeHtml(dur), false);
-            if (masked) pushDatum('Dialed', `<span class="activity-datum-mono">${escapeHtml(masked)}</span>`, false);
-            if (serviceStr) pushDatum('List / service', escapeHtml(serviceStr), false);
-            if (retryN > 0) pushDatum('Retry dial', escapeHtml(`#${retryN + 1} on this lead`), false);
-            if (burst > 1) {
-                pushDatum('Streak', escapeHtml(`${burst} outbound dials grouped here`), false);
-            }
-            const hasRec = call.hasRecording === true || !!(call.recordingUrl && String(call.recordingUrl).trim());
-            if (hasRec) pushDatum('Recording', 'Available', false);
-            if (pipeLabel && activityPipeAddsLiveContext(pipeLabel, outcomePillText)) {
-                pushDatum('Line', escapeHtml(pipeLabel), false);
-            }
-            if (endedReason) pushDatum('End reason', escapeHtml(endedReason), true);
-            if (transcriptPrev) {
-                const tr = escapeHtml(transcriptPrev);
-                pushDatum('Transcript excerpt', tr, true);
-            }
-            if (refLbl) pushDatum('Call id', `<span class="activity-datum-mono">${escapeHtml(refLbl)}</span>`, false);
-            if (summaryStr && !activityFeedSummaryRedundantWithPill(summaryStr, outcomePillText)) {
-                pushDatum('Note', escapeHtml(summaryStr), true);
-            }
+            const dash = '<span class="activity-datum-muted">—</span>';
+            pushDatum('When', whenHtml || dash, true);
+            pushDatum('Duration', dur ? escapeHtml(dur) : dash, false);
+            pushDatum(
+                'Number',
+                masked ? `<span class="activity-datum-mono">${escapeHtml(masked)}</span>` : dash,
+                false
+            );
 
-            if (!cells.length) return '';
             return `<div class="activity-item-details"><div class="activity-item-details-grid">${cells.join('')}</div></div>`;
         }
 
@@ -6675,9 +6617,13 @@ ${actionsRow}
 
                 const recHref = buildActivityRecordingHref(call);
                 const recLinkHtml = recHref
-                    ? `<a class="recording-open-link" href="${escapeHtml(recHref)}" target="_blank" rel="noopener noreferrer" aria-label="Open call recording">Recording</a>`
+                    ? `<a class="recording-open-link transcript-btn transcript-btn--compact" href="${escapeHtml(recHref)}" target="_blank" rel="noopener noreferrer" aria-label="Open call recording">Recording</a>`
                     : '';
-                const detailsBlockHtml = buildActivityDetailsBlockHtml(call, pillLabel);
+                const transcriptBtnHtml = activityCallHasTranscript(call)
+                    ? `<button type="button" class="transcript-btn transcript-btn--compact" onclick="viewTranscript(${transcriptIdJs}, ${transcriptNameJs})" aria-label="View call transcript">Transcript</button>`
+                    : '';
+                const actionsHtml = [recLinkHtml, transcriptBtnHtml].filter(Boolean).join('');
+                const detailsBlockHtml = buildActivityDetailsBlockHtml(call);
 
                 return `
                     <div class="activity-item ${edgeClass}"${rowTitleAttr}>
@@ -6690,10 +6636,7 @@ ${actionsRow}
                                 </div>
                                 ${detailsBlockHtml}
                             </div>
-                            <div class="activity-item-actions">
-                                ${recLinkHtml}
-                                <button type="button" class="transcript-btn transcript-btn--compact" onclick="viewTranscript(${transcriptIdJs}, ${transcriptNameJs})" aria-label="View call transcript">Transcript</button>
-                            </div>
+                            ${actionsHtml ? `<div class="activity-item-actions">${actionsHtml}</div>` : ''}
                         </div>
                     </div>
                 `;
@@ -6898,7 +6841,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 [Call ended - Duration: 1m 32s | Outcome: Rescheduled | Calendar updated]`
                 };
 
-                const transcript = demoTranscripts[callId] || demoTranscripts['demo-1'];
+                const demoKey = String(callId).replace(/^demo-call-/, 'demo-');
+                const transcript = demoTranscripts[callId] || demoTranscripts[demoKey];
+                if (!transcript) {
+                    contentEl.textContent = 'Transcript not available for this call.';
+                    return;
+                }
                 setTimeout(() => {
                     contentEl.innerHTML = `<pre style="white-space: pre-wrap; font-family: 'Inter', sans-serif; line-height: 1.6; color: var(--text); margin: 0;">${transcript}</pre>`;
                 }, 300);
