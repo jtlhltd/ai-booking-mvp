@@ -3752,6 +3752,8 @@
         const DEMO_CLIENT_KEY = 'demo_client';
         /** Sync with RECENT_LEADS_DASHBOARD_CAP in server.js (/api/demo-dashboard lead query LIMIT). */
         const RECENT_LEADS_DASHBOARD_CAP = 5000;
+        /** Must match server dashboard rolling window / touchpoint bucketing. */
+        const DASHBOARD_ACTIVITY_TZ = 'Europe/London';
         const DEMO_URL_ALIASES = new Set(['demo', 'demo_client', 'demo-client', 'sandbox']);
         function isDemoClientKey(key) {
             if (key == null || typeof key !== 'string') return false;
@@ -4335,7 +4337,8 @@ ${actionsRow}
                     serviceMix: livePayload.serviceMix || [],
                     touchpoints: livePayload.touchpoints || { labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], data: [0, 0, 0, 0, 0, 0, 0] },
                     roi: livePayload.roi || { costs: { total: 0, perCall: 0 }, revenue: { total: 0, bookings: 0, avgDealValue: 0 }, roi: { profit: 0, multiplier: 0, percentage: 0 } },
-                    activityAsOfIso: livePayload.activityAsOfIso || metrics.activityAsOfIso || null
+                    activityAsOfIso: livePayload.activityAsOfIso || metrics.activityAsOfIso || null,
+                    activityTimezone: livePayload.activityTimezone || metrics.activityTimezone || DASHBOARD_ACTIVITY_TZ
                 };
             }
             
@@ -4403,7 +4406,8 @@ ${actionsRow}
                     ? livePayload.appointments
                     : base.appointments,
                 roi: livePayload.roi ? livePayload.roi : base.roi,
-                activityAsOfIso: livePayload.activityAsOfIso ?? base.activityAsOfIso ?? null
+                activityAsOfIso: livePayload.activityAsOfIso ?? base.activityAsOfIso ?? null,
+                activityTimezone: livePayload.activityTimezone ?? base.activityTimezone ?? DASHBOARD_ACTIVITY_TZ
             };
         }
 
@@ -4903,10 +4907,10 @@ ${actionsRow}
                         : `Mean ${firstResponse} to first dial`;
         }
 
-        function formatActivitySnapshot(iso) {
+        function formatActivitySnapshot(iso, timeZone = DASHBOARD_ACTIVITY_TZ) {
             const d = new Date(iso);
             if (Number.isNaN(d.getTime())) return '';
-            return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+            return d.toLocaleString('en-GB', { timeZone, dateStyle: 'medium', timeStyle: 'short' });
         }
 
         function renderRecentActivity(data) {
@@ -4933,15 +4937,16 @@ ${actionsRow}
             const resp = data.firstResponse || m.firstResponse || '—';
             const respN = m.firstResponseSampleSize;
 
+            const actTz = data.activityTimezone || m.activityTimezone || DASHBOARD_ACTIVITY_TZ;
             const asOfIso = data.activityAsOfIso || m.activityAsOfIso || null;
             const asOfLine = asOfIso
-                ? `<div class="activity-as-of">Rolling window uses server time · snapshot ${escapeHtml(formatActivitySnapshot(asOfIso))}</div>`
+                ? `<div class="activity-as-of">Rolling last 24 hours (${actTz.replace(/_/g, ' ')}) · snapshot ${escapeHtml(formatActivitySnapshot(asOfIso, actTz))}</div>`
                 : '';
 
             const quietDay = last24Leads === 0 && callsLast24h === 0 && uniqueLast24 === 0
                 && (uniqueDialedAT > 0 || (dialAT != null && dialAT > 0));
             const quietBanner = quietDay
-                ? `<div class="activity-quiet-banner" role="status">No leads or outbound dials in the last 24 hours. Totals below still include all-time activity—quiet stretches are normal between batches.</div>`
+                ? `<div class="activity-quiet-banner" role="status">No leads or outbound dials in the rolling 24 hours (${actTz.replace(/_/g, ' ')}). Totals below still include all-time activity—quiet stretches are normal between batches.</div>`
                 : '';
 
             const tomHelpTitle = 'Outbound dials counts every attempt (retries add up). Unique numbers is distinct phones we tried in that window. Unique leads dialed (all time) is how many contacts have been called at least once.';
@@ -4973,8 +4978,8 @@ ${actionsRow}
                 : '';
 
             const foot = tom
-                ? 'Rolling 24h window (server clock). Hover the ? on “Last 24 hours” for full definitions.'
-                : `<strong>How to read this:</strong> 24-hour figures use a rolling window. All-time dials include retries. Reached + no pickup partition unique numbers dialed (ambiguous rows = no pickup). Response time is mean minutes from lead created to first outbound dial (recent leads sample).`;
+                ? `Rolling 24h window (${actTz.replace(/_/g, ' ')}). Hover the ? on “Last 24 hours” for full definitions.`
+                : `<strong>How to read this:</strong> 24-hour figures are a rolling 24h window in ${actTz.replace(/_/g, ' ')} (same instant boundary for leads, dials, and reach). All-time dials include retries. Reached + no pickup partition unique numbers dialed (ambiguous rows = no pickup). Response time is mean minutes from lead created to first outbound dial (recent leads sample).`;
 
             container.innerHTML = `
                 ${asOfLine}
@@ -4983,7 +4988,7 @@ ${actionsRow}
                     <div class="activity-metric">
                         <div class="activity-metric-label">New leads</div>
                         <div class="activity-metric-value">${formatNumber(last24Leads)}</div>
-                        <div class="activity-metric-hint">Added to your pipeline in the rolling day.</div>
+                        <div class="activity-metric-hint">Added in the rolling 24h window (${actTz.replace(/_/g, ' ')}).</div>
                     </div>
                     <div class="activity-metric">
                         <div class="activity-metric-label">Outbound dials</div>

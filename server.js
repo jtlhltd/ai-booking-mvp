@@ -8069,6 +8069,9 @@ app.get('/api/industry-comparison/:clientKey', async (req, res) => {
   }
 });
 
+/** Rolling activity windows & touchpoint day buckets on the client dashboard (GMT/BST). */
+const DASHBOARD_ACTIVITY_TZ = 'Europe/London';
+
 function sqlHoursAgo(hours = 1) {
   if (isPostgres) {
     return `NOW() - INTERVAL '${hours} hour${hours === 1 ? '' : 's'}'`;
@@ -8639,6 +8642,14 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     const client = await getFullClient(clientKey);
     const activityChannel = activityFeedChannelLabel(client);
 
+    const rollingSinceInstant = DateTime.now().setZone(DASHBOARD_ACTIVITY_TZ).minus({ hours: 24 });
+    const activityRollingSinceIso = rollingSinceInstant.toUTC().toISO();
+    const activityAsOfLondon = DateTime.now().setZone(DASHBOARD_ACTIVITY_TZ);
+
+    const touchpointDayKeySql = isPostgres
+      ? `to_char(created_at AT TIME ZONE '${DASHBOARD_ACTIVITY_TZ}', 'YYYY-MM-DD')`
+      : `strftime('%Y-%m-%d', created_at)`;
+
     const [
       leadCounts,
       callCounts,
@@ -8653,10 +8664,10 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     ] = await Promise.all([
       query(`
         SELECT COUNT(*) AS total,
-               COUNT(*) FILTER (WHERE created_at >= ${sqlHoursAgo(24)}) AS last24
+               COUNT(*) FILTER (WHERE created_at >= $2) AS last24
         FROM leads
         WHERE client_key = $1
-      `, [clientKey]),
+      `, [clientKey, activityRollingSinceIso]),
       query(`
         WITH call_row AS (
           SELECT
@@ -8712,7 +8723,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
           SELECT
             COUNT(*) AS total,
             COUNT(DISTINCT lead_phone) AS unique_leads_called,
-            COUNT(*) FILTER (WHERE created_at >= ${sqlHoursAgo(24)}) AS last24,
+            COUNT(*) FILTER (WHERE created_at >= $2) AS last24,
             COUNT(*) FILTER (WHERE outcome = 'booked') AS booked,
             COUNT(*) FILTER (WHERE is_answered) AS answered,
             COUNT(*) FILTER (WHERE is_not_answered) AS not_answered,
@@ -8723,7 +8734,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
                agg.total,
                agg.unique_leads_called,
                agg.last24,
-               (SELECT COUNT(DISTINCT cr.lead_phone)::int FROM call_row cr WHERE cr.created_at >= ${sqlHoursAgo(24)}) AS unique_leads_called_last24,
+               (SELECT COUNT(DISTINCT cr.lead_phone)::int FROM call_row cr WHERE cr.created_at >= $2) AS unique_leads_called_last24,
                agg.booked,
                agg.answered,
                agg.not_answered,
@@ -8732,16 +8743,16 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
                (SELECT COUNT(*)::int FROM lead_class WHERE has_ans = 0) AS no_pickup_only_leads,
                0::int AS pending_only_leads,
                (SELECT COUNT(DISTINCT cr.lead_phone)::int FROM call_row cr
-                 WHERE cr.created_at >= ${sqlHoursAgo(24)} AND cr.is_answered) AS unique_reached_last24,
+                 WHERE cr.created_at >= $2 AND cr.is_answered) AS unique_reached_last24,
                (SELECT COUNT(*)::int FROM (
                    SELECT cr.lead_phone
                    FROM call_row cr
-                   WHERE cr.created_at >= ${sqlHoursAgo(24)}
+                   WHERE cr.created_at >= $2
                    GROUP BY cr.lead_phone
                    HAVING MAX(CASE WHEN cr.is_answered THEN 1 ELSE 0 END) = 0
                  ) u) AS unique_no_pickup_last24
         FROM agg
-      `, [clientKey]),
+      `, [clientKey, activityRollingSinceIso]),
       query(`
         SELECT COUNT(*) AS total,
                COUNT(*) FILTER (WHERE status IN ('no_show','no-show')) AS no_shows,
@@ -8851,7 +8862,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       query(`
         WITH daily AS (
           SELECT
-            DATE_TRUNC('day', created_at) AS bucket_day,
+            ${touchpointDayKeySql} AS bucket_day,
             lead_phone,
             outcome,
             duration,
@@ -8999,7 +9010,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         name: row.name || row.phone,
         phone: row.phone,
         status: row.status || 'Awaiting follow-up',
-        lastMessage: row.notes || `Added ${new Date(row.created_at).toLocaleDateString('en-GB')}`,
+        lastMessage: row.notes || `Added ${new Date(row.created_at).toLocaleDateString('en-GB', { timeZone: DASHBOARD_ACTIVITY_TZ })}`,
         service: row.service || 'Lead Follow-Up',
         source: row.source || 'Web form',
         timeAgo: formatTimeAgoLabel(row.created_at),
@@ -9172,7 +9183,10 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
 
     const touchpointMap = new Map(
       (touchpointRows.rows || []).map(row => {
-        const dayKey = new Date(row.bucket_day).toISOString().slice(0, 10);
+        const raw = row.bucket_day;
+        const dayKey = typeof raw === 'string'
+          ? raw.slice(0, 10)
+          : new Date(raw).toISOString().slice(0, 10);
         return [dayKey, {
           attempts: parseInt(row.touchpoints || 0, 10),
           uniquePhones: parseInt(row.unique_phones || 0, 10),
@@ -9199,10 +9213,9 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     const touchpointUniqueByDay = [];
     const touchpointByDay = [];
     for (let offset = 6; offset >= 0; offset -= 1) {
-      const day = new Date();
-      day.setDate(day.getDate() - offset);
-      const key = day.toISOString().slice(0, 10);
-      touchpointLabels.push(day.toLocaleDateString('en-GB', { weekday: 'short' }));
+      const day = activityAsOfLondon.startOf('day').minus({ days: offset });
+      const key = day.toFormat('yyyy-MM-dd');
+      touchpointLabels.push(day.setLocale('en-GB').toFormat('ccc'));
       const bucket = touchpointMap.get(key);
       const merged = bucket ? { ...emptyDayBucket(), ...bucket } : emptyDayBucket();
       touchpointData.push(merged.attempts);
@@ -9270,7 +9283,9 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         bookingsThisWeek: weeklyBookings,
         highPriorityLeads,
         mediumPriorityLeads,
-        lowPriorityLeads
+        lowPriorityLeads,
+        activityTimezone: DASHBOARD_ACTIVITY_TZ,
+        activityWindowHours: 24
       },
       serviceMix,
       leads,
@@ -9308,7 +9323,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         timezone: client?.timezone || client?.booking?.timezone || null,
         industry: client?.industry || client?.whiteLabel?.industry || null
       },
-      activityAsOfIso: new Date().toISOString()
+      activityAsOfIso: activityAsOfLondon.toISO(),
+      activityTimezone: DASHBOARD_ACTIVITY_TZ
     };
     res.set('Cache-Control', 'no-store, must-revalidate, max-age=0');
     res.json(payload);
