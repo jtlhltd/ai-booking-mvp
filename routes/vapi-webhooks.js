@@ -249,13 +249,24 @@ async function processWebhookPayload(body, correlationId) {
     const callId = body.call?.id || body.id || body.callId || body.message?.call?.id || body.message?.callId;
     let status = body.call?.status || body.status;
     let outcome = body.call?.outcome || body.outcome;
-    // If this is an end-of-call webhook but we have no outcome, derive from VAPI's endedReason
     const endedReason = body.endedReason || body.call?.endedReason || body.message?.endedReason;
-    if ((!outcome || outcome === '') && endedReason) {
-      outcome = mapEndedReasonToOutcome(endedReason);
-      if (status === 'initiated' || !status) status = 'ended';
-      if (callId) {
-        console.log(`[${correlationId}] [VAPI WEBHOOK] End-of-call applied: callId=${callId} endedReason=${endedReason} outcome=${outcome} status=${status}`);
+    /*
+     * Vapi often sends call.outcome as "failed" while endedReason is specific (e.g. customer-did-not-answer).
+     * Previously we only mapped endedReason when outcome was empty — so the feed showed "Failed" for many no-answers.
+     * When outcome is a generic failure label, prefer mapEndedReasonToOutcome. Keep explicit assistant outcomes
+     * (booked, interested, completed, no-answer, voicemail, etc.).
+     */
+    if (endedReason) {
+      const fromEnded = mapEndedReasonToOutcome(endedReason);
+      const oNorm = String(outcome ?? '').trim().toLowerCase();
+      const genericTelephony = !oNorm || ['failed', 'error', 'unknown'].includes(oNorm);
+      const assistantSetUseful = oNorm && !genericTelephony;
+      if (!assistantSetUseful && fromEnded) {
+        outcome = fromEnded;
+        if (status === 'initiated' || !status) status = 'ended';
+        if (callId) {
+          console.log(`[${correlationId}] [VAPI WEBHOOK] Outcome from endedReason: callId=${callId} endedReason=${endedReason} outcome=${outcome} status=${status}`);
+        }
       }
     }
 

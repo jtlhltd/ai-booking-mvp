@@ -8143,6 +8143,27 @@ function truncateActivityFeedText(str, maxLen = 220) {
   return `${s.slice(0, maxLen - 1).trim()}…`;
 }
 
+function parseCallsRowMetadata(meta) {
+  if (meta == null) return null;
+  if (typeof meta === 'object' && !Array.isArray(meta)) return meta;
+  if (typeof meta === 'string') {
+    try {
+      return JSON.parse(meta);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/** Synthetic rows when outbound queue could not start a Vapi call (not the same as an in-call failure). */
+function isCallQueueStartFailureRow(row) {
+  const cid = String(row?.call_id || '');
+  if (cid.startsWith('failed_q')) return true;
+  const m = parseCallsRowMetadata(row?.metadata);
+  return !!(m && m.fromQueue === true && String(row?.outcome || '').toLowerCase() === 'failed');
+}
+
 function formatVapiEndedReasonDisplay(reason) {
   if (reason == null || reason === '') return '';
   return String(reason)
@@ -8822,7 +8843,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       `, [clientKey]),
       query(`
         SELECT c.call_id, c.id, c.lead_phone, c.status, c.outcome, c.created_at, c.duration, c.recording_url,
-               c.transcript, c.retry_attempt,
+               c.transcript, c.retry_attempt, c.metadata,
                lm.name, lm.service
         FROM calls c
         LEFT JOIN LATERAL (
@@ -9062,14 +9083,18 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     });
     const avgLeadScore = scoredLeadCount > 0 ? Math.round(scoreAccumulator / scoredLeadCount) : null;
 
-    // Fallback: for any call with call_id but no outcome in DB, fetch from VAPI API so dashboard shows real result
+    // Same semantics as routes/vapi-webhooks.js mapEndedReasonToOutcome
     function mapEndedReasonToOutcome(endedReason) {
       if (!endedReason || typeof endedReason !== 'string') return null;
       const r = endedReason.toLowerCase();
       if (r.includes('customer-did-not-answer') || r.includes('did-not-answer')) return 'no-answer';
-      if (r.includes('voicemail')) return 'voicemail';
-      if (r.includes('busy')) return 'busy';
-      if (r.includes('rejected') || r.includes('failed-to-connect')) return 'rejected';
+      if (r.includes('customer-busy') || r.includes('busy')) return 'busy';
+      if (r === 'voicemail' || r.includes('voicemail')) return 'voicemail';
+      if (r.includes('rejected') || r.includes('declined') || r.includes('failed-to-connect') || r.includes('misdialed')) return 'declined';
+      if (r.includes('vonage-rejected') || r.includes('twilio-reported')) return 'declined';
+      if (r.includes('assistant-ended-call') || r.includes('customer-ended-call') || r.includes('vonage-completed')) return 'completed';
+      if (r.includes('silence-timed-out') || r.includes('exceeded-max-duration')) return 'completed';
+      if (r.includes('error') || r.includes('fault')) return 'failed';
       return 'completed';
     }
     function isCallEnded(data) {
@@ -9089,7 +9114,14 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       return null;
     }
     const vapiKey = process.env.VAPI_PRIVATE_KEY || process.env.VAPI_PUBLIC_KEY || '';
-    const rowsNeedingOutcome = (recentCallRows.rows || []).filter(r => r.call_id && !r.outcome);
+    const GENERIC_OUTCOMES = new Set(['', 'failed', 'error', 'unknown']);
+    const rowsNeedingOutcome = (recentCallRows.rows || [])
+      .filter((r) => {
+        if (!r.call_id || String(r.call_id).startsWith('failed_q')) return false;
+        const o = String(r.outcome ?? '').trim().toLowerCase();
+        return GENERIC_OUTCOMES.has(o);
+      })
+      .slice(0, 20);
     const vapiByCallId = new Map();
     if (vapiKey && rowsNeedingOutcome.length > 0) {
       const fetched = await Promise.all(rowsNeedingOutcome.map(async (r) => {
@@ -9109,7 +9141,13 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
           vapiByCallId.set(call_id, data);
           const row = rowsNeedingOutcome.find(r => r.call_id === call_id);
           if (row) {
-            const outcome = data.outcome || (data.endedReason && mapEndedReasonToOutcome(data.endedReason));
+            const fromEnded = data.endedReason ? mapEndedReasonToOutcome(data.endedReason) : null;
+            const vo = String(data.outcome ?? '').trim().toLowerCase();
+            const genericVo = !vo || GENERIC_OUTCOMES.has(vo);
+            let outcome = data.outcome;
+            if (fromEnded && genericVo) outcome = fromEnded;
+            else if (!outcome && fromEnded) outcome = fromEnded;
+            outcome = outcome || 'completed';
             const duration = getDurationFromVapi(data);
             import('./db.js').then(({ upsertCall }) =>
               upsertCall({
@@ -9117,7 +9155,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
                 clientKey,
                 leadPhone: row.lead_phone,
                 status: 'ended',
-                outcome: outcome || 'completed',
+                outcome,
                 duration,
                 cost: data.cost,
                 metadata: data.metadata || {}
@@ -9131,7 +9169,16 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     const STALE_INITIATED_MINUTES = 15; // treat "initiated" older than this as stale (no end-of-call webhook received)
     const recentCalls = (recentCallRows.rows || []).map(row => {
       const vapiData = row.call_id ? vapiByCallId.get(row.call_id) : null;
-      const effectiveOutcome = row.outcome || (vapiData && (vapiData.outcome || (vapiData.endedReason && mapEndedReasonToOutcome(vapiData.endedReason))));
+      let effectiveOutcome = row.outcome;
+      if (vapiData && isCallEnded(vapiData)) {
+        const fromEnded = vapiData.endedReason ? mapEndedReasonToOutcome(vapiData.endedReason) : null;
+        const vo = String(vapiData.outcome ?? '').trim().toLowerCase();
+        const genericVo = !vo || GENERIC_OUTCOMES.has(vo);
+        const dbO = String(row.outcome ?? '').trim().toLowerCase();
+        const genericDb = !dbO || GENERIC_OUTCOMES.has(dbO);
+        if (fromEnded && (genericDb || genericVo)) effectiveOutcome = fromEnded;
+        else if (!effectiveOutcome) effectiveOutcome = vapiData.outcome || fromEnded;
+      }
       const effectiveDuration = row.duration != null ? row.duration : (vapiData ? getDurationFromVapi(vapiData) : null);
       const effectiveStatus = (vapiData && isCallEnded(vapiData)) ? 'ended' : row.status;
 
@@ -9140,6 +9187,9 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       const endedReasonDisplay = formatVapiEndedReasonDisplay(vapiData?.endedReason);
       const retryAttempt = row.retry_attempt != null ? Math.max(0, parseInt(row.retry_attempt, 10) || 0) : 0;
       let outcomeLabel = outcomeToFriendlyLabel(effectiveOutcome);
+      if (isCallQueueStartFailureRow(row)) {
+        outcomeLabel = 'Could not start call';
+      }
       const isInitiated = (effectiveStatus || '').toLowerCase() === 'initiated';
       const createdAt = row.created_at ? new Date(row.created_at) : null;
       const ageMinutes = createdAt ? (Date.now() - createdAt.getTime()) / 60000 : 0;
@@ -9397,7 +9447,7 @@ app.get('/api/events/:clientKey', async (req, res) => {
     try {
       const recentCallRows = await query(`
         SELECT c.call_id, c.id, c.lead_phone, c.status, c.outcome, c.created_at, c.duration, c.recording_url,
-               c.transcript, c.retry_attempt,
+               c.transcript, c.retry_attempt, c.metadata,
                l.name, l.service
         FROM calls c
         LEFT JOIN leads l ON l.client_key = c.client_key AND l.phone = c.lead_phone
@@ -9409,7 +9459,8 @@ app.get('/api/events/:clientKey', async (req, res) => {
 
       for (const row of recentCallRows.rows || []) {
         lastSent = row.created_at;
-        const friendly = outcomeToFriendlyLabel(row.outcome);
+        let friendly = outcomeToFriendlyLabel(row.outcome);
+        if (isCallQueueStartFailureRow(row)) friendly = 'Could not start call';
         const durationLabel = formatCallDuration(row.duration);
         const summary = row.outcome
           ? (durationLabel ? `${friendly || row.outcome} • ${durationLabel}` : (friendly || `Outcome: ${row.outcome}`))
