@@ -2465,6 +2465,116 @@
             opacity: 0.9;
         }
 
+        .follow-up-queue-toolbar {
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .follow-up-callback-filter {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            color: var(--text-secondary, #5c6178);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .follow-up-callback-filter input {
+            accent-color: var(--primary, #5c6ac4);
+        }
+
+        .follow-up-queue-wrap {
+            max-height: 480px;
+            overflow: auto;
+            margin-top: 10px;
+            border-radius: 10px;
+            border: 1px solid rgba(92, 106, 196, 0.12);
+        }
+
+        .follow-up-queue-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+        }
+
+        .follow-up-queue-table th {
+            text-align: left;
+            padding: 10px 12px;
+            background: rgba(92, 106, 196, 0.08);
+            color: var(--text-secondary, #5c6178);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            font-size: 0.68rem;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            white-space: nowrap;
+            border-bottom: 1px solid rgba(92, 106, 196, 0.15);
+        }
+
+        .follow-up-queue-table td {
+            padding: 10px 12px;
+            vertical-align: top;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+            max-width: 220px;
+            word-break: break-word;
+        }
+
+        .follow-up-queue-table tr:hover td {
+            background: rgba(92, 106, 196, 0.04);
+        }
+
+        .follow-up-queue-table .fu-callback-yes {
+            color: #b45309;
+            font-weight: 600;
+        }
+
+        .follow-up-queue-table .fu-actions {
+            white-space: nowrap;
+            max-width: none;
+        }
+
+        .follow-up-copy-btn {
+            margin-left: 6px;
+            padding: 2px 8px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            border-radius: 6px;
+            border: 1px solid rgba(92, 106, 196, 0.35);
+            background: rgba(92, 106, 196, 0.06);
+            color: var(--primary);
+            cursor: pointer;
+        }
+
+        .follow-up-copy-btn:hover {
+            background: rgba(92, 106, 196, 0.12);
+        }
+
+        body[data-theme="dark"] .follow-up-queue-wrap {
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        body[data-theme="dark"] .follow-up-queue-table th {
+            background: rgba(124, 134, 220, 0.15);
+            color: #d0d4e8;
+            border-bottom-color: rgba(255, 255, 255, 0.08);
+        }
+
+        body[data-theme="dark"] .follow-up-queue-table td {
+            border-bottom-color: rgba(255, 255, 255, 0.06);
+        }
+
+        body[data-theme="dark"] .follow-up-queue-table tr:hover td {
+            background: rgba(124, 134, 220, 0.08);
+        }
+
+        body[data-theme="dark"] .follow-up-callback-filter {
+            color: #d0d4e8;
+        }
+
         .retry-badges {
             display: flex;
             flex-wrap: wrap;
@@ -4000,6 +4110,24 @@
                     <div id="retry-queue" class="retry-queue thin-scroll"></div>
                 </article>
             </div>
+        </section>
+
+        <!-- FOLLOW-UP LIST (transcript → Google Sheet → dashboard) -->
+        <section class="dashboard-section" id="followUpQueueSection" aria-labelledby="followUpQueueHeading">
+            <h2 class="section-header" id="followUpQueueSectionTitle">📞 Follow-up call list</h2>
+            <article class="card card-fullwidth">
+                <h3 id="followUpQueueHeading">People to call</h3>
+                <p class="card-subtitle" id="followUpQueueSubtitle">Contacts and details captured from AI call transcripts into your linked Google Sheet — use this for human follow-up dials.</p>
+                <div class="dashboard-list-toolbar follow-up-queue-toolbar">
+                    <button type="button" id="followUpQueueRefresh" class="export-btn secondary">Refresh</button>
+                    <label class="follow-up-callback-filter">
+                        <input type="checkbox" id="followUpCallbackOnly" />
+                        <span>Callback needed only</span>
+                    </label>
+                    <span id="followUpQueueHint" class="dashboard-search-hint" role="status"></span>
+                </div>
+                <div id="follow-up-queue" class="follow-up-queue-wrap thin-scroll" role="region" aria-live="polite"></div>
+            </article>
         </section>
 
         <!-- OPERATIONS SECTION -->
@@ -7194,6 +7322,152 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
         }
 
+        const FOLLOW_UP_TABLE_COLUMNS = [
+            'Timestamp',
+            'Business Name',
+            'Decision Maker',
+            'Phone',
+            'Email',
+            'Callback Needed',
+            'International (Y/N)',
+            'Main Couriers',
+            'UK Courier',
+            'International Shipments per Week',
+            'UK Shipments per Week',
+            'Main Countries',
+            'Example Shipment (weight x dims)',
+            'Example Shipment Cost',
+            'Std Rate up to KG',
+            'Excl Fuel & VAT?',
+            'Single vs Multi-parcel',
+            'Receptionist Name',
+            'Transcript Snippet',
+            'Call ID',
+            'Recording URI',
+            'Called Number'
+        ];
+
+        function followUpVisibleColumns(rows) {
+            const cols = FOLLOW_UP_TABLE_COLUMNS.filter((c) =>
+                rows.some((r) => String(r[c] || '').trim() !== '')
+            );
+            return cols.length ? cols : ['Timestamp', 'Business Name', 'Phone', 'Transcript Snippet'];
+        }
+
+        function formatFollowUpCell(col, val) {
+            const v = String(val || '').trim();
+            if (col === 'Recording URI' && /^https?:\/\//i.test(v)) {
+                return `<a href="${escapeHtml(v)}" target="_blank" rel="noopener noreferrer">Open</a>`;
+            }
+            if (col === 'Callback Needed' && v.toUpperCase() === 'TRUE') {
+                return `<span class="fu-callback-yes">${escapeHtml(v)}</span>`;
+            }
+            if (col === 'Phone' && v) {
+                return `<span>${escapeHtml(v)}</span><button type="button" class="follow-up-copy-btn" data-fu-copy="${escapeHtml(v)}" aria-label="Copy phone number">Copy</button>`;
+            }
+            if (col === 'Transcript Snippet' && v.length > 140) {
+                const short = `${escapeHtml(v.slice(0, 137))}…`;
+                return `<span title="${escapeHtml(v)}">${short}</span>`;
+            }
+            return escapeHtml(v || '—');
+        }
+
+        async function loadFollowUpQueue(clientKey) {
+            const wrap = document.getElementById('follow-up-queue');
+            const hint = document.getElementById('followUpQueueHint');
+            if (!wrap) return;
+            const cbEl = document.getElementById('followUpCallbackOnly');
+            const callback = !!(cbEl && cbEl.checked);
+            wrap.innerHTML = '<div class="empty-state-message" style="padding:16px;">Loading…</div>';
+            if (hint) {
+                hint.textContent = '';
+                hint.hidden = true;
+            }
+            try {
+                const q = new URLSearchParams({ limit: '100' });
+                if (callback) q.set('callback', '1');
+                const res = await fetch(`${BASE_URL}/api/follow-up-queue/${encodeURIComponent(clientKey)}?${q}`, { cache: 'no-store' });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || data.ok === false) {
+                    const msg = data?.message || data?.error || `Could not load (${res.status})`;
+                    wrap.innerHTML = `<div class="empty-state" style="padding:20px;"><div class="empty-state-message">${escapeHtml(msg)}</div></div>`;
+                    return;
+                }
+                if (!data.configured) {
+                    wrap.innerHTML = `
+                        <div class="empty-state" style="padding: 20px;">
+                            <span class="empty-state-icon">📑</span>
+                            <div class="empty-state-title">Sheet not linked</div>
+                            <div class="empty-state-message">${escapeHtml(data.message || 'Link a Google Sheet on this workspace (logisticsSheetId or gsheet_id) so rows from your Vapi sheet tool appear here.')}</div>
+                        </div>`;
+                    if (hint) {
+                        hint.textContent = 'Not configured';
+                        hint.hidden = false;
+                    }
+                    return;
+                }
+                const rows = Array.isArray(data.rows) ? data.rows : [];
+                if (!rows.length) {
+                    wrap.innerHTML = `<div class="empty-state" style="padding: 20px;">
+                        <span class="empty-state-icon">📞</span>
+                        <div class="empty-state-title">${callback ? 'No callbacks flagged' : 'No rows yet'}</div>
+                        <div class="empty-state-message">${callback ? 'No rows with Callback Needed = TRUE. Try clearing the filter or refresh after new calls.' : 'When the AI saves parsed transcript fields to your sheet, rows appear here (newest first).'}</div>
+                    </div>`;
+                    if (hint) {
+                        hint.textContent = data.demo ? 'Demo sample' : `0 in sheet`;
+                        hint.hidden = false;
+                    }
+                    return;
+                }
+                const cols = followUpVisibleColumns(rows);
+                const thead = `<thead><tr>${cols.map((c) => `<th scope="col">${escapeHtml(c)}</th>`).join('')}</tr></thead>`;
+                const tbody = rows.map((row) => {
+                    const tds = cols.map((c) => `<td>${formatFollowUpCell(c, row[c])}</td>`).join('');
+                    return `<tr>${tds}</tr>`;
+                }).join('');
+                wrap.innerHTML = `<table class="follow-up-queue-table">${thead}<tbody>${tbody}</tbody></table>`;
+                if (hint) {
+                    const total = data.total != null ? data.total : rows.length;
+                    const parts = [`Showing ${formatNumber(rows.length)}${total > rows.length ? ` of ${formatNumber(total)}` : ''}`];
+                    if (data.demo) parts.push('demo');
+                    hint.textContent = parts.join(' · ');
+                    hint.hidden = false;
+                }
+            } catch (e) {
+                console.warn('follow-up queue', e);
+                wrap.innerHTML = '<div class="empty-state-message" style="padding:16px;">Unable to load. Try Refresh.</div>';
+            }
+        }
+
+        function initFollowUpQueueUi() {
+            const btn = document.getElementById('followUpQueueRefresh');
+            const cb = document.getElementById('followUpCallbackOnly');
+            if (btn && !btn.dataset.bound) {
+                btn.dataset.bound = '1';
+                btn.addEventListener('click', () => loadFollowUpQueue(currentClient));
+            }
+            if (cb && !cb.dataset.bound) {
+                cb.dataset.bound = '1';
+                cb.addEventListener('change', () => loadFollowUpQueue(currentClient));
+            }
+            const wrap = document.getElementById('follow-up-queue');
+            if (wrap && !wrap.dataset.copyDelegation) {
+                wrap.dataset.copyDelegation = '1';
+                wrap.addEventListener('click', async (e) => {
+                    const b = e.target.closest('[data-fu-copy]');
+                    if (!b) return;
+                    const text = b.getAttribute('data-fu-copy');
+                    if (!text) return;
+                    try {
+                        await navigator.clipboard.writeText(text);
+                        showToast('Copied', 'Phone number copied', 'success', 2000);
+                    } catch (err) {
+                        showToast('Copy failed', 'Could not copy to clipboard', 'error', 2500);
+                    }
+                });
+            }
+        }
+
         async function viewLeadTimeline(leadId, name) {
             const modal = document.getElementById('timelineModal');
             const titleEl = document.getElementById('timelineModalTitle');
@@ -7810,6 +8084,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             currentClient = getClientFromURL();
             activityFeedOutcomeFilter = 'all';
             initActivityFeedChips();
+            initFollowUpQueueUi();
             applyRoiPanelVisibility(currentClient);
             applyTomOutreachDashboardMode(currentClient);
 
@@ -7996,6 +8271,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 renderSystemStatus(config).catch(err => console.warn('System status failed', err)),
                 renderCallQuality(dashboardData).catch(err => console.warn('Call quality failed', err)),
                 renderRetryQueue(dashboardData).catch(err => console.warn('Retry queue failed', err)),
+                loadFollowUpQueue(currentClient).catch(err => console.warn('Follow-up list failed', err)),
                 renderCalendarDetails(dashboardData).catch(err => console.warn('Calendar details failed', err)),
                 renderCallRecordings(callsToRender).catch(err => console.warn('Call recordings failed', err))
             ]).then(() => {
@@ -8038,6 +8314,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         await renderCallRecordings(callsToRender);
                         await renderCallQuality(dashboardData);
                         await renderRetryQueue(dashboardData);
+                        await loadFollowUpQueue(currentClient);
                         await renderCalendarDetails(dashboardData);
                         renderChart(config, dashboardData);
                     }

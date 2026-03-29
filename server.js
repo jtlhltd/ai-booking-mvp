@@ -11282,6 +11282,120 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
   }
 });
 
+function resolveLogisticsSpreadsheetId(client) {
+  if (!client) return process.env.LOGISTICS_SHEET_ID || null;
+  return (
+    client.vapi_json?.logisticsSheetId
+    || client.vapi?.logisticsSheetId
+    || client.gsheet_id
+    || process.env.LOGISTICS_SHEET_ID
+    || null
+  );
+}
+
+function isFollowUpQueueDemoClient(clientKey) {
+  const k = String(clientKey || '').toLowerCase().trim();
+  return k === 'demo_client' || k === 'demo-client' || k === 'stay-focused-fitness-chris';
+}
+
+/** Parsed transcript / logistics rows from the tenant Google Sheet — for human follow-up calls. */
+app.get('/api/follow-up-queue/:clientKey', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    res.set('Cache-Control', 'no-store');
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 80));
+    const callbackOnly = String(req.query.callback || '') === '1';
+
+    if (isFollowUpQueueDemoClient(clientKey)) {
+      const demoRows = [
+        {
+          Timestamp: new Date(Date.now() - 2 * 3600000).toLocaleString('en-GB', { timeZone: 'Europe/London' }),
+          'Business Name': 'Northbridge Freight Ltd',
+          'Decision Maker': 'Alex Morgan',
+          Phone: '+447700900111',
+          Email: 'alex.m@northbridge.example',
+          'International (Y/N)': 'Y',
+          'Main Couriers': 'DHL, FedEx',
+          'International Shipments per Week': '120',
+          'Main Countries': 'DE, FR, US',
+          'Callback Needed': 'TRUE',
+          'Call ID': 'demo-sheet-1',
+          'Transcript Snippet': 'Interested in comparing international rates; asked for a callback Thursday PM.',
+          'Recording URI': '',
+          'Called Number': '+442033344555',
+          'Receptionist Name': 'Sam'
+        },
+        {
+          Timestamp: new Date(Date.now() - 26 * 3600000).toLocaleString('en-GB', { timeZone: 'Europe/London' }),
+          'Business Name': 'Coastal Packaging Co',
+          'Decision Maker': 'Jordan Lee',
+          Phone: '+447700900222',
+          Email: '',
+          'International (Y/N)': 'N',
+          'UK Shipments per Week': '400',
+          'UK Courier': 'DPD',
+          'Callback Needed': 'FALSE',
+          'Call ID': 'demo-sheet-2',
+          'Transcript Snippet': 'Confirmed they use multi-parcel daily; not ready to switch until Q3.',
+          'Recording URI': '',
+          'Called Number': '+442033344555',
+          'Receptionist Name': ''
+        }
+      ];
+      let rows = demoRows;
+      if (callbackOnly) {
+        rows = rows.filter((r) => String(r['Callback Needed'] || '').toUpperCase() === 'TRUE');
+      }
+      return res.json({
+        ok: true,
+        demo: true,
+        configured: true,
+        source: 'demo',
+        total: rows.length,
+        rows: rows.slice(0, limit)
+      });
+    }
+
+    const client = await getFullClient(clientKey);
+    const spreadsheetId = resolveLogisticsSpreadsheetId(client);
+    if (!spreadsheetId) {
+      return res.json({
+        ok: true,
+        configured: false,
+        source: 'sheet',
+        total: 0,
+        rows: [],
+        message: 'No logistics Google Sheet is linked to this workspace. Add logisticsSheetId (or gsheet_id) on the client, or set LOGISTICS_SHEET_ID.'
+      });
+    }
+
+    const { rows: rawRows } = await sheets.readSheet(spreadsheetId, 'Sheet1!A:V');
+    let records = sheets.logisticsSheetRowsToRecords(rawRows);
+    records.reverse();
+    if (callbackOnly) {
+      records = records.filter((r) => String(r['Callback Needed'] || '').toUpperCase() === 'TRUE');
+    }
+    res.json({
+      ok: true,
+      demo: false,
+      configured: true,
+      source: 'sheet',
+      total: records.length,
+      rows: records.slice(0, limit)
+    });
+  } catch (error) {
+    console.error('[FOLLOW-UP QUEUE ERROR]', error);
+    const msg = error?.message || String(error);
+    res.status(502).json({
+      ok: false,
+      configured: true,
+      error: 'sheet_read_failed',
+      message: msg,
+      rows: []
+    });
+  }
+});
+
 // API endpoint for next actions queue
 app.get('/api/next-actions/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix: 'next-actions:' }), async (req, res) => {
   try {

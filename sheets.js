@@ -360,6 +360,25 @@ export async function updateLead(spreadsheetId, { leadId, rowNumber, patch }) {
   });
 }
 
+/** Map Sheet1 rows (header in row 0) to plain objects for dashboard / APIs. */
+export function logisticsSheetRowsToRecords(values) {
+  const rows = Array.isArray(values) ? values : [];
+  if (rows.length < 2) return [];
+  const headers = (rows[0] || []).map((h) => String(h || '').trim());
+  const records = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i] || [];
+    const o = {};
+    for (let j = 0; j < headers.length; j++) {
+      const key = headers[j];
+      if (!key) continue;
+      o[key] = r[j] != null && r[j] !== '' ? String(r[j]) : '';
+    }
+    records.push(o);
+  }
+  return records;
+}
+
 // Read sheet data
 export async function readSheet(spreadsheetId, range = 'Sheet1!A:Z') {
   try {
