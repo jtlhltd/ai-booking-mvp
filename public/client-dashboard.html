@@ -2735,6 +2735,14 @@
             line-height: 1.45;
         }
 
+        .recording-phone {
+            font-size: 0.82rem;
+            color: #5c6178;
+            margin-top: 4px;
+            font-variant-numeric: tabular-nums;
+            word-break: break-all;
+        }
+
         .recording-transcript-btn {
             flex-shrink: 0;
             margin-left: auto;
@@ -3577,6 +3585,10 @@
             color: #d0d4e8 !important;
         }
 
+        body[data-theme="dark"] .recording-phone {
+            color: #b8bfd9 !important;
+        }
+
         body[data-theme="dark"] .recording-transcript-btn {
             background: rgba(124, 134, 220, 0.12);
             border-color: rgba(124, 134, 220, 0.45);
@@ -4018,7 +4030,6 @@
                         <div class="recording-outcome-chips" id="callRecordingsOutcomeChips" role="group" aria-label="Filter by outcome">
                             <button type="button" class="recording-chip recording-chip--active" data-rec-outcome="all">All</button>
                             <button type="button" class="recording-chip" data-rec-outcome="voicemail">Voicemail</button>
-                            <button type="button" class="recording-chip" data-rec-outcome="booked">Booked</button>
                             <button type="button" class="recording-chip" data-rec-outcome="no-answer">No answer</button>
                             <button type="button" class="recording-chip" data-rec-outcome="completed">Completed</button>
                         </div>
@@ -4071,11 +4082,9 @@
                 <div id="activityFeedToolbar" class="dashboard-list-toolbar activity-feed-toolbar">
                     <div class="recording-outcome-chips" id="activityFeedOutcomeChips" role="group" aria-label="Filter activity by outcome">
                         <button type="button" class="recording-chip recording-chip--active" data-act-outcome="all">All</button>
-                        <button type="button" class="recording-chip" data-act-outcome="booked">Booked</button>
                         <button type="button" class="recording-chip" data-act-outcome="voicemail">Voicemail</button>
                         <button type="button" class="recording-chip" data-act-outcome="no-answer">No answer</button>
                         <button type="button" class="recording-chip" data-act-outcome="completed">Completed</button>
-                        <button type="button" class="recording-chip" data-act-outcome="failed">Failed / busy</button>
                     </div>
                 </div>
                 <div id="recent-calls" class="activity-feed activity-feed--scrollable" role="region" aria-label="Recent calls list"></div>
@@ -4204,13 +4213,6 @@
             }
         }
 
-        /** Same outcome filters (e.g. data-act-outcome="booked"); label only — no booking framing for Tom. */
-        function applyTomOutreachOutcomeChipLabels() {
-            if (!isTomOutreachDashboard(currentClient)) return;
-            document.querySelectorAll('button[data-act-outcome="booked"], button[data-rec-outcome="booked"]').forEach((btn) => {
-                btn.textContent = 'Interested';
-            });
-        }
         const BASE_URL = window.location.origin;
         const THEME_KEY = 'dashboard_theme';
         
@@ -6360,7 +6362,6 @@ ${actionsRow}
                 .filter((v) => v != null && String(v).trim() !== '')
                 .map((v) => String(v).toLowerCase())
                 .join(' ');
-            if (chip === 'booked') return /\bbooked\b/.test(parts);
             if (chip === 'voicemail') return parts.includes('voicemail');
             if (chip === 'no-answer') return parts.includes('no-answer') || parts.includes('no answer');
             if (chip === 'completed') {
@@ -6372,23 +6373,7 @@ ${actionsRow}
                     !parts.includes('booked')
                 );
             }
-            if (chip === 'failed') {
-                return (
-                    parts.includes('failed') ||
-                    parts.includes('rejected') ||
-                    parts.includes('declined') ||
-                    parts.includes('busy')
-                );
-            }
             return true;
-        }
-
-        function formatActivityMaskedPhone(phone) {
-            const raw = String(phone || '').trim();
-            if (!raw) return '';
-            const digits = raw.replace(/\D/g, '');
-            if (digits.length >= 4) return `···${digits.slice(-4)}`;
-            return digits.length > 0 ? '···' : '';
         }
 
         /** True when opening the transcript modal should show real content (API or demo script). */
@@ -6418,7 +6403,6 @@ ${actionsRow}
                 const nd = String(call.name).replace(/\D/g, '');
                 if (nd.length >= 10) phoneRaw = String(call.name).trim();
             }
-            const masked = formatActivityMaskedPhone(phoneRaw);
             const dur = (call.durationLabel && String(call.durationLabel).trim()) || '';
 
             const cells = [];
@@ -6435,7 +6419,7 @@ ${actionsRow}
             pushDatum('Duration', dur ? escapeHtml(dur) : dash, false);
             pushDatum(
                 'Number',
-                masked ? `<span class="activity-datum-mono">${escapeHtml(masked)}</span>` : dash,
+                phoneRaw ? `<span class="activity-datum-mono">${escapeHtml(phoneRaw)}</span>` : dash,
                 false
             );
 
@@ -6492,6 +6476,9 @@ ${actionsRow}
             if (!container) {
                 console.warn('recent-calls container not found');
                 return;
+            }
+            if (activityFeedOutcomeFilter === 'booked' || activityFeedOutcomeFilter === 'failed') {
+                activityFeedOutcomeFilter = 'all';
             }
 
             const explicitList = arguments.length > 0;
@@ -7292,7 +7279,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             if (!chip || chip === 'all') return true;
             const o = String(outcome || '').toLowerCase();
             if (chip === 'voicemail') return o.includes('voicemail');
-            if (chip === 'booked') return o.includes('book');
             if (chip === 'no-answer') return o.includes('no-answer') || o.includes('no_answer') || o.includes('no answer');
             if (chip === 'completed') return o === 'completed';
             return true;
@@ -7397,6 +7383,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 ? `<a class="recording-open-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" download>Download / open</a>`
                 : '';
             const phone = (leadPhone && String(leadPhone).trim()) || '';
+            const phoneLine = phone && !retryTitleIsSamePhone(displayName, phone)
+                ? `<div class="recording-phone">${escapeHtml(phone)}</div>`
+                : '';
             const journeyKey = leadId != null && String(leadId).trim() !== ''
                 ? String(leadId).trim()
                 : phone;
@@ -7411,6 +7400,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         <div class="recording-item-main">
                             <div class="recording-info">
                                 <div class="recording-name">${safeNameAttr}</div>
+                                ${phoneLine}
                                 <div class="recording-meta">${escapeHtml(metaLine || '')}</div>
                             </div>
                             <div class="recording-controls">${controlsHtml}</div>
@@ -7428,6 +7418,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const container = document.getElementById('call-recordings');
             const barHost = document.getElementById('callRecordingsBarHost');
             if (!container) return;
+            if (callRecordingsOutcomeFilter === 'booked') callRecordingsOutcomeFilter = 'all';
             const searchEl = document.getElementById('callRecordingsSearchInput');
             const hint = document.getElementById('callRecordingsSearchHint');
             const q = (searchEl && searchEl.value) ? searchEl.value.trim().toLowerCase() : '';
@@ -7819,7 +7810,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             currentClient = getClientFromURL();
             activityFeedOutcomeFilter = 'all';
             initActivityFeedChips();
-            applyTomOutreachOutcomeChipLabels();
             applyRoiPanelVisibility(currentClient);
             applyTomOutreachDashboardMode(currentClient);
 
