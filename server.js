@@ -8632,8 +8632,8 @@ app.get('/api/demo-dashboard-debug/:clientKey', async (req, res) => {
 
 app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
   const { clientKey } = req.params;
-  /** Max rows returned for Recent Leads card; keep in sync with RECENT_LEADS_DASHBOARD_CAP in public/client-dashboard.html */
-  const RECENT_LEADS_DASHBOARD_CAP = 25;
+  /** Max rows returned for Recent Leads card (full list for typical tenants; keep in sync with client-dashboard RECENT_LEADS_DASHBOARD_CAP). */
+  const RECENT_LEADS_DASHBOARD_CAP = 5000;
   try {
     // Get client config first
     const client = await getFullClient(clientKey);

@@ -324,6 +324,54 @@
             max-height: none;
         }
 
+        .dashboard-section--balanced-row .dashboard-grid > .card > #retryQueueBarHost,
+        .dashboard-section--balanced-row .dashboard-grid > .card > .dashboard-list-toolbar {
+            flex-shrink: 0;
+        }
+
+        .dashboard-list-toolbar {
+            margin-bottom: 10px;
+        }
+
+        .dashboard-list-search {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 8px 11px;
+            border-radius: 8px;
+            border: 1px solid rgba(92, 106, 196, 0.22);
+            background: rgba(255, 255, 255, 0.92);
+            font-size: 0.82rem;
+            color: var(--text);
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .dashboard-list-search::placeholder {
+            color: #9aa0c0;
+        }
+
+        .dashboard-list-search:focus {
+            outline: none;
+            border-color: rgba(92, 106, 196, 0.55);
+            box-shadow: 0 0 0 2px rgba(92, 106, 196, 0.12);
+        }
+
+        .dashboard-search-hint {
+            display: block;
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        body[data-theme="dark"] .dashboard-list-search {
+            background: #1e2433;
+            border-color: rgba(92, 106, 196, 0.45);
+            color: #e8ebff;
+        }
+
+        body[data-theme="dark"] .dashboard-list-search::placeholder {
+            color: #7a8199;
+        }
+
         .dashboard-section--balanced-row .card-upload-leads .upload-paste-row {
             flex-shrink: 0;
         }
@@ -3336,7 +3384,11 @@
 
                 <article class="card card-list">
                     <h3>📋 Recent Leads</h3>
-                    <p class="card-subtitle" id="recentLeadsSubtitle">Recently added leads, newest at the top.</p>
+                    <p class="card-subtitle" id="recentLeadsSubtitle">Recently added leads, newest at the top. Use search to filter; export is the full CRM.</p>
+                    <div class="dashboard-list-toolbar">
+                        <input type="search" id="leadsSearchInput" class="dashboard-list-search" placeholder="Search name, phone, service, status…" autocomplete="off" enterkeyhint="search">
+                        <span id="leadsSearchHint" class="dashboard-search-hint" hidden></span>
+                    </div>
                     <div id="leads-list" class="leads-list thin-scroll"></div>
                     <div class="export-buttons">
                         <button class="export-btn secondary" onclick="exportData('leads')">📥 Export</button>
@@ -3389,6 +3441,11 @@
                 <article class="card">
                     <h3>🔄 Retry Queue</h3>
                     <p class="card-subtitle" id="retryQueueSubtitle">Leads we're retrying after initial contact.</p>
+                    <div id="retryQueueBarHost" style="display:none"></div>
+                    <div id="retryQueueSearchToolbar" class="dashboard-list-toolbar" style="display:none">
+                        <input type="search" id="retryQueueSearchInput" class="dashboard-list-search" placeholder="Search name, phone, queue, due time…" autocomplete="off" enterkeyhint="search">
+                        <span id="retryQueueSearchHint" class="dashboard-search-hint" hidden></span>
+                    </div>
                     <div id="retry-queue" class="retry-queue thin-scroll"></div>
                 </article>
             </div>
@@ -3530,7 +3587,7 @@
     <script>
         const DEMO_CLIENT_KEY = 'demo_client';
         /** Sync with RECENT_LEADS_DASHBOARD_CAP in server.js (/api/demo-dashboard lead query LIMIT). */
-        const RECENT_LEADS_DASHBOARD_CAP = 25;
+        const RECENT_LEADS_DASHBOARD_CAP = 5000;
         const DEMO_URL_ALIASES = new Set(['demo', 'demo_client', 'demo-client', 'sandbox']);
         function isDemoClientKey(key) {
             if (key == null || typeof key !== 'string') return false;
@@ -4018,6 +4075,10 @@ ${actionsRow}
         let currentClient = null;
         let dashboardData = { ...DEMO_DATA };
         let currentLeads = [];
+        /** Full recent-leads array from API (search filters a view; modal uses indices into this). */
+        let recentLeadsAllRows = [];
+        let retryQueueRowsAll = [];
+        let retryQueueBarState = { shown: 0, isDemo: false, opts: {} };
         let liveEventSource = null;
         
         function getClientFromURL() {
@@ -4407,7 +4468,7 @@ ${actionsRow}
             
             const recentLeadsSubtitle = document.getElementById('recentLeadsSubtitle');
             if (recentLeadsSubtitle) {
-                recentLeadsSubtitle.textContent = `Recently added leads for ${businessName}, newest at the top. The summary line compares this list to your total in CRM; export is the full set.`;
+                recentLeadsSubtitle.textContent = `Recently added leads for ${businessName}, newest at the top. Search filters the list below; the summary line compares loaded rows to your CRM total. Export downloads the full set.`;
             }
             
             const appointmentsSubtitle = document.getElementById('appointmentsSubtitle');
@@ -4863,68 +4924,84 @@ ${actionsRow}
             }
         }
 
-        function renderRecentLeadsBar(shown, opts = {}) {
-            const { totalInCrm = null, isDemo = false } = opts;
-            if (!shown || shown < 1) return '';
+        function leadMatchesSearch(lead, q) {
+            if (!q) return true;
+            const hay = [lead.name, lead.phone, lead.email, lead.service, lead.source, lead.status, lead.timeAgo, lead.lastMessage]
+                .map((x) => String(x || '')).join(' ').toLowerCase();
+            return hay.includes(q);
+        }
+
+        function retryMatchesSearch(lead, q) {
+            if (!q) return true;
+            const hay = [
+                lead.name, lead.phone, lead.reason, lead.nextRetry, lead.nextRetryLong,
+                lead.sourceLabel, lead.kindLabel, lead.source, lead.retryType, lead.id
+            ].map((x) => String(x || '')).join(' ').toLowerCase();
+            return hay.includes(q);
+        }
+
+        function renderRecentLeadsBar(opts = {}) {
+            const {
+                loaded = 0,
+                totalInCrm = null,
+                isDemo = false,
+                filterActive = false,
+                matchCount = 0,
+                listCap = RECENT_LEADS_DASHBOARD_CAP
+            } = opts;
+            if (!loaded && !filterActive) return '';
             if (isDemo) {
-                return `<div class="retry-queue-bar" role="status"><span><strong>${formatNumber(shown)}</strong> demo contacts</span></div>`;
+                if (filterActive) {
+                    return `<div class="retry-queue-bar" role="status"><span><strong>${formatNumber(matchCount)}</strong> matches · demo data</span></div>`;
+                }
+                return `<div class="retry-queue-bar" role="status"><span><strong>${formatNumber(loaded)}</strong> demo contacts</span></div>`;
             }
             const total = totalInCrm != null && Number.isFinite(Number(totalInCrm)) ? Math.max(0, Math.round(Number(totalInCrm))) : null;
-            const truncated = total != null && total > shown;
+            if (filterActive) {
+                const parts = [`<strong>${formatNumber(matchCount)}</strong> match${matchCount === 1 ? '' : 'es'}`];
+                parts.push(`${formatNumber(loaded)} loaded`);
+                if (total != null) parts.push(`${formatNumber(total)} in CRM`);
+                if (total != null && total > loaded && loaded >= listCap) {
+                    parts.push(`preview capped at ${formatNumber(listCap)}`);
+                }
+                return `<div class="retry-queue-bar" role="status"><span>${parts.join(' · ')}</span></div>`;
+            }
+            const truncated = total != null && total > loaded;
             let mainHtml;
             if (truncated) {
-                mainHtml = `<strong>${formatNumber(shown)}</strong> shown · <strong>${formatNumber(total)}</strong> leads in CRM`;
-            } else if (total != null && total === shown) {
-                mainHtml = `<strong>${formatNumber(shown)}</strong> leads (newest first)`;
+                mainHtml = `<strong>${formatNumber(loaded)}</strong> loaded · <strong>${formatNumber(total)}</strong> leads in CRM`;
+                if (loaded >= listCap) {
+                    mainHtml += ` · list capped at ${formatNumber(listCap)}`;
+                }
+            } else if (total != null && total === loaded) {
+                mainHtml = `<strong>${formatNumber(loaded)}</strong> leads (newest first)`;
             } else {
-                mainHtml = `<strong>${formatNumber(shown)}</strong> leads shown (newest first)`;
+                mainHtml = `<strong>${formatNumber(loaded)}</strong> leads loaded (newest first)`;
             }
             return `<div class="retry-queue-bar" role="status"><span>${mainHtml}</span></div>`;
         }
 
-        function renderLeads(leads = []) {
-            const container = document.getElementById('leads-list');
-            if (!container) return;
-            // Use current clientBusinessName (updated by personalizeDashboard)
-            const businessName = clientBusinessName || 'Your Business';
-            if (!leads.length) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <span class="empty-state-icon">👥</span>
-                        <div class="empty-state-title">No leads yet</div>
-                        <div class="empty-state-message">Leads ${businessName} receives will appear here as we start following up.</div>
-                    </div>
-                `;
-                currentLeads = [];
-                return;
-            }
-            const listCap = dashboardData.recentLeadsListCap ?? RECENT_LEADS_DASHBOARD_CAP;
-            dashboardData.recentLeads = leads;
-            currentLeads = leads.slice(0, listCap);
-            const bar = renderRecentLeadsBar(currentLeads.length, {
-                totalInCrm: dashboardData.totalLeads,
-                isDemo: currentClient === DEMO_CLIENT_KEY
-            });
-            container.innerHTML = bar + currentLeads.map((lead, index) => {
-                const st = (lead.status || '').trim().toLowerCase();
-                const showNewBadge = st === 'new' || st.startsWith('new ');
-                const statusRaw = (lead.status || 'In follow-up').trim();
-                const hideStatusPill = showNewBadge && /^new(\s|$)/i.test(statusRaw);
-                const statusBlock = hideStatusPill
-                    ? ''
-                    : `<span class="lead-status">${escapeHtml(statusRaw)}</span>`;
-                const timeBit = lead.timeAgo
-                    ? `<span class="lead-meta-sep" aria-hidden="true">·</span><span class="lead-meta-added">${escapeHtml(lead.timeAgo)}</span>`
-                    : '';
-                return `
-                <div class="lead-item" data-lead-index="${index}" role="button" tabindex="0">
+        function buildLeadItemHtml(lead, fullIndex) {
+            const st = (lead.status || '').trim().toLowerCase();
+            const showNewBadge = st === 'new' || st.startsWith('new ');
+            const statusRaw = (lead.status || 'In follow-up').trim();
+            const hideStatusPill = showNewBadge && /^new(\s|$)/i.test(statusRaw);
+            const statusBlock = hideStatusPill
+                ? ''
+                : `<span class="lead-status">${escapeHtml(statusRaw)}</span>`;
+            const timeBit = lead.timeAgo
+                ? `<span class="lead-meta-sep" aria-hidden="true">·</span><span class="lead-meta-added">${escapeHtml(lead.timeAgo)}</span>`
+                : '';
+            const fi = String(fullIndex);
+            return `
+                <div class="lead-item" data-lead-full-index="${fi}" role="button" tabindex="0">
                     <div class="lead-item-row1">
                         <div class="lead-item-titles">
                             <span class="lead-name" title="${escapeHtml(lead.name || 'Prospect')}">${escapeHtml(lead.name || 'Prospect')}</span>
                             ${showNewBadge ? '<span class="lead-new-badge" aria-label="New lead">New</span>' : ''}
                             ${statusBlock}
                         </div>
-                        <button type="button" class="timeline-btn" data-timeline-index="${index}" aria-label="View journey for ${escapeHtml(lead.name || 'lead')}">Journey</button>
+                        <button type="button" class="timeline-btn" data-lead-full-index="${fi}" aria-label="View journey for ${escapeHtml(lead.name || 'lead')}">Journey</button>
                     </div>
                     <div class="lead-item-row2">
                         <span class="lead-meta-phone">${escapeHtml(lead.phone || lead.email || '')}</span>
@@ -4934,8 +5011,141 @@ ${actionsRow}
                     </div>
                 </div>
             `;
-            }).join('');
+        }
+
+        function repaintRecentLeadsList() {
+            const container = document.getElementById('leads-list');
+            if (!container) return;
+            const businessName = clientBusinessName || 'Your Business';
+            const searchEl = document.getElementById('leadsSearchInput');
+            const hintEl = document.getElementById('leadsSearchHint');
+            const filterQ = (searchEl && searchEl.value) ? searchEl.value.trim().toLowerCase() : '';
+            const listCap = dashboardData.recentLeadsListCap ?? RECENT_LEADS_DASHBOARD_CAP;
+            const isDemo = currentClient === DEMO_CLIENT_KEY;
+
+            if (!recentLeadsAllRows.length) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <span class="empty-state-icon">👥</span>
+                        <div class="empty-state-title">No leads yet</div>
+                        <div class="empty-state-message">Leads ${businessName} receives will appear here as we start following up.</div>
+                    </div>
+                `;
+                if (hintEl) {
+                    hintEl.textContent = '';
+                    hintEl.hidden = true;
+                }
+                currentLeads = [];
+                return;
+            }
+
+            const entries = recentLeadsAllRows
+                .map((lead, fullIndex) => ({ lead, fullIndex }))
+                .filter(({ lead }) => leadMatchesSearch(lead, filterQ));
+            const loaded = recentLeadsAllRows.length;
+            const matchCount = entries.length;
+            const filterActive = !!filterQ;
+
+            if (hintEl) {
+                if (filterActive) {
+                    hintEl.textContent = matchCount ? `${formatNumber(matchCount)} match${matchCount === 1 ? '' : 'es'}` : 'No matches';
+                    hintEl.hidden = false;
+                } else {
+                    hintEl.textContent = '';
+                    hintEl.hidden = true;
+                }
+            }
+
+            const bar = renderRecentLeadsBar({
+                loaded,
+                totalInCrm: dashboardData.totalLeads,
+                isDemo,
+                filterActive,
+                matchCount,
+                listCap
+            });
+            const barHtml = bar || '';
+            if (filterActive && !matchCount) {
+                container.innerHTML = barHtml + `
+                    <div class="empty-state" style="padding:16px 12px;">
+                        <span class="empty-state-icon">🔍</span>
+                        <div class="empty-state-title">No matches</div>
+                        <div class="empty-state-message">Try another search term.</div>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = barHtml + entries.map(({ lead, fullIndex }) => buildLeadItemHtml(lead, fullIndex)).join('');
+            }
+            currentLeads = recentLeadsAllRows;
             attachLeadModalEvents();
+        }
+
+        function renderLeads(leads, opts = {}) {
+            const preserveFilter = !!opts.preserveFilter;
+            if (!Array.isArray(leads)) {
+                repaintRecentLeadsList();
+                return;
+            }
+            recentLeadsAllRows = leads.slice();
+            dashboardData.recentLeads = recentLeadsAllRows;
+            if (!preserveFilter) {
+                const si = document.getElementById('leadsSearchInput');
+                if (si) si.value = '';
+                const hint = document.getElementById('leadsSearchHint');
+                if (hint) {
+                    hint.textContent = '';
+                    hint.hidden = true;
+                }
+            }
+            repaintRecentLeadsList();
+        }
+
+        function setRetryQueueChromeVisible(visible) {
+            const tool = document.getElementById('retryQueueSearchToolbar');
+            const barHost = document.getElementById('retryQueueBarHost');
+            if (tool) tool.style.display = visible ? '' : 'none';
+            if (barHost) barHost.style.display = visible ? '' : 'none';
+        }
+
+        function repaintRetryQueueList() {
+            const listEl = document.getElementById('retry-queue');
+            if (!listEl) return;
+            const searchEl = document.getElementById('retryQueueSearchInput');
+            const hint = document.getElementById('retryQueueSearchHint');
+            const barHost = document.getElementById('retryQueueBarHost');
+            if (!retryQueueRowsAll.length) {
+                if (hint) {
+                    hint.textContent = '';
+                    hint.hidden = true;
+                }
+                return;
+            }
+            const q = (searchEl && searchEl.value) ? searchEl.value.trim().toLowerCase() : '';
+            const filtered = !q ? retryQueueRowsAll.slice() : retryQueueRowsAll.filter((l) => retryMatchesSearch(l, q));
+            const { shown, isDemo, opts } = retryQueueBarState;
+            if (barHost && shown > 0) {
+                barHost.innerHTML = renderRetryQueueBar(shown, isDemo, opts);
+            }
+            if (hint) {
+                if (q && retryQueueRowsAll.length) {
+                    hint.textContent = `${formatNumber(filtered.length)} match${filtered.length === 1 ? '' : 'es'}`;
+                    hint.hidden = false;
+                } else {
+                    hint.textContent = '';
+                    hint.hidden = true;
+                }
+            }
+            if (q && !filtered.length) {
+                listEl.innerHTML = `
+                    <div class="empty-state" style="padding: 16px 12px;">
+                        <span class="empty-state-icon">🔍</span>
+                        <div class="empty-state-title">No matches</div>
+                        <div class="empty-state-message">Try another search term.</div>
+                    </div>
+                `;
+                return;
+            }
+            listEl.innerHTML = filtered.map((lead) => renderRetryQueueRow(lead, { isDemo })).join('');
         }
 
 
@@ -5850,13 +6060,25 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
         async function renderRetryQueue(data) {
             const container = document.getElementById('retry-queue');
+            const barHost = document.getElementById('retryQueueBarHost');
             if (!container) return;
 
             if (currentClient === DEMO_CLIENT_KEY) {
                 const totalCalls = data.totalCalls || 0;
                 const failedCalls = Math.floor(totalCalls * 0.15);
-                
+
                 if (failedCalls === 0) {
+                    retryQueueRowsAll = [];
+                    retryQueueBarState = { shown: 0, isDemo: false, opts: {} };
+                    if (barHost) barHost.innerHTML = '';
+                    const rs = document.getElementById('retryQueueSearchInput');
+                    if (rs) rs.value = '';
+                    const hint = document.getElementById('retryQueueSearchHint');
+                    if (hint) {
+                        hint.textContent = '';
+                        hint.hidden = true;
+                    }
+                    setRetryQueueChromeVisible(false);
                     container.innerHTML = `
                         <div class="empty-state" style="padding: 20px;">
                             <span class="empty-state-icon">✅</span>
@@ -5874,8 +6096,17 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     nextRetry: idx === 0 ? 'Today, 2pm' : idx === 1 ? 'Today, 4pm' : 'Tomorrow, 10am'
                 }));
 
-                container.innerHTML = renderRetryQueueBar(retryLeads.length, true)
-                    + retryLeads.map((lead) => renderRetryQueueRow(lead, { isDemo: true })).join('');
+                retryQueueRowsAll = retryLeads;
+                retryQueueBarState = { shown: retryLeads.length, isDemo: true, opts: {} };
+                const rs = document.getElementById('retryQueueSearchInput');
+                if (rs) rs.value = '';
+                const hint = document.getElementById('retryQueueSearchHint');
+                if (hint) {
+                    hint.textContent = '';
+                    hint.hidden = true;
+                }
+                setRetryQueueChromeVisible(true);
+                repaintRetryQueueList();
                 return;
             }
 
@@ -5883,11 +6114,26 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const response = await fetch(`${BASE_URL}/api/retry-queue/${currentClient}`, { cache: 'no-store' });
                 const payload = await response.json().catch(() => ({}));
                 if (!response.ok || !payload?.ok) {
+                    retryQueueRowsAll = [];
+                    retryQueueBarState = { shown: 0, isDemo: false, opts: {} };
+                    if (barHost) barHost.innerHTML = '';
+                    setRetryQueueChromeVisible(false);
                     const errMsg = payload?.error || `Could not load retry queue (${response.status})`;
                     showError(container, errMsg, () => renderRetryQueue(data));
                     return;
                 }
                 if (!payload.retries || payload.retries.length === 0) {
+                    retryQueueRowsAll = [];
+                    retryQueueBarState = { shown: 0, isDemo: false, opts: {} };
+                    if (barHost) barHost.innerHTML = '';
+                    const rs = document.getElementById('retryQueueSearchInput');
+                    if (rs) rs.value = '';
+                    const hint = document.getElementById('retryQueueSearchHint');
+                    if (hint) {
+                        hint.textContent = '';
+                        hint.hidden = true;
+                    }
+                    setRetryQueueChromeVisible(false);
                     const subEl = document.getElementById('retryQueueSubtitle');
                     if (subEl && clientBusinessName) {
                         subEl.textContent = `No pending retries or outbound call slots for ${clientBusinessName} right now. After no-answer, busy, or voicemail we usually schedule another attempt.`;
@@ -5913,18 +6159,35 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const listCap = payload.listCap ?? payload.previewLimit ?? 500;
                 const subEl = document.getElementById('retryQueueSubtitle');
                 if (subEl && clientBusinessName) {
-                    subEl.textContent = `All pending retries and outbound call slots for ${clientBusinessName} (retry queue + call queue), soonest first. The list shows up to ${formatNumber(listCap)} soonest rows; the bar above compares that to total pending in the database. Hover a row for full date and number.`;
+                    subEl.textContent = `All pending retries and outbound call slots for ${clientBusinessName} (retry queue + call queue), soonest first. The list shows up to ${formatNumber(listCap)} soonest rows; the bar above compares that to total pending in the database. Use search to filter loaded rows. Hover a row for full date and number.`;
                 }
-                container.innerHTML = renderRetryQueueBar(dedupedRetries.length, false, {
-                    totalPending: payload.totalPending ?? payload.totalInWindow,
-                    listCap,
-                    previewLimit: payload.previewLimit,
-                    truncated: payload.truncated === true,
-                    totalInWindow: payload.totalInWindow
-                })
-                    + dedupedRetries.map((lead) => renderRetryQueueRow(lead)).join('');
+                retryQueueRowsAll = dedupedRetries;
+                retryQueueBarState = {
+                    shown: dedupedRetries.length,
+                    isDemo: false,
+                    opts: {
+                        totalPending: payload.totalPending ?? payload.totalInWindow,
+                        listCap,
+                        previewLimit: payload.previewLimit,
+                        truncated: payload.truncated === true,
+                        totalInWindow: payload.totalInWindow
+                    }
+                };
+                const rs = document.getElementById('retryQueueSearchInput');
+                if (rs) rs.value = '';
+                const hint = document.getElementById('retryQueueSearchHint');
+                if (hint) {
+                    hint.textContent = '';
+                    hint.hidden = true;
+                }
+                setRetryQueueChromeVisible(true);
+                repaintRetryQueueList();
             } catch (error) {
                 console.error('Failed to load retry queue', error);
+                retryQueueRowsAll = [];
+                retryQueueBarState = { shown: 0, isDemo: false, opts: {} };
+                if (barHost) barHost.innerHTML = '';
+                setRetryQueueChromeVisible(false);
                 showError(container, 'Unable to load retry queue. Please refresh the page.', () => renderRetryQueue(data));
             }
         }
@@ -6224,18 +6487,19 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
         function attachLeadModalEvents() {
             document.querySelectorAll('.lead-item').forEach(item => {
-                item.addEventListener('click', () => openLeadModal(item.dataset.leadIndex));
+                const fullIdx = item.dataset.leadFullIndex;
+                item.addEventListener('click', () => openLeadModal(fullIdx));
                 item.addEventListener('keypress', (event) => {
                     if (event.key === 'Enter' || event.key === ' ') {
-                        openLeadModal(item.dataset.leadIndex);
+                        openLeadModal(fullIdx);
                     }
                 });
-                const timelineBtn = item.querySelector('.timeline-btn[data-timeline-index]');
+                const timelineBtn = item.querySelector('.timeline-btn[data-lead-full-index]');
                 if (timelineBtn) {
                     timelineBtn.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        const idx = Number(timelineBtn.dataset.timelineIndex);
-                        const lead = currentLeads[idx];
+                        const idx = Number(timelineBtn.dataset.leadFullIndex);
+                        const lead = recentLeadsAllRows[idx];
                         if (!lead) return;
                         const lid = lead.id != null ? String(lead.id) : String(lead.phone || idx);
                         viewLeadTimeline(lid, lead.name || 'Prospect');
@@ -6245,7 +6509,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         }
 
         function openLeadModal(index) {
-            const lead = currentLeads[Number(index)];
+            const lead = recentLeadsAllRows[Number(index)];
             if (!lead) return;
             const modal = document.getElementById('leadModal');
             if (!modal) return;
@@ -6412,6 +6676,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 }, 100);
             }
             initThemeToggle();
+            initDashboardListSearch();
             // Init test call button - it will fetch config if needed
             initTestCallButton(currentClient, config).catch(err => console.warn('Test call button init error:', err));
             initModalControls();
@@ -6440,6 +6705,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     highPriorityLeads: 0,
                     mediumPriorityLeads: 0,
                     lowPriorityLeads: 0,
+                    recentLeadsListCap: RECENT_LEADS_DASHBOARD_CAP,
                     recentLeads: [],
                     recentCalls: [],
                     appointments: [],
@@ -6867,6 +7133,19 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
         }
 
+        function initDashboardListSearch() {
+            const leadsInput = document.getElementById('leadsSearchInput');
+            if (leadsInput && !leadsInput.dataset.searchBound) {
+                leadsInput.dataset.searchBound = '1';
+                leadsInput.addEventListener('input', () => repaintRecentLeadsList());
+            }
+            const retryInput = document.getElementById('retryQueueSearchInput');
+            if (retryInput && !retryInput.dataset.searchBound) {
+                retryInput.dataset.searchBound = '1';
+                retryInput.addEventListener('input', () => repaintRetryQueueList());
+            }
+        }
+
         function initThemeToggle() {
             const toggle = document.getElementById('themeToggle');
             if (!toggle) return;
@@ -6894,15 +7173,15 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             if (!modal) return;
             const index = modal.dataset.currentIndex;
             if (index === undefined || index === '') return;
-            const lead = currentLeads[Number(index)];
+            const fullIdx = Number(index);
+            const lead = recentLeadsAllRows[fullIdx];
             if (!lead) return;
 
             if (currentClient === DEMO_CLIENT_KEY || !lead.id) {
                 applyLocalLeadAction(lead, action);
-                dashboardData.recentLeads = dashboardData.recentLeads?.map((item, idx) =>
-                    idx === Number(index) ? lead : item
-                ) || currentLeads;
-                renderLeads(dashboardData.recentLeads || currentLeads);
+                recentLeadsAllRows[fullIdx] = lead;
+                dashboardData.recentLeads = recentLeadsAllRows;
+                renderLeads(recentLeadsAllRows, { preserveFilter: true });
                 closeLeadModal();
                 showToast('Lead Updated', `Lead ${action === 'snooze' ? 'snoozed' : 'escalated'} successfully`, 'success');
                 return;
@@ -6919,10 +7198,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     throw new Error(payload?.error || 'Action failed');
                 }
                 if (payload.lead) {
-                    dashboardData.recentLeads = (dashboardData.recentLeads || []).map(item =>
-                        item.id === lead.id ? { ...item, ...payload.lead } : item
-                    );
-                    renderLeads(dashboardData.recentLeads);
+                    const updated = { ...lead, ...payload.lead };
+                    recentLeadsAllRows[fullIdx] = updated;
+                    dashboardData.recentLeads = recentLeadsAllRows;
+                    renderLeads(recentLeadsAllRows, { preserveFilter: true });
                 }
                 closeLeadModal();
                 showToast('Lead Updated', `Lead ${action === 'snooze' ? 'snoozed' : 'escalated'} successfully`, 'success');
