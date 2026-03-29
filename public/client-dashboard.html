@@ -2504,7 +2504,7 @@
 
         .follow-up-queue-table th {
             text-align: left;
-            padding: 10px 14px;
+            padding: 0;
             background: rgba(92, 106, 196, 0.08);
             color: var(--text-secondary, #5c6178);
             font-weight: 600;
@@ -2516,6 +2516,62 @@
             z-index: 1;
             white-space: nowrap;
             border-bottom: 1px solid rgba(92, 106, 196, 0.15);
+            vertical-align: middle;
+        }
+
+        .follow-up-th-btn {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 6px;
+            width: 100%;
+            margin: 0;
+            padding: 10px 14px;
+            border: none;
+            background: transparent;
+            font: inherit;
+            font-size: inherit;
+            font-weight: inherit;
+            letter-spacing: inherit;
+            text-transform: inherit;
+            color: inherit;
+            cursor: pointer;
+            text-align: left;
+            box-sizing: border-box;
+        }
+
+        .follow-up-th-btn:hover {
+            background: rgba(92, 106, 196, 0.06);
+        }
+
+        .follow-up-th-btn:focus-visible {
+            outline: 2px solid var(--primary, #5c6ac4);
+            outline-offset: -2px;
+        }
+
+        .follow-up-th-label {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+
+        .follow-up-th-sort {
+            flex-shrink: 0;
+            font-size: 0.6rem;
+            opacity: 0.4;
+            line-height: 1;
+        }
+
+        .follow-up-queue-table th.follow-up-th--active .follow-up-th-sort {
+            opacity: 1;
+            color: var(--primary, #5c6ac4);
+        }
+
+        body[data-theme="dark"] .follow-up-th-btn:hover {
+            background: rgba(124, 134, 220, 0.12);
+        }
+
+        body[data-theme="dark"] .follow-up-queue-table th.follow-up-th--active .follow-up-th-sort {
+            color: #a5b4fc;
         }
 
         .follow-up-queue-table td {
@@ -7450,6 +7506,97 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             'Called Number'
         ];
 
+        let followUpQueueState = {
+            rawRows: [],
+            cols: [],
+            sortKey: null,
+            sortDir: 'desc'
+        };
+
+        /** Parse "DD/MM/YYYY, HH:mm:ss" (sheet / en-GB) for sorting. */
+        function followUpParseUkTimestamp(s) {
+            const m = String(s || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}),\s*(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+            if (!m) return NaN;
+            const d = Number(m[1]);
+            const mo = Number(m[2]);
+            const y = Number(m[3]);
+            const h = Number(m[4]);
+            const mi = Number(m[5]);
+            const se = m[6] != null ? Number(m[6]) : 0;
+            const t = new Date(y, mo - 1, d, h, mi, se).getTime();
+            return Number.isFinite(t) ? t : NaN;
+        }
+
+        function followUpCellSortValue(col, val) {
+            const v = String(val ?? '').trim();
+            if (col === 'Timestamp') {
+                const t = followUpParseUkTimestamp(v);
+                if (Number.isFinite(t)) return { kind: 'num', v: t };
+                const iso = Date.parse(v);
+                if (Number.isFinite(iso)) return { kind: 'num', v: iso };
+                return { kind: 'str', v: v.toLowerCase() };
+            }
+            if (col === 'Callback Needed') {
+                const u = v.toUpperCase();
+                if (u === 'TRUE') return { kind: 'num', v: 1 };
+                if (u === 'FALSE') return { kind: 'num', v: 0 };
+                return { kind: 'num', v: -1 };
+            }
+            if (v === '' || v === '—') return { kind: 'empty', v: 0 };
+            const numLoose = Number(v.replace(/,/g, ''));
+            if (v !== '' && Number.isFinite(numLoose) && /^[\d.,\s]+$/.test(v)) return { kind: 'num', v: numLoose };
+            return { kind: 'str', v: v.toLowerCase() };
+        }
+
+        function followUpCompareSortValues(a, b, dir) {
+            const mul = dir === 'desc' ? -1 : 1;
+            if (a.kind === 'empty' && b.kind === 'empty') return 0;
+            if (a.kind === 'empty') return 1;
+            if (b.kind === 'empty') return -1;
+            if (a.kind === 'num' && b.kind === 'num') return mul * (a.v - b.v);
+            const sa = String(a.v);
+            const sb = String(b.v);
+            if (sa < sb) return mul * -1;
+            if (sa > sb) return mul * 1;
+            return 0;
+        }
+
+        function followUpSortRows(rows, col, dir) {
+            return [...rows].sort((ra, rb) =>
+                followUpCompareSortValues(
+                    followUpCellSortValue(col, ra[col]),
+                    followUpCellSortValue(col, rb[col]),
+                    dir
+                )
+            );
+        }
+
+        function followUpPaintTable(wrap) {
+            const { rawRows, cols, sortKey, sortDir } = followUpQueueState;
+            if (!wrap || !cols.length || !rawRows.length) return;
+            const displayRows = sortKey ? followUpSortRows(rawRows, sortKey, sortDir) : rawRows.slice();
+            const thead = `<thead><tr>${cols.map((c, i) => {
+                const slug = followUpDataColSlug(c);
+                const isActive = sortKey === c;
+                const ariaSort = isActive ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none';
+                const thCls = isActive ? `follow-up-th--active follow-up-th--${sortDir}` : '';
+                const ind = isActive ? (sortDir === 'asc' ? '▲' : '▼') : '⇅';
+                const label = `Sort by ${c}${isActive ? (sortDir === 'asc' ? ', ascending' : ', descending') : ''}`;
+                return `<th scope="col" data-col="${escapeHtml(slug)}" class="${thCls}" aria-sort="${ariaSort}">` +
+                    `<button type="button" class="follow-up-th-btn" data-fu-col-idx="${i}" aria-label="${escapeHtml(label)}">` +
+                    `<span class="follow-up-th-label">${escapeHtml(c)}</span>` +
+                    `<span class="follow-up-th-sort" aria-hidden="true">${ind}</span></button></th>`;
+            }).join('')}</tr></thead>`;
+            const tbody = displayRows.map((row) => {
+                const tds = cols.map((c) => {
+                    const slug = followUpDataColSlug(c);
+                    return `<td data-col="${escapeHtml(slug)}">${formatFollowUpCell(c, row[c])}</td>`;
+                }).join('');
+                return `<tr>${tds}</tr>`;
+            }).join('');
+            wrap.innerHTML = `<table class="follow-up-queue-table">${thead}<tbody>${tbody}</tbody></table>`;
+        }
+
         function followUpVisibleColumns(rows) {
             const cols = FOLLOW_UP_TABLE_COLUMNS.filter((c) =>
                 rows.some((r) => String(r[c] || '').trim() !== '')
@@ -7513,6 +7660,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const res = await fetch(`${BASE_URL}/api/follow-up-queue/${encodeURIComponent(clientKey)}?${q}`, { cache: 'no-store' });
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok || data.ok === false) {
+                    followUpQueueState = { rawRows: [], cols: [], sortKey: null, sortDir: 'desc' };
                     const msg = data?.message || data?.error || `Could not load (${res.status})`;
                     wrap.innerHTML = `<div class="empty-state" style="padding:20px;"><div class="empty-state-message">${escapeHtml(msg)}</div></div>`;
                     return;
@@ -7524,6 +7672,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             <div class="empty-state-title">Sheet not linked</div>
                             <div class="empty-state-message">${escapeHtml(data.message || 'Link a Google Sheet on this workspace (logisticsSheetId or gsheet_id) so rows from your Vapi sheet tool appear here.')}</div>
                         </div>`;
+                    followUpQueueState = { rawRows: [], cols: [], sortKey: null, sortDir: 'desc' };
                     if (hint) {
                         hint.textContent = 'Not configured';
                         hint.hidden = false;
@@ -7537,6 +7686,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         <div class="empty-state-title">${callback ? 'No callbacks flagged' : 'No rows yet'}</div>
                         <div class="empty-state-message">${callback ? 'No rows with Callback Needed = TRUE. Try clearing the filter or refresh after new calls.' : 'When the AI saves parsed transcript fields to your sheet, rows appear here (newest first).'}</div>
                     </div>`;
+                    followUpQueueState = { rawRows: [], cols: [], sortKey: null, sortDir: 'desc' };
                     if (hint) {
                         hint.textContent = data.demo ? 'Demo sample' : `0 in sheet`;
                         hint.hidden = false;
@@ -7544,18 +7694,13 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     return;
                 }
                 const cols = followUpVisibleColumns(rows);
-                const thead = `<thead><tr>${cols.map((c) => {
-                    const slug = followUpDataColSlug(c);
-                    return `<th scope="col" data-col="${escapeHtml(slug)}">${escapeHtml(c)}</th>`;
-                }).join('')}</tr></thead>`;
-                const tbody = rows.map((row) => {
-                    const tds = cols.map((c) => {
-                        const slug = followUpDataColSlug(c);
-                        return `<td data-col="${escapeHtml(slug)}">${formatFollowUpCell(c, row[c])}</td>`;
-                    }).join('');
-                    return `<tr>${tds}</tr>`;
-                }).join('');
-                wrap.innerHTML = `<table class="follow-up-queue-table">${thead}<tbody>${tbody}</tbody></table>`;
+                followUpQueueState = {
+                    rawRows: rows.slice(),
+                    cols,
+                    sortKey: null,
+                    sortDir: 'desc'
+                };
+                followUpPaintTable(wrap);
                 if (hint) {
                     const total = data.total != null ? data.total : rows.length;
                     const parts = [`Showing ${formatNumber(rows.length)}${total > rows.length ? ` of ${formatNumber(total)}` : ''}`];
@@ -7565,6 +7710,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 }
             } catch (e) {
                 console.warn('follow-up queue', e);
+                followUpQueueState = { rawRows: [], cols: [], sortKey: null, sortDir: 'desc' };
                 wrap.innerHTML = '<div class="empty-state-message" style="padding:16px;">Unable to load. Try Refresh.</div>';
             }
         }
@@ -7594,6 +7740,25 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     } catch (err) {
                         showToast('Copy failed', 'Could not copy to clipboard', 'error', 2500);
                     }
+                });
+            }
+            if (wrap && !wrap.dataset.sortDelegation) {
+                wrap.dataset.sortDelegation = '1';
+                wrap.addEventListener('click', (e) => {
+                    const btn = e.target.closest('.follow-up-th-btn');
+                    if (!btn) return;
+                    e.preventDefault();
+                    const idx = parseInt(btn.getAttribute('data-fu-col-idx'), 10);
+                    if (!Number.isFinite(idx) || idx < 0) return;
+                    const col = followUpQueueState.cols[idx];
+                    if (!col) return;
+                    if (followUpQueueState.sortKey === col) {
+                        followUpQueueState.sortDir = followUpQueueState.sortDir === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        followUpQueueState.sortKey = col;
+                        followUpQueueState.sortDir = col === 'Timestamp' ? 'desc' : 'asc';
+                    }
+                    followUpPaintTable(wrap);
                 });
             }
         }
