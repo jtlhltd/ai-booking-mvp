@@ -1650,18 +1650,19 @@
         .activity-feed {
             display: flex;
             flex-direction: column;
-            gap: 16px;
+            gap: 22px;
         }
 
         #activityFeedSubtitle {
-            max-width: 72ch;
-            line-height: 1.6;
-            font-size: 0.9375rem;
-            margin-bottom: 16px;
+            max-width: 56ch;
+            line-height: 1.45;
+            font-size: 0.9rem;
+            margin-bottom: 14px;
+            color: var(--text-secondary);
         }
 
         .activity-feed--scrollable {
-            max-height: min(58vh, 560px);
+            max-height: min(62vh, 640px);
             overflow-y: auto;
             overflow-x: hidden;
             padding-right: 4px;
@@ -1688,8 +1689,8 @@
             flex-wrap: wrap;
             align-items: center;
             gap: 8px 12px;
-            margin: 0 0 8px;
-            font-size: inherit;
+            margin: 0 0 10px;
+            font-size: 1.05rem;
         }
 
         .activity-feed-live-badge {
@@ -1706,17 +1707,22 @@
         }
 
         .activity-feed-toolbar {
-            margin-bottom: 14px;
+            margin-bottom: 18px;
         }
 
         .activity-feed-toolbar .recording-outcome-chips {
             margin-top: 0;
-            gap: 8px;
+            gap: 10px;
+        }
+
+        .activity-feed-toolbar .recording-chip {
+            padding: 8px 14px;
+            font-size: 0.8rem;
         }
 
         .activity-item {
-            padding: 18px 20px;
-            border-radius: 14px;
+            padding: 22px 24px;
+            border-radius: 16px;
             border: 1px solid #ecefff;
             background: #fbfbff;
             box-sizing: border-box;
@@ -1724,26 +1730,26 @@
         }
 
         .activity-item--edge-neutral {
-            border-left: 3px solid rgba(92, 106, 196, 0.35);
+            border-left: 4px solid rgba(92, 106, 196, 0.35);
         }
 
         .activity-item--edge-positive {
-            border-left: 3px solid rgba(22, 163, 74, 0.42);
+            border-left: 4px solid rgba(22, 163, 74, 0.42);
         }
 
         .activity-item--edge-attention {
-            border-left: 3px solid rgba(234, 179, 8, 0.55);
+            border-left: 4px solid rgba(234, 179, 8, 0.55);
         }
 
         .activity-item--edge-issue {
-            border-left: 3px solid rgba(239, 68, 68, 0.45);
+            border-left: 4px solid rgba(239, 68, 68, 0.45);
         }
 
         .activity-item-row {
             display: flex;
             flex-direction: column;
             align-items: stretch;
-            gap: 14px;
+            gap: 18px;
         }
 
         .activity-item-main {
@@ -1753,8 +1759,8 @@
         }
 
         .activity-item-title {
-            font-size: 1.02rem;
-            line-height: 1.45;
+            font-size: 1.08rem;
+            line-height: 1.5;
         }
 
         .activity-item-title .activity-channel {
@@ -1767,22 +1773,22 @@
         .activity-tags {
             display: flex;
             flex-wrap: wrap;
-            gap: 8px;
-            margin-top: 10px;
+            gap: 10px;
+            margin-top: 12px;
             align-items: center;
         }
 
         .activity-pill {
             display: inline-flex;
             align-items: center;
-            padding: 6px 12px;
+            padding: 8px 14px;
             border-radius: 999px;
-            font-size: 0.8125rem;
+            font-size: 0.875rem;
             font-weight: 600;
             border: 1px solid rgba(148,163,184,0.5);
             background: #f4f4ff;
             color: #475569;
-            line-height: 1.25;
+            line-height: 1.3;
         }
 
         .activity-pill.outcome-booked {
@@ -1837,10 +1843,10 @@
         }
 
         .activity-meta {
-            margin-top: 8px;
+            margin-top: 10px;
             color: #8b8fb0;
-            font-size: 0.9375rem;
-            line-height: 1.5;
+            font-size: 1rem;
+            line-height: 1.55;
         }
 
         .workflow-list {
@@ -2004,25 +2010,30 @@
             align-items: center;
             justify-content: flex-start;
             flex-wrap: wrap;
-            gap: 10px;
+            gap: 12px;
             width: 100%;
-            padding-top: 14px;
-            margin-top: 2px;
+            padding-top: 18px;
+            margin-top: 4px;
             border-top: 1px solid rgba(92, 106, 196, 0.1);
             box-sizing: border-box;
         }
 
+        .activity-item-actions .transcript-btn--compact {
+            padding: 10px 18px;
+            font-size: 0.875rem;
+        }
+
         .activity-item-actions .transcript-btn--compact,
         .activity-item-actions .recording-open-link {
-            min-height: 40px;
+            min-height: 44px;
             display: inline-flex;
             align-items: center;
         }
 
         .activity-item-actions .recording-open-link {
-            padding: 8px 14px;
+            padding: 10px 18px;
             border-radius: 8px;
-            font-size: 0.8rem;
+            font-size: 0.875rem;
             font-weight: 600;
         }
 
@@ -3566,7 +3577,7 @@
                 gap: 10px;
             }
             .activity-item {
-                padding: 16px 14px;
+                padding: 20px 16px;
             }
             .lead-item {
                 padding: 10px;
@@ -3933,7 +3944,7 @@
                     <span>🗓️ Live Activity Feed</span>
                     <span id="activityFeedLiveBadge" class="activity-feed-live-badge" hidden>Live</span>
                 </h3>
-                <p class="card-subtitle" id="activityFeedSubtitle">Latest outbound calls, newest first. Relative times — hover a row for the exact start time. This list is not limited to the last 24 hours (see Today’s Activity for rolling windows).</p>
+                <p class="card-subtitle" id="activityFeedSubtitle">Newest calls first · hover a row for exact time</p>
                 <div id="activityFeedToolbar" class="dashboard-list-toolbar activity-feed-toolbar">
                     <div class="recording-outcome-chips" id="activityFeedOutcomeChips" role="group" aria-label="Filter activity by outcome">
                         <button type="button" class="recording-chip recording-chip--active" data-act-outcome="all">All</button>
@@ -4930,7 +4941,7 @@ ${actionsRow}
             const activityFeedSubtitle = document.getElementById('activityFeedSubtitle');
             if (activityFeedSubtitle) {
                 const tzLabel = DASHBOARD_ACTIVITY_TZ.replace(/_/g, ' ');
-                activityFeedSubtitle.textContent = `Latest calls for ${businessName}, newest first (up to ${ACTIVITY_FEED_DISPLAY_CAP} loaded). Relative times (${tzLabel}); hover a row for exact start. Not limited to 24 hours — use Today’s Activity for rolling outreach metrics. Filter chips narrow by outcome; “Live” appears for ~1 minute after a new call arrives via live sync.`;
+                activityFeedSubtitle.textContent = `${businessName} · newest first (${tzLabel}) · hover a row for exact time · up to ${ACTIVITY_FEED_DISPLAY_CAP} calls`;
             }
             
             // Update more card subtitles
