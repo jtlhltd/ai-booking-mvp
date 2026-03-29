@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <title>Client Dashboard - AI Booking Concierge</title>
+    <title>Client Dashboard</title>
     <link rel="icon" type="image/svg+xml" href="/icon.svg">
     <link rel="alternate icon" href="/icon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -3755,8 +3755,8 @@
                     <div class="client-logo" id="clientLogo">✨</div>
                     <div class="client-details">
                         <h1 id="clientName">Your Concierge Dashboard</h1>
-                        <p id="clientDescription">See what we're doing for you - calls, follow-ups, and bookings</p>
-                        <p id="clientTagline">We chase every lead you already paid for and land them on your calendar.</p>
+                        <p id="clientDescription">See what we're doing for you — calls, follow-ups, and outcomes.</p>
+                        <p id="clientTagline">We work your leads with fast outbound coverage and clear reporting.</p>
                         <p id="clientSubtitle" style="font-size: var(--fs-body); color: var(--muted); margin-top: 8px; display: none;"></p>
                     </div>
                 </div>
@@ -4156,7 +4156,7 @@
             const k = key.trim().toLowerCase();
             return k === DEMO_CLIENT_KEY || DEMO_URL_ALIASES.has(k);
         }
-        /** Tom's tenant: ROI + booking-oriented KPIs and copy are not used */
+        /** Tom's tenant (D2D Xpress): outreach-only UI — no appointments/ROI/conversion tiles; copy avoids booking/calendar framing */
         const TOM_DASH_CLIENT_KEY = 'd2d-xpress-tom';
         const TOM_OUTREACH_WORKFLOW_STEPS = [
             { icon: '📥', title: 'Leads received', desc: 'Contacts arrive from your lists, uploads, and integrations.' },
@@ -4180,7 +4180,27 @@
         function applyTomOutreachDashboardMode(clientKey) {
             const on = isTomOutreachDashboard(clientKey);
             document.body.classList.toggle('tom-outreach-dashboard', on);
-            if (on) document.title = 'Client Dashboard — D2D Xpress Outreach';
+            if (on) {
+                document.title = 'Client Dashboard — D2D Xpress Outreach';
+                const chip = document.getElementById('conciergeStatus');
+                if (chip) chip.textContent = '✓ Outreach active';
+                const intSub = document.getElementById('integrationsCardSubtitle');
+                if (intSub) {
+                    intSub.textContent = 'Channels connected for outreach (voice, SMS, and related integrations).';
+                }
+                const actT = document.getElementById('activeTitle');
+                const actS = document.getElementById('activeSubtitle');
+                if (actT) actT.textContent = 'Your outreach is active';
+                if (actS) actS.textContent = 'Dialling and logging activity';
+            }
+        }
+
+        /** Same outcome filters (e.g. data-act-outcome="booked"); label only — no booking framing for Tom. */
+        function applyTomOutreachOutcomeChipLabels() {
+            if (!isTomOutreachDashboard(currentClient)) return;
+            document.querySelectorAll('button[data-act-outcome="booked"], button[data-rec-outcome="booked"]').forEach((btn) => {
+                btn.textContent = 'Interested';
+            });
         }
         const BASE_URL = window.location.origin;
         const THEME_KEY = 'dashboard_theme';
@@ -4886,7 +4906,9 @@ ${actionsRow}
                 if (hasClientConfig && (config.name || config.displayName || config.display_name)) {
                     clientNameEl.textContent = businessName;
                 } else {
-                    clientNameEl.textContent = 'Your Concierge Dashboard';
+                    clientNameEl.textContent = isTomOutreachDashboard(config.key)
+                        ? 'Your outreach dashboard'
+                        : 'Your Concierge Dashboard';
                 }
             }
             if (clientDescEl) {
@@ -5059,10 +5081,23 @@ ${actionsRow}
             
             // Update active indicator
             const activeTitle = document.getElementById('activeTitle');
-            if (activeTitle) activeTitle.textContent = `${businessName}'s concierge is active`;
+            if (activeTitle) {
+                activeTitle.textContent = isTomOutreachDashboard(currentClient)
+                    ? `${businessName}'s outreach is active`
+                    : `${businessName}'s concierge is active`;
+            }
             
             const activeSubtitle = document.getElementById('activeSubtitle');
-            if (activeSubtitle) activeSubtitle.textContent = `Working on ${businessName}'s leads right now`;
+            if (activeSubtitle) {
+                activeSubtitle.textContent = isTomOutreachDashboard(currentClient)
+                    ? `Dialling and logging activity for ${businessName}`
+                    : `Working on ${businessName}'s leads right now`;
+            }
+
+            const conciergeChip = document.getElementById('conciergeStatus');
+            if (conciergeChip) {
+                conciergeChip.textContent = isTomOutreachDashboard(currentClient) ? '✓ Outreach active' : '✓ Concierge Active';
+            }
             
             // Update card subtitles
             const callQualitySubtitle = document.getElementById('callQualitySubtitle');
@@ -5132,7 +5167,7 @@ ${actionsRow}
             const integrationsSub = document.getElementById('integrationsCardSubtitle');
             if (integrationsSub) {
                 integrationsSub.textContent = isTomOutreachDashboard(currentClient)
-                    ? `Channels connected for ${businessName}'s outreach (SMS, voice, calendar where used).`
+                    ? `Channels connected for ${businessName}'s outreach (voice, SMS, and related integrations).`
                     : `Everything connected to handle your bookings.`;
             }
 
@@ -5331,7 +5366,7 @@ ${actionsRow}
             const convHint = document.getElementById('statusHintConversion');
             if (convHint) {
                 convHint.textContent = isTomOutreachDashboard(currentClient)
-                    ? `Booking/appt rate: ${winRate} — booked outcome or new appt vs unique leads dialed (see Call Quality for pick-up stats)`
+                    ? `Pipeline outcome rate: ${winRate} — vs unique leads dialed (tile hidden here; see Call Quality for connect stats)`
                     : `Win rate: ${winRate}`;
             }
             const respN = data.metrics?.firstResponseSampleSize;
@@ -5919,7 +5954,11 @@ ${actionsRow}
                         lines.push(`Longest call: ${mx}`);
                     }
                     if ((d.bookedRows ?? 0) > 0) {
-                        lines.push(`${formatNumber(d.bookedRows)} booked outcome${d.bookedRows === 1 ? '' : 's'}`);
+                        lines.push(
+                            isTomOutreachDashboard(currentClient)
+                                ? `${formatNumber(d.bookedRows)} interested / positive signal${d.bookedRows === 1 ? '' : 's'}`
+                                : `${formatNumber(d.bookedRows)} booked outcome${d.bookedRows === 1 ? '' : 's'}`
+                        );
                     }
                     if ((d.voicemailRows ?? 0) > 0) {
                         lines.push(`${formatNumber(d.voicemailRows)} voicemail row${d.voicemailRows === 1 ? '' : 's'}`);
@@ -6118,7 +6157,7 @@ ${actionsRow}
 
         function formatActivityOutcomeDisplay(str) {
             if (!str || str === '—') return '—';
-            return String(str)
+            let out = String(str)
                 .replace(/_/g, ' ')
                 .replace(/-/g, ' ')
                 .trim()
@@ -6126,6 +6165,11 @@ ${actionsRow}
                 .filter(Boolean)
                 .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
                 .join(' ');
+            if (isTomOutreachDashboard(currentClient)) {
+                if (out.toLowerCase() === 'booked') return 'Interested';
+                out = out.replace(/\bBooked\b/g, 'Interested');
+            }
+            return out;
         }
 
         /** Seconds for display; treats large round values as ms (e.g. Vapi). */
@@ -7770,6 +7814,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             currentClient = getClientFromURL();
             activityFeedOutcomeFilter = 'all';
             initActivityFeedChips();
+            applyTomOutreachOutcomeChipLabels();
             applyRoiPanelVisibility(currentClient);
             applyTomOutreachDashboardMode(currentClient);
 
