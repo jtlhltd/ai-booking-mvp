@@ -9143,6 +9143,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         status: mapCallStatus(displayStatus),
         statusClass: mapStatusClass(displayStatus),
         timeAgo: formatTimeAgoLabel(row.created_at),
+        createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
         outcome: isStaleInitiated ? 'unknown' : (effectiveOutcome || null),
         outcomeLabel: displayOutcomeLabel || null,
         duration: effectiveDuration != null ? effectiveDuration : null,

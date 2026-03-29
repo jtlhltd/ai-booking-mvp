@@ -1653,11 +1653,52 @@
             gap: 10px;
         }
 
+        .activity-feed--scrollable {
+            max-height: min(52vh, 480px);
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding-right: 4px;
+            margin-right: -2px;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(92, 106, 196, 0.35) transparent;
+        }
+
+        .activity-feed--scrollable::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .activity-feed--scrollable::-webkit-scrollbar-thumb {
+            background: rgba(92, 106, 196, 0.3);
+            border-radius: 999px;
+        }
+
+        .activity-feed--scrollable::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
         .activity-item {
             padding: 12px 14px;
             border-radius: 12px;
             border: 1px solid #ecefff;
             background: #fbfbff;
+            box-sizing: border-box;
+            overflow-x: hidden;
+        }
+
+        .activity-item--edge-neutral {
+            border-left: 3px solid rgba(92, 106, 196, 0.35);
+        }
+
+        .activity-item--edge-positive {
+            border-left: 3px solid rgba(22, 163, 74, 0.42);
+        }
+
+        .activity-item--edge-attention {
+            border-left: 3px solid rgba(234, 179, 8, 0.55);
+        }
+
+        .activity-item--edge-issue {
+            border-left: 3px solid rgba(239, 68, 68, 0.45);
         }
 
         .activity-item-row {
@@ -1885,15 +1926,23 @@
 
 
         .transcript-btn {
-            background: transparent;
-            border: 1px solid rgba(92,106,196,0.3);
+            background: rgba(92, 106, 196, 0.06);
+            border: 1px solid rgba(92,106,196,0.32);
             color: var(--primary);
-            padding: 4px 10px;
-            border-radius: 6px;
+            padding: 8px 14px;
+            border-radius: 8px;
             font-size: 0.8rem;
+            font-weight: 600;
             cursor: pointer;
             margin-top: 6px;
-            transition: all 0.2s;
+            transition: background 0.2s, border-color 0.2s, color 0.2s;
+            outline: none;
+            box-sizing: border-box;
+        }
+
+        .transcript-btn:focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
         }
 
         .transcript-btn--compact {
@@ -1904,8 +1953,15 @@
         }
 
         .transcript-btn:hover {
-            background: rgba(92,106,196,0.1);
+            background: rgba(92,106,196,0.12);
             border-color: var(--primary);
+        }
+
+        .activity-item-actions {
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            padding-top: 1px;
         }
 
         .transcript-modal {
@@ -2959,6 +3015,26 @@
             border-color: rgba(92,106,196,0.5);
         }
 
+        body[data-theme="dark"] .activity-feed--scrollable {
+            scrollbar-color: rgba(165, 180, 252, 0.35) transparent;
+        }
+
+        body[data-theme="dark"] .activity-feed--scrollable::-webkit-scrollbar-thumb {
+            background: rgba(165, 180, 252, 0.28);
+        }
+
+        body[data-theme="dark"] .transcript-btn {
+            background: rgba(92, 106, 196, 0.15);
+            border-color: rgba(124, 134, 220, 0.45);
+            color: #a5b4fc;
+        }
+
+        body[data-theme="dark"] .transcript-btn:hover {
+            background: rgba(92, 106, 196, 0.24);
+            border-color: #a5b4fc;
+            color: #e0e7ff;
+        }
+
         body[data-theme="dark"] .activity-item strong {
             color: #ffffff;
         }
@@ -3782,8 +3858,8 @@
         <section class="dashboard-section">
             <article class="card card-fullwidth">
                 <h3>🗓️ Live Activity Feed</h3>
-                <p class="card-subtitle">Real-time conversations your concierge is having with your leads.</p>
-                <div id="recent-calls" class="activity-feed"></div>
+                <p class="card-subtitle" id="activityFeedSubtitle">Latest outbound calls, newest first. Relative times — hover a row for the exact start time. This list is not limited to the last 24 hours (see Today’s Activity for rolling windows).</p>
+                <div id="recent-calls" class="activity-feed activity-feed--scrollable"></div>
             </article>
         </section>
 
@@ -4755,7 +4831,10 @@ ${actionsRow}
             }
             
             const activityFeedSubtitle = document.getElementById('activityFeedSubtitle');
-            if (activityFeedSubtitle) activityFeedSubtitle.textContent = `Real-time conversations ${businessName}'s concierge is having with leads.`;
+            if (activityFeedSubtitle) {
+                const tzLabel = DASHBOARD_ACTIVITY_TZ.replace(/_/g, ' ');
+                activityFeedSubtitle.textContent = `Latest calls for ${businessName}, newest first. Relative times (${tzLabel}); hover a row for exact start. Not limited to 24 hours — use Today’s Activity for rolling outreach metrics. Retries can show as “3× attempts” on one line.`;
+            }
             
             // Update more card subtitles
             const conversionFunnelSubtitle = document.getElementById('conversionFunnelSubtitle');
@@ -6013,8 +6092,11 @@ ${actionsRow}
 
             container.innerHTML = callsToShow.map((call, index) => {
                 const timeAgo = call.timeAgo || formatTimeAgo(call.timestamp || call.created_at);
-                const callId = escapeHtml(String(call.id || call.timestamp || index));
-                const callName = escapeHtml(call.name || 'Prospect');
+                const transcriptId = String(call.callId || call.id || call.dbId || call.timestamp || index);
+                const transcriptIdJs = JSON.stringify(transcriptId);
+                const transcriptNameJs = JSON.stringify(call.name || 'Prospect');
+                const absWhen = formatRecordingDateTime(call.createdAt || call.timestamp || call.created_at);
+                const rowTitleAttr = absWhen ? ` title="${escapeHtml(absWhen)}"` : '';
                 const statusLabel = (call.status || call.rawStatus || '').toString().replace(/_/g, ' ').trim();
                 let outcomeLabel = call.outcomeLabel || '';
                 if (!outcomeLabel && call.summary && /^outcome:/i.test(call.summary)) {
@@ -6059,18 +6141,38 @@ ${actionsRow}
                 if (call.durationLabel) metaParts.push(call.durationLabel);
                 metaParts.push(timeAgo);
 
+                let edgeClass = 'activity-item--edge-neutral';
+                if (isUnknownResult) {
+                    edgeClass = 'activity-item--edge-neutral';
+                } else if (/booked/.test(outcomeLower)) {
+                    edgeClass = 'activity-item--edge-positive';
+                } else if (/voicemail/.test(outcomeLower)) {
+                    edgeClass = 'activity-item--edge-attention';
+                } else if (/(no[- ]?answer|busy|failed|rejected|declined)/.test(outcomeLower)) {
+                    edgeClass = 'activity-item--edge-issue';
+                } else if (/completed/.test(outcomeLower)) {
+                    edgeClass = 'activity-item--edge-positive';
+                }
+
+                const issueHint = 'No connected conversation on this attempt; we may retry (see attempts count).';
+                const pillTitleAttr = edgeClass === 'activity-item--edge-issue'
+                    ? ` title="${escapeHtml(issueHint)}"`
+                    : '';
+
                 return `
-                    <div class="activity-item">
+                    <div class="activity-item ${edgeClass}"${rowTitleAttr}>
                         <div class="activity-item-row">
                             <div class="activity-item-main">
                                 <div class="activity-item-title"><strong>${escapeHtml(call.name || 'Prospect')}</strong><span class="activity-channel"> · ${escapeHtml(call.channel || 'AI call')}</span></div>
                                 <div class="activity-meta">${escapeHtml(metaParts.join(' · '))}</div>
                                 <div class="activity-tags">
-                                    <span class="${pillClass}">${escapeHtml(pillLabel)}</span>
+                                    <span class="${pillClass}"${pillTitleAttr}>${escapeHtml(pillLabel)}</span>
                                     ${wasPickedUp ? '<span class="activity-pill pickup-yes">Picked up</span>' : ''}
                                 </div>
                             </div>
-                            <button type="button" class="transcript-btn transcript-btn--compact" onclick="viewTranscript('${callId}', '${callName}')">Transcript</button>
+                            <div class="activity-item-actions">
+                                <button type="button" class="transcript-btn transcript-btn--compact" onclick="viewTranscript(${transcriptIdJs}, ${transcriptNameJs})" aria-label="View call transcript">Transcript</button>
+                            </div>
                         </div>
                     </div>
                 `;
