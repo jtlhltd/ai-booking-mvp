@@ -912,7 +912,7 @@
         .leads-list {
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 8px;
             overflow-y: auto;
         }
 
@@ -922,31 +922,51 @@
 
         .lead-item {
             border: 1px solid #eef0fb;
-            border-radius: 12px;
-            padding: 12px;
+            border-radius: 10px;
+            padding: 9px 12px;
             background: #f9f9ff;
             cursor: pointer;
             transition: transform 0.2s ease, border-color 0.2s ease;
         }
 
         .lead-item:hover {
-            transform: translateY(-2px);
+            transform: translateY(-1px);
             border-color: rgba(92,106,196,0.5);
+        }
+
+        .lead-item-row1 {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .lead-item-titles {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+            flex: 1 1 auto;
         }
 
         .lead-name {
             font-weight: 600;
             color: #2f3147;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
-        .lead-meta {
+        .lead-item-row2 {
             display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 4px;
-            font-size: 0.9rem;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 4px 8px;
+            margin-top: 5px;
+            font-size: 0.8125rem;
             color: #7b7f9f;
-            margin-top: 6px;
         }
 
         .lead-meta-phone {
@@ -955,21 +975,17 @@
         }
 
         .lead-meta-service {
-            font-size: 0.82rem;
             color: #8b90b0;
         }
 
-        .lead-footer {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-            margin-top: 8px;
+        .lead-meta-sep {
+            color: #b4b8d4;
+            user-select: none;
         }
 
-        .lead-footer--actions-only {
-            justify-content: flex-end;
+        .lead-meta-added {
+            color: #9498b8;
+            font-size: 0.78rem;
         }
 
         .lead-status {
@@ -981,13 +997,6 @@
             letter-spacing: 0.06em;
             background: rgba(92, 106, 196, 0.12);
             color: var(--primary);
-        }
-
-        .lead-name-row {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            flex-wrap: wrap;
         }
 
         .lead-new-badge {
@@ -2647,11 +2656,19 @@
             color: #ffffff;
         }
 
-        body[data-theme="dark"] .lead-meta {
+        body[data-theme="dark"] .lead-meta-service {
+            color: #a8b4d4;
+        }
+
+        body[data-theme="dark"] .lead-item-row2 {
             color: #d0d4e8;
         }
 
-        body[data-theme="dark"] .lead-meta-service {
+        body[data-theme="dark"] .lead-meta-sep {
+            color: #6b728e;
+        }
+
+        body[data-theme="dark"] .lead-meta-added {
             color: #a8b4d4;
         }
 
@@ -3319,7 +3336,7 @@
 
                 <article class="card card-list">
                     <h3>📋 Recent Leads</h3>
-                    <p class="card-subtitle" id="recentLeadsSubtitle">Leads we're actively following up on.</p>
+                    <p class="card-subtitle" id="recentLeadsSubtitle">Recently added leads, newest at the top.</p>
                     <div id="leads-list" class="leads-list thin-scroll"></div>
                     <div class="export-buttons">
                         <button class="export-btn secondary" onclick="exportData('leads')">📥 Export</button>
@@ -3512,6 +3529,8 @@
     
     <script>
         const DEMO_CLIENT_KEY = 'demo_client';
+        /** Sync with RECENT_LEADS_DASHBOARD_CAP in server.js (/api/demo-dashboard lead query LIMIT). */
+        const RECENT_LEADS_DASHBOARD_CAP = 25;
         const DEMO_URL_ALIASES = new Set(['demo', 'demo_client', 'demo-client', 'sandbox']);
         function isDemoClientKey(key) {
             if (key == null || typeof key !== 'string') return false;
@@ -3697,7 +3716,6 @@ ${actionsRow}
                 return `<div class="retry-queue-bar" role="status"><span><strong>${formatNumber(shown)}</strong> demo rows</span><span class="retry-queue-bar-hint">Sample data only</span></div>`;
             }
             const total = opts.totalPending != null ? opts.totalPending : opts.totalInWindow;
-            const cap = opts.listCap != null ? opts.listCap : (opts.previewLimit != null ? opts.previewLimit : 500);
             const truncated = !!opts.truncated;
             let mainHtml;
             if (total != null && truncated) {
@@ -3709,12 +3727,7 @@ ${actionsRow}
             } else {
                 mainHtml = `<strong>${formatNumber(shown)}</strong> in queue`;
             }
-            const hintParts = ['Soonest scheduled first · scroll the card'];
-            if (truncated) {
-                hintParts.push(`UI loads up to ${formatNumber(cap)} rows; rest still pending in DB`);
-            }
-            hintParts.push('“late / in …” vs your browser clock');
-            return `<div class="retry-queue-bar" role="status"><span>${mainHtml}</span><span class="retry-queue-bar-hint">${escapeHtml(hintParts.join(' · '))}</span></div>`;
+            return `<div class="retry-queue-bar" role="status"><span>${mainHtml}</span></div>`;
         }
 
         function isSafeHttpUrl(url) {
@@ -4072,6 +4085,7 @@ ${actionsRow}
                     recentCallsType: Array.isArray(recentCalls) ? 'array' : typeof recentCalls
                 });
                 return {
+                    recentLeadsListCap: livePayload.recentLeadsListCap ?? RECENT_LEADS_DASHBOARD_CAP,
                     totalLeads: metrics.totalLeads || livePayload.totalLeads || 0,
                     totalCalls: metrics.totalCalls || livePayload.totalCalls || 0,
                     last24hLeads: metrics.last24hLeads || livePayload.last24hLeads || 0,
@@ -4134,6 +4148,7 @@ ${actionsRow}
             
             return {
                 ...base,
+                recentLeadsListCap: RECENT_LEADS_DASHBOARD_CAP,
                 totalLeads: metrics.totalLeads ?? base.totalLeads,
                 totalCalls: metrics.totalCalls ?? base.totalCalls,
                 last24hLeads: metrics.last24hLeads ?? base.last24hLeads,
@@ -4149,7 +4164,7 @@ ${actionsRow}
                 mediumPriorityLeads: metrics.mediumPriorityLeads ?? base.mediumPriorityLeads,
                 lowPriorityLeads: metrics.lowPriorityLeads ?? base.lowPriorityLeads,
                 metrics: livePayload.metrics || metrics || base.metrics,
-                recentLeads: mergedLeads.slice(0, 10), // Keep top 10
+                recentLeads: mergedLeads.slice(0, RECENT_LEADS_DASHBOARD_CAP),
                 serviceMix: Array.isArray(livePayload.serviceMix) && livePayload.serviceMix.length ? livePayload.serviceMix : base.serviceMix,
                 recentCalls: Array.isArray(livePayload.recentCalls) && livePayload.recentCalls.length ? livePayload.recentCalls : base.recentCalls,
                 touchpoints: livePayload.touchpoints && Array.isArray(livePayload.touchpoints.data)
@@ -4391,7 +4406,9 @@ ${actionsRow}
             }
             
             const recentLeadsSubtitle = document.getElementById('recentLeadsSubtitle');
-            if (recentLeadsSubtitle) recentLeadsSubtitle.textContent = `Leads we're actively following up on for ${businessName}.`;
+            if (recentLeadsSubtitle) {
+                recentLeadsSubtitle.textContent = `Recently added leads for ${businessName}, newest at the top. The summary line compares this list to your total in CRM; export is the full set.`;
+            }
             
             const appointmentsSubtitle = document.getElementById('appointmentsSubtitle');
             if (appointmentsSubtitle && !isTomOutreachDashboard(currentClient)) {
@@ -4846,6 +4863,25 @@ ${actionsRow}
             }
         }
 
+        function renderRecentLeadsBar(shown, opts = {}) {
+            const { totalInCrm = null, isDemo = false } = opts;
+            if (!shown || shown < 1) return '';
+            if (isDemo) {
+                return `<div class="retry-queue-bar" role="status"><span><strong>${formatNumber(shown)}</strong> demo contacts</span></div>`;
+            }
+            const total = totalInCrm != null && Number.isFinite(Number(totalInCrm)) ? Math.max(0, Math.round(Number(totalInCrm))) : null;
+            const truncated = total != null && total > shown;
+            let mainHtml;
+            if (truncated) {
+                mainHtml = `<strong>${formatNumber(shown)}</strong> shown · <strong>${formatNumber(total)}</strong> leads in CRM`;
+            } else if (total != null && total === shown) {
+                mainHtml = `<strong>${formatNumber(shown)}</strong> leads (newest first)`;
+            } else {
+                mainHtml = `<strong>${formatNumber(shown)}</strong> leads shown (newest first)`;
+            }
+            return `<div class="retry-queue-bar" role="status"><span>${mainHtml}</span></div>`;
+        }
+
         function renderLeads(leads = []) {
             const container = document.getElementById('leads-list');
             if (!container) return;
@@ -4862,9 +4898,14 @@ ${actionsRow}
                 currentLeads = [];
                 return;
             }
+            const listCap = dashboardData.recentLeadsListCap ?? RECENT_LEADS_DASHBOARD_CAP;
             dashboardData.recentLeads = leads;
-            currentLeads = leads.slice(0, 10);
-            container.innerHTML = currentLeads.map((lead, index) => {
+            currentLeads = leads.slice(0, listCap);
+            const bar = renderRecentLeadsBar(currentLeads.length, {
+                totalInCrm: dashboardData.totalLeads,
+                isDemo: currentClient === DEMO_CLIENT_KEY
+            });
+            container.innerHTML = bar + currentLeads.map((lead, index) => {
                 const st = (lead.status || '').trim().toLowerCase();
                 const showNewBadge = st === 'new' || st.startsWith('new ');
                 const statusRaw = (lead.status || 'In follow-up').trim();
@@ -4872,19 +4913,24 @@ ${actionsRow}
                 const statusBlock = hideStatusPill
                     ? ''
                     : `<span class="lead-status">${escapeHtml(statusRaw)}</span>`;
+                const timeBit = lead.timeAgo
+                    ? `<span class="lead-meta-sep" aria-hidden="true">·</span><span class="lead-meta-added">${escapeHtml(lead.timeAgo)}</span>`
+                    : '';
                 return `
                 <div class="lead-item" data-lead-index="${index}" role="button" tabindex="0">
-                    <div class="lead-name-row">
-                        <div class="lead-name">${escapeHtml(lead.name || 'Prospect')}</div>
-                        ${showNewBadge ? '<span class="lead-new-badge" aria-label="New lead">New</span>' : ''}
+                    <div class="lead-item-row1">
+                        <div class="lead-item-titles">
+                            <span class="lead-name" title="${escapeHtml(lead.name || 'Prospect')}">${escapeHtml(lead.name || 'Prospect')}</span>
+                            ${showNewBadge ? '<span class="lead-new-badge" aria-label="New lead">New</span>' : ''}
+                            ${statusBlock}
+                        </div>
+                        <button type="button" class="timeline-btn" data-timeline-index="${index}" aria-label="View journey for ${escapeHtml(lead.name || 'lead')}">Journey</button>
                     </div>
-                    <div class="lead-meta">
+                    <div class="lead-item-row2">
                         <span class="lead-meta-phone">${escapeHtml(lead.phone || lead.email || '')}</span>
+                        <span class="lead-meta-sep" aria-hidden="true">·</span>
                         <span class="lead-meta-service">${escapeHtml(lead.service || 'General')}</span>
-                    </div>
-                    <div class="lead-footer${hideStatusPill ? ' lead-footer--actions-only' : ''}">
-                        ${statusBlock}
-                        <button type="button" class="timeline-btn" data-timeline-index="${index}" aria-label="View timeline for ${escapeHtml(lead.name || 'lead')}">📊 View Timeline</button>
+                        ${timeBit}
                     </div>
                 </div>
             `;
@@ -7448,7 +7494,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const existingLeads = (dashboardData.recentLeads || []).filter(lead => 
                     !lead.phone || !demoLeads.some(dl => dl.phone === lead.phone)
                 );
-                dashboardData.recentLeads = [...demoLeads, ...existingLeads].slice(0, 10);
+                dashboardData.recentLeads = [...demoLeads, ...existingLeads].slice(0, RECENT_LEADS_DASHBOARD_CAP);
                 renderLeads(dashboardData.recentLeads);
                 setImportStatus(`${demoLeads.length} leads staged (demo)`, 'success');
                 showToast('Leads Imported', `${demoLeads.length} leads added (demo mode)`, 'success');
@@ -7547,7 +7593,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     throw new Error(payload.error || 'Import failed');
                 }
                 if (Array.isArray(payload.leads) && payload.leads.length) {
-                    dashboardData.recentLeads = [...payload.leads, ...(dashboardData.recentLeads || [])].slice(0, 5);
+                    dashboardData.recentLeads = [...payload.leads, ...(dashboardData.recentLeads || [])].slice(0, RECENT_LEADS_DASHBOARD_CAP);
                     renderLeads(dashboardData.recentLeads);
                 }
                 const cs = payload.callSummary;

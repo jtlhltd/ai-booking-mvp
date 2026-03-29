@@ -8632,6 +8632,8 @@ app.get('/api/demo-dashboard-debug/:clientKey', async (req, res) => {
 
 app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
   const { clientKey } = req.params;
+  /** Max rows returned for Recent Leads card; keep in sync with RECENT_LEADS_DASHBOARD_CAP in public/client-dashboard.html */
+  const RECENT_LEADS_DASHBOARD_CAP = 25;
   try {
     // Get client config first
     const client = await getFullClient(clientKey);
@@ -8773,7 +8775,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
           ON le.client_key = l.client_key AND le.lead_phone = l.phone
         WHERE l.client_key = $1
         ORDER BY l.created_at DESC
-        LIMIT 10
+        LIMIT ${RECENT_LEADS_DASHBOARD_CAP}
       `, [clientKey]),
       query(`
         SELECT c.call_id, c.id, c.lead_phone, c.status, c.outcome, c.created_at, c.duration,
@@ -9224,6 +9226,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     const payload = {
       ok: true,
       source: 'live',
+      recentLeadsListCap: RECENT_LEADS_DASHBOARD_CAP,
       metrics: {
         totalLeads,
         totalCalls: displayCalls, // Unique leads with ≥1 outbound dial (all time)
