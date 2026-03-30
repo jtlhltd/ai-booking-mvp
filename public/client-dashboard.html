@@ -2466,6 +2466,7 @@
         }
 
         .follow-up-queue-toolbar {
+            display: flex;
             flex-wrap: wrap;
             align-items: center;
             gap: 12px;
@@ -2483,6 +2484,52 @@
 
         .follow-up-callback-filter input {
             accent-color: var(--primary, #5c6ac4);
+        }
+
+        .sr-only {
+            position: absolute !important;
+            width: 1px !important;
+            height: 1px !important;
+            padding: 0 !important;
+            margin: -1px !important;
+            overflow: hidden !important;
+            clip: rect(0, 0, 0, 0) !important;
+            white-space: nowrap !important;
+            border: 0 !important;
+        }
+
+        .follow-up-pager {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-left: auto;
+        }
+
+        .follow-up-page-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary, #5c6178);
+            font-weight: 600;
+            min-width: 86px;
+            text-align: center;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .follow-up-page-size select {
+            border: 1px solid rgba(92, 106, 196, 0.22);
+            background: rgba(255,255,255,0.85);
+            color: var(--text, #1f2234);
+            border-radius: 10px;
+            padding: 7px 10px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            outline: none;
+        }
+
+        body[data-theme="dark"] .follow-up-page-size select {
+            background: rgba(37, 43, 61, 0.85);
+            color: var(--text, #ffffff);
+            border-color: rgba(92,106,196,0.35);
         }
 
         .follow-up-queue-wrap {
@@ -4286,6 +4333,20 @@
                         <input type="checkbox" id="followUpCallbackOnly" />
                         <span>Callback needed only</span>
                     </label>
+                    <div class="follow-up-pager" id="followUpQueuePager" aria-label="Follow-up list pagination">
+                        <button type="button" class="export-btn secondary follow-up-page-btn" id="followUpPrevPage" disabled>Prev</button>
+                        <span class="follow-up-page-label" id="followUpPageLabel">Page 1</span>
+                        <button type="button" class="export-btn secondary follow-up-page-btn" id="followUpNextPage" disabled>Next</button>
+                        <label class="follow-up-page-size" title="Rows per page">
+                            <span class="sr-only">Rows per page</span>
+                            <select id="followUpPageSize">
+                                <option value="50">50</option>
+                                <option value="100" selected>100</option>
+                                <option value="150">150</option>
+                                <option value="200">200</option>
+                            </select>
+                        </label>
+                    </div>
                     <span id="followUpQueueHint" class="dashboard-search-hint" role="status"></span>
                 </div>
                 <div id="follow-up-queue" class="follow-up-queue-wrap thin-scroll" role="region" aria-live="polite"></div>
@@ -7468,8 +7529,30 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             rawRows: [],
             cols: [],
             sortKey: null,
-            sortDir: 'desc'
+            sortDir: 'desc',
+            total: 0,
+            offset: 0,
+            limit: 100
         };
+
+        let followUpQueuePage = 1;
+
+        function followUpUpdatePagerUi() {
+            const pager = document.getElementById('followUpQueuePager');
+            const prev = document.getElementById('followUpPrevPage');
+            const next = document.getElementById('followUpNextPage');
+            const label = document.getElementById('followUpPageLabel');
+            if (!pager || !prev || !next || !label) return;
+            const total = followUpQueueState.total || 0;
+            const limit = followUpQueueState.limit || 100;
+            const pageCount = Math.max(1, Math.ceil(total / Math.max(1, limit)));
+            const clamped = Math.min(Math.max(1, followUpQueuePage), pageCount);
+            followUpQueuePage = clamped;
+            label.textContent = `Page ${clamped} / ${pageCount}`;
+            prev.disabled = clamped <= 1;
+            next.disabled = clamped >= pageCount;
+            pager.style.display = total > limit ? 'inline-flex' : 'none';
+        }
 
         /** Parse "DD/MM/YYYY, HH:mm:ss" (sheet / en-GB) for sorting. */
         function followUpParseUkTimestamp(s) {
@@ -7601,26 +7684,35 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             return escapeHtml(v || '—');
         }
 
-        async function loadFollowUpQueue(clientKey) {
+        async function loadFollowUpQueue(clientKey, { page = followUpQueuePage } = {}) {
             const wrap = document.getElementById('follow-up-queue');
             const hint = document.getElementById('followUpQueueHint');
             if (!wrap) return;
             const cbEl = document.getElementById('followUpCallbackOnly');
             const callback = !!(cbEl && cbEl.checked);
+            const sizeEl = document.getElementById('followUpPageSize');
+            const pageSizeRaw = sizeEl ? parseInt(sizeEl.value, 10) : 100;
+            const limit = Math.min(200, Math.max(1, Number.isFinite(pageSizeRaw) ? pageSizeRaw : 100));
+            followUpQueuePage = Math.max(1, parseInt(page, 10) || 1);
+            const offset = (followUpQueuePage - 1) * limit;
             wrap.innerHTML = '<div class="empty-state-message" style="padding:16px;">Loading…</div>';
             if (hint) {
                 hint.textContent = '';
                 hint.hidden = true;
             }
+            followUpQueueState.limit = limit;
+            followUpQueueState.offset = offset;
+            followUpUpdatePagerUi();
             try {
-                const q = new URLSearchParams({ limit: '100' });
+                const q = new URLSearchParams({ limit: String(limit), offset: String(offset) });
                 if (callback) q.set('callback', '1');
                 const res = await fetch(`${BASE_URL}/api/follow-up-queue/${encodeURIComponent(clientKey)}?${q}`, { cache: 'no-store' });
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok || data.ok === false) {
-                    followUpQueueState = { rawRows: [], cols: [], sortKey: null, sortDir: 'desc' };
+                    followUpQueueState = { rawRows: [], cols: [], sortKey: null, sortDir: 'desc', total: 0, offset, limit };
                     const msg = data?.message || data?.error || `Could not load (${res.status})`;
                     wrap.innerHTML = `<div class="empty-state" style="padding:20px;"><div class="empty-state-message">${escapeHtml(msg)}</div></div>`;
+                    followUpUpdatePagerUi();
                     return;
                 }
                 if (!data.configured) {
@@ -7630,11 +7722,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             <div class="empty-state-title">Sheet not linked</div>
                             <div class="empty-state-message">${escapeHtml(data.message || 'Link a Google Sheet on this workspace (logisticsSheetId or gsheet_id) so rows from your Vapi sheet tool appear here.')}</div>
                         </div>`;
-                    followUpQueueState = { rawRows: [], cols: [], sortKey: null, sortDir: 'desc' };
+                    followUpQueueState = { rawRows: [], cols: [], sortKey: null, sortDir: 'desc', total: 0, offset, limit };
                     if (hint) {
                         hint.textContent = 'Not configured';
                         hint.hidden = false;
                     }
+                    followUpUpdatePagerUi();
                     return;
                 }
                 const rows = Array.isArray(data.rows) ? data.rows : [];
@@ -7644,11 +7737,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         <div class="empty-state-title">${callback ? 'No callbacks flagged' : 'No rows yet'}</div>
                         <div class="empty-state-message">${callback ? 'No rows with Callback Needed = TRUE. Try clearing the filter or refresh after new calls.' : 'When the AI saves parsed transcript fields to your sheet, rows appear here (newest first).'}</div>
                     </div>`;
-                    followUpQueueState = { rawRows: [], cols: [], sortKey: null, sortDir: 'desc' };
+                    followUpQueueState = { rawRows: [], cols: [], sortKey: null, sortDir: 'desc', total: data.total != null ? data.total : 0, offset, limit };
                     if (hint) {
                         hint.textContent = data.demo ? 'Demo sample' : `0 in sheet`;
                         hint.hidden = false;
                     }
+                    followUpUpdatePagerUi();
                     return;
                 }
                 const cols = followUpVisibleColumns(rows);
@@ -7656,33 +7750,67 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     rawRows: rows.slice(),
                     cols,
                     sortKey: null,
-                    sortDir: 'desc'
+                    sortDir: 'desc',
+                    total: data.total != null ? data.total : rows.length,
+                    offset: data.offset != null ? data.offset : offset,
+                    limit: data.limit != null ? data.limit : limit
                 };
                 followUpPaintTable(wrap);
                 if (hint) {
-                    const total = data.total != null ? data.total : rows.length;
-                    const parts = [`Showing ${formatNumber(rows.length)}${total > rows.length ? ` of ${formatNumber(total)}` : ''}`];
+                    const total = followUpQueueState.total;
+                    const start = total > 0 ? (followUpQueueState.offset + 1) : 0;
+                    const end = Math.min(total, followUpQueueState.offset + rows.length);
+                    const parts = [`Showing ${formatNumber(start)}–${formatNumber(end)} of ${formatNumber(total)}`];
                     if (data.demo) parts.push('demo');
                     hint.textContent = parts.join(' · ');
                     hint.hidden = false;
                 }
+                followUpUpdatePagerUi();
             } catch (e) {
                 console.warn('follow-up queue', e);
-                followUpQueueState = { rawRows: [], cols: [], sortKey: null, sortDir: 'desc' };
+                followUpQueueState = { rawRows: [], cols: [], sortKey: null, sortDir: 'desc', total: 0, offset, limit };
                 wrap.innerHTML = '<div class="empty-state-message" style="padding:16px;">Unable to load. Try Refresh.</div>';
+                followUpUpdatePagerUi();
             }
         }
 
         function initFollowUpQueueUi() {
             const btn = document.getElementById('followUpQueueRefresh');
             const cb = document.getElementById('followUpCallbackOnly');
+            const prev = document.getElementById('followUpPrevPage');
+            const next = document.getElementById('followUpNextPage');
+            const size = document.getElementById('followUpPageSize');
             if (btn && !btn.dataset.bound) {
                 btn.dataset.bound = '1';
-                btn.addEventListener('click', () => loadFollowUpQueue(currentClient));
+                btn.addEventListener('click', () => loadFollowUpQueue(currentClient, { page: followUpQueuePage }));
             }
             if (cb && !cb.dataset.bound) {
                 cb.dataset.bound = '1';
-                cb.addEventListener('change', () => loadFollowUpQueue(currentClient));
+                cb.addEventListener('change', () => {
+                    followUpQueuePage = 1;
+                    loadFollowUpQueue(currentClient, { page: 1 });
+                });
+            }
+            if (size && !size.dataset.bound) {
+                size.dataset.bound = '1';
+                size.addEventListener('change', () => {
+                    followUpQueuePage = 1;
+                    loadFollowUpQueue(currentClient, { page: 1 });
+                });
+            }
+            if (prev && !prev.dataset.bound) {
+                prev.dataset.bound = '1';
+                prev.addEventListener('click', () => {
+                    followUpQueuePage = Math.max(1, followUpQueuePage - 1);
+                    loadFollowUpQueue(currentClient, { page: followUpQueuePage });
+                });
+            }
+            if (next && !next.dataset.bound) {
+                next.dataset.bound = '1';
+                next.addEventListener('click', () => {
+                    followUpQueuePage = followUpQueuePage + 1;
+                    loadFollowUpQueue(currentClient, { page: followUpQueuePage });
+                });
             }
             const wrap = document.getElementById('follow-up-queue');
             if (wrap && !wrap.dataset.copyDelegation) {

@@ -11355,6 +11355,7 @@ app.get('/api/follow-up-queue/:clientKey', async (req, res) => {
     const { clientKey } = req.params;
     res.set('Cache-Control', 'no-store');
     const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 80));
+    const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
     const callbackOnly = String(req.query.callback || '') === '1';
 
     if (isFollowUpQueueDemoClient(clientKey)) {
@@ -11397,13 +11398,16 @@ app.get('/api/follow-up-queue/:clientKey', async (req, res) => {
       if (callbackOnly) {
         rows = rows.filter((r) => String(r['Callback Needed'] || '').toUpperCase() === 'TRUE');
       }
+      const total = rows.length;
       return res.json({
         ok: true,
         demo: true,
         configured: true,
         source: 'demo',
-        total: rows.length,
-        rows: rows.slice(0, limit)
+        total,
+        offset,
+        limit,
+        rows: rows.slice(offset, offset + limit)
       });
     }
 
@@ -11426,13 +11430,16 @@ app.get('/api/follow-up-queue/:clientKey', async (req, res) => {
     if (callbackOnly) {
       records = records.filter((r) => String(r['Callback Needed'] || '').toUpperCase() === 'TRUE');
     }
+    const total = records.length;
     res.json({
       ok: true,
       demo: false,
       configured: true,
       source: 'sheet',
-      total: records.length,
-      rows: records.slice(0, limit)
+      total,
+      offset,
+      limit,
+      rows: records.slice(offset, offset + limit)
     });
   } catch (error) {
     console.error('[FOLLOW-UP QUEUE ERROR]', error);
