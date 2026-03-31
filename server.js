@@ -11419,10 +11419,13 @@ app.get('/api/follow-up-queue/:clientKey', async (req, res) => {
       });
     }
 
-    const { rows: rawRows } = await sheets.readSheet(spreadsheetId, 'Sheet1!A:V');
-    let records = sheets.logisticsSheetRowsToRecords(rawRows);
-    records.reverse();
-    const total = records.length;
+  const { rows: rawRows } = await sheets.readSheet(spreadsheetId, 'Sheet1!A:V');
+  let records = sheets.logisticsSheetRowsToRecords(rawRows).map((r, idx) => ({
+    ...r,
+    _row: idx + 2 // header is row 1
+  }));
+  records.reverse();
+  const total = records.length;
     res.json({
       ok: true,
       demo: false,
@@ -11443,6 +11446,32 @@ app.get('/api/follow-up-queue/:clientKey', async (req, res) => {
       message: msg,
       rows: []
     });
+  }
+});
+
+// Update status / called flag for a specific follow-up row in the logistics sheet
+app.post('/api/follow-up-queue/:clientKey/status', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const { row, called } = req.body || {};
+    const rowNumber = parseInt(row, 10);
+    if (!Number.isFinite(rowNumber) || rowNumber < 2) {
+      return res.status(400).json({ ok: false, error: 'invalid_row' });
+    }
+    const client = await getFullClient(clientKey);
+    const spreadsheetId = resolveLogisticsSpreadsheetId(client);
+    if (!spreadsheetId) {
+      return res.status(400).json({ ok: false, error: 'sheet_not_configured' });
+    }
+    const isCalled = !!called;
+    const ok = await sheets.updateLogisticsStatusByRow(spreadsheetId, rowNumber, { called: isCalled });
+    if (!ok) {
+      return res.status(502).json({ ok: false, error: 'update_failed' });
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('[FOLLOW-UP STATUS UPDATE ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message || String(error) });
   }
 });
 

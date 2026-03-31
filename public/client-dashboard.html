@@ -4372,11 +4372,13 @@
                 <p class="card-subtitle" id="followUpQueueSubtitle">Contacts and details captured from AI call transcripts into your linked Google Sheet — use this for human follow-up dials.</p>
                 <div class="dashboard-list-toolbar follow-up-queue-toolbar">
                     <button type="button" id="followUpQueueRefresh" class="export-btn secondary">Refresh</button>
+                    <button type="button" id="followUpDialNext" class="export-btn secondary">Dial next</button>
                     <div class="follow-up-status-filters" id="followUpStatusFilters" role="group" aria-label="Filter follow-up rows by status">
                         <button type="button" class="follow-up-status-chip follow-up-status-chip--active" data-fu-status-filter="all">All</button>
                         <button type="button" class="follow-up-status-chip" data-fu-status-filter="todo">To call</button>
                         <button type="button" class="follow-up-status-chip" data-fu-status-filter="called">Called</button>
                     </div>
+                    <input type="search" id="followUpSearchInput" class="dashboard-list-search" placeholder="Search business, name, phone, notes…" autocomplete="off" enterkeyhint="search" style="max-width:260px;">
                     <div class="follow-up-pager" id="followUpQueuePager" aria-label="Follow-up list pagination">
                         <button type="button" class="export-btn secondary follow-up-page-btn" id="followUpPrevPage" disabled>Prev</button>
                         <span class="follow-up-page-label" id="followUpPageLabel">Page 1</span>
@@ -7581,6 +7583,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
         let followUpQueuePage = 1;
         let followUpStatusFilter = 'all'; // all | todo | called
+        let followUpSearchTerm = '';
 
         function followUpUpdatePagerUi() {
             const pager = document.getElementById('followUpQueuePager');
@@ -7669,7 +7672,19 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         function followUpPaintTable(wrap) {
             const { rawRows, cols, sortKey, sortDir } = followUpQueueState;
             if (!wrap || !cols.length || !rawRows.length) return;
+            const term = String(followUpSearchTerm || '').trim().toLowerCase();
             const filtered = rawRows.filter((row) => {
+                if (term) {
+                    const haystack = [
+                        row['Business Name'],
+                        row['Decision Maker'],
+                        row.Phone,
+                        row.Email,
+                        row['Main Countries'],
+                        row['Transcript Snippet']
+                    ].map((v) => String(v || '').toLowerCase()).join(' ');
+                    if (!haystack.includes(term)) return false;
+                }
                 const statusRaw = String(row.Status || row['Status'] || '').trim().toLowerCase();
                 const status = statusRaw || 'to call';
                 if (followUpStatusFilter === 'called') return status === 'called';
@@ -7829,7 +7844,13 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     const total = followUpQueueState.total;
                     const start = total > 0 ? (followUpQueueState.offset + 1) : 0;
                     const end = Math.min(total, followUpQueueState.offset + rows.length);
-                    const parts = [`Showing ${formatNumber(start)}–${formatNumber(end)} of ${formatNumber(total)}`];
+                    const totalCalled = rows.filter((r) => String(r.Status || '').toLowerCase() === 'called').length;
+                    const totalTodo = rows.length - totalCalled;
+                    const parts = [
+                        `Showing ${formatNumber(start)}–${formatNumber(end)} of ${formatNumber(total)}`,
+                        `${formatNumber(totalTodo)} to call`,
+                        `${formatNumber(totalCalled)} called`
+                    ];
                     if (data.demo) parts.push('demo');
                     hint.textContent = parts.join(' · ');
                     hint.hidden = false;
@@ -7849,6 +7870,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const next = document.getElementById('followUpNextPage');
             const size = document.getElementById('followUpPageSize');
             const statusFilters = document.getElementById('followUpStatusFilters');
+            const searchInput = document.getElementById('followUpSearchInput');
+            const dialNextBtn = document.getElementById('followUpDialNext');
             if (btn && !btn.dataset.bound) {
                 btn.dataset.bound = '1';
                 btn.addEventListener('click', () => loadFollowUpQueue(currentClient, { page: followUpQueuePage }));
@@ -7888,6 +7911,26 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     if (wrapEl) followUpPaintTable(wrapEl);
                 });
             }
+            if (searchInput && !searchInput.dataset.bound) {
+                searchInput.dataset.bound = '1';
+                searchInput.addEventListener('input', () => {
+                    followUpSearchTerm = searchInput.value || '';
+                    const wrapEl = document.getElementById('follow-up-queue');
+                    if (wrapEl) followUpPaintTable(wrapEl);
+                });
+            }
+            if (dialNextBtn && !dialNextBtn.dataset.bound) {
+                dialNextBtn.dataset.bound = '1';
+                dialNextBtn.addEventListener('click', () => {
+                    const wrapEl = document.getElementById('follow-up-queue');
+                    if (!wrapEl) return;
+                    const nextTodo = wrapEl.querySelector('tr td[data-col="called"] input.fu-called-checkbox:not(:checked)');
+                    if (nextTodo) {
+                        nextTodo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        nextTodo.focus();
+                    }
+                });
+            }
             const wrap = document.getElementById('follow-up-queue');
             if (wrap && !wrap.dataset.copyDelegation) {
                 wrap.dataset.copyDelegation = '1';
@@ -7914,13 +7957,24 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         if (key) {
                             const isChecked = !!calledCb.checked;
                             const nextStatus = isChecked ? 'Called' : 'To call';
+                            let targetRow = null;
                             followUpQueueState.rawRows = followUpQueueState.rawRows.map((row) => {
                                 const rk = followUpRowKey(row);
                                 if (rk !== key) return row;
                                 const next = { ...row, Status: nextStatus, 'Called?': isChecked ? 'TRUE' : 'FALSE' };
+                                targetRow = next;
                                 return next;
                             });
                             followUpPaintTable(wrap);
+                            if (targetRow && typeof targetRow._row === 'number') {
+                                fetch(`${BASE_URL}/api/follow-up-queue/${encodeURIComponent(currentClient)}/status`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ row: targetRow._row, called: isChecked })
+                                }).catch((err) => {
+                                    console.warn('Failed to persist follow-up status', err);
+                                });
+                            }
                         }
                         return;
                     }

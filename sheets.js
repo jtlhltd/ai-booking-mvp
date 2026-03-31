@@ -360,6 +360,43 @@ export async function updateLead(spreadsheetId, { leadId, rowNumber, patch }) {
   });
 }
 
+/** Update logistics status / called flag for a specific Sheet1 row (by row index). */
+export async function updateLogisticsStatusByRow(spreadsheetId, rowNumber, { called }) {
+  const s = await getClient();
+  if (!rowNumber || rowNumber < 2) {
+    console.warn('[UPDATE LOGISTICS STATUS] Invalid rowNumber:', rowNumber);
+    return false;
+  }
+  try {
+    const range = `Sheet1!A${rowNumber}:V${rowNumber}`;
+    const current = await s.spreadsheets.values.get({
+      spreadsheetId,
+      range
+    });
+    const row = (current.data.values && current.data.values[0]) ? [...current.data.values[0]] : [];
+    while (row.length < LOGISTICS_HEADERS.length) row.push('');
+    const headerMap = Object.fromEntries(LOGISTICS_HEADERS.map((h, i) => [h, i]));
+    const nextStatus = called ? 'called' : 'to call';
+    if (headerMap['Status'] !== undefined) {
+      row[headerMap['Status']] = nextStatus;
+    }
+    if (headerMap['Called?'] !== undefined) {
+      row[headerMap['Called?']] = called ? 'TRUE' : 'FALSE';
+    }
+    await s.spreadsheets.values.update({
+      spreadsheetId,
+      range,
+      valueInputOption: 'RAW',
+      requestBody: { values: [row] }
+    });
+    console.log('[UPDATE LOGISTICS STATUS] Updated row', rowNumber, 'called =', called);
+    return true;
+  } catch (error) {
+    console.error('[UPDATE LOGISTICS STATUS ERROR]', error);
+    return false;
+  }
+}
+
 /** Map Sheet1 rows (header in row 0) to plain objects for dashboard / APIs. */
 export function logisticsSheetRowsToRecords(values) {
   const rows = Array.isArray(values) ? values : [];
