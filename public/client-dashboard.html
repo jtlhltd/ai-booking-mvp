@@ -7958,9 +7958,20 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                                 fetch(`${BASE_URL}/api/follow-up-queue/${encodeURIComponent(currentClient)}/status`, {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ row: targetRow._row, called: isChecked })
+                                    body: JSON.stringify({
+                                        row: targetRow._row,
+                                        called: isChecked,
+                                        callId: targetRow['Call ID'] || '',
+                                        phone: targetRow.Phone || ''
+                                    })
+                                }).then(async (res) => {
+                                    const payload = await res.json().catch(() => ({}));
+                                    if (!res.ok || !payload?.ok) {
+                                        throw new Error(payload?.error || `HTTP ${res.status}`);
+                                    }
                                 }).catch((err) => {
                                     console.warn('Failed to persist follow-up status', err);
+                                    showToast('Save failed', 'Could not save Called? to sheet. Please try again.', 'error', 3500);
                                 });
                             }
                         }

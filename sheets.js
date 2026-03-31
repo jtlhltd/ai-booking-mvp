@@ -394,6 +394,70 @@ export async function updateLogisticsStatusByRow(spreadsheetId, rowNumber, { cal
   }
 }
 
+/** Update Called? (stored in "Callback Needed") by searching sheet for callId/phone. */
+export async function updateLogisticsCalledFlag(spreadsheetId, { callId = '', phone = '', called }) {
+  const s = await getClient();
+  try {
+    const response = await s.spreadsheets.values.get({
+      spreadsheetId,
+      range: 'Sheet1!A:V'
+    });
+    const rows = response.data.values || [];
+    if (rows.length < 2) return false;
+
+    const header = rows[0] || [];
+    const headerMap = {};
+    header.forEach((h, i) => { headerMap[String(h || '').trim()] = i; });
+    const cbIdx = headerMap['Callback Needed'];
+    const callIdIdx = headerMap['Call ID'];
+    const phoneIdx = headerMap['Phone'];
+    if (cbIdx == null) return false;
+
+    const wantCallId = String(callId || '').trim();
+    const wantPhone = String(phone || '').trim();
+    const wantPhoneNorm = wantPhone.replace(/\s+/g, '').replace(/^\+/, '');
+    let rowNumber = -1;
+
+    if (wantCallId && callIdIdx != null) {
+      for (let i = 1; i < rows.length; i++) {
+        if (String(rows[i][callIdIdx] || '').trim() === wantCallId) {
+          rowNumber = i + 1;
+          break;
+        }
+      }
+    }
+
+    if (rowNumber === -1 && wantPhone && phoneIdx != null) {
+      for (let i = 1; i < rows.length; i++) {
+        const rp = String(rows[i][phoneIdx] || '').trim();
+        const rpNorm = rp.replace(/\s+/g, '').replace(/^\+/, '');
+        if (!rpNorm) continue;
+        if (rpNorm === wantPhoneNorm || rpNorm.endsWith(wantPhoneNorm) || wantPhoneNorm.endsWith(rpNorm)) {
+          rowNumber = i + 1;
+          break;
+        }
+      }
+    }
+
+    if (rowNumber === -1) return false;
+
+    // Update only the Callback Needed cell
+    const colLetter = String.fromCharCode('A'.charCodeAt(0) + cbIdx);
+    const range = `Sheet1!${colLetter}${rowNumber}:${colLetter}${rowNumber}`;
+    await s.spreadsheets.values.update({
+      spreadsheetId,
+      range,
+      valueInputOption: 'RAW',
+      requestBody: { values: [[called ? 'TRUE' : 'FALSE']] }
+    });
+    console.log('[UPDATE LOGISTICS CALLED FLAG] Updated', { rowNumber, called });
+    return true;
+  } catch (error) {
+    console.error('[UPDATE LOGISTICS CALLED FLAG ERROR]', error);
+    return false;
+  }
+}
+
 /** Map Sheet1 rows (header in row 0) to plain objects for dashboard / APIs. */
 export function logisticsSheetRowsToRecords(values) {
   const rows = Array.isArray(values) ? values : [];

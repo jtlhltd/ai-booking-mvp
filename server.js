@@ -11453,7 +11453,7 @@ app.get('/api/follow-up-queue/:clientKey', async (req, res) => {
 app.post('/api/follow-up-queue/:clientKey/status', async (req, res) => {
   try {
     const { clientKey } = req.params;
-    const { row, called } = req.body || {};
+    const { row, called, callId, phone } = req.body || {};
     const rowNumber = parseInt(row, 10);
     if (!Number.isFinite(rowNumber) || rowNumber < 2) {
       return res.status(400).json({ ok: false, error: 'invalid_row' });
@@ -11464,7 +11464,11 @@ app.post('/api/follow-up-queue/:clientKey/status', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'sheet_not_configured' });
     }
     const isCalled = !!called;
-    const ok = await sheets.updateLogisticsStatusByRow(spreadsheetId, rowNumber, { called: isCalled });
+    // Prefer direct row update, but fall back to searching by callId/phone in case rows shifted.
+    let ok = await sheets.updateLogisticsStatusByRow(spreadsheetId, rowNumber, { called: isCalled });
+    if (!ok) {
+      ok = await sheets.updateLogisticsCalledFlag(spreadsheetId, { callId, phone, called: isCalled });
+    }
     if (!ok) {
       return res.status(502).json({ ok: false, error: 'update_failed' });
     }
