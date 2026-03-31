@@ -2737,8 +2737,21 @@
 
         .follow-up-queue-table td[data-col="business-name"],
         .follow-up-queue-table th[data-col="business-name"] {
+            position: sticky;
+            left: 0;
+            z-index: 3;
+            background: var(--surface, #ffffff);
             min-width: 11rem;
             max-width: 18rem;
+        }
+
+        .follow-up-queue-table th[data-col="business-name"] {
+            z-index: 6;
+        }
+
+        body[data-theme="dark"] .follow-up-queue-table td[data-col="business-name"],
+        body[data-theme="dark"] .follow-up-queue-table th[data-col="business-name"] {
+            background: var(--surface, #252b3d);
         }
 
         .follow-up-queue-table td[data-col="decision-maker"],
@@ -4535,6 +4548,14 @@
                         <button type="button" class="recording-chip" data-act-outcome="no-answer">No answer</button>
                         <button type="button" class="recording-chip" data-act-outcome="completed">Completed</button>
                     </div>
+                    <label class="follow-up-callback-filter" style="margin-left:auto;">
+                        <input type="checkbox" id="activityFeedHideStartFailures" checked />
+                        <span>Hide “could not start”</span>
+                    </label>
+                    <label class="follow-up-callback-filter">
+                        <input type="checkbox" id="activityFeedGroupRetries" checked />
+                        <span>Group retries</span>
+                    </label>
                 </div>
                 <div id="recent-calls" class="activity-feed activity-feed--scrollable" role="region" aria-label="Recent calls list"></div>
             </article>
@@ -4615,6 +4636,8 @@
         /** Sync with server.js RECENT_CALLS_FEED_CAP (recent calls query LIMIT). */
         const ACTIVITY_FEED_DISPLAY_CAP = 40;
         let activityFeedOutcomeFilter = 'all';
+        let activityFeedHideStartFailures = true;
+        let activityFeedGroupRetries = true;
         let activityFeedLastPushAt = 0;
         let activityFeedLiveBadgeTimer = null;
         const DEMO_URL_ALIASES = new Set(['demo', 'demo_client', 'demo-client', 'sandbox']);
@@ -6864,6 +6887,27 @@ ${actionsRow}
                 });
                 renderCalls();
             });
+
+            const hideEl = document.getElementById('activityFeedHideStartFailures');
+            if (hideEl && !hideEl.dataset.bound) {
+                hideEl.dataset.bound = '1';
+                hideEl.checked = activityFeedHideStartFailures;
+                hideEl.addEventListener('change', () => {
+                    activityFeedHideStartFailures = !!hideEl.checked;
+                    try { localStorage.setItem('dash.act.hideStartFailures', activityFeedHideStartFailures ? '1' : '0'); } catch {}
+                    renderCalls();
+                });
+            }
+            const groupEl = document.getElementById('activityFeedGroupRetries');
+            if (groupEl && !groupEl.dataset.bound) {
+                groupEl.dataset.bound = '1';
+                groupEl.checked = activityFeedGroupRetries;
+                groupEl.addEventListener('change', () => {
+                    activityFeedGroupRetries = !!groupEl.checked;
+                    try { localStorage.setItem('dash.act.groupRetries', activityFeedGroupRetries ? '1' : '0'); } catch {}
+                    renderCalls();
+                });
+            }
         }
 
         function syncActivityFeedChips() {
@@ -6928,6 +6972,44 @@ ${actionsRow}
             let working = callsToShow.filter((c) => activityCallMatchesOutcomeChip(c, activityFeedOutcomeFilter));
             if (currentClient !== DEMO_CLIENT_KEY) {
                 working = consolidateActivityCalls(working);
+            }
+
+            if (activityFeedHideStartFailures) {
+                working = working.filter((c) => {
+                    const label = String(c?.outcomeLabel || c?.summary || '').toLowerCase();
+                    return !label.includes('could not start call');
+                });
+            }
+
+            if (activityFeedGroupRetries) {
+                const normPhone = (p) => {
+                    const d = String(p || '').replace(/[^\d]/g, '');
+                    return d.length >= 10 ? d.slice(-10) : d;
+                };
+                const grouped = [];
+                const seen = new Set();
+                for (const c of working) {
+                    const key = normPhone(c.leadPhone) || String(c.name || '').toLowerCase().trim();
+                    if (!key) {
+                        grouped.push(c);
+                        continue;
+                    }
+                    if (seen.has(key)) continue;
+                    const bucket = working.filter((x) => (normPhone(x.leadPhone) || String(x.name || '').toLowerCase().trim()) === key);
+                    seen.add(key);
+                    if (bucket.length <= 1) {
+                        grouped.push(c);
+                        continue;
+                    }
+                    const first = bucket[0];
+                    const attempts = bucket.length;
+                    const suffix = attempts > 1 ? ` • ${attempts} attempts` : '';
+                    grouped.push({
+                        ...first,
+                        summary: first.summary ? `${first.summary}${suffix}` : `Attempts: ${attempts}`
+                    });
+                }
+                working = grouped;
             }
 
             syncActivityFeedChips();
@@ -7637,6 +7719,24 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         let followUpStatusFilter = 'all'; // all | todo | called
         let followUpSearchTerm = '';
 
+        function followUpLoadPrefs() {
+            try {
+                const ps = parseInt(localStorage.getItem('dash.fu.pageSize') || '', 10);
+                if (Number.isFinite(ps)) followUpQueueState.limit = Math.min(200, Math.max(1, ps));
+                const sf = localStorage.getItem('dash.fu.statusFilter') || '';
+                if (sf === 'all' || sf === 'todo' || sf === 'called') followUpStatusFilter = sf;
+                followUpSearchTerm = localStorage.getItem('dash.fu.search') || '';
+            } catch {}
+        }
+
+        function followUpSavePrefs() {
+            try {
+                localStorage.setItem('dash.fu.pageSize', String(followUpQueueState.limit || 100));
+                localStorage.setItem('dash.fu.statusFilter', String(followUpStatusFilter || 'all'));
+                localStorage.setItem('dash.fu.search', String(followUpSearchTerm || ''));
+            } catch {}
+        }
+
         function followUpUpdatePagerUi() {
             const pager = document.getElementById('followUpQueuePager');
             const prev = document.getElementById('followUpPrevPage');
@@ -7949,14 +8049,18 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const size = document.getElementById('followUpPageSize');
             const statusFilters = document.getElementById('followUpStatusFilters');
             const searchInput = document.getElementById('followUpSearchInput');
+            followUpLoadPrefs();
             if (btn && !btn.dataset.bound) {
                 btn.dataset.bound = '1';
                 btn.addEventListener('click', () => loadFollowUpQueue(currentClient, { page: followUpQueuePage }));
             }
             if (size && !size.dataset.bound) {
                 size.dataset.bound = '1';
+                if (followUpQueueState.limit) size.value = String(followUpQueueState.limit);
                 size.addEventListener('change', () => {
                     followUpQueuePage = 1;
+                    followUpQueueState.limit = Math.min(200, Math.max(1, parseInt(size.value, 10) || 100));
+                    followUpSavePrefs();
                     loadFollowUpQueue(currentClient, { page: 1 });
                 });
             }
@@ -7984,14 +8088,17 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     statusFilters.querySelectorAll('.follow-up-status-chip').forEach((el) => {
                         el.classList.toggle('follow-up-status-chip--active', el === chip);
                     });
+                    followUpSavePrefs();
                     const wrapEl = document.getElementById('follow-up-queue');
                     if (wrapEl) followUpPaintTable(wrapEl);
                 });
             }
             if (searchInput && !searchInput.dataset.bound) {
                 searchInput.dataset.bound = '1';
+                searchInput.value = followUpSearchTerm || '';
                 searchInput.addEventListener('input', () => {
                     followUpSearchTerm = searchInput.value || '';
+                    followUpSavePrefs();
                     const wrapEl = document.getElementById('follow-up-queue');
                     if (wrapEl) followUpPaintTable(wrapEl);
                 });
@@ -8710,6 +8817,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         async function initDashboard() {
             currentClient = getClientFromURL();
             activityFeedOutcomeFilter = 'all';
+            try {
+                activityFeedHideStartFailures = localStorage.getItem('dash.act.hideStartFailures') !== '0';
+                activityFeedGroupRetries = localStorage.getItem('dash.act.groupRetries') !== '0';
+            } catch {}
             initActivityFeedChips();
             initFollowUpQueueUi();
             applyRoiPanelVisibility(currentClient);

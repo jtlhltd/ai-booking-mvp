@@ -9187,6 +9187,11 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       const endedReasonDisplay = formatVapiEndedReasonDisplay(vapiData?.endedReason);
       const retryAttempt = row.retry_attempt != null ? Math.max(0, parseInt(row.retry_attempt, 10) || 0) : 0;
       let outcomeLabel = outcomeToFriendlyLabel(effectiveOutcome);
+      const metaObj = parseCallsRowMetadata(row?.metadata) || {};
+      const queueFailReasonRaw = typeof metaObj.reason === 'string' ? metaObj.reason : (metaObj.reason != null ? String(metaObj.reason) : '');
+      const queueFailReason = queueFailReasonRaw && queueFailReasonRaw.length > 180
+        ? `${queueFailReasonRaw.slice(0, 180).trim()}…`
+        : queueFailReasonRaw;
       if (isCallQueueStartFailureRow(row)) {
         outcomeLabel = 'Could not start call';
       }
@@ -9199,7 +9204,11 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       let displayStatus = effectiveStatus;
       let displayOutcomeLabel = outcomeLabel;
       if (effectiveOutcome && outcomeLabel) {
-        summary = durationLabel ? `${outcomeLabel} • ${durationLabel}` : outcomeLabel;
+        if (isCallQueueStartFailureRow(row) && queueFailReason) {
+          summary = `Could not start call — ${queueFailReason}`;
+        } else {
+          summary = durationLabel ? `${outcomeLabel} • ${durationLabel}` : outcomeLabel;
+        }
       } else if (isStaleInitiated) {
         summary = 'Call ended — result not received (VAPI end-of-call webhook may not have been sent)';
         displayStatus = 'ended';
@@ -9232,6 +9241,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         rawStatus: displayStatus,
         transcriptPreview: transcriptPreview || null,
         endedReason: endedReasonDisplay || null,
+        queueStartFailureReason: isCallQueueStartFailureRow(row) ? (queueFailReason || null) : null,
         retryAttempt,
         hasRecording: !!(row.recording_url && String(row.recording_url).trim())
       };
@@ -9461,10 +9471,17 @@ app.get('/api/events/:clientKey', async (req, res) => {
         lastSent = row.created_at;
         let friendly = outcomeToFriendlyLabel(row.outcome);
         if (isCallQueueStartFailureRow(row)) friendly = 'Could not start call';
+        const metaObj = parseCallsRowMetadata(row?.metadata) || {};
+        const queueFailReasonRaw = typeof metaObj.reason === 'string' ? metaObj.reason : (metaObj.reason != null ? String(metaObj.reason) : '');
+        const queueFailReason = queueFailReasonRaw && queueFailReasonRaw.length > 180
+          ? `${queueFailReasonRaw.slice(0, 180).trim()}…`
+          : queueFailReasonRaw;
         const durationLabel = formatCallDuration(row.duration);
-        const summary = row.outcome
-          ? (durationLabel ? `${friendly || row.outcome} • ${durationLabel}` : (friendly || `Outcome: ${row.outcome}`))
-          : (durationLabel ? `Call ended • ${durationLabel}` : 'Call completed');
+        const summary = (isCallQueueStartFailureRow(row) && queueFailReason)
+          ? `Could not start call — ${queueFailReason}`
+          : (row.outcome
+            ? (durationLabel ? `${friendly || row.outcome} • ${durationLabel}` : (friendly || `Outcome: ${row.outcome}`))
+            : (durationLabel ? `Call ended • ${durationLabel}` : 'Call completed'));
         const transcriptPreview = truncateActivityFeedText(row.transcript);
         const retryAttempt = row.retry_attempt != null ? Math.max(0, parseInt(row.retry_attempt, 10) || 0) : 0;
         const payload = {
@@ -9490,6 +9507,7 @@ app.get('/api/events/:clientKey', async (req, res) => {
             : null,
           transcriptPreview: transcriptPreview || null,
           endedReason: null,
+          queueStartFailureReason: isCallQueueStartFailureRow(row) ? (queueFailReason || null) : null,
           retryAttempt,
           hasRecording: !!(row.recording_url && String(row.recording_url).trim())
         };
