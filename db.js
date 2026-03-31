@@ -355,6 +355,10 @@ async function initPostgres() {
     CREATE INDEX IF NOT EXISTS retry_queue_pending_scheduled_idx ON retry_queue (scheduled_for ASC) WHERE status = 'pending';
     -- Prefix LIKE 'webhook_%' + pending (lib/webhook-retry.js)
     CREATE INDEX IF NOT EXISTS retry_queue_pending_type_pattern_idx ON retry_queue (retry_type varchar_pattern_ops) WHERE status = 'pending';
+    -- Prefix LIKE 'appointment_reminder%' / 'follow_up_%' + pending + scheduled range (lib/database-health.js)
+    CREATE INDEX IF NOT EXISTS retry_queue_pending_reason_scheduled_idx
+      ON retry_queue (retry_reason varchar_pattern_ops, scheduled_for ASC)
+      WHERE status = 'pending';
     -- Stale processing reset: WHERE status = 'processing' AND updated_at < ...
     CREATE INDEX IF NOT EXISTS retry_queue_processing_updated_idx ON retry_queue (updated_at) WHERE status = 'processing';
 
