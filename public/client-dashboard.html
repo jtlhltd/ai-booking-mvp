@@ -7820,7 +7820,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     `<button type="button" class="follow-up-copy-btn" data-fu-copy="${escapeHtml(v)}" aria-label="Copy email">Copy</button></div>`;
             }
             if (col === 'Phone' && v) {
-                const chip = extra?.dupCount > 1 ? `<span class="fu-dup-chip" title="Duplicate phone appears ${extra.dupCount} times">DUP ×${extra.dupCount}</span>` : '';
+                const chip = extra?.dupCount > 1 ? `<span class="fu-dup-chip" title="Duplicate phone appears ${extra.dupCount} times">Duplicate ×${extra.dupCount}</span>` : '';
                 return followUpPhoneCellHtml(v, 'Copy phone number') + chip;
             }
             if (col === 'Called Number' && v) {
