@@ -2510,30 +2510,23 @@
             color: var(--primary, #5c6ac4);
         }
 
-        .follow-up-queue-table td[data-col="status"],
-        .follow-up-queue-table th[data-col="status"] {
+        .follow-up-queue-table td[data-col="called"],
+        .follow-up-queue-table th[data-col="called"] {
             white-space: nowrap;
         }
 
-        .fu-status-btn {
-            border-radius: 999px;
-            border: 1px solid rgba(148, 163, 184, 0.7);
-            padding: 3px 9px;
-            font-size: 0.72rem;
-            font-weight: 600;
-            background: rgba(248, 250, 252, 0.9);
-            color: var(--text-secondary, #4b5563);
+        .fu-called-cell {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2px 6px;
+        }
+
+        .fu-called-checkbox {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--primary, #5c6ac4);
             cursor: pointer;
-        }
-
-        .fu-status-btn.fu-status--called {
-            background: rgba(22, 163, 74, 0.1);
-            border-color: rgba(22, 163, 74, 0.5);
-            color: #15803d;
-        }
-
-        .fu-status-btn.fu-status--todo {
-            background: rgba(248, 250, 252, 0.9);
         }
 
         .sr-only {
@@ -7557,7 +7550,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             'Decision Maker',
             'Phone',
             'Email',
-            'Status',
+            'Called?',
             'International (Y/N)',
             'Main Couriers',
             'UK Courier',
@@ -7638,11 +7631,11 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 if (Number.isFinite(iso)) return { kind: 'num', v: iso };
                 return { kind: 'str', v: v.toLowerCase() };
             }
-            if (col === 'Status') {
+            if (col === 'Called?') {
                 const u = v.toLowerCase();
-                if (u === 'called') return { kind: 'num', v: 1 };
-                if (u === 'to call' || u === 'todo') return { kind: 'num', v: 0 };
-                return { kind: 'num', v: 2 };
+                if (u === 'true' || u === 'yes' || u === 'called') return { kind: 'num', v: 1 };
+                if (u === 'false' || u === 'no' || u === 'to call' || u === 'todo' || u === '') return { kind: 'num', v: 0 };
+                return { kind: 'num', v: 0 };
             }
             if (v === '' || v === '—') return { kind: 'empty', v: 0 };
             const numLoose = Number(v.replace(/,/g, ''));
@@ -7733,12 +7726,11 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             if (col === 'Recording URI' && /^https?:\/\//i.test(v)) {
                 return `<a href="${escapeHtml(v)}" target="_blank" rel="noopener noreferrer">Open</a>`;
             }
-            if (col === 'Status') {
-                const statusRaw = v.toLowerCase();
-                const isCalled = statusRaw === 'called';
-                const label = isCalled ? 'Called' : 'To call';
-                const cls = isCalled ? 'fu-status--called' : 'fu-status--todo';
-                return `<button type="button" class="fu-status-btn ${cls}" data-fu-status="${escapeHtml(label)}">${escapeHtml(label)}</button>`;
+            if (col === 'Called?') {
+                const booly = String(v || '').trim().toLowerCase();
+                const isChecked = booly === 'true' || booly === 'yes' || booly === 'called';
+                const aria = isChecked ? 'Mark as not called' : 'Mark as called';
+                return `<div class="fu-called-cell"><input type="checkbox" class="fu-called-checkbox" data-fu-called aria-label="${escapeHtml(aria)}" ${isChecked ? 'checked' : ''}></div>`;
             }
             if (col === 'Phone' && v) {
                 return followUpPhoneCellHtml(v, 'Copy phone number');
@@ -7817,6 +7809,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 rows = rows.map((r) => {
                     const copy = { ...r };
                     if (!copy.Status) copy.Status = 'To call';
+                    if (copy['Called?'] == null || String(copy['Called?']).trim() === '') {
+                        copy['Called?'] = String(copy.Status || '').trim().toLowerCase() === 'called' ? 'TRUE' : 'FALSE';
+                    }
                     return copy;
                 });
                 const cols = followUpVisibleColumns(rows);
@@ -7912,16 +7907,18 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             if (wrap && !wrap.dataset.sortDelegation) {
                 wrap.dataset.sortDelegation = '1';
                 wrap.addEventListener('click', (e) => {
-                    const statusBtn = e.target.closest('.fu-status-btn');
-                    if (statusBtn) {
-                        const tr = statusBtn.closest('tr');
+                    const calledCb = e.target.closest('[data-fu-called]');
+                    if (calledCb) {
+                        const tr = calledCb.closest('tr');
                         const key = tr && tr.getAttribute('data-fu-key');
                         if (key) {
-                            const nextStatus = statusBtn.dataset.fuStatus === 'Called' ? 'To call' : 'Called';
+                            const isChecked = !!calledCb.checked;
+                            const nextStatus = isChecked ? 'Called' : 'To call';
                             followUpQueueState.rawRows = followUpQueueState.rawRows.map((row) => {
                                 const rk = followUpRowKey(row);
-                                if (rk === key) return { ...row, Status: nextStatus };
-                                return row;
+                                if (rk !== key) return row;
+                                const next = { ...row, Status: nextStatus, 'Called?': isChecked ? 'TRUE' : 'FALSE' };
+                                return next;
                             });
                             followUpPaintTable(wrap);
                         }
