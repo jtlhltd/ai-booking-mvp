@@ -2529,6 +2529,59 @@
             cursor: pointer;
         }
 
+        .fu-dup-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 2px 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(245, 158, 11, 0.45);
+            background: rgba(245, 158, 11, 0.12);
+            color: #92400e;
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            margin-left: 8px;
+            white-space: nowrap;
+        }
+
+        body[data-theme="dark"] .fu-dup-chip {
+            border-color: rgba(245, 158, 11, 0.55);
+            background: rgba(245, 158, 11, 0.18);
+            color: #fbbf24;
+        }
+
+        .fu-email-cell {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .fu-email-text {
+            max-width: 260px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .fu-transcript-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .fu-transcript-btn {
+            border: 1px solid rgba(92, 106, 196, 0.28);
+            background: rgba(92, 106, 196, 0.08);
+            color: var(--primary, #5c6ac4);
+            border-radius: 999px;
+            padding: 3px 9px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
         .sr-only {
             position: absolute !important;
             width: 1px !important;
@@ -7610,6 +7663,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             return `row:${JSON.stringify(row)}`;
         }
 
+        function followUpNormalizePhoneKey(v) {
+            const digits = String(v || '').replace(/[^\d]/g, '');
+            if (!digits) return '';
+            return digits.length >= 10 ? digits.slice(-10) : digits;
+        }
+
         /** Parse "DD/MM/YYYY, HH:mm:ss" (sheet / en-GB) for sorting. */
         function followUpParseUkTimestamp(s) {
             const m = String(s || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}),\s*(\d{1,2}):(\d{2})(?::(\d{2}))?/);
@@ -7672,6 +7731,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const { rawRows, cols, sortKey, sortDir } = followUpQueueState;
             if (!wrap || !cols.length || !rawRows.length) return;
             const term = String(followUpSearchTerm || '').trim().toLowerCase();
+            const dupCounts = new Map();
+            rawRows.forEach((r) => {
+                const k = followUpNormalizePhoneKey(r.Phone);
+                if (!k) return;
+                dupCounts.set(k, (dupCounts.get(k) || 0) + 1);
+            });
             const filtered = rawRows.filter((row) => {
                 if (term) {
                     const haystack = [
@@ -7706,7 +7771,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const tbody = displayRows.map((row) => {
                 const tds = cols.map((c) => {
                     const slug = followUpDataColSlug(c);
-                    return `<td data-col="${escapeHtml(slug)}">${formatFollowUpCell(c, row[c])}</td>`;
+                    const extra = c === 'Phone'
+                        ? { dupCount: (dupCounts.get(followUpNormalizePhoneKey(row.Phone)) || 0) }
+                        : null;
+                    return `<td data-col="${escapeHtml(slug)}">${formatFollowUpCell(c, row[c], row, extra)}</td>`;
                 }).join('');
                 const key = followUpRowKey(row);
                 return `<tr data-fu-key="${escapeHtml(key)}">${tds}</tr>`;
@@ -7735,7 +7803,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 `<button type="button" class="follow-up-copy-btn" data-fu-copy="${escapeHtml(v)}" aria-label="${escapeHtml(ariaLabel)}">Copy</button></div>`;
         }
 
-        function formatFollowUpCell(col, val) {
+        function formatFollowUpCell(col, val, row = null, extra = null) {
             const v = String(val || '').trim();
             if (col === 'Recording URI' && /^https?:\/\//i.test(v)) {
                 return `<a href="${escapeHtml(v)}" target="_blank" rel="noopener noreferrer">Open</a>`;
@@ -7746,15 +7814,24 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const aria = isChecked ? 'Mark as not called' : 'Mark as called';
                 return `<div class="fu-called-cell"><input type="checkbox" class="fu-called-checkbox" data-fu-called aria-label="${escapeHtml(aria)}" ${isChecked ? 'checked' : ''}></div>`;
             }
+            if (col === 'Email') {
+                if (!v) return '—';
+                return `<div class="fu-email-cell"><span class="fu-email-text" title="${escapeHtml(v)}">${escapeHtml(v)}</span>` +
+                    `<button type="button" class="follow-up-copy-btn" data-fu-copy="${escapeHtml(v)}" aria-label="Copy email">Copy</button></div>`;
+            }
             if (col === 'Phone' && v) {
-                return followUpPhoneCellHtml(v, 'Copy phone number');
+                const chip = extra?.dupCount > 1 ? `<span class="fu-dup-chip" title="Duplicate phone appears ${extra.dupCount} times">DUP ×${extra.dupCount}</span>` : '';
+                return followUpPhoneCellHtml(v, 'Copy phone number') + chip;
             }
             if (col === 'Called Number' && v) {
                 return followUpPhoneCellHtml(v, 'Copy dialed number');
             }
             if (col === 'Transcript Snippet') {
                 if (!v) return '—';
-                return `<div class="fu-transcript" title="${escapeHtml(v)}">${escapeHtml(v)}</div>`;
+                const callId = String(row?.['Call ID'] || '').trim();
+                const nm = String(row?.['Business Name'] || row?.['Decision Maker'] || row?.Phone || 'Prospect').trim();
+                const btn = callId ? `<button type="button" class="fu-transcript-btn" data-fu-transcript="${escapeHtml(callId)}" data-fu-name="${escapeHtml(nm)}">Transcript</button>` : '';
+                return `<div class="fu-transcript-actions"><div class="fu-transcript" title="${escapeHtml(v)}">${escapeHtml(v)}</div>${btn}</div>`;
             }
             return escapeHtml(v || '—');
         }
@@ -7938,6 +8015,13 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             if (wrap && !wrap.dataset.sortDelegation) {
                 wrap.dataset.sortDelegation = '1';
                 wrap.addEventListener('click', (e) => {
+                    const trBtn = e.target.closest('[data-fu-transcript]');
+                    if (trBtn) {
+                        const callId = trBtn.getAttribute('data-fu-transcript');
+                        const nm = trBtn.getAttribute('data-fu-name') || 'Prospect';
+                        if (callId) viewTranscript(callId, nm);
+                        return;
+                    }
                     const calledCb = e.target.closest('[data-fu-called]');
                     if (calledCb) {
                         const tr = calledCb.closest('tr');
@@ -7946,23 +8030,39 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             const isChecked = !!calledCb.checked;
                             const nextStatus = isChecked ? 'Called' : 'To call';
                             let targetRow = null;
+                            let targetPhoneKey = '';
                             followUpQueueState.rawRows = followUpQueueState.rawRows.map((row) => {
                                 const rk = followUpRowKey(row);
                                 if (rk !== key) return row;
                                 const next = { ...row, Status: nextStatus, 'Called?': isChecked ? 'TRUE' : 'FALSE' };
                                 targetRow = next;
+                                targetPhoneKey = followUpNormalizePhoneKey(next.Phone);
                                 return next;
                             });
+                            if (targetRow && targetPhoneKey) {
+                                // Prevent double calls: if the same phone appears multiple times on this page, keep them in sync.
+                                followUpQueueState.rawRows = followUpQueueState.rawRows.map((row) => {
+                                    const pk = followUpNormalizePhoneKey(row.Phone);
+                                    if (pk && pk === targetPhoneKey) {
+                                        return { ...row, Status: nextStatus, 'Called?': isChecked ? 'TRUE' : 'FALSE' };
+                                    }
+                                    return row;
+                                });
+                            }
                             followUpPaintTable(wrap);
-                            if (targetRow && typeof targetRow._row === 'number') {
+                            const targets = targetPhoneKey
+                                ? followUpQueueState.rawRows.filter((r) => followUpNormalizePhoneKey(r.Phone) === targetPhoneKey)
+                                : (targetRow ? [targetRow] : []);
+                            targets.forEach((r) => {
+                                if (!r || typeof r._row !== 'number') return;
                                 fetch(`${BASE_URL}/api/follow-up-queue/${encodeURIComponent(currentClient)}/status`, {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({
-                                        row: targetRow._row,
+                                        row: r._row,
                                         called: isChecked,
-                                        callId: targetRow['Call ID'] || '',
-                                        phone: targetRow.Phone || ''
+                                        callId: r['Call ID'] || '',
+                                        phone: r.Phone || ''
                                     })
                                 }).then(async (res) => {
                                     const payload = await res.json().catch(() => ({}));
@@ -7973,7 +8073,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                                     console.warn('Failed to persist follow-up status', err);
                                     showToast('Save failed', 'Could not save Called? to sheet. Please try again.', 'error', 3500);
                                 });
-                            }
+                            });
                         }
                         return;
                     }
