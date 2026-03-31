@@ -115,7 +115,7 @@ export async function appendLogistics(spreadsheetId, data) {
     'Excl Fuel & VAT?': exclFromInc || d.excludingFuelVat || d.exclFuelVat || '',
     'Single vs Multi-parcel': d['Single vs Multi-parcel'] ?? d.singleVsMulti ?? d.singleVsMultiParcel ?? '',
     'Receptionist Name': d.receptionistName ?? '',
-    'Callback Needed': (d.callbackNeeded === true || d.callbackNeeded === 'TRUE') ? 'TRUE' : 'FALSE',
+    'Callback Needed': '',
     'Call ID': d.callId ?? '',
     'Recording URI': d.recordingUrl ?? '',
     'Transcript Snippet': (d.transcriptSnippet ?? '').slice(0, 300),

@@ -2486,6 +2486,56 @@
             accent-color: var(--primary, #5c6ac4);
         }
 
+        .follow-up-status-filters {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .follow-up-status-chip {
+            border-radius: 999px;
+            border: 1px solid rgba(92, 106, 196, 0.2);
+            background: rgba(255,255,255,0.9);
+            color: var(--text-secondary, #4b4f67);
+            padding: 5px 10px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .follow-up-status-chip.follow-up-status-chip--active {
+            background: rgba(92, 106, 196, 0.12);
+            border-color: rgba(92, 106, 196, 0.5);
+            color: var(--primary, #5c6ac4);
+        }
+
+        .follow-up-queue-table td[data-col="status"],
+        .follow-up-queue-table th[data-col="status"] {
+            white-space: nowrap;
+        }
+
+        .fu-status-btn {
+            border-radius: 999px;
+            border: 1px solid rgba(148, 163, 184, 0.7);
+            padding: 3px 9px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            background: rgba(248, 250, 252, 0.9);
+            color: var(--text-secondary, #4b5563);
+            cursor: pointer;
+        }
+
+        .fu-status-btn.fu-status--called {
+            background: rgba(22, 163, 74, 0.1);
+            border-color: rgba(22, 163, 74, 0.5);
+            color: #15803d;
+        }
+
+        .fu-status-btn.fu-status--todo {
+            background: rgba(248, 250, 252, 0.9);
+        }
+
         .sr-only {
             position: absolute !important;
             width: 1px !important;
@@ -4329,10 +4379,11 @@
                 <p class="card-subtitle" id="followUpQueueSubtitle">Contacts and details captured from AI call transcripts into your linked Google Sheet — use this for human follow-up dials.</p>
                 <div class="dashboard-list-toolbar follow-up-queue-toolbar">
                     <button type="button" id="followUpQueueRefresh" class="export-btn secondary">Refresh</button>
-                    <label class="follow-up-callback-filter">
-                        <input type="checkbox" id="followUpCallbackOnly" />
-                        <span>Callback needed only</span>
-                    </label>
+                    <div class="follow-up-status-filters" id="followUpStatusFilters" role="group" aria-label="Filter follow-up rows by status">
+                        <button type="button" class="follow-up-status-chip follow-up-status-chip--active" data-fu-status-filter="all">All</button>
+                        <button type="button" class="follow-up-status-chip" data-fu-status-filter="todo">To call</button>
+                        <button type="button" class="follow-up-status-chip" data-fu-status-filter="called">Called</button>
+                    </div>
                     <div class="follow-up-pager" id="followUpQueuePager" aria-label="Follow-up list pagination">
                         <button type="button" class="export-btn secondary follow-up-page-btn" id="followUpPrevPage" disabled>Prev</button>
                         <span class="follow-up-page-label" id="followUpPageLabel">Page 1</span>
@@ -7506,7 +7557,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             'Decision Maker',
             'Phone',
             'Email',
-            'Callback Needed',
+            'Status',
             'International (Y/N)',
             'Main Couriers',
             'UK Courier',
@@ -7536,6 +7587,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         };
 
         let followUpQueuePage = 1;
+        let followUpStatusFilter = 'all'; // all | todo | called
 
         function followUpUpdatePagerUi() {
             const pager = document.getElementById('followUpQueuePager');
@@ -7552,6 +7604,15 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             prev.disabled = clamped <= 1;
             next.disabled = clamped >= pageCount;
             pager.style.display = total > limit ? 'inline-flex' : 'none';
+        }
+
+        function followUpRowKey(row) {
+            const cid = String(row['Call ID'] || '').trim();
+            if (cid) return `call:${cid}`;
+            const phone = String(row.Phone || '').trim();
+            const ts = String(row.Timestamp || '').trim();
+            if (phone || ts) return `row:${phone}|${ts}`;
+            return `row:${JSON.stringify(row)}`;
         }
 
         /** Parse "DD/MM/YYYY, HH:mm:ss" (sheet / en-GB) for sorting. */
@@ -7577,11 +7638,11 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 if (Number.isFinite(iso)) return { kind: 'num', v: iso };
                 return { kind: 'str', v: v.toLowerCase() };
             }
-            if (col === 'Callback Needed') {
-                const u = v.toUpperCase();
-                if (u === 'TRUE') return { kind: 'num', v: 1 };
-                if (u === 'FALSE') return { kind: 'num', v: 0 };
-                return { kind: 'num', v: -1 };
+            if (col === 'Status') {
+                const u = v.toLowerCase();
+                if (u === 'called') return { kind: 'num', v: 1 };
+                if (u === 'to call' || u === 'todo') return { kind: 'num', v: 0 };
+                return { kind: 'num', v: 2 };
             }
             if (v === '' || v === '—') return { kind: 'empty', v: 0 };
             const numLoose = Number(v.replace(/,/g, ''));
@@ -7615,7 +7676,14 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         function followUpPaintTable(wrap) {
             const { rawRows, cols, sortKey, sortDir } = followUpQueueState;
             if (!wrap || !cols.length || !rawRows.length) return;
-            const displayRows = sortKey ? followUpSortRows(rawRows, sortKey, sortDir) : rawRows.slice();
+            const filtered = rawRows.filter((row) => {
+                const statusRaw = String(row.Status || row['Status'] || '').trim().toLowerCase();
+                const status = statusRaw || 'to call';
+                if (followUpStatusFilter === 'called') return status === 'called';
+                if (followUpStatusFilter === 'todo') return status !== 'called';
+                return true;
+            });
+            const displayRows = sortKey ? followUpSortRows(filtered, sortKey, sortDir) : filtered.slice();
             const thead = `<thead><tr>${cols.map((c, i) => {
                 const slug = followUpDataColSlug(c);
                 const isActive = sortKey === c;
@@ -7633,7 +7701,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     const slug = followUpDataColSlug(c);
                     return `<td data-col="${escapeHtml(slug)}">${formatFollowUpCell(c, row[c])}</td>`;
                 }).join('');
-                return `<tr>${tds}</tr>`;
+                const key = followUpRowKey(row);
+                return `<tr data-fu-key="${escapeHtml(key)}">${tds}</tr>`;
             }).join('');
             wrap.innerHTML = `<table class="follow-up-queue-table">${thead}<tbody>${tbody}</tbody></table>`;
         }
@@ -7664,12 +7733,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             if (col === 'Recording URI' && /^https?:\/\//i.test(v)) {
                 return `<a href="${escapeHtml(v)}" target="_blank" rel="noopener noreferrer">Open</a>`;
             }
-            if (col === 'Callback Needed') {
-                if (!v) return '—';
-                const u = v.toUpperCase();
-                if (u === 'TRUE') return `<span class="fu-callback-yes">${escapeHtml(v)}</span>`;
-                if (u === 'FALSE') return `<span class="fu-callback-no">${escapeHtml(v)}</span>`;
-                return escapeHtml(v);
+            if (col === 'Status') {
+                const statusRaw = v.toLowerCase();
+                const isCalled = statusRaw === 'called';
+                const label = isCalled ? 'Called' : 'To call';
+                const cls = isCalled ? 'fu-status--called' : 'fu-status--todo';
+                return `<button type="button" class="fu-status-btn ${cls}" data-fu-status="${escapeHtml(label)}">${escapeHtml(label)}</button>`;
             }
             if (col === 'Phone' && v) {
                 return followUpPhoneCellHtml(v, 'Copy phone number');
@@ -7688,8 +7757,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const wrap = document.getElementById('follow-up-queue');
             const hint = document.getElementById('followUpQueueHint');
             if (!wrap) return;
-            const cbEl = document.getElementById('followUpCallbackOnly');
-            const callback = !!(cbEl && cbEl.checked);
+            const callback = false;
             const sizeEl = document.getElementById('followUpPageSize');
             const pageSizeRaw = sizeEl ? parseInt(sizeEl.value, 10) : 100;
             const limit = Math.min(200, Math.max(1, Number.isFinite(pageSizeRaw) ? pageSizeRaw : 100));
@@ -7730,12 +7798,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     followUpUpdatePagerUi();
                     return;
                 }
-                const rows = Array.isArray(data.rows) ? data.rows : [];
+                let rows = Array.isArray(data.rows) ? data.rows : [];
                 if (!rows.length) {
                     wrap.innerHTML = `<div class="empty-state" style="padding: 20px;">
                         <span class="empty-state-icon">📞</span>
-                        <div class="empty-state-title">${callback ? 'No callbacks flagged' : 'No rows yet'}</div>
-                        <div class="empty-state-message">${callback ? 'No rows with Callback Needed = TRUE. Try clearing the filter or refresh after new calls.' : 'When the AI saves parsed transcript fields to your sheet, rows appear here (newest first).'}</div>
+                        <div class="empty-state-title">No rows yet</div>
+                        <div class="empty-state-message">When the AI saves parsed transcript fields to your sheet, rows appear here (newest first).</div>
                     </div>`;
                     followUpQueueState = { rawRows: [], cols: [], sortKey: null, sortDir: 'desc', total: data.total != null ? data.total : 0, offset, limit };
                     if (hint) {
@@ -7745,6 +7813,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     followUpUpdatePagerUi();
                     return;
                 }
+                // Ensure Status field present with default "To call"
+                rows = rows.map((r) => {
+                    const copy = { ...r };
+                    if (!copy.Status) copy.Status = 'To call';
+                    return copy;
+                });
                 const cols = followUpVisibleColumns(rows);
                 followUpQueueState = {
                     rawRows: rows.slice(),
@@ -7776,20 +7850,13 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
         function initFollowUpQueueUi() {
             const btn = document.getElementById('followUpQueueRefresh');
-            const cb = document.getElementById('followUpCallbackOnly');
             const prev = document.getElementById('followUpPrevPage');
             const next = document.getElementById('followUpNextPage');
             const size = document.getElementById('followUpPageSize');
+            const statusFilters = document.getElementById('followUpStatusFilters');
             if (btn && !btn.dataset.bound) {
                 btn.dataset.bound = '1';
                 btn.addEventListener('click', () => loadFollowUpQueue(currentClient, { page: followUpQueuePage }));
-            }
-            if (cb && !cb.dataset.bound) {
-                cb.dataset.bound = '1';
-                cb.addEventListener('change', () => {
-                    followUpQueuePage = 1;
-                    loadFollowUpQueue(currentClient, { page: 1 });
-                });
             }
             if (size && !size.dataset.bound) {
                 size.dataset.bound = '1';
@@ -7812,6 +7879,20 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     loadFollowUpQueue(currentClient, { page: followUpQueuePage });
                 });
             }
+            if (statusFilters && !statusFilters.dataset.bound) {
+                statusFilters.dataset.bound = '1';
+                statusFilters.addEventListener('click', (e) => {
+                    const chip = e.target.closest('.follow-up-status-chip');
+                    if (!chip) return;
+                    const val = chip.getAttribute('data-fu-status-filter') || 'all';
+                    followUpStatusFilter = val;
+                    statusFilters.querySelectorAll('.follow-up-status-chip').forEach((el) => {
+                        el.classList.toggle('follow-up-status-chip--active', el === chip);
+                    });
+                    const wrapEl = document.getElementById('follow-up-queue');
+                    if (wrapEl) followUpPaintTable(wrapEl);
+                });
+            }
             const wrap = document.getElementById('follow-up-queue');
             if (wrap && !wrap.dataset.copyDelegation) {
                 wrap.dataset.copyDelegation = '1';
@@ -7831,6 +7912,21 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             if (wrap && !wrap.dataset.sortDelegation) {
                 wrap.dataset.sortDelegation = '1';
                 wrap.addEventListener('click', (e) => {
+                    const statusBtn = e.target.closest('.fu-status-btn');
+                    if (statusBtn) {
+                        const tr = statusBtn.closest('tr');
+                        const key = tr && tr.getAttribute('data-fu-key');
+                        if (key) {
+                            const nextStatus = statusBtn.dataset.fuStatus === 'Called' ? 'To call' : 'Called';
+                            followUpQueueState.rawRows = followUpQueueState.rawRows.map((row) => {
+                                const rk = followUpRowKey(row);
+                                if (rk === key) return { ...row, Status: nextStatus };
+                                return row;
+                            });
+                            followUpPaintTable(wrap);
+                        }
+                        return;
+                    }
                     const btn = e.target.closest('.follow-up-th-btn');
                     if (!btn) return;
                     e.preventDefault();

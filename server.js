@@ -11370,7 +11370,6 @@ app.get('/api/follow-up-queue/:clientKey', async (req, res) => {
           'Main Couriers': 'DHL, FedEx',
           'International Shipments per Week': '120',
           'Main Countries': 'DE, FR, US',
-          'Callback Needed': 'TRUE',
           'Call ID': 'demo-sheet-1',
           'Transcript Snippet': 'Interested in comparing international rates; asked for a callback Thursday PM.',
           'Recording URI': '',
@@ -11386,7 +11385,6 @@ app.get('/api/follow-up-queue/:clientKey', async (req, res) => {
           'International (Y/N)': 'N',
           'UK Shipments per Week': '400',
           'UK Courier': 'DPD',
-          'Callback Needed': 'FALSE',
           'Call ID': 'demo-sheet-2',
           'Transcript Snippet': 'Confirmed they use multi-parcel daily; not ready to switch until Q3.',
           'Recording URI': '',
@@ -11394,10 +11392,7 @@ app.get('/api/follow-up-queue/:clientKey', async (req, res) => {
           'Receptionist Name': ''
         }
       ];
-      let rows = demoRows;
-      if (callbackOnly) {
-        rows = rows.filter((r) => String(r['Callback Needed'] || '').toUpperCase() === 'TRUE');
-      }
+      const rows = demoRows;
       const total = rows.length;
       return res.json({
         ok: true,
@@ -11427,9 +11422,6 @@ app.get('/api/follow-up-queue/:clientKey', async (req, res) => {
     const { rows: rawRows } = await sheets.readSheet(spreadsheetId, 'Sheet1!A:V');
     let records = sheets.logisticsSheetRowsToRecords(rawRows);
     records.reverse();
-    if (callbackOnly) {
-      records = records.filter((r) => String(r['Callback Needed'] || '').toUpperCase() === 'TRUE');
-    }
     const total = records.length;
     res.json({
       ok: true,
