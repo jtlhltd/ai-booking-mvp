@@ -376,12 +376,9 @@ export async function updateLogisticsStatusByRow(spreadsheetId, rowNumber, { cal
     const row = (current.data.values && current.data.values[0]) ? [...current.data.values[0]] : [];
     while (row.length < LOGISTICS_HEADERS.length) row.push('');
     const headerMap = Object.fromEntries(LOGISTICS_HEADERS.map((h, i) => [h, i]));
-    const nextStatus = called ? 'called' : 'to call';
-    if (headerMap['Status'] !== undefined) {
-      row[headerMap['Status']] = nextStatus;
-    }
-    if (headerMap['Called?'] !== undefined) {
-      row[headerMap['Called?']] = called ? 'TRUE' : 'FALSE';
+    // Re-use the existing "Callback Needed" logistics column to persist our Called? flag.
+    if (headerMap['Callback Needed'] !== undefined) {
+      row[headerMap['Callback Needed']] = called ? 'TRUE' : 'FALSE';
     }
     await s.spreadsheets.values.update({
       spreadsheetId,

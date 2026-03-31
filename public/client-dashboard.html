@@ -4372,7 +4372,6 @@
                 <p class="card-subtitle" id="followUpQueueSubtitle">Contacts and details captured from AI call transcripts into your linked Google Sheet — use this for human follow-up dials.</p>
                 <div class="dashboard-list-toolbar follow-up-queue-toolbar">
                     <button type="button" id="followUpQueueRefresh" class="export-btn secondary">Refresh</button>
-                    <button type="button" id="followUpDialNext" class="export-btn secondary">Dial next</button>
                     <div class="follow-up-status-filters" id="followUpStatusFilters" role="group" aria-label="Filter follow-up rows by status">
                         <button type="button" class="follow-up-status-chip follow-up-status-chip--active" data-fu-status-filter="all">All</button>
                         <button type="button" class="follow-up-status-chip" data-fu-status-filter="todo">To call</button>
@@ -7820,12 +7819,14 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     followUpUpdatePagerUi();
                     return;
                 }
-                // Ensure Status field present with default "To call"
+                // Ensure Status / Called? fields present, deriving from sheet's "Callback Needed" when available
                 rows = rows.map((r) => {
                     const copy = { ...r };
-                    if (!copy.Status) copy.Status = 'To call';
-                    if (copy['Called?'] == null || String(copy['Called?']).trim() === '') {
-                        copy['Called?'] = String(copy.Status || '').trim().toLowerCase() === 'called' ? 'TRUE' : 'FALSE';
+                    const rawFlag = String(copy['Called?'] || copy['Callback Needed'] || '').trim().toUpperCase();
+                    const isCalled = rawFlag === 'TRUE' || rawFlag === 'YES' || rawFlag === 'CALLED';
+                    copy['Called?'] = isCalled ? 'TRUE' : 'FALSE';
+                    if (!copy.Status) {
+                        copy.Status = isCalled ? 'Called' : 'To call';
                     }
                     return copy;
                 });
@@ -7871,7 +7872,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const size = document.getElementById('followUpPageSize');
             const statusFilters = document.getElementById('followUpStatusFilters');
             const searchInput = document.getElementById('followUpSearchInput');
-            const dialNextBtn = document.getElementById('followUpDialNext');
             if (btn && !btn.dataset.bound) {
                 btn.dataset.bound = '1';
                 btn.addEventListener('click', () => loadFollowUpQueue(currentClient, { page: followUpQueuePage }));
@@ -7917,18 +7917,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     followUpSearchTerm = searchInput.value || '';
                     const wrapEl = document.getElementById('follow-up-queue');
                     if (wrapEl) followUpPaintTable(wrapEl);
-                });
-            }
-            if (dialNextBtn && !dialNextBtn.dataset.bound) {
-                dialNextBtn.dataset.bound = '1';
-                dialNextBtn.addEventListener('click', () => {
-                    const wrapEl = document.getElementById('follow-up-queue');
-                    if (!wrapEl) return;
-                    const nextTodo = wrapEl.querySelector('tr td[data-col="called"] input.fu-called-checkbox:not(:checked)');
-                    if (nextTodo) {
-                        nextTodo.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        nextTodo.focus();
-                    }
                 });
             }
             const wrap = document.getElementById('follow-up-queue');
