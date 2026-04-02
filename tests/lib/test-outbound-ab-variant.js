@@ -10,12 +10,11 @@ resetStats();
 
 describe('outbound-ab-variant', () => {
   test('buildAssistantOverrides maps voice string and firstMessage and script', () => {
-    const { overrides, assistantIdOverride } = buildAssistantOverridesFromVariantConfig({
+    const { overrides } = buildAssistantOverridesFromVariantConfig({
       firstMessage: 'Hi there',
       script: 'You are a test assistant.',
       voice: 'voice-id-123'
     });
-    assertEqual(assistantIdOverride, null);
     assertEqual(overrides.firstMessage, 'Hi there');
     assertEqual(overrides.voice.provider, '11labs');
     assertEqual(overrides.voice.voiceId, 'voice-id-123');
@@ -32,11 +31,14 @@ describe('outbound-ab-variant', () => {
     assertEqual(overrides.model.messages[0].content, 'A');
   });
 
-  test('buildAssistantOverrides assistantId and vapiAssistantId', () => {
-    const a = buildAssistantOverridesFromVariantConfig({ assistantId: 'asst_1' });
-    assertEqual(a.assistantIdOverride, 'asst_1');
-    const b = buildAssistantOverridesFromVariantConfig({ vapiAssistantId: 'asst_2' });
-    assertEqual(b.assistantIdOverride, 'asst_2');
+  test('buildAssistantOverrides ignores non-AB fields like assistantId', () => {
+    const { overrides } = buildAssistantOverridesFromVariantConfig({
+      assistantId: 'asst_ignored',
+      vapiAssistantId: 'asst_ignored2',
+      variableValues: { x: 'y' },
+      model: { temperature: 0.99 }
+    });
+    assertEqual(Object.keys(overrides).length, 0);
   });
 
   test('mergeAssistantOverrides merges variableValues and prefers AB model.messages', () => {
