@@ -2432,7 +2432,7 @@
             display: flex;
             align-items: flex-end;
             gap: 2px;
-            height: 104px;
+            height: 118px;
             padding-top: 6px;
         }
 
@@ -2543,6 +2543,77 @@
 
         .insights-bandit-table tr:last-child td {
             border-bottom: none;
+        }
+
+        .insights-action-list {
+            margin: 0;
+            padding-left: 1.15rem;
+            font-size: 12px;
+            line-height: 1.5;
+            color: var(--text-primary, #1f2937);
+        }
+
+        .insights-action-item {
+            margin-bottom: 10px;
+        }
+
+        .insights-action-item--risk strong {
+            color: #b45309;
+        }
+
+        .insights-action-item--win strong {
+            color: #047857;
+        }
+
+        .insights-action-item--info strong,
+        .insights-action-item--model strong,
+        .insights-action-item--context strong {
+            color: var(--primary);
+        }
+
+        .insights-subcaption {
+            display: block;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+
+        .insights-monitor-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+            margin-top: 4px;
+        }
+
+        .insights-monitor-table th,
+        .insights-monitor-table td {
+            padding: 5px 6px;
+            text-align: left;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+            vertical-align: top;
+        }
+
+        .insights-monitor-table th {
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .insights-bar-pct {
+            font-size: 7px;
+            font-weight: 700;
+            color: var(--text-secondary);
+            line-height: 1;
+            text-align: center;
+            max-width: 100%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .insights-status-pill {
@@ -4658,7 +4729,7 @@
 
                 <article class="card card-insights-routing">
                     <h3>🧠 Insights & Routing</h3>
-                    <p class="card-subtitle" id="callInsightsSubtitle">Transcript patterns, hourly and weekday performance, and the dial-time model used when scheduling outbound dials.</p>
+                    <p class="card-subtitle" id="callInsightsSubtitle">Actionable call-time analysis, model activity, and Thompson beliefs that drive queue scheduling.</p>
                     <div class="insights-card-toolbar" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
                         <small id="callInsightsMeta" style="color:var(--muted);">—</small>
                         <button type="button" id="callInsightsRefresh" class="export-btn secondary" style="padding:6px 10px;font-size:12px;">Refresh insights</button>
@@ -7888,6 +7959,29 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
         }
 
+        function summarizeByHourForInsights(byHour) {
+            if (!Array.isArray(byHour) || byHour.length < 24) return '';
+            let best = null;
+            let worst = null;
+            for (const h of byHour) {
+                const attempts = h.attempts || 0;
+                if (attempts < 5) continue;
+                const ar = h.answeredRate != null ? Number(h.answeredRate) : h.answered / attempts;
+                const pct = Math.round(ar * 100);
+                const hour = h.hour != null ? Number(h.hour) : 0;
+                if (best === null || pct > best.pct) best = { hour, pct, attempts };
+                if (worst === null || pct < worst.pct) worst = { hour, pct, attempts };
+            }
+            if (!best) {
+                return '<p class="insights-panel-hint">Need at least <strong>5 dials</strong> in an hour to compare answer rates reliably.</p>';
+            }
+            const weakLine =
+                worst && worst.hour !== best.hour
+                    ? ` <strong>Weakest (≥5 dials):</strong> ${String(worst.hour).padStart(2, '0')}:00 · ${worst.pct}% (${worst.attempts} dials).`
+                    : '';
+            return `<p class="insights-panel-hint"><strong>Best hour (≥5 dials):</strong> ${String(best.hour).padStart(2, '0')}:00 · ${best.pct}% answered (${best.attempts} dials).${weakLine}</p>`;
+        }
+
         function buildInsightsHourBarChart(byHour, timeZoneLabel) {
             if (!Array.isArray(byHour) || byHour.length < 24) {
                 return '<p class="insights-panel-hint">No hourly breakdown for this window.</p>';
@@ -7912,17 +8006,23 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         ? `${String(hour).padStart(2, '0')}:00 — ${pct}% answered (${h.answered}/${attempts} dials)`
                         : `${String(hour).padStart(2, '0')}:00 — no dials`;
                     const cls = attempts ? 'insights-hour-bar' : 'insights-hour-bar insights-hour-bar--empty';
+                    const pctLabel = attempts ? `${pct}%` : '';
                     return `<div class="insights-hour-bar-wrap" title="${title.replace(/"/g, '&quot;')}">
-                    <div class="${cls}" style="height:${attempts ? Math.max(6, hPct) : 3}px"></div>
-                    <span class="insights-hour-label">${hour % 4 === 0 ? escapeHtml(String(hour)) : ''}</span>
+                    <div class="${cls}" style="height:${attempts ? Math.max(8, hPct) : 3}px"></div>
+                    <span class="insights-bar-pct">${escapeHtml(pctLabel)}</span>
+                    <span class="insights-hour-label">${hour % 2 === 0 ? escapeHtml(String(hour)) : ''}</span>
                 </div>`;
                 })
                 .join('');
-            return `<p class="insights-panel-hint">Local time (${escapeHtml(timeZoneLabel || 'UTC')}). Bar height is relative to your strongest hour in this period (answered ÷ attempts).</p>
+            return `<p class="insights-panel-hint"><strong>Readout:</strong> each bar is <em>% answered</em> for dials placed in that local hour (${escapeHtml(
+                timeZoneLabel || 'UTC'
+            )}). Taller = better pickup in this dataset.</p>
+                ${summarizeByHourForInsights(byHour)}
                 <div class="insights-hour-bars" role="img" aria-label="Answered rate by hour of day">${bars}</div>`;
         }
 
         function buildInsightsWeekdayBarChart(byWeekday) {
+            const WD_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
             if (!Array.isArray(byWeekday) || byWeekday.length < 1) {
                 return '<p class="insights-panel-hint">No weekday breakdown.</p>';
             }
@@ -7941,17 +8041,23 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     const ar = d.answeredRate != null ? Number(d.answeredRate) : (attempts ? d.answered / attempts : 0);
                     const pct = Math.round(ar * 100);
                     const hPct = maxPct > 0 ? Math.round((pct / maxPct) * 100) : 0;
-                    const label = d.label || `Day ${d.weekday || ''}`;
+                    const wd = Number(d.weekday);
+                    const idx = Number.isFinite(wd) ? Math.max(0, Math.min(6, wd - 1)) : 0;
+                    const rawLabel = d.label && String(d.label).trim();
+                    const label = rawLabel || WD_SHORT[idx] || '—';
                     const title = attempts
                         ? `${label}: ${pct}% answered (${d.answered}/${attempts})`
                         : `${label}: no dials`;
+                    const pctLabel = attempts ? `${pct}%` : '';
                     return `<div class="insights-weekday-col" title="${title.replace(/"/g, '&quot;')}">
-                    <div class="${attempts ? 'insights-wd-bar' : 'insights-wd-bar insights-wd-bar--empty'}" style="height:${attempts ? Math.max(8, hPct) : 5}px"></div>
+                    <div class="${attempts ? 'insights-wd-bar' : 'insights-wd-bar insights-wd-bar--empty'}" style="height:${attempts ? Math.max(10, hPct) : 5}px"></div>
+                    <span class="insights-bar-pct" style="font-size:8px">${escapeHtml(pctLabel)}</span>
                     <span class="insights-wd-label">${escapeHtml(label)}</span>
                 </div>`;
                 })
                 .join('');
-            return `<div class="insights-weekday-bars" role="img" aria-label="Answered rate by weekday">${cols}</div>`;
+            return `<p class="insights-panel-hint">Compare <em>% answered</em> by weekday — use it to plan staffing and lead-ingest timing.</p>
+                <div class="insights-weekday-bars" role="img" aria-label="Answered rate by weekday">${cols}</div>`;
         }
 
         function buildInsightsPairChips(items, emptyMsg) {
@@ -7964,6 +8070,79 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         `<span class="insights-chip" role="listitem">${escapeHtml(x.key)} · ${formatNumber(x.count)}</span>`
                 )
                 .join('')}</div>`;
+        }
+
+        function buildInsightsActionHintsPanel(actionHints) {
+            const bullets = (actionHints && actionHints.bullets) || [];
+            if (!bullets.length) return '';
+            const items = bullets
+                .map((b) => {
+                    const k = String(b.kind || 'info').replace(/[^a-z-]/g, '') || 'info';
+                    return `<li class="insights-action-item insights-action-item--${k}"><strong>${escapeHtml(b.title || '')}</strong> ${escapeHtml(b.detail || '')}</li>`;
+                })
+                .join('');
+            const head = actionHints.headline ? `<p class="insights-panel-hint">${escapeHtml(actionHints.headline)}</p>` : '';
+            return `<div class="insights-panel insights-panel--span">
+                <div class="insights-panel-title">What to do with this</div>
+                ${head}
+                <ul class="insights-action-list">${items}</ul>
+            </div>`;
+        }
+
+        function scheduleSourceLabel(s) {
+            if (s === 'thompson') return 'Thompson';
+            if (s === 'routing_heuristic') return 'Routing heuristic';
+            return s ? String(s) : '—';
+        }
+
+        function buildInsightsMonitoringSection(bandit) {
+            const obs = (bandit && bandit.recentActivity) || [];
+            const sched = (bandit && bandit.scheduleAdjustments) || [];
+            const last7 = bandit && bandit.observationsLast7Days;
+            const n7 = last7 != null ? formatNumber(last7) : '—';
+            let obsBlock =
+                '<p class="insights-panel-hint">Nothing logged yet. Use <strong>Refresh insights</strong> to sync historical calls into the dial-time model; new completions append as they finish.</p>';
+            if (obs.length) {
+                const rows = obs
+                    .slice(0, 18)
+                    .map(
+                        (r) =>
+                            `<tr><td>${escapeHtml(r.at ? formatTimeAgo(r.at) : '—')}</td><td>${escapeHtml(String(r.hour).padStart(2, '0'))}:00</td><td>${
+                                r.success ? 'Answered' : 'No pickup'
+                            }</td><td style="font-size:10px;word-break:break-all">${escapeHtml(String(r.callId || '').slice(0, 18))}</td></tr>`
+                    )
+                    .join('');
+                obsBlock = `<table class="insights-monitor-table"><thead><tr><th>When</th><th>Hour</th><th>Outcome</th><th>Call id</th></tr></thead><tbody>${rows}</tbody></table>`;
+            }
+            let schedBlock =
+                '<p class="insights-panel-hint">No rows yet. When scheduling moves a queued dial by <strong>&gt; 1 minute</strong> (Thompson or routing heuristic vs baseline), it appears here.</p>';
+            if (sched.length) {
+                const rows = sched
+                    .slice(0, 15)
+                    .map((r) => {
+                        const bas = r.baselineAt
+                            ? new Date(r.baselineAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                            : '—';
+                        const chs = r.chosenAt
+                            ? new Date(r.chosenAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                            : '—';
+                        return `<tr><td>${escapeHtml(r.at ? formatTimeAgo(r.at) : '—')}</td><td>${escapeHtml(scheduleSourceLabel(r.source))}</td><td>${escapeHtml(
+                            r.hourChosen != null ? `${String(r.hourChosen).padStart(2, '0')}:00` : '—'
+                        )}</td><td>${r.delayMinutes != null ? `${escapeHtml(String(r.delayMinutes))}m` : '—'}</td><td style="font-size:10px;line-height:1.35">${escapeHtml(
+                            bas
+                        )} → ${escapeHtml(chs)}</td></tr>`;
+                    })
+                    .join('');
+                schedBlock = `<table class="insights-monitor-table"><thead><tr><th>When</th><th>Source</th><th>Hour</th><th>Shift</th><th>Baseline → chosen</th></tr></thead><tbody>${rows}</tbody></table>`;
+            }
+            return `<div class="insights-panel insights-panel--span">
+                <div class="insights-panel-title">Model activity & schedule shifts</div>
+                <p class="insights-panel-hint"><strong>${n7}</strong> bandit observations recorded in the last 7 days (rolling).</p>
+                <div class="insights-wide-grid">
+                    <div><span class="insights-subcaption">Belief updates</span>${obsBlock}</div>
+                    <div><span class="insights-subcaption">Schedule adjustments</span>${schedBlock}</div>
+                </div>
+            </div>`;
         }
 
         function banditStrengthCaption(s) {
@@ -7982,16 +8161,18 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 <span class="insights-status-pill">Thompson dial-time: ${th}</span>
                 ${bandit?.demo ? '<span class="insights-status-pill">Demo preview</span>' : ''}
             </div>`;
+            const obs7 =
+                bandit?.observationsLast7Days != null ? formatNumber(bandit.observationsLast7Days) : null;
             const obsLine =
                 bandit?.updatedAt && !bandit?.demo
-                    ? `<p class="insights-panel-hint">${formatNumber(bandit.observationCount || 0)} completed calls updated the model · last change ${formatTimeAgo(bandit.updatedAt)}</p>`
+                    ? `<p class="insights-panel-hint">${formatNumber(bandit.observationCount || 0)} calls in the dial-time model · ${obs7 != null ? `<strong>${obs7}</strong> in last 7 days · ` : ''}last update ${formatTimeAgo(bandit.updatedAt)}</p>`
                     : bandit?.demo
                       ? '<p class="insights-panel-hint">Representative preview — connect a live tenant for real posteriors.</p>'
                       : !bandit?.ok
                         ? `<p class="insights-panel-hint">Could not load bandit state${bandit?.error ? `: ${escapeHtml(String(bandit.error))}` : ''}.</p>`
-                        : `<p class="insights-panel-hint">${formatNumber(bandit?.observationCount || 0)} bandit observations on file.</p>`;
+                        : `<p class="insights-panel-hint">${formatNumber(bandit?.observationCount || 0)} observations on file${obs7 != null ? ` · <strong>${obs7}</strong> in last 7 days` : ''}.</p>`;
             if (!ranked.length) {
-                return `${pill}${obsLine}<p class="insights-panel-hint">No per-hour posteriors with data yet. Each completed outbound call (via webhook) nudges a Beta belief for that local hour: success ≈ answered. Once hours accumulate observations, they appear ranked here with P(answered), counts, and how reliable the estimate is.</p>`;
+                return `${pill}${obsLine}<p class="insights-panel-hint">No per-hour beliefs with data yet. <strong>Refresh insights</strong> backfills from your call history; new completions also update the model when webhooks mark a call finished.</p>`;
             }
             const rows = ranked
                 .map(
@@ -8007,11 +8188,27 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         }
 
         function demoCallTimeBanditPayload() {
+            const now = new Date().toISOString();
             return {
                 ok: true,
                 demo: true,
                 observationCount: 284,
-                updatedAt: new Date().toISOString(),
+                observationsLast7Days: 62,
+                updatedAt: now,
+                recentActivity: [
+                    { callId: 'demo-call-901', hour: 10, success: true, at: now },
+                    { callId: 'demo-call-900', hour: 14, success: false, at: now }
+                ],
+                scheduleAdjustments: [
+                    {
+                        baselineAt: new Date(Date.now() - 86400000).toISOString(),
+                        chosenAt: new Date(Date.now() - 86400000 + 3600000).toISOString(),
+                        source: 'thompson',
+                        hourChosen: 11,
+                        delayMinutes: 60,
+                        at: new Date(Date.now() - 86400000).toISOString()
+                    }
+                ],
                 ranked: [
                     { hour: 10, label: '10:00', meanAnsweredPct: 41, successes: 17, failures: 25, observations: 42, strength: 'building', uncertainty: 14 },
                     { hour: 14, label: '14:00', meanAnsweredPct: 36, successes: 11, failures: 21, observations: 32, strength: 'building', uncertainty: 16 },
@@ -8097,6 +8294,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const bestDays = routing?.recommendations?.bestWeekdays || [];
                 const byHour = routing?.buckets?.byHour || [];
                 const byWeekday = routing?.buckets?.byWeekday || [];
+                const actionHints = routing?.actionHints || {};
                 const routingTz = routing?.timeZone || 'UTC';
                 const computedAt = payload.computed_at || payload.computedAt || null;
                 const sampleSize = insights.sampleSize || summary.attempts || 0;
@@ -8167,6 +8365,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     }
                     </div>
 
+                    ${buildInsightsActionHintsPanel(actionHints)}
+
                     <div class="insights-panel insights-panel--span">
                         <div class="insights-panel-title">Outcomes & sentiment</div>
                         <div class="insights-wide-grid" style="margin-top:8px">
@@ -8192,6 +8392,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             ${buildInsightsWeekdayBarChart(byWeekday)}
                         </div>
                     </div>
+
+                    ${buildInsightsMonitoringSection(bandit)}
 
                     <div class="insights-panel insights-panel--span">
                         <div class="insights-panel-title">Dial-time model (Thompson sampling)</div>

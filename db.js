@@ -281,6 +281,19 @@ async function initPostgres() {
       created_at TIMESTAMPTZ DEFAULT now()
     );
     CREATE INDEX IF NOT EXISTS bandit_obs_tenant_idx ON call_time_bandit_observations(client_key);
+    CREATE INDEX IF NOT EXISTS bandit_obs_created_idx ON call_time_bandit_observations(client_key, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS call_schedule_decisions (
+      id BIGSERIAL PRIMARY KEY,
+      client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
+      baseline_at TIMESTAMPTZ NOT NULL,
+      chosen_at TIMESTAMPTZ NOT NULL,
+      source TEXT NOT NULL,
+      hour_chosen SMALLINT,
+      delay_minutes INT,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS schedule_decisions_client_idx ON call_schedule_decisions(client_key, created_at DESC);
 
     CREATE TABLE IF NOT EXISTS quality_alerts (
       id BIGSERIAL PRIMARY KEY,
@@ -1445,8 +1458,11 @@ export async function getCallTimeBanditForDashboard(clientKey) {
     ok: true,
     updatedAt: null,
     observationCount: 0,
+    observationsLast7Days: 0,
     hours: [],
-    ranked: []
+    ranked: [],
+    recentActivity: [],
+    scheduleAdjustments: []
   };
   if (!clientKey) return { ...empty, ok: false, error: 'missing client' };
 
@@ -1507,16 +1523,210 @@ export async function getCallTimeBanditForDashboard(clientKey) {
       .sort((x, y) => y.meanAnsweredPct - x.meanAnsweredPct || y.observations - x.observations)
       .slice(0, 12);
 
+    const [{ rows: recentObs }, { rows: recentSched }, { rows: c7 }] = await Promise.all([
+      query(
+        `
+        SELECT call_id, hour, success, created_at
+        FROM call_time_bandit_observations
+        WHERE client_key = $1
+        ORDER BY created_at DESC
+        LIMIT 40
+      `,
+        [clientKey]
+      ),
+      query(
+        `
+        SELECT baseline_at, chosen_at, source, hour_chosen, delay_minutes, created_at
+        FROM call_schedule_decisions
+        WHERE client_key = $1
+        ORDER BY created_at DESC
+        LIMIT 30
+      `,
+        [clientKey]
+      ),
+      query(
+        `
+        SELECT COUNT(*) AS c
+        FROM call_time_bandit_observations
+        WHERE client_key = $1
+          AND created_at >= NOW() - INTERVAL '7 days'
+      `,
+        [clientKey]
+      )
+    ]);
+
+    const observationsLast7Days = parseInt(String(c7?.[0]?.c ?? 0), 10) || 0;
+    const recentActivity = (recentObs || []).map((r) => ({
+      callId: r.call_id,
+      hour: r.hour,
+      success: Boolean(r.success),
+      at: r.created_at ? new Date(r.created_at).toISOString() : null
+    }));
+    const scheduleAdjustments = (recentSched || []).map((r) => ({
+      baselineAt: r.baseline_at ? new Date(r.baseline_at).toISOString() : null,
+      chosenAt: r.chosen_at ? new Date(r.chosen_at).toISOString() : null,
+      source: r.source,
+      hourChosen: r.hour_chosen,
+      delayMinutes: r.delay_minutes,
+      at: r.created_at ? new Date(r.created_at).toISOString() : null
+    }));
+
     return {
       ok: true,
       updatedAt,
       observationCount,
+      observationsLast7Days,
       hours,
-      ranked
+      ranked,
+      recentActivity,
+      scheduleAdjustments
     };
   } catch (e) {
     console.warn('[CALL TIME BANDIT] getCallTimeBanditForDashboard:', e.message);
-    return { ...empty, ok: false, error: e.message };
+    return {
+      ...empty,
+      ok: false,
+      error: e.message,
+      recentActivity: [],
+      scheduleAdjustments: [],
+      observationsLast7Days: 0
+    };
+  }
+}
+
+function isBanditEligibleCallRow(row) {
+  const st = (row.status || '').toString().trim().toLowerCase();
+  if (['initiated', 'in_progress', 'queued', 'pending', 'ringing'].includes(st)) return false;
+  const dur = row.duration != null ? Number(row.duration) : null;
+  const hasOutcome = row.outcome != null && String(row.outcome).trim() !== '';
+  if (!hasOutcome && (dur == null || dur === 0) && !['ended', 'completed', 'finished', 'failed'].includes(st)) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Populate bandit observations from historical calls missing from call_time_bandit_observations.
+ * Merges posteriors in one write. Safe to run repeatedly.
+ */
+export async function backfillCallTimeBanditObservations(clientKey, { days = 30, limit = 4000 } = {}) {
+  if (!clientKey) return { inserted: 0, skipped: true };
+  try {
+    const tenant = await getFullClient(clientKey);
+    if (!tenant) return { inserted: 0 };
+
+    const { getTenantTimezone } = await import('./lib/business-hours.js');
+    const { DateTime } = await import('luxon');
+    const { isAnsweredHeuristic } = await import('./lib/call-outcome-heuristics.js');
+
+    const tz = getTenantTimezone(tenant, process.env.TZ || process.env.TIMEZONE || 'Europe/London');
+    const d = Math.max(1, Math.min(120, Number(days) || 30));
+    const lim = Math.max(1, Math.min(8000, Number(limit) || 4000));
+
+    const { rows } = await query(
+      `
+      SELECT c.call_id, c.created_at, c.outcome, c.status, c.duration, c.transcript, c.recording_url
+      FROM calls c
+      WHERE c.client_key = $1
+        AND c.created_at >= NOW() - ($2::integer * INTERVAL '1 day')
+        AND NOT EXISTS (
+          SELECT 1 FROM call_time_bandit_observations o WHERE o.call_id = c.call_id
+        )
+      ORDER BY c.created_at ASC
+      LIMIT $3
+    `,
+      [clientKey, d, lim]
+    );
+
+    const arms = { ...(await getCallTimeBanditState(clientKey)) };
+    const toInsert = [];
+
+    for (const row of rows || []) {
+      if (!row?.call_id || !row.created_at) continue;
+      if (!isBanditEligibleCallRow(row)) continue;
+      const dt = DateTime.fromJSDate(new Date(row.created_at), { zone: tz });
+      if (!dt.isValid) continue;
+      const hour = dt.hour;
+      const success = isAnsweredHeuristic(row);
+      toInsert.push({
+        call_id: String(row.call_id),
+        client_key: clientKey,
+        hour,
+        success
+      });
+      const hk = String(hour);
+      const prev = arms[hk] || { a: 1, b: 1 };
+      const a = Number(prev.a) || 1;
+      const b = Number(prev.b) || 1;
+      arms[hk] = success ? { a: a + 1, b } : { a, b: b + 1 };
+    }
+
+    if (toInsert.length === 0) return { inserted: 0 };
+
+    const chunkSize = 80;
+    for (let i = 0; i < toInsert.length; i += chunkSize) {
+      const chunk = toInsert.slice(i, i + chunkSize);
+      const placeholders = chunk
+        .map((_, j) => {
+          const o = j * 4;
+          return `($${o + 1}, $${o + 2}, $${o + 3}, $${o + 4})`;
+        })
+        .join(', ');
+      const flat = chunk.flatMap((x) => [x.call_id, x.client_key, x.hour, x.success]);
+      await query(
+        `
+        INSERT INTO call_time_bandit_observations (call_id, client_key, hour, success)
+        VALUES ${placeholders}
+        ON CONFLICT (call_id) DO NOTHING
+      `,
+        flat
+      );
+    }
+
+    await query(
+      `
+      INSERT INTO call_time_bandit (client_key, arms, updated_at)
+      VALUES ($1, $2::jsonb, now())
+      ON CONFLICT (client_key)
+      DO UPDATE SET arms = EXCLUDED.arms, updated_at = now()
+    `,
+      [clientKey, JSON.stringify(arms)]
+    );
+
+    return { inserted: toInsert.length };
+  } catch (e) {
+    console.warn('[CALL TIME BANDIT] backfill:', e.message);
+    return { inserted: 0, error: e.message };
+  }
+}
+
+export async function recordCallScheduleDecision({
+  clientKey,
+  baselineAt,
+  chosenAt,
+  source,
+  hourChosen,
+  delayMinutes
+}) {
+  if (!clientKey || !baselineAt || !chosenAt || !source) return;
+  try {
+    await query(
+      `
+      INSERT INTO call_schedule_decisions
+        (client_key, baseline_at, chosen_at, source, hour_chosen, delay_minutes)
+      VALUES ($1, $2::timestamptz, $3::timestamptz, $4, $5, $6)
+    `,
+      [
+        clientKey,
+        baselineAt instanceof Date ? baselineAt.toISOString() : baselineAt,
+        chosenAt instanceof Date ? chosenAt.toISOString() : chosenAt,
+        String(source),
+        hourChosen != null ? Number(hourChosen) : null,
+        delayMinutes != null ? Number(delayMinutes) : null
+      ]
+    );
+  } catch (e) {
+    console.warn('[CALL SCHEDULE] log skipped:', e.message);
   }
 }
 

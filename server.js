@@ -11273,8 +11273,12 @@ app.get('/api/call-time-bandit/:clientKey', async (req, res) => {
   res.set('Cache-Control', 'no-store');
   try {
     const { clientKey } = req.params;
-    const { getCallTimeBanditForDashboard } = await import('./db.js');
-    const data = await getCallTimeBanditForDashboard(clientKey);
+    const { getCallTimeBanditForDashboard, backfillCallTimeBanditObservations } = await import('./db.js');
+    let data = await getCallTimeBanditForDashboard(clientKey);
+    if (data.ok && data.observationCount === 0) {
+      await backfillCallTimeBanditObservations(clientKey, { days: 90, limit: 6000 }).catch(() => {});
+      data = await getCallTimeBanditForDashboard(clientKey);
+    }
     const thompsonOff = ['0', 'false'].includes(
       String(process.env.CALL_TIME_THOMPSON || '').trim().toLowerCase()
     );
