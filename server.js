@@ -11177,6 +11177,73 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
   }
 });
 
+// Aggregated “learning loop” insights from transcripts + routing recommendations
+app.get('/api/call-insights/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix: 'call-insights:v1:' }), async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const days = Math.max(1, Math.min(120, parseInt(req.query.days || 30, 10) || 30));
+    const { getLatestCallInsights, upsertCallInsights, getFullClient } = await import('./db.js');
+    const existing = await getLatestCallInsights(clientKey);
+    if (existing && existing.insights) {
+      return res.json({ ok: true, source: 'cache', ...existing });
+    }
+
+    const client = await getFullClient(clientKey).catch(() => null);
+    const timeZone = client?.timezone || client?.booking?.timezone || process.env.TZ || 'UTC';
+    const { computeAndStoreCallInsights } = await import('./lib/call-insights-engine.js');
+    const computed = await computeAndStoreCallInsights({
+      query,
+      clientKey,
+      days,
+      timeZone,
+      upsertCallInsights
+    });
+    return res.json({
+      ok: true,
+      source: 'computed',
+      client_key: clientKey,
+      period_days: days,
+      insights: computed.insights,
+      routing: computed.routing,
+      computed_at: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[CALL INSIGHTS ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.post('/api/call-insights/:clientKey/recompute', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const days = Math.max(1, Math.min(120, parseInt((req.body && req.body.days) || req.query.days || 30, 10) || 30));
+    const { upsertCallInsights, getFullClient } = await import('./db.js');
+    const client = await getFullClient(clientKey).catch(() => null);
+    const timeZone = client?.timezone || client?.booking?.timezone || process.env.TZ || 'UTC';
+    const { computeAndStoreCallInsights } = await import('./lib/call-insights-engine.js');
+    const computed = await computeAndStoreCallInsights({
+      query,
+      clientKey,
+      days,
+      timeZone,
+      upsertCallInsights
+    });
+    res.set('Cache-Control', 'no-store');
+    return res.json({
+      ok: true,
+      source: 'recomputed',
+      client_key: clientKey,
+      period_days: days,
+      insights: computed.insights,
+      routing: computed.routing,
+      computed_at: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[CALL INSIGHTS RECOMPUTE ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 // API endpoint for retry queue (pending follow-up rows + outbound calls waiting in call_queue)
 // No response cache: queue changes often; cached empty responses made the dashboard look "broken".
 app.get('/api/retry-queue/:clientKey', async (req, res) => {

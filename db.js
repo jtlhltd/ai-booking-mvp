@@ -252,6 +252,20 @@ async function initPostgres() {
     CREATE INDEX IF NOT EXISTS calls_outcome_idx ON calls(outcome);
     CREATE INDEX IF NOT EXISTS calls_created_idx ON calls(created_at);
 
+    -- Aggregated transcript insights + routing recommendations (per tenant)
+    CREATE TABLE IF NOT EXISTS call_insights (
+      id BIGSERIAL PRIMARY KEY,
+      client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
+      period_days INTEGER NOT NULL DEFAULT 30,
+      insights JSONB NOT NULL,
+      routing JSONB,
+      computed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      created_at TIMESTAMPTZ DEFAULT now(),
+      UNIQUE(client_key)
+    );
+    CREATE INDEX IF NOT EXISTS call_insights_client_idx ON call_insights(client_key);
+    CREATE INDEX IF NOT EXISTS call_insights_computed_idx ON call_insights(computed_at DESC);
+
     CREATE TABLE IF NOT EXISTS quality_alerts (
       id BIGSERIAL PRIMARY KEY,
       client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
@@ -1364,6 +1378,32 @@ export async function getCallsByTenant(clientKey, limit = 100) {
     LIMIT $2
   `, [clientKey, limit]);
   return rows;
+}
+
+export async function upsertCallInsights({ clientKey, periodDays = 30, insights, routing = null, computedAt = null }) {
+  const insightsJson = insights ? JSON.stringify(insights) : JSON.stringify({});
+  const routingJson = routing ? JSON.stringify(routing) : null;
+  await query(`
+    INSERT INTO call_insights (client_key, period_days, insights, routing, computed_at, updated_at)
+    VALUES ($1, $2, $3::jsonb, $4::jsonb, COALESCE($5::timestamptz, now()), now())
+    ON CONFLICT (client_key)
+    DO UPDATE SET
+      period_days = EXCLUDED.period_days,
+      insights = EXCLUDED.insights,
+      routing = EXCLUDED.routing,
+      computed_at = EXCLUDED.computed_at,
+      updated_at = now()
+  `, [clientKey, periodDays, insightsJson, routingJson, computedAt]);
+}
+
+export async function getLatestCallInsights(clientKey) {
+  const { rows } = await query(`
+    SELECT client_key, period_days, insights, routing, computed_at
+    FROM call_insights
+    WHERE client_key = $1
+    LIMIT 1
+  `, [clientKey]);
+  return rows?.[0] || null;
 }
 
 export async function getCallsByPhone(clientKey, leadPhone, limit = 50) {

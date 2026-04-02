@@ -4418,6 +4418,16 @@
                     <p class="card-subtitle" id="callQualitySubtitle">How effective our calls are.</p>
                     <div id="call-quality" class="call-quality-grid"></div>
                 </article>
+
+                <article class="card">
+                    <h3>🧠 Insights & Routing</h3>
+                    <p class="card-subtitle" id="callInsightsSubtitle">Patterns from transcripts + best times to call.</p>
+                    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+                        <small id="callInsightsMeta" style="color:var(--muted);">—</small>
+                        <button type="button" id="callInsightsRefresh" class="export-btn secondary" style="padding:6px 10px;font-size:12px;">Refresh insights</button>
+                    </div>
+                    <div id="call-insights" class="call-quality-grid"></div>
+                </article>
                 </div>
         </section>
 
@@ -7641,6 +7651,126 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
         }
 
+        async function renderCallInsights(data) {
+            const container = document.getElementById('call-insights');
+            if (!container) return;
+            const metaEl = document.getElementById('callInsightsMeta');
+            const btn = document.getElementById('callInsightsRefresh');
+            const clientKey = currentClient;
+
+            const renderError = (msg) => {
+                container.innerHTML = `<div class="quality-metric"><div class="quality-label">Insights</div><div class="quality-value">—</div><div class="quality-badge">${escapeHtml(msg || 'Unable to load insights')}</div></div>`;
+            };
+
+            const attachRefresh = () => {
+                if (!btn || btn.__wired) return;
+                btn.__wired = true;
+                btn.addEventListener('click', async () => {
+                    if (!clientKey || isDemoClientKey(clientKey)) return;
+                    btn.disabled = true;
+                    btn.textContent = 'Refreshing…';
+                    try {
+                        const resp = await fetch(`${BASE_URL}/api/call-insights/${encodeURIComponent(clientKey)}/recompute`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ days: 30 })
+                        });
+                        const payload = await resp.json().catch(() => null);
+                        if (!payload || !payload.ok) throw new Error(payload?.error || 'Request failed');
+                        await renderCallInsights({ _insightsPayload: payload });
+                    } catch (e) {
+                        renderError(e?.message || 'Refresh failed');
+                    } finally {
+                        btn.disabled = false;
+                        btn.textContent = 'Refresh insights';
+                    }
+                });
+            };
+            attachRefresh();
+
+            try {
+                // Allow caller to pass through a pre-fetched payload
+                const payload = data && data._insightsPayload
+                    ? data._insightsPayload
+                    : (await fetch(`${BASE_URL}/api/call-insights/${encodeURIComponent(clientKey)}`, { cache: 'no-store' }).then(r => r.json()));
+
+                if (!payload || !payload.ok) {
+                    renderError(payload?.error || 'No insights yet');
+                    if (metaEl) metaEl.textContent = '—';
+                    return;
+                }
+
+                const insights = payload.insights || payload.insightsJson || payload.insights || {};
+                const routing = payload.routing || payload.routingJson || payload.routing || {};
+                const summary = insights.summary || {};
+                const patterns = insights.patterns || {};
+                const bestHours = routing?.recommendations?.bestHours || [];
+                const bestDays = routing?.recommendations?.bestWeekdays || [];
+                const computedAt = payload.computed_at || payload.computedAt || null;
+                const sampleSize = insights.sampleSize || summary.attempts || 0;
+                if (metaEl) {
+                    metaEl.textContent = `${formatNumber(sampleSize)} calls analysed${computedAt ? ` · updated ${timeAgo(computedAt)}` : ''}`;
+                }
+
+                const bestHoursLabel = bestHours.length
+                    ? bestHours.map(h => `${h.label}${h.score != null ? ` (${h.score})` : ''}`).join(', ')
+                    : '—';
+                const bestDaysLabel = bestDays.length ? bestDays.map(d => d.label).join(', ') : '—';
+
+                const topObj = (patterns.topObjections || []).slice(0, 3).map(x => `${x.key} (${x.count})`).join(', ') || '—';
+                const topPhrases = (patterns.topPhrases || []).slice(0, 3).map(x => `${x.key} (${x.count})`).join(', ') || '—';
+                const suggestions = (patterns.suggestions || []).slice(0, 2);
+
+                container.innerHTML = `
+                    <div class="quality-metric">
+                        <div class="quality-label">Answered rate</div>
+                        <div class="quality-value">${Number(summary.answeredRate || 0)}%</div>
+                        <div class="quality-badge">last ${escapeHtml(String(payload.period_days || payload.periodDays || 30))} days</div>
+                    </div>
+                    <div class="quality-metric">
+                        <div class="quality-label">Booked rate</div>
+                        <div class="quality-value">${Number(summary.bookedRate || 0)}%</div>
+                        <div class="quality-badge">calls with outcome booked</div>
+                    </div>
+                    <div class="quality-metric">
+                        <div class="quality-label">Best hours</div>
+                        <div class="quality-value quality-value--schedule">${escapeHtml(bestHoursLabel)}</div>
+                        <div class="quality-badge">blended score uses booked + answered</div>
+                    </div>
+                    <div class="quality-metric">
+                        <div class="quality-label">Best days</div>
+                        <div class="quality-value quality-value--schedule">${escapeHtml(bestDaysLabel)}</div>
+                        <div class="quality-badge">day-of-week performance</div>
+                    </div>
+                    <div class="quality-metric">
+                        <div class="quality-label">Top objections</div>
+                        <div class="quality-value quality-value--schedule">${escapeHtml(topObj)}</div>
+                        <div class="quality-badge">from extracted objection tags</div>
+                    </div>
+                    <div class="quality-metric">
+                        <div class="quality-label">Key phrases</div>
+                        <div class="quality-value quality-value--schedule">${escapeHtml(topPhrases)}</div>
+                        <div class="quality-badge">from extracted key phrases</div>
+                    </div>
+                    ${
+                        suggestions.length
+                            ? suggestions.map(s => `
+                                <div class="quality-metric">
+                                    <div class="quality-label">Suggested tweak</div>
+                                    <div class="quality-value quality-value--schedule">${escapeHtml(s.title || 'Suggestion')}</div>
+                                    <div class="quality-badge">${escapeHtml(s.detail || '')}</div>
+                                </div>
+                            `).join('')
+                            : ''
+                    }
+                `;
+            } catch (err) {
+                const errMsg = err?.message || String(err || 'unknown error');
+                renderError(errMsg);
+                if (metaEl) metaEl.textContent = '—';
+            }
+        }
+
         async function renderRetryQueue(data) {
             const container = document.getElementById('retry-queue');
             const barHost = document.getElementById('retryQueueBarHost');
@@ -9349,6 +9479,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 renderActiveIndicator(dashboardData).catch(err => console.warn('Active indicator failed', err)),
                 renderSystemStatus(config).catch(err => console.warn('System status failed', err)),
                 renderCallQuality(dashboardData).catch(err => console.warn('Call quality failed', err)),
+                renderCallInsights(dashboardData).catch(err => console.warn('Call insights failed', err)),
                 renderRetryQueue(dashboardData).catch(err => console.warn('Retry queue failed', err)),
                 loadFollowUpQueue(currentClient).catch(err => console.warn('Follow-up list failed', err)),
                 renderCalendarDetails(dashboardData).catch(err => console.warn('Calendar details failed', err)),
@@ -9400,6 +9531,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         renderCalls(callsToRender);
                         await renderCallRecordings(callsToRender);
                         await renderCallQuality(dashboardData);
+                        await renderCallInsights(dashboardData);
                         await renderRetryQueue(dashboardData);
                         await renderCalendarDetails(dashboardData);
                         renderChart(config, dashboardData);

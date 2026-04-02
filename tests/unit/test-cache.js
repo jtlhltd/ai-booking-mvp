@@ -8,59 +8,59 @@ resetStats();
 
 describe('Cache Tests', () => {
   
-  test('Cache set and get', () => {
+  test('Cache set and get', async () => {
     const cache = new CacheManager();
-    cache.set('test-key', 'test-value');
-    const value = cache.get('test-key');
+    await cache.set('test-key', 'test-value');
+    const value = await cache.get('test-key');
     
     assertEqual(value, 'test-value', 'Cache stores and retrieves value');
   });
   
   test('Cache TTL expiration', async () => {
     const cache = new CacheManager({ ttl: 100 }); // 100ms TTL
-    cache.set('test-key', 'test-value');
+    await cache.set('test-key', 'test-value');
     
     // Value should exist immediately
-    assertEqual(cache.get('test-key'), 'test-value', 'Value exists before expiration');
+    assertEqual(await cache.get('test-key'), 'test-value', 'Value exists before expiration');
     
     // Wait for expiration
     await wait(150);
     
     // Value should be expired
-    assertNull(cache.get('test-key'), 'Value expired after TTL');
+    assertNull(await cache.get('test-key'), 'Value expired after TTL');
   });
   
-  test('Cache clear', () => {
+  test('Cache clear', async () => {
     const cache = new CacheManager();
-    cache.set('key1', 'value1');
-    cache.set('key2', 'value2');
+    await cache.set('key1', 'value1');
+    await cache.set('key2', 'value2');
     
     cache.clear();
     
-    assertNull(cache.get('key1'), 'Cache cleared - key1 removed');
-    assertNull(cache.get('key2'), 'Cache cleared - key2 removed');
+    assertNull(await cache.get('key1'), 'Cache cleared - key1 removed');
+    assertNull(await cache.get('key2'), 'Cache cleared - key2 removed');
   });
   
-  test('Cache stats', () => {
+  test('Cache stats', async () => {
     const cache = new CacheManager();
-    cache.set('key1', 'value1');
-    cache.get('key1');
-    cache.get('key1');
-    cache.get('missing-key');
+    await cache.set('key1', 'value1');
+    await cache.get('key1');
+    await cache.get('key1');
+    await cache.get('missing-key');
     
     assertTrue(cache.stats.hits >= 2, 'Cache hits tracked');
     assertTrue(cache.stats.misses >= 1, 'Cache misses tracked');
     assertTrue(cache.stats.sets >= 1, 'Cache sets tracked');
   });
   
-  test('Cache max size', () => {
+  test('Cache max size', async () => {
     const cache = new CacheManager({ maxSize: 2 });
-    cache.set('key1', 'value1');
-    cache.set('key2', 'value2');
-    cache.set('key3', 'value3'); // Should evict key1
+    await cache.set('key1', 'value1');
+    await cache.set('key2', 'value2');
+    await cache.set('key3', 'value3'); // Should evict key1
     
     // key1 might be evicted
-    assertTrue(cache.get('key3') === 'value3', 'New key added');
+    assertTrue((await cache.get('key3')) === 'value3', 'New key added');
   });
 });
 
