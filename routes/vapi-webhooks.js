@@ -8,6 +8,36 @@ import { recordReceptionistTelemetry } from '../lib/demo-telemetry.js';
 import { storeCallContext } from '../lib/call-context-cache.js';
 import { verifyVapiSignature } from '../middleware/vapi-webhook-verification.js';
 
+/**
+ * Logistics sheet "Business Name" = company we dialed (callee), never the tenant `client_key` slug.
+ */
+function pickCalleeBusinessNameForSheet({
+  tenantKey,
+  metadata = {},
+  customerName,
+  structuredFields = {}
+}) {
+  const tk = String(tenantKey || '').trim().toLowerCase();
+  const isBad = (s) => {
+    const v = String(s ?? '').trim();
+    if (!v) return true;
+    if (tk && v.toLowerCase() === tk) return true;
+    return false;
+  };
+  const candidates = [
+    metadata?.leadName,
+    metadata?.businessName,
+    structuredFields?.businessName,
+    structuredFields?.companyName,
+    customerName,
+  ];
+  for (const c of candidates) {
+    if (isBad(c)) continue;
+    return String(c).trim();
+  }
+  return '';
+}
+
 const router = express.Router();
 
 // Middleware to preserve raw body for signature verification
@@ -1044,8 +1074,13 @@ async function processWebhookPayload(body, correlationId) {
           const asStr = (v) => (v == null ? '' : String(v).trim());
           const asJoined = (v) => Array.isArray(v) ? v.filter(Boolean).join(', ') : asStr(v);
           sheetData = {
-            // Business Name = the company we called (lead). Avoid tenant key like "d2d-xpress-tom".
-            businessName: metadata.leadName || metadata.businessName || body.call?.customer?.name || tenant?.displayName || '',
+            // Business Name = the company we called (lead). Never tenant clientKey / displayName.
+            businessName: pickCalleeBusinessNameForSheet({
+              tenantKey,
+              metadata,
+              customerName: body.call?.customer?.name,
+              structuredFields: { businessName: sd.businessName, companyName: sd.companyName },
+            }),
             decisionMaker: asStr(sd.decisionMaker),
             phone: asStr(sd.phone) || (leadPhone || ''),
             calledNumber: leadPhone || '',
@@ -1072,7 +1107,7 @@ async function processWebhookPayload(body, correlationId) {
         } else {
           // Fallback: derive from structuredOutput/extracted + transcript (existing behaviour)
           const hasStructuredSource = effectiveHasStructuredData && effectiveStructuredOutput;
-          const businessName = hasStructuredSource
+          const structuredBn = hasStructuredSource
             ? (body.call?.customer?.name || '')
             : (effectiveStructuredOutput?.businessName || metadata.businessName || '');
           const decisionMaker = hasStructuredSource
@@ -1089,7 +1124,12 @@ async function processWebhookPayload(body, correlationId) {
           );
 
           sheetData = {
-            businessName: businessName || '',
+            businessName: pickCalleeBusinessNameForSheet({
+              tenantKey,
+              metadata,
+              customerName: body.call?.customer?.name,
+              structuredFields: { businessName: structuredBn },
+            }),
             decisionMaker: decisionMaker || (hasStructuredSource ? (effectiveStructuredOutput['Decision Maker'] || effectiveStructuredOutput.decisionMaker) : '') || '',
             phone: (hasStructuredSource ? (effectiveStructuredOutput['Phone Number'] || effectiveStructuredOutput.phone) : null) || leadPhone || '',
             calledNumber: leadPhone || '',
@@ -1208,9 +1248,9 @@ async function processWebhookPayload(body, correlationId) {
 
         // Email fallback notification for callback queue (per-tenant if available)
         const callbackInbox = tenant?.vapi?.callbackInboxEmail || process.env.CALLBACK_INBOX_EMAIL;
-        if (callbackNeeded && callbackInbox) {
-          const subject = `Callback needed: ${businessName || 'Unknown business'} (${leadPhone})`;
-          const body = `A receptionist requested a callback or decision maker was unavailable.\n\nBusiness: ${businessName || 'Unknown'}\nReceptionist: ${receptionistName || 'Unknown'}\nPhone: ${leadPhone}\nEmail: ${extracted.email || 'N/A'}\nInternational: ${extracted.international || 'N/A'}\nCouriers: ${(extracted.mainCouriers || []).join(', ') || 'N/A'}\nFrequency: ${extracted.frequency || 'N/A'}\nCountries: ${(extracted.mainCountries || []).join(', ') || 'N/A'}\nExample Shipment: ${extracted.exampleShipment || 'N/A'} (Cost: ${extracted.exampleShipmentCost || 'N/A'})\nRecording: ${recordingUrl || 'N/A'}\nCall ID: ${callId}\n\nTranscript snippet:\n${transcript.slice(0, 800)}`;
+        if (sheetData.callbackNeeded === 'TRUE' && callbackInbox) {
+          const subject = `Callback needed: ${sheetData.businessName || 'Unknown business'} (${leadPhone})`;
+          const body = `A receptionist requested a callback or decision maker was unavailable.\n\nBusiness: ${sheetData.businessName || 'Unknown'}\nReceptionist: ${sheetData.receptionistName || 'Unknown'}\nPhone: ${leadPhone}\nEmail: ${extracted.email || 'N/A'}\nInternational: ${extracted.international || 'N/A'}\nCouriers: ${(extracted.mainCouriers || []).join(', ') || 'N/A'}\nFrequency: ${extracted.frequency || 'N/A'}\nCountries: ${(extracted.mainCountries || []).join(', ') || 'N/A'}\nExample Shipment: ${extracted.exampleShipment || 'N/A'} (Cost: ${extracted.exampleShipmentCost || 'N/A'})\nRecording: ${recordingUrl || 'N/A'}\nCall ID: ${callId}\n\nTranscript snippet:\n${transcript.slice(0, 800)}`;
           await messagingService.sendEmail({ to: callbackInbox, subject, body }).catch(() => {});
         }
       } catch (sheetErr) {
