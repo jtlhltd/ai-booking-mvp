@@ -24232,17 +24232,51 @@ app.post('/api/onboard-client', async (req, res) => {
   }
 });
 
+/** Tenant keys allowed to use dashboard A/B setup without API key (override with DASHBOARD_SELF_SERVICE_CLIENT_KEYS). */
+function getDashboardSelfServiceClientKeys() {
+  const e = process.env.DASHBOARD_SELF_SERVICE_CLIENT_KEYS;
+  if (e != null && String(e).trim() !== '') {
+    return String(e)
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return ['d2d-xpress-tom'];
+}
+function isDashboardSelfServiceClient(clientKey) {
+  return getDashboardSelfServiceClientKeys().includes(clientKey);
+}
+function isVapiOutboundAbExperimentOnlyPatch(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return false;
+  const keys = Object.keys(body);
+  if (keys.length !== 1 || keys[0] !== 'vapi') return false;
+  const v = body.vapi;
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
+  const vk = Object.keys(v);
+  const exp = v.outboundAbExperiment;
+  return (
+    vk.length === 1 &&
+    vk[0] === 'outboundAbExperiment' &&
+    exp != null &&
+    String(exp).trim() !== ''
+  );
+}
+
 // Update Client Configuration
 app.patch('/api/clients/:clientKey/config', async (req, res) => {
   try {
+    const { clientKey } = req.params;
     const apiKey = req.get('X-API-Key');
-    if (!apiKey || apiKey !== process.env.API_KEY) {
+    const keyOk = apiKey && apiKey === process.env.API_KEY;
+    const selfServiceOk =
+      isDashboardSelfServiceClient(clientKey) && isVapiOutboundAbExperimentOnlyPatch(req.body);
+    if (!keyOk && !selfServiceOk) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
-    
+
     const { updateClientConfig } = await import('./lib/client-onboarding.js');
-    
-    const result = await updateClientConfig(req.params.clientKey, req.body);
+
+    const result = await updateClientConfig(clientKey, req.body);
     
     res.json(result);
   } catch (error) {
@@ -24251,14 +24285,16 @@ app.patch('/api/clients/:clientKey/config', async (req, res) => {
   }
 });
 
-// Tom / operator: create outbound A/B variants + set vapi.outboundAbExperiment (requires API_KEY)
+// Tom / dashboard: create outbound A/B variants + set vapi.outboundAbExperiment (API_KEY or self-service client)
 app.post('/api/clients/:clientKey/outbound-ab-test', async (req, res) => {
   try {
+    const { clientKey } = req.params;
     const apiKey = req.get('X-API-Key');
-    if (!apiKey || apiKey !== process.env.API_KEY) {
+    const keyOk = apiKey && apiKey === process.env.API_KEY;
+    const selfOk = isDashboardSelfServiceClient(clientKey);
+    if (!keyOk && !selfOk) {
       return res.status(401).json({ ok: false, error: 'Unauthorized' });
     }
-    const { clientKey } = req.params;
     const { experimentName, variants, replaceExisting = true } = req.body || {};
     const nameTrim = experimentName != null ? String(experimentName).trim() : '';
     if (!nameTrim) {

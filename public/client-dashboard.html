@@ -4959,12 +4959,8 @@
                     <summary class="tom-ab-setup-summary">Configure experiment on this dashboard</summary>
                     <div class="tom-ab-setup-inner">
                         <p class="tom-ab-test-meta" style="margin:0;">
-                            Uses your operator <code>API_KEY</code> (same as the ROI panel). Saving the full experiment deactivates old rows for this experiment name, creates two variants, and sets <code>vapi.outboundAbExperiment</code>.
+                            Saving the full experiment deactivates old rows for this experiment name, creates two variants, and sets <code>vapi.outboundAbExperiment</code>.
                         </p>
-                        <label class="tom-ab-field">API key
-                            <input type="password" id="tomAbApiKey" class="tom-ab-input" autocomplete="off" placeholder="Paste server API_KEY" />
-                        </label>
-                        <button type="button" class="export-btn secondary" id="tomAbUseRoiKeyBtn">Use API key from ROI panel</button>
                         <label class="tom-ab-field">Experiment name
                             <input type="text" id="tomAbExpName" class="tom-ab-input" placeholder="e.g. tom_outbound_v1" />
                         </label>
@@ -7748,17 +7744,6 @@ ${actionsRow}
 
         function initTomAbTestSetupPanel() {
             if (!isTomOutreachDashboard(currentClient)) return;
-            const useRoi = document.getElementById('tomAbUseRoiKeyBtn');
-            if (useRoi && useRoi.dataset.bound !== '1') {
-                useRoi.dataset.bound = '1';
-                useRoi.addEventListener('click', () => {
-                    const r = document.getElementById('roiInputApiKey') && document.getElementById('roiInputApiKey').value.trim();
-                    const t = document.getElementById('tomAbApiKey');
-                    if (t && r) t.value = r;
-                    const msg = document.getElementById('tomAbSetupMsg');
-                    if (msg) msg.textContent = r ? 'Copied API key from ROI panel.' : 'ROI panel has no API key entered yet.';
-                });
-            }
             const saveFull = document.getElementById('tomAbSaveFullBtn');
             if (saveFull && saveFull.dataset.bound !== '1') {
                 saveFull.dataset.bound = '1';
@@ -7773,14 +7758,8 @@ ${actionsRow}
 
         async function saveTomOutboundAbTest(mode) {
             const msg = document.getElementById('tomAbSetupMsg');
-            const apiKeyEl = document.getElementById('tomAbApiKey');
-            const apiKey = apiKeyEl && apiKeyEl.value.trim();
             const expEl = document.getElementById('tomAbExpName');
             const expName = expEl && expEl.value.trim();
-            if (!apiKey) {
-                if (msg) msg.textContent = 'API key required.';
-                return;
-            }
             if (!expName) {
                 if (msg) msg.textContent = 'Experiment name required.';
                 return;
@@ -7790,7 +7769,7 @@ ${actionsRow}
                 if (mode === 'nameOnly') {
                     const res = await fetch(`${BASE_URL}/api/clients/${encodeURIComponent(currentClient)}/config`, {
                         method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ vapi: { outboundAbExperiment: expName } })
                     });
                     const data = await res.json().catch(() => ({}));
@@ -7812,7 +7791,7 @@ ${actionsRow}
                     const replaceExisting = !replaceEl || replaceEl.checked;
                     const res = await fetch(`${BASE_URL}/api/clients/${encodeURIComponent(currentClient)}/outbound-ab-test`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             experimentName: expName,
                             replaceExisting,
@@ -7822,7 +7801,6 @@ ${actionsRow}
                     const data = await res.json().catch(() => ({}));
                     if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
                 }
-                if (apiKeyEl) apiKeyEl.value = '';
                 if (msg) msg.textContent = 'Saved. Refreshing…';
                 const livePayload = await fetchLiveData(currentClient);
                 if (livePayload) {
