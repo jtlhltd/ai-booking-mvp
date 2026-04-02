@@ -1,0 +1,19 @@
+---
+description: Auto commit and push after implementing changes
+alwaysApply: true
+---
+
+# Auto commit + push workflow
+
+When you (the agent) make changes in this repo at the user's request, always finish by:
+
+- `git status` / `git diff` to confirm what will be committed
+- `git add` the relevant files
+- `git commit` with a concise message matching existing repo style
+- `git push`
+
+Do **not** commit/push if:
+- The user explicitly says not to
+- There are no changes to commit
+- The changes include secrets or credential files (e.g. `.env`) — stop and warn instead
+

@@ -2813,6 +2813,37 @@
             white-space: normal;
         }
 
+        .follow-up-queue-table .fu-pencil-btn {
+            margin-left: 6px;
+            border: 1px solid rgba(17, 24, 39, 0.12);
+            background: rgba(255, 255, 255, 0.7);
+            color: #334155;
+            border-radius: 8px;
+            padding: 3px 7px;
+            font-size: 12px;
+            line-height: 1;
+            cursor: pointer;
+        }
+        .follow-up-queue-table .fu-pencil-btn:hover {
+            background: rgba(255, 255, 255, 1);
+            border-color: rgba(17, 24, 39, 0.22);
+        }
+        body[data-theme="dark"] .follow-up-queue-table .fu-pencil-btn {
+            background: rgba(15, 23, 42, 0.6);
+            border-color: rgba(148, 163, 184, 0.25);
+            color: rgba(226, 232, 240, 0.95);
+        }
+        body[data-theme="dark"] .follow-up-queue-table .fu-pencil-btn:hover {
+            background: rgba(15, 23, 42, 0.92);
+            border-color: rgba(148, 163, 184, 0.4);
+        }
+        .follow-up-queue-table .fu-cell-actions {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+        }
+
         .follow-up-queue-table .fu-phone-cell {
             display: flex;
             flex-direction: row;
@@ -4439,8 +4470,7 @@
                 <div class="dashboard-list-toolbar follow-up-queue-toolbar">
                     <button type="button" id="followUpQueueRefresh" class="export-btn secondary">Refresh</button>
                     <div class="follow-up-status-filters" id="followUpStatusFilters" role="group" aria-label="Filter follow-up rows by status">
-                        <button type="button" class="follow-up-status-chip follow-up-status-chip--active" data-fu-status-filter="all">All</button>
-                        <button type="button" class="follow-up-status-chip" data-fu-status-filter="todo">To call</button>
+                        <button type="button" class="follow-up-status-chip follow-up-status-chip--active" data-fu-status-filter="todo">Need calling</button>
                         <button type="button" class="follow-up-status-chip" data-fu-status-filter="called">Called</button>
                     </div>
                     <input type="search" id="followUpSearchInput" class="dashboard-list-search" placeholder="Search business, name, phone, notes…" autocomplete="off" enterkeyhint="search" style="max-width:260px;">
@@ -7726,7 +7756,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         };
 
         let followUpQueuePage = 1;
-        let followUpStatusFilter = 'all'; // all | todo | called
+        let followUpStatusFilter = 'todo'; // todo | called
         let followUpSearchTerm = '';
 
         function followUpLoadPrefs() {
@@ -7734,7 +7764,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const ps = parseInt(localStorage.getItem('dash.fu.pageSize') || '', 10);
                 if (Number.isFinite(ps)) followUpQueueState.limit = Math.min(200, Math.max(1, ps));
                 const sf = localStorage.getItem('dash.fu.statusFilter') || '';
-                if (sf === 'all' || sf === 'todo' || sf === 'called') followUpStatusFilter = sf;
+                if (sf === 'todo' || sf === 'called') followUpStatusFilter = sf;
                 followUpSearchTerm = localStorage.getItem('dash.fu.search') || '';
             } catch {}
         }
@@ -7742,7 +7772,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         function followUpSavePrefs() {
             try {
                 localStorage.setItem('dash.fu.pageSize', String(followUpQueueState.limit || 100));
-                localStorage.setItem('dash.fu.statusFilter', String(followUpStatusFilter || 'all'));
+                localStorage.setItem('dash.fu.statusFilter', String(followUpStatusFilter || 'todo'));
                 localStorage.setItem('dash.fu.search', String(followUpSearchTerm || ''));
             } catch {}
         }
@@ -7765,6 +7795,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         }
 
         function followUpRowKey(row) {
+            const rn = row && typeof row._row === 'number' ? row._row : null;
+            if (rn && Number.isFinite(rn) && rn > 1) return `sheetRow:${rn}`;
             const cid = String(row['Call ID'] || '').trim();
             if (cid) return `call:${cid}`;
             const phone = String(row.Phone || '').trim();
@@ -7863,7 +7895,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const status = statusRaw || 'to call';
                 if (followUpStatusFilter === 'called') return status === 'called';
                 if (followUpStatusFilter === 'todo') return status !== 'called';
-                return true;
             });
             const displayRows = sortKey ? followUpSortRows(filtered, sortKey, sortDir) : filtered.slice();
             const thead = `<thead><tr>${cols.map((c, i) => {
@@ -7913,22 +7944,16 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 `<button type="button" class="follow-up-copy-btn" data-fu-copy="${escapeHtml(v)}" aria-label="${escapeHtml(ariaLabel)}">Copy</button></div>`;
         }
 
+        function followUpPencilBtn(col, disabled = false) {
+            const aria = `Edit ${col}`;
+            return `<button type="button" class="fu-pencil-btn" data-fu-edit="1" data-fu-edit-col="${escapeHtml(col)}" aria-label="${escapeHtml(aria)}" ${disabled ? 'disabled style="opacity:0.55;cursor:not-allowed"' : ''}>✎</button>`;
+        }
+
         function formatFollowUpCell(col, val, row = null, extra = null) {
             const v = String(val || '').trim();
-            if (FOLLOW_UP_EDITABLE_COLUMNS && FOLLOW_UP_EDITABLE_COLUMNS.has(col)) {
-                const key = row ? followUpRowKey(row) : '';
-                const label = v || '—';
-                const canEdit = row && typeof row._row === 'number' && key;
-                const copyBtn = (col === 'Email' && v)
-                    ? `<button type="button" class="follow-up-copy-btn" data-fu-copy="${escapeHtml(v)}" aria-label="Copy email">Copy</button>`
-                    : '';
-                const editBtn = canEdit
-                    ? `<button type="button" class="follow-up-copy-btn" data-fu-edit="1" data-fu-edit-col="${escapeHtml(col)}" aria-label="Edit ${escapeHtml(col)}">Edit</button>`
-                    : '';
-                return `<div class="fu-edit-cell"><span class="fu-edit-text" title="${escapeHtml(label)}">${escapeHtml(label)}</span>${copyBtn}${editBtn}</div>`;
-            }
+            const canEdit = row && typeof row._row === 'number';
             if (col === 'Recording URI' && /^https?:\/\//i.test(v)) {
-                return `<a href="${escapeHtml(v)}" target="_blank" rel="noopener noreferrer">Open</a>`;
+                return `<span class="fu-cell-actions"><a href="${escapeHtml(v)}" target="_blank" rel="noopener noreferrer">Open</a>${followUpPencilBtn(col, !canEdit)}</span>`;
             }
             if (col === 'Called?') {
                 const booly = String(v || '').trim().toLowerCase();
@@ -7937,28 +7962,39 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 return `<div class="fu-called-cell"><input type="checkbox" class="fu-called-checkbox" data-fu-called aria-label="${escapeHtml(aria)}" ${isChecked ? 'checked' : ''}></div>`;
             }
             if (col === 'Email') {
-                if (!v) return '—';
-                return `<div class="fu-email-cell"><span class="fu-email-text" title="${escapeHtml(v)}">${escapeHtml(v)}</span>` +
-                    `<button type="button" class="follow-up-copy-btn" data-fu-copy="${escapeHtml(v)}" aria-label="Copy email">Copy</button></div>`;
+                const label = v || '—';
+                const copyBtn = v
+                    ? `<button type="button" class="follow-up-copy-btn" data-fu-copy="${escapeHtml(v)}" aria-label="Copy email">Copy</button>`
+                    : '';
+                return `<span class="fu-cell-actions"><span class="fu-email-text" title="${escapeHtml(label)}">${escapeHtml(label)}</span>${copyBtn}${followUpPencilBtn(col, !canEdit)}</span>`;
             }
-            if (col === 'Phone' && v) {
+            if (col === 'Phone') {
+                const label = v || '—';
+                if (!v) return `<span class="fu-cell-actions"><span title="${escapeHtml(label)}">${escapeHtml(label)}</span>${followUpPencilBtn(col, !canEdit)}</span>`;
                 const chip = extra?.dupCount > 1 ? `<span class="fu-dup-chip" title="Duplicate phone appears ${extra.dupCount} times">Duplicate ×${extra.dupCount}</span>` : '';
-                return followUpPhoneCellHtml(v, 'Copy phone number') + chip;
+                return `<span class="fu-cell-actions">${followUpPhoneCellHtml(v, 'Copy phone number')}${chip}${followUpPencilBtn(col, !canEdit)}</span>`;
             }
-            if (col === 'Called Number' && v) {
-                return followUpPhoneCellHtml(v, 'Copy dialed number');
+            if (col === 'Called Number') {
+                const label = v || '—';
+                if (!v) return `<span class="fu-cell-actions"><span title="${escapeHtml(label)}">${escapeHtml(label)}</span>${followUpPencilBtn(col, !canEdit)}</span>`;
+                return `<span class="fu-cell-actions">${followUpPhoneCellHtml(v, 'Copy dialed number')}${followUpPencilBtn(col, !canEdit)}</span>`;
             }
             if (col === 'Transcript Snippet') {
-                if (!v) return '—';
+                const label = v || '—';
+                if (!v) return `<span class="fu-cell-actions"><span title="${escapeHtml(label)}">${escapeHtml(label)}</span>${followUpPencilBtn(col, !canEdit)}</span>`;
                 const callId = String(row?.['Call ID'] || '').trim();
                 const nm = String(row?.['Business Name'] || row?.['Decision Maker'] || row?.Phone || 'Prospect').trim();
                 const btn = callId ? `<button type="button" class="fu-transcript-btn" data-fu-transcript="${escapeHtml(callId)}" data-fu-name="${escapeHtml(nm)}">Transcript</button>` : '';
-                return `<div class="fu-transcript-actions"><div class="fu-transcript" title="${escapeHtml(v)}">${escapeHtml(v)}</div>${btn}</div>`;
+                return `<div class="fu-transcript-actions"><div class="fu-transcript" title="${escapeHtml(v)}">${escapeHtml(v)}</div><span class="fu-cell-actions">${btn}${followUpPencilBtn(col, !canEdit)}</span></div>`;
+            }
+            if (FOLLOW_UP_EDITABLE_COLUMNS && FOLLOW_UP_EDITABLE_COLUMNS.has(col)) {
+                const label = v || '—';
+                return `<span class="fu-cell-actions"><span title="${escapeHtml(label)}">${escapeHtml(label)}</span>${followUpPencilBtn(col, !canEdit)}</span>`;
             }
             return escapeHtml(v || '—');
         }
 
-        const FOLLOW_UP_EDITABLE_COLUMNS = new Set(['Business Name', 'Decision Maker', 'Receptionist Name', 'Email']);
+        const FOLLOW_UP_EDITABLE_COLUMNS = new Set(FOLLOW_UP_TABLE_COLUMNS.filter((c) => c !== 'Called?'));
         let followUpEditing = false;
 
         function followUpBeginEditCell(td, colName, rowKey) {
@@ -7972,13 +8008,19 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             if (!row || typeof row._row !== 'number') return;
 
             const initial = String(row[colName] || '').trim();
+            const isNumericCol = colName === 'International Shipments per Week'
+                || colName === 'UK Shipments per Week'
+                || colName === 'Example Shipment Cost'
+                || colName === 'Std Rate up to KG';
             const input = document.createElement('input');
-            input.type = 'text';
+            input.type = isNumericCol ? 'number' : 'text';
             input.value = initial;
             input.className = 'dashboard-list-search';
             input.style.maxWidth = '100%';
             input.style.width = '100%';
             input.setAttribute('aria-label', `Edit ${colName}`);
+            if (colName === 'Phone' || colName === 'Called Number') input.inputMode = 'tel';
+            if (colName === 'Email') input.inputMode = 'email';
 
             td.dataset.fuEditing = '1';
             td.innerHTML = '';
