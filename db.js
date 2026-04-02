@@ -1510,6 +1510,16 @@ export async function cancelPendingRetries(clientKey, leadPhone) {
   console.log(`[DB] Cancelled pending retries for ${leadPhone} (${clientKey})`);
 }
 
+/** Cancels only automated follow-up rows (not technical vapi_call retries). */
+export async function cancelPendingFollowUps(clientKey, leadPhone) {
+  await query(`
+    UPDATE retry_queue 
+    SET status = 'cancelled', updated_at = now()
+    WHERE client_key = $1 AND lead_phone = $2 AND status = 'pending'
+      AND retry_reason LIKE 'follow_up_%'
+  `, [clientKey, leadPhone]);
+}
+
 export async function cleanupOldRetries(daysOld = 7) {
   await query(`
     DELETE FROM retry_queue 
