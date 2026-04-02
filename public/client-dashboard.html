@@ -2324,6 +2324,188 @@
             margin-top: 4px;
         }
 
+        .insights-root {
+            width: 100%;
+        }
+
+        .insights-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            padding: 4px 0 14px;
+        }
+
+        .insights-stack .call-quality-grid {
+            padding-top: 0;
+        }
+
+        .insights-wide-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        @media (max-width: 900px) {
+            .insights-wide-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .insights-panel {
+            background: rgba(92, 106, 196, 0.06);
+            border-radius: 12px;
+            padding: 14px 16px;
+            border: 1px solid rgba(92, 106, 196, 0.12);
+        }
+
+        .insights-panel--span {
+            grid-column: 1 / -1;
+        }
+
+        .insights-panel-title {
+            font-size: 13px;
+            font-weight: 700;
+            margin: 0 0 2px 0;
+            color: var(--text-secondary);
+        }
+
+        .insights-panel-hint {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin: 0 0 10px 0;
+            line-height: 1.45;
+            opacity: 0.92;
+        }
+
+        .insights-hour-bars {
+            display: flex;
+            align-items: flex-end;
+            gap: 2px;
+            height: 104px;
+            padding-top: 6px;
+        }
+
+        .insights-hour-bar-wrap {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+        }
+
+        .insights-hour-bar {
+            width: 100%;
+            max-width: 12px;
+            margin: 0 auto;
+            border-radius: 3px 3px 0 0;
+            background: linear-gradient(180deg, var(--primary) 0%, rgba(92, 106, 196, 0.4) 100%);
+            min-height: 2px;
+        }
+
+        .insights-hour-bar--empty {
+            background: rgba(0, 0, 0, 0.06);
+            min-height: 3px;
+        }
+
+        .insights-hour-label {
+            font-size: 8px;
+            color: var(--muted);
+            line-height: 1;
+        }
+
+        .insights-weekday-bars {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 6px;
+            height: 108px;
+            padding-top: 6px;
+        }
+
+        .insights-weekday-col {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .insights-wd-bar {
+            width: 100%;
+            max-width: 32px;
+            border-radius: 4px 4px 0 0;
+            background: linear-gradient(180deg, #0d9488 0%, rgba(13, 148, 136, 0.35) 100%);
+            min-height: 2px;
+        }
+
+        .insights-wd-bar--empty {
+            background: rgba(0, 0, 0, 0.06);
+            min-height: 5px;
+        }
+
+        .insights-wd-label {
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--muted);
+            text-align: center;
+            line-height: 1.15;
+        }
+
+        .insights-outcome-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .insights-chip {
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.72);
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            color: var(--text-primary, #1f2937);
+        }
+
+        .insights-bandit-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            margin-top: 6px;
+        }
+
+        .insights-bandit-table th,
+        .insights-bandit-table td {
+            padding: 7px 8px;
+            text-align: left;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+        }
+
+        .insights-bandit-table th {
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .insights-bandit-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .insights-status-pill {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 999px;
+            margin-right: 6px;
+            margin-bottom: 4px;
+            background: rgba(255, 255, 255, 0.65);
+            border: 1px solid rgba(0, 0, 0, 0.07);
+        }
+
         .retry-queue {
             display: flex;
             flex-direction: column;
@@ -4421,12 +4603,12 @@
 
                 <article class="card">
                     <h3>🧠 Insights & Routing</h3>
-                    <p class="card-subtitle" id="callInsightsSubtitle">Patterns from transcripts + best times to call.</p>
+                    <p class="card-subtitle" id="callInsightsSubtitle">Transcript patterns, hourly and weekday performance, and the dial-time model used when scheduling outbound dials.</p>
                     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
                         <small id="callInsightsMeta" style="color:var(--muted);">—</small>
                         <button type="button" id="callInsightsRefresh" class="export-btn secondary" style="padding:6px 10px;font-size:12px;">Refresh insights</button>
                     </div>
-                    <div id="call-insights" class="call-quality-grid"></div>
+                    <div id="call-insights" class="insights-root"></div>
                 </article>
                 </div>
         </section>
@@ -7651,6 +7833,141 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
         }
 
+        function buildInsightsHourBarChart(byHour, timeZoneLabel) {
+            if (!Array.isArray(byHour) || byHour.length < 24) {
+                return '<p class="insights-panel-hint">No hourly breakdown for this window.</p>';
+            }
+            let maxPct = 1;
+            byHour.forEach((h) => {
+                const attempts = h.attempts || 0;
+                if (attempts > 0) {
+                    const ar = h.answeredRate != null ? Number(h.answeredRate) : h.answered / attempts;
+                    const pct = Math.round(ar * 100);
+                    if (pct > maxPct) maxPct = pct;
+                }
+            });
+            const bars = byHour
+                .map((h) => {
+                    const hour = h.hour != null ? Number(h.hour) : 0;
+                    const attempts = h.attempts || 0;
+                    const ar = h.answeredRate != null ? Number(h.answeredRate) : (attempts ? h.answered / attempts : 0);
+                    const pct = Math.round(ar * 100);
+                    const hPct = maxPct > 0 ? Math.round((pct / maxPct) * 100) : 0;
+                    const title = attempts
+                        ? `${String(hour).padStart(2, '0')}:00 — ${pct}% answered (${h.answered}/${attempts} dials)`
+                        : `${String(hour).padStart(2, '0')}:00 — no dials`;
+                    const cls = attempts ? 'insights-hour-bar' : 'insights-hour-bar insights-hour-bar--empty';
+                    return `<div class="insights-hour-bar-wrap" title="${title.replace(/"/g, '&quot;')}">
+                    <div class="${cls}" style="height:${attempts ? Math.max(6, hPct) : 3}px"></div>
+                    <span class="insights-hour-label">${hour % 4 === 0 ? escapeHtml(String(hour)) : ''}</span>
+                </div>`;
+                })
+                .join('');
+            return `<p class="insights-panel-hint">Local time (${escapeHtml(timeZoneLabel || 'UTC')}). Bar height is relative to your strongest hour in this period (answered ÷ attempts).</p>
+                <div class="insights-hour-bars" role="img" aria-label="Answered rate by hour of day">${bars}</div>`;
+        }
+
+        function buildInsightsWeekdayBarChart(byWeekday) {
+            if (!Array.isArray(byWeekday) || byWeekday.length < 1) {
+                return '<p class="insights-panel-hint">No weekday breakdown.</p>';
+            }
+            let maxPct = 1;
+            byWeekday.forEach((d) => {
+                const attempts = d.attempts || 0;
+                if (attempts > 0) {
+                    const ar = d.answeredRate != null ? Number(d.answeredRate) : d.answered / attempts;
+                    const pct = Math.round(ar * 100);
+                    if (pct > maxPct) maxPct = pct;
+                }
+            });
+            const cols = byWeekday
+                .map((d) => {
+                    const attempts = d.attempts || 0;
+                    const ar = d.answeredRate != null ? Number(d.answeredRate) : (attempts ? d.answered / attempts : 0);
+                    const pct = Math.round(ar * 100);
+                    const hPct = maxPct > 0 ? Math.round((pct / maxPct) * 100) : 0;
+                    const label = d.label || `Day ${d.weekday || ''}`;
+                    const title = attempts
+                        ? `${label}: ${pct}% answered (${d.answered}/${attempts})`
+                        : `${label}: no dials`;
+                    return `<div class="insights-weekday-col" title="${title.replace(/"/g, '&quot;')}">
+                    <div class="${attempts ? 'insights-wd-bar' : 'insights-wd-bar insights-wd-bar--empty'}" style="height:${attempts ? Math.max(8, hPct) : 5}px"></div>
+                    <span class="insights-wd-label">${escapeHtml(label)}</span>
+                </div>`;
+                })
+                .join('');
+            return `<div class="insights-weekday-bars" role="img" aria-label="Answered rate by weekday">${cols}</div>`;
+        }
+
+        function buildInsightsPairChips(items, emptyMsg) {
+            if (!Array.isArray(items) || !items.length) {
+                return `<p class="insights-panel-hint">${escapeHtml(emptyMsg)}</p>`;
+            }
+            return `<div class="insights-outcome-chips" role="list">${items
+                .map(
+                    (x) =>
+                        `<span class="insights-chip" role="listitem">${escapeHtml(x.key)} · ${formatNumber(x.count)}</span>`
+                )
+                .join('')}</div>`;
+        }
+
+        function banditStrengthCaption(s) {
+            if (s === 'strong') return 'High confidence (many dials at this hour)';
+            if (s === 'building') return 'Moderate data';
+            if (s === 'early') return 'Early data';
+            return 'Prior only';
+        }
+
+        function buildInsightsBanditBlock(bandit) {
+            const ranked = (bandit && bandit.ranked) || [];
+            const sched = bandit?.optimalSchedulingActive ? 'On' : 'Off';
+            const th = bandit?.thompsonActive ? 'On' : 'Off';
+            const pill = `<div class="insights-panel-hint" style="margin-bottom:8px">
+                <span class="insights-status-pill">Queue scheduling: ${sched}</span>
+                <span class="insights-status-pill">Thompson dial-time: ${th}</span>
+                ${bandit?.demo ? '<span class="insights-status-pill">Demo preview</span>' : ''}
+            </div>`;
+            const obsLine =
+                bandit?.updatedAt && !bandit?.demo
+                    ? `<p class="insights-panel-hint">${formatNumber(bandit.observationCount || 0)} completed calls updated the model · last change ${formatTimeAgo(bandit.updatedAt)}</p>`
+                    : bandit?.demo
+                      ? '<p class="insights-panel-hint">Representative preview — connect a live tenant for real posteriors.</p>'
+                      : !bandit?.ok
+                        ? `<p class="insights-panel-hint">Could not load bandit state${bandit?.error ? `: ${escapeHtml(String(bandit.error))}` : ''}.</p>`
+                        : `<p class="insights-panel-hint">${formatNumber(bandit?.observationCount || 0)} bandit observations on file.</p>`;
+            if (!ranked.length) {
+                return `${pill}${obsLine}<p class="insights-panel-hint">No per-hour posteriors with data yet. Each completed outbound call (via webhook) nudges a Beta belief for that local hour: success ≈ answered. Once hours accumulate observations, they appear ranked here with P(answered), counts, and how reliable the estimate is.</p>`;
+            }
+            const rows = ranked
+                .map(
+                    (r) =>
+                        `<tr><td>${escapeHtml(r.label)}</td><td><strong>${r.meanAnsweredPct}%</strong></td><td>${formatNumber(r.successes)} / ${formatNumber(r.failures)}</td><td>${escapeHtml(banditStrengthCaption(r.strength))}</td></tr>`
+                )
+                .join('');
+            return `${pill}${obsLine}<p class="insights-panel-hint">Belief = posterior mean from a Beta(1,1) prior after your observed answered / not counts. The live scheduler <strong>Thompson-samples</strong> these beliefs to pick dial times (balances explore vs exploit).</p>
+            <table class="insights-bandit-table">
+                <thead><tr><th>Hour</th><th>Belief · P(answered)</th><th>Answered / not</th><th>Data strength</th></tr></thead>
+                <tbody>${rows}</tbody>
+            </table>`;
+        }
+
+        function demoCallTimeBanditPayload() {
+            return {
+                ok: true,
+                demo: true,
+                observationCount: 284,
+                updatedAt: new Date().toISOString(),
+                ranked: [
+                    { hour: 10, label: '10:00', meanAnsweredPct: 41, successes: 17, failures: 25, observations: 42, strength: 'building', uncertainty: 14 },
+                    { hour: 14, label: '14:00', meanAnsweredPct: 36, successes: 11, failures: 21, observations: 32, strength: 'building', uncertainty: 16 },
+                    { hour: 9, label: '09:00', meanAnsweredPct: 33, successes: 9, failures: 19, observations: 28, strength: 'early', uncertainty: 18 },
+                    { hour: 16, label: '16:00', meanAnsweredPct: 29, successes: 6, failures: 17, observations: 23, strength: 'early', uncertainty: 19 }
+                ],
+                thompsonActive: true,
+                optimalSchedulingActive: true
+            };
+        }
+
         async function renderCallInsights(data) {
             const container = document.getElementById('call-insights');
             if (!container) return;
@@ -7689,10 +8006,27 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             attachRefresh();
 
             try {
-                // Allow caller to pass through a pre-fetched payload
-                const payload = data && data._insightsPayload
-                    ? data._insightsPayload
-                    : (await fetch(`${BASE_URL}/api/call-insights/${encodeURIComponent(clientKey)}`, { cache: 'no-store' }).then(r => r.json()));
+                const insightsUrl = `${BASE_URL}/api/call-insights/${encodeURIComponent(clientKey)}`;
+                const banditUrl = `${BASE_URL}/api/call-time-bandit/${encodeURIComponent(clientKey)}`;
+
+                let payload;
+                let bandit;
+                if (data && data._insightsPayload) {
+                    payload = data._insightsPayload;
+                    bandit = isDemoClientKey(clientKey)
+                        ? demoCallTimeBanditPayload()
+                        : await fetch(banditUrl, { cache: 'no-store' })
+                              .then((r) => r.json())
+                              .catch(() => ({ ok: false, ranked: [] }));
+                } else {
+                    const insightPromise = fetch(insightsUrl, { cache: 'no-store' }).then((r) => r.json());
+                    const banditPromise = isDemoClientKey(clientKey)
+                        ? Promise.resolve(demoCallTimeBanditPayload())
+                        : fetch(banditUrl, { cache: 'no-store' })
+                              .then((r) => r.json())
+                              .catch(() => ({ ok: false, ranked: [] }));
+                    [payload, bandit] = await Promise.all([insightPromise, banditPromise]);
+                }
 
                 if (!payload || !payload.ok) {
                     renderError(payload?.error || 'No insights yet');
@@ -7706,6 +8040,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const patterns = insights.patterns || {};
                 const bestHours = routing?.recommendations?.bestHours || [];
                 const bestDays = routing?.recommendations?.bestWeekdays || [];
+                const byHour = routing?.buckets?.byHour || [];
+                const byWeekday = routing?.buckets?.byWeekday || [];
+                const routingTz = routing?.timeZone || 'UTC';
                 const computedAt = payload.computed_at || payload.computedAt || null;
                 const sampleSize = insights.sampleSize || summary.attempts || 0;
                 if (metaEl) {
@@ -7713,19 +8050,25 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 }
 
                 const bestHoursLabel = bestHours.length
-                    ? bestHours.map(h => `${h.label}${h.score != null ? ` (${h.score})` : ''}`).join(', ')
+                    ? bestHours.map((h) => `${h.label}${h.score != null ? ` (${h.score})` : ''}`).join(', ')
                     : '—';
-                const bestDaysLabel = bestDays.length ? bestDays.map(d => d.label).join(', ') : '—';
+                const bestDaysLabel = bestDays.length ? bestDays.map((d) => d.label).join(', ') : '—';
 
-                const topObj = (patterns.topObjections || []).slice(0, 3).map(x => `${x.key} (${x.count})`).join(', ') || '—';
-                const topPhrases = (patterns.topPhrases || []).slice(0, 3).map(x => `${x.key} (${x.count})`).join(', ') || '—';
-                const suggestions = (patterns.suggestions || []).slice(0, 2);
+                const topObj = (patterns.topObjections || []).slice(0, 3).map((x) => `${x.key} (${x.count})`).join(', ') || '—';
+                const topPhrases = (patterns.topPhrases || []).slice(0, 3).map((x) => `${x.key} (${x.count})`).join(', ') || '—';
+                const suggestions = (patterns.suggestions || []).slice(0, 3);
+                const topOutcomes = (patterns.topOutcomes || []).slice(0, 10);
+                const sentimentRows = (patterns.sentimentBreakdown || []).slice(0, 8);
+
+                const periodDays = String(payload.period_days || payload.periodDays || 30);
 
                 container.innerHTML = `
+                    <div class="insights-stack">
+                    <div class="call-quality-grid">
                     <div class="quality-metric">
                         <div class="quality-label">Answered rate</div>
                         <div class="quality-value">${Number(summary.answeredRate || 0)}%</div>
-                        <div class="quality-badge">last ${escapeHtml(String(payload.period_days || payload.periodDays || 30))} days</div>
+                        <div class="quality-badge">last ${escapeHtml(periodDays)} days</div>
                     </div>
                     <div class="quality-metric">
                         <div class="quality-label">Booked rate</div>
@@ -7733,14 +8076,14 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         <div class="quality-badge">calls with outcome booked</div>
                     </div>
                     <div class="quality-metric">
-                        <div class="quality-label">Best hours</div>
+                        <div class="quality-label">Best hours (heuristic)</div>
                         <div class="quality-value quality-value--schedule">${escapeHtml(bestHoursLabel)}</div>
-                        <div class="quality-badge">blended score uses booked + answered</div>
+                        <div class="quality-badge">blended score: booked + answered</div>
                     </div>
                     <div class="quality-metric">
-                        <div class="quality-label">Best days</div>
+                        <div class="quality-label">Best days (heuristic)</div>
                         <div class="quality-value quality-value--schedule">${escapeHtml(bestDaysLabel)}</div>
-                        <div class="quality-badge">day-of-week performance</div>
+                        <div class="quality-badge">min sample before ranking</div>
                     </div>
                     <div class="quality-metric">
                         <div class="quality-label">Top objections</div>
@@ -7754,15 +8097,52 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     </div>
                     ${
                         suggestions.length
-                            ? suggestions.map(s => `
+                            ? suggestions
+                                  .map(
+                                      (s) => `
                                 <div class="quality-metric">
                                     <div class="quality-label">Suggested tweak</div>
                                     <div class="quality-value quality-value--schedule">${escapeHtml(s.title || 'Suggestion')}</div>
                                     <div class="quality-badge">${escapeHtml(s.detail || '')}</div>
                                 </div>
-                            `).join('')
+                            `
+                                  )
+                                  .join('')
                             : ''
                     }
+                    </div>
+
+                    <div class="insights-panel insights-panel--span">
+                        <div class="insights-panel-title">Outcomes & sentiment</div>
+                        <div class="insights-wide-grid" style="margin-top:8px">
+                            <div>
+                                <p class="insights-panel-hint" style="margin-bottom:6px">Call outcomes (same window)</p>
+                                ${buildInsightsPairChips(topOutcomes, 'No outcome tags in this sample.')}
+                            </div>
+                            <div>
+                                <p class="insights-panel-hint" style="margin-bottom:6px">Sentiment (when recorded)</p>
+                                ${buildInsightsPairChips(sentimentRows, 'No sentiment breakdown in this sample.')}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="insights-wide-grid">
+                        <div class="insights-panel">
+                            <div class="insights-panel-title">Answered rate by hour</div>
+                            ${buildInsightsHourBarChart(byHour, routingTz)}
+                        </div>
+                        <div class="insights-panel">
+                            <div class="insights-panel-title">Answered rate by weekday</div>
+                            <p class="insights-panel-hint">Same window (${escapeHtml(periodDays)} days) · ${escapeHtml(routingTz)}</p>
+                            ${buildInsightsWeekdayBarChart(byWeekday)}
+                        </div>
+                    </div>
+
+                    <div class="insights-panel insights-panel--span">
+                        <div class="insights-panel-title">Dial-time model (Thompson sampling)</div>
+                        ${buildInsightsBanditBlock(bandit)}
+                    </div>
+                    </div>
                 `;
             } catch (err) {
                 const errMsg = err?.message || String(err || 'unknown error');

@@ -11268,6 +11268,30 @@ app.post('/api/call-insights/:clientKey/recompute', async (req, res) => {
   }
 });
 
+// Dial-time Thompson bandit state (no-store: changes as calls complete)
+app.get('/api/call-time-bandit/:clientKey', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    const { clientKey } = req.params;
+    const { getCallTimeBanditForDashboard } = await import('./db.js');
+    const data = await getCallTimeBanditForDashboard(clientKey);
+    const thompsonOff = ['0', 'false'].includes(
+      String(process.env.CALL_TIME_THOMPSON || '').trim().toLowerCase()
+    );
+    const schedulingOff = ['0', 'false'].includes(
+      String(process.env.OPTIMAL_CALL_SCHEDULING || '').trim().toLowerCase()
+    );
+    return res.json({
+      ...data,
+      thompsonActive: !thompsonOff,
+      optimalSchedulingActive: !schedulingOff
+    });
+  } catch (error) {
+    console.error('[CALL TIME BANDIT API]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 // API endpoint for retry queue (pending follow-up rows + outbound calls waiting in call_queue)
 // No response cache: queue changes often; cached empty responses made the dashboard look "broken".
 app.get('/api/retry-queue/:clientKey', async (req, res) => {

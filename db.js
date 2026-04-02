@@ -1437,6 +1437,89 @@ export async function getCallTimeBanditState(clientKey) {
   }
 }
 
+/**
+ * Dashboard payload: Beta posteriors per clock hour (tenant-local) for Thompson dial-time learning.
+ */
+export async function getCallTimeBanditForDashboard(clientKey) {
+  const empty = {
+    ok: true,
+    updatedAt: null,
+    observationCount: 0,
+    hours: [],
+    ranked: []
+  };
+  if (!clientKey) return { ...empty, ok: false, error: 'missing client' };
+
+  try {
+    const [{ rows: br }, { rows: cr }] = await Promise.all([
+      query(
+        `SELECT arms, updated_at FROM call_time_bandit WHERE client_key = $1`,
+        [clientKey]
+      ),
+      query(
+        `SELECT COUNT(*) AS c FROM call_time_bandit_observations WHERE client_key = $1`,
+        [clientKey]
+      )
+    ]);
+
+    const observationCount = parseInt(String(cr?.[0]?.c ?? 0), 10) || 0;
+    const updatedAt = br?.[0]?.updated_at
+      ? new Date(br[0].updated_at).toISOString()
+      : null;
+    const raw = br?.[0]?.arms;
+    const arms =
+      raw != null && typeof raw === 'object' && !Array.isArray(raw) ? { ...raw } : {};
+
+    const hours = [];
+    for (let h = 0; h < 24; h++) {
+      const hk = String(h);
+      const prev = arms[hk] || { a: 1, b: 1 };
+      const a = Number(prev.a) || 1;
+      const b = Number(prev.b) || 1;
+      const ab = a + b;
+      const mean = ab > 0 ? a / ab : 0.5;
+      const successes = Math.max(0, Math.round(a - 1));
+      const failures = Math.max(0, Math.round(b - 1));
+      const observations = successes + failures;
+      const varBeta = ab > 0 ? (a * b) / (ab * ab * (ab + 1)) : 0.25;
+      const uncertainty = Math.min(50, Math.round(100 * Math.sqrt(varBeta)));
+      let strength = 'prior';
+      if (observations >= 40) strength = 'strong';
+      else if (observations >= 8) strength = 'building';
+      else if (observations >= 1) strength = 'early';
+
+      hours.push({
+        hour: h,
+        label: `${String(h).padStart(2, '0')}:00`,
+        alpha: a,
+        beta: b,
+        meanAnsweredPct: Math.round(mean * 100),
+        successes,
+        failures,
+        observations,
+        uncertainty,
+        strength
+      });
+    }
+
+    const ranked = [...hours]
+      .filter((x) => x.observations > 0)
+      .sort((x, y) => y.meanAnsweredPct - x.meanAnsweredPct || y.observations - x.observations)
+      .slice(0, 12);
+
+    return {
+      ok: true,
+      updatedAt,
+      observationCount,
+      hours,
+      ranked
+    };
+  } catch (e) {
+    console.warn('[CALL TIME BANDIT] getCallTimeBanditForDashboard:', e.message);
+    return { ...empty, ok: false, error: e.message };
+  }
+}
+
 async function mergeCallTimeBanditPosterior(clientKey, hour, success) {
   const hk = String(hour);
   const curState = await getCallTimeBanditState(clientKey);
