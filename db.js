@@ -2545,6 +2545,26 @@ export async function getOutboundAbExperimentSummary(clientKey, experimentName) 
   return { experimentName: name, variants, hasDbVariants: true };
 }
 
+/**
+ * When the tenant has exactly one distinct active experiment_name, return it (for dashboard / dial fallback).
+ */
+export async function inferOutboundAbExperimentName(clientKey) {
+  if (!clientKey) return null;
+  const { rows } = await query(
+    `
+    SELECT experiment_name
+    FROM ab_test_experiments
+    WHERE client_key = $1 AND is_active = TRUE
+    GROUP BY experiment_name
+    ORDER BY experiment_name ASC
+  `,
+    [clientKey]
+  );
+  if (rows.length !== 1) return null;
+  const n = rows[0].experiment_name;
+  return n != null && String(n).trim() !== '' ? String(n).trim() : null;
+}
+
 // Security and Authentication functions
 export async function createUserAccount({ clientKey, username, email, passwordHash, role = 'user', permissions = [] }) {
   const permissionsJson = JSON.stringify(permissions);

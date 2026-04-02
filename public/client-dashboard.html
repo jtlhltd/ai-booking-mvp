@@ -1163,6 +1163,21 @@
             font-style: italic;
         }
 
+        .tom-ab-inferred-banner {
+            font-size: 0.8125rem;
+            line-height: 1.45;
+            color: var(--muted);
+            padding: 10px 12px;
+            margin-bottom: 12px;
+            border-radius: 8px;
+            background: rgba(234, 179, 8, 0.1);
+            border: 1px solid rgba(234, 179, 8, 0.35);
+        }
+
+        .tom-ab-inferred-banner strong {
+            color: var(--text, #2f3147);
+        }
+
         .leads-list {
             display: flex;
             flex-direction: column;
@@ -4236,6 +4251,16 @@
             border-color: rgba(124, 134, 220, 0.22);
         }
 
+        body[data-theme="dark"] .tom-ab-inferred-banner {
+            background: rgba(234, 179, 8, 0.12);
+            border-color: rgba(250, 204, 21, 0.35);
+            color: #d0d4e8;
+        }
+
+        body[data-theme="dark"] .tom-ab-inferred-banner strong {
+            color: #f8fafc;
+        }
+
         body[data-theme="dark"] .activity-inline-help {
             border-color: rgba(124, 134, 220, 0.45);
             background: rgba(92, 106, 196, 0.18);
@@ -5841,7 +5866,7 @@ ${actionsRow}
                             (t.scriptPreview || '').slice(0, 40)
                         ].join(':');
                     }).join(';');
-                    return [ab.experimentName || '', varSig].join('|');
+                    return [ab.experimentName || '', ab.experimentNameSource || '', varSig].join('|');
                 })()
             ].join('|');
         }
@@ -5887,7 +5912,9 @@ ${actionsRow}
                     roi: livePayload.roi || { costs: { total: 0, perCall: 0 }, revenue: { total: 0, bookings: 0, avgDealValue: 0 }, roi: { profit: 0, multiplier: 0, percentage: 0 } },
                     activityAsOfIso: livePayload.activityAsOfIso || metrics.activityAsOfIso || null,
                     activityTimezone: livePayload.activityTimezone || metrics.activityTimezone || DASHBOARD_ACTIVITY_TZ,
-                    outboundAbTest: livePayload.outboundAbTest || null
+                    outboundAbTest: livePayload.outboundAbTest
+                        ? { ...livePayload.outboundAbTest }
+                        : null
                 };
             }
             
@@ -7567,12 +7594,23 @@ ${actionsRow}
             if (!exp) {
                 root.innerHTML = `
                     <p class="tom-ab-test-meta" style="margin:0;">
-                        No outbound A/B experiment is set yet. When your workspace has <code>vapi.outboundAbExperiment</code> configured, this section shows <strong>what is being tested</strong> (voice, opening line, script per variant) and <strong>results</strong> from the test ledger plus the live feed.
+                        Nothing to show yet. Do one of the following:
+                        (1) Set <code>outboundAbExperiment</code> inside tenant <code>vapi_json</code> to your experiment name, or
+                        (2) Create <strong>exactly one</strong> active experiment in <code>ab_test_experiments</code> for this client — we will detect it automatically.
+                        Then this section lists <strong>what is being tested</strong> per variant and <strong>results</strong> from the ledger plus the live feed.
                     </p>`;
                 return;
             }
 
             const cap = typeof ACTIVITY_FEED_DISPLAY_CAP === 'number' ? ACTIVITY_FEED_DISPLAY_CAP : 40;
+            const expSource = ab && ab.experimentNameSource;
+            const inferredBanner =
+                exp && expSource === 'inferred'
+                    ? `<div class="tom-ab-inferred-banner" role="status">
+                        <strong>Note:</strong> The experiment name was picked automatically because you have exactly one active A/B test in the database.
+                        Set <code>outboundAbExperiment</code> in tenant <code>vapi_json</code> to this same name so production config is explicit.
+                       </div>`
+                    : '';
 
             let testedHtml = '';
             if (variants.length) {
@@ -7635,6 +7673,7 @@ ${actionsRow}
             }
 
             root.innerHTML = `
+                ${inferredBanner}
                 <p class="card-subtitle" style="margin-top:0;">
                     Active experiment: <strong>${escapeHtml(exp)}</strong>
                     <span class="tom-ab-test-meta"> · Leads are split by phone number (same person always sees the same variant). Results use the A/B ledger; “In feed” counts calls in the newest <strong>${cap}</strong> activity rows.</span>

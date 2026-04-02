@@ -9358,8 +9358,21 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       ? (roiMultiplier - 1) * 100
       : null;
 
-    const outboundAbExperimentName =
+    let outboundAbExperimentName =
       client?.vapi?.outboundAbExperiment != null ? String(client.vapi.outboundAbExperiment).trim() : '';
+    let outboundAbExperimentSource = outboundAbExperimentName ? 'vapi' : null;
+    if (!outboundAbExperimentName) {
+      try {
+        const { inferOutboundAbExperimentName } = await import('./db.js');
+        const inferred = await inferOutboundAbExperimentName(clientKey);
+        if (inferred) {
+          outboundAbExperimentName = inferred;
+          outboundAbExperimentSource = 'inferred';
+        }
+      } catch (infErr) {
+        console.error('[DEMO DASHBOARD] outbound A/B infer error:', infErr?.message || infErr);
+      }
+    }
     let outboundAbTestDb = null;
     if (outboundAbExperimentName) {
       try {
@@ -9383,6 +9396,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       recentLeadsListCap: RECENT_LEADS_DASHBOARD_CAP,
       outboundAbTest: {
         experimentName: outboundAbExperimentName || null,
+        experimentNameSource: outboundAbExperimentSource,
         summary: outboundAbTestDb,
         recentFeedVariantCounts
       },
