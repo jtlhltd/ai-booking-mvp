@@ -314,6 +314,32 @@
             max-height: min(58vh, 640px);
         }
 
+        /* Performance & Analytics: matched tile height; Insights scrolls inside */
+        .dashboard-section--analytics-row.dashboard-section--balanced-row .dashboard-grid > .card {
+            height: min(58vh, 640px);
+            max-height: min(58vh, 640px);
+        }
+
+        .dashboard-section--analytics-row.dashboard-section--balanced-row .dashboard-grid > .card > #lead-journey,
+        .dashboard-section--analytics-row.dashboard-section--balanced-row .dashboard-grid > .card > #call-quality {
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+            padding-bottom: 6px;
+        }
+
+        .dashboard-section--analytics-row.dashboard-section--balanced-row
+            .dashboard-grid
+            > .card.card-weekly-activity
+            .weekly-chart-wrap {
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+            min-height: 0;
+        }
+
         .dashboard-section--balanced-row .dashboard-grid > .card > .leads-list,
         .dashboard-section--balanced-row .dashboard-grid > .card > #retry-queue,
         .dashboard-section--balanced-row .dashboard-grid > .card > #call-recordings,
@@ -409,10 +435,29 @@
         }
 
         .dashboard-grid > .card > #call-quality,
+        .dashboard-grid > .card > #call-insights,
         .dashboard-grid > .card > #lead-journey,
         .dashboard-grid > .card > .weekly-chart-wrap {
             flex: 1 1 auto;
             min-height: 0;
+        }
+
+        .dashboard-section--analytics-row .card-insights-routing > h3,
+        .dashboard-section--analytics-row .card-insights-routing > .card-subtitle,
+        .dashboard-section--analytics-row .card-insights-routing > .insights-card-toolbar {
+            flex-shrink: 0;
+        }
+
+        .dashboard-section--analytics-row .card-insights-routing > #call-insights.insights-root {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+            margin-right: -2px;
+            padding-right: 4px;
+            padding-bottom: 8px;
         }
 
         .dashboard-grid > .card.card-weekly-activity .weekly-chart-wrap {
@@ -2326,6 +2371,12 @@
 
         .insights-root {
             width: 100%;
+        }
+
+        .insights-stack .quality-value--schedule {
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            hyphens: auto;
         }
 
         .insights-stack {
@@ -4410,6 +4461,10 @@
                 max-height: min(90vh, 720px);
             }
 
+            .dashboard-section--analytics-row.dashboard-section--balanced-row .dashboard-grid > .card {
+                max-height: min(90vh, 720px);
+            }
+
             .meta-item {
                 max-width: none;
                 flex: 1 1 100%;
@@ -4567,7 +4622,7 @@
         </section>
 
         <!-- PERFORMANCE & ANALYTICS SECTION -->
-        <section class="dashboard-section">
+        <section class="dashboard-section dashboard-section--balanced-row dashboard-section--analytics-row">
             <h2 class="section-header">📊 Performance & Analytics</h2>
             <div class="dashboard-grid">
                 <article class="card card-chart">
@@ -4601,14 +4656,14 @@
                     <div id="call-quality" class="call-quality-grid"></div>
                 </article>
 
-                <article class="card">
+                <article class="card card-insights-routing">
                     <h3>🧠 Insights & Routing</h3>
                     <p class="card-subtitle" id="callInsightsSubtitle">Transcript patterns, hourly and weekday performance, and the dial-time model used when scheduling outbound dials.</p>
-                    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+                    <div class="insights-card-toolbar" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
                         <small id="callInsightsMeta" style="color:var(--muted);">—</small>
                         <button type="button" id="callInsightsRefresh" class="export-btn secondary" style="padding:6px 10px;font-size:12px;">Refresh insights</button>
                     </div>
-                    <div id="call-insights" class="insights-root"></div>
+                    <div id="call-insights" class="insights-root thin-scroll" role="region" aria-label="Insights and routing detail"></div>
                 </article>
                 </div>
         </section>
