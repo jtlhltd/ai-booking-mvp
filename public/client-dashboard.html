@@ -2545,6 +2545,22 @@
             border-bottom: none;
         }
 
+        .insights-provenance-list {
+            margin: 8px 0 0 0;
+            padding-left: 1.2rem;
+            font-size: 12px;
+            line-height: 1.55;
+            color: var(--text-primary, #1f2937);
+        }
+
+        .insights-provenance-list li {
+            margin-bottom: 10px;
+        }
+
+        .insights-provenance-list li:last-child {
+            margin-bottom: 0;
+        }
+
         .insights-action-list {
             margin: 0;
             padding-left: 1.15rem;
@@ -8079,6 +8095,31 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 .join('')}</div>`;
         }
 
+        function buildInsightsDataProvenance(routing, summary, periodDays) {
+            const h = routing?.howCalculated || {};
+            const days = Number(h.periodDays) || Number(periodDays) || 30;
+            const tz = escapeHtml(h.reportTimeZone || routing?.timeZone || 'UTC');
+            const cap = h.maxCallsFromDatabase != null ? formatNumber(h.maxCallsFromDatabase) : formatNumber(2000);
+            const n =
+                summary?.attempts != null
+                    ? formatNumber(summary.attempts)
+                    : h.callsInReport != null
+                      ? formatNumber(h.callsInReport)
+                      : '—';
+            const minSlot = h.minCallsPerSlotForRanking ?? 6;
+            return `<div class="insights-panel insights-panel--span insights-provenance">
+                <div class="insights-panel-title">How the summary numbers above are worked out</div>
+                <ul class="insights-provenance-list">
+                    <li><strong>Answered rate</strong> — We take your <strong>${n}</strong> most recent calls from the last <strong>${days}</strong> days (up to <strong>${cap}</strong> calls loaded from the database). “Answered” uses the same pickup/conversation check as elsewhere on this dashboard (not just “it rang”).</li>
+                    <li><strong>Best hours</strong> — Each call is placed in the <strong>hour it started</strong> using <strong>${tz}</strong>. The number in brackets (e.g. 18:00 <strong>(7)</strong>) is a simple <strong>0–100 score from answer rate</strong> at that hour. We only rank an hour after at least <strong>${minSlot}</strong> calls have been made in that hour.</li>
+                    <li><strong>Best days</strong> — Same idea by <strong>weekday</strong>, again needing at least <strong>${minSlot}</strong> calls on that day before it can appear in the list.</li>
+                    <li><strong>Top objections &amp; key phrases</strong> — These come from <strong>tags and phrases stored on each call</strong> when your system saves them after a call (for example from transcript analysis). We count how often each one appears in this same set of calls.</li>
+                    <li><strong>Suggested tweak</strong> — Short tips when the data matches a few fixed patterns (for example many “not interested” outcomes). They are <strong>suggestions only</strong>; nothing changes in your live assistant unless you change it.</li>
+                </ul>
+                <p class="insights-panel-hint" style="margin-top:10px">Click <strong>Refresh insights</strong> to rebuild this report from your latest calls.</p>
+            </div>`;
+        }
+
         function buildInsightsActionHintsPanel(actionHints) {
             const bullets = (actionHints && actionHints.bullets) || [];
             if (!bullets.length) return '';
@@ -8323,46 +8364,49 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
                 const periodDays = String(payload.period_days || payload.periodDays || 30);
                 const tomInsights = isTomOutreachDashboard(clientKey);
+                const hc = routing?.howCalculated || {};
+                const tzTile = escapeHtml(hc.reportTimeZone || routing?.timeZone || 'UTC');
+                const minRank = hc.minCallsPerSlotForRanking ?? 6;
+                const capCalls = hc.maxCallsFromDatabase != null ? formatNumber(hc.maxCallsFromDatabase) : formatNumber(2000);
+                const callsN = formatNumber(summary.attempts ?? sampleSize ?? 0);
                 const bookedMetricHtml = tomInsights
                     ? ''
                     : `
                     <div class="quality-metric">
                         <div class="quality-label">Booked rate</div>
                         <div class="quality-value">${Number(summary.bookedRate || 0)}%</div>
-                        <div class="quality-badge">calls with outcome booked</div>
+                        <div class="quality-badge">Calls marked with a “booked” outcome in this same report.</div>
                     </div>`;
-                const heuristicBadge = tomInsights
-                    ? 'ranked by % answered (pickup) — min sample per slot'
-                    : 'ranked by % answered in window — min sample per slot';
 
                 container.innerHTML = `
                     <div class="insights-stack">
+                    ${buildInsightsDataProvenance(routing, summary, periodDays)}
                     <div class="call-quality-grid">
                     <div class="quality-metric">
                         <div class="quality-label">Answered rate</div>
                         <div class="quality-value">${Number(summary.answeredRate || 0)}%</div>
-                        <div class="quality-badge">last ${escapeHtml(periodDays)} days</div>
+                        <div class="quality-badge">${callsN} calls in this report · last ${escapeHtml(periodDays)} days · up to ${capCalls} newest loaded</div>
                     </div>
                     ${bookedMetricHtml}
                     <div class="quality-metric">
-                        <div class="quality-label">Best hours (heuristic)</div>
+                        <div class="quality-label">Best hours</div>
                         <div class="quality-value quality-value--schedule">${escapeHtml(bestHoursLabel)}</div>
-                        <div class="quality-badge">${escapeHtml(heuristicBadge)}</div>
+                        <div class="quality-badge">By start hour (${tzTile}). Bracket = 0–100 score from % answered. ≥${minRank} calls/hour to rank.</div>
                     </div>
                     <div class="quality-metric">
-                        <div class="quality-label">Best days (heuristic)</div>
+                        <div class="quality-label">Best days</div>
                         <div class="quality-value quality-value--schedule">${escapeHtml(bestDaysLabel)}</div>
-                        <div class="quality-badge">min sample before ranking</div>
+                        <div class="quality-badge">By weekday in ${tzTile}. ≥${minRank} calls that day to rank · sorted by % answered.</div>
                     </div>
                     <div class="quality-metric">
                         <div class="quality-label">Top objections</div>
                         <div class="quality-value quality-value--schedule">${escapeHtml(topObj)}</div>
-                        <div class="quality-badge">from extracted objection tags</div>
+                        <div class="quality-badge">Tags stored on calls in this report (from your pipeline / analysis).</div>
                     </div>
                     <div class="quality-metric">
                         <div class="quality-label">Key phrases</div>
                         <div class="quality-value quality-value--schedule">${escapeHtml(topPhrases)}</div>
-                        <div class="quality-badge">from extracted key phrases</div>
+                        <div class="quality-badge">Phrases stored on calls in this report (from your pipeline / analysis).</div>
                     </div>
                     ${
                         suggestions.length
