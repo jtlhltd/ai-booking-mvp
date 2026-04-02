@@ -2467,6 +2467,49 @@ export async function getABTestConversionRates(experimentId) {
   return rows;
 }
 
+/** Safe previews of variant_config for dashboards (voice, opening, script). */
+export function summarizeOutboundVariantConfig(variantConfig) {
+  let c = variantConfig;
+  if (c == null) {
+    return { voiceId: null, openingLine: null, scriptPreview: null, scriptCharCount: 0 };
+  }
+  if (typeof c === 'string') {
+    try {
+      c = JSON.parse(c);
+    } catch {
+      return { voiceId: null, openingLine: null, scriptPreview: null, scriptCharCount: 0 };
+    }
+  }
+  if (typeof c !== 'object' || c === null) {
+    return { voiceId: null, openingLine: null, scriptPreview: null, scriptCharCount: 0 };
+  }
+
+  let voiceId = null;
+  if (typeof c.voice === 'string' && c.voice.trim()) voiceId = c.voice.trim();
+  else if (c.voice && typeof c.voice === 'object' && c.voice.voiceId) {
+    voiceId = String(c.voice.voiceId).trim();
+  }
+
+  const open = c.firstMessage != null ? String(c.firstMessage).trim() : '';
+  const scriptRaw =
+    c.systemMessage != null ? String(c.systemMessage) : c.script != null ? String(c.script) : '';
+  const scriptTrim = scriptRaw.trim();
+  const scriptCharCount = scriptTrim.length;
+  const maxScript = 280;
+  const scriptPreview =
+    scriptTrim.length === 0
+      ? null
+      : scriptTrim.length <= maxScript
+        ? scriptTrim
+        : `${scriptTrim.slice(0, maxScript).trim()}…`;
+
+  const maxOpen = 200;
+  const openingLine =
+    open.length === 0 ? null : open.length <= maxOpen ? open : `${open.slice(0, maxOpen).trim()}…`;
+
+  return { voiceId, openingLine, scriptPreview, scriptCharCount };
+}
+
 /**
  * Dashboard summary for one outbound A/B experiment (multiple variant rows share experiment_name).
  */
@@ -2490,11 +2533,13 @@ export async function getOutboundAbExperimentSummary(clientKey, experimentName) 
     const rates = await getABTestConversionRates(row.id);
     const agg =
       rates.find((r) => r.variant_name === row.variant_name) || (rates.length === 1 ? rates[0] : null);
+    const tested = summarizeOutboundVariantConfig(row.variant_config);
     variants.push({
       variantName: row.variant_name,
       totalLeads: parseInt(agg?.total_leads ?? 0, 10),
       convertedLeads: parseInt(agg?.converted_leads ?? 0, 10),
-      conversionRatePct: agg?.conversion_rate != null ? Number(agg.conversion_rate) : 0
+      conversionRatePct: agg?.conversion_rate != null ? Number(agg.conversion_rate) : 0,
+      tested
     });
   }
   return { experimentName: name, variants, hasDbVariants: true };

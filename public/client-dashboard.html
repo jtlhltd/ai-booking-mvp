@@ -1082,6 +1082,87 @@
             line-height: 1.45;
         }
 
+        .tom-ab-split {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            align-items: start;
+            margin-top: 12px;
+        }
+
+        @media (max-width: 960px) {
+            .tom-ab-split {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .tom-ab-panel-title {
+            margin: 0 0 8px 0;
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--primary, #2f3147);
+        }
+
+        .tom-ab-variant-card {
+            border: 1px solid var(--border, #e8eaf5);
+            border-radius: 10px;
+            padding: 12px 14px;
+            margin-bottom: 12px;
+            background: rgba(92, 106, 196, 0.04);
+        }
+
+        .tom-ab-variant-card h5 {
+            margin: 0 0 10px 0;
+            font-size: 0.9375rem;
+            color: var(--primary, #2f3147);
+        }
+
+        .tom-ab-dl {
+            margin: 0;
+            display: grid;
+            gap: 10px;
+        }
+
+        .tom-ab-dl dt {
+            margin: 0;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--muted);
+        }
+
+        .tom-ab-dl dd {
+            margin: 2px 0 0 0;
+            font-size: 0.8125rem;
+            line-height: 1.45;
+            color: var(--text, #2f3147);
+        }
+
+        .tom-ab-script-preview {
+            max-height: 120px;
+            overflow-y: auto;
+            padding: 8px 10px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.7);
+            border: 1px solid rgba(92, 106, 196, 0.12);
+            margin-top: 4px;
+        }
+
+        .tom-ab-script-preview pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-family: ui-monospace, monospace;
+            font-size: 0.75rem;
+            line-height: 1.4;
+        }
+
+        .tom-ab-missing {
+            color: var(--muted);
+            font-style: italic;
+        }
+
         .leads-list {
             display: flex;
             flex-direction: column;
@@ -4137,6 +4218,24 @@
             border-bottom-color: rgba(124, 134, 220, 0.25);
         }
 
+        body[data-theme="dark"] .tom-ab-panel-title {
+            color: #e8eaf8;
+        }
+
+        body[data-theme="dark"] .tom-ab-variant-card {
+            background: rgba(92, 106, 196, 0.12);
+            border-color: rgba(124, 134, 220, 0.28);
+        }
+
+        body[data-theme="dark"] .tom-ab-variant-card h5 {
+            color: #e8eaf8;
+        }
+
+        body[data-theme="dark"] .tom-ab-script-preview {
+            background: rgba(15, 18, 35, 0.6);
+            border-color: rgba(124, 134, 220, 0.22);
+        }
+
         body[data-theme="dark"] .activity-inline-help {
             border-color: rgba(124, 134, 220, 0.45);
             background: rgba(92, 106, 196, 0.18);
@@ -5731,11 +5830,18 @@ ${actionsRow}
                 (() => {
                     const ab = d.outboundAbTest;
                     if (!ab || typeof ab !== 'object') return '';
-                    return [
-                        ab.experimentName || '',
-                        JSON.stringify(ab.recentFeedVariantCounts || {}),
-                        (ab.summary?.variants || []).map((v) => `${v.variantName}:${v.totalLeads}:${v.convertedLeads}`).join(',')
-                    ].join('|');
+                    const varSig = (ab.summary?.variants || []).map((v) => {
+                        const t = v.tested || {};
+                        return [
+                            v.variantName,
+                            v.totalLeads,
+                            v.convertedLeads,
+                            t.voiceId || '',
+                            (t.openingLine || '').slice(0, 40),
+                            (t.scriptPreview || '').slice(0, 40)
+                        ].join(':');
+                    }).join(';');
+                    return [ab.experimentName || '', varSig].join('|');
                 })()
             ].join('|');
         }
@@ -7461,9 +7567,43 @@ ${actionsRow}
             if (!exp) {
                 root.innerHTML = `
                     <p class="tom-ab-test-meta" style="margin:0;">
-                        No outbound A/B experiment is set yet. When your workspace has <code>vapi.outboundAbExperiment</code> configured, this section shows each variant’s volume, conversions (when recorded as <code>converted</code> in the test ledger), and how many calls appear in the live feed.
+                        No outbound A/B experiment is set yet. When your workspace has <code>vapi.outboundAbExperiment</code> configured, this section shows <strong>what is being tested</strong> (voice, opening line, script per variant) and <strong>results</strong> from the test ledger plus the live feed.
                     </p>`;
                 return;
+            }
+
+            const cap = typeof ACTIVITY_FEED_DISPLAY_CAP === 'number' ? ACTIVITY_FEED_DISPLAY_CAP : 40;
+
+            let testedHtml = '';
+            if (variants.length) {
+                testedHtml = variants.map((v) => {
+                    const t = v.tested || {};
+                    const voiceHtml = t.voiceId
+                        ? `<code style="font-size:0.8em;">${escapeHtml(t.voiceId)}</code>`
+                        : '<span class="tom-ab-missing">Not overridden (assistant default)</span>';
+                    const openHtml = t.openingLine
+                        ? escapeHtml(t.openingLine)
+                        : '<span class="tom-ab-missing">Not set in variant config</span>';
+                    let scriptHtml = '<span class="tom-ab-missing">Not set in variant config</span>';
+                    if (t.scriptPreview) {
+                        const n = typeof t.scriptCharCount === 'number' ? t.scriptCharCount : 0;
+                        scriptHtml = `<div class="tom-ab-script-preview"><pre>${escapeHtml(t.scriptPreview)}</pre></div>
+                            <div class="tom-ab-test-meta">${formatNumber(n)} characters in full script</div>`;
+                    }
+                    return `<article class="tom-ab-variant-card">
+                        <h5>${escapeHtml(v.variantName)}</h5>
+                        <dl class="tom-ab-dl">
+                            <div><dt>Voice (ElevenLabs)</dt><dd>${voiceHtml}</dd></div>
+                            <div><dt>Opening line</dt><dd>${openHtml}</dd></div>
+                            <div><dt>Call script</dt><dd>${scriptHtml}</dd></div>
+                        </dl>
+                    </article>`;
+                }).join('');
+            } else {
+                const feedKeys = Object.keys(feedCounts);
+                testedHtml = feedKeys.length
+                    ? `<p class="tom-ab-test-meta">Variants appear in the live feed (${feedKeys.map((k) => `<strong>${escapeHtml(k)}</strong>`).join(', ')}) but there are no matching rows in <code>ab_test_experiments</code> yet — add variant configs to show exactly what is being tested.</p>`
+                    : `<p class="tom-ab-test-meta">Create at least two variants for experiment <strong>${escapeHtml(exp)}</strong> (via admin API or database). Each variant should set <code>voice</code>, <code>firstMessage</code>, and <code>script</code> in <code>variant_config</code>.</p>`;
             }
 
             let tableBody = '';
@@ -7490,29 +7630,39 @@ ${actionsRow}
                         <td>${formatNumber(feedCounts[k])}</td>
                     </tr>`).join('');
                 } else {
-                    tableBody = `<tr><td colspan="5" class="tom-ab-test-meta">No ledger rows yet for this experiment, and no tagged calls in the current feed. After the next dials, variants will appear here and on each activity row.</td></tr>`;
+                    tableBody = `<tr><td colspan="5" class="tom-ab-test-meta">No ledger or feed data yet. After outbound dials, leads and “In feed” fill in; conversions and rate appear when outcomes are recorded as <code>converted</code> in the test ledger.</td></tr>`;
                 }
             }
 
-            const cap = typeof ACTIVITY_FEED_DISPLAY_CAP === 'number' ? ACTIVITY_FEED_DISPLAY_CAP : 40;
             root.innerHTML = `
                 <p class="card-subtitle" style="margin-top:0;">
                     Active experiment: <strong>${escapeHtml(exp)}</strong>
-                    · <span class="tom-ab-test-meta">“Leads” = distinct numbers in the A/B ledger for that variant. “In feed” = calls in the newest <strong>${cap}</strong> activity rows.</span>
+                    <span class="tom-ab-test-meta"> · Leads are split by phone number (same person always sees the same variant). Results use the A/B ledger; “In feed” counts calls in the newest <strong>${cap}</strong> activity rows.</span>
                 </p>
-                <div class="tom-ab-test-table-wrap">
-                    <table class="tom-ab-test-table" aria-label="Outbound A B test variants">
-                        <thead>
-                            <tr>
-                                <th scope="col">Variant</th>
-                                <th scope="col">Leads (ledger)</th>
-                                <th scope="col">Converted</th>
-                                <th scope="col">Rate</th>
-                                <th scope="col">In feed</th>
-                            </tr>
-                        </thead>
-                        <tbody>${tableBody}</tbody>
-                    </table>
+                <div class="tom-ab-split">
+                    <div class="tom-ab-panel tom-ab-panel--tested" aria-labelledby="tom-ab-tested-heading">
+                        <h4 class="tom-ab-panel-title" id="tom-ab-tested-heading">What’s being tested</h4>
+                        <p class="tom-ab-test-meta" style="margin-top:0;">Outbound calls rotate these differences per variant (voice ID, first thing the assistant says, and the full system script).</p>
+                        ${testedHtml}
+                    </div>
+                    <div class="tom-ab-panel tom-ab-panel--results" aria-labelledby="tom-ab-results-heading">
+                        <h4 class="tom-ab-panel-title" id="tom-ab-results-heading">Results</h4>
+                        <p class="tom-ab-test-meta" style="margin-top:0;">Ledger = assignments + conversions recorded for this experiment. Rate = converted ÷ leads with any ledger row for that variant.</p>
+                        <div class="tom-ab-test-table-wrap">
+                            <table class="tom-ab-test-table" aria-label="Outbound A B test results">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Variant</th>
+                                        <th scope="col">Leads</th>
+                                        <th scope="col">Converted</th>
+                                        <th scope="col">Rate</th>
+                                        <th scope="col">In feed</th>
+                                    </tr>
+                                </thead>
+                                <tbody>${tableBody}</tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>`;
         }
 
