@@ -24395,7 +24395,9 @@ const DASHBOARD_SELF_SERVICE_VAPI_AB_KEYS = new Set([
   'outboundAbOpeningExperiment',
   'outboundAbScriptExperiment',
   'outboundAbExperiment',
-  'outboundAbFocusDimension'
+  'outboundAbFocusDimension',
+  'outboundAbMinSamplesPerVariant',
+  'outboundAbSampleReadyEmail'
 ]);
 
 function isVapiOutboundAbExperimentOnlyPatch(body) {

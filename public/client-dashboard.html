@@ -5142,6 +5142,43 @@
                             <p id="tomAbFocusMsg" class="tom-ab-test-meta tom-ab-focus-msg" role="status"></p>
                         </div>
 
+                        <details class="tom-ab-dim-block tom-ab-notify-block">
+                            <summary class="tom-ab-dim-summary">Sample-ready email (no auto winner)</summary>
+                            <div class="tom-ab-dim-inner">
+                                <p class="tom-ab-test-meta" style="margin:0;">
+                                    When the dimension <strong>live on dials</strong> has at least <strong>N distinct leads per variant</strong>, you get <strong>one email</strong> with a results table. Nothing is chosen for you — you update the control in the dashboard when you decide.
+                                </p>
+                                <label class="tom-ab-field">Alert email
+                                    <input
+                                        type="email"
+                                        id="tomAbSampleReadyEmail"
+                                        class="tom-ab-input"
+                                        autocomplete="email"
+                                        placeholder="you@yourcompany.com"
+                                    />
+                                </label>
+                                <label class="tom-ab-field">Min leads per variant
+                                    <input
+                                        type="number"
+                                        id="tomAbMinSamplesPerVariant"
+                                        class="tom-ab-input"
+                                        min="2"
+                                        step="1"
+                                        placeholder="30"
+                                    />
+                                </label>
+                                <p class="tom-ab-test-meta" style="margin:0;">
+                                    You can also set <code>OUTBOUND_AB_SAMPLE_READY_EMAIL</code> and <code>OUTBOUND_AB_MIN_SAMPLES_PER_VARIANT</code> on the server.
+                                </p>
+                                <div class="tom-ab-setup-actions">
+                                    <button type="button" id="tomAbNotifySettingsBtn" class="export-btn secondary">
+                                        Save alert settings
+                                    </button>
+                                </div>
+                                <p id="tomAbNotifySettingsMsg" class="tom-ab-test-meta" role="status" style="margin:8px 0 0 0;"></p>
+                            </div>
+                        </details>
+
                         <details class="tom-ab-dim-block tom-ab-quick-block">
                             <summary class="tom-ab-dim-summary">Quick create — paste or upload JSON</summary>
                             <div class="tom-ab-dim-inner">
@@ -6200,6 +6237,8 @@ ${actionsRow}
         
         let currentClient = null;
         let dashboardData = createEmptyDashboardData();
+        /** Latest `vapi` from GET /api/clients/:key (Tom self-service A/B notify fields). */
+        let tomAbClientVapiSnapshot = null;
         let currentLeads = [];
         /** Full recent-leads array from API (search filters a view; modal uses indices into this). */
         let recentLeadsAllRows = [];
@@ -8093,6 +8132,69 @@ ${actionsRow}
             }
             updateTomAbSetupStatusLine();
             syncTomAbQuickDimFromSegment();
+            prefillTomAbNotifySettings();
+        }
+
+        function prefillTomAbNotifySettings() {
+            if (!isTomOutreachDashboard(currentClient)) return;
+            const v = tomAbClientVapiSnapshot;
+            const em = document.getElementById('tomAbSampleReadyEmail');
+            const mn = document.getElementById('tomAbMinSamplesPerVariant');
+            if (!em || !mn) return;
+            if (v && v.outboundAbSampleReadyEmail != null && String(v.outboundAbSampleReadyEmail).trim()) {
+                em.value = String(v.outboundAbSampleReadyEmail).trim();
+            }
+            if (v && v.outboundAbMinSamplesPerVariant != null && String(v.outboundAbMinSamplesPerVariant).trim()) {
+                mn.value = String(v.outboundAbMinSamplesPerVariant).trim();
+            }
+        }
+
+        async function saveTomAbNotifySettings() {
+            const msg = document.getElementById('tomAbNotifySettingsMsg');
+            const em = document.getElementById('tomAbSampleReadyEmail');
+            const mn = document.getElementById('tomAbMinSamplesPerVariant');
+            const email = em && em.value.trim();
+            const minStr = mn && mn.value.trim();
+            if (msg) msg.textContent = '';
+            if (!email) {
+                if (msg) msg.textContent = 'Enter an alert email (or configure OUTBOUND_AB_SAMPLE_READY_EMAIL on the server).';
+                return;
+            }
+            if (!minStr) {
+                if (msg) msg.textContent = 'Enter min leads per variant (e.g. 30).';
+                return;
+            }
+            const minN = parseInt(minStr, 10);
+            if (!Number.isFinite(minN) || minN < 2) {
+                if (msg) msg.textContent = 'Min leads must be at least 2.';
+                return;
+            }
+            const btn = document.getElementById('tomAbNotifySettingsBtn');
+            if (btn) btn.disabled = true;
+            try {
+                const res = await fetch(`${BASE_URL}/api/clients/${encodeURIComponent(currentClient)}/config`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        vapi: {
+                            outboundAbSampleReadyEmail: email,
+                            outboundAbMinSamplesPerVariant: String(minN)
+                        }
+                    })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
+                tomAbClientVapiSnapshot = {
+                    ...(tomAbClientVapiSnapshot && typeof tomAbClientVapiSnapshot === 'object' ? tomAbClientVapiSnapshot : {}),
+                    outboundAbSampleReadyEmail: email,
+                    outboundAbMinSamplesPerVariant: String(minN)
+                };
+                if (msg) msg.textContent = 'Saved.';
+            } catch (err) {
+                if (msg) msg.textContent = err.message || 'Save failed';
+            } finally {
+                if (btn) btn.disabled = false;
+            }
         }
 
         function syncTomAbQuickDimFromSegment() {
@@ -8317,6 +8419,11 @@ Aliases: voiceIds / voice, openingLines / openers / opening, scripts / scriptBod
             if (qbtn && qbtn.dataset.bound !== '1') {
                 qbtn.dataset.bound = '1';
                 qbtn.addEventListener('click', () => tomAbQuickSubmit());
+            }
+            const nbtn = document.getElementById('tomAbNotifySettingsBtn');
+            if (nbtn && nbtn.dataset.bound !== '1') {
+                nbtn.dataset.bound = '1';
+                nbtn.addEventListener('click', () => saveTomAbNotifySettings());
             }
             syncTomAbQuickDimFromSegment();
         }
@@ -11612,6 +11719,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             applyTomOutreachDashboardMode(currentClient);
             initTomAbTestSetupPanel();
             initTomAbBundleAdvanceDelegation();
+            tomAbClientVapiSnapshot = null;
 
             // Fetch client config from API if not demo
             let clientConfig = null;
@@ -11627,6 +11735,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         
                         if (data.ok && data.client) {
                             clientConfig = data.client;
+                            tomAbClientVapiSnapshot =
+                                clientConfig.vapi && typeof clientConfig.vapi === 'object'
+                                    ? clientConfig.vapi
+                                    : null;
                             console.log('[DASHBOARD] Loaded client config:', {
                                 name: clientConfig.name || clientConfig.displayName,
                                 description: clientConfig.description,
