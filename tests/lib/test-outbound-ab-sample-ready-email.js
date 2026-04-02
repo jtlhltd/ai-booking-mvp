@@ -45,27 +45,51 @@ test('parseMinSamplesPerVariant: vapi and default', () => {
   assert.equal(parseMinSamplesPerVariant({}), 30);
 });
 
-test('resolveSampleReadyNotifyEmail: env wins over vapi', () => {
-  const prev = process.env.OUTBOUND_AB_SAMPLE_READY_EMAIL;
+test('resolveSampleReadyNotifyEmail: OUTBOUND_AB wins over YOUR_EMAIL and vapi', () => {
+  const prevAb = process.env.OUTBOUND_AB_SAMPLE_READY_EMAIL;
+  const prevYour = process.env.YOUR_EMAIL;
   process.env.OUTBOUND_AB_SAMPLE_READY_EMAIL = 'ops@render.com';
+  process.env.YOUR_EMAIL = 'other@render.com';
   try {
     assert.equal(
       resolveSampleReadyNotifyEmail({ outboundAbSampleReadyEmail: 'tenant@x.com' }),
       'ops@render.com'
     );
   } finally {
-    if (prev === undefined) delete process.env.OUTBOUND_AB_SAMPLE_READY_EMAIL;
-    else process.env.OUTBOUND_AB_SAMPLE_READY_EMAIL = prev;
+    if (prevAb === undefined) delete process.env.OUTBOUND_AB_SAMPLE_READY_EMAIL;
+    else process.env.OUTBOUND_AB_SAMPLE_READY_EMAIL = prevAb;
+    if (prevYour === undefined) delete process.env.YOUR_EMAIL;
+    else process.env.YOUR_EMAIL = prevYour;
   }
 });
 
 test('resolveSampleReadyNotifyEmail: vapi fallback when env unset', () => {
-  const prev = process.env.OUTBOUND_AB_SAMPLE_READY_EMAIL;
+  const prevAb = process.env.OUTBOUND_AB_SAMPLE_READY_EMAIL;
+  const prevYour = process.env.YOUR_EMAIL;
   delete process.env.OUTBOUND_AB_SAMPLE_READY_EMAIL;
+  delete process.env.YOUR_EMAIL;
   try {
     assert.equal(resolveSampleReadyNotifyEmail({ outboundAbSampleReadyEmail: 'a@b.c' }), 'a@b.c');
   } finally {
-    if (prev !== undefined) process.env.OUTBOUND_AB_SAMPLE_READY_EMAIL = prev;
+    if (prevAb !== undefined) process.env.OUTBOUND_AB_SAMPLE_READY_EMAIL = prevAb;
+    else delete process.env.OUTBOUND_AB_SAMPLE_READY_EMAIL;
+    if (prevYour !== undefined) process.env.YOUR_EMAIL = prevYour;
+    else delete process.env.YOUR_EMAIL;
+  }
+});
+
+test('resolveSampleReadyNotifyEmail: YOUR_EMAIL when OUTBOUND unset', () => {
+  const prevAb = process.env.OUTBOUND_AB_SAMPLE_READY_EMAIL;
+  const prevYour = process.env.YOUR_EMAIL;
+  delete process.env.OUTBOUND_AB_SAMPLE_READY_EMAIL;
+  process.env.YOUR_EMAIL = 'me@render.app';
+  try {
+    assert.equal(resolveSampleReadyNotifyEmail({ outboundAbSampleReadyEmail: 'tenant@x.com' }), 'me@render.app');
+  } finally {
+    if (prevAb !== undefined) process.env.OUTBOUND_AB_SAMPLE_READY_EMAIL = prevAb;
+    else delete process.env.OUTBOUND_AB_SAMPLE_READY_EMAIL;
+    if (prevYour !== undefined) process.env.YOUR_EMAIL = prevYour;
+    else delete process.env.YOUR_EMAIL;
   }
 });
 
