@@ -9460,6 +9460,28 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       }
     }
 
+    const { resolveOutboundAbDimensionsForDial, outboundAbDialWarning } = await import(
+      './lib/outbound-ab-focus.js'
+    );
+    const focusStored = trimAbExp(client?.vapi?.outboundAbFocusDimension);
+    const focusNorm = focusStored.toLowerCase();
+    const focusValid = ['voice', 'opening', 'script'].includes(focusNorm) ? focusNorm : '';
+    const dialPairs = resolveOutboundAbDimensionsForDial({
+      voiceExp: voiceExpName,
+      openingExp: openingExpName,
+      scriptExp: scriptExpName,
+      focusDimension: focusValid
+    });
+    const dialActiveDimensions = dialPairs.map((p) => p[0]);
+    const dialWarning = dimensionalMode
+      ? outboundAbDialWarning({
+          voiceExp: voiceExpName,
+          openingExp: openingExpName,
+          scriptExp: scriptExpName,
+          focusDimension: focusValid
+        })
+      : null;
+
     const recentFeedVariantCounts = {};
     const recentFeedAbByDimension = { voice: {}, opening: {}, script: {} };
     for (const c of recentCalls) {
@@ -9507,7 +9529,10 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         experimentNameSource: dimensionalMode ? null : legacyOutboundAbExperimentSource,
         summary: dimensionalMode ? null : legacyOutboundAbSummary,
         recentFeedVariantCounts,
-        recentFeedAbByDimension
+        recentFeedAbByDimension,
+        focusDimension: focusStored || null,
+        dialActiveDimensions,
+        dialWarning
       },
       metrics: {
         totalLeads,
@@ -24359,7 +24384,8 @@ const DASHBOARD_SELF_SERVICE_VAPI_AB_KEYS = new Set([
   'outboundAbVoiceExperiment',
   'outboundAbOpeningExperiment',
   'outboundAbScriptExperiment',
-  'outboundAbExperiment'
+  'outboundAbExperiment',
+  'outboundAbFocusDimension'
 ]);
 
 function isVapiOutboundAbExperimentOnlyPatch(body) {
@@ -24481,13 +24507,16 @@ app.post('/api/clients/:clientKey/outbound-ab-test', async (req, res) => {
     });
     const vapiKey = OUTBOUND_AB_VAPI_KEYS[dimRaw];
     const { updateClientConfig } = await import('./lib/client-onboarding.js');
-    await updateClientConfig(clientKey, { vapi: { [vapiKey]: nameTrim } });
+    await updateClientConfig(clientKey, {
+      vapi: { [vapiKey]: nameTrim, outboundAbFocusDimension: dimRaw }
+    });
     res.json({
       ok: true,
       experimentName: nameTrim,
       dimension: dimRaw,
       vapiKey,
-      variantCount: mapped.length
+      variantCount: mapped.length,
+      outboundAbFocusDimension: dimRaw
     });
   } catch (error) {
     console.error('[OUTBOUND AB TEST SETUP ERROR]', error);

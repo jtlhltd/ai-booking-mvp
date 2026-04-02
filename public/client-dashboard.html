@@ -1100,6 +1100,46 @@
             border-top: 1px solid var(--border, #e8eaf5);
         }
 
+        .tom-ab-focus-fieldset {
+            border: 1px solid var(--border, #e8eaf5);
+            border-radius: 10px;
+            padding: 12px 14px 14px;
+            margin: 14px 0 18px;
+            background: rgba(92, 106, 196, 0.06);
+        }
+
+        .tom-ab-focus-legend {
+            font-weight: 700;
+            font-size: 0.9375rem;
+            padding: 0 6px;
+        }
+
+        .tom-ab-focus-radios {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px 20px;
+        }
+
+        .tom-ab-radio-label {
+            font-size: 0.9rem;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .tom-ab-live-pill {
+            display: inline-block;
+            margin-left: 8px;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            vertical-align: middle;
+            background: rgba(34, 139, 87, 0.15);
+            color: #1d6f45;
+        }
+
         @media (max-width: 960px) {
             .tom-ab-split {
                 grid-template-columns: 1fr;
@@ -4963,14 +5003,27 @@
         <section class="dashboard-section tom-ab-test-section" aria-label="A B tests outbound">
             <article class="card card-fullwidth">
                 <h3>🧪 A/B tests (outbound)</h3>
-                <p class="card-subtitle">Three independent tests: voice IDs, opening lines, or call scripts. Each uses its own experiment name and variant pair; calls merge the winning slice per dimension.</p>
+                <p class="card-subtitle">Voice, opening line, and script can each have an experiment configured, but <strong>only one dimension is applied per dial</strong> until you switch the active dimension — so you are not changing voice, opener, and script at once.</p>
                 <div id="tomAbTestSectionRoot" class="tom-ab-test-section-root"></div>
                 <details id="tomAbTestSetupDetails" class="tom-ab-setup-details">
                     <summary class="tom-ab-setup-summary">Configure experiments on this dashboard</summary>
                     <div class="tom-ab-setup-inner tom-ab-setup-inner--dims">
                         <p class="tom-ab-test-meta" style="margin:0;">
-                            Save each dimension separately. Full save deactivates old rows for that experiment name, creates two variants, and sets the matching <code>vapi</code> key (<code>outboundAbVoiceExperiment</code>, <code>outboundAbOpeningExperiment</code>, or <code>outboundAbScriptExperiment</code>). Legacy combined tests still use <code>outboundAbExperiment</code> when no dimensional keys are set.
+                            Save each dimension separately. Saving an experiment also sets it as the <strong>active dimension for dials</strong>. If several dimensions have experiment names, choose which one is live below until that test is done, then switch.
                         </p>
+                        <fieldset class="tom-ab-focus-fieldset" aria-label="Active A B dimension for outbound dials">
+                            <legend class="tom-ab-focus-legend">Active dimension for dials</legend>
+                            <p class="tom-ab-test-meta" style="margin:0 0 8px 0;">Only this slice varies on calls; the others use your assistant defaults.</p>
+                            <div class="tom-ab-focus-radios">
+                                <label class="tom-ab-radio-label"><input type="radio" name="tomAbFocusDim" value="voice" id="tomAbFocusVoice" /> Voice</label>
+                                <label class="tom-ab-radio-label"><input type="radio" name="tomAbFocusDim" value="opening" id="tomAbFocusOpening" /> Opening line</label>
+                                <label class="tom-ab-radio-label"><input type="radio" name="tomAbFocusDim" value="script" id="tomAbFocusScript" /> Script</label>
+                            </div>
+                            <div class="tom-ab-setup-actions" style="margin-top:10px;">
+                                <button type="button" id="tomAbFocusSaveBtn" class="export-btn secondary">Save active dimension</button>
+                            </div>
+                            <p id="tomAbFocusMsg" class="tom-ab-test-meta" role="status" style="margin:8px 0 0 0;"></p>
+                        </fieldset>
 
                         <details class="tom-ab-dim-block" open>
                             <summary class="tom-ab-dim-summary">Voice only (ElevenLabs ID)</summary>
@@ -6122,7 +6175,16 @@ ${actionsRow}
                         slotSig('script'),
                         leg.experimentName || '',
                         leg.experimentNameSource || '',
-                        legVar
+                        legVar,
+                        (() => {
+                            const ab = d.outboundAbTest;
+                            if (!ab || typeof ab !== 'object') return '';
+                            return [
+                                ab.focusDimension || '',
+                                (ab.dialActiveDimensions || []).join(','),
+                                (ab.dialWarning || '').slice(0, 120)
+                            ].join('|');
+                        })()
                     ].join('~');
                 })()
             ].join('|');
@@ -7869,6 +7931,14 @@ ${actionsRow}
             prefillVoice('voice', 'tomAbVoice');
             prefillVoice('opening', 'tomAbOpen');
             prefillVoice('script', 'tomAbScript');
+
+            const fv = ab.focusDimension != null ? String(ab.focusDimension).trim().toLowerCase() : '';
+            ['voice', 'opening', 'script'].forEach((d) => {
+                const el = document.getElementById(
+                    d === 'voice' ? 'tomAbFocusVoice' : d === 'opening' ? 'tomAbFocusOpening' : 'tomAbFocusScript'
+                );
+                if (el) el.checked = fv === d;
+            });
         }
 
         function initTomAbTestSetupPanel() {
@@ -7886,6 +7956,49 @@ ${actionsRow}
             bind('tomAbOpenSaveNameBtn', 'opening', 'nameOnly');
             bind('tomAbScriptSaveFullBtn', 'script', 'full');
             bind('tomAbScriptSaveNameBtn', 'script', 'nameOnly');
+            const focusBtn = document.getElementById('tomAbFocusSaveBtn');
+            if (focusBtn && focusBtn.dataset.bound !== '1') {
+                focusBtn.dataset.bound = '1';
+                focusBtn.addEventListener('click', () => saveTomOutboundAbFocus());
+            }
+        }
+
+        async function saveTomOutboundAbFocus() {
+            const msg = document.getElementById('tomAbFocusMsg');
+            const picked =
+                (document.getElementById('tomAbFocusVoice') && document.getElementById('tomAbFocusVoice').checked && 'voice') ||
+                (document.getElementById('tomAbFocusOpening') && document.getElementById('tomAbFocusOpening').checked && 'opening') ||
+                (document.getElementById('tomAbFocusScript') && document.getElementById('tomAbFocusScript').checked && 'script') ||
+                '';
+            if (!picked) {
+                if (msg) msg.textContent = 'Select voice, opening line, or script.';
+                return;
+            }
+            if (msg) msg.textContent = '';
+            try {
+                const res = await fetch(`${BASE_URL}/api/clients/${encodeURIComponent(currentClient)}/config`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ vapi: { outboundAbFocusDimension: picked } })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
+                if (msg) msg.textContent = 'Saved. Refreshing…';
+                const livePayload = await fetchLiveData(currentClient);
+                if (livePayload) {
+                    dashboardData = mergeData({}, livePayload, false);
+                    updateStatusBar(dashboardData);
+                    renderRecentActivity(dashboardData);
+                    renderLeadJourney(dashboardData);
+                    renderLeads(dashboardData.recentLeads || []);
+                    renderCalls(dashboardData.recentCalls || []);
+                    renderTomAbTestSection(dashboardData);
+                }
+                prefillTomAbTestFormFromData();
+                if (msg) msg.textContent = 'Saved.';
+            } catch (err) {
+                if (msg) msg.textContent = err.message || 'Save failed';
+            }
         }
 
         async function saveTomOutboundAbDim(dimension, mode) {
@@ -7905,7 +8018,9 @@ ${actionsRow}
                     const res = await fetch(`${BASE_URL}/api/clients/${encodeURIComponent(currentClient)}/config`, {
                         method: 'PATCH',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ vapi: { [vapiKey]: expName } })
+                        body: JSON.stringify({
+                            vapi: { [vapiKey]: expName, outboundAbFocusDimension: dimension }
+                        })
                     });
                     const data = await res.json().catch(() => ({}));
                     if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
@@ -8003,7 +8118,7 @@ ${actionsRow}
             }
         }
 
-        function renderTomAbDimBlock(dimKey, title, testedRowLabel, slot, feedCounts, cap) {
+        function renderTomAbDimBlock(dimKey, title, testedRowLabel, slot, feedCounts, cap, isLiveOnDials) {
             const exp = slot && slot.experimentName ? String(slot.experimentName).trim() : '';
             const summary = slot && slot.summary;
             const variants =
@@ -8083,10 +8198,13 @@ ${actionsRow}
             }
 
             const headingId = `tom-ab-dim-${dimKey}-h`;
+            const livePill = isLiveOnDials
+                ? ' <span class="tom-ab-live-pill">Live on dials</span>'
+                : '';
             return `
                 <section class="tom-ab-dim-results" aria-labelledby="${headingId}">
                     ${inferredBanner}
-                    <h4 class="tom-ab-panel-title" id="${headingId}">${escapeHtml(title)}${exp ? ` · <span class="tom-ab-test-meta">${escapeHtml(exp)}</span>` : ''}</h4>
+                    <h4 class="tom-ab-panel-title" id="${headingId}">${escapeHtml(title)}${livePill}${exp ? ` · <span class="tom-ab-test-meta">${escapeHtml(exp)}</span>` : ''}</h4>
                     <p class="tom-ab-test-meta" style="margin-top:0;">Same lead always gets the same variant per experiment (hash of phone). “In feed” = newest <strong>${cap}</strong> activity rows for this slice.</p>
                     <div class="tom-ab-split">
                         <div class="tom-ab-panel tom-ab-panel--tested">
@@ -8144,15 +8262,20 @@ ${actionsRow}
                 return;
             }
 
+            const liveSet = new Set(ab.dialActiveDimensions || []);
             let html = '';
             if (hasDim) {
+                if (ab.dialWarning) {
+                    html += `<div class="tom-ab-inferred-banner" role="alert">${escapeHtml(ab.dialWarning)}</div>`;
+                }
                 html += renderTomAbDimBlock(
                     'voice',
                     'Voice A/B',
                     'voice IDs only',
                     voiceSlot,
                     byDim.voice,
-                    cap
+                    cap,
+                    liveSet.has('voice')
                 );
                 html += renderTomAbDimBlock(
                     'opening',
@@ -8160,7 +8283,8 @@ ${actionsRow}
                     'opening lines only',
                     openingSlot,
                     byDim.opening,
-                    cap
+                    cap,
+                    liveSet.has('opening')
                 );
                 html += renderTomAbDimBlock(
                     'script',
@@ -8168,7 +8292,8 @@ ${actionsRow}
                     'scripts only',
                     scriptSlot,
                     byDim.script,
-                    cap
+                    cap,
+                    liveSet.has('script')
                 );
             }
 
