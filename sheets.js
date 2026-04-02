@@ -394,6 +394,48 @@ export async function updateLogisticsStatusByRow(spreadsheetId, rowNumber, { cal
   }
 }
 
+/** Patch one logistics row by row index (1-based), updating specified headers. */
+export async function patchLogisticsRowByNumber(spreadsheetId, rowNumber, patch = {}) {
+  const s = await getClient();
+  if (!rowNumber || rowNumber < 2) {
+    console.warn('[PATCH LOGISTICS ROW] Invalid rowNumber:', rowNumber);
+    return false;
+  }
+  const entries = Object.entries(patch || {}).filter(([k]) => String(k || '').trim() !== '');
+  if (!entries.length) return true;
+
+  try {
+    const range = `Sheet1!A${rowNumber}:V${rowNumber}`;
+    const current = await s.spreadsheets.values.get({ spreadsheetId, range });
+    const row = (current.data.values && current.data.values[0]) ? [...current.data.values[0]] : [];
+    while (row.length < LOGISTICS_HEADERS.length) row.push('');
+
+    const headerMap = Object.fromEntries(LOGISTICS_HEADERS.map((h, i) => [h, i]));
+    let touched = 0;
+    for (const [kRaw, vRaw] of entries) {
+      const k = String(kRaw || '').trim();
+      const idx = headerMap[k];
+      if (idx === undefined) continue;
+      const v = vRaw === null || vRaw === undefined ? '' : String(vRaw);
+      row[idx] = v;
+      touched++;
+    }
+    if (!touched) return false;
+
+    await s.spreadsheets.values.update({
+      spreadsheetId,
+      range,
+      valueInputOption: 'RAW',
+      requestBody: { values: [row] }
+    });
+    console.log('[PATCH LOGISTICS ROW] Updated row', rowNumber, 'fields =', touched);
+    return true;
+  } catch (error) {
+    console.error('[PATCH LOGISTICS ROW ERROR]', error);
+    return false;
+  }
+}
+
 /** Update Called? (stored in "Callback Needed") by searching sheet for callId/phone. */
 export async function updateLogisticsCalledFlag(spreadsheetId, { callId = '', phone = '', called }) {
   const s = await getClient();

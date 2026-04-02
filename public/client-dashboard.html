@@ -7915,6 +7915,18 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
         function formatFollowUpCell(col, val, row = null, extra = null) {
             const v = String(val || '').trim();
+            if (FOLLOW_UP_EDITABLE_COLUMNS && FOLLOW_UP_EDITABLE_COLUMNS.has(col)) {
+                const key = row ? followUpRowKey(row) : '';
+                const label = v || '—';
+                const canEdit = row && typeof row._row === 'number' && key;
+                const copyBtn = (col === 'Email' && v)
+                    ? `<button type="button" class="follow-up-copy-btn" data-fu-copy="${escapeHtml(v)}" aria-label="Copy email">Copy</button>`
+                    : '';
+                const editBtn = canEdit
+                    ? `<button type="button" class="follow-up-copy-btn" data-fu-edit="1" data-fu-edit-col="${escapeHtml(col)}" aria-label="Edit ${escapeHtml(col)}">Edit</button>`
+                    : '';
+                return `<div class="fu-edit-cell"><span class="fu-edit-text" title="${escapeHtml(label)}">${escapeHtml(label)}</span>${copyBtn}${editBtn}</div>`;
+            }
             if (col === 'Recording URI' && /^https?:\/\//i.test(v)) {
                 return `<a href="${escapeHtml(v)}" target="_blank" rel="noopener noreferrer">Open</a>`;
             }
@@ -7946,6 +7958,80 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             return escapeHtml(v || '—');
         }
 
+        const FOLLOW_UP_EDITABLE_COLUMNS = new Set(['Business Name', 'Decision Maker', 'Receptionist Name', 'Email']);
+        let followUpEditing = false;
+
+        function followUpBeginEditCell(td, colName, rowKey) {
+            if (!td || !FOLLOW_UP_EDITABLE_COLUMNS.has(colName)) return;
+            if (td.dataset.fuEditing === '1') return;
+            const tr = td.closest('tr');
+            const key = rowKey || (tr && tr.getAttribute('data-fu-key')) || '';
+            if (!key) return;
+
+            const row = followUpQueueState.rawRows.find((r) => followUpRowKey(r) === key);
+            if (!row || typeof row._row !== 'number') return;
+
+            const initial = String(row[colName] || '').trim();
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = initial;
+            input.className = 'dashboard-list-search';
+            input.style.maxWidth = '100%';
+            input.style.width = '100%';
+            input.setAttribute('aria-label', `Edit ${colName}`);
+
+            td.dataset.fuEditing = '1';
+            td.innerHTML = '';
+            td.appendChild(input);
+            followUpEditing = true;
+
+            const finish = async (commit) => {
+                if (!td || td.dataset.fuEditing !== '1') return;
+                td.dataset.fuEditing = '0';
+                followUpEditing = false;
+                const nextVal = String(input.value || '').trim();
+                if (!commit || nextVal === initial) {
+                    const wrapEl = document.getElementById('follow-up-queue');
+                    if (wrapEl) followUpPaintTable(wrapEl);
+                    return;
+                }
+
+                // Optimistic update
+                followUpQueueState.rawRows = followUpQueueState.rawRows.map((r) => {
+                    if (followUpRowKey(r) !== key) return r;
+                    return { ...r, [colName]: nextVal };
+                });
+                const wrapEl = document.getElementById('follow-up-queue');
+                if (wrapEl) followUpPaintTable(wrapEl);
+
+                fetch(`${BASE_URL}/api/follow-up-queue/${encodeURIComponent(currentClient)}/patch`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ row: row._row, patch: { [colName]: nextVal } })
+                }).then(async (res) => {
+                    const payload = await res.json().catch(() => ({}));
+                    if (!res.ok || !payload?.ok) throw new Error(payload?.error || `HTTP ${res.status}`);
+                }).catch((err) => {
+                    console.warn('Failed to persist follow-up cell edit', err);
+                    showToast('Save failed', 'Could not save edit to sheet. Please try again.', 'error', 3500);
+                });
+            };
+
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    input.blur();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    finish(false);
+                }
+            });
+            input.addEventListener('blur', () => finish(true));
+            setTimeout(() => {
+                try { input.focus(); input.select(); } catch {}
+            }, 0);
+        }
+
         async function loadFollowUpQueue(clientKey, { page = followUpQueuePage } = {}) {
             const wrap = document.getElementById('follow-up-queue');
             const hint = document.getElementById('followUpQueueHint');
@@ -7965,6 +8051,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             followUpQueueState.offset = offset;
             followUpUpdatePagerUi();
             try {
+                const priorSortKey = followUpQueueState.sortKey;
+                const priorSortDir = followUpQueueState.sortDir;
                 const q = new URLSearchParams({ limit: String(limit), offset: String(offset) });
                 if (callback) q.set('callback', '1');
                 const res = await fetch(`${BASE_URL}/api/follow-up-queue/${encodeURIComponent(clientKey)}?${q}`, { cache: 'no-store' });
@@ -8021,8 +8109,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 followUpQueueState = {
                     rawRows: rows.slice(),
                     cols,
-                    sortKey: null,
-                    sortDir: 'desc',
+                    sortKey: cols.includes(priorSortKey) ? priorSortKey : null,
+                    sortDir: cols.includes(priorSortKey) ? (priorSortDir || 'desc') : 'desc',
                     total: data.total != null ? data.total : rows.length,
                     offset: data.offset != null ? data.offset : offset,
                     limit: data.limit != null ? data.limit : limit
@@ -8139,6 +8227,15 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         if (callId) viewTranscript(callId, nm);
                         return;
                     }
+                    const editBtn = e.target.closest('[data-fu-edit]');
+                    if (editBtn) {
+                        const td = editBtn.closest('td');
+                        const colName = editBtn.getAttribute('data-fu-edit-col') || '';
+                        const tr = editBtn.closest('tr');
+                        const key = tr && tr.getAttribute('data-fu-key');
+                        if (td && colName && key) followUpBeginEditCell(td, colName, key);
+                        return;
+                    }
                     const calledCb = e.target.closest('[data-fu-called]');
                     if (calledCb) {
                         const tr = calledCb.closest('tr');
@@ -8210,6 +8307,18 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     followUpPaintTable(wrap);
                 });
             }
+            startFollowUpAutoRefresh();
+        }
+
+        let followUpAutoRefreshTimer = null;
+        function startFollowUpAutoRefresh() {
+            if (followUpAutoRefreshTimer) return;
+            followUpAutoRefreshTimer = setInterval(() => {
+                if (!currentClient) return;
+                if (document.visibilityState !== 'visible') return;
+                if (followUpEditing) return;
+                loadFollowUpQueue(currentClient, { page: followUpQueuePage });
+            }, 45000);
         }
 
         async function viewLeadTimeline(leadId, name) {

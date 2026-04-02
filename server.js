@@ -11497,6 +11497,36 @@ app.post('/api/follow-up-queue/:clientKey/status', async (req, res) => {
   }
 });
 
+// Patch one follow-up row in the logistics sheet (arbitrary columns by header name)
+app.post('/api/follow-up-queue/:clientKey/patch', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const { row, patch } = req.body || {};
+    const rowNumber = parseInt(row, 10);
+    if (!Number.isFinite(rowNumber) || rowNumber < 2) {
+      return res.status(400).json({ ok: false, error: 'invalid_row' });
+    }
+    if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+      return res.status(400).json({ ok: false, error: 'invalid_patch' });
+    }
+
+    const client = await getFullClient(clientKey);
+    const spreadsheetId = resolveLogisticsSpreadsheetId(client);
+    if (!spreadsheetId) {
+      return res.status(400).json({ ok: false, error: 'sheet_not_configured' });
+    }
+
+    const ok = await sheets.patchLogisticsRowByNumber(spreadsheetId, rowNumber, patch);
+    if (!ok) {
+      return res.status(502).json({ ok: false, error: 'update_failed' });
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('[FOLLOW-UP PATCH ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message || String(error) });
+  }
+});
+
 // API endpoint for next actions queue
 app.get('/api/next-actions/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix: 'next-actions:' }), async (req, res) => {
   try {
