@@ -7709,7 +7709,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const computedAt = payload.computed_at || payload.computedAt || null;
                 const sampleSize = insights.sampleSize || summary.attempts || 0;
                 if (metaEl) {
-                    metaEl.textContent = `${formatNumber(sampleSize)} calls analysed${computedAt ? ` · updated ${timeAgo(computedAt)}` : ''}`;
+                    metaEl.textContent = `${formatNumber(sampleSize)} calls analysed${computedAt ? ` · updated ${formatTimeAgo(computedAt)}` : ''}`;
                 }
 
                 const bestHoursLabel = bestHours.length
