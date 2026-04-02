@@ -2813,13 +2813,23 @@
             white-space: normal;
         }
 
+        .follow-up-queue-table td .fu-pencil-btn {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .follow-up-queue-table td:hover .fu-pencil-btn,
+        .follow-up-queue-table td:focus-within .fu-pencil-btn {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
         .follow-up-queue-table .fu-pencil-btn {
-            margin-left: 6px;
+            margin-left: 4px;
             border: 1px solid rgba(17, 24, 39, 0.12);
             background: rgba(255, 255, 255, 0.7);
             color: #334155;
             border-radius: 8px;
-            padding: 3px 7px;
+            padding: 2px 6px;
             font-size: 12px;
             line-height: 1;
             cursor: pointer;
@@ -2842,6 +2852,7 @@
             align-items: center;
             gap: 6px;
             min-width: 0;
+            flex-wrap: nowrap;
         }
 
         .follow-up-queue-table .fu-phone-cell {
@@ -4470,7 +4481,7 @@
                 <div class="dashboard-list-toolbar follow-up-queue-toolbar">
                     <button type="button" id="followUpQueueRefresh" class="export-btn secondary">Refresh</button>
                     <div class="follow-up-status-filters" id="followUpStatusFilters" role="group" aria-label="Filter follow-up rows by status">
-                        <button type="button" class="follow-up-status-chip follow-up-status-chip--active" data-fu-status-filter="todo">Need calling</button>
+                        <button type="button" class="follow-up-status-chip follow-up-status-chip--active" data-fu-status-filter="todo">Need Calling</button>
                         <button type="button" class="follow-up-status-chip" data-fu-status-filter="called">Called</button>
                     </div>
                     <input type="search" id="followUpSearchInput" class="dashboard-list-search" placeholder="Search business, name, phone, notes…" autocomplete="off" enterkeyhint="search" style="max-width:260px;">
@@ -7940,8 +7951,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         }
 
         function followUpPhoneCellHtml(v, ariaLabel) {
-            return `<div class="fu-phone-cell"><span class="fu-phone-text">${escapeHtml(v)}</span>` +
-                `<button type="button" class="follow-up-copy-btn" data-fu-copy="${escapeHtml(v)}" aria-label="${escapeHtml(ariaLabel)}">Copy</button></div>`;
+            return `<span class="fu-phone-cell"><span class="fu-phone-text">${escapeHtml(v)}</span>` +
+                `<button type="button" class="follow-up-copy-btn" data-fu-copy="${escapeHtml(v)}" aria-label="${escapeHtml(ariaLabel)}">Copy</button></span>`;
         }
 
         function followUpPencilBtn(col, disabled = false) {
