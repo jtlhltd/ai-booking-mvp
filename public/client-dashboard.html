@@ -1090,6 +1090,16 @@
             margin-top: 12px;
         }
 
+        .tom-ab-dim-results {
+            margin-bottom: 1.75rem;
+        }
+
+        .tom-ab-legacy-block {
+            margin-top: 0.25rem;
+            padding-top: 1.25rem;
+            border-top: 1px solid var(--border, #e8eaf5);
+        }
+
         @media (max-width: 960px) {
             .tom-ab-split {
                 grid-template-columns: 1fr;
@@ -4953,58 +4963,128 @@
         <section class="dashboard-section tom-ab-test-section" aria-label="A B tests outbound">
             <article class="card card-fullwidth">
                 <h3>🧪 A/B tests (outbound)</h3>
-                <p class="card-subtitle">Voice, opening line, and script variants. Numbers update as calls are placed and outcomes are recorded.</p>
+                <p class="card-subtitle">Three independent tests: voice IDs, opening lines, or call scripts. Each uses its own experiment name and variant pair; calls merge the winning slice per dimension.</p>
                 <div id="tomAbTestSectionRoot" class="tom-ab-test-section-root"></div>
                 <details id="tomAbTestSetupDetails" class="tom-ab-setup-details">
-                    <summary class="tom-ab-setup-summary">Configure experiment on this dashboard</summary>
-                    <div class="tom-ab-setup-inner">
+                    <summary class="tom-ab-setup-summary">Configure experiments on this dashboard</summary>
+                    <div class="tom-ab-setup-inner tom-ab-setup-inner--dims">
                         <p class="tom-ab-test-meta" style="margin:0;">
-                            Saving the full experiment deactivates old rows for this experiment name, creates two variants, and sets <code>vapi.outboundAbExperiment</code>.
+                            Save each dimension separately. Full save deactivates old rows for that experiment name, creates two variants, and sets the matching <code>vapi</code> key (<code>outboundAbVoiceExperiment</code>, <code>outboundAbOpeningExperiment</code>, or <code>outboundAbScriptExperiment</code>). Legacy combined tests still use <code>outboundAbExperiment</code> when no dimensional keys are set.
                         </p>
-                        <label class="tom-ab-field">Experiment name
-                            <input type="text" id="tomAbExpName" class="tom-ab-input" placeholder="e.g. tom_outbound_v1" />
-                        </label>
-                        <label class="tom-ab-replace-row">
-                            <input type="checkbox" id="tomAbReplaceExisting" checked />
-                            <span>Replace existing variants for this experiment name</span>
-                        </label>
-                        <div class="tom-ab-variant-grid">
-                            <fieldset class="tom-ab-variant-fieldset">
-                                <legend>Variant A</legend>
-                                <label>Name
-                                    <input type="text" id="tomAbV0Name" class="tom-ab-input" value="control" />
+
+                        <details class="tom-ab-dim-block" open>
+                            <summary class="tom-ab-dim-summary">Voice only (ElevenLabs ID)</summary>
+                            <div class="tom-ab-dim-inner">
+                                <label class="tom-ab-field">Experiment name
+                                    <input type="text" id="tomAbVoiceExpName" class="tom-ab-input" placeholder="e.g. tom_voice_v1" />
                                 </label>
-                                <label>Voice ID (ElevenLabs)
-                                    <input type="text" id="tomAbV0Voice" class="tom-ab-input" placeholder="Optional — uses assistant default if empty" />
+                                <label class="tom-ab-replace-row">
+                                    <input type="checkbox" id="tomAbVoiceReplaceExisting" checked />
+                                    <span>Replace existing variants for this experiment name</span>
                                 </label>
-                                <label>Opening line
-                                    <textarea id="tomAbV0Open" class="tom-ab-textarea" rows="2" placeholder="First thing the assistant says"></textarea>
+                                <div class="tom-ab-variant-grid">
+                                    <fieldset class="tom-ab-variant-fieldset">
+                                        <legend>Variant A</legend>
+                                        <label>Name
+                                            <input type="text" id="tomAbVoiceV0Name" class="tom-ab-input" value="control" />
+                                        </label>
+                                        <label>Voice ID
+                                            <input type="text" id="tomAbVoiceV0Voice" class="tom-ab-input" placeholder="ElevenLabs voice id" />
+                                        </label>
+                                    </fieldset>
+                                    <fieldset class="tom-ab-variant-fieldset">
+                                        <legend>Variant B</legend>
+                                        <label>Name
+                                            <input type="text" id="tomAbVoiceV1Name" class="tom-ab-input" value="variant_b" />
+                                        </label>
+                                        <label>Voice ID
+                                            <input type="text" id="tomAbVoiceV1Voice" class="tom-ab-input" placeholder="ElevenLabs voice id" />
+                                        </label>
+                                    </fieldset>
+                                </div>
+                                <div class="tom-ab-setup-actions">
+                                    <button type="button" id="tomAbVoiceSaveFullBtn" class="export-btn">Save voice experiment</button>
+                                    <button type="button" id="tomAbVoiceSaveNameBtn" class="export-btn secondary">Voice: name only</button>
+                                </div>
+                                <p id="tomAbVoiceSetupMsg" class="tom-ab-test-meta" role="status" style="margin:0;"></p>
+                            </div>
+                        </details>
+
+                        <details class="tom-ab-dim-block">
+                            <summary class="tom-ab-dim-summary">Opening line only</summary>
+                            <div class="tom-ab-dim-inner">
+                                <label class="tom-ab-field">Experiment name
+                                    <input type="text" id="tomAbOpenExpName" class="tom-ab-input" placeholder="e.g. tom_opening_v1" />
                                 </label>
-                                <label>Script (system instructions)
-                                    <textarea id="tomAbV0Script" class="tom-ab-textarea" rows="5" placeholder="Full call script / instructions"></textarea>
+                                <label class="tom-ab-replace-row">
+                                    <input type="checkbox" id="tomAbOpenReplaceExisting" checked />
+                                    <span>Replace existing variants for this experiment name</span>
                                 </label>
-                            </fieldset>
-                            <fieldset class="tom-ab-variant-fieldset">
-                                <legend>Variant B</legend>
-                                <label>Name
-                                    <input type="text" id="tomAbV1Name" class="tom-ab-input" value="variant_b" />
+                                <div class="tom-ab-variant-grid">
+                                    <fieldset class="tom-ab-variant-fieldset">
+                                        <legend>Variant A</legend>
+                                        <label>Name
+                                            <input type="text" id="tomAbOpenV0Name" class="tom-ab-input" value="control" />
+                                        </label>
+                                        <label>Opening line
+                                            <textarea id="tomAbOpenV0Open" class="tom-ab-textarea" rows="3" placeholder="First thing the assistant says"></textarea>
+                                        </label>
+                                    </fieldset>
+                                    <fieldset class="tom-ab-variant-fieldset">
+                                        <legend>Variant B</legend>
+                                        <label>Name
+                                            <input type="text" id="tomAbOpenV1Name" class="tom-ab-input" value="variant_b" />
+                                        </label>
+                                        <label>Opening line
+                                            <textarea id="tomAbOpenV1Open" class="tom-ab-textarea" rows="3" placeholder="First thing the assistant says"></textarea>
+                                        </label>
+                                    </fieldset>
+                                </div>
+                                <div class="tom-ab-setup-actions">
+                                    <button type="button" id="tomAbOpenSaveFullBtn" class="export-btn">Save opening-line experiment</button>
+                                    <button type="button" id="tomAbOpenSaveNameBtn" class="export-btn secondary">Opening: name only</button>
+                                </div>
+                                <p id="tomAbOpenSetupMsg" class="tom-ab-test-meta" role="status" style="margin:0;"></p>
+                            </div>
+                        </details>
+
+                        <details class="tom-ab-dim-block">
+                            <summary class="tom-ab-dim-summary">Script only (system instructions)</summary>
+                            <div class="tom-ab-dim-inner">
+                                <label class="tom-ab-field">Experiment name
+                                    <input type="text" id="tomAbScriptExpName" class="tom-ab-input" placeholder="e.g. tom_script_v1" />
                                 </label>
-                                <label>Voice ID (ElevenLabs)
-                                    <input type="text" id="tomAbV1Voice" class="tom-ab-input" placeholder="Optional" />
+                                <label class="tom-ab-replace-row">
+                                    <input type="checkbox" id="tomAbScriptReplaceExisting" checked />
+                                    <span>Replace existing variants for this experiment name</span>
                                 </label>
-                                <label>Opening line
-                                    <textarea id="tomAbV1Open" class="tom-ab-textarea" rows="2" placeholder="First thing the assistant says"></textarea>
-                                </label>
-                                <label>Script (system instructions)
-                                    <textarea id="tomAbV1Script" class="tom-ab-textarea" rows="5" placeholder="Full call script / instructions"></textarea>
-                                </label>
-                            </fieldset>
-                        </div>
-                        <div class="tom-ab-setup-actions">
-                            <button type="button" id="tomAbSaveFullBtn" class="export-btn">Save experiment &amp; variants</button>
-                            <button type="button" id="tomAbSaveNameBtn" class="export-btn secondary">Save experiment name only</button>
-                        </div>
-                        <p id="tomAbSetupMsg" class="tom-ab-test-meta" role="status" style="margin:0;"></p>
+                                <div class="tom-ab-variant-grid">
+                                    <fieldset class="tom-ab-variant-fieldset">
+                                        <legend>Variant A</legend>
+                                        <label>Name
+                                            <input type="text" id="tomAbScriptV0Name" class="tom-ab-input" value="control" />
+                                        </label>
+                                        <label>Script
+                                            <textarea id="tomAbScriptV0Script" class="tom-ab-textarea" rows="6" placeholder="Full call script / system instructions"></textarea>
+                                        </label>
+                                    </fieldset>
+                                    <fieldset class="tom-ab-variant-fieldset">
+                                        <legend>Variant B</legend>
+                                        <label>Name
+                                            <input type="text" id="tomAbScriptV1Name" class="tom-ab-input" value="variant_b" />
+                                        </label>
+                                        <label>Script
+                                            <textarea id="tomAbScriptV1Script" class="tom-ab-textarea" rows="6" placeholder="Full call script / system instructions"></textarea>
+                                        </label>
+                                    </fieldset>
+                                </div>
+                                <div class="tom-ab-setup-actions">
+                                    <button type="button" id="tomAbScriptSaveFullBtn" class="export-btn">Save script experiment</button>
+                                    <button type="button" id="tomAbScriptSaveNameBtn" class="export-btn secondary">Script: name only</button>
+                                </div>
+                                <p id="tomAbScriptSetupMsg" class="tom-ab-test-meta" role="status" style="margin:0;"></p>
+                            </div>
+                        </details>
                     </div>
                 </details>
             </article>
@@ -5980,7 +6060,14 @@ ${actionsRow}
             const leads = d.recentLeads || [];
             const appts = d.appointments || [];
             const callSig = calls.slice(0, 12).map((c) => String(c.callId || c.id || '')).join(',');
-            const abSig = calls.slice(0, 24).map((c) => `${c.abVariant || ''}|${c.abExperiment || ''}`).join(',');
+            const abSig = calls.slice(0, 24).map((c) => {
+                if (c.abOutbound && typeof c.abOutbound === 'object') {
+                    return ['voice', 'opening', 'script']
+                        .map((d) => (c.abOutbound[d] && c.abOutbound[d].variant) || '')
+                        .join('/');
+                }
+                return `${c.abVariant || ''}|${c.abExperiment || ''}`;
+            }).join(',');
             const leadSig = leads.slice(0, 12).map((l) => String(l.id || l.phone || '')).join(',');
             const tp = d.touchpoints;
             const tpData = tp && Array.isArray(tp.data) ? tp.data.join(',') : '';
@@ -6000,7 +6087,24 @@ ${actionsRow}
                 (() => {
                     const ab = d.outboundAbTest;
                     if (!ab || typeof ab !== 'object') return '';
-                    const varSig = (ab.summary?.variants || []).map((v) => {
+                    const slotSig = (slot) => {
+                        const s = ab[slot];
+                        if (!s || typeof s !== 'object') return '';
+                        const varSig = (s.summary?.variants || []).map((v) => {
+                            const t = v.tested || {};
+                            return [
+                                v.variantName,
+                                v.totalLeads,
+                                v.convertedLeads,
+                                t.voiceId || '',
+                                (t.openingLine || '').slice(0, 40),
+                                (t.scriptPreview || '').slice(0, 40)
+                            ].join(':');
+                        }).join(';');
+                        return [s.experimentName || '', s.experimentNameSource || '', varSig].join('|');
+                    };
+                    const leg = ab.legacy || {};
+                    const legVar = (leg.summary?.variants || []).map((v) => {
                         const t = v.tested || {};
                         return [
                             v.variantName,
@@ -6011,7 +6115,15 @@ ${actionsRow}
                             (t.scriptPreview || '').slice(0, 40)
                         ].join(':');
                     }).join(';');
-                    return [ab.experimentName || '', ab.experimentNameSource || '', varSig].join('|');
+                    return [
+                        ab.mode || '',
+                        slotSig('voice'),
+                        slotSig('opening'),
+                        slotSig('script'),
+                        leg.experimentName || '',
+                        leg.experimentNameSource || '',
+                        legVar
+                    ].join('~');
                 })()
             ].join('|');
         }
@@ -7717,82 +7829,154 @@ ${actionsRow}
             });
         }
 
+        const TOM_AB_VAPI_KEYS = {
+            voice: 'outboundAbVoiceExperiment',
+            opening: 'outboundAbOpeningExperiment',
+            script: 'outboundAbScriptExperiment'
+        };
+
         function prefillTomAbTestFormFromData() {
             if (!isTomOutreachDashboard(currentClient)) return;
             const ab = dashboardData && dashboardData.outboundAbTest;
-            const expEl = document.getElementById('tomAbExpName');
-            if (expEl && !expEl.value.trim() && ab && ab.experimentName) {
-                expEl.value = ab.experimentName;
-            }
-            const vars = ab && ab.summary && Array.isArray(ab.summary.variants) ? ab.summary.variants : [];
-            const applyVar = (idx, v) => {
-                if (!v) return;
-                const n = document.getElementById(`tomAbV${idx}Name`);
-                if (n && !n.value.trim() && v.variantName) n.value = v.variantName;
-                const voice = document.getElementById(`tomAbV${idx}Voice`);
-                if (voice && !voice.value.trim() && v.tested && v.tested.voiceId) voice.value = v.tested.voiceId;
-                const o = document.getElementById(`tomAbV${idx}Open`);
-                if (o && !o.value.trim() && v.tested && v.tested.openingLine) o.value = v.tested.openingLine;
-                const s = document.getElementById(`tomAbV${idx}Script`);
-                if (s && !s.value.trim() && v.tested && v.tested.scriptPreview) {
-                    s.value = String(v.tested.scriptPreview).replace(/\u2026\s*$/, '').replace(/…\s*$/, '');
-                }
+            if (!ab || typeof ab !== 'object') return;
+
+            const prefillVoice = (slot, prefix) => {
+                const s = ab[slot];
+                const expEl = document.getElementById(`${prefix}ExpName`);
+                if (expEl && !expEl.value.trim() && s && s.experimentName) expEl.value = s.experimentName;
+                const vars = s && s.summary && Array.isArray(s.summary.variants) ? s.summary.variants : [];
+                const apply = (idx, v) => {
+                    if (!v) return;
+                    const n = document.getElementById(`${prefix}V${idx}Name`);
+                    if (n && !n.value.trim() && v.variantName) n.value = v.variantName;
+                    if (slot === 'voice') {
+                        const voice = document.getElementById(`${prefix}V${idx}Voice`);
+                        if (voice && !voice.value.trim() && v.tested && v.tested.voiceId) voice.value = v.tested.voiceId;
+                    } else if (slot === 'opening') {
+                        const o = document.getElementById(`${prefix}V${idx}Open`);
+                        if (o && !o.value.trim() && v.tested && v.tested.openingLine) o.value = v.tested.openingLine;
+                    } else {
+                        const sc = document.getElementById(`${prefix}V${idx}Script`);
+                        if (sc && !sc.value.trim() && v.tested && v.tested.scriptPreview) {
+                            sc.value = String(v.tested.scriptPreview).replace(/\u2026\s*$/, '').replace(/…\s*$/, '');
+                        }
+                    }
+                };
+                apply(0, vars[0]);
+                apply(1, vars[1]);
             };
-            applyVar(0, vars[0]);
-            applyVar(1, vars[1]);
+
+            prefillVoice('voice', 'tomAbVoice');
+            prefillVoice('opening', 'tomAbOpen');
+            prefillVoice('script', 'tomAbScript');
         }
 
         function initTomAbTestSetupPanel() {
             if (!isTomOutreachDashboard(currentClient)) return;
-            const saveFull = document.getElementById('tomAbSaveFullBtn');
-            if (saveFull && saveFull.dataset.bound !== '1') {
-                saveFull.dataset.bound = '1';
-                saveFull.addEventListener('click', () => saveTomOutboundAbTest('full'));
-            }
-            const saveName = document.getElementById('tomAbSaveNameBtn');
-            if (saveName && saveName.dataset.bound !== '1') {
-                saveName.dataset.bound = '1';
-                saveName.addEventListener('click', () => saveTomOutboundAbTest('nameOnly'));
-            }
+            const bind = (id, dim, mode) => {
+                const el = document.getElementById(id);
+                if (el && el.dataset.bound !== '1') {
+                    el.dataset.bound = '1';
+                    el.addEventListener('click', () => saveTomOutboundAbDim(dim, mode));
+                }
+            };
+            bind('tomAbVoiceSaveFullBtn', 'voice', 'full');
+            bind('tomAbVoiceSaveNameBtn', 'voice', 'nameOnly');
+            bind('tomAbOpenSaveFullBtn', 'opening', 'full');
+            bind('tomAbOpenSaveNameBtn', 'opening', 'nameOnly');
+            bind('tomAbScriptSaveFullBtn', 'script', 'full');
+            bind('tomAbScriptSaveNameBtn', 'script', 'nameOnly');
         }
 
-        async function saveTomOutboundAbTest(mode) {
-            const msg = document.getElementById('tomAbSetupMsg');
-            const expEl = document.getElementById('tomAbExpName');
+        async function saveTomOutboundAbDim(dimension, mode) {
+            const prefix =
+                dimension === 'voice' ? 'tomAbVoice' : dimension === 'opening' ? 'tomAbOpen' : 'tomAbScript';
+            const msg = document.getElementById(`${prefix}SetupMsg`);
+            const expEl = document.getElementById(`${prefix}ExpName`);
             const expName = expEl && expEl.value.trim();
             if (!expName) {
                 if (msg) msg.textContent = 'Experiment name required.';
                 return;
             }
             if (msg) msg.textContent = '';
+            const vapiKey = TOM_AB_VAPI_KEYS[dimension];
             try {
                 if (mode === 'nameOnly') {
                     const res = await fetch(`${BASE_URL}/api/clients/${encodeURIComponent(currentClient)}/config`, {
                         method: 'PATCH',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ vapi: { outboundAbExperiment: expName } })
+                        body: JSON.stringify({ vapi: { [vapiKey]: expName } })
                     });
                     const data = await res.json().catch(() => ({}));
                     if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
                 } else {
-                    const v0 = {
-                        name: (document.getElementById('tomAbV0Name') && document.getElementById('tomAbV0Name').value.trim()) || 'control',
-                        voice: document.getElementById('tomAbV0Voice') && document.getElementById('tomAbV0Voice').value.trim(),
-                        firstMessage: document.getElementById('tomAbV0Open') && document.getElementById('tomAbV0Open').value.trim(),
-                        script: document.getElementById('tomAbV0Script') && document.getElementById('tomAbV0Script').value.trim()
-                    };
-                    const v1 = {
-                        name: (document.getElementById('tomAbV1Name') && document.getElementById('tomAbV1Name').value.trim()) || 'variant_b',
-                        voice: document.getElementById('tomAbV1Voice') && document.getElementById('tomAbV1Voice').value.trim(),
-                        firstMessage: document.getElementById('tomAbV1Open') && document.getElementById('tomAbV1Open').value.trim(),
-                        script: document.getElementById('tomAbV1Script') && document.getElementById('tomAbV1Script').value.trim()
-                    };
-                    const replaceEl = document.getElementById('tomAbReplaceExisting');
+                    let v0;
+                    let v1;
+                    if (dimension === 'voice') {
+                        v0 = {
+                            name:
+                                (document.getElementById('tomAbVoiceV0Name') &&
+                                    document.getElementById('tomAbVoiceV0Name').value.trim()) ||
+                                'control',
+                            voice:
+                                document.getElementById('tomAbVoiceV0Voice') &&
+                                document.getElementById('tomAbVoiceV0Voice').value.trim()
+                        };
+                        v1 = {
+                            name:
+                                (document.getElementById('tomAbVoiceV1Name') &&
+                                    document.getElementById('tomAbVoiceV1Name').value.trim()) ||
+                                'variant_b',
+                            voice:
+                                document.getElementById('tomAbVoiceV1Voice') &&
+                                document.getElementById('tomAbVoiceV1Voice').value.trim()
+                        };
+                    } else if (dimension === 'opening') {
+                        v0 = {
+                            name:
+                                (document.getElementById('tomAbOpenV0Name') &&
+                                    document.getElementById('tomAbOpenV0Name').value.trim()) ||
+                                'control',
+                            firstMessage:
+                                document.getElementById('tomAbOpenV0Open') &&
+                                document.getElementById('tomAbOpenV0Open').value.trim()
+                        };
+                        v1 = {
+                            name:
+                                (document.getElementById('tomAbOpenV1Name') &&
+                                    document.getElementById('tomAbOpenV1Name').value.trim()) ||
+                                'variant_b',
+                            firstMessage:
+                                document.getElementById('tomAbOpenV1Open') &&
+                                document.getElementById('tomAbOpenV1Open').value.trim()
+                        };
+                    } else {
+                        v0 = {
+                            name:
+                                (document.getElementById('tomAbScriptV0Name') &&
+                                    document.getElementById('tomAbScriptV0Name').value.trim()) ||
+                                'control',
+                            script:
+                                document.getElementById('tomAbScriptV0Script') &&
+                                document.getElementById('tomAbScriptV0Script').value.trim()
+                        };
+                        v1 = {
+                            name:
+                                (document.getElementById('tomAbScriptV1Name') &&
+                                    document.getElementById('tomAbScriptV1Name').value.trim()) ||
+                                'variant_b',
+                            script:
+                                document.getElementById('tomAbScriptV1Script') &&
+                                document.getElementById('tomAbScriptV1Script').value.trim()
+                        };
+                    }
+                    const replaceEl = document.getElementById(`${prefix}ReplaceExisting`);
                     const replaceExisting = !replaceEl || replaceEl.checked;
                     const res = await fetch(`${BASE_URL}/api/clients/${encodeURIComponent(currentClient)}/outbound-ab-test`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
+                            dimension,
                             experimentName: expName,
                             replaceExisting,
                             variants: [v0, v1]
@@ -7819,41 +8003,16 @@ ${actionsRow}
             }
         }
 
-        function renderTomAbTestSection(data) {
-            const root = document.getElementById('tomAbTestSectionRoot');
-            if (!root) return;
-            if (!isTomOutreachDashboard(currentClient)) {
-                root.innerHTML = '';
-                return;
-            }
-            const ab = data && data.outboundAbTest;
-            const exp = ab && ab.experimentName ? String(ab.experimentName).trim() : '';
-            const summary = ab && ab.summary;
-            const feedCounts = {};
-            for (const c of data.recentCalls || []) {
-                if (c && c.abVariant) {
-                    const k = String(c.abVariant);
-                    feedCounts[k] = (feedCounts[k] || 0) + 1;
-                }
-            }
-            const variants = summary && Array.isArray(summary.variants) && summary.variants.length ? summary.variants : [];
-
-            if (!exp) {
-                root.innerHTML = `
-                    <p class="tom-ab-test-meta" style="margin:0;">
-                        Nothing to show yet. Expand <strong>Configure experiment on this dashboard</strong> below to set the experiment name and two variants (or save the name only if variants already exist in the database).
-                        Alternatively: set <code>outboundAbExperiment</code> in <code>vapi_json</code>, or keep exactly one active experiment in <code>ab_test_experiments</code> so we can detect it automatically.
-                    </p>`;
-                return;
-            }
-
-            const cap = typeof ACTIVITY_FEED_DISPLAY_CAP === 'number' ? ACTIVITY_FEED_DISPLAY_CAP : 40;
-            const expSource = ab && ab.experimentNameSource;
+        function renderTomAbDimBlock(dimKey, title, testedRowLabel, slot, feedCounts, cap) {
+            const exp = slot && slot.experimentName ? String(slot.experimentName).trim() : '';
+            const summary = slot && slot.summary;
+            const variants =
+                summary && Array.isArray(summary.variants) && summary.variants.length ? summary.variants : [];
+            const expSource = slot && slot.experimentNameSource;
             const inferredBanner =
                 exp && expSource === 'inferred'
                     ? `<div class="tom-ab-inferred-banner" role="status">
-                        <strong>Note:</strong> The experiment name was picked automatically because you have exactly one active A/B test in the database.
-                        Set <code>outboundAbExperiment</code> in tenant <code>vapi_json</code> to this same name so production config is explicit.
+                        <strong>Note:</strong> This ${escapeHtml(title)} experiment name was inferred (only one matching active test in the database). Set the matching <code>vapi</code> key explicitly if you want production config fixed.
                        </div>`
                     : '';
 
@@ -7861,38 +8020,44 @@ ${actionsRow}
             if (variants.length) {
                 testedHtml = variants.map((v) => {
                     const t = v.tested || {};
-                    const voiceHtml = t.voiceId
-                        ? `<code style="font-size:0.8em;">${escapeHtml(t.voiceId)}</code>`
-                        : '<span class="tom-ab-missing">Not overridden (assistant default)</span>';
-                    const openHtml = t.openingLine
-                        ? escapeHtml(t.openingLine)
-                        : '<span class="tom-ab-missing">Not set in variant config</span>';
-                    let scriptHtml = '<span class="tom-ab-missing">Not set in variant config</span>';
-                    if (t.scriptPreview) {
-                        const n = typeof t.scriptCharCount === 'number' ? t.scriptCharCount : 0;
-                        scriptHtml = `<div class="tom-ab-script-preview"><pre>${escapeHtml(t.scriptPreview)}</pre></div>
-                            <div class="tom-ab-test-meta">${formatNumber(n)} characters in full script</div>`;
+                    let inner = '';
+                    if (dimKey === 'voice') {
+                        const voiceHtml = t.voiceId
+                            ? `<code style="font-size:0.8em;">${escapeHtml(t.voiceId)}</code>`
+                            : '<span class="tom-ab-missing">Not set</span>';
+                        inner = `<div><dt>Voice ID</dt><dd>${voiceHtml}</dd></div>`;
+                    } else if (dimKey === 'opening') {
+                        const openHtml = t.openingLine
+                            ? escapeHtml(t.openingLine)
+                            : '<span class="tom-ab-missing">Not set</span>';
+                        inner = `<div><dt>Opening line</dt><dd>${openHtml}</dd></div>`;
+                    } else {
+                        let scriptHtml = '<span class="tom-ab-missing">Not set</span>';
+                        if (t.scriptPreview) {
+                            const n = typeof t.scriptCharCount === 'number' ? t.scriptCharCount : 0;
+                            scriptHtml = `<div class="tom-ab-script-preview"><pre>${escapeHtml(t.scriptPreview)}</pre></div>
+                                <div class="tom-ab-test-meta">${formatNumber(n)} characters in full script</div>`;
+                        }
+                        inner = `<div><dt>Script</dt><dd>${scriptHtml}</dd></div>`;
                     }
                     return `<article class="tom-ab-variant-card">
                         <h5>${escapeHtml(v.variantName)}</h5>
-                        <dl class="tom-ab-dl">
-                            <div><dt>Voice (ElevenLabs)</dt><dd>${voiceHtml}</dd></div>
-                            <div><dt>Opening line</dt><dd>${openHtml}</dd></div>
-                            <div><dt>Call script</dt><dd>${scriptHtml}</dd></div>
-                        </dl>
+                        <dl class="tom-ab-dl">${inner}</dl>
                     </article>`;
                 }).join('');
             } else {
-                const feedKeys = Object.keys(feedCounts);
+                const feedKeys = Object.keys(feedCounts || {});
                 testedHtml = feedKeys.length
-                    ? `<p class="tom-ab-test-meta">Variants appear in the live feed (${feedKeys.map((k) => `<strong>${escapeHtml(k)}</strong>`).join(', ')}) but there are no matching rows in <code>ab_test_experiments</code> yet — add variant configs to show exactly what is being tested.</p>`
-                    : `<p class="tom-ab-test-meta">Create at least two variants for experiment <strong>${escapeHtml(exp)}</strong> (via admin API or database). Each variant should set <code>voice</code>, <code>firstMessage</code>, and <code>script</code> in <code>variant_config</code>.</p>`;
+                    ? `<p class="tom-ab-test-meta">Variants appear in the live feed (${feedKeys.map((k) => `<strong>${escapeHtml(k)}</strong>`).join(', ')}) but there are no matching rows in <code>ab_test_experiments</code> for <strong>${escapeHtml(exp || title)}</strong>.</p>`
+                    : exp
+                      ? `<p class="tom-ab-test-meta">Create at least two variants for <strong>${escapeHtml(exp)}</strong> (${escapeHtml(testedRowLabel)}).</p>`
+                      : `<p class="tom-ab-test-meta">No active ${escapeHtml(title)} experiment. Configure below.</p>`;
             }
 
             let tableBody = '';
             if (variants.length) {
                 tableBody = variants.map((v) => {
-                    const feedN = Object.prototype.hasOwnProperty.call(feedCounts, v.variantName)
+                    const feedN = Object.prototype.hasOwnProperty.call(feedCounts || {}, v.variantName)
                         ? feedCounts[v.variantName]
                         : null;
                     const rate = v.totalLeads > 0 ? `${Number(v.conversionRatePct).toFixed(1)}%` : '—';
@@ -7905,7 +8070,7 @@ ${actionsRow}
                     </tr>`;
                 }).join('');
             } else {
-                const feedKeys = Object.keys(feedCounts);
+                const feedKeys = Object.keys(feedCounts || {});
                 if (feedKeys.length) {
                     tableBody = feedKeys.map((k) => `<tr>
                         <td><strong>${escapeHtml(k)}</strong></td>
@@ -7913,41 +8078,201 @@ ${actionsRow}
                         <td>${formatNumber(feedCounts[k])}</td>
                     </tr>`).join('');
                 } else {
-                    tableBody = `<tr><td colspan="5" class="tom-ab-test-meta">No ledger or feed data yet. After outbound dials, leads and “In feed” fill in; conversions and rate appear when outcomes are recorded as <code>converted</code> in the test ledger.</td></tr>`;
+                    tableBody = `<tr><td colspan="5" class="tom-ab-test-meta">No ledger or feed data yet for this slice.</td></tr>`;
                 }
             }
 
-            root.innerHTML = `
-                ${inferredBanner}
-                <p class="card-subtitle" style="margin-top:0;">
-                    Active experiment: <strong>${escapeHtml(exp)}</strong>
-                    <span class="tom-ab-test-meta"> · Leads are split by phone number (same person always sees the same variant). Results use the A/B ledger; “In feed” counts calls in the newest <strong>${cap}</strong> activity rows.</span>
-                </p>
-                <div class="tom-ab-split">
-                    <div class="tom-ab-panel tom-ab-panel--tested" aria-labelledby="tom-ab-tested-heading">
-                        <h4 class="tom-ab-panel-title" id="tom-ab-tested-heading">What’s being tested</h4>
-                        <p class="tom-ab-test-meta" style="margin-top:0;">Outbound calls rotate these differences per variant (voice ID, first thing the assistant says, and the full system script).</p>
-                        ${testedHtml}
-                    </div>
-                    <div class="tom-ab-panel tom-ab-panel--results" aria-labelledby="tom-ab-results-heading">
-                        <h4 class="tom-ab-panel-title" id="tom-ab-results-heading">Results</h4>
-                        <p class="tom-ab-test-meta" style="margin-top:0;">Ledger = assignments + conversions recorded for this experiment. Rate = converted ÷ leads with any ledger row for that variant.</p>
-                        <div class="tom-ab-test-table-wrap">
-                            <table class="tom-ab-test-table" aria-label="Outbound A B test results">
-                                <thead>
-                                    <tr>
-                                        <th scope="col">Variant</th>
-                                        <th scope="col">Leads</th>
-                                        <th scope="col">Converted</th>
-                                        <th scope="col">Rate</th>
-                                        <th scope="col">In feed</th>
-                                    </tr>
-                                </thead>
-                                <tbody>${tableBody}</tbody>
-                            </table>
+            const headingId = `tom-ab-dim-${dimKey}-h`;
+            return `
+                <section class="tom-ab-dim-results" aria-labelledby="${headingId}">
+                    ${inferredBanner}
+                    <h4 class="tom-ab-panel-title" id="${headingId}">${escapeHtml(title)}${exp ? ` · <span class="tom-ab-test-meta">${escapeHtml(exp)}</span>` : ''}</h4>
+                    <p class="tom-ab-test-meta" style="margin-top:0;">Same lead always gets the same variant per experiment (hash of phone). “In feed” = newest <strong>${cap}</strong> activity rows for this slice.</p>
+                    <div class="tom-ab-split">
+                        <div class="tom-ab-panel tom-ab-panel--tested">
+                            <h5 class="tom-ab-panel-title" style="font-size:1rem;">What’s being tested</h5>
+                            ${testedHtml}
+                        </div>
+                        <div class="tom-ab-panel tom-ab-panel--results">
+                            <h5 class="tom-ab-panel-title" style="font-size:1rem;">Results</h5>
+                            <div class="tom-ab-test-table-wrap">
+                                <table class="tom-ab-test-table" aria-label="${escapeHtml(title)} A B results">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">Variant</th>
+                                            <th scope="col">Leads</th>
+                                            <th scope="col">Converted</th>
+                                            <th scope="col">Rate</th>
+                                            <th scope="col">In feed</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>${tableBody}</tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
-                </div>`;
+                </section>`;
+        }
+
+        function renderTomAbTestSection(data) {
+            const root = document.getElementById('tomAbTestSectionRoot');
+            if (!root) return;
+            if (!isTomOutreachDashboard(currentClient)) {
+                root.innerHTML = '';
+                return;
+            }
+            const ab = data && data.outboundAbTest;
+            const cap = typeof ACTIVITY_FEED_DISPLAY_CAP === 'number' ? ACTIVITY_FEED_DISPLAY_CAP : 40;
+            const byDim = (ab && ab.recentFeedAbByDimension) || { voice: {}, opening: {}, script: {} };
+            const voiceSlot = ab && ab.voice;
+            const openingSlot = ab && ab.opening;
+            const scriptSlot = ab && ab.script;
+            const leg = ab && ab.legacy;
+            const hasDim =
+                (voiceSlot && voiceSlot.experimentName) ||
+                (openingSlot && openingSlot.experimentName) ||
+                (scriptSlot && scriptSlot.experimentName);
+            const hasLegacy = leg && leg.experimentName;
+
+            if (!hasDim && !hasLegacy) {
+                root.innerHTML = `
+                    <p class="tom-ab-test-meta" style="margin:0;">
+                        Nothing to show yet. Expand <strong>Configure experiments on this dashboard</strong> and save a <strong>voice</strong>, <strong>opening line</strong>, and/or <strong>script</strong> experiment (each is separate).
+                        Dimensional keys: <code>outboundAbVoiceExperiment</code>, <code>outboundAbOpeningExperiment</code>, <code>outboundAbScriptExperiment</code>.
+                        Legacy combined test: <code>outboundAbExperiment</code> when no dimensional keys are set and exactly one active experiment exists.
+                    </p>`;
+                return;
+            }
+
+            let html = '';
+            if (hasDim) {
+                html += renderTomAbDimBlock(
+                    'voice',
+                    'Voice A/B',
+                    'voice IDs only',
+                    voiceSlot,
+                    byDim.voice,
+                    cap
+                );
+                html += renderTomAbDimBlock(
+                    'opening',
+                    'Opening line A/B',
+                    'opening lines only',
+                    openingSlot,
+                    byDim.opening,
+                    cap
+                );
+                html += renderTomAbDimBlock(
+                    'script',
+                    'Script A/B',
+                    'scripts only',
+                    scriptSlot,
+                    byDim.script,
+                    cap
+                );
+            }
+
+            if (hasLegacy && ab.mode === 'legacy') {
+                const feedCounts = (ab && ab.recentFeedVariantCounts) || {};
+                const exp = leg.experimentName ? String(leg.experimentName).trim() : '';
+                const summary = leg.summary;
+                const variants =
+                    summary && Array.isArray(summary.variants) && summary.variants.length ? summary.variants : [];
+                const expSource = leg.experimentNameSource;
+                const inferredBanner =
+                    exp && expSource === 'inferred'
+                        ? `<div class="tom-ab-inferred-banner" role="status">
+                            <strong>Note:</strong> Legacy combined experiment name was inferred (exactly one active test). Set <code>outboundAbExperiment</code> in <code>vapi_json</code> to lock it.
+                           </div>`
+                        : '';
+                let testedHtml = '';
+                if (variants.length) {
+                    testedHtml = variants.map((v) => {
+                        const t = v.tested || {};
+                        const voiceHtml = t.voiceId
+                            ? `<code style="font-size:0.8em;">${escapeHtml(t.voiceId)}</code>`
+                            : '<span class="tom-ab-missing">Not overridden (assistant default)</span>';
+                        const openHtml = t.openingLine
+                            ? escapeHtml(t.openingLine)
+                            : '<span class="tom-ab-missing">Not set in variant config</span>';
+                        let scriptHtml = '<span class="tom-ab-missing">Not set in variant config</span>';
+                        if (t.scriptPreview) {
+                            const n = typeof t.scriptCharCount === 'number' ? t.scriptCharCount : 0;
+                            scriptHtml = `<div class="tom-ab-script-preview"><pre>${escapeHtml(t.scriptPreview)}</pre></div>
+                                <div class="tom-ab-test-meta">${formatNumber(n)} characters in full script</div>`;
+                        }
+                        return `<article class="tom-ab-variant-card">
+                            <h5>${escapeHtml(v.variantName)}</h5>
+                            <dl class="tom-ab-dl">
+                                <div><dt>Voice</dt><dd>${voiceHtml}</dd></div>
+                                <div><dt>Opening line</dt><dd>${openHtml}</dd></div>
+                                <div><dt>Call script</dt><dd>${scriptHtml}</dd></div>
+                            </dl>
+                        </article>`;
+                    }).join('');
+                } else {
+                    const feedKeys = Object.keys(feedCounts);
+                    testedHtml = feedKeys.length
+                        ? `<p class="tom-ab-test-meta">Feed variants (${feedKeys.map((k) => `<strong>${escapeHtml(k)}</strong>`).join(', ')}) — add DB rows to show full config.</p>`
+                        : `<p class="tom-ab-test-meta">Add variants for <strong>${escapeHtml(exp)}</strong>.</p>`;
+                }
+                let tableBody = '';
+                if (variants.length) {
+                    tableBody = variants.map((v) => {
+                        const feedN = Object.prototype.hasOwnProperty.call(feedCounts, v.variantName)
+                            ? feedCounts[v.variantName]
+                            : null;
+                        const rate = v.totalLeads > 0 ? `${Number(v.conversionRatePct).toFixed(1)}%` : '—';
+                        return `<tr>
+                            <td><strong>${escapeHtml(v.variantName)}</strong></td>
+                            <td>${formatNumber(v.totalLeads)}</td>
+                            <td>${formatNumber(v.convertedLeads)}</td>
+                            <td>${escapeHtml(rate)}</td>
+                            <td>${feedN != null ? formatNumber(feedN) : '—'}</td>
+                        </tr>`;
+                    }).join('');
+                } else {
+                    const feedKeys = Object.keys(feedCounts);
+                    tableBody = feedKeys.length
+                        ? feedKeys.map((k) => `<tr>
+                            <td><strong>${escapeHtml(k)}</strong></td>
+                            <td>—</td><td>—</td><td>—</td>
+                            <td>${formatNumber(feedCounts[k])}</td>
+                        </tr>`).join('')
+                        : `<tr><td colspan="5" class="tom-ab-test-meta">No ledger or feed data yet.</td></tr>`;
+                }
+                html += `
+                    <section class="tom-ab-dim-results tom-ab-legacy-block" aria-labelledby="tom-ab-legacy-h">
+                        ${inferredBanner}
+                        <h4 class="tom-ab-panel-title" id="tom-ab-legacy-h">Legacy combined experiment · <span class="tom-ab-test-meta">${escapeHtml(exp)}</span></h4>
+                        <p class="tom-ab-test-meta" style="margin-top:0;">One experiment varies voice, opening, and script together. Prefer dimensional tests above when possible.</p>
+                        <div class="tom-ab-split">
+                            <div class="tom-ab-panel tom-ab-panel--tested">
+                                <h5 class="tom-ab-panel-title" style="font-size:1rem;">What’s being tested</h5>
+                                ${testedHtml}
+                            </div>
+                            <div class="tom-ab-panel tom-ab-panel--results">
+                                <h5 class="tom-ab-panel-title" style="font-size:1rem;">Results</h5>
+                                <div class="tom-ab-test-table-wrap">
+                                    <table class="tom-ab-test-table" aria-label="Legacy outbound A B results">
+                                        <thead>
+                                            <tr>
+                                                <th scope="col">Variant</th>
+                                                <th scope="col">Leads</th>
+                                                <th scope="col">Converted</th>
+                                                <th scope="col">Rate</th>
+                                                <th scope="col">In feed</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>${tableBody}</tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </section>`;
+            }
+
+            root.innerHTML = html;
         }
 
         function renderCalls(callsOverride) {
@@ -8128,14 +8453,40 @@ ${actionsRow}
                     : '';
                 const actionsHtml = [recLinkHtml, transcriptBtnHtml].filter(Boolean).join('');
                 const detailsBlockHtml = buildActivityDetailsBlockHtml(call);
-                const abTitle =
-                    call.abExperiment && call.abVariant
-                        ? ` title="${escapeHtml(`Test: ${call.abExperiment} · variant: ${call.abVariant}`)}"`
-                        : call.abVariant
-                            ? ` title="${escapeHtml('Variant: ' + call.abVariant)}"`
-                            : '';
-                const abPillHtml = call.abVariant
-                    ? `<span class="activity-pill activity-pill--ab"${abTitle}>A/B: ${escapeHtml(call.abVariant)}</span>`
+                let abPillLabel = '';
+                let abTitle = '';
+                if (call.abOutbound && typeof call.abOutbound === 'object') {
+                    const parts = [];
+                    const titles = [];
+                    if (call.abOutbound.voice) {
+                        parts.push(`V:${call.abOutbound.voice.variant}`);
+                        titles.push(
+                            `Voice: ${call.abOutbound.voice.experiment || '?'} → ${call.abOutbound.voice.variant}`
+                        );
+                    }
+                    if (call.abOutbound.opening) {
+                        parts.push(`O:${call.abOutbound.opening.variant}`);
+                        titles.push(
+                            `Opening: ${call.abOutbound.opening.experiment || '?'} → ${call.abOutbound.opening.variant}`
+                        );
+                    }
+                    if (call.abOutbound.script) {
+                        parts.push(`S:${call.abOutbound.script.variant}`);
+                        titles.push(
+                            `Script: ${call.abOutbound.script.experiment || '?'} → ${call.abOutbound.script.variant}`
+                        );
+                    }
+                    abPillLabel = parts.join(' · ');
+                    if (titles.length) abTitle = ` title="${escapeHtml(titles.join(' | '))}"`;
+                } else if (call.abExperiment && call.abVariant) {
+                    abPillLabel = call.abVariant;
+                    abTitle = ` title="${escapeHtml(`Test: ${call.abExperiment} · variant: ${call.abVariant}`)}"`;
+                } else if (call.abVariant) {
+                    abPillLabel = call.abVariant;
+                    abTitle = ` title="${escapeHtml('Variant: ' + call.abVariant)}"`;
+                }
+                const abPillHtml = abPillLabel
+                    ? `<span class="activity-pill activity-pill--ab"${abTitle}>A/B: ${escapeHtml(abPillLabel)}</span>`
                     : '';
 
                 return `

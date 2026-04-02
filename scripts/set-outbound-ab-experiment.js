@@ -1,5 +1,7 @@
 /**
- * Merge outboundAbExperiment into tenant vapi_json (Postgres JSONB || or JS merge fallback).
+ * Merge outboundAbExperiment into tenant vapi_json (legacy single combined A/B test).
+ * For split tests, set vapi_json keys outboundAbVoiceExperiment, outboundAbOpeningExperiment,
+ * outboundAbScriptExperiment instead (or use the Tom dashboard).
  *
  * Usage:
  *   node scripts/set-outbound-ab-experiment.js d2d-xpress-tom tom_outbound_v1

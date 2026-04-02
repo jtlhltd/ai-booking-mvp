@@ -41,6 +41,34 @@ describe('outbound-ab-variant', () => {
     assertEqual(Object.keys(overrides).length, 0);
   });
 
+  test('buildAssistantOverrides voice dimension ignores opening and script', () => {
+    const { overrides } = buildAssistantOverridesFromVariantConfig(
+      {
+        firstMessage: 'Hi',
+        script: 'Full script.',
+        voice: 'vid'
+      },
+      'voice'
+    );
+    assertEqual(overrides.voice && overrides.voice.voiceId, 'vid');
+    assertEqual(overrides.firstMessage, undefined);
+    assertEqual(overrides.model, undefined);
+  });
+
+  test('buildAssistantOverrides script dimension ignores voice and opening', () => {
+    const { overrides } = buildAssistantOverridesFromVariantConfig(
+      {
+        firstMessage: 'Hi',
+        script: 'Only this',
+        voice: 'vid'
+      },
+      'script'
+    );
+    assertEqual(overrides.voice, undefined);
+    assertEqual(overrides.firstMessage, undefined);
+    assertEqual(overrides.model.messages[0].content, 'Only this');
+  });
+
   test('mergeAssistantOverrides merges variableValues and prefers AB model.messages', () => {
     const merged = mergeAssistantOverrides(
       { variableValues: { a: '1' }, model: { model: 'gpt-4o', temperature: 0.1 } },

@@ -9198,6 +9198,29 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         abExperimentRaw != null && String(abExperimentRaw).trim() !== '' ? String(abExperimentRaw).trim() : null;
       const abVariant =
         abVariantRaw != null && String(abVariantRaw).trim() !== '' ? String(abVariantRaw).trim() : null;
+      const abOutboundRaw = metaObj.abOutbound ?? vapiMeta.abOutbound ?? null;
+      let abOutbound = null;
+      if (abOutboundRaw && typeof abOutboundRaw === 'object' && !Array.isArray(abOutboundRaw)) {
+        const ob = {};
+        for (const dim of ['voice', 'opening', 'script']) {
+          const slice = abOutboundRaw[dim];
+          if (
+            slice &&
+            typeof slice === 'object' &&
+            slice.variant != null &&
+            String(slice.variant).trim() !== ''
+          ) {
+            ob[dim] = {
+              experiment:
+                slice.experiment != null && String(slice.experiment).trim() !== ''
+                  ? String(slice.experiment).trim()
+                  : null,
+              variant: String(slice.variant).trim()
+            };
+          }
+        }
+        if (Object.keys(ob).length > 0) abOutbound = ob;
+      }
       const queueFailReasonRaw = typeof metaObj.reason === 'string' ? metaObj.reason : (metaObj.reason != null ? String(metaObj.reason) : '');
       const queueFailReason = queueFailReasonRaw && queueFailReasonRaw.length > 180
         ? `${queueFailReasonRaw.slice(0, 180).trim()}…`
@@ -9255,7 +9278,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         retryAttempt,
         hasRecording: !!(row.recording_url && String(row.recording_url).trim()),
         abExperiment,
-        abVariant
+        abVariant,
+        abOutbound
       };
     });
     
@@ -9358,33 +9382,96 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       ? (roiMultiplier - 1) * 100
       : null;
 
-    let outboundAbExperimentName =
-      client?.vapi?.outboundAbExperiment != null ? String(client.vapi.outboundAbExperiment).trim() : '';
-    let outboundAbExperimentSource = outboundAbExperimentName ? 'vapi' : null;
-    if (!outboundAbExperimentName) {
+    const trimAbExp = (x) => (x != null && String(x).trim() !== '' ? String(x).trim() : '');
+    let voiceExpName = trimAbExp(client?.vapi?.outboundAbVoiceExperiment);
+    let openingExpName = trimAbExp(client?.vapi?.outboundAbOpeningExperiment);
+    let scriptExpName = trimAbExp(client?.vapi?.outboundAbScriptExperiment);
+    let voiceExpSource = voiceExpName ? 'vapi' : null;
+    let openingExpSource = openingExpName ? 'vapi' : null;
+    let scriptExpSource = scriptExpName ? 'vapi' : null;
+    if (!voiceExpName && !openingExpName && !scriptExpName) {
       try {
-        const { inferOutboundAbExperimentName } = await import('./db.js');
-        const inferred = await inferOutboundAbExperimentName(clientKey);
-        if (inferred) {
-          outboundAbExperimentName = inferred;
-          outboundAbExperimentSource = 'inferred';
+        const { inferOutboundAbExperimentNamesForDimensions } = await import('./db.js');
+        const infDim = await inferOutboundAbExperimentNamesForDimensions(clientKey);
+        if (infDim.voice) {
+          voiceExpName = infDim.voice;
+          voiceExpSource = 'inferred';
+        }
+        if (infDim.opening) {
+          openingExpName = infDim.opening;
+          openingExpSource = 'inferred';
+        }
+        if (infDim.script) {
+          scriptExpName = infDim.script;
+          scriptExpSource = 'inferred';
         }
       } catch (infErr) {
-        console.error('[DEMO DASHBOARD] outbound A/B infer error:', infErr?.message || infErr);
+        console.error('[DEMO DASHBOARD] outbound A/B dimension infer error:', infErr?.message || infErr);
       }
     }
-    let outboundAbTestDb = null;
-    if (outboundAbExperimentName) {
+    const dimensionalMode = !!(voiceExpName || openingExpName || scriptExpName);
+
+    let legacyOutboundAbExperimentName = trimAbExp(client?.vapi?.outboundAbExperiment);
+    let legacyOutboundAbExperimentSource = legacyOutboundAbExperimentName ? 'vapi' : null;
+    let legacyOutboundAbSummary = null;
+    if (!dimensionalMode) {
+      if (!legacyOutboundAbExperimentName) {
+        try {
+          const { inferOutboundAbExperimentName } = await import('./db.js');
+          const inferred = await inferOutboundAbExperimentName(clientKey);
+          if (inferred) {
+            legacyOutboundAbExperimentName = inferred;
+            legacyOutboundAbExperimentSource = 'inferred';
+          }
+        } catch (infErr) {
+          console.error('[DEMO DASHBOARD] outbound A/B infer error:', infErr?.message || infErr);
+        }
+      }
+      if (legacyOutboundAbExperimentName) {
+        try {
+          const { getOutboundAbExperimentSummary } = await import('./db.js');
+          legacyOutboundAbSummary = await getOutboundAbExperimentSummary(
+            clientKey,
+            legacyOutboundAbExperimentName
+          );
+        } catch (abSumErr) {
+          console.error('[DEMO DASHBOARD] outbound A/B summary error:', abSumErr?.message || abSumErr);
+        }
+      }
+    }
+
+    let voiceSummary = null;
+    let openingSummary = null;
+    let scriptSummary = null;
+    if (dimensionalMode) {
       try {
         const { getOutboundAbExperimentSummary } = await import('./db.js');
-        outboundAbTestDb = await getOutboundAbExperimentSummary(clientKey, outboundAbExperimentName);
+        if (voiceExpName) {
+          voiceSummary = await getOutboundAbExperimentSummary(clientKey, voiceExpName);
+        }
+        if (openingExpName) {
+          openingSummary = await getOutboundAbExperimentSummary(clientKey, openingExpName);
+        }
+        if (scriptExpName) {
+          scriptSummary = await getOutboundAbExperimentSummary(clientKey, scriptExpName);
+        }
       } catch (abSumErr) {
-        console.error('[DEMO DASHBOARD] outbound A/B summary error:', abSumErr?.message || abSumErr);
+        console.error('[DEMO DASHBOARD] outbound A/B dimensional summary error:', abSumErr?.message || abSumErr);
       }
     }
+
     const recentFeedVariantCounts = {};
+    const recentFeedAbByDimension = { voice: {}, opening: {}, script: {} };
     for (const c of recentCalls) {
-      if (c.abVariant) {
+      if (c.abOutbound && typeof c.abOutbound === 'object') {
+        for (const dim of ['voice', 'opening', 'script']) {
+          const slice = c.abOutbound[dim];
+          if (slice && slice.variant) {
+            const k = String(slice.variant);
+            recentFeedAbByDimension[dim][k] = (recentFeedAbByDimension[dim][k] || 0) + 1;
+          }
+        }
+      } else if (c.abVariant) {
         const k = String(c.abVariant);
         recentFeedVariantCounts[k] = (recentFeedVariantCounts[k] || 0) + 1;
       }
@@ -9395,10 +9482,32 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       source: 'live',
       recentLeadsListCap: RECENT_LEADS_DASHBOARD_CAP,
       outboundAbTest: {
-        experimentName: outboundAbExperimentName || null,
-        experimentNameSource: outboundAbExperimentSource,
-        summary: outboundAbTestDb,
-        recentFeedVariantCounts
+        mode: dimensionalMode ? 'dimensional' : 'legacy',
+        voice: {
+          experimentName: voiceExpName || null,
+          experimentNameSource: voiceExpSource,
+          summary: voiceSummary
+        },
+        opening: {
+          experimentName: openingExpName || null,
+          experimentNameSource: openingExpSource,
+          summary: openingSummary
+        },
+        script: {
+          experimentName: scriptExpName || null,
+          experimentNameSource: scriptExpSource,
+          summary: scriptSummary
+        },
+        legacy: {
+          experimentName: dimensionalMode ? null : legacyOutboundAbExperimentName || null,
+          experimentNameSource: dimensionalMode ? null : legacyOutboundAbExperimentSource,
+          summary: dimensionalMode ? null : legacyOutboundAbSummary
+        },
+        experimentName: dimensionalMode ? null : legacyOutboundAbExperimentName || null,
+        experimentNameSource: dimensionalMode ? null : legacyOutboundAbExperimentSource,
+        summary: dimensionalMode ? null : legacyOutboundAbSummary,
+        recentFeedVariantCounts,
+        recentFeedAbByDimension
       },
       metrics: {
         totalLeads,
@@ -24246,6 +24355,13 @@ function getDashboardSelfServiceClientKeys() {
 function isDashboardSelfServiceClient(clientKey) {
   return getDashboardSelfServiceClientKeys().includes(clientKey);
 }
+const DASHBOARD_SELF_SERVICE_VAPI_AB_KEYS = new Set([
+  'outboundAbVoiceExperiment',
+  'outboundAbOpeningExperiment',
+  'outboundAbScriptExperiment',
+  'outboundAbExperiment'
+]);
+
 function isVapiOutboundAbExperimentOnlyPatch(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return false;
   const keys = Object.keys(body);
@@ -24253,13 +24369,13 @@ function isVapiOutboundAbExperimentOnlyPatch(body) {
   const v = body.vapi;
   if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
   const vk = Object.keys(v);
-  const exp = v.outboundAbExperiment;
-  return (
-    vk.length === 1 &&
-    vk[0] === 'outboundAbExperiment' &&
-    exp != null &&
-    String(exp).trim() !== ''
-  );
+  if (vk.length === 0) return false;
+  for (const k of vk) {
+    if (!DASHBOARD_SELF_SERVICE_VAPI_AB_KEYS.has(k)) return false;
+    const val = v[k];
+    if (val !== null && val !== undefined && typeof val !== 'string') return false;
+  }
+  return true;
 }
 
 // Update Client Configuration
@@ -24285,7 +24401,7 @@ app.patch('/api/clients/:clientKey/config', async (req, res) => {
   }
 });
 
-// Tom / dashboard: create outbound A/B variants + set vapi.outboundAbExperiment (API_KEY or self-service client)
+// Tom / dashboard: create outbound A/B variants for one dimension (voice | opening | script) + set matching vapi key
 app.post('/api/clients/:clientKey/outbound-ab-test', async (req, res) => {
   try {
     const { clientKey } = req.params;
@@ -24295,7 +24411,15 @@ app.post('/api/clients/:clientKey/outbound-ab-test', async (req, res) => {
     if (!keyOk && !selfOk) {
       return res.status(401).json({ ok: false, error: 'Unauthorized' });
     }
-    const { experimentName, variants, replaceExisting = true } = req.body || {};
+    const { OUTBOUND_AB_VAPI_KEYS } = await import('./lib/outbound-ab-variant.js');
+    const { experimentName, variants, replaceExisting = true, dimension } = req.body || {};
+    const dimRaw = dimension != null ? String(dimension).trim().toLowerCase() : '';
+    if (dimRaw !== 'voice' && dimRaw !== 'opening' && dimRaw !== 'script') {
+      return res.status(400).json({
+        ok: false,
+        error: 'dimension is required: "voice", "opening", or "script"'
+      });
+    }
     const nameTrim = experimentName != null ? String(experimentName).trim() : '';
     if (!nameTrim) {
       return res.status(400).json({ ok: false, error: 'experimentName is required' });
@@ -24317,16 +24441,32 @@ app.post('/api/clients/:clientKey/outbound-ab-test', async (req, res) => {
           : v.systemMessage != null
             ? String(v.systemMessage).trim()
             : '';
-      if (!firstMessage && !script) {
-        return res.status(400).json({
-          ok: false,
-          error: `Variant "${vn}" needs at least an opening line and/or script`
-        });
-      }
       const config = {};
-      if (voice) config.voice = voice;
-      if (firstMessage) config.firstMessage = firstMessage;
-      if (script) config.script = script;
+      if (dimRaw === 'voice') {
+        if (!voice) {
+          return res.status(400).json({
+            ok: false,
+            error: `Variant "${vn}": voice experiments require a non-empty voice ID per variant`
+          });
+        }
+        config.voice = voice;
+      } else if (dimRaw === 'opening') {
+        if (!firstMessage) {
+          return res.status(400).json({
+            ok: false,
+            error: `Variant "${vn}": opening-line experiments require a non-empty opening line per variant`
+          });
+        }
+        config.firstMessage = firstMessage;
+      } else {
+        if (!script) {
+          return res.status(400).json({
+            ok: false,
+            error: `Variant "${vn}": script experiments require non-empty script (system instructions) per variant`
+          });
+        }
+        config.script = script;
+      }
       mapped.push({ name: vn, config });
     }
     if (replaceExisting) {
@@ -24339,9 +24479,16 @@ app.post('/api/clients/:clientKey/outbound-ab-test', async (req, res) => {
       variants: mapped,
       isActive: true
     });
+    const vapiKey = OUTBOUND_AB_VAPI_KEYS[dimRaw];
     const { updateClientConfig } = await import('./lib/client-onboarding.js');
-    await updateClientConfig(clientKey, { vapi: { outboundAbExperiment: nameTrim } });
-    res.json({ ok: true, experimentName: nameTrim, variantCount: mapped.length });
+    await updateClientConfig(clientKey, { vapi: { [vapiKey]: nameTrim } });
+    res.json({
+      ok: true,
+      experimentName: nameTrim,
+      dimension: dimRaw,
+      vapiKey,
+      variantCount: mapped.length
+    });
   } catch (error) {
     console.error('[OUTBOUND AB TEST SETUP ERROR]', error);
     res.status(500).json({ ok: false, error: error.message || String(error) });

@@ -2574,6 +2574,97 @@ export async function inferOutboundAbExperimentName(clientKey) {
   return n != null && String(n).trim() !== '' ? String(n).trim() : null;
 }
 
+function parseAbVariantConfigJson(raw) {
+  if (raw == null) return null;
+  if (typeof raw === 'string') {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  if (typeof raw === 'object') return raw;
+  return null;
+}
+
+function variantConfigFieldPresence(c) {
+  if (!c || typeof c !== 'object') {
+    return { hasVoice: false, hasOpening: false, hasScript: false };
+  }
+  let hasVoice = false;
+  if (typeof c.voice === 'string' && c.voice.trim()) hasVoice = true;
+  else if (c.voice && typeof c.voice === 'object' && c.voice.voiceId && String(c.voice.voiceId).trim()) {
+    hasVoice = true;
+  }
+  const open = c.firstMessage != null ? String(c.firstMessage).trim() : '';
+  const hasOpening = open.length > 0;
+  const scriptRaw =
+    c.systemMessage != null ? String(c.systemMessage) : c.script != null ? String(c.script) : '';
+  const hasScript = scriptRaw.trim().length > 0;
+  return { hasVoice, hasOpening, hasScript };
+}
+
+function activeRowsAreVoiceOnly(rows) {
+  if (!rows || rows.length < 2) return false;
+  for (const r of rows) {
+    const p = variantConfigFieldPresence(parseAbVariantConfigJson(r.variant_config));
+    if (!p.hasVoice || p.hasOpening || p.hasScript) return false;
+  }
+  return true;
+}
+
+function activeRowsAreOpeningOnly(rows) {
+  if (!rows || rows.length < 2) return false;
+  for (const r of rows) {
+    const p = variantConfigFieldPresence(parseAbVariantConfigJson(r.variant_config));
+    if (!p.hasOpening || p.hasVoice || p.hasScript) return false;
+  }
+  return true;
+}
+
+function activeRowsAreScriptOnly(rows) {
+  if (!rows || rows.length < 2) return false;
+  for (const r of rows) {
+    const p = variantConfigFieldPresence(parseAbVariantConfigJson(r.variant_config));
+    if (!p.hasScript || p.hasVoice || p.hasOpening) return false;
+  }
+  return true;
+}
+
+/**
+ * When vapi dimensional keys are unset, infer at most one experiment name per slice
+ * (all variants must be that slice only, and ≥2 variants).
+ */
+export async function inferOutboundAbExperimentNamesForDimensions(clientKey) {
+  if (!clientKey) {
+    return { voice: null, opening: null, script: null };
+  }
+  const active = await getActiveABTests(clientKey);
+  const byName = new Map();
+  for (const row of active) {
+    const n = row.experiment_name != null ? String(row.experiment_name).trim() : '';
+    if (!n) continue;
+    if (!byName.has(n)) byName.set(n, []);
+    byName.get(n).push(row);
+  }
+  const voiceCandidates = [];
+  const openingCandidates = [];
+  const scriptCandidates = [];
+  for (const [name, rows] of byName) {
+    if (activeRowsAreVoiceOnly(rows)) voiceCandidates.push(name);
+    if (activeRowsAreOpeningOnly(rows)) openingCandidates.push(name);
+    if (activeRowsAreScriptOnly(rows)) scriptCandidates.push(name);
+  }
+  voiceCandidates.sort();
+  openingCandidates.sort();
+  scriptCandidates.sort();
+  return {
+    voice: voiceCandidates.length === 1 ? voiceCandidates[0] : null,
+    opening: openingCandidates.length === 1 ? openingCandidates[0] : null,
+    script: scriptCandidates.length === 1 ? scriptCandidates[0] : null
+  };
+}
+
 // Security and Authentication functions
 export async function createUserAccount({ clientKey, username, email, passwordHash, role = 'user', permissions = [] }) {
   const permissionsJson = JSON.stringify(permissions);
