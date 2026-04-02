@@ -261,6 +261,7 @@ async function initPostgres() {
       routing JSONB,
       computed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       created_at TIMESTAMPTZ DEFAULT now(),
+      updated_at TIMESTAMPTZ DEFAULT now(),
       UNIQUE(client_key)
     );
     CREATE INDEX IF NOT EXISTS call_insights_client_idx ON call_insights(client_key);
