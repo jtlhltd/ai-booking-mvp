@@ -8063,12 +8063,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             if (!row || typeof row._row !== 'number') return;
 
             const initial = String(row[colName] || '').trim();
-            const isNumericCol = colName === 'International Shipments per Week'
-                || colName === 'UK Shipments per Week'
-                || colName === 'Example Shipment Cost'
-                || colName === 'Std Rate up to KG';
             const input = document.createElement('input');
-            input.type = isNumericCol ? 'number' : 'text';
+            // Always text: spreadsheet cells often hold "Unknown", units ("30kg"), ranges, etc.
+            // type="number" blocks letters and shows spinners.
+            input.type = 'text';
             input.value = initial;
             input.className = 'dashboard-list-search';
             input.style.maxWidth = '100%';
