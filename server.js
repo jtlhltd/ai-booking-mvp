@@ -9662,8 +9662,11 @@ app.post('/api/leads/import-test', async (req, res) => {
  * made the dashboard upload appear to hang for the length of every call.
  */
 async function processLeadImportOutboundCalls({ clientKey, client, inserted }) {
-  const { addToCallQueue } = await import('./db.js');
+  const { addToCallQueue, getLatestCallInsights } = await import('./db.js');
   const { callLeadInstantly } = await import('./lib/instant-calling.js');
+  const { scheduleAtOptimalCallWindow } = await import('./lib/optimal-call-window.js');
+  const insightsRow = await getLatestCallInsights(clientKey).catch(() => null);
+  const routing = insightsRow?.routing;
   let queuedCount = 0;
   let calledCount = 0;
   let lastCallError = null;
@@ -9672,8 +9675,9 @@ async function processLeadImportOutboundCalls({ clientKey, client, inserted }) {
     try {
       if (!isBusinessHours(client)) {
         const next = getNextBusinessHour(client);
+        const scheduledFor = scheduleAtOptimalCallWindow(client, routing, next, { fallbackTz: TIMEZONE });
         await addToCallQueue({
-          clientKey, leadPhone: lead.phone, priority: 8, scheduledFor: next,
+          clientKey, leadPhone: lead.phone, priority: 8, scheduledFor,
           callType: 'vapi_call',
           callData: { ...queueDef, leadId: lead.id, leadName: lead.name, leadService: lead.service, leadSource: lead.source, leadStatus: lead.status, businessHours: 'outside' }
         });
@@ -9693,8 +9697,9 @@ async function processLeadImportOutboundCalls({ clientKey, client, inserted }) {
         console.log('[LEAD IMPORT][bg] Call initiated:', lead.phone, result.id || result.callId);
       } else if (result?.error === 'outside_business_hours') {
         const next = getNextBusinessHour(client);
+        const scheduledFor = scheduleAtOptimalCallWindow(client, routing, next, { fallbackTz: TIMEZONE });
         await addToCallQueue({
-          clientKey, leadPhone: lead.phone, priority: 8, scheduledFor: next,
+          clientKey, leadPhone: lead.phone, priority: 8, scheduledFor,
           callType: 'vapi_call',
           callData: { ...queueDef, leadId: lead.id, leadName: lead.name, leadService: lead.service, leadSource: lead.source, leadStatus: lead.status, businessHours: 'outside' }
         });
@@ -9702,7 +9707,8 @@ async function processLeadImportOutboundCalls({ clientKey, client, inserted }) {
       } else {
         lastCallError = result?.details || result?.error || 'unknown';
         console.warn('[LEAD IMPORT][bg] Call failed, queueing for retry:', lead.phone, result?.error);
-        const retryWhen = isBusinessHours(client) ? new Date() : getNextBusinessHour(client);
+        const retryBaseline = isBusinessHours(client) ? new Date() : getNextBusinessHour(client);
+        const retryWhen = scheduleAtOptimalCallWindow(client, routing, retryBaseline, { fallbackTz: TIMEZONE });
         await addToCallQueue({
           clientKey, leadPhone: lead.phone, priority: 8, scheduledFor: retryWhen,
           callType: 'vapi_call',
@@ -9875,13 +9881,19 @@ app.post('/api/leads/import', async (req, res) => {
           callSummary.reason = 'vapi_not_configured';
         }
         if (client && (client.isEnabled || tomOutboundRelaxedImport) && (client.vapi?.assistantId || client?.vapiAssistantId || (tomOutboundRelaxedImport && process.env.VAPI_ASSISTANT_ID))) {
-          const { addToCallQueue } = await import('./db.js');
+          const { addToCallQueue, getLatestCallInsights } = await import('./db.js');
+          const { scheduleAtOptimalCallWindow } = await import('./lib/optimal-call-window.js');
+          const insightsRow = await getLatestCallInsights(clientKey).catch(() => null);
+          const routing = insightsRow?.routing;
 
           const inBusinessHours = isBusinessHours(client);
           const shouldCallNow = inBusinessHours;
           callSummary.inBusinessHours = inBusinessHours;
           callSummary.shouldCallNow = shouldCallNow;
-          const scheduledFor = shouldCallNow ? new Date() : getNextBusinessHour(client);
+          const scheduledBaseline = shouldCallNow ? new Date() : getNextBusinessHour(client);
+          const scheduledFor = shouldCallNow
+            ? scheduledBaseline
+            : scheduleAtOptimalCallWindow(client, routing, scheduledBaseline, { fallbackTz: TIMEZONE });
           console.log('[LEAD IMPORT] Call decision:', {
             clientKey,
             tomOutboundRelaxedImport,
@@ -21752,16 +21764,22 @@ async function queueNewLeadsForCalling() {
         
         console.log(`[LEAD QUEUER] Found ${newLeads.rows.length} new leads for ${client.clientKey}`);
         
-        const { addToCallQueue } = await import('./db.js');
-        
+        const { addToCallQueue, getLatestCallInsights } = await import('./db.js');
+        const { scheduleAtOptimalCallWindow } = await import('./lib/optimal-call-window.js');
+        const insightsRow = await getLatestCallInsights(client.clientKey).catch(() => null);
+        const routing = insightsRow?.routing;
+
         for (const lead of newLeads.rows) {
           try {
             // Check if we should call now or schedule for later
             const shouldCallNow = isBusinessHours(client);
-            const scheduledFor = shouldCallNow 
-              ? new Date() // Call immediately
-              : getNextBusinessHour(client); // Schedule for next business hour
-            
+            const scheduledBaseline = shouldCallNow
+              ? new Date()
+              : getNextBusinessHour(client);
+            const scheduledFor = scheduleAtOptimalCallWindow(client, routing, scheduledBaseline, {
+              fallbackTz: TIMEZONE
+            });
+
             // Calculate priority based on lead age and source
             const leadAge = Math.floor((Date.now() - new Date(lead.created_at).getTime()) / (1000 * 60 * 60)); // hours
             let priority = 5; // Default priority
