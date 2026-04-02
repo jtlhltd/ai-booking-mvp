@@ -1100,32 +1100,85 @@
             border-top: 1px solid var(--border, #e8eaf5);
         }
 
+        .tom-ab-setup-status-line {
+            margin: 10px 0 12px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            background: rgba(92, 106, 196, 0.08);
+            border: 1px solid var(--border, #e8eaf5);
+            font-size: 0.875rem;
+            line-height: 1.45;
+            color: var(--primary, #2f3147);
+        }
+
+        .tom-ab-setup-status-line strong {
+            font-weight: 700;
+        }
+
+        .tom-ab-setup-status-line .tom-ab-status-warn {
+            color: #a65c00;
+            font-weight: 600;
+        }
+
         .tom-ab-focus-fieldset {
             border: 1px solid var(--border, #e8eaf5);
             border-radius: 10px;
-            padding: 12px 14px 14px;
-            margin: 14px 0 18px;
+            padding: 12px 14px 10px;
+            margin: 0 0 16px;
             background: rgba(92, 106, 196, 0.06);
         }
 
-        .tom-ab-focus-legend {
+        .tom-ab-focus-legend-text {
             font-weight: 700;
             font-size: 0.9375rem;
-            padding: 0 6px;
+            margin: 0 0 10px 0;
         }
 
-        .tom-ab-focus-radios {
+        .tom-ab-segmented {
             display: flex;
-            flex-wrap: wrap;
-            gap: 14px 20px;
+            width: 100%;
+            max-width: 440px;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid var(--border, #d8dbe8);
+            background: var(--card-bg, #fff);
         }
 
-        .tom-ab-radio-label {
-            font-size: 0.9rem;
+        .tom-ab-seg {
+            flex: 1;
+            min-width: 0;
+            padding: 11px 10px;
+            border: none;
+            border-right: 1px solid var(--border, #e8eaf5);
+            background: transparent;
             cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
+            font-size: 0.8125rem;
+            font-weight: 700;
+            color: var(--primary, #2f3147);
+            transition: background 0.15s ease, color 0.15s ease;
+        }
+
+        .tom-ab-seg:last-child {
+            border-right: none;
+        }
+
+        .tom-ab-seg:hover:not([aria-pressed="true"]) {
+            background: rgba(92, 106, 196, 0.08);
+        }
+
+        .tom-ab-seg[aria-pressed="true"] {
+            background: var(--primary, #5c6ac4);
+            color: #fff;
+        }
+
+        .tom-ab-seg:disabled {
+            opacity: 0.55;
+            cursor: wait;
+        }
+
+        .tom-ab-focus-msg {
+            margin: 10px 0 0 0;
+            min-height: 1.2em;
         }
 
         .tom-ab-live-pill {
@@ -5003,30 +5056,27 @@
         <section class="dashboard-section tom-ab-test-section" aria-label="A B tests outbound">
             <article class="card card-fullwidth">
                 <h3>🧪 A/B tests (outbound)</h3>
-                <p class="card-subtitle">Voice, opening line, and script can each have an experiment configured, but <strong>only one dimension is applied per dial</strong> until you switch the active dimension — so you are not changing voice, opener, and script at once.</p>
+                <p class="card-subtitle"><strong>One thing tested per dial.</strong> Pick what’s live below, then edit that experiment only — voice, opening line, and script never all vary at once.</p>
                 <div id="tomAbTestSectionRoot" class="tom-ab-test-section-root"></div>
                 <details id="tomAbTestSetupDetails" class="tom-ab-setup-details">
                     <summary class="tom-ab-setup-summary">Configure experiments on this dashboard</summary>
                     <div class="tom-ab-setup-inner tom-ab-setup-inner--dims">
                         <p class="tom-ab-test-meta" style="margin:0;">
-                            Save each dimension separately. Saving an experiment also sets it as the <strong>active dimension for dials</strong>. If several dimensions have experiment names, choose which one is live below until that test is done, then switch.
+                            <strong>1)</strong> Tap the dimension that should vary on calls. <strong>2)</strong> Open that row and save variants. Saving an experiment also marks it live.
                         </p>
-                        <fieldset class="tom-ab-focus-fieldset" aria-label="Active A B dimension for outbound dials">
-                            <legend class="tom-ab-focus-legend">Active dimension for dials</legend>
-                            <p class="tom-ab-test-meta" style="margin:0 0 8px 0;">Only this slice varies on calls; the others use your assistant defaults.</p>
-                            <div class="tom-ab-focus-radios">
-                                <label class="tom-ab-radio-label"><input type="radio" name="tomAbFocusDim" value="voice" id="tomAbFocusVoice" /> Voice</label>
-                                <label class="tom-ab-radio-label"><input type="radio" name="tomAbFocusDim" value="opening" id="tomAbFocusOpening" /> Opening line</label>
-                                <label class="tom-ab-radio-label"><input type="radio" name="tomAbFocusDim" value="script" id="tomAbFocusScript" /> Script</label>
+                        <div id="tomAbSetupStatusLine" class="tom-ab-setup-status-line" aria-live="polite"></div>
+                        <div class="tom-ab-focus-fieldset" aria-label="Active A B dimension for outbound dials">
+                            <div class="tom-ab-focus-legend-text">What’s live on dials <span class="tom-ab-test-meta" style="font-weight:400;">(tap to switch — saves automatically)</span></div>
+                            <div class="tom-ab-segmented" role="toolbar" aria-label="Choose dimension for outbound A B">
+                                <button type="button" class="tom-ab-seg" id="tomAbSegVoice" data-tom-ab-dim="voice" aria-pressed="false">Voice</button>
+                                <button type="button" class="tom-ab-seg" id="tomAbSegOpening" data-tom-ab-dim="opening" aria-pressed="false">Opening</button>
+                                <button type="button" class="tom-ab-seg" id="tomAbSegScript" data-tom-ab-dim="script" aria-pressed="false">Script</button>
                             </div>
-                            <div class="tom-ab-setup-actions" style="margin-top:10px;">
-                                <button type="button" id="tomAbFocusSaveBtn" class="export-btn secondary">Save active dimension</button>
-                            </div>
-                            <p id="tomAbFocusMsg" class="tom-ab-test-meta" role="status" style="margin:8px 0 0 0;"></p>
-                        </fieldset>
+                            <p id="tomAbFocusMsg" class="tom-ab-test-meta tom-ab-focus-msg" role="status"></p>
+                        </div>
 
-                        <details class="tom-ab-dim-block" open>
-                            <summary class="tom-ab-dim-summary">Voice only (ElevenLabs ID)</summary>
+                        <details class="tom-ab-dim-block" data-tom-ab-dim="voice" open>
+                            <summary class="tom-ab-dim-summary">Voice · ElevenLabs IDs</summary>
                             <div class="tom-ab-dim-inner">
                                 <label class="tom-ab-field">Experiment name
                                     <input type="text" id="tomAbVoiceExpName" class="tom-ab-input" placeholder="e.g. tom_voice_v1" />
@@ -5063,8 +5113,8 @@
                             </div>
                         </details>
 
-                        <details class="tom-ab-dim-block">
-                            <summary class="tom-ab-dim-summary">Opening line only</summary>
+                        <details class="tom-ab-dim-block" data-tom-ab-dim="opening">
+                            <summary class="tom-ab-dim-summary">Opening line</summary>
                             <div class="tom-ab-dim-inner">
                                 <label class="tom-ab-field">Experiment name
                                     <input type="text" id="tomAbOpenExpName" class="tom-ab-input" placeholder="e.g. tom_opening_v1" />
@@ -5101,8 +5151,8 @@
                             </div>
                         </details>
 
-                        <details class="tom-ab-dim-block">
-                            <summary class="tom-ab-dim-summary">Script only (system instructions)</summary>
+                        <details class="tom-ab-dim-block" data-tom-ab-dim="script">
+                            <summary class="tom-ab-dim-summary">Script · system instructions</summary>
                             <div class="tom-ab-dim-inner">
                                 <label class="tom-ab-field">Experiment name
                                     <input type="text" id="tomAbScriptExpName" class="tom-ab-input" placeholder="e.g. tom_script_v1" />
@@ -7933,12 +7983,73 @@ ${actionsRow}
             prefillVoice('script', 'tomAbScript');
 
             const fv = ab.focusDimension != null ? String(ab.focusDimension).trim().toLowerCase() : '';
+            if (fv === 'voice' || fv === 'opening' || fv === 'script') {
+                setTomAbFocusSegmentUI(fv);
+                syncTomAbDimensionPanels(fv);
+            } else {
+                setTomAbFocusSegmentUI('');
+                const firstWith = ['voice', 'opening', 'script'].find((d) => ab[d] && ab[d].experimentName);
+                syncTomAbDimensionPanels(firstWith || 'voice');
+            }
+            updateTomAbSetupStatusLine();
+        }
+
+        function setTomAbFocusSegmentUI(dim) {
             ['voice', 'opening', 'script'].forEach((d) => {
-                const el = document.getElementById(
-                    d === 'voice' ? 'tomAbFocusVoice' : d === 'opening' ? 'tomAbFocusOpening' : 'tomAbFocusScript'
+                const btn = document.getElementById(
+                    d === 'voice' ? 'tomAbSegVoice' : d === 'opening' ? 'tomAbSegOpening' : 'tomAbSegScript'
                 );
-                if (el) el.checked = fv === d;
+                if (btn) btn.setAttribute('aria-pressed', d === dim ? 'true' : 'false');
             });
+        }
+
+        function syncTomAbDimensionPanels(dim) {
+            document.querySelectorAll('.tom-ab-dim-block[data-tom-ab-dim]').forEach((det) => {
+                const d = det.getAttribute('data-tom-ab-dim');
+                det.open = d === dim;
+            });
+        }
+
+        function updateTomAbSetupStatusLine() {
+            const line = document.getElementById('tomAbSetupStatusLine');
+            if (!line || !isTomOutreachDashboard(currentClient)) return;
+            const ab = dashboardData && dashboardData.outboundAbTest;
+            if (!ab || typeof ab !== 'object') {
+                line.innerHTML = '';
+                return;
+            }
+            const dimLabels = { voice: 'Voice', opening: 'Opening line', script: 'Script' };
+            const active = ab.dialActiveDimensions && ab.dialActiveDimensions[0];
+            const focus = ab.focusDimension != null ? String(ab.focusDimension).trim().toLowerCase() : '';
+            const slotKey =
+                active && ['voice', 'opening', 'script'].includes(active)
+                    ? active
+                    : focus && ['voice', 'opening', 'script'].includes(focus)
+                      ? focus
+                      : null;
+            const slot = slotKey && ab[slotKey];
+            const expName = slot && slot.experimentName ? String(slot.experimentName).trim() : '';
+
+            if (ab.dialWarning) {
+                line.innerHTML = `<span class="tom-ab-status-warn">${escapeHtml(ab.dialWarning)}</span>`;
+                return;
+            }
+            if (active && expName) {
+                line.innerHTML = `<strong>Live on dials:</strong> ${escapeHtml(dimLabels[active] || active)} · <code style="font-size:0.85em;">${escapeHtml(expName)}</code>`;
+                return;
+            }
+            if (slotKey && expName) {
+                line.innerHTML = `<strong>Selected:</strong> ${escapeHtml(dimLabels[slotKey])} · <code style="font-size:0.85em;">${escapeHtml(expName)}</code> <span class="tom-ab-test-meta">(saved to config)</span>`;
+                return;
+            }
+            const configured = ['voice', 'opening', 'script'].filter((d) => ab[d] && ab[d].experimentName).length;
+            if (configured > 1) {
+                line.innerHTML =
+                    '<span class="tom-ab-status-warn">Several experiments exist — tap <strong>Voice</strong>, <strong>Opening</strong>, or <strong>Script</strong> so only one is live on dials.</span>';
+                return;
+            }
+            line.innerHTML =
+                '<span class="tom-ab-test-meta">Tap a dimension above, then expand that section to set the experiment name and two variants.</span>';
         }
 
         function initTomAbTestSetupPanel() {
@@ -7956,24 +8067,39 @@ ${actionsRow}
             bind('tomAbOpenSaveNameBtn', 'opening', 'nameOnly');
             bind('tomAbScriptSaveFullBtn', 'script', 'full');
             bind('tomAbScriptSaveNameBtn', 'script', 'nameOnly');
-            const focusBtn = document.getElementById('tomAbFocusSaveBtn');
-            if (focusBtn && focusBtn.dataset.bound !== '1') {
-                focusBtn.dataset.bound = '1';
-                focusBtn.addEventListener('click', () => saveTomOutboundAbFocus());
-            }
+            document.querySelectorAll('.tom-ab-seg[data-tom-ab-dim]').forEach((btn) => {
+                if (btn.dataset.bound === '1') return;
+                btn.dataset.bound = '1';
+                btn.addEventListener('click', () => {
+                    const dim = btn.getAttribute('data-tom-ab-dim');
+                    if (dim) saveTomOutboundAbFocus(dim);
+                });
+            });
         }
 
-        async function saveTomOutboundAbFocus() {
+        async function saveTomOutboundAbFocus(picked) {
             const msg = document.getElementById('tomAbFocusMsg');
-            const picked =
-                (document.getElementById('tomAbFocusVoice') && document.getElementById('tomAbFocusVoice').checked && 'voice') ||
-                (document.getElementById('tomAbFocusOpening') && document.getElementById('tomAbFocusOpening').checked && 'opening') ||
-                (document.getElementById('tomAbFocusScript') && document.getElementById('tomAbFocusScript').checked && 'script') ||
-                '';
-            if (!picked) {
-                if (msg) msg.textContent = 'Select voice, opening line, or script.';
+            if (!picked || !['voice', 'opening', 'script'].includes(picked)) return;
+            setTomAbFocusSegmentUI(picked);
+            syncTomAbDimensionPanels(picked);
+            const cur =
+                dashboardData?.outboundAbTest?.focusDimension != null
+                    ? String(dashboardData.outboundAbTest.focusDimension).trim().toLowerCase()
+                    : '';
+            if (cur === picked) {
+                updateTomAbSetupStatusLine();
+                if (msg) {
+                    msg.textContent = 'Already live on dials.';
+                    setTimeout(() => {
+                        if (msg && msg.textContent === 'Already live on dials.') msg.textContent = '';
+                    }, 2200);
+                }
                 return;
             }
+            const segs = document.querySelectorAll('.tom-ab-seg[data-tom-ab-dim]');
+            segs.forEach((b) => {
+                b.disabled = true;
+            });
             if (msg) msg.textContent = '';
             try {
                 const res = await fetch(`${BASE_URL}/api/clients/${encodeURIComponent(currentClient)}/config`, {
@@ -7983,7 +8109,7 @@ ${actionsRow}
                 });
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
-                if (msg) msg.textContent = 'Saved. Refreshing…';
+                if (msg) msg.textContent = 'Updated.';
                 const livePayload = await fetchLiveData(currentClient);
                 if (livePayload) {
                     dashboardData = mergeData({}, livePayload, false);
@@ -7995,9 +8121,18 @@ ${actionsRow}
                     renderTomAbTestSection(dashboardData);
                 }
                 prefillTomAbTestFormFromData();
-                if (msg) msg.textContent = 'Saved.';
+                updateTomAbSetupStatusLine();
+                if (msg) {
+                    setTimeout(() => {
+                        if (msg && msg.textContent === 'Updated.') msg.textContent = '';
+                    }, 2200);
+                }
             } catch (err) {
                 if (msg) msg.textContent = err.message || 'Save failed';
+            } finally {
+                segs.forEach((b) => {
+                    b.disabled = false;
+                });
             }
         }
 
