@@ -9499,6 +9499,33 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       }
     }
 
+    let liveResults = null;
+    try {
+      const { buildOutboundAbLiveResultsPayload } = await import('./lib/outbound-ab-live-results.js');
+      liveResults = buildOutboundAbLiveResultsPayload({
+        client,
+        dimensionalMode,
+        focusValid,
+        voiceExpName,
+        voiceSummary,
+        openingExpName,
+        openingSummary,
+        scriptExpName,
+        scriptSummary,
+        legacyOutboundAbExperimentName,
+        legacyOutboundAbSummary
+      });
+    } catch (liveResErr) {
+      console.error('[DEMO DASHBOARD] outbound A/B liveResults error:', liveResErr?.message || liveResErr);
+      liveResults = {
+        serverTime: new Date().toISOString(),
+        minSamplesPerVariant: 30,
+        notifyEmailConfigured: false,
+        focusExperiment: null,
+        reason: 'build_error'
+      };
+    }
+
     const payload = {
       ok: true,
       source: 'live',
@@ -9542,7 +9569,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
           client?.vapi?.outboundAbBundleAt != null &&
           String(client.vapi.outboundAbBundleAt).trim() !== ''
             ? String(client.vapi.outboundAbBundleAt).trim()
-            : null
+            : null,
+        liveResults
       },
       metrics: {
         totalLeads,

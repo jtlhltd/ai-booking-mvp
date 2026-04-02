@@ -1320,6 +1320,59 @@
             margin-top: 4px;
         }
 
+        .tom-ab-live-results-panel {
+            margin-bottom: 1.25rem;
+            padding: 14px 16px;
+            border-radius: 12px;
+            border: 1px solid var(--border, #e8eaf5);
+            background: linear-gradient(165deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 249, 252, 0.98) 100%);
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+        }
+
+        body[data-theme='dark'] .tom-ab-live-results-panel {
+            background: rgba(30, 32, 44, 0.6);
+            border-color: rgba(255, 255, 255, 0.08);
+        }
+
+        .tom-ab-live-results-head {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .tom-ab-live-results-actions {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .tom-ab-live-results-actions .tom-ab-live-refresh-btn {
+            padding: 6px 14px;
+            font-size: 0.8125rem;
+        }
+
+        .tom-ab-live-ok {
+            color: #0d7a3e;
+            font-weight: 600;
+            font-size: 0.8125rem;
+        }
+
+        .tom-ab-live-progress {
+            font-size: 0.8125rem;
+            color: var(--muted);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .tom-ab-live-ready {
+            margin: 0;
+            font-size: 0.875rem;
+            color: var(--text, #2f3147);
+            line-height: 1.45;
+        }
+
         .tom-ab-setup-details {
             margin-top: 16px;
             padding-top: 14px;
@@ -8283,6 +8336,117 @@ Aliases: voiceIds / voice, openingLines / openers / opening, scripts / scriptBod
             </div>`;
         }
 
+        function renderTomAbLiveResultsPanel(ab) {
+            const lr = ab && ab.liveResults;
+            if (!lr || typeof lr !== 'object') return '';
+            const fe = lr.focusExperiment;
+            const dimLabels = { voice: 'Voice', opening: 'Opening line', script: 'Script' };
+            const t =
+                lr.serverTime != null && String(lr.serverTime).trim()
+                    ? escapeHtml(new Date(String(lr.serverTime).trim()).toLocaleString())
+                    : '—';
+            let body = '';
+            if (fe && Array.isArray(fe.variants) && fe.variants.length) {
+                const dimLine =
+                    fe.dimension && dimLabels[fe.dimension]
+                        ? dimLabels[fe.dimension]
+                        : fe.dimension
+                          ? escapeHtml(fe.dimension)
+                          : 'Legacy combined test';
+                const readyLine = fe.allVariantsMeetMinSamples
+                    ? `<p class="tom-ab-live-ready"><strong>Sample target reached</strong> for every variant (${lr.minSamplesPerVariant}+ leads each).${
+                          lr.notifyEmailConfigured
+                              ? ' Check your inbox for the review email if it has not arrived yet.'
+                              : ''
+                      } You still choose the control — nothing is applied automatically.</p>`
+                    : `<p class="tom-ab-test-meta" style="margin:0 0 10px 0;">Collecting leads… alert sends at <strong>${formatNumber(
+                          lr.minSamplesPerVariant
+                      )}</strong> per variant (configure under <strong>Sample-ready email</strong> below).</p>`;
+                const rows = fe.variants
+                    .map((v) => {
+                        const rate =
+                            v.totalLeads > 0 && v.conversionRatePct != null
+                                ? `${Number(v.conversionRatePct).toFixed(1)}%`
+                                : '—';
+                        const sampleCell = v.meetsMinSamples
+                            ? `<span class="tom-ab-live-ok">✓ ${formatNumber(lr.minSamplesPerVariant)}+</span>`
+                            : `<span class="tom-ab-live-progress">${formatNumber(v.totalLeads)} / ${formatNumber(
+                                  lr.minSamplesPerVariant
+                              )}</span>`;
+                        return `<tr>
+                            <td><strong>${escapeHtml(v.variantName)}</strong></td>
+                            <td>${formatNumber(v.totalLeads)}</td>
+                            <td>${formatNumber(v.convertedLeads)}</td>
+                            <td>${escapeHtml(rate)}</td>
+                            <td>${sampleCell}</td>
+                        </tr>`;
+                    })
+                    .join('');
+                body = `<p class="tom-ab-test-meta" style="margin:0 0 8px 0;"><strong>${dimLine}</strong> · <code style="font-size:0.85em;">${escapeHtml(
+                    fe.experimentName
+                )}</code></p>
+                    ${readyLine}
+                    <div class="tom-ab-test-table-wrap" style="margin-top:10px;">
+                        <table class="tom-ab-test-table" aria-label="Live outbound A B results for current focus">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Variant</th>
+                                    <th scope="col">Leads</th>
+                                    <th scope="col">Converted</th>
+                                    <th scope="col">Rate</th>
+                                    <th scope="col">Sample target</th>
+                                </tr>
+                            </thead>
+                            <tbody>${rows}</tbody>
+                        </table>
+                    </div>`;
+            } else {
+                const hint =
+                    lr.reason === 'no_focus'
+                        ? 'Tap <strong>Voice</strong>, <strong>Opening</strong>, or <strong>Script</strong> under <em>What’s live on dials</em> so this panel can show the active experiment’s counts.'
+                        : lr.reason === 'no_summary' || lr.reason === 'no_variants'
+                          ? 'Deploy or save an experiment with variants — live counts will show here.'
+                          : 'Live counts will appear when a focused outbound A/B experiment has data.';
+                body = `<p class="tom-ab-test-meta" style="margin:0;">${hint}</p>`;
+            }
+            return `<section class="tom-ab-live-results-panel" aria-labelledby="tom-ab-live-results-h">
+                <div class="tom-ab-live-results-head">
+                    <h4 class="tom-ab-panel-title" id="tom-ab-live-results-h" style="margin:0;">Live results</h4>
+                    <div class="tom-ab-live-results-actions">
+                        <span class="tom-ab-test-meta" id="tomAbLiveResultsAsOf">Updated ${t}</span>
+                        <button type="button" class="export-btn secondary tom-ab-live-refresh-btn" id="tomAbRefreshLiveResultsBtn">Refresh</button>
+                    </div>
+                </div>
+                <p class="tom-ab-test-meta" style="margin:4px 0 12px 0;">Pulls fresh numbers from the server (same basis as the sample-ready email).</p>
+                ${body}
+            </section>`;
+        }
+
+        async function refreshTomOutboundAbLiveResults() {
+            const btn = document.getElementById('tomAbRefreshLiveResultsBtn');
+            if (btn) btn.disabled = true;
+            try {
+                const livePayload = await fetchLiveData(currentClient);
+                if (livePayload) {
+                    dashboardData = mergeData({}, livePayload, false);
+                    updateStatusBar(dashboardData);
+                    renderRecentActivity(dashboardData);
+                    renderLeadJourney(dashboardData);
+                    renderLeads(dashboardData.recentLeads || []);
+                    renderCalls(dashboardData.recentCalls || []);
+                    renderTomAbTestSection(dashboardData);
+                }
+                prefillTomAbTestFormFromData();
+                updateTomAbSetupStatusLine();
+                syncTomAbQuickDimFromSegment();
+            } catch (err) {
+                console.error('[Tom A/B refresh]', err);
+            } finally {
+                const b = document.getElementById('tomAbRefreshLiveResultsBtn');
+                if (b) b.disabled = false;
+            }
+        }
+
         function setTomAbFocusSegmentUI(dim) {
             ['voice', 'opening', 'script'].forEach((d) => {
                 const btn = document.getElementById(
@@ -8545,14 +8709,19 @@ Aliases: voiceIds / voice, openingLines / openers / opening, scripts / scriptBod
             }
         }
 
-        function initTomAbBundleAdvanceDelegation() {
+        function initTomAbOutreachSectionDelegation() {
             const sec = document.getElementById('tomAbOutreachAbSection');
-            if (!sec || sec.dataset.bundleAdvBound === '1') return;
-            sec.dataset.bundleAdvBound = '1';
+            if (!sec || sec.dataset.tomAbClickBound === '1') return;
+            sec.dataset.tomAbClickBound = '1';
             sec.addEventListener('click', (e) => {
                 if (e.target.closest('#tomAbBundleAdvanceBtn')) {
                     e.preventDefault();
                     tomAbBundleAdvance();
+                    return;
+                }
+                if (e.target.closest('#tomAbRefreshLiveResultsBtn')) {
+                    e.preventDefault();
+                    refreshTomOutboundAbLiveResults();
                 }
             });
         }
@@ -8908,6 +9077,7 @@ Aliases: voiceIds / voice, openingLines / openers / opening, scripts / scriptBod
                 if (ab.dialWarning) {
                     html += `<div class="tom-ab-inferred-banner" role="alert">${escapeHtml(ab.dialWarning)}</div>`;
                 }
+                html += renderTomAbLiveResultsPanel(ab);
                 html += renderTomAbBundleWizard(ab);
                 html += renderTomAbDimBlock(
                     'voice',
@@ -8939,6 +9109,9 @@ Aliases: voiceIds / voice, openingLines / openers / opening, scripts / scriptBod
             }
 
             if (hasLegacy && ab.mode === 'legacy') {
+                if (!hasDim) {
+                    html += renderTomAbLiveResultsPanel(ab);
+                }
                 const feedCounts = (ab && ab.recentFeedVariantCounts) || {};
                 const exp = leg.experimentName ? String(leg.experimentName).trim() : '';
                 const summary = leg.summary;
@@ -11718,7 +11891,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             applyRoiPanelVisibility(currentClient);
             applyTomOutreachDashboardMode(currentClient);
             initTomAbTestSetupPanel();
-            initTomAbBundleAdvanceDelegation();
+            initTomAbOutreachSectionDelegation();
             tomAbClientVapiSnapshot = null;
 
             // Fetch client config from API if not demo
