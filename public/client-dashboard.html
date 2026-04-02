@@ -5299,6 +5299,34 @@ ${actionsRow}
             return null;
         }
 
+        /** Cheap fingerprint so background polls can skip full re-renders when nothing changed. */
+        function dashboardPollFingerprint(d) {
+            if (!d || typeof d !== 'object') return '';
+            const calls = d.recentCalls || [];
+            const leads = d.recentLeads || [];
+            const appts = d.appointments || [];
+            const callSig = calls.slice(0, 12).map((c) => String(c.callId || c.id || '')).join(',');
+            const leadSig = leads.slice(0, 12).map((l) => String(l.id || l.phone || '')).join(',');
+            const tp = d.touchpoints;
+            const tpData = tp && Array.isArray(tp.data) ? tp.data.join(',') : '';
+            return [
+                d.totalLeads,
+                d.totalCalls,
+                d.bookingsThisWeek,
+                d.last24hLeads,
+                calls.length,
+                callSig,
+                leads.length,
+                leadSig,
+                appts.length,
+                String((appts[0] && (appts[0].id || appts[0].start)) || ''),
+                tpData
+            ].join('|');
+        }
+
+        let dashboardPollInFlight = false;
+        let lastDashboardPollFingerprint = '';
+
         function mergeData(base = {}, livePayload, isDemoClient = false) {
             if (!livePayload) return base;
             
@@ -5310,13 +5338,6 @@ ${actionsRow}
                 // Real client - use API data directly from livePayload
                 const metrics = livePayload.metrics || {};
                 const recentCalls = livePayload.recentCalls || [];
-                console.log('[DASHBOARD MERGE] Real client mode - recentCalls from API:', {
-                    count: recentCalls.length,
-                    calls: recentCalls,
-                    livePayloadKeys: Object.keys(livePayload),
-                    hasRecentCalls: !!livePayload.recentCalls,
-                    recentCallsType: Array.isArray(recentCalls) ? 'array' : typeof recentCalls
-                });
                 return {
                     recentLeadsListCap: livePayload.recentLeadsListCap ?? RECENT_LEADS_DASHBOARD_CAP,
                     totalLeads: metrics.totalLeads || livePayload.totalLeads || 0,
@@ -8406,7 +8427,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 if (document.visibilityState !== 'visible') return;
                 if (followUpEditing) return;
                 loadFollowUpQueue(currentClient, { page: followUpQueuePage, silent: true });
-            }, 90000);
+            }, isTomOutreachDashboard(currentClient) ? 120000 : 90000);
         }
 
         async function viewLeadTimeline(leadId, name) {
@@ -9323,6 +9344,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     ? []
                     : (config.customWorkflow || config.workflow || CLIENT_CONFIG.demo_client.workflow)
             );
+            lastDashboardPollFingerprint = dashboardPollFingerprint(dashboardData);
             
             // Load async data in parallel (non-blocking)
             Promise.all([
@@ -9351,13 +9373,20 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 });
             }, 100);
 
+            const dashboardPollMs = isTomOutreachDashboard(currentClient) ? 120000 : 60000;
             setInterval(async () => {
+                if (document.visibilityState === 'hidden') return;
+                if (dashboardPollInFlight) return;
+                dashboardPollInFlight = true;
                 try {
                     const refreshPayload = await fetchLiveData(currentClient);
-                    // Update freshness timestamp even in demo mode
                     lastDataUpdate = new Date();
                     if (refreshPayload) {
-                        dashboardData = mergeData(dashboardData, refreshPayload);
+                        const merged = mergeData(dashboardData, refreshPayload);
+                        const fp = dashboardPollFingerprint(merged);
+                        if (fp === lastDashboardPollFingerprint) return;
+                        lastDashboardPollFingerprint = fp;
+                        dashboardData = merged;
                         updateStatusBar(dashboardData);
                         renderRecentActivity(dashboardData);
                         if (shouldShowRoiPanel(currentClient)) {
@@ -9379,9 +9408,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     }
                 } catch (error) {
                     console.error('Failed to refresh dashboard data', error);
-                    // Silent fail for background refresh - don't interrupt user
+                } finally {
+                    dashboardPollInFlight = false;
                 }
-            }, 30000);
+            }, dashboardPollMs);
         }
 
         // Accessibility improvements
