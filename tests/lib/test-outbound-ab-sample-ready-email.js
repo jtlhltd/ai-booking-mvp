@@ -45,8 +45,28 @@ test('parseMinSamplesPerVariant: vapi and default', () => {
   assert.equal(parseMinSamplesPerVariant({}), 30);
 });
 
-test('resolveSampleReadyNotifyEmail: vapi wins', () => {
-  assert.equal(resolveSampleReadyNotifyEmail({ outboundAbSampleReadyEmail: 'a@b.c' }), 'a@b.c');
+test('resolveSampleReadyNotifyEmail: env wins over vapi', () => {
+  const prev = process.env.OUTBOUND_AB_SAMPLE_READY_EMAIL;
+  process.env.OUTBOUND_AB_SAMPLE_READY_EMAIL = 'ops@render.com';
+  try {
+    assert.equal(
+      resolveSampleReadyNotifyEmail({ outboundAbSampleReadyEmail: 'tenant@x.com' }),
+      'ops@render.com'
+    );
+  } finally {
+    if (prev === undefined) delete process.env.OUTBOUND_AB_SAMPLE_READY_EMAIL;
+    else process.env.OUTBOUND_AB_SAMPLE_READY_EMAIL = prev;
+  }
+});
+
+test('resolveSampleReadyNotifyEmail: vapi fallback when env unset', () => {
+  const prev = process.env.OUTBOUND_AB_SAMPLE_READY_EMAIL;
+  delete process.env.OUTBOUND_AB_SAMPLE_READY_EMAIL;
+  try {
+    assert.equal(resolveSampleReadyNotifyEmail({ outboundAbSampleReadyEmail: 'a@b.c' }), 'a@b.c');
+  } finally {
+    if (prev !== undefined) process.env.OUTBOUND_AB_SAMPLE_READY_EMAIL = prev;
+  }
 });
 
 test('getSampleReadyNotifiedMap: nested object or JSON string', () => {

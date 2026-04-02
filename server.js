@@ -9526,6 +9526,13 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       };
     }
 
+    const { isOutboundAbReviewPending } = await import('./lib/outbound-ab-review-lock.js');
+    const reviewPending = isOutboundAbReviewPending(client?.vapi);
+    const reviewPendingSinceRaw =
+      client?.vapi?.outboundAbReviewPending != null ? String(client.vapi.outboundAbReviewPending).trim() : '';
+    const reviewPendingSince =
+      reviewPending && reviewPendingSinceRaw !== '' ? reviewPendingSinceRaw : null;
+
     const payload = {
       ok: true,
       source: 'live',
@@ -9570,7 +9577,9 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
           String(client.vapi.outboundAbBundleAt).trim() !== ''
             ? String(client.vapi.outboundAbBundleAt).trim()
             : null,
-        liveResults
+        liveResults,
+        reviewPending,
+        reviewPendingSince
       },
       metrics: {
         totalLeads,
@@ -24456,6 +24465,16 @@ app.patch('/api/clients/:clientKey/config', async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
+    if (selfServiceOk) {
+      const { isOutboundAbReviewPending, OUTBOUND_AB_REVIEW_PENDING_MESSAGE } = await import(
+        './lib/outbound-ab-review-lock.js'
+      );
+      const existingLock = await getFullClient(clientKey);
+      if (isOutboundAbReviewPending(existingLock?.vapi)) {
+        return res.status(423).json({ ok: false, error: OUTBOUND_AB_REVIEW_PENDING_MESSAGE });
+      }
+    }
+
     const { updateClientConfig } = await import('./lib/client-onboarding.js');
 
     const result = await updateClientConfig(clientKey, req.body);
@@ -24470,6 +24489,14 @@ app.patch('/api/clients/:clientKey/config', async (req, res) => {
 /** Shared create path for outbound A/B (dimension + variants + optional experiment name — auto-generated if blank). */
 async function runOutboundAbTestSetup(clientKey, body, res) {
   try {
+    const { isOutboundAbReviewPending, OUTBOUND_AB_REVIEW_PENDING_MESSAGE } = await import(
+      './lib/outbound-ab-review-lock.js'
+    );
+    const lockClient = await getFullClient(clientKey);
+    if (isOutboundAbReviewPending(lockClient?.vapi)) {
+      res.status(423).json({ ok: false, error: OUTBOUND_AB_REVIEW_PENDING_MESSAGE });
+      return;
+    }
     const { OUTBOUND_AB_VAPI_KEYS } = await import('./lib/outbound-ab-variant.js');
     const { experimentName, variants, replaceExisting = true, dimension } = body || {};
     const dimRaw = dimension != null ? String(dimension).trim().toLowerCase() : '';
@@ -24650,6 +24677,12 @@ app.post('/api/clients/:clientKey/outbound-ab-test-bundle', async (req, res) => 
 
     const { deactivateAbTestExperimentsByName } = await import('./db.js');
     const existing = await getFullClient(clientKey);
+    const { isOutboundAbReviewPending, OUTBOUND_AB_REVIEW_PENDING_MESSAGE } = await import(
+      './lib/outbound-ab-review-lock.js'
+    );
+    if (isOutboundAbReviewPending(existing?.vapi)) {
+      return res.status(423).json({ ok: false, error: OUTBOUND_AB_REVIEW_PENDING_MESSAGE });
+    }
     const prevVapi = existing && existing.vapi && typeof existing.vapi === 'object' ? existing.vapi : {};
     for (const k of ['outboundAbVoiceExperiment', 'outboundAbOpeningExperiment', 'outboundAbScriptExperiment']) {
       const n = prevVapi[k] != null ? String(prevVapi[k]).trim() : '';
@@ -24690,7 +24723,8 @@ app.post('/api/clients/:clientKey/outbound-ab-test-bundle', async (req, res) => 
         [OUTBOUND_AB_VAPI_KEYS.script]: scriptExp,
         outboundAbFocusDimension: 'voice',
         outboundAbBundlePhase: 'voice',
-        outboundAbBundleAt: nowIso
+        outboundAbBundleAt: nowIso,
+        outboundAbReviewPending: ''
       }
     });
 
@@ -24715,7 +24749,7 @@ app.post('/api/clients/:clientKey/outbound-ab-test-bundle', async (req, res) => 
   }
 });
 
-// Advance bundle: voice → opening → script → complete (one factor live per phase).
+// Advance bundle: voice → opening → script → complete (API_KEY only when no review pending — prefer review-continue).
 app.post('/api/clients/:clientKey/outbound-ab-test-bundle-advance', async (req, res) => {
   const { clientKey } = req.params;
   const apiKey = req.get('X-API-Key');
@@ -24726,38 +24760,83 @@ app.post('/api/clients/:clientKey/outbound-ab-test-bundle-advance', async (req, 
   }
   try {
     const client = await getFullClient(clientKey);
-    const phaseRaw =
-      client && client.vapi && client.vapi.outboundAbBundlePhase != null
-        ? String(client.vapi.outboundAbBundlePhase).trim().toLowerCase()
-        : '';
-    if (!phaseRaw || phaseRaw === 'complete') {
+    const { isOutboundAbReviewPending, OUTBOUND_AB_REVIEW_PENDING_MESSAGE } = await import(
+      './lib/outbound-ab-review-lock.js'
+    );
+    if (isOutboundAbReviewPending(client?.vapi)) {
+      return res.status(423).json({ ok: false, error: OUTBOUND_AB_REVIEW_PENDING_MESSAGE });
+    }
+    const { advanceOutboundAbBundlePhase } = await import('./lib/outbound-ab-bundle-advance.js');
+    const out = await advanceOutboundAbBundlePhase(clientKey);
+    if (!out.advanced) {
       return res.status(400).json({
         ok: false,
-        error: 'No active bundle phase. Deploy a bundle from the dashboard first.'
+        error:
+          out.reason === 'no_active_phase'
+            ? 'No active bundle phase. Deploy a bundle from the dashboard first.'
+            : out.reason || 'Cannot advance bundle'
       });
     }
-    const { updateClientConfig } = await import('./lib/client-onboarding.js');
-    if (phaseRaw === 'voice') {
-      await updateClientConfig(clientKey, {
-        vapi: { outboundAbFocusDimension: 'opening', outboundAbBundlePhase: 'opening' }
-      });
-      return res.json({ ok: true, bundlePhase: 'opening', outboundAbFocusDimension: 'opening' });
-    }
-    if (phaseRaw === 'opening') {
-      await updateClientConfig(clientKey, {
-        vapi: { outboundAbFocusDimension: 'script', outboundAbBundlePhase: 'script' }
-      });
-      return res.json({ ok: true, bundlePhase: 'script', outboundAbFocusDimension: 'script' });
-    }
-    if (phaseRaw === 'script') {
-      await updateClientConfig(clientKey, {
-        vapi: { outboundAbBundlePhase: 'complete' }
-      });
-      return res.json({ ok: true, bundlePhase: 'complete', outboundAbFocusDimension: 'script' });
-    }
-    return res.status(400).json({ ok: false, error: `Unknown bundle phase: ${phaseRaw}` });
+    return res.json({
+      ok: true,
+      bundlePhase: out.bundlePhase,
+      outboundAbFocusDimension: out.outboundAbFocusDimension
+    });
   } catch (error) {
     console.error('[OUTBOUND AB BUNDLE ADVANCE ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message || String(error) });
+  }
+});
+
+// Operator: after sample-ready email, clear review lock and advance one bundle phase (if a bundle is active).
+app.post('/api/clients/:clientKey/outbound-ab-review-continue', async (req, res) => {
+  const { clientKey } = req.params;
+  const apiKey = req.get('X-API-Key');
+  const keyOk = apiKey && apiKey === process.env.API_KEY;
+  const selfOk = isDashboardSelfServiceClient(clientKey);
+  if (!keyOk && !selfOk) {
+    return res.status(401).json({ ok: false, error: 'Unauthorized' });
+  }
+  try {
+    const { isOutboundAbReviewPending } = await import('./lib/outbound-ab-review-lock.js');
+    const { updateClientConfig } = await import('./lib/client-onboarding.js');
+    const before = await getFullClient(clientKey);
+    if (!isOutboundAbReviewPending(before?.vapi)) {
+      return res.status(400).json({
+        ok: false,
+        error: 'No review is pending. This action runs only after the sample-ready email.'
+      });
+    }
+    await updateClientConfig(clientKey, { vapi: { outboundAbReviewPending: '' } });
+    const after = await getFullClient(clientKey);
+    const phase =
+      after?.vapi?.outboundAbBundlePhase != null
+        ? String(after.vapi.outboundAbBundlePhase).trim().toLowerCase()
+        : '';
+    let bundlePhase = phase || null;
+    let outboundAbFocusDimension =
+      after?.vapi?.outboundAbFocusDimension != null
+        ? String(after.vapi.outboundAbFocusDimension).trim()
+        : null;
+    let advanced = false;
+    if (phase && phase !== 'complete') {
+      const { advanceOutboundAbBundlePhase } = await import('./lib/outbound-ab-bundle-advance.js');
+      const adv = await advanceOutboundAbBundlePhase(clientKey);
+      advanced = adv.advanced;
+      if (adv.bundlePhase) bundlePhase = adv.bundlePhase;
+      if (adv.outboundAbFocusDimension) outboundAbFocusDimension = adv.outboundAbFocusDimension;
+    }
+    const finalClient = await getFullClient(clientKey);
+    return res.json({
+      ok: true,
+      reviewPending: false,
+      bundleAdvanced: advanced,
+      bundlePhase,
+      outboundAbFocusDimension,
+      vapi: finalClient?.vapi || null
+    });
+  } catch (error) {
+    console.error('[OUTBOUND AB REVIEW CONTINUE ERROR]', error);
     res.status(500).json({ ok: false, error: error.message || String(error) });
   }
 });
