@@ -9532,7 +9532,17 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         recentFeedAbByDimension,
         focusDimension: focusStored || null,
         dialActiveDimensions,
-        dialWarning
+        dialWarning,
+        bundlePhase:
+          client?.vapi?.outboundAbBundlePhase != null &&
+          String(client.vapi.outboundAbBundlePhase).trim() !== ''
+            ? String(client.vapi.outboundAbBundlePhase).trim()
+            : null,
+        bundleStartedAt:
+          client?.vapi?.outboundAbBundleAt != null &&
+          String(client.vapi.outboundAbBundleAt).trim() !== ''
+            ? String(client.vapi.outboundAbBundleAt).trim()
+            : null
       },
       metrics: {
         totalLeads,
@@ -24575,6 +24585,151 @@ app.post('/api/clients/:clientKey/outbound-ab-test-import', async (req, res) => 
     },
     res
   );
+});
+
+// Tom / dashboard: one JSON upload → three experiments (voice, opening, script) + bundle phase (starts on voice).
+app.post('/api/clients/:clientKey/outbound-ab-test-bundle', async (req, res) => {
+  const { clientKey } = req.params;
+  const apiKey = req.get('X-API-Key');
+  const keyOk = apiKey && apiKey === process.env.API_KEY;
+  const selfOk = isDashboardSelfServiceClient(clientKey);
+  if (!keyOk && !selfOk) {
+    return res.status(401).json({ ok: false, error: 'Unauthorized' });
+  }
+  const raw =
+    typeof req.body?.json === 'string'
+      ? req.body.json
+      : req.body?.json != null
+        ? JSON.stringify(req.body.json)
+        : '';
+  const text = String(raw || '').trim();
+  if (!text) {
+    return res.status(400).json({ ok: false, error: 'json field is required (string or object)' });
+  }
+  let voices;
+  let openings;
+  let scripts;
+  try {
+    const { parseOutboundAbBundleSpec, stringsToMappedVariants } = await import(
+      './lib/outbound-ab-bundle-spec.js'
+    );
+    ({ voices, openings, scripts } = parseOutboundAbBundleSpec(text));
+    const voiceVariants = stringsToMappedVariants('voice', voices);
+    const openingVariants = stringsToMappedVariants('opening', openings);
+    const scriptVariants = stringsToMappedVariants('script', scripts);
+
+    const { deactivateAbTestExperimentsByName } = await import('./db.js');
+    const existing = await getFullClient(clientKey);
+    const prevVapi = existing && existing.vapi && typeof existing.vapi === 'object' ? existing.vapi : {};
+    for (const k of ['outboundAbVoiceExperiment', 'outboundAbOpeningExperiment', 'outboundAbScriptExperiment']) {
+      const n = prevVapi[k] != null ? String(prevVapi[k]).trim() : '';
+      if (n) await deactivateAbTestExperimentsByName(clientKey, n);
+    }
+
+    const slug = String(clientKey)
+      .replace(/[^a-z0-9_-]+/gi, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '')
+      .slice(0, 24);
+    const bid = nanoid(8);
+    const voiceExp = `ab_b_${slug || 'tenant'}_${bid}_voice`;
+    const openingExp = `ab_b_${slug || 'tenant'}_${bid}_open`;
+    const scriptExp = `ab_b_${slug || 'tenant'}_${bid}_script`;
+
+    for (const [name, variants] of [
+      [voiceExp, voiceVariants],
+      [openingExp, openingVariants],
+      [scriptExp, scriptVariants]
+    ]) {
+      await deactivateAbTestExperimentsByName(clientKey, name);
+      await createABTestExperiment({
+        clientKey,
+        experimentName: name,
+        variants,
+        isActive: true
+      });
+    }
+
+    const { OUTBOUND_AB_VAPI_KEYS } = await import('./lib/outbound-ab-variant.js');
+    const { updateClientConfig } = await import('./lib/client-onboarding.js');
+    const nowIso = new Date().toISOString();
+    await updateClientConfig(clientKey, {
+      vapi: {
+        [OUTBOUND_AB_VAPI_KEYS.voice]: voiceExp,
+        [OUTBOUND_AB_VAPI_KEYS.opening]: openingExp,
+        [OUTBOUND_AB_VAPI_KEYS.script]: scriptExp,
+        outboundAbFocusDimension: 'voice',
+        outboundAbBundlePhase: 'voice',
+        outboundAbBundleAt: nowIso
+      }
+    });
+
+    res.json({
+      ok: true,
+      voiceExperiment: voiceExp,
+      openingExperiment: openingExp,
+      scriptExperiment: scriptExp,
+      bundlePhase: 'voice',
+      outboundAbFocusDimension: 'voice',
+      variantCounts: {
+        voice: voiceVariants.length,
+        opening: openingVariants.length,
+        script: scriptVariants.length
+      }
+    });
+  } catch (e) {
+    console.error('[OUTBOUND AB BUNDLE ERROR]', e);
+    const msg = e && e.message ? String(e.message) : String(e);
+    const code = /Invalid JSON|Missing |Empty |dimension must|Each list needs/.test(msg) ? 400 : 500;
+    res.status(code).json({ ok: false, error: msg });
+  }
+});
+
+// Advance bundle: voice → opening → script → complete (one factor live per phase).
+app.post('/api/clients/:clientKey/outbound-ab-test-bundle-advance', async (req, res) => {
+  const { clientKey } = req.params;
+  const apiKey = req.get('X-API-Key');
+  const keyOk = apiKey && apiKey === process.env.API_KEY;
+  const selfOk = isDashboardSelfServiceClient(clientKey);
+  if (!keyOk && !selfOk) {
+    return res.status(401).json({ ok: false, error: 'Unauthorized' });
+  }
+  try {
+    const client = await getFullClient(clientKey);
+    const phaseRaw =
+      client && client.vapi && client.vapi.outboundAbBundlePhase != null
+        ? String(client.vapi.outboundAbBundlePhase).trim().toLowerCase()
+        : '';
+    if (!phaseRaw || phaseRaw === 'complete') {
+      return res.status(400).json({
+        ok: false,
+        error: 'No active bundle phase. Deploy a bundle from the dashboard first.'
+      });
+    }
+    const { updateClientConfig } = await import('./lib/client-onboarding.js');
+    if (phaseRaw === 'voice') {
+      await updateClientConfig(clientKey, {
+        vapi: { outboundAbFocusDimension: 'opening', outboundAbBundlePhase: 'opening' }
+      });
+      return res.json({ ok: true, bundlePhase: 'opening', outboundAbFocusDimension: 'opening' });
+    }
+    if (phaseRaw === 'opening') {
+      await updateClientConfig(clientKey, {
+        vapi: { outboundAbFocusDimension: 'script', outboundAbBundlePhase: 'script' }
+      });
+      return res.json({ ok: true, bundlePhase: 'script', outboundAbFocusDimension: 'script' });
+    }
+    if (phaseRaw === 'script') {
+      await updateClientConfig(clientKey, {
+        vapi: { outboundAbBundlePhase: 'complete' }
+      });
+      return res.json({ ok: true, bundlePhase: 'complete', outboundAbFocusDimension: 'script' });
+    }
+    return res.status(400).json({ ok: false, error: `Unknown bundle phase: ${phaseRaw}` });
+  } catch (error) {
+    console.error('[OUTBOUND AB BUNDLE ADVANCE ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message || String(error) });
+  }
 });
 
 // Deactivate Client

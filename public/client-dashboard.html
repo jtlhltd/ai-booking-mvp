@@ -1304,6 +1304,22 @@
             color: var(--text, #2f3147);
         }
 
+        .tom-ab-bundle-banner {
+            font-size: 0.875rem;
+            line-height: 1.45;
+            color: var(--text, #2f3147);
+            padding: 12px 14px;
+            margin-bottom: 14px;
+            border-radius: 10px;
+            background: rgba(92, 106, 196, 0.1);
+            border: 1px solid rgba(92, 106, 196, 0.28);
+        }
+
+        .tom-ab-bundle-banner .tom-ab-test-meta {
+            display: block;
+            margin-top: 4px;
+        }
+
         .tom-ab-setup-details {
             margin-top: 16px;
             padding-top: 14px;
@@ -5076,10 +5092,14 @@
             </div>
         </section>
 
-        <section class="dashboard-section tom-ab-test-section" aria-label="A B tests outbound">
+        <section
+            class="dashboard-section tom-ab-test-section"
+            id="tomAbOutreachAbSection"
+            aria-label="A B tests outbound"
+        >
             <article class="card card-fullwidth">
                 <h3>🧪 A/B tests (outbound)</h3>
-                <p class="card-subtitle"><strong>One thing tested per dial.</strong> Use <strong>Quick create</strong> to upload or paste JSON variants, or configure each dimension by hand — voice, opening, and script never all vary on the same call.</p>
+                <p class="card-subtitle"><strong>One thing tested per dial.</strong> Use <strong>Full sequence bundle</strong> to upload voices, openings, and scripts in one JSON (we create three experiments and walk you through phases), or use <strong>Quick create</strong> / manual rows for a single dimension.</p>
                 <div id="tomAbTestSectionRoot" class="tom-ab-test-section-root"></div>
                 <details id="tomAbTestSetupDetails" class="tom-ab-setup-details">
                     <summary class="tom-ab-setup-summary">Configure experiments on this dashboard</summary>
@@ -5088,6 +5108,30 @@
                             <strong>1)</strong> Tap the dimension that should vary on calls. <strong>2)</strong> Open that row and save variants. Saving an experiment also marks it live.
                         </p>
                         <div id="tomAbSetupStatusLine" class="tom-ab-setup-status-line" aria-live="polite"></div>
+
+                        <details class="tom-ab-dim-block tom-ab-bundle-block">
+                            <summary class="tom-ab-dim-summary">Full sequence bundle — one JSON for voice, opening, script</summary>
+                            <div class="tom-ab-dim-inner">
+                                <p class="tom-ab-test-meta" style="margin:0;">
+                                    Paste or upload a single JSON object with <strong>voices</strong>, <strong>openings</strong>, and <strong>scripts</strong> (each an array of at least two non-empty strings). We create three separate experiments, set <strong>voice</strong> live first, and show a <strong>Continue</strong> control in results when you are ready for opening, then script.
+                                </p>
+                                <label class="tom-ab-field">Bundle JSON file
+                                    <input type="file" id="tomAbBundleFile" accept=".json,application/json" class="tom-ab-input" style="padding:8px;" />
+                                </label>
+                                <label class="tom-ab-field">Or paste bundle JSON
+                                    <textarea id="tomAbBundleJson" class="tom-ab-textarea" rows="14" spellcheck="false" placeholder='{ "voices": ["id_a", "id_b"], "openings": ["Hi…", "Hey…"], "scripts": ["You are…", "You are…"] }'></textarea>
+                                </label>
+                                <details class="tom-ab-json-help">
+                                    <summary class="tom-ab-test-meta" style="cursor:pointer;">Example bundle JSON</summary>
+                                    <pre class="tom-ab-json-example" id="tomAbBundleExamplePre" aria-label="Bundle JSON example"></pre>
+                                </details>
+                                <div class="tom-ab-setup-actions">
+                                    <button type="button" id="tomAbBundleDeployBtn" class="export-btn">Deploy bundle &amp; start voice phase</button>
+                                </div>
+                                <p id="tomAbBundleDeployMsg" class="tom-ab-test-meta" role="status" style="margin:8px 0 0 0;"></p>
+                            </div>
+                        </details>
+
                         <div class="tom-ab-focus-fieldset" aria-label="Active A B dimension for outbound dials">
                             <div class="tom-ab-focus-legend-text">What’s live on dials <span class="tom-ab-test-meta" style="font-weight:400;">(tap to switch — saves automatically)</span></div>
                             <div class="tom-ab-segmented" role="toolbar" aria-label="Choose dimension for outbound A B">
@@ -8087,6 +8131,56 @@ Script — optional wrapper with a name:
 You can also use "value" instead of firstMessage / voice / script.`;
         }
 
+        function fillTomAbBundleExampleOnce() {
+            const ex = document.getElementById('tomAbBundleExamplePre');
+            if (!ex || ex.dataset.filled === '1') return;
+            ex.dataset.filled = '1';
+            ex.textContent = `{
+  "voices": ["elevenlabs_voice_id_a", "elevenlabs_voice_id_b"],
+  "openings": [
+    "Hi, it's Tom from ACME — got a quick question.",
+    "Hey, Tom here from ACME. Mind if I ask something quick?"
+  ],
+  "scripts": [
+    "You are a friendly outbound SDR. Keep calls under 3 minutes. …",
+    "You are a direct outbound SDR. No small talk. …"
+  ]
+}
+
+Aliases: voiceIds / voice, openingLines / openers / opening, scripts / scriptBodies / script.`;
+        }
+
+        function renderTomAbBundleWizard(ab) {
+            if (!ab || typeof ab !== 'object') return '';
+            const phase = ab.bundlePhase != null ? String(ab.bundlePhase).trim().toLowerCase() : '';
+            if (!phase || phase === 'complete') return '';
+            const btnText =
+                phase === 'voice'
+                    ? 'Continue to opening-line phase'
+                    : phase === 'opening'
+                      ? 'Continue to script phase'
+                      : 'Mark bundle complete';
+            const stepLabel =
+                phase === 'voice'
+                    ? 'Step 1 of 3 — Voice IDs are live on dials'
+                    : phase === 'opening'
+                      ? 'Step 2 of 3 — Opening lines are live'
+                      : 'Step 3 of 3 — Scripts are live';
+            const started =
+                ab.bundleStartedAt != null && String(ab.bundleStartedAt).trim()
+                    ? `<span class="tom-ab-test-meta">Bundle started ${escapeHtml(
+                          String(ab.bundleStartedAt).trim().slice(0, 16).replace('T', ' ')
+                      )}</span>`
+                    : '';
+            return `<div class="tom-ab-bundle-banner" role="region" aria-label="Outbound A B bundle sequence">
+                <p style="margin:0 0 8px 0;"><strong>${escapeHtml(stepLabel)}.</strong> When you have enough dials on this slice, continue to the next phase.</p>
+                ${started}
+                <div class="tom-ab-setup-actions" style="margin-top:10px;">
+                    <button type="button" id="tomAbBundleAdvanceBtn" class="export-btn">${escapeHtml(btnText)}</button>
+                </div>
+            </div>`;
+        }
+
         function setTomAbFocusSegmentUI(dim) {
             ['voice', 'opening', 'script'].forEach((d) => {
                 const btn = document.getElementById(
@@ -8125,6 +8219,22 @@ You can also use "value" instead of firstMessage / voice / script.`;
 
             if (ab.dialWarning) {
                 line.innerHTML = `<span class="tom-ab-status-warn">${escapeHtml(ab.dialWarning)}</span>`;
+                return;
+            }
+            const bundlePhase =
+                ab.bundlePhase != null ? String(ab.bundlePhase).trim().toLowerCase() : '';
+            if (bundlePhase && bundlePhase !== 'complete') {
+                const step =
+                    bundlePhase === 'voice'
+                        ? 'Phase 1 of 3 — voice IDs'
+                        : bundlePhase === 'opening'
+                          ? 'Phase 2 of 3 — opening lines'
+                          : 'Phase 3 of 3 — scripts';
+                let second = '';
+                if (active && ['voice', 'opening', 'script'].includes(active) && expName) {
+                    second = `<br/><strong>Live on dials:</strong> ${escapeHtml(dimLabels[active] || active)} · <code style="font-size:0.85em;">${escapeHtml(expName)}</code>`;
+                }
+                line.innerHTML = `<strong>Bundle sequence:</strong> ${escapeHtml(step)}.${second}`;
                 return;
             }
             if (active && expName) {
@@ -8169,6 +8279,26 @@ You can also use "value" instead of firstMessage / voice / script.`;
                 });
             });
             fillTomAbJsonExamplesOnce();
+            fillTomAbBundleExampleOnce();
+            const bf = document.getElementById('tomAbBundleFile');
+            if (bf && bf.dataset.bound !== '1') {
+                bf.dataset.bound = '1';
+                bf.addEventListener('change', () => {
+                    const f = bf.files && bf.files[0];
+                    const ta = document.getElementById('tomAbBundleJson');
+                    if (!f || !ta) return;
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        ta.value = reader.result || '';
+                    };
+                    reader.readAsText(f, 'UTF-8');
+                });
+            }
+            const bbtn = document.getElementById('tomAbBundleDeployBtn');
+            if (bbtn && bbtn.dataset.bound !== '1') {
+                bbtn.dataset.bound = '1';
+                bbtn.addEventListener('click', () => tomAbBundleDeploy());
+            }
             const qf = document.getElementById('tomAbQuickFile');
             if (qf && qf.dataset.bound !== '1') {
                 qf.dataset.bound = '1';
@@ -8305,6 +8435,102 @@ You can also use "value" instead of firstMessage / voice / script.`;
                 if (msg) msg.textContent = err.message || 'Import failed';
             } finally {
                 if (btn) btn.disabled = false;
+            }
+        }
+
+        function initTomAbBundleAdvanceDelegation() {
+            const sec = document.getElementById('tomAbOutreachAbSection');
+            if (!sec || sec.dataset.bundleAdvBound === '1') return;
+            sec.dataset.bundleAdvBound = '1';
+            sec.addEventListener('click', (e) => {
+                if (e.target.closest('#tomAbBundleAdvanceBtn')) {
+                    e.preventDefault();
+                    tomAbBundleAdvance();
+                }
+            });
+        }
+
+        async function tomAbBundleDeploy() {
+            const msg = document.getElementById('tomAbBundleDeployMsg');
+            const ta = document.getElementById('tomAbBundleJson');
+            const json = ta && ta.value.trim();
+            if (!json) {
+                if (msg) msg.textContent = 'Paste bundle JSON or choose a .json file above.';
+                return;
+            }
+            if (msg) msg.textContent = 'Deploying bundle…';
+            const btn = document.getElementById('tomAbBundleDeployBtn');
+            if (btn) btn.disabled = true;
+            try {
+                const res = await fetch(
+                    `${BASE_URL}/api/clients/${encodeURIComponent(currentClient)}/outbound-ab-test-bundle`,
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ json })
+                    }
+                );
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
+                if (data.outboundAbFocusDimension) {
+                    setTomAbFocusSegmentUI(data.outboundAbFocusDimension);
+                    syncTomAbDimensionPanels(data.outboundAbFocusDimension);
+                }
+                const livePayload = await fetchLiveData(currentClient);
+                if (livePayload) {
+                    dashboardData = mergeData({}, livePayload, false);
+                    updateStatusBar(dashboardData);
+                    renderRecentActivity(dashboardData);
+                    renderLeadJourney(dashboardData);
+                    renderLeads(dashboardData.recentLeads || []);
+                    renderCalls(dashboardData.recentCalls || []);
+                    renderTomAbTestSection(dashboardData);
+                }
+                prefillTomAbTestFormFromData();
+                updateTomAbSetupStatusLine();
+                syncTomAbQuickDimFromSegment();
+                if (msg) {
+                    msg.textContent = `Bundle live — voice phase. Experiments: ${data.voiceExperiment || ''}`;
+                }
+            } catch (err) {
+                if (msg) msg.textContent = err.message || 'Bundle deploy failed';
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        async function tomAbBundleAdvance() {
+            const btn0 = document.getElementById('tomAbBundleAdvanceBtn');
+            if (btn0) btn0.disabled = true;
+            try {
+                const res = await fetch(
+                    `${BASE_URL}/api/clients/${encodeURIComponent(currentClient)}/outbound-ab-test-bundle-advance`,
+                    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }
+                );
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
+                if (data.outboundAbFocusDimension) {
+                    setTomAbFocusSegmentUI(data.outboundAbFocusDimension);
+                    syncTomAbDimensionPanels(data.outboundAbFocusDimension);
+                }
+                const livePayload = await fetchLiveData(currentClient);
+                if (livePayload) {
+                    dashboardData = mergeData({}, livePayload, false);
+                    updateStatusBar(dashboardData);
+                    renderRecentActivity(dashboardData);
+                    renderLeadJourney(dashboardData);
+                    renderLeads(dashboardData.recentLeads || []);
+                    renderCalls(dashboardData.recentCalls || []);
+                    renderTomAbTestSection(dashboardData);
+                }
+                prefillTomAbTestFormFromData();
+                updateTomAbSetupStatusLine();
+                syncTomAbQuickDimFromSegment();
+            } catch (err) {
+                alert(err.message || 'Could not advance bundle');
+            } finally {
+                const btn1 = document.getElementById('tomAbBundleAdvanceBtn');
+                if (btn1) btn1.disabled = false;
             }
         }
 
@@ -8562,7 +8788,7 @@ You can also use "value" instead of firstMessage / voice / script.`;
             if (!hasDim && !hasLegacy) {
                 root.innerHTML = `
                     <p class="tom-ab-test-meta" style="margin:0;">
-                        Nothing to show yet. Expand <strong>Configure experiments on this dashboard</strong> and save a <strong>voice</strong>, <strong>opening line</strong>, and/or <strong>script</strong> experiment (each is separate).
+                        Nothing to show yet. Expand <strong>Configure experiments on this dashboard</strong> and use <strong>Full sequence bundle</strong> (one JSON for all three lists) or set up a single dimension with <strong>Quick create</strong> / manual forms.
                         Dimensional keys: <code>outboundAbVoiceExperiment</code>, <code>outboundAbOpeningExperiment</code>, <code>outboundAbScriptExperiment</code>.
                         Legacy combined test: <code>outboundAbExperiment</code> when no dimensional keys are set and exactly one active experiment exists.
                     </p>`;
@@ -8575,6 +8801,7 @@ You can also use "value" instead of firstMessage / voice / script.`;
                 if (ab.dialWarning) {
                     html += `<div class="tom-ab-inferred-banner" role="alert">${escapeHtml(ab.dialWarning)}</div>`;
                 }
+                html += renderTomAbBundleWizard(ab);
                 html += renderTomAbDimBlock(
                     'voice',
                     'Voice A/B',
@@ -11384,6 +11611,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             applyRoiPanelVisibility(currentClient);
             applyTomOutreachDashboardMode(currentClient);
             initTomAbTestSetupPanel();
+            initTomAbBundleAdvanceDelegation();
 
             // Fetch client config from API if not demo
             let clientConfig = null;
