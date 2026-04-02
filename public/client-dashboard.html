@@ -5171,7 +5171,7 @@
         >
             <article class="card card-fullwidth">
                 <h3>🧪 A/B tests (outbound)</h3>
-                <p class="card-subtitle"><strong>Clients:</strong> upload variants with <strong>Full sequence bundle</strong> (add <code>?abClient=1</code> to this URL for upload + live results only). <strong>Operator:</strong> the system runs voice → opening → script automatically; when each phase hits the sample target, your Render <code>YOUR_EMAIL</code> or <code>OUTBOUND_AB_SAMPLE_READY_EMAIL</code> is notified and the <strong>same two variants keep dialing</strong> until you click <strong>Review complete &amp; continue</strong>. No new tests until then.</p>
+                <p class="card-subtitle"><strong>Clients:</strong> upload variants with <strong>Full sequence bundle</strong> (add <code>?abClient=1</code> to this URL for upload + live results only). <strong>Operator:</strong> the system runs voice → opening → script automatically; when each phase hits the sample target, <code>YOUR_EMAIL</code> on Render is notified and the <strong>same two variants keep dialing</strong> until you click <strong>Review complete &amp; continue</strong>. No new tests until then.</p>
                 <div id="tomAbTestSectionRoot" class="tom-ab-test-section-root"></div>
                 <details id="tomAbTestSetupDetails" class="tom-ab-setup-details">
                     <summary class="tom-ab-setup-summary">Configure experiments on this dashboard</summary>
@@ -5219,7 +5219,7 @@
                             <summary class="tom-ab-dim-summary">Sample-ready email (no auto winner)</summary>
                             <div class="tom-ab-dim-inner">
                                 <p class="tom-ab-test-meta" style="margin:0;">
-                                    Primary inbox is <strong><code>YOUR_EMAIL</code></strong> or <strong><code>OUTBOUND_AB_SAMPLE_READY_EMAIL</code></strong> on Render (first non-empty wins). When the live experiment hits <strong>N leads per variant</strong>, one email is sent, results stay on the dashboard, and <strong>testing freezes</strong> (same two variants) until <strong>Review complete &amp; continue</strong>.
+                                    Sample-ready emails go to server <strong><code>YOUR_EMAIL</code></strong> (Render). When the live experiment hits <strong>N leads per variant</strong>, one email is sent, results stay on the dashboard, and <strong>testing freezes</strong> (same two variants) until <strong>Review complete &amp; continue</strong>.
                                 </p>
                                 <label class="tom-ab-field">Fallback alert email (if env unset)
                                     <input
@@ -5241,7 +5241,7 @@
                                     />
                                 </label>
                                 <p class="tom-ab-test-meta" style="margin:0;">
-                                    Prefer <code>YOUR_EMAIL</code> or <code>OUTBOUND_AB_SAMPLE_READY_EMAIL</code> plus <code>OUTBOUND_AB_MIN_SAMPLES_PER_VARIANT</code> in Render; the dashboard fields here apply only when both env addresses are empty.
+                                    Set <code>YOUR_EMAIL</code> and <code>OUTBOUND_AB_MIN_SAMPLES_PER_VARIANT</code> in Render; the fallback alert email below is used only when <code>YOUR_EMAIL</code> is empty.
                                 </p>
                                 <div class="tom-ab-setup-actions">
                                     <button type="button" id="tomAbNotifySettingsBtn" class="export-btn secondary">
@@ -8247,7 +8247,7 @@ ${actionsRow}
             const minStr = mn && mn.value.trim();
             if (msg) msg.textContent = '';
             if (!email) {
-                if (msg) msg.textContent = 'Enter an alert email (or set YOUR_EMAIL / OUTBOUND_AB_SAMPLE_READY_EMAIL on the server).';
+                if (msg) msg.textContent = 'Enter an alert email (or set YOUR_EMAIL on the server).';
                 return;
             }
             if (!minStr) {
@@ -8354,7 +8354,7 @@ Aliases: voiceIds / voice, openingLines / openers / opening, scripts / scriptBod
                     ? escapeHtml(new Date(String(ab.reviewPendingSince).trim()).toLocaleString())
                     : '';
             return `<div class="tom-ab-review-banner tom-ab-operator-only" role="alert">
-                <p style="margin:0 0 10px 0;"><strong>Operator review required.</strong> The sample target was reached — check <strong>YOUR_EMAIL</strong> or <strong>OUTBOUND_AB_SAMPLE_READY_EMAIL</strong> on Render. The <strong>same two variants stay on dials</strong>; no new tests or config changes until you finish.</p>
+                <p style="margin:0 0 10px 0;"><strong>Operator review required.</strong> The sample target was reached — check <strong>YOUR_EMAIL</strong> on Render. The <strong>same two variants stay on dials</strong>; no new tests or config changes until you finish.</p>
                 ${since ? `<p class="tom-ab-test-meta" style="margin:0 0 10px 0;">Pending since ${since}</p>` : ''}
                 <div class="tom-ab-setup-actions">
                     <button type="button" id="tomAbReviewContinueBtn" class="export-btn">Review complete &amp; continue</button>
