@@ -24251,6 +24251,67 @@ app.patch('/api/clients/:clientKey/config', async (req, res) => {
   }
 });
 
+// Tom / operator: create outbound A/B variants + set vapi.outboundAbExperiment (requires API_KEY)
+app.post('/api/clients/:clientKey/outbound-ab-test', async (req, res) => {
+  try {
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    }
+    const { clientKey } = req.params;
+    const { experimentName, variants, replaceExisting = true } = req.body || {};
+    const nameTrim = experimentName != null ? String(experimentName).trim() : '';
+    if (!nameTrim) {
+      return res.status(400).json({ ok: false, error: 'experimentName is required' });
+    }
+    if (!Array.isArray(variants) || variants.length < 2) {
+      return res.status(400).json({ ok: false, error: 'At least two variants are required' });
+    }
+    const mapped = [];
+    for (const v of variants) {
+      const vn = String(v.name || v.variantName || '').trim();
+      if (!vn) {
+        return res.status(400).json({ ok: false, error: 'Each variant needs a name' });
+      }
+      const voice = v.voice != null ? String(v.voice).trim() : '';
+      const firstMessage = v.firstMessage != null ? String(v.firstMessage).trim() : '';
+      const script =
+        v.script != null
+          ? String(v.script).trim()
+          : v.systemMessage != null
+            ? String(v.systemMessage).trim()
+            : '';
+      if (!firstMessage && !script) {
+        return res.status(400).json({
+          ok: false,
+          error: `Variant "${vn}" needs at least an opening line and/or script`
+        });
+      }
+      const config = {};
+      if (voice) config.voice = voice;
+      if (firstMessage) config.firstMessage = firstMessage;
+      if (script) config.script = script;
+      mapped.push({ name: vn, config });
+    }
+    if (replaceExisting) {
+      const { deactivateAbTestExperimentsByName } = await import('./db.js');
+      await deactivateAbTestExperimentsByName(clientKey, nameTrim);
+    }
+    await createABTestExperiment({
+      clientKey,
+      experimentName: nameTrim,
+      variants: mapped,
+      isActive: true
+    });
+    const { updateClientConfig } = await import('./lib/client-onboarding.js');
+    await updateClientConfig(clientKey, { vapi: { outboundAbExperiment: nameTrim } });
+    res.json({ ok: true, experimentName: nameTrim, variantCount: mapped.length });
+  } catch (error) {
+    console.error('[OUTBOUND AB TEST SETUP ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message || String(error) });
+  }
+});
+
 // Deactivate Client
 app.post('/api/clients/:clientKey/deactivate', async (req, res) => {
   try {

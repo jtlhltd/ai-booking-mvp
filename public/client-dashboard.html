@@ -1178,6 +1178,99 @@
             color: var(--text, #2f3147);
         }
 
+        .tom-ab-setup-details {
+            margin-top: 16px;
+            padding-top: 14px;
+            border-top: 1px solid var(--border, #e8eaf5);
+        }
+
+        .tom-ab-setup-summary {
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--primary, #5c6ac4);
+            list-style-position: outside;
+        }
+
+        .tom-ab-setup-inner {
+            margin-top: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .tom-ab-field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: 0.85rem;
+            color: var(--muted);
+        }
+
+        .tom-ab-input,
+        .tom-ab-textarea {
+            padding: 8px 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border, #e8eaf5);
+            font-size: 0.875rem;
+            font-family: inherit;
+        }
+
+        .tom-ab-textarea {
+            resize: vertical;
+            min-height: 48px;
+        }
+
+        .tom-ab-variant-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            margin-top: 8px;
+        }
+
+        @media (max-width: 900px) {
+            .tom-ab-variant-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .tom-ab-variant-fieldset {
+            border: 1px solid var(--border, #e8eaf5);
+            border-radius: 10px;
+            padding: 12px;
+            margin: 0;
+        }
+
+        .tom-ab-variant-fieldset legend {
+            font-weight: 600;
+            padding: 0 6px;
+            font-size: 0.875rem;
+        }
+
+        .tom-ab-variant-fieldset label {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-bottom: 10px;
+            font-size: 0.8rem;
+            color: var(--muted);
+        }
+
+        .tom-ab-setup-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            margin-top: 8px;
+        }
+
+        .tom-ab-replace-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            color: var(--muted);
+        }
+
         .leads-list {
             display: flex;
             flex-direction: column;
@@ -4862,6 +4955,62 @@
                 <h3>🧪 A/B tests (outbound)</h3>
                 <p class="card-subtitle">Voice, opening line, and script variants. Numbers update as calls are placed and outcomes are recorded.</p>
                 <div id="tomAbTestSectionRoot" class="tom-ab-test-section-root"></div>
+                <details id="tomAbTestSetupDetails" class="tom-ab-setup-details">
+                    <summary class="tom-ab-setup-summary">Configure experiment on this dashboard</summary>
+                    <div class="tom-ab-setup-inner">
+                        <p class="tom-ab-test-meta" style="margin:0;">
+                            Uses your operator <code>API_KEY</code> (same as the ROI panel). Saving the full experiment deactivates old rows for this experiment name, creates two variants, and sets <code>vapi.outboundAbExperiment</code>.
+                        </p>
+                        <label class="tom-ab-field">API key
+                            <input type="password" id="tomAbApiKey" class="tom-ab-input" autocomplete="off" placeholder="Paste server API_KEY" />
+                        </label>
+                        <button type="button" class="export-btn secondary" id="tomAbUseRoiKeyBtn">Use API key from ROI panel</button>
+                        <label class="tom-ab-field">Experiment name
+                            <input type="text" id="tomAbExpName" class="tom-ab-input" placeholder="e.g. tom_outbound_v1" />
+                        </label>
+                        <label class="tom-ab-replace-row">
+                            <input type="checkbox" id="tomAbReplaceExisting" checked />
+                            <span>Replace existing variants for this experiment name</span>
+                        </label>
+                        <div class="tom-ab-variant-grid">
+                            <fieldset class="tom-ab-variant-fieldset">
+                                <legend>Variant A</legend>
+                                <label>Name
+                                    <input type="text" id="tomAbV0Name" class="tom-ab-input" value="control" />
+                                </label>
+                                <label>Voice ID (ElevenLabs)
+                                    <input type="text" id="tomAbV0Voice" class="tom-ab-input" placeholder="Optional — uses assistant default if empty" />
+                                </label>
+                                <label>Opening line
+                                    <textarea id="tomAbV0Open" class="tom-ab-textarea" rows="2" placeholder="First thing the assistant says"></textarea>
+                                </label>
+                                <label>Script (system instructions)
+                                    <textarea id="tomAbV0Script" class="tom-ab-textarea" rows="5" placeholder="Full call script / instructions"></textarea>
+                                </label>
+                            </fieldset>
+                            <fieldset class="tom-ab-variant-fieldset">
+                                <legend>Variant B</legend>
+                                <label>Name
+                                    <input type="text" id="tomAbV1Name" class="tom-ab-input" value="variant_b" />
+                                </label>
+                                <label>Voice ID (ElevenLabs)
+                                    <input type="text" id="tomAbV1Voice" class="tom-ab-input" placeholder="Optional" />
+                                </label>
+                                <label>Opening line
+                                    <textarea id="tomAbV1Open" class="tom-ab-textarea" rows="2" placeholder="First thing the assistant says"></textarea>
+                                </label>
+                                <label>Script (system instructions)
+                                    <textarea id="tomAbV1Script" class="tom-ab-textarea" rows="5" placeholder="Full call script / instructions"></textarea>
+                                </label>
+                            </fieldset>
+                        </div>
+                        <div class="tom-ab-setup-actions">
+                            <button type="button" id="tomAbSaveFullBtn" class="export-btn">Save experiment &amp; variants</button>
+                            <button type="button" id="tomAbSaveNameBtn" class="export-btn secondary">Save experiment name only</button>
+                        </div>
+                        <p id="tomAbSetupMsg" class="tom-ab-test-meta" role="status" style="margin:0;"></p>
+                    </div>
+                </details>
             </article>
         </section>
 
@@ -7572,6 +7721,126 @@ ${actionsRow}
             });
         }
 
+        function prefillTomAbTestFormFromData() {
+            if (!isTomOutreachDashboard(currentClient)) return;
+            const ab = dashboardData && dashboardData.outboundAbTest;
+            const expEl = document.getElementById('tomAbExpName');
+            if (expEl && !expEl.value.trim() && ab && ab.experimentName) {
+                expEl.value = ab.experimentName;
+            }
+            const vars = ab && ab.summary && Array.isArray(ab.summary.variants) ? ab.summary.variants : [];
+            const applyVar = (idx, v) => {
+                if (!v) return;
+                const n = document.getElementById(`tomAbV${idx}Name`);
+                if (n && !n.value.trim() && v.variantName) n.value = v.variantName;
+                const voice = document.getElementById(`tomAbV${idx}Voice`);
+                if (voice && !voice.value.trim() && v.tested && v.tested.voiceId) voice.value = v.tested.voiceId;
+                const o = document.getElementById(`tomAbV${idx}Open`);
+                if (o && !o.value.trim() && v.tested && v.tested.openingLine) o.value = v.tested.openingLine;
+                const s = document.getElementById(`tomAbV${idx}Script`);
+                if (s && !s.value.trim() && v.tested && v.tested.scriptPreview) {
+                    s.value = String(v.tested.scriptPreview).replace(/\u2026\s*$/, '').replace(/…\s*$/, '');
+                }
+            };
+            applyVar(0, vars[0]);
+            applyVar(1, vars[1]);
+        }
+
+        function initTomAbTestSetupPanel() {
+            if (!isTomOutreachDashboard(currentClient)) return;
+            const useRoi = document.getElementById('tomAbUseRoiKeyBtn');
+            if (useRoi && useRoi.dataset.bound !== '1') {
+                useRoi.dataset.bound = '1';
+                useRoi.addEventListener('click', () => {
+                    const r = document.getElementById('roiInputApiKey') && document.getElementById('roiInputApiKey').value.trim();
+                    const t = document.getElementById('tomAbApiKey');
+                    if (t && r) t.value = r;
+                    const msg = document.getElementById('tomAbSetupMsg');
+                    if (msg) msg.textContent = r ? 'Copied API key from ROI panel.' : 'ROI panel has no API key entered yet.';
+                });
+            }
+            const saveFull = document.getElementById('tomAbSaveFullBtn');
+            if (saveFull && saveFull.dataset.bound !== '1') {
+                saveFull.dataset.bound = '1';
+                saveFull.addEventListener('click', () => saveTomOutboundAbTest('full'));
+            }
+            const saveName = document.getElementById('tomAbSaveNameBtn');
+            if (saveName && saveName.dataset.bound !== '1') {
+                saveName.dataset.bound = '1';
+                saveName.addEventListener('click', () => saveTomOutboundAbTest('nameOnly'));
+            }
+        }
+
+        async function saveTomOutboundAbTest(mode) {
+            const msg = document.getElementById('tomAbSetupMsg');
+            const apiKeyEl = document.getElementById('tomAbApiKey');
+            const apiKey = apiKeyEl && apiKeyEl.value.trim();
+            const expEl = document.getElementById('tomAbExpName');
+            const expName = expEl && expEl.value.trim();
+            if (!apiKey) {
+                if (msg) msg.textContent = 'API key required.';
+                return;
+            }
+            if (!expName) {
+                if (msg) msg.textContent = 'Experiment name required.';
+                return;
+            }
+            if (msg) msg.textContent = '';
+            try {
+                if (mode === 'nameOnly') {
+                    const res = await fetch(`${BASE_URL}/api/clients/${encodeURIComponent(currentClient)}/config`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
+                        body: JSON.stringify({ vapi: { outboundAbExperiment: expName } })
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
+                } else {
+                    const v0 = {
+                        name: (document.getElementById('tomAbV0Name') && document.getElementById('tomAbV0Name').value.trim()) || 'control',
+                        voice: document.getElementById('tomAbV0Voice') && document.getElementById('tomAbV0Voice').value.trim(),
+                        firstMessage: document.getElementById('tomAbV0Open') && document.getElementById('tomAbV0Open').value.trim(),
+                        script: document.getElementById('tomAbV0Script') && document.getElementById('tomAbV0Script').value.trim()
+                    };
+                    const v1 = {
+                        name: (document.getElementById('tomAbV1Name') && document.getElementById('tomAbV1Name').value.trim()) || 'variant_b',
+                        voice: document.getElementById('tomAbV1Voice') && document.getElementById('tomAbV1Voice').value.trim(),
+                        firstMessage: document.getElementById('tomAbV1Open') && document.getElementById('tomAbV1Open').value.trim(),
+                        script: document.getElementById('tomAbV1Script') && document.getElementById('tomAbV1Script').value.trim()
+                    };
+                    const replaceEl = document.getElementById('tomAbReplaceExisting');
+                    const replaceExisting = !replaceEl || replaceEl.checked;
+                    const res = await fetch(`${BASE_URL}/api/clients/${encodeURIComponent(currentClient)}/outbound-ab-test`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
+                        body: JSON.stringify({
+                            experimentName: expName,
+                            replaceExisting,
+                            variants: [v0, v1]
+                        })
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
+                }
+                if (apiKeyEl) apiKeyEl.value = '';
+                if (msg) msg.textContent = 'Saved. Refreshing…';
+                const livePayload = await fetchLiveData(currentClient);
+                if (livePayload) {
+                    dashboardData = mergeData({}, livePayload, false);
+                    updateStatusBar(dashboardData);
+                    renderRecentActivity(dashboardData);
+                    renderLeadJourney(dashboardData);
+                    renderLeads(dashboardData.recentLeads || []);
+                    renderCalls(dashboardData.recentCalls || []);
+                    renderTomAbTestSection(dashboardData);
+                }
+                prefillTomAbTestFormFromData();
+                if (msg) msg.textContent = 'Saved.';
+            } catch (err) {
+                if (msg) msg.textContent = err.message || 'Save failed';
+            }
+        }
+
         function renderTomAbTestSection(data) {
             const root = document.getElementById('tomAbTestSectionRoot');
             if (!root) return;
@@ -7594,10 +7863,8 @@ ${actionsRow}
             if (!exp) {
                 root.innerHTML = `
                     <p class="tom-ab-test-meta" style="margin:0;">
-                        Nothing to show yet. Do one of the following:
-                        (1) Set <code>outboundAbExperiment</code> inside tenant <code>vapi_json</code> to your experiment name, or
-                        (2) Create <strong>exactly one</strong> active experiment in <code>ab_test_experiments</code> for this client — we will detect it automatically.
-                        Then this section lists <strong>what is being tested</strong> per variant and <strong>results</strong> from the ledger plus the live feed.
+                        Nothing to show yet. Expand <strong>Configure experiment on this dashboard</strong> below to set the experiment name and two variants (or save the name only if variants already exist in the database).
+                        Alternatively: set <code>outboundAbExperiment</code> in <code>vapi_json</code>, or keep exactly one active experiment in <code>ab_test_experiments</code> so we can detect it automatically.
                     </p>`;
                 return;
             }
@@ -10355,6 +10622,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             initFollowUpQueueUi();
             applyRoiPanelVisibility(currentClient);
             applyTomOutreachDashboardMode(currentClient);
+            initTomAbTestSetupPanel();
 
             // Fetch client config from API if not demo
             let clientConfig = null;
@@ -10528,6 +10796,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const callsToRender = dashboardData.recentCalls || [];
             renderCalls(callsToRender);
             renderTomAbTestSection(dashboardData);
+            prefillTomAbTestFormFromData();
             renderWorkflow(
                 isTomOutreachDashboard(currentClient)
                     ? []
@@ -10591,6 +10860,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         const callsToRender = dashboardData.recentCalls || [];
                         renderCalls(callsToRender);
                         renderTomAbTestSection(dashboardData);
+                        prefillTomAbTestFormFromData();
                         await renderCallRecordings(callsToRender);
                         await renderCallQuality(dashboardData);
                         await renderCallInsights(dashboardData);

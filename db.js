@@ -2388,6 +2388,15 @@ export async function getActiveABTests(clientKey) {
   return rows;
 }
 
+/** Deactivate all variant rows for this experiment name (before replacing from dashboard). */
+export async function deactivateAbTestExperimentsByName(clientKey, experimentName) {
+  if (!clientKey || !experimentName) return;
+  await query(
+    `UPDATE ab_test_experiments SET is_active = FALSE WHERE client_key = $1 AND experiment_name = $2`,
+    [clientKey, String(experimentName).trim()]
+  );
+}
+
 export async function recordABTestResult({ experimentId, clientKey, leadPhone, variantName, outcome, outcomeData = null }) {
   const outcomeDataJson = outcomeData ? JSON.stringify(outcomeData) : null;
   
