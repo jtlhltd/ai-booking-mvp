@@ -1387,6 +1387,55 @@
             border-top: 1px solid var(--border, #e8eaf5);
         }
 
+        .tom-ab-creatives-form-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 14px;
+            margin-bottom: 4px;
+        }
+
+        @media (min-width: 900px) {
+            .tom-ab-creatives-form-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        .tom-ab-creatives-preview {
+            margin-bottom: 16px;
+        }
+
+        .tom-ab-creatives-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 14px;
+            margin-top: 10px;
+        }
+
+        @media (min-width: 900px) {
+            .tom-ab-creatives-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        .tom-ab-creative-col h5 {
+            margin: 0 0 6px 0;
+            font-size: 0.95rem;
+        }
+
+        .tom-ab-creative-list {
+            margin: 0;
+            padding-left: 1.2rem;
+            font-size: 0.875rem;
+            line-height: 1.45;
+        }
+
+        .tom-ab-creative-list li {
+            margin-bottom: 8px;
+            word-break: break-word;
+            max-height: 140px;
+            overflow-y: auto;
+        }
+
         .tom-ab-review-banner {
             font-size: 0.875rem;
             line-height: 1.45;
@@ -5184,20 +5233,21 @@
                 <p class="card-subtitle">Upload your creative bundle here. Phases, dial focus, and review handoffs are handled on our side — you only watch the numbers.</p>
 
                 <section class="tom-ab-simple-upload" aria-label="Upload creatives and view test results">
-                    <p class="tom-ab-test-meta" style="margin:0 0 12px 0;">
-                        One JSON: <strong>voices</strong>, <strong>openings</strong>, and <strong>scripts</strong> — each at least two strings.
+                    <p class="tom-ab-test-meta" style="margin:0 0 14px 0;">
+                        <strong>One line = one variant.</strong> Add at least <strong>two lines</strong> in each box (voice IDs, opening lines, scripts), then tap Upload.
                     </p>
-                    <label class="tom-ab-field">JSON file
-                        <input type="file" id="tomAbBundleFile" accept=".json,application/json" class="tom-ab-input" style="padding:8px;" />
-                    </label>
-                    <label class="tom-ab-field">Or paste JSON
-                        <textarea id="tomAbBundleJson" class="tom-ab-textarea" rows="10" spellcheck="false" placeholder='{ "voices": ["…", "…"], "openings": ["…", "…"], "scripts": ["…", "…"] }'></textarea>
-                    </label>
-                    <details class="tom-ab-json-help">
-                        <summary class="tom-ab-test-meta" style="cursor:pointer;">Example</summary>
-                        <pre class="tom-ab-json-example" id="tomAbBundleExamplePre" aria-label="Example JSON"></pre>
-                    </details>
-                    <div class="tom-ab-setup-actions" style="margin-top:10px;">
+                    <div class="tom-ab-creatives-form-grid">
+                        <label class="tom-ab-field">Voice IDs <span class="tom-ab-test-meta" style="font-weight:400;">(ElevenLabs — one per line)</span>
+                            <textarea id="tomAbCreativeVoices" class="tom-ab-textarea" rows="6" spellcheck="false" placeholder="voice_id_variant_a&#10;voice_id_variant_b"></textarea>
+                        </label>
+                        <label class="tom-ab-field">Opening lines <span class="tom-ab-test-meta" style="font-weight:400;">(one per line)</span>
+                            <textarea id="tomAbCreativeOpenings" class="tom-ab-textarea" rows="6" spellcheck="false" placeholder="Hi, it’s Tom from…&#10;Hey — Tom here…"></textarea>
+                        </label>
+                        <label class="tom-ab-field">Scripts <span class="tom-ab-test-meta" style="font-weight:400;">(one per line)</span>
+                            <textarea id="tomAbCreativeScripts" class="tom-ab-textarea" rows="6" spellcheck="false" placeholder="You are a friendly outbound SDR…&#10;You are a direct outbound SDR…"></textarea>
+                        </label>
+                    </div>
+                    <div class="tom-ab-setup-actions" style="margin-top:12px;">
                         <button type="button" id="tomAbBundleDeployBtn" class="export-btn">Upload</button>
                     </div>
                     <p id="tomAbBundleDeployMsg" class="tom-ab-test-meta" role="status" style="margin:8px 0 0 0;"></p>
@@ -7955,23 +8005,116 @@ ${actionsRow}
             });
         }
 
-        function fillTomAbBundleExampleOnce() {
-            const ex = document.getElementById('tomAbBundleExamplePre');
-            if (!ex || ex.dataset.filled === '1') return;
-            ex.dataset.filled = '1';
-            ex.textContent = `{
-  "voices": ["elevenlabs_voice_id_a", "elevenlabs_voice_id_b"],
-  "openings": [
-    "Hi, it's Tom from ACME — got a quick question.",
-    "Hey, Tom here from ACME. Mind if I ask something quick?"
-  ],
-  "scripts": [
-    "You are a friendly outbound SDR. Keep calls under 3 minutes. …",
-    "You are a direct outbound SDR. No small talk. …"
-  ]
-}
+        function parseTomAbCreativeLines(raw) {
+            return String(raw || '')
+                .split(/\r?\n/)
+                .map((s) => s.trim())
+                .filter(Boolean);
+        }
 
-Aliases: voiceIds / voice, openingLines / openers / opening, scripts / scriptBodies / script.`;
+        function readTomAbCreativeLinesFromForm() {
+            return {
+                voices: parseTomAbCreativeLines(document.getElementById('tomAbCreativeVoices')?.value),
+                openings: parseTomAbCreativeLines(document.getElementById('tomAbCreativeOpenings')?.value),
+                scripts: parseTomAbCreativeLines(document.getElementById('tomAbCreativeScripts')?.value)
+            };
+        }
+
+        function extractTomAbCreativesFromPayload(ab) {
+            const out = { voices: [], openings: [], scripts: [] };
+            if (!ab || typeof ab !== 'object') return out;
+            const fromSlot = (slot, kind) => {
+                const vars = slot && slot.summary && Array.isArray(slot.summary.variants) ? slot.summary.variants : [];
+                if (kind === 'voice') {
+                    return vars.map((v) => (v.tested && v.tested.voiceId ? String(v.tested.voiceId).trim() : '')).filter(Boolean);
+                }
+                if (kind === 'opening') {
+                    return vars.map((v) => (v.tested && v.tested.openingLine ? String(v.tested.openingLine).trim() : '')).filter(
+                        Boolean
+                    );
+                }
+                return vars
+                    .map((v) => {
+                        const t = v.tested || {};
+                        const full = t.script != null && String(t.script).trim() ? String(t.script).trim() : '';
+                        if (full) return full;
+                        return t.scriptPreview != null && String(t.scriptPreview).trim() ? String(t.scriptPreview).trim() : '';
+                    })
+                    .filter(Boolean);
+            };
+            if (ab.voice && ab.voice.experimentName) out.voices = fromSlot(ab.voice, 'voice');
+            if (ab.opening && ab.opening.experimentName) out.openings = fromSlot(ab.opening, 'opening');
+            if (ab.script && ab.script.experimentName) out.scripts = fromSlot(ab.script, 'script');
+            if (!out.voices.length && !out.openings.length && !out.scripts.length && ab.legacy && ab.legacy.experimentName) {
+                const vars =
+                    ab.legacy.summary && Array.isArray(ab.legacy.summary.variants) ? ab.legacy.summary.variants : [];
+                out.voices = vars.map((v) => (v.tested && v.tested.voiceId ? String(v.tested.voiceId).trim() : '')).filter(Boolean);
+                out.openings = vars
+                    .map((v) => (v.tested && v.tested.openingLine ? String(v.tested.openingLine).trim() : ''))
+                    .filter(Boolean);
+                out.scripts = vars
+                    .map((v) => {
+                        const t = v.tested || {};
+                        const full = t.script != null && String(t.script).trim() ? String(t.script).trim() : '';
+                        if (full) return full;
+                        return t.scriptPreview != null && String(t.scriptPreview).trim() ? String(t.scriptPreview).trim() : '';
+                    })
+                    .filter(Boolean);
+            }
+            return out;
+        }
+
+        function syncTomAbCreativeTextareasFromServer(ab) {
+            const ex = extractTomAbCreativesFromPayload(ab);
+            const vEl = document.getElementById('tomAbCreativeVoices');
+            const oEl = document.getElementById('tomAbCreativeOpenings');
+            const sEl = document.getElementById('tomAbCreativeScripts');
+            if (!vEl || !oEl || !sEl) return;
+            if (!vEl.value.trim() && ex.voices.length) vEl.value = ex.voices.join('\n');
+            if (!oEl.value.trim() && ex.openings.length) oEl.value = ex.openings.join('\n');
+            if (!sEl.value.trim() && ex.scripts.length) sEl.value = ex.scripts.join('\n');
+        }
+
+        function renderTomAbCreativesPreviewPanel(ab) {
+            const server = extractTomAbCreativesFromPayload(ab);
+            const form = readTomAbCreativeLinesFromForm();
+            const useVoices = server.voices.length >= 2 ? server.voices : form.voices;
+            const useOpenings = server.openings.length >= 2 ? server.openings : form.openings;
+            const useScripts = server.scripts.length >= 2 ? server.scripts : form.scripts;
+            const hasServer =
+                server.voices.length >= 2 || server.openings.length >= 2 || server.scripts.length >= 2;
+            const hasAny = useVoices.length || useOpenings.length || useScripts.length;
+            const badge = hasServer
+                ? '<span class="tom-ab-test-meta">On test</span>'
+                : hasAny
+                  ? '<span class="tom-ab-test-meta">Preview</span>'
+                  : '';
+
+            const col = (title, items) => {
+                if (!items.length) {
+                    return `<div class="tom-ab-creative-col"><h5>${title}</h5><p class="tom-ab-test-meta" style="margin:0;">—</p></div>`;
+                }
+                return `<div class="tom-ab-creative-col"><h5>${title}</h5><ol class="tom-ab-creative-list" start="1">${items
+                    .map((line) => `<li>${escapeHtml(line)}</li>`)
+                    .join('')}</ol></div>`;
+            };
+
+            return `<section class="tom-ab-creatives-preview" aria-labelledby="tom-ab-creatives-h">
+                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+                    <h4 class="tom-ab-panel-title" id="tom-ab-creatives-h" style="margin:0;">Your creatives</h4>
+                    ${badge}
+                </div>
+                <div class="tom-ab-creatives-grid">
+                    ${col('Voices', useVoices)}
+                    ${col('Openers', useOpenings)}
+                    ${col('Scripts', useScripts)}
+                </div>
+                ${
+                    !hasAny
+                        ? '<p class="tom-ab-test-meta" style="margin:10px 0 0 0;">Nothing to show yet — type at least two lines in each box above, then Upload.</p>'
+                        : ''
+                }
+            </section>`;
         }
 
         function renderTomAbReviewBanner(ab) {
@@ -8103,26 +8246,23 @@ Aliases: voiceIds / voice, openingLines / openers / opening, scripts / scriptBod
 
         function initTomAbTestSetupPanel() {
             if (!isTomOutreachDashboard(currentClient)) return;
-            fillTomAbBundleExampleOnce();
-            const bf = document.getElementById('tomAbBundleFile');
-            if (bf && bf.dataset.bound !== '1') {
-                bf.dataset.bound = '1';
-                bf.addEventListener('change', () => {
-                    const f = bf.files && bf.files[0];
-                    const ta = document.getElementById('tomAbBundleJson');
-                    if (!f || !ta) return;
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                        ta.value = reader.result || '';
-                    };
-                    reader.readAsText(f, 'UTF-8');
-                });
-            }
             const bbtn = document.getElementById('tomAbBundleDeployBtn');
             if (bbtn && bbtn.dataset.bound !== '1') {
                 bbtn.dataset.bound = '1';
                 bbtn.addEventListener('click', () => tomAbBundleDeploy());
             }
+            ['tomAbCreativeVoices', 'tomAbCreativeOpenings', 'tomAbCreativeScripts'].forEach((id) => {
+                const el = document.getElementById(id);
+                if (!el || el.dataset.tomAbPreviewBound === '1') return;
+                el.dataset.tomAbPreviewBound = '1';
+                let t;
+                el.addEventListener('input', () => {
+                    clearTimeout(t);
+                    t = setTimeout(() => {
+                        if (isTomOutreachDashboard(currentClient)) renderTomAbTestSection(dashboardData);
+                    }, 140);
+                });
+            });
         }
 
         function initTomAbOutreachSectionDelegation() {
@@ -8139,12 +8279,15 @@ Aliases: voiceIds / voice, openingLines / openers / opening, scripts / scriptBod
 
         async function tomAbBundleDeploy() {
             const msg = document.getElementById('tomAbBundleDeployMsg');
-            const ta = document.getElementById('tomAbBundleJson');
-            const json = ta && ta.value.trim();
-            if (!json) {
-                if (msg) msg.textContent = 'Paste bundle JSON or choose a .json file above.';
+            const { voices, openings, scripts } = readTomAbCreativeLinesFromForm();
+            if (voices.length < 2 || openings.length < 2 || scripts.length < 2) {
+                if (msg) {
+                    msg.textContent =
+                        'Each box needs at least two non-empty lines (one line = one variant).';
+                }
                 return;
             }
+            const json = JSON.stringify({ voices, openings, scripts });
             if (msg) msg.textContent = 'Uploading…';
             const btn = document.getElementById('tomAbBundleDeployBtn');
             if (btn) btn.disabled = true;
@@ -8187,23 +8330,10 @@ Aliases: voiceIds / voice, openingLines / openers / opening, scripts / scriptBod
                 return;
             }
             const ab = data && data.outboundAbTest;
-            const voiceSlot = ab && ab.voice;
-            const openingSlot = ab && ab.opening;
-            const scriptSlot = ab && ab.script;
-            const leg = ab && ab.legacy;
-            const hasDim =
-                (voiceSlot && voiceSlot.experimentName) ||
-                (openingSlot && openingSlot.experimentName) ||
-                (scriptSlot && scriptSlot.experimentName);
-            const hasLegacy = leg && leg.experimentName;
-
-            if (!hasDim && !hasLegacy) {
-                root.innerHTML =
-                    '<p class="tom-ab-test-meta" style="margin:0;">Nothing to monitor yet. Upload creatives above.</p>';
-                return;
-            }
+            syncTomAbCreativeTextareasFromServer(ab);
 
             let html = '';
+            html += renderTomAbCreativesPreviewPanel(ab);
             html += renderTomAbReviewBanner(ab);
             html += renderTomAbLiveResultsPanel(ab);
 
