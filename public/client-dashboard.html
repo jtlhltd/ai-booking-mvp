@@ -5966,6 +5966,13 @@ ${actionsRow}
                     ? `Last 7 days of outbound dials for ${businessName}: pick-up rate, persistence, talk time, and dial patterns (server time).`
                     : `How effective our calls are for ${businessName} (7-day window).`;
             }
+
+            const callInsightsSubtitle = document.getElementById('callInsightsSubtitle');
+            if (callInsightsSubtitle) {
+                callInsightsSubtitle.textContent = isTomOutreachDashboard(currentClient)
+                    ? `Pickup timing, conversation signals, and dial-time learning for ${businessName} — outreach-focused (not calendar booking).`
+                    : `Actionable call-time analysis, model activity, and Thompson beliefs that drive queue scheduling.`;
+            }
             
             const recentLeadsSubtitle = document.getElementById('recentLeadsSubtitle');
             if (recentLeadsSubtitle) {
@@ -8314,6 +8321,18 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const sentimentRows = (patterns.sentimentBreakdown || []).slice(0, 8);
 
                 const periodDays = String(payload.period_days || payload.periodDays || 30);
+                const tomInsights = isTomOutreachDashboard(clientKey);
+                const bookedMetricHtml = tomInsights
+                    ? ''
+                    : `
+                    <div class="quality-metric">
+                        <div class="quality-label">Booked rate</div>
+                        <div class="quality-value">${Number(summary.bookedRate || 0)}%</div>
+                        <div class="quality-badge">calls with outcome booked</div>
+                    </div>`;
+                const heuristicBadge = tomInsights
+                    ? 'ranked by % answered (pickup) — min sample per slot'
+                    : 'ranked by % answered in window — min sample per slot';
 
                 container.innerHTML = `
                     <div class="insights-stack">
@@ -8323,15 +8342,11 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         <div class="quality-value">${Number(summary.answeredRate || 0)}%</div>
                         <div class="quality-badge">last ${escapeHtml(periodDays)} days</div>
                     </div>
-                    <div class="quality-metric">
-                        <div class="quality-label">Booked rate</div>
-                        <div class="quality-value">${Number(summary.bookedRate || 0)}%</div>
-                        <div class="quality-badge">calls with outcome booked</div>
-                    </div>
+                    ${bookedMetricHtml}
                     <div class="quality-metric">
                         <div class="quality-label">Best hours (heuristic)</div>
                         <div class="quality-value quality-value--schedule">${escapeHtml(bestHoursLabel)}</div>
-                        <div class="quality-badge">blended score: booked + answered</div>
+                        <div class="quality-badge">${escapeHtml(heuristicBadge)}</div>
                     </div>
                     <div class="quality-metric">
                         <div class="quality-label">Best days (heuristic)</div>
