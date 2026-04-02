@@ -2848,11 +2848,27 @@
             border-color: rgba(148, 163, 184, 0.4);
         }
         .follow-up-queue-table .fu-cell-actions {
-            display: inline-flex;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto auto;
             align-items: center;
-            gap: 6px;
+            column-gap: 6px;
             min-width: 0;
-            flex-wrap: nowrap;
+            max-width: 100%;
+        }
+        .follow-up-queue-table .fu-cell-actions > span {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .follow-up-queue-table .fu-cell-actions > a {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .follow-up-queue-table .fu-cell-actions > button {
+            justify-self: end;
         }
 
         .follow-up-queue-table .fu-phone-cell {
