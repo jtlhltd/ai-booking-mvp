@@ -266,6 +266,21 @@ async function initPostgres() {
     CREATE INDEX IF NOT EXISTS call_insights_client_idx ON call_insights(client_key);
     CREATE INDEX IF NOT EXISTS call_insights_computed_idx ON call_insights(computed_at DESC);
 
+    -- Thompson sampling: per-tenant Beta posteriors for answered-rate by hour-of-day (local)
+    CREATE TABLE IF NOT EXISTS call_time_bandit (
+      client_key TEXT PRIMARY KEY REFERENCES tenants(client_key) ON DELETE CASCADE,
+      arms JSONB NOT NULL DEFAULT '{}'::jsonb,
+      updated_at TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE TABLE IF NOT EXISTS call_time_bandit_observations (
+      call_id TEXT PRIMARY KEY,
+      client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
+      hour SMALLINT NOT NULL,
+      success BOOLEAN NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS bandit_obs_tenant_idx ON call_time_bandit_observations(client_key);
+
     CREATE TABLE IF NOT EXISTS quality_alerts (
       id BIGSERIAL PRIMARY KEY,
       client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
@@ -1404,6 +1419,87 @@ export async function getLatestCallInsights(clientKey) {
     LIMIT 1
   `, [clientKey]);
   return rows?.[0] || null;
+}
+
+export async function getCallTimeBanditState(clientKey) {
+  try {
+    const { rows } = await query(`
+      SELECT arms FROM call_time_bandit WHERE client_key = $1
+    `, [clientKey]);
+    const arms = rows?.[0]?.arms;
+    if (arms == null) return {};
+    if (typeof arms === 'object') return { ...arms };
+    return {};
+  } catch (e) {
+    console.warn('[CALL TIME BANDIT] getCallTimeBanditState:', e.message);
+    return {};
+  }
+}
+
+async function mergeCallTimeBanditPosterior(clientKey, hour, success) {
+  const hk = String(hour);
+  const curState = await getCallTimeBanditState(clientKey);
+  const arms = { ...curState };
+  const prev = arms[hk] || { a: 1, b: 1 };
+  const a = Number(prev.a) || 1;
+  const b = Number(prev.b) || 1;
+  arms[hk] = success ? { a: a + 1, b } : { a, b: b + 1 };
+  await query(`
+    INSERT INTO call_time_bandit (client_key, arms, updated_at)
+    VALUES ($1, $2::jsonb, now())
+    ON CONFLICT (client_key)
+    DO UPDATE SET arms = EXCLUDED.arms, updated_at = now()
+  `, [clientKey, JSON.stringify(arms)]);
+}
+
+/**
+ * Idempotent: one bandit update per call_id. Uses call created_at hour in tenant TZ; label = answered heuristic.
+ */
+export async function recordCallTimeBanditAfterCallComplete({ clientKey, callId }) {
+  if (!clientKey || !callId) return;
+  try {
+    const { rows } = await query(`
+      SELECT call_id, created_at, outcome, status, duration, transcript, recording_url
+      FROM calls
+      WHERE call_id = $1 AND client_key = $2
+    `, [callId, clientKey]);
+    const row = rows?.[0];
+    if (!row?.created_at) return;
+
+    const st = (row.status || '').toString().trim().toLowerCase();
+    if (['initiated', 'in_progress', 'queued', 'pending', 'ringing'].includes(st)) return;
+    const dur = row.duration != null ? Number(row.duration) : null;
+    const hasOutcome = row.outcome != null && String(row.outcome).trim() !== '';
+    if (!hasOutcome && (dur == null || dur === 0) && !['ended', 'completed', 'finished', 'failed'].includes(st)) {
+      return;
+    }
+
+    const tenant = await getFullClient(clientKey);
+    if (!tenant) return;
+
+    const { getTenantTimezone } = await import('./lib/business-hours.js');
+    const { DateTime } = await import('luxon');
+    const { isAnsweredHeuristic } = await import('./lib/call-outcome-heuristics.js');
+
+    const tz = getTenantTimezone(tenant, process.env.TZ || process.env.TIMEZONE || 'Europe/London');
+    const dt = DateTime.fromJSDate(new Date(row.created_at), { zone: tz });
+    if (!dt.isValid) return;
+    const hour = dt.hour;
+    const success = isAnsweredHeuristic(row);
+
+    const ins = await query(`
+      INSERT INTO call_time_bandit_observations (call_id, client_key, hour, success)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (call_id) DO NOTHING
+      RETURNING call_id
+    `, [callId, clientKey, hour, success]);
+
+    if (ins.rows?.length) {
+      await mergeCallTimeBanditPosterior(clientKey, hour, success);
+    }
+  } catch (e) {
+    console.warn('[CALL TIME BANDIT] record skipped:', e.message);
+  }
 }
 
 export async function getCallsByPhone(clientKey, leadPhone, limit = 50) {

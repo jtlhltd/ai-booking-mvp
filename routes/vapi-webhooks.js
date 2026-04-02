@@ -1386,6 +1386,13 @@ async function updateCallTracking({
       metrics,
       analyzedAt
     });
+
+    try {
+      const { recordCallTimeBanditAfterCallComplete } = await import('../db.js');
+      await recordCallTimeBanditAfterCallComplete({ clientKey: tenantKey, callId });
+    } catch (banditErr) {
+      console.warn('[CALL TIME BANDIT] webhook update skipped:', banditErr?.message || banditErr);
+    }
     
     // Track cost if available
     if (cost && cost > 0) {

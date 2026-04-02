@@ -9675,7 +9675,10 @@ async function processLeadImportOutboundCalls({ clientKey, client, inserted }) {
     try {
       if (!isBusinessHours(client)) {
         const next = getNextBusinessHour(client);
-        const scheduledFor = scheduleAtOptimalCallWindow(client, routing, next, { fallbackTz: TIMEZONE });
+        const scheduledFor = await scheduleAtOptimalCallWindow(client, routing, next, {
+          fallbackTz: TIMEZONE,
+          clientKey
+        });
         await addToCallQueue({
           clientKey, leadPhone: lead.phone, priority: 8, scheduledFor,
           callType: 'vapi_call',
@@ -9697,7 +9700,10 @@ async function processLeadImportOutboundCalls({ clientKey, client, inserted }) {
         console.log('[LEAD IMPORT][bg] Call initiated:', lead.phone, result.id || result.callId);
       } else if (result?.error === 'outside_business_hours') {
         const next = getNextBusinessHour(client);
-        const scheduledFor = scheduleAtOptimalCallWindow(client, routing, next, { fallbackTz: TIMEZONE });
+        const scheduledFor = await scheduleAtOptimalCallWindow(client, routing, next, {
+          fallbackTz: TIMEZONE,
+          clientKey
+        });
         await addToCallQueue({
           clientKey, leadPhone: lead.phone, priority: 8, scheduledFor,
           callType: 'vapi_call',
@@ -9708,7 +9714,10 @@ async function processLeadImportOutboundCalls({ clientKey, client, inserted }) {
         lastCallError = result?.details || result?.error || 'unknown';
         console.warn('[LEAD IMPORT][bg] Call failed, queueing for retry:', lead.phone, result?.error);
         const retryBaseline = isBusinessHours(client) ? new Date() : getNextBusinessHour(client);
-        const retryWhen = scheduleAtOptimalCallWindow(client, routing, retryBaseline, { fallbackTz: TIMEZONE });
+        const retryWhen = await scheduleAtOptimalCallWindow(client, routing, retryBaseline, {
+          fallbackTz: TIMEZONE,
+          clientKey
+        });
         await addToCallQueue({
           clientKey, leadPhone: lead.phone, priority: 8, scheduledFor: retryWhen,
           callType: 'vapi_call',
@@ -9893,7 +9902,10 @@ app.post('/api/leads/import', async (req, res) => {
           const scheduledBaseline = shouldCallNow ? new Date() : getNextBusinessHour(client);
           const scheduledFor = shouldCallNow
             ? scheduledBaseline
-            : scheduleAtOptimalCallWindow(client, routing, scheduledBaseline, { fallbackTz: TIMEZONE });
+            : await scheduleAtOptimalCallWindow(client, routing, scheduledBaseline, {
+              fallbackTz: TIMEZONE,
+              clientKey
+            });
           console.log('[LEAD IMPORT] Call decision:', {
             clientKey,
             tomOutboundRelaxedImport,
@@ -21776,8 +21788,9 @@ async function queueNewLeadsForCalling() {
             const scheduledBaseline = shouldCallNow
               ? new Date()
               : getNextBusinessHour(client);
-            const scheduledFor = scheduleAtOptimalCallWindow(client, routing, scheduledBaseline, {
-              fallbackTz: TIMEZONE
+            const scheduledFor = await scheduleAtOptimalCallWindow(client, routing, scheduledBaseline, {
+              fallbackTz: TIMEZONE,
+              clientKey: client.clientKey
             });
 
             // Calculate priority based on lead age and source
