@@ -9513,7 +9513,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         scriptExpName,
         scriptSummary,
         legacyOutboundAbExperimentName,
-        legacyOutboundAbSummary
+        legacyOutboundAbSummary,
+        dialActiveDimensions
       });
     } catch (liveResErr) {
       console.error('[DEMO DASHBOARD] outbound A/B liveResults error:', liveResErr?.message || liveResErr);

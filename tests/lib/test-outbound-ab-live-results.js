@@ -29,7 +29,7 @@ test('dimensional: builds rows for focused dimension', () => {
   assert.equal(p.focusExperiment.allVariantsMeetMinSamples, false);
 });
 
-test('dimensional: no_focus when focus invalid', () => {
+test('dimensional: falls back to first slice with ledger data when focus unset', () => {
   const p = buildOutboundAbLiveResultsPayload({
     client: { vapi: {} },
     dimensionalMode: true,
@@ -41,8 +41,36 @@ test('dimensional: no_focus when focus invalid', () => {
     scriptExpName: null,
     scriptSummary: null,
     legacyOutboundAbExperimentName: null,
-    legacyOutboundAbSummary: null
+    legacyOutboundAbSummary: null,
+    dialActiveDimensions: []
   });
-  assert.equal(p.focusExperiment, null);
-  assert.equal(p.reason, 'no_focus');
+  assert.equal(p.focusExperiment.experimentName, 'v');
+  assert.equal(p.focusExperiment.dimension, 'voice');
+  assert.equal(p.reason, null);
+});
+
+test('dimensional: prefers sole dial dimension when set', () => {
+  const openingSummary = {
+    hasDbVariants: true,
+    variants: [
+      { variantName: 'a', totalLeads: 5, convertedLeads: 0, conversionRatePct: 0 },
+      { variantName: 'b', totalLeads: 6, convertedLeads: 1, conversionRatePct: 16.67 }
+    ]
+  };
+  const p = buildOutboundAbLiveResultsPayload({
+    client: { vapi: { outboundAbFocusDimension: 'voice' } },
+    dimensionalMode: true,
+    focusValid: 'voice',
+    voiceExpName: 'v',
+    voiceSummary: null,
+    openingExpName: 'o',
+    openingSummary,
+    scriptExpName: null,
+    scriptSummary: null,
+    legacyOutboundAbExperimentName: null,
+    legacyOutboundAbSummary: null,
+    dialActiveDimensions: ['opening']
+  });
+  assert.equal(p.focusExperiment.experimentName, 'o');
+  assert.equal(p.focusExperiment.dimension, 'opening');
 });
