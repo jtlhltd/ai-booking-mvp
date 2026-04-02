@@ -4729,7 +4729,7 @@
 
                 <article class="card card-insights-routing">
                     <h3>🧠 Insights & Routing</h3>
-                    <p class="card-subtitle" id="callInsightsSubtitle">Actionable call-time analysis, model activity, and Thompson beliefs that drive queue scheduling.</p>
+                    <p class="card-subtitle" id="callInsightsSubtitle">Plain-English tips from your call times and answer rates.</p>
                     <div class="insights-card-toolbar" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
                         <small id="callInsightsMeta" style="color:var(--muted);">—</small>
                         <button type="button" id="callInsightsRefresh" class="export-btn secondary" style="padding:6px 10px;font-size:12px;">Refresh insights</button>
@@ -5970,8 +5970,8 @@ ${actionsRow}
             const callInsightsSubtitle = document.getElementById('callInsightsSubtitle');
             if (callInsightsSubtitle) {
                 callInsightsSubtitle.textContent = isTomOutreachDashboard(currentClient)
-                    ? `Pickup timing, conversation signals, and dial-time learning for ${businessName} — outreach-focused (not calendar booking).`
-                    : `Actionable call-time analysis, model activity, and Thompson beliefs that drive queue scheduling.`;
+                    ? `Easy-to-read call timing tips for ${businessName} — focused on reaching people, not calendar bookings.`
+                    : `Plain-English tips from your call times and answer rates.`;
             }
             
             const recentLeadsSubtitle = document.getElementById('recentLeadsSubtitle');
@@ -7980,13 +7980,13 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 if (worst === null || pct < worst.pct) worst = { hour, pct, attempts };
             }
             if (!best) {
-                return '<p class="insights-panel-hint">Need at least <strong>5 dials</strong> in an hour to compare answer rates reliably.</p>';
+                return '<p class="insights-panel-hint">We need <strong>at least 5 calls</strong> in an hour before we can compare that hour fairly.</p>';
             }
             const weakLine =
                 worst && worst.hour !== best.hour
-                    ? ` <strong>Weakest (≥5 dials):</strong> ${String(worst.hour).padStart(2, '0')}:00 · ${worst.pct}% (${worst.attempts} dials).`
+                    ? ` <strong>Weakest busy hour:</strong> ${String(worst.hour).padStart(2, '0')}:00 · ${worst.pct}% answered (${worst.attempts} calls).`
                     : '';
-            return `<p class="insights-panel-hint"><strong>Best hour (≥5 dials):</strong> ${String(best.hour).padStart(2, '0')}:00 · ${best.pct}% answered (${best.attempts} dials).${weakLine}</p>`;
+            return `<p class="insights-panel-hint"><strong>Strongest busy hour:</strong> ${String(best.hour).padStart(2, '0')}:00 · ${best.pct}% answered (${best.attempts} calls).${weakLine}</p>`;
         }
 
         function buildInsightsHourBarChart(byHour, timeZoneLabel) {
@@ -8021,9 +8021,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 </div>`;
                 })
                 .join('');
-            return `<p class="insights-panel-hint"><strong>Readout:</strong> each bar is <em>% answered</em> for dials placed in that local hour (${escapeHtml(
+            return `<p class="insights-panel-hint">Each bar shows <strong>what share of calls got an answer</strong> for calls made in that hour (${escapeHtml(
                 timeZoneLabel || 'UTC'
-            )}). Taller = better pickup in this dataset.</p>
+            )}). Taller bar = more people picked up in this report.</p>
                 ${summarizeByHourForInsights(byHour)}
                 <div class="insights-hour-bars" role="img" aria-label="Answered rate by hour of day">${bars}</div>`;
         }
@@ -8063,7 +8063,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 </div>`;
                 })
                 .join('');
-            return `<p class="insights-panel-hint">Compare <em>% answered</em> by weekday — use it to plan staffing and lead-ingest timing.</p>
+            return `<p class="insights-panel-hint">Shows <strong>what share of calls got an answer</strong> on each weekday — useful for staffing and when leads come in.</p>
                 <div class="insights-weekday-bars" role="img" aria-label="Answered rate by weekday">${cols}</div>`;
         }
 
@@ -8091,14 +8091,15 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const head = actionHints.headline ? `<p class="insights-panel-hint">${escapeHtml(actionHints.headline)}</p>` : '';
             return `<div class="insights-panel insights-panel--span">
                 <div class="insights-panel-title">What to do with this</div>
+                <p class="insights-panel-hint" style="margin-top:2px">Short suggestions based on your data — no stats degree required.</p>
                 ${head}
                 <ul class="insights-action-list">${items}</ul>
             </div>`;
         }
 
         function scheduleSourceLabel(s) {
-            if (s === 'thompson') return 'Thompson';
-            if (s === 'routing_heuristic') return 'Routing heuristic';
+            if (s === 'thompson') return 'Smart timing';
+            if (s === 'routing_heuristic') return 'From your stats';
             return s ? String(s) : '—';
         }
 
@@ -8108,7 +8109,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const last7 = bandit && bandit.observationsLast7Days;
             const n7 = last7 != null ? formatNumber(last7) : '—';
             let obsBlock =
-                '<p class="insights-panel-hint">Nothing logged yet. Use <strong>Refresh insights</strong> to sync historical calls into the dial-time model; new completions append as they finish.</p>';
+                '<p class="insights-panel-hint">Nothing here yet. Click <strong>Refresh insights</strong> to pull in your call history; new finished calls will show up as they come in.</p>';
             if (obs.length) {
                 const rows = obs
                     .slice(0, 18)
@@ -8119,10 +8120,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             }</td><td style="font-size:10px;word-break:break-all">${escapeHtml(String(r.callId || '').slice(0, 18))}</td></tr>`
                     )
                     .join('');
-                obsBlock = `<table class="insights-monitor-table"><thead><tr><th>When</th><th>Hour</th><th>Outcome</th><th>Call id</th></tr></thead><tbody>${rows}</tbody></table>`;
+                obsBlock = `<table class="insights-monitor-table"><thead><tr><th>When</th><th>Time</th><th>Result</th><th>Call ref.</th></tr></thead><tbody>${rows}</tbody></table>`;
             }
             let schedBlock =
-                '<p class="insights-panel-hint">No rows yet. When scheduling moves a queued dial by <strong>&gt; 1 minute</strong> (Thompson or routing heuristic vs baseline), it appears here.</p>';
+                '<p class="insights-panel-hint">Nothing here yet. When the system moves a queued call to a better time (more than a minute different), it will appear in this list.</p>';
             if (sched.length) {
                 const rows = sched
                     .slice(0, 15)
@@ -8140,23 +8141,23 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         )} → ${escapeHtml(chs)}</td></tr>`;
                     })
                     .join('');
-                schedBlock = `<table class="insights-monitor-table"><thead><tr><th>When</th><th>Source</th><th>Hour</th><th>Shift</th><th>Baseline → chosen</th></tr></thead><tbody>${rows}</tbody></table>`;
+                schedBlock = `<table class="insights-monitor-table"><thead><tr><th>When</th><th>Why</th><th>Hour</th><th>Moved by</th><th>Old time → new time</th></tr></thead><tbody>${rows}</tbody></table>`;
             }
             return `<div class="insights-panel insights-panel--span">
-                <div class="insights-panel-title">Model activity & schedule shifts</div>
-                <p class="insights-panel-hint"><strong>${n7}</strong> bandit observations recorded in the last 7 days (rolling).</p>
+                <div class="insights-panel-title">Recent learning & rescheduled calls</div>
+                <p class="insights-panel-hint"><strong>${n7}</strong> call results added to timing learning in the last 7 days.</p>
                 <div class="insights-wide-grid">
-                    <div><span class="insights-subcaption">Belief updates</span>${obsBlock}</div>
-                    <div><span class="insights-subcaption">Schedule adjustments</span>${schedBlock}</div>
+                    <div><span class="insights-subcaption">Latest call results (by hour)</span>${obsBlock}</div>
+                    <div><span class="insights-subcaption">When we moved a queued call</span>${schedBlock}</div>
                 </div>
             </div>`;
         }
 
         function banditStrengthCaption(s) {
-            if (s === 'strong') return 'High confidence (many dials at this hour)';
-            if (s === 'building') return 'Moderate data';
-            if (s === 'early') return 'Early data';
-            return 'Prior only';
+            if (s === 'strong') return 'Lots of calls — pretty reliable';
+            if (s === 'building') return 'Enough to trust a little';
+            if (s === 'early') return 'Still learning';
+            return 'No data yet (starting guess)';
         }
 
         function buildInsightsBanditBlock(bandit) {
@@ -8164,22 +8165,22 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const sched = bandit?.optimalSchedulingActive ? 'On' : 'Off';
             const th = bandit?.thompsonActive ? 'On' : 'Off';
             const pill = `<div class="insights-panel-hint" style="margin-bottom:8px">
-                <span class="insights-status-pill">Queue scheduling: ${sched}</span>
-                <span class="insights-status-pill">Thompson dial-time: ${th}</span>
+                <span class="insights-status-pill">Smarter call times: ${sched}</span>
+                <span class="insights-status-pill">Learn from answers: ${th}</span>
                 ${bandit?.demo ? '<span class="insights-status-pill">Demo preview</span>' : ''}
             </div>`;
             const obs7 =
                 bandit?.observationsLast7Days != null ? formatNumber(bandit.observationsLast7Days) : null;
             const obsLine =
                 bandit?.updatedAt && !bandit?.demo
-                    ? `<p class="insights-panel-hint">${formatNumber(bandit.observationCount || 0)} calls in the dial-time model · ${obs7 != null ? `<strong>${obs7}</strong> in last 7 days · ` : ''}last update ${formatTimeAgo(bandit.updatedAt)}</p>`
+                    ? `<p class="insights-panel-hint">${formatNumber(bandit.observationCount || 0)} calls used to learn best times · ${obs7 != null ? `<strong>${obs7}</strong> in the last 7 days · ` : ''}updated ${formatTimeAgo(bandit.updatedAt)}</p>`
                     : bandit?.demo
-                      ? '<p class="insights-panel-hint">Representative preview — connect a live tenant for real posteriors.</p>'
+                      ? '<p class="insights-panel-hint">Example data — your live account will show real numbers.</p>'
                       : !bandit?.ok
-                        ? `<p class="insights-panel-hint">Could not load bandit state${bandit?.error ? `: ${escapeHtml(String(bandit.error))}` : ''}.</p>`
-                        : `<p class="insights-panel-hint">${formatNumber(bandit?.observationCount || 0)} observations on file${obs7 != null ? ` · <strong>${obs7}</strong> in last 7 days` : ''}.</p>`;
+                        ? `<p class="insights-panel-hint">Could not load timing data${bandit?.error ? `: ${escapeHtml(String(bandit.error))}` : ''}.</p>`
+                        : `<p class="insights-panel-hint">${formatNumber(bandit?.observationCount || 0)} calls on file${obs7 != null ? ` · <strong>${obs7}</strong> in the last 7 days` : ''}.</p>`;
             if (!ranked.length) {
-                return `${pill}${obsLine}<p class="insights-panel-hint">No per-hour beliefs with data yet. <strong>Refresh insights</strong> backfills from your call history; new completions also update the model when webhooks mark a call finished.</p>`;
+                return `${pill}${obsLine}<p class="insights-panel-hint">We don’t have hour-by-hour learnings yet. Click <strong>Refresh insights</strong> to load your history; new finished calls update this automatically.</p>`;
             }
             const rows = ranked
                 .map(
@@ -8187,9 +8188,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         `<tr><td>${escapeHtml(r.label)}</td><td><strong>${r.meanAnsweredPct}%</strong></td><td>${formatNumber(r.successes)} / ${formatNumber(r.failures)}</td><td>${escapeHtml(banditStrengthCaption(r.strength))}</td></tr>`
                 )
                 .join('');
-            return `${pill}${obsLine}<p class="insights-panel-hint">Belief = posterior mean from a Beta(1,1) prior after your observed answered / not counts. The live scheduler <strong>Thompson-samples</strong> these beliefs to pick dial times (balances explore vs exploit).</p>
+            return `${pill}${obsLine}<p class="insights-panel-hint">For each hour, we estimate how often calls get an answer based on past calls. The system uses this to pick better times while still trying new slots sometimes.</p>
             <table class="insights-bandit-table">
-                <thead><tr><th>Hour</th><th>Belief · P(answered)</th><th>Answered / not</th><th>Data strength</th></tr></thead>
+                <thead><tr><th>Hour</th><th>Est. answer rate</th><th>Reached / didn’t</th><th>How sure</th></tr></thead>
                 <tbody>${rows}</tbody>
             </table>`;
         }
@@ -8411,7 +8412,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     ${buildInsightsMonitoringSection(bandit)}
 
                     <div class="insights-panel insights-panel--span">
-                        <div class="insights-panel-title">Dial-time model (Thompson sampling)</div>
+                        <div class="insights-panel-title">Best times to call (learned from your data)</div>
                         ${buildInsightsBanditBlock(bandit)}
                     </div>
                     </div>
