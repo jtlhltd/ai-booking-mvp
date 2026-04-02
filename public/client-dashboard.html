@@ -1373,8 +1373,16 @@
             line-height: 1.45;
         }
 
-        body.tom-ab-client-only.tom-outreach-dashboard .tom-ab-operator-only {
-            display: none !important;
+        .tom-ab-simple-upload {
+            margin-bottom: 1.25rem;
+            padding: 14px 16px;
+            border-radius: 12px;
+            border: 1px solid var(--border, #e8eaf5);
+            background: var(--card-bg, rgba(255, 255, 255, 0.6));
+        }
+
+        .tom-ab-advanced-details {
+            margin-top: 8px;
         }
 
         .tom-ab-review-banner {
@@ -5170,39 +5178,36 @@
             aria-label="A B tests outbound"
         >
             <article class="card card-fullwidth">
-                <h3>🧪 A/B tests (outbound)</h3>
-                <p class="card-subtitle"><strong>Clients:</strong> upload variants with <strong>Full sequence bundle</strong> (add <code>?abClient=1</code> to this URL for upload + live results only). <strong>Operator:</strong> the system runs voice → opening → script automatically; when each phase hits the sample target, <code>YOUR_EMAIL</code> on Render is notified and the <strong>same two variants keep dialing</strong> until you click <strong>Review complete &amp; continue</strong>. No new tests until then.</p>
-                <div id="tomAbTestSectionRoot" class="tom-ab-test-section-root"></div>
-                <details id="tomAbTestSetupDetails" class="tom-ab-setup-details">
-                    <summary class="tom-ab-setup-summary">Configure experiments on this dashboard</summary>
-                    <div class="tom-ab-setup-inner tom-ab-setup-inner--dims">
-                        <details class="tom-ab-dim-block tom-ab-bundle-block">
-                            <summary class="tom-ab-dim-summary">Full sequence bundle — one JSON for voice, opening, script</summary>
-                            <div class="tom-ab-dim-inner">
-                                <p class="tom-ab-test-meta" style="margin:0;">
-                                    Paste or upload one JSON with <strong>voices</strong>, <strong>openings</strong>, and <strong>scripts</strong> (each ≥2 non-empty strings). We create three experiments, start the <strong>voice</strong> phase, advance phases automatically after you complete each <strong>review</strong> (sample-ready email → your control update → Review complete).
-                                </p>
-                                <label class="tom-ab-field">Bundle JSON file
-                                    <input type="file" id="tomAbBundleFile" accept=".json,application/json" class="tom-ab-input" style="padding:8px;" />
-                                </label>
-                                <label class="tom-ab-field">Or paste bundle JSON
-                                    <textarea id="tomAbBundleJson" class="tom-ab-textarea" rows="14" spellcheck="false" placeholder='{ "voices": ["id_a", "id_b"], "openings": ["Hi…", "Hey…"], "scripts": ["You are…", "You are…"] }'></textarea>
-                                </label>
-                                <details class="tom-ab-json-help">
-                                    <summary class="tom-ab-test-meta" style="cursor:pointer;">Example bundle JSON</summary>
-                                    <pre class="tom-ab-json-example" id="tomAbBundleExamplePre" aria-label="Bundle JSON example"></pre>
-                                </details>
-                                <div class="tom-ab-setup-actions">
-                                    <button type="button" id="tomAbBundleDeployBtn" class="export-btn">Deploy bundle &amp; start voice phase</button>
-                                </div>
-                                <p id="tomAbBundleDeployMsg" class="tom-ab-test-meta" role="status" style="margin:8px 0 0 0;"></p>
-                            </div>
-                        </details>
+                <h3>Creatives & monitoring</h3>
+                <p class="card-subtitle">Upload creatives, then watch live counts below.</p>
 
-                        <div class="tom-ab-operator-only">
-                        <p class="tom-ab-test-meta" style="margin:0;">
-                            <strong>Operator tools</strong> — switch live dimension, quick JSON, or per-dimension forms. Locked while a sample-ready review is pending.
-                        </p>
+                <section class="tom-ab-simple-upload" aria-label="Upload creatives">
+                    <h4 class="tom-ab-panel-title" style="margin-top:0;font-size:1.05rem;">Upload creatives</h4>
+                    <p class="tom-ab-test-meta" style="margin:0 0 12px 0;">
+                        One JSON with <strong>voices</strong>, <strong>openings</strong>, and <strong>scripts</strong> (each an array of at least two strings).
+                    </p>
+                    <label class="tom-ab-field">JSON file
+                        <input type="file" id="tomAbBundleFile" accept=".json,application/json" class="tom-ab-input" style="padding:8px;" />
+                    </label>
+                    <label class="tom-ab-field">Or paste JSON
+                        <textarea id="tomAbBundleJson" class="tom-ab-textarea" rows="10" spellcheck="false" placeholder='{ "voices": ["…", "…"], "openings": ["…", "…"], "scripts": ["…", "…"] }'></textarea>
+                    </label>
+                    <details class="tom-ab-json-help">
+                        <summary class="tom-ab-test-meta" style="cursor:pointer;">Example</summary>
+                        <pre class="tom-ab-json-example" id="tomAbBundleExamplePre" aria-label="Example JSON"></pre>
+                    </details>
+                    <div class="tom-ab-setup-actions" style="margin-top:10px;">
+                        <button type="button" id="tomAbBundleDeployBtn" class="export-btn">Upload</button>
+                    </div>
+                    <p id="tomAbBundleDeployMsg" class="tom-ab-test-meta" role="status" style="margin:8px 0 0 0;"></p>
+                </section>
+
+                <div id="tomAbTestSectionRoot" class="tom-ab-test-section-root"></div>
+
+                <details id="tomAbTestSetupDetails" class="tom-ab-setup-details tom-ab-advanced-details">
+                    <summary class="tom-ab-setup-summary">Advanced</summary>
+                    <div class="tom-ab-setup-inner tom-ab-setup-inner--dims">
+                        <p class="tom-ab-test-meta" style="margin:0;">Focus dimension, alerts, or edit one slice at a time.</p>
                         <div id="tomAbSetupStatusLine" class="tom-ab-setup-status-line" aria-live="polite"></div>
 
                         <div class="tom-ab-focus-fieldset" aria-label="Active A B dimension for outbound dials">
@@ -5398,7 +5403,6 @@
                                 <p id="tomAbScriptSetupMsg" class="tom-ab-test-meta" role="status" style="margin:0;"></p>
                             </div>
                         </details>
-                        </div>
                     </div>
                 </details>
             </article>
@@ -5808,21 +5812,6 @@
             el.style.display = show ? '' : 'none';
             el.setAttribute('aria-hidden', show ? 'false' : 'true');
         }
-        function applyTomAbClientOnlyMode(clientKey) {
-            window.__tomAbClientOnly = false;
-            document.body.classList.remove('tom-ab-client-only');
-            if (!isTomOutreachDashboard(clientKey)) return;
-            try {
-                const q = new URLSearchParams(window.location.search || '');
-                if (q.get('abClient') === '1') {
-                    window.__tomAbClientOnly = true;
-                    document.body.classList.add('tom-ab-client-only');
-                }
-            } catch {
-                /* ignore */
-            }
-        }
-
         function applyTomOutreachDashboardMode(clientKey) {
             const on = isTomOutreachDashboard(clientKey);
             document.body.classList.toggle('tom-outreach-dashboard', on);
@@ -6328,7 +6317,6 @@ ${actionsRow}
         let dashboardData = createEmptyDashboardData();
         /** Latest `vapi` from GET /api/clients/:key (Tom self-service A/B notify fields). */
         let tomAbClientVapiSnapshot = null;
-        window.__tomAbClientOnly = false;
         let currentLeads = [];
         /** Full recent-leads array from API (search filters a view; modal uses indices into this). */
         let recentLeadsAllRows = [];
@@ -8347,19 +8335,12 @@ Aliases: voiceIds / voice, openingLines / openers / opening, scripts / scriptBod
         }
 
         function renderTomAbReviewBanner(ab) {
-            if (window.__tomAbClientOnly) return '';
             if (!ab || !ab.reviewPending) return '';
-            const since =
-                ab.reviewPendingSince != null && String(ab.reviewPendingSince).trim()
-                    ? escapeHtml(new Date(String(ab.reviewPendingSince).trim()).toLocaleString())
-                    : '';
-            return `<div class="tom-ab-review-banner tom-ab-operator-only" role="alert">
-                <p style="margin:0 0 10px 0;"><strong>Operator review required.</strong> The sample target was reached — check <strong>YOUR_EMAIL</strong> on Render. The <strong>same two variants stay on dials</strong>; no new tests or config changes until you finish.</p>
-                ${since ? `<p class="tom-ab-test-meta" style="margin:0 0 10px 0;">Pending since ${since}</p>` : ''}
+            return `<div class="tom-ab-review-banner" role="alert">
+                <p style="margin:0 0 8px 0;"><strong>Review needed.</strong> Sample target hit — check <code>YOUR_EMAIL</code>. Same two variants keep running until you click below.</p>
                 <div class="tom-ab-setup-actions">
-                    <button type="button" id="tomAbReviewContinueBtn" class="export-btn">Review complete &amp; continue</button>
+                    <button type="button" id="tomAbReviewContinueBtn" class="export-btn">Continue</button>
                 </div>
-                <p class="tom-ab-test-meta" style="margin:8px 0 0 0;">After you update production control (e.g. winning voice in Vapi), click above to unlock and move the automated bundle to the next phase.</p>
             </div>`;
         }
 
@@ -8381,14 +8362,12 @@ Aliases: voiceIds / voice, openingLines / openers / opening, scripts / scriptBod
                           ? escapeHtml(fe.dimension)
                           : 'Legacy combined test';
                 const readyLine = fe.allVariantsMeetMinSamples
-                    ? `<p class="tom-ab-live-ready"><strong>Sample target reached</strong> for every variant (${lr.minSamplesPerVariant}+ leads each).${
-                          lr.notifyEmailConfigured
-                              ? ' Check your inbox for the review email if it has not arrived yet.'
-                              : ''
-                      } You still choose the control — nothing is applied automatically.</p>`
-                    : `<p class="tom-ab-test-meta" style="margin:0 0 10px 0;">Collecting leads… alert sends at <strong>${formatNumber(
+                    ? `<p class="tom-ab-live-ready"><strong>Sample target reached</strong> (${formatNumber(lr.minSamplesPerVariant)}+ per variant).${
+                          lr.notifyEmailConfigured ? ' Check email for the review note.' : ''
+                      }</p>`
+                    : `<p class="tom-ab-test-meta" style="margin:0 0 10px 0;">Working toward <strong>${formatNumber(
                           lr.minSamplesPerVariant
-                      )}</strong> per variant (configure under <strong>Sample-ready email</strong> below).</p>`;
+                      )}</strong> leads per variant (email alert: <strong>Advanced</strong>).</p>`;
                 const rows = fe.variants
                     .map((v) => {
                         const rate =
@@ -8430,26 +8409,24 @@ Aliases: voiceIds / voice, openingLines / openers / opening, scripts / scriptBod
             } else {
                 const hint =
                     lr.reason === 'no_focus'
-                        ? 'Tap <strong>Voice</strong>, <strong>Opening</strong>, or <strong>Script</strong> under <em>What’s live on dials</em> so this panel can show the active experiment’s counts.'
+                        ? 'Under <strong>Advanced</strong>, pick Voice, Opening, or Script as the focus so this table fills in.'
                         : lr.reason === 'no_summary' || lr.reason === 'no_variants'
-                          ? 'Deploy or save an experiment with variants — live counts will show here.'
-                          : 'Live counts will appear when a focused outbound A/B experiment has data.';
+                          ? 'Upload a bundle or save an experiment — counts will show here.'
+                          : 'Counts appear when an active test has data.';
                 body = `<p class="tom-ab-test-meta" style="margin:0;">${hint}</p>`;
             }
             return `<section class="tom-ab-live-results-panel" aria-labelledby="tom-ab-live-results-h">
                 <div class="tom-ab-live-results-head">
-                    <h4 class="tom-ab-panel-title" id="tom-ab-live-results-h" style="margin:0;">Live results</h4>
+                    <h4 class="tom-ab-panel-title" id="tom-ab-live-results-h" style="margin:0;">Monitoring</h4>
                     <div class="tom-ab-live-results-actions">
                         <span class="tom-ab-test-meta" id="tomAbLiveResultsAsOf">Updated ${t}</span>
                         <button type="button" class="export-btn secondary tom-ab-live-refresh-btn" id="tomAbRefreshLiveResultsBtn">Refresh</button>
                     </div>
                 </div>
-                <p class="tom-ab-test-meta" style="margin:4px 0 12px 0;">Pulls fresh numbers from the server (same basis as the sample-ready email).</p>
+                <p class="tom-ab-test-meta" style="margin:4px 0 12px 0;">Live from the server — use Refresh or reload the page.</p>
                 ${
                     ab.reviewPending
-                        ? `<p class="tom-ab-test-meta" style="margin:0 0 10px 0;padding:8px 10px;border-radius:8px;background:rgba(234,179,8,0.12);border:1px solid rgba(234,179,8,0.35);"><strong>Review lock:</strong> counts still update; the same two variants stay live until the operator finishes review${
-                              window.__tomAbClientOnly ? '' : ' (see banner above)'
-                          }.</p>`
+                        ? `<p class="tom-ab-test-meta" style="margin:0 0 10px 0;">Review pending: counts update; variants stay the same until you <strong>Continue</strong> above.</p>`
                         : ''
                 }
                 ${body}
@@ -8773,7 +8750,7 @@ Aliases: voiceIds / voice, openingLines / openers / opening, scripts / scriptBod
                 if (msg) msg.textContent = 'Paste bundle JSON or choose a .json file above.';
                 return;
             }
-            if (msg) msg.textContent = 'Deploying bundle…';
+            if (msg) msg.textContent = 'Uploading…';
             const btn = document.getElementById('tomAbBundleDeployBtn');
             if (btn) btn.disabled = true;
             try {
@@ -8805,7 +8782,7 @@ Aliases: voiceIds / voice, openingLines / openers / opening, scripts / scriptBod
                 updateTomAbSetupStatusLine();
                 syncTomAbQuickDimFromSegment();
                 if (msg) {
-                    msg.textContent = `Bundle live — voice phase. Experiments: ${data.voiceExperiment || ''}`;
+                    msg.textContent = 'Uploaded. Numbers update in Monitoring below.';
                 }
             } catch (err) {
                 if (msg) msg.textContent = err.message || 'Bundle deploy failed';
@@ -9009,9 +8986,7 @@ Aliases: voiceIds / voice, openingLines / openers / opening, scripts / scriptBod
             const expSource = slot && slot.experimentNameSource;
             const inferredBanner =
                 exp && expSource === 'inferred'
-                    ? `<div class="tom-ab-inferred-banner" role="status">
-                        <strong>Note:</strong> This ${escapeHtml(title)} experiment name was inferred (only one matching active test in the database). Set the matching <code>vapi</code> key explicitly if you want production config fixed.
-                       </div>`
+                    ? `<div class="tom-ab-inferred-banner" role="status"><strong>Note:</strong> Experiment name was inferred from the database.</div>`
                     : '';
 
             let testedHtml = '';
@@ -9088,7 +9063,7 @@ Aliases: voiceIds / voice, openingLines / openers / opening, scripts / scriptBod
                 <section class="tom-ab-dim-results" aria-labelledby="${headingId}">
                     ${inferredBanner}
                     <h4 class="tom-ab-panel-title" id="${headingId}">${escapeHtml(title)}${livePill}${exp ? ` · <span class="tom-ab-test-meta">${escapeHtml(exp)}</span>` : ''}</h4>
-                    <p class="tom-ab-test-meta" style="margin-top:0;">Same lead always gets the same variant per experiment (hash of phone). “In feed” = newest <strong>${cap}</strong> activity rows for this slice.</p>
+                    <p class="tom-ab-test-meta" style="margin-top:0;">“In feed” = last <strong>${cap}</strong> activity rows for this slice.</p>
                     <div class="tom-ab-split">
                         <div class="tom-ab-panel tom-ab-panel--tested">
                             <h5 class="tom-ab-panel-title" style="font-size:1rem;">What’s being tested</h5>
@@ -9136,12 +9111,8 @@ Aliases: voiceIds / voice, openingLines / openers / opening, scripts / scriptBod
             const hasLegacy = leg && leg.experimentName;
 
             if (!hasDim && !hasLegacy) {
-                root.innerHTML = `
-                    <p class="tom-ab-test-meta" style="margin:0;">
-                        Nothing to show yet. Expand <strong>Configure experiments on this dashboard</strong> and use <strong>Full sequence bundle</strong> (one JSON for all three lists) or set up a single dimension with <strong>Quick create</strong> / manual forms.
-                        Dimensional keys: <code>outboundAbVoiceExperiment</code>, <code>outboundAbOpeningExperiment</code>, <code>outboundAbScriptExperiment</code>.
-                        Legacy combined test: <code>outboundAbExperiment</code> when no dimensional keys are set and exactly one active experiment exists.
-                    </p>`;
+                root.innerHTML =
+                    '<p class="tom-ab-test-meta" style="margin:0;">Nothing to monitor yet. Upload creatives above.</p>';
                 return;
             }
 
@@ -9154,33 +9125,38 @@ Aliases: voiceIds / voice, openingLines / openers / opening, scripts / scriptBod
                 html += renderTomAbReviewBanner(ab);
                 html += renderTomAbLiveResultsPanel(ab);
                 html += renderTomAbBundleWizard(ab);
-                html += renderTomAbDimBlock(
-                    'voice',
-                    'Voice A/B',
-                    'voice IDs only',
-                    voiceSlot,
-                    byDim.voice,
-                    cap,
-                    liveSet.has('voice')
-                );
-                html += renderTomAbDimBlock(
-                    'opening',
-                    'Opening line A/B',
-                    'opening lines only',
-                    openingSlot,
-                    byDim.opening,
-                    cap,
-                    liveSet.has('opening')
-                );
-                html += renderTomAbDimBlock(
-                    'script',
-                    'Script A/B',
-                    'scripts only',
-                    scriptSlot,
-                    byDim.script,
-                    cap,
-                    liveSet.has('script')
-                );
+                html += `<details class="tom-ab-deep-dive tom-ab-test-meta" style="margin-top:12px;border:1px solid var(--border);border-radius:10px;padding:0 12px 12px;">
+                    <summary class="tom-ab-panel-title" style="cursor:pointer;padding:10px 0;list-style-position:outside;">Per-dimension breakdown</summary>
+                    <div>
+                        ${renderTomAbDimBlock(
+                            'voice',
+                            'Voice A/B',
+                            'voice IDs only',
+                            voiceSlot,
+                            byDim.voice,
+                            cap,
+                            liveSet.has('voice')
+                        )}
+                        ${renderTomAbDimBlock(
+                            'opening',
+                            'Opening line A/B',
+                            'opening lines only',
+                            openingSlot,
+                            byDim.opening,
+                            cap,
+                            liveSet.has('opening')
+                        )}
+                        ${renderTomAbDimBlock(
+                            'script',
+                            'Script A/B',
+                            'scripts only',
+                            scriptSlot,
+                            byDim.script,
+                            cap,
+                            liveSet.has('script')
+                        )}
+                    </div>
+                </details>`;
             }
 
             if (hasLegacy && ab.mode === 'legacy') {
@@ -9196,9 +9172,7 @@ Aliases: voiceIds / voice, openingLines / openers / opening, scripts / scriptBod
                 const expSource = leg.experimentNameSource;
                 const inferredBanner =
                     exp && expSource === 'inferred'
-                        ? `<div class="tom-ab-inferred-banner" role="status">
-                            <strong>Note:</strong> Legacy combined experiment name was inferred (exactly one active test). Set <code>outboundAbExperiment</code> in <code>vapi_json</code> to lock it.
-                           </div>`
+                        ? `<div class="tom-ab-inferred-banner" role="status"><strong>Note:</strong> Legacy experiment name was inferred.</div>`
                         : '';
                 let testedHtml = '';
                 if (variants.length) {
@@ -9256,11 +9230,14 @@ Aliases: voiceIds / voice, openingLines / openers / opening, scripts / scriptBod
                         </tr>`).join('')
                         : `<tr><td colspan="5" class="tom-ab-test-meta">No ledger or feed data yet.</td></tr>`;
                 }
-                html += `
-                    <section class="tom-ab-dim-results tom-ab-legacy-block" aria-labelledby="tom-ab-legacy-h">
+                html += `<details class="tom-ab-deep-dive tom-ab-test-meta tom-ab-legacy-block" style="margin-top:12px;border:1px solid var(--border);border-radius:10px;padding:0 12px 12px;" ${
+                    !hasDim ? 'open' : ''
+                }>
+                    <summary class="tom-ab-panel-title" style="cursor:pointer;padding:10px 0;">Legacy experiment detail</summary>
+                    <section class="tom-ab-dim-results" aria-labelledby="tom-ab-legacy-h">
                         ${inferredBanner}
-                        <h4 class="tom-ab-panel-title" id="tom-ab-legacy-h">Legacy combined experiment · <span class="tom-ab-test-meta">${escapeHtml(exp)}</span></h4>
-                        <p class="tom-ab-test-meta" style="margin-top:0;">One experiment varies voice, opening, and script together. Prefer dimensional tests above when possible.</p>
+                        <h4 class="tom-ab-panel-title" id="tom-ab-legacy-h"><span class="tom-ab-test-meta">${escapeHtml(exp)}</span></h4>
+                        <p class="tom-ab-test-meta" style="margin-top:0;">Voice, opening, and script vary together in one experiment.</p>
                         <div class="tom-ab-split">
                             <div class="tom-ab-panel tom-ab-panel--tested">
                                 <h5 class="tom-ab-panel-title" style="font-size:1rem;">What’s being tested</h5>
@@ -9284,7 +9261,8 @@ Aliases: voiceIds / voice, openingLines / openers / opening, scripts / scriptBod
                                 </div>
                             </div>
                         </div>
-                    </section>`;
+                    </section>
+                </details>`;
             }
 
             root.innerHTML = html;
@@ -11966,7 +11944,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             initFollowUpQueueUi();
             applyRoiPanelVisibility(currentClient);
             applyTomOutreachDashboardMode(currentClient);
-            applyTomAbClientOnlyMode(currentClient);
             initTomAbTestSetupPanel();
             initTomAbOutreachSectionDelegation();
             tomAbClientVapiSnapshot = null;
