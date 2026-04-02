@@ -4499,6 +4499,16 @@
                     </div>
                     <div id="call-recordings" class="thin-scroll"></div>
                 </article>
+
+                <article class="card card-list">
+                    <h3>📼 Voicemail Listener</h3>
+                    <p class="card-subtitle" id="voicemailListenerSubtitle">Voicemails only — review quickly and open transcript/recording.</p>
+                    <div id="voicemailListenerToolbar" class="dashboard-list-toolbar" style="display:none">
+                        <input type="search" id="voicemailSearchInput" class="dashboard-list-search" placeholder="Search voicemail name/phone/notes…" autocomplete="off" enterkeyhint="search">
+                        <span id="voicemailSearchHint" class="dashboard-search-hint" hidden></span>
+                    </div>
+                    <div id="voicemail-listener" class="thin-scroll"></div>
+                </article>
                 </div>
         </section>
 
@@ -8602,6 +8612,120 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
         }
 
+        let voicemailRowsAll = [];
+
+        async function renderVoicemailListener() {
+            const container = document.getElementById('voicemail-listener');
+            const toolbar = document.getElementById('voicemailListenerToolbar');
+            const searchEl = document.getElementById('voicemailSearchInput');
+            const hintEl = document.getElementById('voicemailSearchHint');
+            if (!container) return;
+
+            if (currentClient === DEMO_CLIENT_KEY) {
+                voicemailRowsAll = (callRecordingsAll || []).filter((r) => String(r.outcome || '').toLowerCase() === 'voicemail').slice(0, 12);
+                container.innerHTML = voicemailRowsAll.length
+                    ? voicemailRowsAll.map((rec) => {
+                        const metaLine = `Voicemail · ${formatRecordingDateTime(rec.createdAt) || rec.timeAgo || 'Recently'} · ${formatRecordingDurationLabel(rec.duration)}`;
+                        return renderRecordingRowHtml({
+                            name: rec.name,
+                            metaLine,
+                            recordingUrl: rec.recordingUrl,
+                            audioStreamSrc: '',
+                            transcriptCallId: rec.callId || String(rec.id),
+                            leadId: rec.leadId,
+                            leadPhone: rec.phone,
+                            isDemo: true
+                        });
+                    }).join('')
+                    : `<div class="empty-state" style="padding: 20px;">
+                        <span class="empty-state-icon">📼</span>
+                        <div class="empty-state-title">No voicemails yet</div>
+                        <div class="empty-state-message">Voicemail recordings will appear here after calls reach voicemail.</div>
+                    </div>`;
+                if (toolbar) toolbar.style.display = voicemailRowsAll.length ? '' : 'none';
+                if (searchEl) searchEl.value = '';
+                if (hintEl) { hintEl.textContent = ''; hintEl.hidden = true; }
+                bindRecordingPlayersIn(container);
+                return;
+            }
+
+            try {
+                container.innerHTML = '<div class="empty-state-message" style="padding:16px;">Loading voicemails…</div>';
+                const response = await fetch(`${BASE_URL}/api/voicemails/${encodeURIComponent(currentClient)}?limit=120`, { cache: 'no-store' });
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok || !payload?.ok) {
+                    container.innerHTML = `<div class="empty-state" style="padding: 20px;">
+                        <span class="empty-state-icon">📼</span>
+                        <div class="empty-state-title">Unable to load voicemails</div>
+                        <div class="empty-state-message">${escapeHtml(payload?.error || 'Please refresh and try again.')}</div>
+                    </div>`;
+                    if (toolbar) toolbar.style.display = 'none';
+                    return;
+                }
+                voicemailRowsAll = Array.isArray(payload.voicemails) ? payload.voicemails : [];
+                if (!voicemailRowsAll.length) {
+                    container.innerHTML = `<div class="empty-state" style="padding: 20px;">
+                        <span class="empty-state-icon">📼</span>
+                        <div class="empty-state-title">No voicemails yet</div>
+                        <div class="empty-state-message">Voicemail recordings will appear here after calls reach voicemail.</div>
+                    </div>`;
+                    if (toolbar) toolbar.style.display = 'none';
+                    return;
+                }
+                if (toolbar) toolbar.style.display = '';
+                if (searchEl) searchEl.value = '';
+                if (hintEl) { hintEl.textContent = ''; hintEl.hidden = true; }
+
+                const renderList = (rows) => {
+                    container.innerHTML = rows.map((rec) => {
+                        const metaLine = `Voicemail · ${(formatRecordingDateTime(rec.createdAt) || rec.timeAgo || 'Recently')} · ${formatRecordingDurationLabel(rec.duration)}`;
+                        const audioStreamSrc = rec.id != null && rec.recordingUrl
+                            ? `${BASE_URL}/api/call-recordings/${encodeURIComponent(currentClient)}/stream/${encodeURIComponent(String(rec.id))}`
+                            : '';
+                        return renderRecordingRowHtml({
+                            name: rec.name,
+                            metaLine,
+                            recordingUrl: rec.recordingUrl,
+                            audioStreamSrc,
+                            transcriptCallId: rec.callId || String(rec.id),
+                            leadId: rec.leadId,
+                            leadPhone: rec.phone,
+                            isDemo: false
+                        });
+                    }).join('');
+                    bindRecordingPlayersIn(container);
+                };
+
+                renderList(voicemailRowsAll);
+
+                if (searchEl && !searchEl.dataset.bound) {
+                    searchEl.dataset.bound = '1';
+                    searchEl.addEventListener('input', () => {
+                        const term = String(searchEl.value || '').trim().toLowerCase();
+                        const filtered = term
+                            ? voicemailRowsAll.filter((r) => {
+                                const h = `${r.name || ''} ${r.phone || ''} ${r.transcriptPreview || ''}`.toLowerCase();
+                                return h.includes(term);
+                            })
+                            : voicemailRowsAll;
+                        renderList(filtered);
+                        if (hintEl) {
+                            hintEl.textContent = term ? `Showing ${formatNumber(filtered.length)} of ${formatNumber(voicemailRowsAll.length)}` : '';
+                            hintEl.hidden = !term;
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to load voicemails', error);
+                container.innerHTML = `<div class="empty-state" style="padding: 20px;">
+                    <span class="empty-state-icon">📼</span>
+                    <div class="empty-state-title">Unable to load voicemails</div>
+                    <div class="empty-state-message">Please refresh and try again.</div>
+                </div>`;
+                if (toolbar) toolbar.style.display = 'none';
+            }
+        }
+
         async function renderCalendarDetails(data) {
             const container = document.getElementById('calendar-details');
             if (!container) return;
@@ -9011,7 +9135,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 renderRetryQueue(dashboardData).catch(err => console.warn('Retry queue failed', err)),
                 loadFollowUpQueue(currentClient).catch(err => console.warn('Follow-up list failed', err)),
                 renderCalendarDetails(dashboardData).catch(err => console.warn('Calendar details failed', err)),
-                renderCallRecordings(callsToRender).catch(err => console.warn('Call recordings failed', err))
+                renderCallRecordings(callsToRender).catch(err => console.warn('Call recordings failed', err)),
+                renderVoicemailListener().catch(err => console.warn('Voicemail listener failed', err))
             ]).then(() => {
                 console.log('All async data loaded');
             });

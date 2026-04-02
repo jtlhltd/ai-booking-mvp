@@ -11718,6 +11718,93 @@ app.get('/api/call-recordings/:clientKey', async (req, res) => {
   }
 });
 
+// Voicemail listener: voicemail-only recordings (fast human review)
+app.get('/api/voicemails/:clientKey', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    res.set('Cache-Control', 'no-store, must-revalidate');
+    const limitRaw = parseInt(String(req.query.limit || ''), 10);
+    const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 50, 1), 200);
+
+    const [countRes, result] = await Promise.all([
+      query(`
+        SELECT COUNT(*)::int AS n
+        FROM calls c
+        WHERE c.client_key = $1
+          AND c.recording_url IS NOT NULL
+          AND TRIM(c.recording_url) <> ''
+          AND LOWER(COALESCE(c.outcome, '')) IN ('voicemail')
+      `, [clientKey]),
+      query(`
+        SELECT
+          c.id,
+          c.call_id,
+          c.lead_phone,
+          c.recording_url,
+          c.duration,
+          c.outcome,
+          c.created_at,
+          c.transcript,
+          lm.lead_id,
+          lm.name
+        FROM calls c
+        LEFT JOIN LATERAL (
+          SELECT l.id AS lead_id, l.name
+          FROM leads l
+          WHERE l.client_key = c.client_key
+            AND (
+              l.phone = c.lead_phone
+              OR (
+                LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
+                AND RIGHT(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), 10)
+                  = RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
+              )
+            )
+          ORDER BY l.created_at DESC NULLS LAST
+          LIMIT 1
+        ) lm ON true
+        WHERE c.client_key = $1
+          AND c.recording_url IS NOT NULL
+          AND TRIM(c.recording_url) <> ''
+          AND LOWER(COALESCE(c.outcome, '')) IN ('voicemail')
+        ORDER BY c.created_at DESC
+        LIMIT $2
+      `, [clientKey, limit])
+    ]);
+
+    const totalVoicemails = parseInt(countRes.rows?.[0]?.n || 0, 10) || 0;
+    const rows = [...(result.rows || [])];
+    const voicemails = rows.map((row) => {
+      let dur = Number(row.duration);
+      if (Number.isFinite(dur) && dur > 100000 && dur % 1000 === 0) dur = Math.round(dur / 1000);
+      if (!Number.isFinite(dur) || dur < 0) dur = 0;
+      return {
+        id: row.id,
+        callId: row.call_id,
+        leadId: row.lead_id != null ? row.lead_id : null,
+        name: row.name || 'Prospect',
+        phone: row.lead_phone,
+        recordingUrl: row.recording_url,
+        duration: dur,
+        outcome: row.outcome || 'voicemail',
+        createdAt: row.created_at,
+        timeAgo: formatTimeAgoLabel(row.created_at),
+        transcriptPreview: truncateActivityFeedText(row.transcript, 240) || null
+      };
+    });
+
+    res.json({
+      ok: true,
+      voicemails,
+      totalVoicemails,
+      limit
+    });
+  } catch (error) {
+    console.error('[VOICEMAIL LISTENER ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 /** Stream recording bytes through our origin so <audio> works (third-party URLs often block CORS). */
 app.get('/api/call-recordings/:clientKey/stream/:callRowId', async (req, res) => {
   const { Readable } = await import('stream');
