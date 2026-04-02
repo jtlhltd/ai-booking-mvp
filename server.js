@@ -9358,10 +9358,34 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       ? (roiMultiplier - 1) * 100
       : null;
 
+    const outboundAbExperimentName =
+      client?.vapi?.outboundAbExperiment != null ? String(client.vapi.outboundAbExperiment).trim() : '';
+    let outboundAbTestDb = null;
+    if (outboundAbExperimentName) {
+      try {
+        const { getOutboundAbExperimentSummary } = await import('./db.js');
+        outboundAbTestDb = await getOutboundAbExperimentSummary(clientKey, outboundAbExperimentName);
+      } catch (abSumErr) {
+        console.error('[DEMO DASHBOARD] outbound A/B summary error:', abSumErr?.message || abSumErr);
+      }
+    }
+    const recentFeedVariantCounts = {};
+    for (const c of recentCalls) {
+      if (c.abVariant) {
+        const k = String(c.abVariant);
+        recentFeedVariantCounts[k] = (recentFeedVariantCounts[k] || 0) + 1;
+      }
+    }
+
     const payload = {
       ok: true,
       source: 'live',
       recentLeadsListCap: RECENT_LEADS_DASHBOARD_CAP,
+      outboundAbTest: {
+        experimentName: outboundAbExperimentName || null,
+        summary: outboundAbTestDb,
+        recentFeedVariantCounts
+      },
       metrics: {
         totalLeads,
         totalCalls: displayCalls, // Unique leads with ≥1 outbound dial (all time)

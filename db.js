@@ -2467,6 +2467,39 @@ export async function getABTestConversionRates(experimentId) {
   return rows;
 }
 
+/**
+ * Dashboard summary for one outbound A/B experiment (multiple variant rows share experiment_name).
+ */
+export async function getOutboundAbExperimentSummary(clientKey, experimentName) {
+  if (!clientKey || !experimentName || !String(experimentName).trim()) return null;
+  const name = String(experimentName).trim();
+  const { rows: experiments } = await query(
+    `
+    SELECT id, variant_name, variant_config, is_active
+    FROM ab_test_experiments
+    WHERE client_key = $1 AND experiment_name = $2 AND is_active = TRUE
+    ORDER BY variant_name ASC
+  `,
+    [clientKey, name]
+  );
+  if (!experiments.length) {
+    return { experimentName: name, variants: [], hasDbVariants: false };
+  }
+  const variants = [];
+  for (const row of experiments) {
+    const rates = await getABTestConversionRates(row.id);
+    const agg =
+      rates.find((r) => r.variant_name === row.variant_name) || (rates.length === 1 ? rates[0] : null);
+    variants.push({
+      variantName: row.variant_name,
+      totalLeads: parseInt(agg?.total_leads ?? 0, 10),
+      convertedLeads: parseInt(agg?.converted_leads ?? 0, 10),
+      conversionRatePct: agg?.conversion_rate != null ? Number(agg.conversion_rate) : 0
+    });
+  }
+  return { experimentName: name, variants, hasDbVariants: true };
+}
+
 // Security and Authentication functions
 export async function createUserAccount({ clientKey, username, email, passwordHash, role = 'user', permissions = [] }) {
   const permissionsJson = JSON.stringify(permissions);

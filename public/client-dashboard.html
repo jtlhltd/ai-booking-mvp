@@ -1039,6 +1039,49 @@
             display: none !important;
         }
 
+        .tom-ab-test-section {
+            display: none !important;
+        }
+
+        body.tom-outreach-dashboard .tom-ab-test-section {
+            display: block !important;
+        }
+
+        .tom-ab-test-table-wrap {
+            overflow-x: auto;
+            margin-top: 10px;
+        }
+
+        table.tom-ab-test-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+        }
+
+        .tom-ab-test-table th,
+        .tom-ab-test-table td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border, #e8eaf5);
+            vertical-align: top;
+        }
+
+        .tom-ab-test-table th {
+            color: var(--muted);
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .tom-ab-test-section .card-subtitle code {
+            font-size: 0.78em;
+        }
+
+        .tom-ab-test-meta {
+            color: var(--muted);
+            font-size: 0.8125rem;
+            line-height: 1.45;
+        }
+
         .leads-list {
             display: flex;
             flex-direction: column;
@@ -1907,17 +1950,6 @@
             color: #5b21b6;
             font-weight: 600;
             font-size: 0.75rem;
-        }
-
-        .tom-ab-test-hint {
-            font-size: 0.8125rem;
-            color: var(--muted, #6b7280);
-            margin: -2px 0 10px 0;
-            padding: 8px 10px;
-            border-radius: 8px;
-            background: rgba(124, 58, 237, 0.06);
-            border: 1px solid rgba(124, 58, 237, 0.14);
-            line-height: 1.4;
         }
 
         .activity-item strong {
@@ -4100,10 +4132,9 @@
             color: #ddd6fe;
         }
 
-        body[data-theme="dark"] .tom-ab-test-hint {
-            color: #c4c9e0;
-            background: rgba(124, 58, 237, 0.12);
-            border-color: rgba(196, 181, 253, 0.22);
+        body[data-theme="dark"] .tom-ab-test-table th,
+        body[data-theme="dark"] .tom-ab-test-table td {
+            border-bottom-color: rgba(124, 134, 220, 0.25);
         }
 
         body[data-theme="dark"] .activity-inline-help {
@@ -4702,6 +4733,14 @@
             </div>
         </section>
 
+        <section class="dashboard-section tom-ab-test-section" aria-label="A B tests outbound">
+            <article class="card card-fullwidth">
+                <h3>🧪 A/B tests (outbound)</h3>
+                <p class="card-subtitle">Voice, opening line, and script variants. Numbers update as calls are placed and outcomes are recorded.</p>
+                <div id="tomAbTestSectionRoot" class="tom-ab-test-section-root"></div>
+            </article>
+        </section>
+
         <section class="roi-panel" id="roiPanel" aria-hidden="false">
             <div class="roi-metric">
                 <span>Your Investment (30d)</span>
@@ -4996,7 +5035,6 @@
                         <span>Group retries</span>
                     </label>
                 </div>
-                <div id="tomAbTestActivityHint" class="tom-ab-test-hint" hidden aria-live="polite"></div>
                 <div id="recent-calls" class="activity-feed activity-feed--scrollable" role="region" aria-label="Recent calls list"></div>
             </article>
         </section>
@@ -5603,7 +5641,8 @@ ${actionsRow}
                     costs: { total: null, monthlyFee: null, perCall: null },
                     revenue: { total: null, bookings: 0, avgDealValue: null },
                     roi: { profit: null, multiplier: null, percentage: null }
-                }
+                },
+                outboundAbTest: null
             };
         }
         
@@ -5688,7 +5727,16 @@ ${actionsRow}
                 leadSig,
                 appts.length,
                 String((appts[0] && (appts[0].id || appts[0].start)) || ''),
-                tpData
+                tpData,
+                (() => {
+                    const ab = d.outboundAbTest;
+                    if (!ab || typeof ab !== 'object') return '';
+                    return [
+                        ab.experimentName || '',
+                        JSON.stringify(ab.recentFeedVariantCounts || {}),
+                        (ab.summary?.variants || []).map((v) => `${v.variantName}:${v.totalLeads}:${v.convertedLeads}`).join(',')
+                    ].join('|');
+                })()
             ].join('|');
         }
 
@@ -5732,7 +5780,8 @@ ${actionsRow}
                     touchpoints: livePayload.touchpoints || { labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], data: [0, 0, 0, 0, 0, 0, 0] },
                     roi: livePayload.roi || { costs: { total: 0, perCall: 0 }, revenue: { total: 0, bookings: 0, avgDealValue: 0 }, roi: { profit: 0, multiplier: 0, percentage: 0 } },
                     activityAsOfIso: livePayload.activityAsOfIso || metrics.activityAsOfIso || null,
-                    activityTimezone: livePayload.activityTimezone || metrics.activityTimezone || DASHBOARD_ACTIVITY_TZ
+                    activityTimezone: livePayload.activityTimezone || metrics.activityTimezone || DASHBOARD_ACTIVITY_TZ,
+                    outboundAbTest: livePayload.outboundAbTest || null
                 };
             }
             
@@ -5806,7 +5855,8 @@ ${actionsRow}
                     : base.appointments,
                 roi: livePayload.roi ? livePayload.roi : base.roi,
                 activityAsOfIso: livePayload.activityAsOfIso ?? base.activityAsOfIso ?? null,
-                activityTimezone: livePayload.activityTimezone ?? base.activityTimezone ?? DASHBOARD_ACTIVITY_TZ
+                activityTimezone: livePayload.activityTimezone ?? base.activityTimezone ?? DASHBOARD_ACTIVITY_TZ,
+                outboundAbTest: livePayload.outboundAbTest ?? base.outboundAbTest ?? null
             };
         }
 
@@ -7389,32 +7439,81 @@ ${actionsRow}
             });
         }
 
-        /** Tom outreach: summary of A/B assignments in the current activity feed list (not outcome-filtered). */
-        function updateTomAbTestActivityHint(feedCalls) {
-            const el = document.getElementById('tomAbTestActivityHint');
-            if (!el) return;
+        function renderTomAbTestSection(data) {
+            const root = document.getElementById('tomAbTestSectionRoot');
+            if (!root) return;
             if (!isTomOutreachDashboard(currentClient)) {
-                el.hidden = true;
-                el.innerHTML = '';
+                root.innerHTML = '';
                 return;
             }
-            const withAb = (feedCalls || []).filter((c) => c.abVariant);
-            if (!withAb.length) {
-                el.hidden = true;
-                el.innerHTML = '';
+            const ab = data && data.outboundAbTest;
+            const exp = ab && ab.experimentName ? String(ab.experimentName).trim() : '';
+            const summary = ab && ab.summary;
+            const feedCounts = {};
+            for (const c of data.recentCalls || []) {
+                if (c && c.abVariant) {
+                    const k = String(c.abVariant);
+                    feedCounts[k] = (feedCounts[k] || 0) + 1;
+                }
+            }
+            const variants = summary && Array.isArray(summary.variants) && summary.variants.length ? summary.variants : [];
+
+            if (!exp) {
+                root.innerHTML = `
+                    <p class="tom-ab-test-meta" style="margin:0;">
+                        No outbound A/B experiment is set yet. When your workspace has <code>vapi.outboundAbExperiment</code> configured, this section shows each variant’s volume, conversions (when recorded as <code>converted</code> in the test ledger), and how many calls appear in the live feed.
+                    </p>`;
                 return;
             }
-            const exp = withAb[0].abExperiment || 'outbound test';
-            const counts = {};
-            for (const c of withAb) {
-                const v = c.abVariant || '?';
-                counts[v] = (counts[v] || 0) + 1;
+
+            let tableBody = '';
+            if (variants.length) {
+                tableBody = variants.map((v) => {
+                    const feedN = Object.prototype.hasOwnProperty.call(feedCounts, v.variantName)
+                        ? feedCounts[v.variantName]
+                        : null;
+                    const rate = v.totalLeads > 0 ? `${Number(v.conversionRatePct).toFixed(1)}%` : '—';
+                    return `<tr>
+                        <td><strong>${escapeHtml(v.variantName)}</strong></td>
+                        <td>${formatNumber(v.totalLeads)}</td>
+                        <td>${formatNumber(v.convertedLeads)}</td>
+                        <td>${escapeHtml(rate)}</td>
+                        <td>${feedN != null ? formatNumber(feedN) : '—'}</td>
+                    </tr>`;
+                }).join('');
+            } else {
+                const feedKeys = Object.keys(feedCounts);
+                if (feedKeys.length) {
+                    tableBody = feedKeys.map((k) => `<tr>
+                        <td><strong>${escapeHtml(k)}</strong></td>
+                        <td>—</td><td>—</td><td>—</td>
+                        <td>${formatNumber(feedCounts[k])}</td>
+                    </tr>`).join('');
+                } else {
+                    tableBody = `<tr><td colspan="5" class="tom-ab-test-meta">No ledger rows yet for this experiment, and no tagged calls in the current feed. After the next dials, variants will appear here and on each activity row.</td></tr>`;
+                }
             }
-            const countStr = Object.entries(counts)
-                .map(([v, n]) => `${escapeHtml(v)}: ${n}`)
-                .join(' · ');
-            el.innerHTML = `<strong>A/B test</strong> <span style="opacity:.9">(${escapeHtml(exp)})</span> — calls in feed: ${countStr}`;
-            el.hidden = false;
+
+            const cap = typeof ACTIVITY_FEED_DISPLAY_CAP === 'number' ? ACTIVITY_FEED_DISPLAY_CAP : 40;
+            root.innerHTML = `
+                <p class="card-subtitle" style="margin-top:0;">
+                    Active experiment: <strong>${escapeHtml(exp)}</strong>
+                    · <span class="tom-ab-test-meta">“Leads” = distinct numbers in the A/B ledger for that variant. “In feed” = calls in the newest <strong>${cap}</strong> activity rows.</span>
+                </p>
+                <div class="tom-ab-test-table-wrap">
+                    <table class="tom-ab-test-table" aria-label="Outbound A B test variants">
+                        <thead>
+                            <tr>
+                                <th scope="col">Variant</th>
+                                <th scope="col">Leads (ledger)</th>
+                                <th scope="col">Converted</th>
+                                <th scope="col">Rate</th>
+                                <th scope="col">In feed</th>
+                            </tr>
+                        </thead>
+                        <tbody>${tableBody}</tbody>
+                    </table>
+                </div>`;
         }
 
         function renderCalls(callsOverride) {
@@ -7449,8 +7548,6 @@ ${actionsRow}
                     { id: 'demo-6', callId: 'demo-call-6', dbId: 9006, name: 'Jordan Lee', leadPhone: '+447700900666', service: 'Lead Follow-Up', channel: 'Phone', timeAgo: '2h ago', createdAt: ago(120), outcome: 'no-answer', outcomeLabel: 'No answer', status: 'Ended', rawStatus: 'ended', durationLabel: '—', endedReason: 'Customer did not answer', retryAttempt: 2, hasRecording: false }
                 ];
             }
-
-            updateTomAbTestActivityHint(callsToShow);
 
             if (!callsToShow.length) {
                 container.innerHTML = `
@@ -10054,6 +10151,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 : [call, ...list];
             dashboardData.recentCalls = next.slice(0, cap);
             renderCalls();
+            renderTomAbTestSection(dashboardData);
             showToast('New Call Logged', `${call.name || 'Prospect'}: ${call.summary || 'Call completed'}`, 'info');
         }
 
@@ -10240,6 +10338,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             renderChart(config, dashboardData);
             const callsToRender = dashboardData.recentCalls || [];
             renderCalls(callsToRender);
+            renderTomAbTestSection(dashboardData);
             renderWorkflow(
                 isTomOutreachDashboard(currentClient)
                     ? []
@@ -10302,6 +10401,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         renderAppointments(dashboardData.appointments || []);
                         const callsToRender = dashboardData.recentCalls || [];
                         renderCalls(callsToRender);
+                        renderTomAbTestSection(dashboardData);
                         await renderCallRecordings(callsToRender);
                         await renderCallQuality(dashboardData);
                         await renderCallInsights(dashboardData);
