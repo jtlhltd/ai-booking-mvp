@@ -8113,8 +8113,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     <li><strong>Answered rate</strong> — We take your <strong>${n}</strong> most recent calls from the last <strong>${days}</strong> days (up to <strong>${cap}</strong> calls loaded from the database). “Answered” uses the same pickup/conversation check as elsewhere on this dashboard (not just “it rang”).</li>
                     <li><strong>Best hours</strong> — Each call is placed in the <strong>hour it started</strong> using <strong>${tz}</strong>. The number in brackets (e.g. 18:00 <strong>(7)</strong>) is a simple <strong>0–100 score from answer rate</strong> at that hour. We only rank an hour after at least <strong>${minSlot}</strong> calls have been made in that hour.</li>
                     <li><strong>Best days</strong> — Same idea by <strong>weekday</strong>, again needing at least <strong>${minSlot}</strong> calls on that day before it can appear in the list.</li>
-                    <li><strong>Top objections &amp; key phrases</strong> — These come from <strong>tags and phrases stored on each call</strong> when your system saves them after a call (for example from transcript analysis). We count how often each one appears in this same set of calls.</li>
-                    <li><strong>Suggested tweak</strong> — Short tips when the data matches a few fixed patterns (for example many “not interested” outcomes). They are <strong>suggestions only</strong>; nothing changes in your live assistant unless you change it.</li>
+                    <li><strong>Top objections &amp; key phrases</strong> — When a call ends and we have a transcript, we run <strong>automatic keyword rules</strong> (e.g. words about cost → “price”, “call back later” → “timing”) and save the matches on that call. The counts you see are <strong>how often those tags showed up</strong> across this report — not a human listening to every call.</li>
+                    <li><strong>Suggested tweak</strong> — Pops up when a few <strong>simple rules</strong> trip (for example a lot of “not interested” outcomes). Your live assistant does <strong>not</strong> change by itself.</li>
+                    <li><strong>How reliable is this?</strong> — <strong>Answer rate, best hours, and best days</strong> are grounded in real call timestamps and outcomes — solid for spotting timing patterns. <strong>Objections and phrases</strong> are useful for <strong>trends</strong> but can miss nuance or misfire on a word here and there; use them to <strong>prioritize which recordings to review</strong>. <strong>Suggested tweaks</strong> are <strong>ideas to test</strong>, not promises. If a number surprises you, listen to a handful of calls before you rework the script.</li>
                 </ul>
                 <p class="insights-panel-hint" style="margin-top:10px">Click <strong>Refresh insights</strong> to rebuild this report from your latest calls.</p>
             </div>`;
@@ -8401,12 +8402,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     <div class="quality-metric">
                         <div class="quality-label">Top objections</div>
                         <div class="quality-value quality-value--schedule">${escapeHtml(topObj)}</div>
-                        <div class="quality-badge">Tags stored on calls in this report (from your pipeline / analysis).</div>
+                        <div class="quality-badge">Auto-detected from transcripts (keyword rules). Good for trends — spot-check calls before big changes.</div>
                     </div>
                     <div class="quality-metric">
                         <div class="quality-label">Key phrases</div>
                         <div class="quality-value quality-value--schedule">${escapeHtml(topPhrases)}</div>
-                        <div class="quality-badge">Phrases stored on calls in this report (from your pipeline / analysis).</div>
+                        <div class="quality-badge">Same as objections: automatic transcript scan. Counts = how often wording matched.</div>
                     </div>
                     ${
                         suggestions.length
@@ -8416,6 +8417,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                                 <div class="quality-metric">
                                     <div class="quality-label">Suggested tweak</div>
                                     <div class="quality-value quality-value--schedule">${escapeHtml(s.title || 'Suggestion')}</div>
+                                    <div class="quality-badge" style="font-size:11px;opacity:.9">Rule-based idea to try — not proof of cause or guaranteed lift.</div>
                                     <div class="quality-badge">${escapeHtml(s.detail || '')}</div>
                                 </div>
                             `
