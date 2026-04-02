@@ -9188,6 +9188,16 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       const retryAttempt = row.retry_attempt != null ? Math.max(0, parseInt(row.retry_attempt, 10) || 0) : 0;
       let outcomeLabel = outcomeToFriendlyLabel(effectiveOutcome);
       const metaObj = parseCallsRowMetadata(row?.metadata) || {};
+      const vapiMeta =
+        vapiData?.metadata && typeof vapiData.metadata === 'object' && !Array.isArray(vapiData.metadata)
+          ? vapiData.metadata
+          : {};
+      const abExperimentRaw = metaObj.abExperiment ?? vapiMeta.abExperiment ?? null;
+      const abVariantRaw = metaObj.abVariant ?? vapiMeta.abVariant ?? null;
+      const abExperiment =
+        abExperimentRaw != null && String(abExperimentRaw).trim() !== '' ? String(abExperimentRaw).trim() : null;
+      const abVariant =
+        abVariantRaw != null && String(abVariantRaw).trim() !== '' ? String(abVariantRaw).trim() : null;
       const queueFailReasonRaw = typeof metaObj.reason === 'string' ? metaObj.reason : (metaObj.reason != null ? String(metaObj.reason) : '');
       const queueFailReason = queueFailReasonRaw && queueFailReasonRaw.length > 180
         ? `${queueFailReasonRaw.slice(0, 180).trim()}…`
@@ -9243,7 +9253,9 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         endedReason: endedReasonDisplay || null,
         queueStartFailureReason: isCallQueueStartFailureRow(row) ? (queueFailReason || null) : null,
         retryAttempt,
-        hasRecording: !!(row.recording_url && String(row.recording_url).trim())
+        hasRecording: !!(row.recording_url && String(row.recording_url).trim()),
+        abExperiment,
+        abVariant
       };
     });
     

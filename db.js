@@ -1382,7 +1382,7 @@ export async function upsertCall({
       outcome = EXCLUDED.outcome,
       duration = EXCLUDED.duration,
       cost = EXCLUDED.cost,
-      metadata = EXCLUDED.metadata,
+      metadata = COALESCE(calls.metadata, '{}'::jsonb) || COALESCE(EXCLUDED.metadata, '{}'::jsonb),
       retry_attempt = EXCLUDED.retry_attempt,
       transcript = EXCLUDED.transcript,
       recording_url = EXCLUDED.recording_url,

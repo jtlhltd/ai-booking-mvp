@@ -1901,6 +1901,25 @@
             color: #1d4ed8;
         }
 
+        .activity-pill.activity-pill--ab {
+            border-color: rgba(124, 58, 237, 0.4);
+            background: rgba(124, 58, 237, 0.09);
+            color: #5b21b6;
+            font-weight: 600;
+            font-size: 0.75rem;
+        }
+
+        .tom-ab-test-hint {
+            font-size: 0.8125rem;
+            color: var(--muted, #6b7280);
+            margin: -2px 0 10px 0;
+            padding: 8px 10px;
+            border-radius: 8px;
+            background: rgba(124, 58, 237, 0.06);
+            border: 1px solid rgba(124, 58, 237, 0.14);
+            line-height: 1.4;
+        }
+
         .activity-item strong {
             color: #2f3147;
         }
@@ -4075,6 +4094,18 @@
             color: #a5b4fc;
         }
 
+        body[data-theme="dark"] .activity-pill.activity-pill--ab {
+            border-color: rgba(196, 181, 253, 0.45);
+            background: rgba(124, 58, 237, 0.18);
+            color: #ddd6fe;
+        }
+
+        body[data-theme="dark"] .tom-ab-test-hint {
+            color: #c4c9e0;
+            background: rgba(124, 58, 237, 0.12);
+            border-color: rgba(196, 181, 253, 0.22);
+        }
+
         body[data-theme="dark"] .activity-inline-help {
             border-color: rgba(124, 134, 220, 0.45);
             background: rgba(92, 106, 196, 0.18);
@@ -4965,6 +4996,7 @@
                         <span>Group retries</span>
                     </label>
                 </div>
+                <div id="tomAbTestActivityHint" class="tom-ab-test-hint" hidden aria-live="polite"></div>
                 <div id="recent-calls" class="activity-feed activity-feed--scrollable" role="region" aria-label="Recent calls list"></div>
             </article>
         </section>
@@ -5640,6 +5672,7 @@ ${actionsRow}
             const leads = d.recentLeads || [];
             const appts = d.appointments || [];
             const callSig = calls.slice(0, 12).map((c) => String(c.callId || c.id || '')).join(',');
+            const abSig = calls.slice(0, 24).map((c) => `${c.abVariant || ''}|${c.abExperiment || ''}`).join(',');
             const leadSig = leads.slice(0, 12).map((l) => String(l.id || l.phone || '')).join(',');
             const tp = d.touchpoints;
             const tpData = tp && Array.isArray(tp.data) ? tp.data.join(',') : '';
@@ -5650,6 +5683,7 @@ ${actionsRow}
                 d.last24hLeads,
                 calls.length,
                 callSig,
+                abSig,
                 leads.length,
                 leadSig,
                 appts.length,
@@ -7355,6 +7389,34 @@ ${actionsRow}
             });
         }
 
+        /** Tom outreach: summary of A/B assignments in the current activity feed list (not outcome-filtered). */
+        function updateTomAbTestActivityHint(feedCalls) {
+            const el = document.getElementById('tomAbTestActivityHint');
+            if (!el) return;
+            if (!isTomOutreachDashboard(currentClient)) {
+                el.hidden = true;
+                el.innerHTML = '';
+                return;
+            }
+            const withAb = (feedCalls || []).filter((c) => c.abVariant);
+            if (!withAb.length) {
+                el.hidden = true;
+                el.innerHTML = '';
+                return;
+            }
+            const exp = withAb[0].abExperiment || 'outbound test';
+            const counts = {};
+            for (const c of withAb) {
+                const v = c.abVariant || '?';
+                counts[v] = (counts[v] || 0) + 1;
+            }
+            const countStr = Object.entries(counts)
+                .map(([v, n]) => `${escapeHtml(v)}: ${n}`)
+                .join(' · ');
+            el.innerHTML = `<strong>A/B test</strong> <span style="opacity:.9">(${escapeHtml(exp)})</span> — calls in feed: ${countStr}`;
+            el.hidden = false;
+        }
+
         function renderCalls(callsOverride) {
             const container = document.getElementById('recent-calls');
             if (!container) {
@@ -7387,6 +7449,8 @@ ${actionsRow}
                     { id: 'demo-6', callId: 'demo-call-6', dbId: 9006, name: 'Jordan Lee', leadPhone: '+447700900666', service: 'Lead Follow-Up', channel: 'Phone', timeAgo: '2h ago', createdAt: ago(120), outcome: 'no-answer', outcomeLabel: 'No answer', status: 'Ended', rawStatus: 'ended', durationLabel: '—', endedReason: 'Customer did not answer', retryAttempt: 2, hasRecording: false }
                 ];
             }
+
+            updateTomAbTestActivityHint(callsToShow);
 
             if (!callsToShow.length) {
                 container.innerHTML = `
@@ -7533,6 +7597,15 @@ ${actionsRow}
                     : '';
                 const actionsHtml = [recLinkHtml, transcriptBtnHtml].filter(Boolean).join('');
                 const detailsBlockHtml = buildActivityDetailsBlockHtml(call);
+                const abTitle =
+                    call.abExperiment && call.abVariant
+                        ? ` title="${escapeHtml(`Test: ${call.abExperiment} · variant: ${call.abVariant}`)}"`
+                        : call.abVariant
+                            ? ` title="${escapeHtml('Variant: ' + call.abVariant)}"`
+                            : '';
+                const abPillHtml = call.abVariant
+                    ? `<span class="activity-pill activity-pill--ab"${abTitle}>A/B: ${escapeHtml(call.abVariant)}</span>`
+                    : '';
 
                 return `
                     <div class="activity-item ${edgeClass}"${rowTitleAttr}>
@@ -7542,6 +7615,7 @@ ${actionsRow}
                                 <div class="activity-tags">
                                     <span class="${pillClass}"${pillTitleAttr}>${escapeHtml(pillLabel)}</span>
                                     ${wasPickedUp ? '<span class="activity-pill pickup-yes">Picked up</span>' : ''}
+                                    ${abPillHtml}
                                 </div>
                                 ${detailsBlockHtml}
                             </div>
