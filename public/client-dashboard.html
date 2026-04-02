@@ -1181,6 +1181,29 @@
             min-height: 1.2em;
         }
 
+        .tom-ab-quick-block {
+            margin-bottom: 14px;
+            border: 1px dashed var(--border, #d8dbe8);
+            border-radius: 10px;
+        }
+
+        .tom-ab-json-help {
+            margin: 10px 0 12px;
+        }
+
+        .tom-ab-json-example {
+            margin: 8px 0 0;
+            padding: 12px;
+            border-radius: 8px;
+            background: var(--card-bg, #fff);
+            border: 1px solid var(--border, #e8eaf5);
+            font-size: 0.72rem;
+            line-height: 1.4;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
         .tom-ab-live-pill {
             display: inline-block;
             margin-left: 8px;
@@ -5056,7 +5079,7 @@
         <section class="dashboard-section tom-ab-test-section" aria-label="A B tests outbound">
             <article class="card card-fullwidth">
                 <h3>🧪 A/B tests (outbound)</h3>
-                <p class="card-subtitle"><strong>One thing tested per dial.</strong> Pick what’s live below, then edit that experiment only — voice, opening line, and script never all vary at once.</p>
+                <p class="card-subtitle"><strong>One thing tested per dial.</strong> Use <strong>Quick create</strong> to upload or paste JSON variants, or configure each dimension by hand — voice, opening, and script never all vary on the same call.</p>
                 <div id="tomAbTestSectionRoot" class="tom-ab-test-section-root"></div>
                 <details id="tomAbTestSetupDetails" class="tom-ab-setup-details">
                     <summary class="tom-ab-setup-summary">Configure experiments on this dashboard</summary>
@@ -5074,6 +5097,39 @@
                             </div>
                             <p id="tomAbFocusMsg" class="tom-ab-test-meta tom-ab-focus-msg" role="status"></p>
                         </div>
+
+                        <details class="tom-ab-dim-block tom-ab-quick-block">
+                            <summary class="tom-ab-dim-summary">Quick create — paste or upload JSON</summary>
+                            <div class="tom-ab-dim-inner">
+                                <p class="tom-ab-test-meta" style="margin:0;">
+                                    Choose what you’re testing, then supply <strong>two or more variants</strong> as JSON. We create the experiment, pick a name if you don’t, set it <strong>live on dials</strong> for that dimension, and keep other slices on assistant defaults (one factor at a time).
+                                </p>
+                                <label class="tom-ab-field">What you’re testing
+                                    <select id="tomAbQuickDim" class="tom-ab-input">
+                                        <option value="voice">Voice (ElevenLabs IDs)</option>
+                                        <option value="opening">Opening line</option>
+                                        <option value="script">Script (system prompt)</option>
+                                    </select>
+                                </label>
+                                <label class="tom-ab-field">Experiment name <span class="tom-ab-test-meta">(optional — auto if empty)</span>
+                                    <input type="text" id="tomAbQuickExpName" class="tom-ab-input" placeholder="e.g. tom_opening_feb" />
+                                </label>
+                                <label class="tom-ab-field">JSON file
+                                    <input type="file" id="tomAbQuickFile" accept=".json,application/json" class="tom-ab-input" style="padding:8px;" />
+                                </label>
+                                <label class="tom-ab-field">Or paste JSON here
+                                    <textarea id="tomAbQuickJson" class="tom-ab-textarea" rows="11" spellcheck="false" placeholder='Opening example: [ { "name": "control", "firstMessage": "Hi, it’s Tom…" }, { "name": "variant_b", "firstMessage": "Hey — Tom here…" } ]'></textarea>
+                                </label>
+                                <details class="tom-ab-json-help">
+                                    <summary class="tom-ab-test-meta" style="cursor:pointer;">Copy-paste examples</summary>
+                                    <pre class="tom-ab-json-example" id="tomAbJsonExamplesPre" aria-label="JSON examples"></pre>
+                                </details>
+                                <div class="tom-ab-setup-actions">
+                                    <button type="button" id="tomAbQuickSubmitBtn" class="export-btn">Create from JSON &amp; set live</button>
+                                </div>
+                                <p id="tomAbQuickMsg" class="tom-ab-test-meta" role="status" style="margin:8px 0 0 0;"></p>
+                            </div>
+                        </details>
 
                         <details class="tom-ab-dim-block" data-tom-ab-dim="voice" open>
                             <summary class="tom-ab-dim-summary">Voice · ElevenLabs IDs</summary>
@@ -7992,6 +8048,43 @@ ${actionsRow}
                 syncTomAbDimensionPanels(firstWith || 'voice');
             }
             updateTomAbSetupStatusLine();
+            syncTomAbQuickDimFromSegment();
+        }
+
+        function syncTomAbQuickDimFromSegment() {
+            const sel = document.getElementById('tomAbQuickDim');
+            if (!sel) return;
+            const pressed = document.querySelector('.tom-ab-seg[data-tom-ab-dim][aria-pressed="true"]');
+            const d = pressed && pressed.getAttribute('data-tom-ab-dim');
+            if (d && ['voice', 'opening', 'script'].includes(d)) sel.value = d;
+        }
+
+        function fillTomAbJsonExamplesOnce() {
+            const ex = document.getElementById('tomAbJsonExamplesPre');
+            if (!ex || ex.dataset.filled === '1') return;
+            ex.dataset.filled = '1';
+            ex.textContent = `Opening line (array of variants):
+[
+  { "name": "control", "firstMessage": "Hi, it’s Tom from ACME — got a quick question." },
+  { "name": "variant_b", "firstMessage": "Hey, Tom here from ACME. Mind if I ask something quick?" }
+]
+
+Voice (ElevenLabs voice IDs):
+[
+  { "name": "control", "voice": "your_voice_id_a" },
+  { "name": "variant_b", "voice": "your_voice_id_b" }
+]
+
+Script — optional wrapper with a name:
+{
+  "experimentName": "tom_script_feb",
+  "variants": [
+    { "name": "control", "script": "You are a friendly SDR. Be brief. …" },
+    { "name": "variant_b", "script": "You are a direct SDR. No filler. …" }
+  ]
+}
+
+You can also use "value" instead of firstMessage / voice / script.`;
         }
 
         function setTomAbFocusSegmentUI(dim) {
@@ -8075,6 +8168,27 @@ ${actionsRow}
                     if (dim) saveTomOutboundAbFocus(dim);
                 });
             });
+            fillTomAbJsonExamplesOnce();
+            const qf = document.getElementById('tomAbQuickFile');
+            if (qf && qf.dataset.bound !== '1') {
+                qf.dataset.bound = '1';
+                qf.addEventListener('change', () => {
+                    const f = qf.files && qf.files[0];
+                    const ta = document.getElementById('tomAbQuickJson');
+                    if (!f || !ta) return;
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        ta.value = reader.result || '';
+                    };
+                    reader.readAsText(f, 'UTF-8');
+                });
+            }
+            const qbtn = document.getElementById('tomAbQuickSubmitBtn');
+            if (qbtn && qbtn.dataset.bound !== '1') {
+                qbtn.dataset.bound = '1';
+                qbtn.addEventListener('click', () => tomAbQuickSubmit());
+            }
+            syncTomAbQuickDimFromSegment();
         }
 
         async function saveTomOutboundAbFocus(picked) {
@@ -8122,6 +8236,7 @@ ${actionsRow}
                 }
                 prefillTomAbTestFormFromData();
                 updateTomAbSetupStatusLine();
+                syncTomAbQuickDimFromSegment();
                 if (msg) {
                     setTimeout(() => {
                         if (msg && msg.textContent === 'Updated.') msg.textContent = '';
@@ -8133,6 +8248,63 @@ ${actionsRow}
                 segs.forEach((b) => {
                     b.disabled = false;
                 });
+            }
+        }
+
+        async function tomAbQuickSubmit() {
+            const msg = document.getElementById('tomAbQuickMsg');
+            const dimEl = document.getElementById('tomAbQuickDim');
+            const jsonEl = document.getElementById('tomAbQuickJson');
+            const expEl = document.getElementById('tomAbQuickExpName');
+            const dim = dimEl && dimEl.value;
+            const json = jsonEl && jsonEl.value.trim();
+            const expName = expEl && expEl.value.trim();
+            if (!json) {
+                if (msg) msg.textContent = 'Paste JSON or choose a .json file above.';
+                return;
+            }
+            if (msg) msg.textContent = 'Creating…';
+            const btn = document.getElementById('tomAbQuickSubmitBtn');
+            if (btn) btn.disabled = true;
+            try {
+                const body = { dimension: dim, json };
+                if (expName) body.experimentName = expName;
+                const res = await fetch(
+                    `${BASE_URL}/api/clients/${encodeURIComponent(currentClient)}/outbound-ab-test-import`,
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    }
+                );
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
+                if (expEl && !expEl.value.trim() && data.experimentName) {
+                    expEl.value = data.experimentName;
+                }
+                if (data.dimension) {
+                    setTomAbFocusSegmentUI(data.dimension);
+                    syncTomAbDimensionPanels(data.dimension);
+                }
+                if (msg) msg.textContent = 'Done. Refreshing…';
+                const livePayload = await fetchLiveData(currentClient);
+                if (livePayload) {
+                    dashboardData = mergeData({}, livePayload, false);
+                    updateStatusBar(dashboardData);
+                    renderRecentActivity(dashboardData);
+                    renderLeadJourney(dashboardData);
+                    renderLeads(dashboardData.recentLeads || []);
+                    renderCalls(dashboardData.recentCalls || []);
+                    renderTomAbTestSection(dashboardData);
+                }
+                prefillTomAbTestFormFromData();
+                updateTomAbSetupStatusLine();
+                syncTomAbQuickDimFromSegment();
+                if (msg) msg.textContent = `Live: ${data.experimentName || 'experiment'} (${data.dimension || dim}).`;
+            } catch (err) {
+                if (msg) msg.textContent = err.message || 'Import failed';
+            } finally {
+                if (btn) btn.disabled = false;
             }
         }
 

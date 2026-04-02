@@ -24427,37 +24427,38 @@ app.patch('/api/clients/:clientKey/config', async (req, res) => {
   }
 });
 
-// Tom / dashboard: create outbound A/B variants for one dimension (voice | opening | script) + set matching vapi key
-app.post('/api/clients/:clientKey/outbound-ab-test', async (req, res) => {
+/** Shared create path for outbound A/B (dimension + variants + optional experiment name — auto-generated if blank). */
+async function runOutboundAbTestSetup(clientKey, body, res) {
   try {
-    const { clientKey } = req.params;
-    const apiKey = req.get('X-API-Key');
-    const keyOk = apiKey && apiKey === process.env.API_KEY;
-    const selfOk = isDashboardSelfServiceClient(clientKey);
-    if (!keyOk && !selfOk) {
-      return res.status(401).json({ ok: false, error: 'Unauthorized' });
-    }
     const { OUTBOUND_AB_VAPI_KEYS } = await import('./lib/outbound-ab-variant.js');
-    const { experimentName, variants, replaceExisting = true, dimension } = req.body || {};
+    const { experimentName, variants, replaceExisting = true, dimension } = body || {};
     const dimRaw = dimension != null ? String(dimension).trim().toLowerCase() : '';
     if (dimRaw !== 'voice' && dimRaw !== 'opening' && dimRaw !== 'script') {
-      return res.status(400).json({
+      res.status(400).json({
         ok: false,
         error: 'dimension is required: "voice", "opening", or "script"'
       });
+      return;
     }
-    const nameTrim = experimentName != null ? String(experimentName).trim() : '';
+    let nameTrim = experimentName != null ? String(experimentName).trim() : '';
     if (!nameTrim) {
-      return res.status(400).json({ ok: false, error: 'experimentName is required' });
+      const slug = String(clientKey)
+        .replace(/[^a-z0-9_-]+/gi, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_|_$/g, '')
+        .slice(0, 24);
+      nameTrim = `ab_${slug || 'tenant'}_${nanoid(10)}`;
     }
     if (!Array.isArray(variants) || variants.length < 2) {
-      return res.status(400).json({ ok: false, error: 'At least two variants are required' });
+      res.status(400).json({ ok: false, error: 'At least two variants are required' });
+      return;
     }
     const mapped = [];
     for (const v of variants) {
       const vn = String(v.name || v.variantName || '').trim();
       if (!vn) {
-        return res.status(400).json({ ok: false, error: 'Each variant needs a name' });
+        res.status(400).json({ ok: false, error: 'Each variant needs a name' });
+        return;
       }
       const voice = v.voice != null ? String(v.voice).trim() : '';
       const firstMessage = v.firstMessage != null ? String(v.firstMessage).trim() : '';
@@ -24470,26 +24471,29 @@ app.post('/api/clients/:clientKey/outbound-ab-test', async (req, res) => {
       const config = {};
       if (dimRaw === 'voice') {
         if (!voice) {
-          return res.status(400).json({
+          res.status(400).json({
             ok: false,
             error: `Variant "${vn}": voice experiments require a non-empty voice ID per variant`
           });
+          return;
         }
         config.voice = voice;
       } else if (dimRaw === 'opening') {
         if (!firstMessage) {
-          return res.status(400).json({
+          res.status(400).json({
             ok: false,
             error: `Variant "${vn}": opening-line experiments require a non-empty opening line per variant`
           });
+          return;
         }
         config.firstMessage = firstMessage;
       } else {
         if (!script) {
-          return res.status(400).json({
+          res.status(400).json({
             ok: false,
             error: `Variant "${vn}": script experiments require non-empty script (system instructions) per variant`
           });
+          return;
         }
         config.script = script;
       }
@@ -24522,6 +24526,55 @@ app.post('/api/clients/:clientKey/outbound-ab-test', async (req, res) => {
     console.error('[OUTBOUND AB TEST SETUP ERROR]', error);
     res.status(500).json({ ok: false, error: error.message || String(error) });
   }
+}
+
+// Tom / dashboard: create outbound A/B variants for one dimension (voice | opening | script) + set matching vapi key
+app.post('/api/clients/:clientKey/outbound-ab-test', async (req, res) => {
+  const { clientKey } = req.params;
+  const apiKey = req.get('X-API-Key');
+  const keyOk = apiKey && apiKey === process.env.API_KEY;
+  const selfOk = isDashboardSelfServiceClient(clientKey);
+  if (!keyOk && !selfOk) {
+    return res.status(401).json({ ok: false, error: 'Unauthorized' });
+  }
+  await runOutboundAbTestSetup(clientKey, req.body, res);
+});
+
+// Tom / dashboard: same as outbound-ab-test but body is JSON text + dimension (optional experimentName in JSON or top-level)
+app.post('/api/clients/:clientKey/outbound-ab-test-import', async (req, res) => {
+  const { clientKey } = req.params;
+  const apiKey = req.get('X-API-Key');
+  const keyOk = apiKey && apiKey === process.env.API_KEY;
+  const selfOk = isDashboardSelfServiceClient(clientKey);
+  if (!keyOk && !selfOk) {
+    return res.status(401).json({ ok: false, error: 'Unauthorized' });
+  }
+  const { dimension, json, experimentName: expTop, replaceExisting } = req.body || {};
+  const text =
+    typeof json === 'string' ? json : json != null ? JSON.stringify(json) : '';
+  if (!String(text).trim()) {
+    return res.status(400).json({ ok: false, error: 'json field is required (string or object)' });
+  }
+  let parsed;
+  try {
+    const { parseOutboundAbUploadSpec } = await import('./lib/outbound-ab-upload-spec.js');
+    parsed = parseOutboundAbUploadSpec(text, dimension);
+  } catch (e) {
+    return res.status(400).json({ ok: false, error: e.message || String(e) });
+  }
+  const top = expTop != null ? String(expTop).trim() : '';
+  const fromSpec = parsed.experimentName || '';
+  const mergedName = top || fromSpec || undefined;
+  await runOutboundAbTestSetup(
+    clientKey,
+    {
+      dimension,
+      variants: parsed.variants,
+      replaceExisting: replaceExisting !== false,
+      ...(mergedName ? { experimentName: mergedName } : {})
+    },
+    res
+  );
 });
 
 // Deactivate Client
