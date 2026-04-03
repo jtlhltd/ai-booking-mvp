@@ -451,12 +451,12 @@
         .dashboard-section--analytics-row .card-insights-routing > #call-insights.insights-root {
             flex: 1 1 auto;
             min-height: 0;
+            min-width: 0;
             overflow-y: auto;
-            overflow-x: hidden;
+            overflow-x: auto;
             -webkit-overflow-scrolling: touch;
             overscroll-behavior: contain;
-            margin-right: -2px;
-            padding-right: 4px;
+            padding-right: 8px;
             padding-bottom: 8px;
         }
 
@@ -3072,8 +3072,9 @@
 
         .insights-wide-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 16px;
+            align-items: start;
         }
 
         @media (max-width: 900px) {
@@ -3082,11 +3083,40 @@
             }
         }
 
+        .insights-grid-cell {
+            min-width: 0;
+        }
+
+        .insights-chart-x-scroll {
+            overflow-x: auto;
+            overflow-y: visible;
+            max-width: 100%;
+            -webkit-overflow-scrolling: touch;
+            margin: 4px 0 2px;
+            padding-bottom: 4px;
+        }
+
+        .insights-table-scroll {
+            overflow-x: auto;
+            max-width: 100%;
+            -webkit-overflow-scrolling: touch;
+            margin-top: 4px;
+            border-radius: 8px;
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            background: rgba(255, 255, 255, 0.35);
+        }
+
         .insights-panel {
             background: rgba(92, 106, 196, 0.06);
             border-radius: 12px;
             padding: 14px 16px;
             border: 1px solid rgba(92, 106, 196, 0.12);
+            min-width: 0;
+        }
+
+        .insights-panel .insights-panel-hint {
+            overflow-wrap: anywhere;
+            word-break: break-word;
         }
 
         .insights-panel--span {
@@ -3111,23 +3141,27 @@
         .insights-hour-bars {
             display: flex;
             align-items: flex-end;
-            gap: 2px;
+            justify-content: flex-start;
+            gap: 3px;
             height: 118px;
             padding-top: 6px;
+            width: max-content;
+            min-width: 100%;
         }
 
         .insights-hour-bar-wrap {
-            flex: 1;
-            min-width: 0;
+            flex: 0 0 auto;
+            width: 16px;
+            min-width: 16px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 3px;
+            gap: 2px;
         }
 
         .insights-hour-bar {
             width: 100%;
-            max-width: 12px;
+            max-width: 14px;
             margin: 0 auto;
             border-radius: 3px 3px 0 0;
             background: linear-gradient(180deg, var(--primary) 0%, rgba(92, 106, 196, 0.4) 100%);
@@ -3140,23 +3174,28 @@
         }
 
         .insights-hour-label {
-            font-size: 8px;
+            font-size: 7px;
             color: var(--muted);
             line-height: 1;
+            min-height: 8px;
+            text-align: center;
         }
 
         .insights-weekday-bars {
             display: flex;
             align-items: flex-end;
             justify-content: space-between;
-            gap: 6px;
+            gap: 8px;
             height: 108px;
             padding-top: 6px;
+            width: 100%;
+            min-width: min(100%, 320px);
         }
 
         .insights-weekday-col {
-            flex: 1;
-            min-width: 0;
+            flex: 1 1 0;
+            min-width: 36px;
+            max-width: 72px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -3330,18 +3369,39 @@
         }
 
         .insights-monitor-table {
-            width: 100%;
+            width: max-content;
+            min-width: 100%;
             border-collapse: collapse;
             font-size: 11px;
-            margin-top: 4px;
+            margin-top: 0;
         }
 
         .insights-monitor-table th,
         .insights-monitor-table td {
-            padding: 5px 6px;
+            padding: 6px 8px;
             text-align: left;
             border-bottom: 1px solid rgba(0, 0, 0, 0.06);
             vertical-align: top;
+            white-space: nowrap;
+        }
+
+        .insights-monitor-table td.insights-cell-wrap {
+            white-space: normal;
+            word-break: break-word;
+            max-width: 200px;
+        }
+
+        .insights-monitor-table td.insights-cell-callid {
+            white-space: normal;
+            word-break: break-all;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 10px;
+            max-width: 160px;
+            min-width: 120px;
+        }
+
+        .insights-monitor-table td.insights-cell-delay {
+            white-space: nowrap;
         }
 
         .insights-monitor-table th {
@@ -3356,12 +3416,12 @@
             font-size: 7px;
             font-weight: 700;
             color: var(--text-secondary);
-            line-height: 1;
+            line-height: 1.15;
             text-align: center;
-            max-width: 100%;
+            width: 100%;
+            min-height: 9px;
             white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            overflow: visible;
         }
 
         .insights-status-pill {
@@ -9681,18 +9741,21 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         : `${String(hour).padStart(2, '0')}:00 — no dials`;
                     const cls = attempts ? 'insights-hour-bar' : 'insights-hour-bar insights-hour-bar--empty';
                     const pctLabel = attempts ? `${pct}%` : '';
+                    const hourTick = hour % 4 === 0 ? escapeHtml(String(hour)) : '';
                     return `<div class="insights-hour-bar-wrap" title="${title.replace(/"/g, '&quot;')}">
                     <div class="${cls}" style="height:${attempts ? Math.max(8, hPct) : 3}px"></div>
                     <span class="insights-bar-pct">${escapeHtml(pctLabel)}</span>
-                    <span class="insights-hour-label">${hour % 2 === 0 ? escapeHtml(String(hour)) : ''}</span>
+                    <span class="insights-hour-label">${hourTick}</span>
                 </div>`;
                 })
                 .join('');
             return `<p class="insights-panel-hint">Each bar shows <strong>what share of calls got an answer</strong> for calls made in that hour (${escapeHtml(
                 timeZoneLabel || 'UTC'
-            )}). Taller bar = more people picked up in this report.</p>
+            )}). Taller bar = more people picked up in this report. Scroll horizontally if the chart is wider than the card.</p>
                 ${summarizeByHourForInsights(byHour)}
-                <div class="insights-hour-bars" role="img" aria-label="Answered rate by hour of day">${bars}</div>`;
+                <div class="insights-chart-x-scroll">
+                <div class="insights-hour-bars" role="img" aria-label="Answered rate by hour of day">${bars}</div>
+                </div>`;
         }
 
         function buildInsightsWeekdayBarChart(byWeekday) {
@@ -9731,7 +9794,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 })
                 .join('');
             return `<p class="insights-panel-hint">Shows <strong>what share of calls got an answer</strong> on each weekday — useful for staffing and when leads come in.</p>
-                <div class="insights-weekday-bars" role="img" aria-label="Answered rate by weekday">${cols}</div>`;
+                <div class="insights-chart-x-scroll">
+                <div class="insights-weekday-bars" role="img" aria-label="Answered rate by weekday">${cols}</div>
+                </div>`;
         }
 
         function buildInsightsPairChips(items, emptyMsg) {
@@ -9822,10 +9887,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         (r) =>
                             `<tr><td>${escapeHtml(r.at ? formatTimeAgo(r.at) : '—')}</td><td>${escapeHtml(String(r.hour).padStart(2, '0'))}:00</td><td>${
                                 r.success ? 'Answered' : 'No pickup'
-                            }</td><td style="font-size:10px;word-break:break-all">${escapeHtml(String(r.callId || '').slice(0, 18))}</td></tr>`
+                            }</td><td class="insights-cell-callid">${escapeHtml(String(r.callId || '—'))}</td></tr>`
                     )
                     .join('');
-                obsBlock = `<table class="insights-monitor-table"><thead><tr><th>When</th><th>Time</th><th>Result</th><th>Call ref.</th></tr></thead><tbody>${rows}</tbody></table>`;
+                obsBlock = `<div class="insights-table-scroll"><table class="insights-monitor-table"><thead><tr><th>When</th><th>Time</th><th>Result</th><th>Call ref.</th></tr></thead><tbody>${rows}</tbody></table></div>`;
             }
             let schedBlock =
                 '<p class="insights-panel-hint">Nothing here yet. When the system moves a queued call to a better time (more than a minute different), it will appear in this list.</p>';
@@ -9841,19 +9906,19 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             : '—';
                         return `<tr><td>${escapeHtml(r.at ? formatTimeAgo(r.at) : '—')}</td><td>${escapeHtml(scheduleSourceLabel(r.source))}</td><td>${escapeHtml(
                             r.hourChosen != null ? `${String(r.hourChosen).padStart(2, '0')}:00` : '—'
-                        )}</td><td>${r.delayMinutes != null ? `${escapeHtml(String(r.delayMinutes))}m` : '—'}</td><td style="font-size:10px;line-height:1.35">${escapeHtml(
+                        )}</td><td class="insights-cell-delay">${r.delayMinutes != null ? `${escapeHtml(String(r.delayMinutes))}m` : '—'}</td><td class="insights-cell-wrap">${escapeHtml(
                             bas
                         )} → ${escapeHtml(chs)}</td></tr>`;
                     })
                     .join('');
-                schedBlock = `<table class="insights-monitor-table"><thead><tr><th>When</th><th>Why</th><th>Hour</th><th>Moved by</th><th>Old time → new time</th></tr></thead><tbody>${rows}</tbody></table>`;
+                schedBlock = `<div class="insights-table-scroll"><table class="insights-monitor-table"><thead><tr><th>When</th><th>Why</th><th>Hour</th><th>Moved by</th><th>Old time → new time</th></tr></thead><tbody>${rows}</tbody></table></div>`;
             }
             return `<div class="insights-panel insights-panel--span">
                 <div class="insights-panel-title">Recent learning & rescheduled calls</div>
                 <p class="insights-panel-hint"><strong>${n7}</strong> call results added to timing learning in the last 7 days.</p>
                 <div class="insights-wide-grid">
-                    <div><span class="insights-subcaption">Latest call results (by hour)</span>${obsBlock}</div>
-                    <div><span class="insights-subcaption">When we moved a queued call</span>${schedBlock}</div>
+                    <div class="insights-grid-cell"><span class="insights-subcaption">Latest call results (by hour)</span>${obsBlock}</div>
+                    <div class="insights-grid-cell"><span class="insights-subcaption">When we moved a queued call</span>${schedBlock}</div>
                 </div>
             </div>`;
         }
