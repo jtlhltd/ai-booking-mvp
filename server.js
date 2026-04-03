@@ -24569,7 +24569,7 @@ async function runOutboundAbTestSetup(clientKey, body, res) {
       if (!baseline) {
         res.status(400).json({
           ok: false,
-          error: `Single ${dimRaw} upload: could not detect your current live ${dimRaw}. Upload two explicit variants in JSON, or configure your assistant (VAPI_PRIVATE_KEY + assistantId), vapi.assistantOverrides, or an active outbound A/B experiment so we can read the control arm.`
+          error: `Single ${dimRaw} upload: could not read a baseline ${dimRaw}. Control is taken from this tenant’s Vapi assistant first (needs VAPI_PRIVATE_KEY + assistantId), then vapi.assistantOverrides, then the current A/B experiment control. Upload two explicit variants in JSON, or fix assistant access.`
         });
         return;
       }
