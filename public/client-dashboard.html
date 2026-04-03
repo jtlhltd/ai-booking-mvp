@@ -1599,6 +1599,10 @@
             font-size: 0.8125rem;
         }
 
+        table.tom-ab-test-table--placeholder .tom-ab-mon-placeholder-row td {
+            color: var(--muted);
+        }
+
         .tom-ab-review-banner {
             font-size: 0.875rem;
             line-height: 1.45;
@@ -8499,8 +8503,8 @@ ${actionsRow}
             const focusRaw = ab.focusDimension != null ? String(ab.focusDimension).trim().toLowerCase() : '';
             const focusLabel = dimLabels[focusRaw];
             const focusLine = focusLabel
-                ? `<strong>Dial focus:</strong> ${focusLabel} <span class="tom-ab-test-meta">(which dimension rotates on new dials when several are configured)</span>`
-                : `<strong>Dial focus:</strong> <span class="tom-ab-test-meta">— Not set</span>`;
+                ? `<strong>Active test on calls:</strong> ${focusLabel}<br><span class="tom-ab-test-meta">Only this piece is splitting across A/B variants on new dials for now. Change focus when you move to another dimension.</span>`
+                : `<strong>Active test on calls:</strong> <span class="tom-ab-test-meta">— When voice, opener, and script experiments are all set, pick which one rotates on dials.</span>`;
             const dial = Array.isArray(ab.dialActiveDimensions) ? ab.dialActiveDimensions : [];
             const dialStr = dial
                 .map((x) => {
@@ -8509,7 +8513,7 @@ ${actionsRow}
                 })
                 .filter(Boolean)
                 .join(', ');
-            const dialLine = dialStr ? `<br><strong>Live on dial now:</strong> ${escapeHtml(dialStr)}` : '';
+            const dialLine = dialStr ? `<br><strong>What’s live on each dial:</strong> ${escapeHtml(dialStr)}` : '';
             let bundleLine = '';
             if (ab.bundlePhase != null && String(ab.bundlePhase).trim() !== '') {
                 const ph = String(ab.bundlePhase).trim().toLowerCase();
@@ -8552,14 +8556,42 @@ ${actionsRow}
             </tr>`;
         }
 
+        function tomAbMonitoringComparisonPlaceholderRows(minN) {
+            const row = (name) => `<tr class="tom-ab-mon-placeholder-row">
+                <td><strong>${escapeHtml(name)}</strong></td>
+                <td>—</td>
+                <td>—</td>
+                <td>—</td>
+                <td><span class="tom-ab-live-progress">0 / ${formatNumber(minN)}</span></td>
+            </tr>`;
+            return row('control') + row('variant_b');
+        }
+
         function renderTomAbDimensionMonitoringBlock(dim, title, slot, minN, isPrimaryFocus) {
             const exp = slot && slot.experimentName ? String(slot.experimentName).trim() : '';
             const variants = slot && slot.summary && Array.isArray(slot.summary.variants) ? slot.summary.variants : [];
             const pill = isPrimaryFocus ? '<span class="tom-ab-live-pill">Primary in summary</span>' : '';
+            const tableHead = `<thead>
+                            <tr>
+                                <th scope="col">Variant</th>
+                                <th scope="col">Leads</th>
+                                <th scope="col">Conv</th>
+                                <th scope="col">Rate</th>
+                                <th scope="col">Sample</th>
+                            </tr>
+                        </thead>`;
             if (!exp && !variants.length) {
                 return `<div class="tom-ab-mon-dim-section" data-tom-ab-mon-dim="${dim}">
                     <h5 class="tom-ab-mon-dim-h">${escapeHtml(title)} ${pill}</h5>
-                    <p class="tom-ab-test-meta" style="margin:0;">No experiment in this slot — upload above to see counts.</p>
+                    <p class="tom-ab-test-meta" style="margin:0 0 8px 0;">Upload this dimension above to run a comparison. Table below shows how control vs variant will line up once live.</p>
+                    <div class="tom-ab-test-table-wrap">
+                        <table class="tom-ab-test-table tom-ab-test-table--compact tom-ab-test-table--placeholder" aria-label="${escapeHtml(
+                            title
+                        )} comparison (placeholder)">
+                            ${tableHead}
+                            <tbody>${tomAbMonitoringComparisonPlaceholderRows(minN)}</tbody>
+                        </table>
+                    </div>
                 </div>`;
             }
             const rows = variants.length ? variants.map((v) => tomAbMonitoringStatsRow(v, minN)).join('') : '';
@@ -8574,22 +8606,64 @@ ${actionsRow}
                 }
                 <div class="tom-ab-test-table-wrap">
                     <table class="tom-ab-test-table tom-ab-test-table--compact" aria-label="${escapeHtml(title)} results">
-                        <thead>
-                            <tr>
-                                <th scope="col">Variant</th>
-                                <th scope="col">Leads</th>
-                                <th scope="col">Conv</th>
-                                <th scope="col">Rate</th>
-                                <th scope="col">Sample</th>
-                            </tr>
-                        </thead>
+                        ${tableHead}
                         <tbody>${
                             rows ||
-                            `<tr><td colspan="5" class="tom-ab-test-meta">No per-variant rows yet — wait for dials.</td></tr>`
+                            tomAbMonitoringComparisonPlaceholderRows(minN) +
+                                `<tr><td colspan="5" class="tom-ab-test-meta" style="border-top:none;">Waiting for first assigned leads…</td></tr>`
                         }</tbody>
                     </table>
                 </div>
             </div>`;
+        }
+
+        function renderTomAbDimensionalMonitoringBody(ab, lr, fe, minN) {
+            const primDim =
+                fe && fe.dimension && (fe.dimension === 'voice' || fe.dimension === 'opening' || fe.dimension === 'script')
+                    ? fe.dimension
+                    : '';
+            const goalMet = fe && fe.allVariantsMeetMinSamples;
+            const goalLine = goalMet
+                ? `<p class="tom-ab-live-ready"><strong>Sample target reached</strong> (${formatNumber(
+                      minN
+                  )}+ per variant on the primary slice).${lr.notifyEmailConfigured ? ' Check email.' : ''}</p>`
+                : `<p class="tom-ab-test-meta" style="margin:0 0 14px 0;"><strong>Comparison</strong> — control vs variant per dimension. Goal: <strong>${formatNumber(
+                      minN
+                  )}</strong> leads each before we treat samples as solid. <span class="tom-ab-live-pill">Primary in summary</span> is the slice the server highlights when several dimensions have data.</p>`;
+            const blocks = [
+                renderTomAbDimensionMonitoringBlock('voice', 'Voice test', (ab && ab.voice) || {}, minN, primDim === 'voice'),
+                renderTomAbDimensionMonitoringBlock(
+                    'opening',
+                    'Opening line test',
+                    (ab && ab.opening) || {},
+                    minN,
+                    primDim === 'opening'
+                ),
+                renderTomAbDimensionMonitoringBlock(
+                    'script',
+                    'Script test',
+                    (ab && ab.script) || {},
+                    minN,
+                    primDim === 'script'
+                )
+            ].join('');
+            let body = `${goalLine}${blocks}`;
+            if (!fe || !fe.variants || !fe.variants.length) {
+                const hint =
+                    lr.reason === 'no_live_results_payload'
+                        ? 'Tap <strong>Refresh</strong> or reload the page.'
+                        : lr.reason === 'no_experiment_data'
+                          ? 'Numbers stay at — until leads are assigned to experiments and dials roll in.'
+                          : lr.reason === 'no_summary' || lr.reason === 'no_variants'
+                            ? 'Counts are still wiring up — tap <strong>Refresh</strong> or try uploading again.'
+                            : lr.reason === 'build_error'
+                              ? 'Could not load counts (server error).'
+                              : '';
+                if (hint) {
+                    body = `<p class="tom-ab-test-meta" style="margin:0 0 12px 0;">${hint}</p>${body}`;
+                }
+            }
+            return body;
         }
 
         function renderTomAbLiveResultsPanel(ab) {
@@ -8617,54 +8691,10 @@ ${actionsRow}
             const statusStrip = renderTomAbMonitoringStatusStrip(ab);
 
             let body = '';
+            const tomOutreachUi =
+                typeof isTomOutreachDashboard === 'function' && isTomOutreachDashboard(currentClient);
             if (ab && ab.mode === 'dimensional') {
-                const primDim =
-                    fe && fe.dimension && (fe.dimension === 'voice' || fe.dimension === 'opening' || fe.dimension === 'script')
-                        ? fe.dimension
-                        : '';
-                const goalMet = fe && fe.allVariantsMeetMinSamples;
-                const goalLine = goalMet
-                    ? `<p class="tom-ab-live-ready"><strong>Sample target reached</strong> (${formatNumber(
-                          minN
-                      )}+ per variant on the primary slice).${
-                          lr.notifyEmailConfigured ? ' Check email.' : ''
-                      }</p>`
-                    : `<p class="tom-ab-test-meta" style="margin:0 0 14px 0;">Goal: <strong>${formatNumber(
-                          minN
-                      )}</strong> leads per variant for each experiment below. <span class="tom-ab-live-pill">Primary in summary</span> matches the slice the server uses when several dimensions have data.</p>`;
-                const blocks = [
-                    renderTomAbDimensionMonitoringBlock('voice', 'Voice test', (ab && ab.voice) || {}, minN, primDim === 'voice'),
-                    renderTomAbDimensionMonitoringBlock(
-                        'opening',
-                        'Opening line test',
-                        (ab && ab.opening) || {},
-                        minN,
-                        primDim === 'opening'
-                    ),
-                    renderTomAbDimensionMonitoringBlock(
-                        'script',
-                        'Script test',
-                        (ab && ab.script) || {},
-                        minN,
-                        primDim === 'script'
-                    )
-                ].join('');
-                body = `${goalLine}${blocks}`;
-                if (!fe || !fe.variants || !fe.variants.length) {
-                    const hint =
-                        lr.reason === 'no_live_results_payload'
-                            ? 'Tap <strong>Refresh</strong> or reload the page.'
-                            : lr.reason === 'no_experiment_data'
-                              ? 'Totals will appear when leads are assigned to experiments.'
-                              : lr.reason === 'no_summary' || lr.reason === 'no_variants'
-                                ? 'Counts are still wiring up — tap <strong>Refresh</strong> or try uploading again.'
-                                : lr.reason === 'build_error'
-                                  ? 'Could not load counts (server error).'
-                                  : '';
-                    if (hint) {
-                        body = `<p class="tom-ab-test-meta" style="margin:0 0 12px 0;">${hint}</p>${body}`;
-                    }
-                }
+                body = renderTomAbDimensionalMonitoringBody(ab, lr, fe, minN);
             } else if (fe && Array.isArray(fe.variants) && fe.variants.length) {
                 const dimLine =
                     fe.dimension && dimLabels[fe.dimension]
@@ -8698,6 +8728,8 @@ ${actionsRow}
                             <tbody>${rows}</tbody>
                         </table>
                     </div>`;
+            } else if (tomOutreachUi) {
+                body = renderTomAbDimensionalMonitoringBody(ab || {}, lr, fe, minN);
             } else {
                 const hint =
                     lr.reason === 'no_live_results_payload'
