@@ -2565,6 +2565,21 @@ export async function getABTestConversionRates(experimentId) {
       FROM ab_test_results 
       WHERE experiment_id = $1 AND outcome = 'converted'
       GROUP BY variant_name
+    ),
+    variant_follow_up AS (
+      SELECT
+        atr.variant_name,
+        COUNT(DISTINCT atr.lead_phone) AS follow_up_leads
+      FROM ab_test_results atr
+      WHERE atr.experiment_id = $1
+        AND atr.outcome = 'assigned'
+        AND (
+          SELECT COUNT(*)::bigint
+          FROM calls c
+          WHERE c.client_key = atr.client_key
+            AND c.lead_phone = atr.lead_phone
+        ) >= 2
+      GROUP BY atr.variant_name
     )
     SELECT 
       vt.variant_name,
@@ -2577,11 +2592,18 @@ export async function getABTestConversionRates(experimentId) {
         WHEN vt.total_leads > 0 
         THEN ROUND((COALESCE(vc.converted_leads, 0)::DECIMAL / vt.total_leads) * 100, 2)
         ELSE 0 
-      END as conversion_rate
+      END as conversion_rate,
+      COALESCE(vfu.follow_up_leads, 0)::bigint AS follow_up_leads,
+      CASE
+        WHEN vt.total_leads > 0
+        THEN ROUND((COALESCE(vfu.follow_up_leads, 0)::DECIMAL / vt.total_leads) * 100, 2)
+        ELSE 0
+      END AS follow_up_rate
     FROM variant_totals vt
     LEFT JOIN variant_live_pickups vlp ON vlp.variant_name = vt.variant_name
     LEFT JOIN variant_conversions vc ON vc.variant_name = vt.variant_name
-    ORDER BY conversion_rate DESC
+    LEFT JOIN variant_follow_up vfu ON vfu.variant_name = vt.variant_name
+    ORDER BY vt.variant_name ASC
   `, [experimentId]);
   return rows;
 }
@@ -2659,6 +2681,8 @@ export async function getOutboundAbExperimentSummary(clientKey, experimentName) 
       livePickupLeads: parseInt(agg?.live_pickup_leads ?? 0, 10),
       convertedLeads: parseInt(agg?.converted_leads ?? 0, 10),
       conversionRatePct: agg?.conversion_rate != null ? Number(agg.conversion_rate) : 0,
+      followUpLeads: parseInt(agg?.follow_up_leads ?? 0, 10),
+      followUpRatePct: agg?.follow_up_rate != null ? Number(agg.follow_up_rate) : 0,
       tested
     });
   }
