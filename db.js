@@ -8,6 +8,7 @@ import {
   collectOutboundAbExperimentNamesFromMetadata,
   isOutboundAbLivePickupOutcome
 } from './lib/outbound-ab-live-pickup.js';
+import { getCallAnalyticsMinCreatedAtIso } from './lib/call-analytics-cutoff.js';
 
 const dbType = (process.env.DB_TYPE || '').toLowerCase();
 let pool = null;
@@ -1454,6 +1455,61 @@ export async function getLatestCallInsights(clientKey) {
   return rows?.[0] || null;
 }
 
+/**
+ * Recompute stored Beta arms from observations tied to calls on/after CALL_ANALYTICS_SINCE.
+ * Drops skew from older test traffic without deleting observation rows.
+ */
+async function rebuildCallTimeBanditArmsForCutoff(clientKey) {
+  const minIso = getCallAnalyticsMinCreatedAtIso();
+  if (!minIso || !clientKey) return;
+  const { rows } = await query(
+    `
+    SELECT o.hour AS hour, o.success AS success
+    FROM call_time_bandit_observations o
+    INNER JOIN calls c ON c.call_id = o.call_id AND c.client_key = o.client_key
+    WHERE o.client_key = $1 AND c.created_at >= $2::timestamptz
+  `,
+    [clientKey, minIso]
+  );
+  const arms = {};
+  for (let h = 0; h < 24; h++) {
+    arms[String(h)] = { a: 1, b: 1 };
+  }
+  for (const r of rows || []) {
+    const hourNum = Number(r.hour);
+    if (!Number.isFinite(hourNum)) continue;
+    const hk = String(hourNum);
+    const prev = arms[hk] || { a: 1, b: 1 };
+    const a = Number(prev.a) || 1;
+    const b = Number(prev.b) || 1;
+    const success = r.success === true || r.success === 1 || r.success === 'true';
+    arms[hk] = success ? { a: a + 1, b } : { a, b: b + 1 };
+  }
+  await query(
+    `
+    INSERT INTO call_time_bandit (client_key, arms, updated_at)
+    VALUES ($1, $2::jsonb, now())
+    ON CONFLICT (client_key)
+    DO UPDATE SET arms = EXCLUDED.arms, updated_at = now()
+  `,
+    [clientKey, JSON.stringify(arms)]
+  );
+}
+
+/** Limit full recomputes on hot dashboard polling when CALL_ANALYTICS_SINCE is set. */
+const _banditCutoffRebuildLastMs = new Map();
+const BANDIT_CUTOFF_DASHBOARD_REBUILD_MS = 60_000;
+
+async function maybeRebuildBanditArmsForCutoffThrottled(clientKey) {
+  const minIso = getCallAnalyticsMinCreatedAtIso();
+  if (!minIso || !clientKey) return;
+  const now = Date.now();
+  const last = _banditCutoffRebuildLastMs.get(clientKey) || 0;
+  if (now - last < BANDIT_CUTOFF_DASHBOARD_REBUILD_MS) return;
+  _banditCutoffRebuildLastMs.set(clientKey, now);
+  await rebuildCallTimeBanditArmsForCutoff(clientKey);
+}
+
 export async function getCallTimeBanditState(clientKey) {
   try {
     const { rows } = await query(`
@@ -1486,15 +1542,28 @@ export async function getCallTimeBanditForDashboard(clientKey) {
   if (!clientKey) return { ...empty, ok: false, error: 'missing client' };
 
   try {
+    await maybeRebuildBanditArmsForCutoffThrottled(clientKey);
+    const minIso = getCallAnalyticsMinCreatedAtIso();
+
     const [{ rows: br }, { rows: cr }] = await Promise.all([
       query(
         `SELECT arms, updated_at FROM call_time_bandit WHERE client_key = $1`,
         [clientKey]
       ),
-      query(
-        `SELECT COUNT(*) AS c FROM call_time_bandit_observations WHERE client_key = $1`,
-        [clientKey]
-      )
+      minIso
+        ? query(
+            `
+        SELECT COUNT(*) AS c
+        FROM call_time_bandit_observations o
+        INNER JOIN calls c ON c.call_id = o.call_id AND c.client_key = o.client_key
+        WHERE o.client_key = $1 AND c.created_at >= $2::timestamptz
+      `,
+            [clientKey, minIso]
+          )
+        : query(
+            `SELECT COUNT(*) AS c FROM call_time_bandit_observations WHERE client_key = $1`,
+            [clientKey]
+          )
     ]);
 
     const observationCount = parseInt(String(cr?.[0]?.c ?? 0), 10) || 0;
@@ -1543,35 +1612,70 @@ export async function getCallTimeBanditForDashboard(clientKey) {
       .slice(0, 12);
 
     const [{ rows: recentObs }, { rows: recentSched }, { rows: c7 }] = await Promise.all([
-      query(
-        `
+      minIso
+        ? query(
+            `
+        SELECT o.call_id, o.hour, o.success, o.created_at
+        FROM call_time_bandit_observations o
+        INNER JOIN calls c ON c.call_id = o.call_id AND c.client_key = o.client_key
+        WHERE o.client_key = $1 AND c.created_at >= $2::timestamptz
+        ORDER BY o.created_at DESC
+        LIMIT 40
+      `,
+            [clientKey, minIso]
+          )
+        : query(
+            `
         SELECT call_id, hour, success, created_at
         FROM call_time_bandit_observations
         WHERE client_key = $1
         ORDER BY created_at DESC
         LIMIT 40
       `,
-        [clientKey]
-      ),
-      query(
-        `
+            [clientKey]
+          ),
+      minIso
+        ? query(
+            `
+        SELECT baseline_at, chosen_at, source, hour_chosen, delay_minutes, created_at
+        FROM call_schedule_decisions
+        WHERE client_key = $1 AND created_at >= $2::timestamptz
+        ORDER BY created_at DESC
+        LIMIT 30
+      `,
+            [clientKey, minIso]
+          )
+        : query(
+            `
         SELECT baseline_at, chosen_at, source, hour_chosen, delay_minutes, created_at
         FROM call_schedule_decisions
         WHERE client_key = $1
         ORDER BY created_at DESC
         LIMIT 30
       `,
-        [clientKey]
-      ),
-      query(
-        `
+            [clientKey]
+          ),
+      minIso
+        ? query(
+            `
+        SELECT COUNT(*) AS c
+        FROM call_time_bandit_observations o
+        INNER JOIN calls c ON c.call_id = o.call_id AND c.client_key = o.client_key
+        WHERE o.client_key = $1
+          AND c.created_at >= $2::timestamptz
+          AND c.created_at >= NOW() - INTERVAL '7 days'
+      `,
+            [clientKey, minIso]
+          )
+        : query(
+            `
         SELECT COUNT(*) AS c
         FROM call_time_bandit_observations
         WHERE client_key = $1
           AND created_at >= NOW() - INTERVAL '7 days'
       `,
-        [clientKey]
-      )
+            [clientKey]
+          )
     ]);
 
     const observationsLast7Days = parseInt(String(c7?.[0]?.c ?? 0), 10) || 0;
@@ -1631,6 +1735,11 @@ function isBanditEligibleCallRow(row) {
 export async function backfillCallTimeBanditObservations(clientKey, { days = 30, limit = 4000 } = {}) {
   if (!clientKey) return { inserted: 0, skipped: true };
   try {
+    const minIso = getCallAnalyticsMinCreatedAtIso();
+    if (minIso) {
+      await rebuildCallTimeBanditArmsForCutoff(clientKey);
+    }
+
     const tenant = await getFullClient(clientKey);
     if (!tenant) return { inserted: 0 };
 
@@ -1642,6 +1751,9 @@ export async function backfillCallTimeBanditObservations(clientKey, { days = 30,
     const d = Math.max(1, Math.min(120, Number(days) || 30));
     const lim = Math.max(1, Math.min(8000, Number(limit) || 4000));
 
+    const cutoffClause = minIso ? 'AND c.created_at >= $4::timestamptz' : '';
+    const backfillParams = minIso ? [clientKey, d, lim, minIso] : [clientKey, d, lim];
+
     const { rows } = await query(
       `
       SELECT c.call_id, c.created_at, c.outcome, c.status, c.duration,
@@ -1649,13 +1761,14 @@ export async function backfillCallTimeBanditObservations(clientKey, { days = 30,
       FROM calls c
       WHERE c.client_key = $1
         AND c.created_at >= NOW() - ($2::integer * INTERVAL '1 day')
+        ${cutoffClause}
         AND NOT EXISTS (
           SELECT 1 FROM call_time_bandit_observations o WHERE o.call_id = c.call_id
         )
       ORDER BY c.created_at ASC
       LIMIT $3
     `,
-      [clientKey, d, lim]
+      backfillParams
     );
 
     const arms = { ...(await getCallTimeBanditState(clientKey)) };
@@ -1780,6 +1893,11 @@ export async function recordCallTimeBanditAfterCallComplete({ clientKey, callId 
     const row = rows?.[0];
     if (!row?.created_at) return;
 
+    const minIso = getCallAnalyticsMinCreatedAtIso();
+    if (minIso && new Date(row.created_at).getTime() < new Date(minIso).getTime()) {
+      return;
+    }
+
     const st = (row.status || '').toString().trim().toLowerCase();
     if (['initiated', 'in_progress', 'queued', 'pending', 'ringing'].includes(st)) return;
     const dur = row.duration != null ? Number(row.duration) : null;
@@ -1800,6 +1918,10 @@ export async function recordCallTimeBanditAfterCallComplete({ clientKey, callId 
     if (!dt.isValid) return;
     const hour = dt.hour;
     const success = isAnsweredHeuristic(row);
+
+    if (minIso) {
+      await rebuildCallTimeBanditArmsForCutoff(clientKey);
+    }
 
     const ins = await query(`
       INSERT INTO call_time_bandit_observations (call_id, client_key, hour, success)
@@ -1842,6 +1964,14 @@ export async function getRecentCallsCount(clientKey, minutesBack = 60) {
 
 // Get quality metrics for a client
 export async function getCallQualityMetrics(clientKey, days = 30) {
+  const dayMs = Math.max(1, Number(days) || 30) * 86400000;
+  let sinceMs = Date.now() - dayMs;
+  const minIso = getCallAnalyticsMinCreatedAtIso();
+  if (minIso) {
+    const t = new Date(minIso).getTime();
+    if (t > sinceMs) sinceMs = t;
+  }
+  const since = new Date(sinceMs).toISOString();
   const { rows } = await query(`
     SELECT 
       COUNT(*) as total_calls,
@@ -1854,9 +1984,9 @@ export async function getCallQualityMetrics(clientKey, days = 30) {
       COUNT(*) FILTER (WHERE sentiment = 'neutral') as neutral_sentiment_count
     FROM calls
     WHERE client_key = $1 
-      AND created_at >= now() - interval '${days} days'
+      AND created_at >= $2::timestamptz
       AND quality_score IS NOT NULL
-  `, [clientKey]);
+  `, [clientKey, since]);
   
   return rows[0] || {
     total_calls: 0,
