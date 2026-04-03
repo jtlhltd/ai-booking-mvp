@@ -111,7 +111,17 @@ import { performanceMiddleware, getPerformanceMonitor } from './lib/performance-
 import { cacheMiddleware, getCache } from './lib/cache.js';
 
 import { makeJwtAuth, insertEvent, freeBusy } from './gcal.js';
-import { init as initDb,  upsertFullClient, getFullClient, listFullClients, deleteClient, DB_PATH, query, pool } from './db.js'; // SQLite-backed tenants
+import {
+  init as initDb,
+  upsertFullClient,
+  getFullClient,
+  listFullClients,
+  deleteClient,
+  DB_PATH,
+  query,
+  pool,
+  invalidateClientCache
+} from './db.js'; // SQLite-backed tenants
 import { 
   authenticateApiKey, 
   rateLimitMiddleware, 
@@ -24522,6 +24532,7 @@ async function runOutboundAbTestSetup(clientKey, body, res) {
     const { isOutboundAbReviewPending, OUTBOUND_AB_REVIEW_PENDING_MESSAGE } = await import(
       './lib/outbound-ab-review-lock.js'
     );
+    invalidateClientCache(clientKey);
     const lockClient = await getFullClient(clientKey);
     if (isOutboundAbReviewPending(lockClient?.vapi)) {
       res.status(423).json({ ok: false, error: OUTBOUND_AB_REVIEW_PENDING_MESSAGE });
@@ -24666,6 +24677,14 @@ async function runOutboundAbTestSetup(clientKey, body, res) {
     }
     if (replaceExisting) {
       const { deactivateAbTestExperimentsByName } = await import('./db.js');
+      const vapiKeyForDim = OUTBOUND_AB_VAPI_KEYS[dimRaw];
+      const prevExp =
+        lockClient?.vapi && typeof lockClient.vapi === 'object'
+          ? String(lockClient.vapi[vapiKeyForDim] || '').trim()
+          : '';
+      if (prevExp && prevExp !== nameTrim) {
+        await deactivateAbTestExperimentsByName(clientKey, prevExp);
+      }
       await deactivateAbTestExperimentsByName(clientKey, nameTrim);
     }
     await createABTestExperiment({
