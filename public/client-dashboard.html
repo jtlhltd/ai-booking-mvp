@@ -1569,6 +1569,159 @@
             border-top: 1px dashed var(--border, #e8eaf5);
         }
 
+        .tom-ab-all-creatives {
+            margin: 20px 0 24px 0;
+            padding: 16px 18px;
+            border: 1px solid var(--border, #e8eaf5);
+            border-radius: 12px;
+            background: rgba(250, 251, 255, 0.85);
+        }
+
+        .tom-ab-all-creatives-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .tom-ab-all-intro {
+            margin: 0 0 14px 0;
+        }
+
+        .tom-ab-all-creatives-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .tom-ab-all-creative-card {
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            border-radius: 10px;
+            padding: 14px 16px;
+            background: #fff;
+        }
+
+        .tom-ab-all-creative-card h5 {
+            margin: 0 0 12px 0;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .tom-ab-all-status-pill {
+            font-size: 0.68rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            padding: 3px 9px;
+            border-radius: 999px;
+            background: rgba(0, 0, 0, 0.06);
+            color: var(--muted, #64748b);
+        }
+
+        .tom-ab-all-status-pill--on {
+            background: rgba(37, 99, 235, 0.12);
+            color: #1d4ed8;
+        }
+
+        .tom-ab-all-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 14px;
+        }
+
+        @media (min-width: 768px) {
+            .tom-ab-all-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        .tom-ab-all-row-label {
+            font-size: 0.72rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            color: var(--muted, #64748b);
+            margin: 0 0 6px 0;
+        }
+
+        .tom-ab-all-row-body {
+            font-size: 0.8125rem;
+            line-height: 1.45;
+            word-break: break-word;
+            max-height: 140px;
+            overflow-y: auto;
+        }
+
+        .tom-ab-all-script-pre {
+            margin: 0;
+            font-size: 0.78rem;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-family: inherit;
+            line-height: 1.4;
+        }
+
+        .tom-ab-all-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            margin-top: 14px;
+            padding-top: 12px;
+            border-top: 1px dashed var(--border, #e8eaf5);
+        }
+
+        .tom-ab-all-btn {
+            font-size: 0.8125rem;
+            padding: 6px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font: inherit;
+            border: 1px solid var(--border, #cbd5e1);
+            background: #fff;
+        }
+
+        .tom-ab-all-btn--primary {
+            border-color: var(--accent, #2563eb);
+            background: var(--accent, #2563eb);
+            color: #fff;
+        }
+
+        .tom-ab-all-btn--danger {
+            border-color: #dc2626;
+            color: #b91c1c;
+            background: #fff;
+        }
+
+        .tom-ab-all-legacy-table-wrap {
+            overflow-x: auto;
+            margin-top: 10px;
+        }
+
+        table.tom-ab-all-legacy-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.78rem;
+        }
+
+        table.tom-ab-all-legacy-table th,
+        table.tom-ab-all-legacy-table td {
+            border: 1px solid var(--border, #e8eaf5);
+            padding: 8px 10px;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        table.tom-ab-all-legacy-table th {
+            background: rgba(0, 0, 0, 0.03);
+            font-weight: 600;
+        }
+
         .tom-ab-opening-preview,
         .tom-ab-creative-variant-body {
             font-size: 0.8125rem;
@@ -5548,7 +5701,7 @@
         >
             <article class="card card-fullwidth tom-ab-client-console">
                 <h3>Creatives &amp; live test</h3>
-                <p class="card-subtitle">Upload one challenger at a time (voice, opener, or script). Control is always your live Vapi assistant; we never store a duplicate “control” copy.</p>
+                <p class="card-subtitle">Use <strong>All creatives</strong> below to see live vs challenger for every dimension, edit challengers, stop tests, or clear drafts. Upload one challenger at a time above; control is always your live Vapi assistant.</p>
 
                 <section class="tom-ab-simple-upload" aria-label="Upload creatives and view test results">
                     <p class="tom-ab-test-meta" style="margin:0 0 14px 0;">
@@ -8432,6 +8585,17 @@ ${actionsRow}
             if (msg) msg.textContent = 'Update the challenger below, then click Save changes.';
         }
 
+        function tomAbClearDimensionDraft(dim) {
+            if (dim !== 'voice' && dim !== 'opening' && dim !== 'script') return;
+            tomAbPerDimDraft[dim] = '';
+            if (tomAbPendingEditDim === dim) tomAbPendingEditDim = null;
+            applyTomAbDraftToVisibleField(getTomAbActiveUploadDimension());
+            updateTomAbUploadButtonLabel();
+            const msg = document.getElementById('tomAbCreativeUploadMsg');
+            if (msg) msg.textContent = 'Draft cleared.';
+            if (isOutreachDashboardClient(currentClient)) renderTomAbTestSection(dashboardData);
+        }
+
         /** Apply stop-test response immediately so the UI clears even if /demo-dashboard fetch fails or times out. */
         function tomAbMergeOutboundAbAfterStop(dim, data) {
             if (!dashboardData || typeof dashboardData !== 'object') return;
@@ -8516,101 +8680,32 @@ ${actionsRow}
             }
         }
 
-        function tomAbZipCreativesForPreview(voices, openings, scripts) {
-            const n = Math.max(voices.length, openings.length, scripts.length);
-            const triples = [];
-            for (let i = 0; i < n; i++) {
-                const v = voices[i] || '';
-                const o = openings[i] || '';
-                const s = scripts[i] || '';
-                if (v || o || s) triples.push({ voice: v, opening: o, script: s });
-            }
-            return triples;
-        }
-
-        function tomAbDedupeIdenticalPreviewTriples(triples) {
-            if (triples.length <= 1) return triples;
-            const f = triples[0];
-            const allSame = triples.every(
-                (t) => t.voice === f.voice && t.opening === f.opening && t.script === f.script
-            );
-            return allSame ? [f] : triples;
-        }
-
-        function tomAbVariantCreativeSnippet(dimKey, v) {
-            const t = (v && v.tested) || {};
-            if (dimKey === 'voice') {
-                const id = t.voiceId ? escapeHtml(String(t.voiceId)) : '—';
-                return `<p class="tom-ab-creative-variant-body"><code class="tom-ab-voice-code">${id}</code></p>`;
-            }
-            if (dimKey === 'opening') {
-                const line = t.openingLine ? escapeHtml(String(t.openingLine)) : '—';
-                return `<p class="tom-ab-creative-variant-body tom-ab-opening-preview">${line}</p>`;
-            }
-            const raw =
-                t.scriptPreview != null && String(t.scriptPreview).trim()
-                    ? String(t.scriptPreview)
-                    : t.script != null && String(t.script).trim()
-                      ? String(t.script)
-                      : '';
-            const scr = raw.trim() ? escapeHtml(raw) : '—';
-            const n = typeof t.scriptCharCount === 'number' ? t.scriptCharCount : 0;
-            const note =
-                n > 280
-                    ? `<p class="tom-ab-test-meta" style="margin:6px 0 0 0;">Full script is ${formatNumber(n)} characters; preview is trimmed.</p>`
-                    : '';
-            return `<p class="tom-ab-creative-variant-body tom-ab-creative-preview-script">${scr}</p>${note}`;
-        }
-
-        /** When there is no experiment for this dimension, show what is configured on the tenant Vapi assistant (same baseline control uses on dials). */
-        function renderTomAbVapiLiveBlock(dimKey, live) {
+        function tomAbLiveValueHtml(dimKey, live) {
             const L = live && typeof live === 'object' ? live : {};
-            const reason = L.fetchFailedReason != null && String(L.fetchFailedReason).trim() ? String(L.fetchFailedReason).trim() : '';
-            const fetchNote = reason
-                ? `<p class="tom-ab-test-meta" style="margin:6px 0 0 0;">Could not load from Vapi (<code style="font-size:0.85em;">${escapeHtml(
-                      reason
-                  )}</code>). Check <code>VAPI_PRIVATE_KEY</code> and tenant assistant id; see logs <code>[OUTBOUND AB BASELINE]</code>.</p>`
-                : '';
-            let body = '';
             if (dimKey === 'voice') {
                 const id = L.voiceId != null && String(L.voiceId).trim() ? String(L.voiceId).trim() : '';
-                body = id
+                return id
                     ? `<code class="tom-ab-voice-code">${escapeHtml(id)}</code>`
-                    : `<span class="tom-ab-test-meta">No voice id in last assistant response.</span>`;
-            } else if (dimKey === 'opening') {
-                const msg = L.firstMessage != null && String(L.firstMessage).trim() ? String(L.firstMessage).trim() : '';
-                body = msg
-                    ? `<p class="tom-ab-opening-preview" style="margin:0;">${escapeHtml(msg)}</p>`
-                    : `<span class="tom-ab-test-meta">No opening line in last assistant response.</span>`;
-            } else {
-                const scr = L.scriptPreview != null && String(L.scriptPreview).trim() ? String(L.scriptPreview).trim() : '';
-                body = scr
-                    ? `<p class="tom-ab-creative-variant-body tom-ab-creative-preview-script" style="margin:0;">${escapeHtml(scr)}</p>`
-                    : `<span class="tom-ab-test-meta">No script preview in last assistant response.</span>`;
+                    : `<span class="tom-ab-test-meta">No voice id from last assistant fetch.</span>`;
             }
-            return `<div class="tom-ab-vapi-live-block" style="margin:0 0 12px 0;padding:10px 12px;border:1px solid rgba(0,0,0,0.08);border-radius:8px;background:rgba(0,0,0,0.02);">
-                <p class="tom-ab-test-meta" style="margin:0 0 6px 0;"><strong>Live on Vapi assistant</strong> — control for this dimension until you start a test.</p>
-                ${body}
-                ${fetchNote}
-            </div>`;
+            if (dimKey === 'opening') {
+                const msg = L.firstMessage != null && String(L.firstMessage).trim() ? String(L.firstMessage).trim() : '';
+                return msg
+                    ? `<p class="tom-ab-opening-preview" style="margin:0;">${escapeHtml(msg)}</p>`
+                    : `<span class="tom-ab-test-meta">No opening line from last assistant fetch.</span>`;
+            }
+            const scr = L.scriptPreview != null && String(L.scriptPreview).trim() ? String(L.scriptPreview).trim() : '';
+            return scr
+                ? `<pre class="tom-ab-all-script-pre">${escapeHtml(scr)}</pre>`
+                : `<span class="tom-ab-test-meta">No script preview from last assistant fetch.</span>`;
         }
 
-        function renderTomAbCreativeDraftOnly(dimKey, title) {
-            const draft = tomAbPerDimDraft[dimKey] ? String(tomAbPerDimDraft[dimKey]).trim() : '';
-            if (!draft) {
-                return `<p class="tom-ab-test-meta" style="margin:0;">Nothing on test — upload a <strong>${escapeHtml(
-                    title
-                )}</strong> above.</p>`;
-            }
-            const body =
-                dimKey === 'voice'
-                    ? `<code class="tom-ab-voice-code">${escapeHtml(draft)}</code>`
-                    : `<p class="tom-ab-opening-preview" style="margin:0;">${escapeHtml(draft)}</p>`;
-            return `<p class="tom-ab-test-meta" style="margin:0;">Nothing on test yet.</p>
-                <div class="tom-ab-draft-preview">
-                    <p class="tom-ab-test-meta" style="margin:0 0 6px 0;"><strong>Your draft</strong> (not uploaded)</p>
-                    ${body}
-                </div>`;
+        function tomAbChallengerDisplayHtml(dimKey, chRaw) {
+            const t = chRaw != null ? String(chRaw).trim() : '';
+            if (!t) return `<span class="tom-ab-test-meta">No challenger on test — upload above.</span>`;
+            if (dimKey === 'voice') return `<code class="tom-ab-voice-code">${escapeHtml(t)}</code>`;
+            if (dimKey === 'opening') return `<p class="tom-ab-opening-preview" style="margin:0;">${escapeHtml(t)}</p>`;
+            return `<pre class="tom-ab-all-script-pre">${escapeHtml(t)}</pre>`;
         }
 
         function tomAbVoiceSlotsAllSameId(vars) {
@@ -8624,60 +8719,159 @@ ${actionsRow}
             return ids.every((id) => id === first);
         }
 
-        function renderTomAbCreativeDimColumn(dimKey, title, slot, ab) {
+        function tomAbAllCreativeCard(dimKey, title, ab, live) {
+            const slot = ab && ab[dimKey] ? ab[dimKey] : {};
             const exp = slot && slot.experimentName ? String(slot.experimentName).trim() : '';
             const vars = slot && slot.summary && Array.isArray(slot.summary.variants) ? slot.summary.variants : [];
-            let inner = '';
-            if (!exp && !vars.length) {
-                const live = ab && ab.vapiAssistantLive;
-                inner = renderTomAbVapiLiveBlock(dimKey, live) + renderTomAbCreativeDraftOnly(dimKey, title);
-            } else {
-                inner = exp
-                    ? `<p class="tom-ab-test-meta" style="margin:0 0 10px 0;">Experiment <code style="font-size:0.78em;">${escapeHtml(
-                          exp
-                      )}</code></p>`
+            const ch = tomAbFindChallengerVariantSummary(vars);
+            const chRaw = ch ? tomAbChallengerRawFromVariant(dimKey, ch) : '';
+            const onTest = !!(exp && vars.length);
+            const pill = onTest
+                ? '<span class="tom-ab-all-status-pill tom-ab-all-status-pill--on">On test</span>'
+                : '<span class="tom-ab-all-status-pill">Not on test</span>';
+            const expLine = exp
+                ? `<p class="tom-ab-test-meta tom-ab-all-meta-exp" style="margin:0 0 10px 0;">Experiment <code style="font-size:0.85em;">${escapeHtml(
+                      exp
+                  )}</code></p>`
+                : '';
+            const draft = tomAbPerDimDraft[dimKey] ? String(tomAbPerDimDraft[dimKey]).trim() : '';
+            const draftLine = draft
+                ? `<p class="tom-ab-test-meta" style="margin:10px 0 0 0;">You have text in the upload field for this dimension (not saved). <button type="button" class="tom-ab-variant-action-btn" data-tom-ab-all-clear-draft="${escapeHtml(
+                      dimKey
+                  )}">Clear draft</button></p>`
+                : '';
+            const editStop =
+                onTest && chRaw
+                    ? `<div class="tom-ab-all-actions" role="group" aria-label="${escapeHtml(title)} actions">
+                        <button type="button" class="tom-ab-all-btn tom-ab-all-btn--primary" data-tom-ab-all-edit="${escapeHtml(
+                            dimKey
+                        )}">Edit challenger</button>
+                        <button type="button" class="tom-ab-all-btn tom-ab-all-btn--danger" data-tom-ab-all-stop="${escapeHtml(
+                            dimKey
+                        )}">Stop test</button>
+                    </div>`
                     : '';
-                inner += vars
-                    .map((v) => {
-                        const vn = String(v.variantName || '').toLowerCase();
-                        const isChallenger = vn !== 'control';
-                        const rowActions =
-                            isChallenger && exp
-                                ? `<div class="tom-ab-variant-actions" role="group" aria-label="Challenger actions">
-                            <button type="button" class="tom-ab-variant-action-btn" data-tom-ab-edit-challenger="${escapeHtml(
-                                dimKey
-                            )}">Edit challenger</button>
-                        </div>`
-                                : '';
-                        return `<div class="tom-ab-creative-variant-row">
-                        <div class="tom-ab-creative-variant-head">
-                            <strong>${escapeHtml(v.variantName)}</strong>
-                            <span class="tom-ab-test-meta">${formatNumber(
-                            typeof v.livePickupLeads === 'number' ? v.livePickupLeads : parseInt(v.livePickupLeads, 10) || 0
-                        )} live · ${formatNumber(v.totalLeads)} assigned</span>
-                        </div>
-                        ${tomAbVariantCreativeSnippet(dimKey, v)}
-                        ${rowActions}
-                    </div>`;
-                    })
-                    .join('');
-                if (exp) {
-                    inner += `<div class="tom-ab-variant-actions tom-ab-stop-test-wrap">
-                        <button type="button" class="tom-ab-variant-action-btn tom-ab-stop-test-btn" data-tom-ab-stop-dimension="${escapeHtml(
-                        dimKey
-                    )}">Stop test on this dimension</button>
-                    </div>`;
-                }
-            }
             const sameVoiceNote =
                 dimKey === 'voice' && vars.length >= 2 && tomAbVoiceSlotsAllSameId(vars)
-                    ? `<p class="tom-ab-test-meta" role="note" style="margin:12px 0 0 0;">Both rows show the same ID — <strong>control</strong> should be your Vapi assistant voice. If they match, that assistant is configured with this voice on Vapi, or the server could not fetch the assistant (set <code>VAPI_PRIVATE_KEY</code> and tenant <code>assistantId</code>; check logs for <code>[OUTBOUND AB BASELINE]</code>).</p>`
+                    ? `<p class="tom-ab-test-meta" role="note" style="margin:10px 0 0 0;">Both arms show the same voice ID — <strong>control</strong> should match your live Vapi assistant. If they match, the assistant uses this voice on Vapi, or the server could not fetch the assistant (check <code>VAPI_PRIVATE_KEY</code> and assistant id).</p>`
                     : '';
-            return `<div class="tom-ab-creative-dim-col" data-tom-ab-creative-dim="${dimKey}">
-                <h5 class="tom-ab-creative-dim-title">${escapeHtml(title)}</h5>
-                ${inner}
+            return `<article class="tom-ab-all-creative-card" data-tom-ab-all-dim="${escapeHtml(dimKey)}">
+                <h5>${escapeHtml(title)} ${pill}</h5>
+                ${expLine}
+                <div class="tom-ab-all-grid">
+                    <div>
+                        <p class="tom-ab-all-row-label">Live on Vapi (control)</p>
+                        <div class="tom-ab-all-row-body">${tomAbLiveValueHtml(dimKey, live)}</div>
+                    </div>
+                    <div>
+                        <p class="tom-ab-all-row-label">Challenger (variant_b)</p>
+                        <div class="tom-ab-all-row-body">${tomAbChallengerDisplayHtml(dimKey, chRaw)}</div>
+                    </div>
+                </div>
+                ${draftLine}
+                ${editStop}
                 ${sameVoiceNote}
-            </div>`;
+            </article>`;
+        }
+
+        function renderTomAbAllCreativesDimensional(ab, live) {
+            const dims = [
+                { key: 'voice', title: 'Voice ID' },
+                { key: 'opening', title: 'Opening line' },
+                { key: 'script', title: 'Script' }
+            ];
+            const hasServer = dims.some((d) => {
+                const sl = ab && ab[d.key];
+                return !!(sl && sl.experimentName && String(sl.experimentName).trim());
+            });
+            const hasDraft =
+                tomAbPerDimDraft.voice.trim() ||
+                tomAbPerDimDraft.opening.trim() ||
+                tomAbPerDimDraft.script.trim();
+            const badge = hasServer
+                ? '<span class="tom-ab-test-meta">On test</span>'
+                : hasDraft
+                  ? '<span class="tom-ab-test-meta">Draft only</span>'
+                  : '';
+            const fr = live && live.fetchFailedReason != null && String(live.fetchFailedReason).trim();
+            const fetchBanner = fr
+                ? `<p class="tom-ab-test-meta" role="status" style="margin:0 0 12px 0;">Could not load full live assistant text from Vapi (<code style="font-size:0.85em;">${escapeHtml(
+                      String(live.fetchFailedReason).trim()
+                  )}</code>). Live values below may be incomplete.</p>`
+                : '';
+            const cards = dims.map((d) => tomAbAllCreativeCard(d.key, d.title, ab, live)).join('');
+            return `<section class="tom-ab-all-creatives" aria-labelledby="tom-ab-all-creatives-h">
+                <div class="tom-ab-all-creatives-head">
+                    <h4 class="tom-ab-panel-title" id="tom-ab-all-creatives-h" style="margin:0;">All creatives</h4>
+                    ${badge}
+                </div>
+                ${fetchBanner}
+                <p class="tom-ab-test-meta tom-ab-all-intro">Everything on one screen: <strong>live assistant</strong> (control) vs <strong>challenger</strong> per dimension. <strong>Edit challenger</strong> loads the upload area; <strong>Stop test</strong> ends the test for that slice; <strong>Clear draft</strong> empties unsaved text in the field.</p>
+                <div class="tom-ab-all-creatives-stack">${cards}</div>
+            </section>`;
+        }
+
+        function renderTomAbAllCreativesLegacy(ab, live, legacyExp) {
+            const vars = ab.legacy && ab.legacy.summary && Array.isArray(ab.legacy.summary.variants) ? ab.legacy.summary.variants : [];
+            const rows = vars
+                .map((v) => {
+                    const t = v.tested || {};
+                    const voice = t.voiceId ? escapeHtml(String(t.voiceId)) : '—';
+                    const op = t.openingLine ? escapeHtml(String(t.openingLine)) : '—';
+                    const raw =
+                        t.script != null && String(t.script).trim()
+                            ? String(t.script).trim()
+                            : t.scriptPreview != null && String(t.scriptPreview).trim()
+                              ? String(t.scriptPreview).trim()
+                              : '';
+                    const scrH = raw ? escapeHtml(raw.length > 240 ? `${raw.slice(0, 240).trim()}…` : raw) : '—';
+                    return `<tr>
+                    <td><strong>${escapeHtml(v.variantName)}</strong></td>
+                    <td><code style="font-size:0.78em;word-break:break-all">${voice}</code></td>
+                    <td>${op}</td>
+                    <td><div class="tom-ab-all-row-body">${scrH}</div></td>
+                </tr>`;
+                })
+                .join('');
+            const fr = live && live.fetchFailedReason != null && String(live.fetchFailedReason).trim();
+            const fetchBanner = fr
+                ? `<p class="tom-ab-test-meta" role="status" style="margin:0 0 12px 0;">Vapi live snapshot: <code style="font-size:0.85em;">${escapeHtml(
+                      String(live.fetchFailedReason).trim()
+                  )}</code></p>`
+                : '';
+            return `<section class="tom-ab-all-creatives" aria-labelledby="tom-ab-all-creatives-h">
+                <div class="tom-ab-all-creatives-head">
+                    <h4 class="tom-ab-panel-title" id="tom-ab-all-creatives-h" style="margin:0;">All creatives</h4>
+                    <span class="tom-ab-test-meta">Legacy combined</span>
+                </div>
+                ${fetchBanner}
+                <p class="tom-ab-test-meta tom-ab-all-intro">Legacy experiment rotates voice, opener, and script together. <code style="font-size:0.85em;">${escapeHtml(
+                    legacyExp
+                )}</code>. Per-dimension edit/stop above applies to dimensional tests; contact your team to change legacy bundles.</p>
+                <div class="tom-ab-all-legacy-table-wrap">
+                    <table class="tom-ab-all-legacy-table">
+                        <thead>
+                            <tr>
+                                <th>Variant</th>
+                                <th>Voice</th>
+                                <th>Opening</th>
+                                <th>Script</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows || '<tr><td colspan="4" class="tom-ab-test-meta">No variant rows.</td></tr>'}</tbody>
+                    </table>
+                </div>
+            </section>`;
+        }
+
+        function renderTomAbAllCreativesManager(ab) {
+            if (!ab || typeof ab !== 'object') return '';
+            const live = ab.vapiAssistantLive && typeof ab.vapiAssistantLive === 'object' ? ab.vapiAssistantLive : {};
+            const legacyExp = ab.legacy && ab.legacy.experimentName ? String(ab.legacy.experimentName).trim() : '';
+            if (ab.mode === 'legacy' && legacyExp) {
+                return renderTomAbAllCreativesLegacy(ab, live, legacyExp);
+            }
+            return renderTomAbAllCreativesDimensional(ab, live);
         }
 
         function extractTomAbCreativesFromPayload(ab) {
@@ -8750,92 +8944,6 @@ ${actionsRow}
                     tomAbPerDimDraft.script = ex.scripts[0];
                 }
             }
-        }
-
-        function renderTomAbCreativesPreviewPanel(ab) {
-            const legacyExp = ab && ab.legacy && ab.legacy.experimentName ? String(ab.legacy.experimentName).trim() : '';
-            if (ab && ab.mode === 'legacy' && legacyExp) {
-                const server = extractTomAbCreativesFromPayload(ab);
-                const formVoices = tomAbPerDimDraft.voice.trim() ? [tomAbPerDimDraft.voice.trim()] : [];
-                const formOpenings = tomAbPerDimDraft.opening.trim() ? [tomAbPerDimDraft.opening.trim()] : [];
-                const formScripts = tomAbPerDimDraft.script.trim() ? [tomAbPerDimDraft.script.trim()] : [];
-                const useVoices = server.voices.length ? server.voices : formVoices;
-                const useOpenings = server.openings.length ? server.openings : formOpenings;
-                const useScripts = server.scripts.length ? server.scripts : formScripts;
-                const hasServer =
-                    server.voices.length > 0 || server.openings.length > 0 || server.scripts.length > 0;
-                const rawTriples = tomAbZipCreativesForPreview(useVoices, useOpenings, useScripts);
-                const triples = tomAbDedupeIdenticalPreviewTriples(rawTriples);
-                const hasAny = triples.length > 0;
-                const badge = hasServer
-                    ? '<span class="tom-ab-test-meta">On test (legacy)</span>'
-                    : hasAny
-                      ? '<span class="tom-ab-test-meta">Preview</span>'
-                      : '';
-                const cardHtml = (c, i) => {
-                    const voiceL = c.voice ? escapeHtml(c.voice) : '—';
-                    const openL = c.opening ? escapeHtml(c.opening) : '—';
-                    const scrL = c.script ? escapeHtml(c.script) : '—';
-                    const title = triples.length === 1 ? 'Combined variants' : `Row ${i + 1}`;
-                    return `<div class="tom-ab-creative-preview-card">
-                        <h5>${title}</h5>
-                        <div class="tom-ab-creative-preview-bits">
-                            <p class="tom-ab-test-meta" style="margin:0 0 2px 0;"><strong>Voice</strong></p>
-                            <p style="margin:0 0 10px 0;"><code style="font-size:0.9em;word-break:break-all;">${voiceL}</code></p>
-                            <p class="tom-ab-test-meta" style="margin:0 0 2px 0;"><strong>Opening</strong></p>
-                            <p style="margin:0 0 10px 0;">${openL}</p>
-                            <p class="tom-ab-test-meta" style="margin:0 0 2px 0;"><strong>Script</strong></p>
-                            <p class="tom-ab-creative-preview-script">${scrL}</p>
-                        </div>
-                    </div>`;
-                };
-                const grid =
-                    triples.length > 0
-                        ? `<div class="tom-ab-creatives-preview-grid">${triples.map(cardHtml).join('')}</div>`
-                        : '';
-                return `<section class="tom-ab-creatives-preview" aria-labelledby="tom-ab-creatives-h">
-                    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap;">
-                        <h4 class="tom-ab-panel-title" id="tom-ab-creatives-h" style="margin:0;">Your creatives</h4>
-                        ${badge}
-                    </div>
-                    <p class="tom-ab-test-meta" style="margin:8px 0 0 0;">Legacy combined experiment <code style="font-size:0.78em;">${escapeHtml(
-                        legacyExp
-                    )}</code></p>
-                    ${grid}
-                    ${
-                        !hasAny
-                            ? '<p class="tom-ab-test-meta" style="margin:10px 0 0 0;">No variant text loaded yet.</p>'
-                            : ''
-                    }
-                </section>`;
-            }
-
-            const voiceOn = !!(ab && ab.voice && ab.voice.experimentName);
-            const openingOn = !!(ab && ab.opening && ab.opening.experimentName);
-            const scriptOn = !!(ab && ab.script && ab.script.experimentName);
-            const hasServer = voiceOn || openingOn || scriptOn;
-            const hasDraft =
-                tomAbPerDimDraft.voice.trim() ||
-                tomAbPerDimDraft.opening.trim() ||
-                tomAbPerDimDraft.script.trim();
-            const badge = hasServer
-                ? '<span class="tom-ab-test-meta">On test</span>'
-                : hasDraft
-                  ? '<span class="tom-ab-test-meta">Draft only</span>'
-                  : '';
-            const cols = [
-                renderTomAbCreativeDimColumn('voice', 'Voice ID', (ab && ab.voice) || {}, ab),
-                renderTomAbCreativeDimColumn('opening', 'Opening line', (ab && ab.opening) || {}, ab),
-                renderTomAbCreativeDimColumn('script', 'Script', (ab && ab.script) || {}, ab)
-            ].join('');
-            return `<section class="tom-ab-creatives-preview" aria-labelledby="tom-ab-creatives-h">
-                <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap;">
-                    <h4 class="tom-ab-panel-title" id="tom-ab-creatives-h" style="margin:0;">Your creatives</h4>
-                    ${badge}
-                </div>
-                <p class="tom-ab-test-meta" style="margin:8px 0 0 0;">Opening line and script work like voice: upload <strong>only the challenger</strong>. When a dimension has no test yet, the card shows your <strong>live Vapi assistant</strong> for that slice; after you start a test, <strong>control</strong> stays live on Vapi and <strong>variant_b</strong> is the challenger.</p>
-                <div class="tom-ab-creatives-dim-grid">${cols}</div>
-            </section>`;
         }
 
         function renderTomAbReviewBanner(ab) {
@@ -9203,18 +9311,26 @@ ${actionsRow}
                     refreshTomOutboundAbLiveResults();
                     return;
                 }
-                const editBtn = e.target.closest('[data-tom-ab-edit-challenger]');
-                if (editBtn && sec.contains(editBtn)) {
+                const editAll = e.target.closest('[data-tom-ab-all-edit]');
+                if (editAll && sec.contains(editAll)) {
                     e.preventDefault();
-                    const dim = editBtn.getAttribute('data-tom-ab-edit-challenger');
+                    const dim = editAll.getAttribute('data-tom-ab-all-edit');
                     if (dim === 'voice' || dim === 'opening' || dim === 'script') tomAbBeginEditChallenger(dim);
                     return;
                 }
-                const stopBtn = e.target.closest('[data-tom-ab-stop-dimension]');
-                if (stopBtn && sec.contains(stopBtn)) {
+                const stopAll = e.target.closest('[data-tom-ab-all-stop]');
+                if (stopAll && sec.contains(stopAll)) {
                     e.preventDefault();
-                    const dim = stopBtn.getAttribute('data-tom-ab-stop-dimension');
+                    const dim = stopAll.getAttribute('data-tom-ab-all-stop');
                     if (dim === 'voice' || dim === 'opening' || dim === 'script') tomAbStopDimensionTest(dim);
+                    return;
+                }
+                const clearDraftBtn = e.target.closest('[data-tom-ab-all-clear-draft]');
+                if (clearDraftBtn && sec.contains(clearDraftBtn)) {
+                    e.preventDefault();
+                    const dim = clearDraftBtn.getAttribute('data-tom-ab-all-clear-draft');
+                    if (dim === 'voice' || dim === 'opening' || dim === 'script') tomAbClearDimensionDraft(dim);
+                    return;
                 }
             });
         }
@@ -9306,7 +9422,7 @@ ${actionsRow}
             applyTomAbDraftToVisibleField(getTomAbActiveUploadDimension());
 
             let html = '';
-            html += renderTomAbCreativesPreviewPanel(ab);
+            html += renderTomAbAllCreativesManager(ab);
             html += renderTomAbReviewBanner(ab);
             html += renderTomAbLiveResultsPanel(ab);
 
