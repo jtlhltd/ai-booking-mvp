@@ -1483,6 +1483,122 @@
             overflow-y: auto;
         }
 
+        .tom-ab-creatives-dim-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 14px;
+            margin-top: 12px;
+        }
+
+        @media (min-width: 900px) {
+            .tom-ab-creatives-dim-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        .tom-ab-creative-dim-col {
+            padding: 12px 14px;
+            border-radius: 10px;
+            border: 1px solid var(--border, #e8eaf5);
+            background: rgba(255, 255, 255, 0.35);
+            min-width: 0;
+        }
+
+        .tom-ab-creative-dim-title {
+            margin: 0 0 10px 0;
+            font-size: 0.95rem;
+        }
+
+        .tom-ab-creative-variant-row {
+            margin-bottom: 14px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border, #e8eaf5);
+        }
+
+        .tom-ab-creative-variant-row:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .tom-ab-creative-variant-head {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 6px;
+            margin-bottom: 6px;
+            align-items: baseline;
+        }
+
+        .tom-ab-opening-preview,
+        .tom-ab-creative-variant-body {
+            font-size: 0.8125rem;
+            line-height: 1.45;
+            word-break: break-word;
+            margin: 0;
+            max-height: 160px;
+            overflow-y: auto;
+        }
+
+        .tom-ab-voice-code {
+            font-size: 0.8rem;
+            word-break: break-all;
+        }
+
+        .tom-ab-draft-preview {
+            margin-top: 10px;
+            padding: 8px 10px;
+            border-radius: 8px;
+            background: rgba(92, 106, 196, 0.06);
+            border: 1px dashed var(--border, #d8dbe8);
+        }
+
+        .tom-ab-monitoring-status {
+            font-size: 0.875rem;
+            line-height: 1.55;
+            margin-bottom: 14px;
+            padding: 12px 14px;
+            border-radius: 10px;
+            background: rgba(92, 106, 196, 0.06);
+            border: 1px solid var(--border, #e8eaf5);
+        }
+
+        .tom-ab-dial-warning {
+            margin: 0 0 14px 0;
+            padding: 12px 14px;
+            border-radius: 10px;
+            background: rgba(245, 166, 35, 0.12);
+            border: 1px solid rgba(245, 166, 35, 0.45);
+            font-size: 0.875rem;
+            color: #7a5200;
+        }
+
+        .tom-ab-recent-feed-meta {
+            font-size: 0.8125rem;
+            margin: 0 0 14px 0;
+            color: var(--muted);
+            line-height: 1.45;
+        }
+
+        .tom-ab-mon-dim-section {
+            margin-bottom: 20px;
+        }
+
+        .tom-ab-mon-dim-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .tom-ab-mon-dim-h {
+            margin: 0 0 8px 0;
+            font-size: 0.95rem;
+        }
+
+        table.tom-ab-test-table--compact th,
+        table.tom-ab-test-table--compact td {
+            padding: 8px 10px;
+            font-size: 0.8125rem;
+        }
+
         .tom-ab-review-banner {
             font-size: 0.875rem;
             line-height: 1.45;
@@ -8131,6 +8247,81 @@ ${actionsRow}
             return allSame ? [f] : triples;
         }
 
+        function tomAbVariantCreativeSnippet(dimKey, v) {
+            const t = (v && v.tested) || {};
+            if (dimKey === 'voice') {
+                const id = t.voiceId ? escapeHtml(String(t.voiceId)) : '—';
+                return `<p class="tom-ab-creative-variant-body"><code class="tom-ab-voice-code">${id}</code></p>`;
+            }
+            if (dimKey === 'opening') {
+                const line = t.openingLine ? escapeHtml(String(t.openingLine)) : '—';
+                return `<p class="tom-ab-creative-variant-body tom-ab-opening-preview">${line}</p>`;
+            }
+            const raw =
+                t.scriptPreview != null && String(t.scriptPreview).trim()
+                    ? String(t.scriptPreview)
+                    : t.script != null && String(t.script).trim()
+                      ? String(t.script)
+                      : '';
+            const scr = raw.trim() ? escapeHtml(raw) : '—';
+            const n = typeof t.scriptCharCount === 'number' ? t.scriptCharCount : 0;
+            const note =
+                n > 280
+                    ? `<p class="tom-ab-test-meta" style="margin:6px 0 0 0;">Full script is ${formatNumber(n)} characters; preview is trimmed.</p>`
+                    : '';
+            return `<p class="tom-ab-creative-variant-body tom-ab-creative-preview-script">${scr}</p>${note}`;
+        }
+
+        function renderTomAbCreativeDraftOnly(dimKey, title) {
+            const draft = tomAbPerDimDraft[dimKey] ? String(tomAbPerDimDraft[dimKey]).trim() : '';
+            if (!draft) {
+                return `<p class="tom-ab-test-meta" style="margin:0;">Nothing on test — upload a <strong>${escapeHtml(
+                    title
+                )}</strong> above.</p>`;
+            }
+            const body =
+                dimKey === 'voice'
+                    ? `<code class="tom-ab-voice-code">${escapeHtml(draft)}</code>`
+                    : `<p class="tom-ab-opening-preview" style="margin:0;">${escapeHtml(draft)}</p>`;
+            return `<p class="tom-ab-test-meta" style="margin:0;">Nothing on test yet.</p>
+                <div class="tom-ab-draft-preview">
+                    <p class="tom-ab-test-meta" style="margin:0 0 6px 0;"><strong>Your draft</strong> (not uploaded)</p>
+                    ${body}
+                </div>`;
+        }
+
+        function renderTomAbCreativeDimColumn(dimKey, title, slot) {
+            const exp = slot && slot.experimentName ? String(slot.experimentName).trim() : '';
+            const vars = slot && slot.summary && Array.isArray(slot.summary.variants) ? slot.summary.variants : [];
+            let inner = '';
+            if (!exp && !vars.length) {
+                inner = renderTomAbCreativeDraftOnly(dimKey, title);
+            } else {
+                inner = exp
+                    ? `<p class="tom-ab-test-meta" style="margin:0 0 10px 0;">Experiment <code style="font-size:0.78em;">${escapeHtml(
+                          exp
+                      )}</code></p>`
+                    : '';
+                inner += vars
+                    .map(
+                        (v) => `<div class="tom-ab-creative-variant-row">
+                        <div class="tom-ab-creative-variant-head">
+                            <strong>${escapeHtml(v.variantName)}</strong>
+                            <span class="tom-ab-test-meta">${formatNumber(v.totalLeads)} leads · ${formatNumber(
+                            v.convertedLeads
+                        )} conv</span>
+                        </div>
+                        ${tomAbVariantCreativeSnippet(dimKey, v)}
+                    </div>`
+                    )
+                    .join('');
+            }
+            return `<div class="tom-ab-creative-dim-col" data-tom-ab-creative-dim="${dimKey}">
+                <h5 class="tom-ab-creative-dim-title">${escapeHtml(title)}</h5>
+                ${inner}
+            </div>`;
+        }
+
         function extractTomAbCreativesFromPayload(ab) {
             const out = { voices: [], openings: [], scripts: [] };
             if (!ab || typeof ab !== 'object') return out;
@@ -8189,57 +8380,88 @@ ${actionsRow}
         }
 
         function renderTomAbCreativesPreviewPanel(ab) {
-            const server = extractTomAbCreativesFromPayload(ab);
-            const formVoices = tomAbPerDimDraft.voice.trim() ? [tomAbPerDimDraft.voice.trim()] : [];
-            const formOpenings = tomAbPerDimDraft.opening.trim() ? [tomAbPerDimDraft.opening.trim()] : [];
-            const formScripts = tomAbPerDimDraft.script.trim() ? [tomAbPerDimDraft.script.trim()] : [];
-            const useVoices = server.voices.length ? server.voices : formVoices;
-            const useOpenings = server.openings.length ? server.openings : formOpenings;
-            const useScripts = server.scripts.length ? server.scripts : formScripts;
-            const hasServer = server.voices.length > 0 || server.openings.length > 0 || server.scripts.length > 0;
-            const rawTriples = tomAbZipCreativesForPreview(useVoices, useOpenings, useScripts);
-            const triples = tomAbDedupeIdenticalPreviewTriples(rawTriples);
-            const hasAny = triples.length > 0;
+            const legacyExp = ab && ab.legacy && ab.legacy.experimentName ? String(ab.legacy.experimentName).trim() : '';
+            if (ab && ab.mode === 'legacy' && legacyExp) {
+                const server = extractTomAbCreativesFromPayload(ab);
+                const formVoices = tomAbPerDimDraft.voice.trim() ? [tomAbPerDimDraft.voice.trim()] : [];
+                const formOpenings = tomAbPerDimDraft.opening.trim() ? [tomAbPerDimDraft.opening.trim()] : [];
+                const formScripts = tomAbPerDimDraft.script.trim() ? [tomAbPerDimDraft.script.trim()] : [];
+                const useVoices = server.voices.length ? server.voices : formVoices;
+                const useOpenings = server.openings.length ? server.openings : formOpenings;
+                const useScripts = server.scripts.length ? server.scripts : formScripts;
+                const hasServer =
+                    server.voices.length > 0 || server.openings.length > 0 || server.scripts.length > 0;
+                const rawTriples = tomAbZipCreativesForPreview(useVoices, useOpenings, useScripts);
+                const triples = tomAbDedupeIdenticalPreviewTriples(rawTriples);
+                const hasAny = triples.length > 0;
+                const badge = hasServer
+                    ? '<span class="tom-ab-test-meta">On test (legacy)</span>'
+                    : hasAny
+                      ? '<span class="tom-ab-test-meta">Preview</span>'
+                      : '';
+                const cardHtml = (c, i) => {
+                    const voiceL = c.voice ? escapeHtml(c.voice) : '—';
+                    const openL = c.opening ? escapeHtml(c.opening) : '—';
+                    const scrL = c.script ? escapeHtml(c.script) : '—';
+                    const title = triples.length === 1 ? 'Combined variants' : `Row ${i + 1}`;
+                    return `<div class="tom-ab-creative-preview-card">
+                        <h5>${title}</h5>
+                        <div class="tom-ab-creative-preview-bits">
+                            <p class="tom-ab-test-meta" style="margin:0 0 2px 0;"><strong>Voice</strong></p>
+                            <p style="margin:0 0 10px 0;"><code style="font-size:0.9em;word-break:break-all;">${voiceL}</code></p>
+                            <p class="tom-ab-test-meta" style="margin:0 0 2px 0;"><strong>Opening</strong></p>
+                            <p style="margin:0 0 10px 0;">${openL}</p>
+                            <p class="tom-ab-test-meta" style="margin:0 0 2px 0;"><strong>Script</strong></p>
+                            <p class="tom-ab-creative-preview-script">${scrL}</p>
+                        </div>
+                    </div>`;
+                };
+                const grid =
+                    triples.length > 0
+                        ? `<div class="tom-ab-creatives-preview-grid">${triples.map(cardHtml).join('')}</div>`
+                        : '';
+                return `<section class="tom-ab-creatives-preview" aria-labelledby="tom-ab-creatives-h">
+                    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+                        <h4 class="tom-ab-panel-title" id="tom-ab-creatives-h" style="margin:0;">Your creatives</h4>
+                        ${badge}
+                    </div>
+                    <p class="tom-ab-test-meta" style="margin:8px 0 0 0;">Legacy combined experiment <code style="font-size:0.78em;">${escapeHtml(
+                        legacyExp
+                    )}</code></p>
+                    ${grid}
+                    ${
+                        !hasAny
+                            ? '<p class="tom-ab-test-meta" style="margin:10px 0 0 0;">No variant text loaded yet.</p>'
+                            : ''
+                    }
+                </section>`;
+            }
+
+            const voiceOn = !!(ab && ab.voice && ab.voice.experimentName);
+            const openingOn = !!(ab && ab.opening && ab.opening.experimentName);
+            const scriptOn = !!(ab && ab.script && ab.script.experimentName);
+            const hasServer = voiceOn || openingOn || scriptOn;
+            const hasDraft =
+                tomAbPerDimDraft.voice.trim() ||
+                tomAbPerDimDraft.opening.trim() ||
+                tomAbPerDimDraft.script.trim();
             const badge = hasServer
                 ? '<span class="tom-ab-test-meta">On test</span>'
-                : hasAny
-                  ? '<span class="tom-ab-test-meta">Preview</span>'
+                : hasDraft
+                  ? '<span class="tom-ab-test-meta">Draft only</span>'
                   : '';
-
-            const cardHtml = (c, i) => {
-                const voiceL = c.voice ? escapeHtml(c.voice) : '—';
-                const openL = c.opening ? escapeHtml(c.opening) : '—';
-                const scrL = c.script ? escapeHtml(c.script) : '—';
-                const title = triples.length === 1 ? 'Your creative' : `Creative ${i + 1}`;
-                return `<div class="tom-ab-creative-preview-card">
-                    <h5>${title}</h5>
-                    <div class="tom-ab-creative-preview-bits">
-                        <p class="tom-ab-test-meta" style="margin:0 0 2px 0;"><strong>Voice</strong></p>
-                        <p style="margin:0 0 10px 0;"><code style="font-size:0.9em;word-break:break-all;">${voiceL}</code></p>
-                        <p class="tom-ab-test-meta" style="margin:0 0 2px 0;"><strong>Opening</strong></p>
-                        <p style="margin:0 0 10px 0;">${openL}</p>
-                        <p class="tom-ab-test-meta" style="margin:0 0 2px 0;"><strong>Script</strong></p>
-                        <p class="tom-ab-creative-preview-script">${scrL}</p>
-                    </div>
-                </div>`;
-            };
-
-            const grid =
-                triples.length > 0
-                    ? `<div class="tom-ab-creatives-preview-grid">${triples.map(cardHtml).join('')}</div>`
-                    : '';
-
+            const cols = [
+                renderTomAbCreativeDimColumn('voice', 'Voice ID', (ab && ab.voice) || {}),
+                renderTomAbCreativeDimColumn('opening', 'Opening line', (ab && ab.opening) || {}),
+                renderTomAbCreativeDimColumn('script', 'Script', (ab && ab.script) || {})
+            ].join('');
             return `<section class="tom-ab-creatives-preview" aria-labelledby="tom-ab-creatives-h">
                 <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap;">
                     <h4 class="tom-ab-panel-title" id="tom-ab-creatives-h" style="margin:0;">Your creatives</h4>
                     ${badge}
                 </div>
-                ${grid}
-                ${
-                    !hasAny
-                        ? '<p class="tom-ab-test-meta" style="margin:10px 0 0 0;">Nothing to show yet — pick a type, enter one value, then Upload.</p>'
-                        : ''
-                }
+                <p class="tom-ab-test-meta" style="margin:8px 0 0 0;">What’s live for each dimension (voice, opener, script). Upload each one separately above.</p>
+                <div class="tom-ab-creatives-dim-grid">${cols}</div>
             </section>`;
         }
 
@@ -8247,6 +8469,126 @@ ${actionsRow}
             if (!ab || !ab.reviewPending) return '';
             return `<div class="tom-ab-review-banner" role="status">
                 <p style="margin:0;"><strong>Checkpoint.</strong> This test reached its sample target. We handle the next step on our side; the same two variants stay live until we continue.</p>
+            </div>`;
+        }
+
+        function renderTomAbRecentFeedSnippet(byDim) {
+            if (!byDim || typeof byDim !== 'object') return '';
+            const dimLabels = { voice: 'Voice', opening: 'Opening', script: 'Script' };
+            const parts = [];
+            for (const d of ['voice', 'opening', 'script']) {
+                const o = byDim[d];
+                if (!o || typeof o !== 'object') continue;
+                const entries = Object.entries(o).filter(([, n]) => (Number(n) || 0) > 0);
+                if (!entries.length) continue;
+                parts.push(
+                    `${dimLabels[d]}: ${entries
+                        .map(([k, v]) => `${escapeHtml(k)} ${formatNumber(Number(v) || 0)}`)
+                        .join(', ')}`
+                );
+            }
+            if (!parts.length) return '';
+            return `<p class="tom-ab-recent-feed-meta" role="status"><strong>Recent calls (activity feed)</strong> — ${parts.join(
+                ' · '
+            )}</p>`;
+        }
+
+        function renderTomAbMonitoringStatusStrip(ab) {
+            if (!ab || typeof ab !== 'object') return '';
+            const dimLabels = { voice: 'Voice', opening: 'Opening line', script: 'Script' };
+            const focusRaw = ab.focusDimension != null ? String(ab.focusDimension).trim().toLowerCase() : '';
+            const focusLabel = dimLabels[focusRaw];
+            const focusLine = focusLabel
+                ? `<strong>Dial focus:</strong> ${focusLabel} <span class="tom-ab-test-meta">(which dimension rotates on new dials when several are configured)</span>`
+                : `<strong>Dial focus:</strong> <span class="tom-ab-test-meta">— Not set</span>`;
+            const dial = Array.isArray(ab.dialActiveDimensions) ? ab.dialActiveDimensions : [];
+            const dialStr = dial
+                .map((x) => {
+                    const k = String(x || '').toLowerCase();
+                    return dimLabels[k] || x;
+                })
+                .filter(Boolean)
+                .join(', ');
+            const dialLine = dialStr ? `<br><strong>Live on dial now:</strong> ${escapeHtml(dialStr)}` : '';
+            let bundleLine = '';
+            if (ab.bundlePhase != null && String(ab.bundlePhase).trim() !== '') {
+                const ph = String(ab.bundlePhase).trim().toLowerCase();
+                const phLabel = dimLabels[ph] || ph;
+                let b = `<br><strong>Bundle phase:</strong> ${escapeHtml(phLabel)}`;
+                if (ab.bundleStartedAt != null && String(ab.bundleStartedAt).trim() !== '') {
+                    try {
+                        b += ` <span class="tom-ab-test-meta">since ${escapeHtml(
+                            new Date(String(ab.bundleStartedAt).trim()).toLocaleString()
+                        )}</span>`;
+                    } catch {
+                        /* ignore */
+                    }
+                }
+                bundleLine = b;
+            }
+            const warn =
+                ab.dialWarning != null && String(ab.dialWarning).trim()
+                    ? `<div class="tom-ab-dial-warning" role="status">${escapeHtml(String(ab.dialWarning).trim())}</div>`
+                    : '';
+            const feed = renderTomAbRecentFeedSnippet(ab.recentFeedAbByDimension);
+            return `<div class="tom-ab-monitoring-status">${focusLine}${dialLine}${bundleLine}</div>${warn}${feed}`;
+        }
+
+        function tomAbMonitoringStatsRow(v, minN) {
+            const tl = typeof v.totalLeads === 'number' ? v.totalLeads : parseInt(v.totalLeads, 10) || 0;
+            const cl =
+                typeof v.convertedLeads === 'number' ? v.convertedLeads : parseInt(v.convertedLeads, 10) || 0;
+            const rate = tl > 0 && v.conversionRatePct != null ? `${Number(v.conversionRatePct).toFixed(1)}%` : '—';
+            const meets = tl >= minN;
+            const sampleCell = meets
+                ? `<span class="tom-ab-live-ok">✓ ${formatNumber(minN)}+</span>`
+                : `<span class="tom-ab-live-progress">${formatNumber(tl)} / ${formatNumber(minN)}</span>`;
+            return `<tr>
+                <td><strong>${escapeHtml(v.variantName)}</strong></td>
+                <td>${formatNumber(tl)}</td>
+                <td>${formatNumber(cl)}</td>
+                <td>${escapeHtml(rate)}</td>
+                <td>${sampleCell}</td>
+            </tr>`;
+        }
+
+        function renderTomAbDimensionMonitoringBlock(dim, title, slot, minN, isPrimaryFocus) {
+            const exp = slot && slot.experimentName ? String(slot.experimentName).trim() : '';
+            const variants = slot && slot.summary && Array.isArray(slot.summary.variants) ? slot.summary.variants : [];
+            const pill = isPrimaryFocus ? '<span class="tom-ab-live-pill">Primary in summary</span>' : '';
+            if (!exp && !variants.length) {
+                return `<div class="tom-ab-mon-dim-section" data-tom-ab-mon-dim="${dim}">
+                    <h5 class="tom-ab-mon-dim-h">${escapeHtml(title)} ${pill}</h5>
+                    <p class="tom-ab-test-meta" style="margin:0;">No experiment in this slot — upload above to see counts.</p>
+                </div>`;
+            }
+            const rows = variants.length ? variants.map((v) => tomAbMonitoringStatsRow(v, minN)).join('') : '';
+            return `<div class="tom-ab-mon-dim-section" data-tom-ab-mon-dim="${dim}">
+                <h5 class="tom-ab-mon-dim-h">${escapeHtml(title)} ${pill}</h5>
+                ${
+                    exp
+                        ? `<p class="tom-ab-test-meta" style="margin:0 0 8px 0;"><code style="font-size:0.78em;">${escapeHtml(
+                              exp
+                          )}</code></p>`
+                        : ''
+                }
+                <div class="tom-ab-test-table-wrap">
+                    <table class="tom-ab-test-table tom-ab-test-table--compact" aria-label="${escapeHtml(title)} results">
+                        <thead>
+                            <tr>
+                                <th scope="col">Variant</th>
+                                <th scope="col">Leads</th>
+                                <th scope="col">Conv</th>
+                                <th scope="col">Rate</th>
+                                <th scope="col">Sample</th>
+                            </tr>
+                        </thead>
+                        <tbody>${
+                            rows ||
+                            `<tr><td colspan="5" class="tom-ab-test-meta">No per-variant rows yet — wait for dials.</td></tr>`
+                        }</tbody>
+                    </table>
+                </div>
             </div>`;
         }
 
@@ -8268,8 +8610,62 @@ ${actionsRow}
                 lr.serverTime != null && String(lr.serverTime).trim()
                     ? escapeHtml(new Date(String(lr.serverTime).trim()).toLocaleString())
                     : '—';
+            const minN =
+                typeof lr.minSamplesPerVariant === 'number' && Number.isFinite(lr.minSamplesPerVariant)
+                    ? lr.minSamplesPerVariant
+                    : 30;
+            const statusStrip = renderTomAbMonitoringStatusStrip(ab);
+
             let body = '';
-            if (fe && Array.isArray(fe.variants) && fe.variants.length) {
+            if (ab && ab.mode === 'dimensional') {
+                const primDim =
+                    fe && fe.dimension && (fe.dimension === 'voice' || fe.dimension === 'opening' || fe.dimension === 'script')
+                        ? fe.dimension
+                        : '';
+                const goalMet = fe && fe.allVariantsMeetMinSamples;
+                const goalLine = goalMet
+                    ? `<p class="tom-ab-live-ready"><strong>Sample target reached</strong> (${formatNumber(
+                          minN
+                      )}+ per variant on the primary slice).${
+                          lr.notifyEmailConfigured ? ' Check email.' : ''
+                      }</p>`
+                    : `<p class="tom-ab-test-meta" style="margin:0 0 14px 0;">Goal: <strong>${formatNumber(
+                          minN
+                      )}</strong> leads per variant for each experiment below. <span class="tom-ab-live-pill">Primary in summary</span> matches the slice the server uses when several dimensions have data.</p>`;
+                const blocks = [
+                    renderTomAbDimensionMonitoringBlock('voice', 'Voice test', (ab && ab.voice) || {}, minN, primDim === 'voice'),
+                    renderTomAbDimensionMonitoringBlock(
+                        'opening',
+                        'Opening line test',
+                        (ab && ab.opening) || {},
+                        minN,
+                        primDim === 'opening'
+                    ),
+                    renderTomAbDimensionMonitoringBlock(
+                        'script',
+                        'Script test',
+                        (ab && ab.script) || {},
+                        minN,
+                        primDim === 'script'
+                    )
+                ].join('');
+                body = `${goalLine}${blocks}`;
+                if (!fe || !fe.variants || !fe.variants.length) {
+                    const hint =
+                        lr.reason === 'no_live_results_payload'
+                            ? 'Tap <strong>Refresh</strong> or reload the page.'
+                            : lr.reason === 'no_experiment_data'
+                              ? 'Totals will appear when leads are assigned to experiments.'
+                              : lr.reason === 'no_summary' || lr.reason === 'no_variants'
+                                ? 'Counts are still wiring up — tap <strong>Refresh</strong> or try uploading again.'
+                                : lr.reason === 'build_error'
+                                  ? 'Could not load counts (server error).'
+                                  : '';
+                    if (hint) {
+                        body = `<p class="tom-ab-test-meta" style="margin:0 0 12px 0;">${hint}</p>${body}`;
+                    }
+                }
+            } else if (fe && Array.isArray(fe.variants) && fe.variants.length) {
                 const dimLine =
                     fe.dimension && dimLabels[fe.dimension]
                         ? dimLabels[fe.dimension]
@@ -8277,32 +8673,13 @@ ${actionsRow}
                           ? escapeHtml(fe.dimension)
                           : 'Combined test';
                 const readyLine = fe.allVariantsMeetMinSamples
-                    ? `<p class="tom-ab-live-ready"><strong>Sample target reached</strong> (${formatNumber(lr.minSamplesPerVariant)}+ per variant).${
+                    ? `<p class="tom-ab-live-ready"><strong>Sample target reached</strong> (${formatNumber(minN)}+ per variant).${
                           lr.notifyEmailConfigured ? ' Check email.' : ''
                       }</p>`
                     : `<p class="tom-ab-test-meta" style="margin:0 0 10px 0;">Goal: <strong>${formatNumber(
-                          lr.minSamplesPerVariant
+                          minN
                       )}</strong> leads per variant.</p>`;
-                const rows = fe.variants
-                    .map((v) => {
-                        const rate =
-                            v.totalLeads > 0 && v.conversionRatePct != null
-                                ? `${Number(v.conversionRatePct).toFixed(1)}%`
-                                : '—';
-                        const sampleCell = v.meetsMinSamples
-                            ? `<span class="tom-ab-live-ok">✓ ${formatNumber(lr.minSamplesPerVariant)}+</span>`
-                            : `<span class="tom-ab-live-progress">${formatNumber(v.totalLeads)} / ${formatNumber(
-                                  lr.minSamplesPerVariant
-                              )}</span>`;
-                        return `<tr>
-                            <td><strong>${escapeHtml(v.variantName)}</strong></td>
-                            <td>${formatNumber(v.totalLeads)}</td>
-                            <td>${formatNumber(v.convertedLeads)}</td>
-                            <td>${escapeHtml(rate)}</td>
-                            <td>${sampleCell}</td>
-                        </tr>`;
-                    })
-                    .join('');
+                const rows = fe.variants.map((v) => tomAbMonitoringStatsRow(v, minN)).join('');
                 body = `<p class="tom-ab-test-meta" style="margin:0 0 8px 0;"><strong>${dimLine}</strong> · <code style="font-size:0.85em;">${escapeHtml(
                     fe.experimentName
                 )}</code></p>
@@ -8344,6 +8721,7 @@ ${actionsRow}
                         <button type="button" class="export-btn secondary tom-ab-live-refresh-btn" id="tomAbRefreshLiveResultsBtn">Refresh</button>
                     </div>
                 </div>
+                ${statusStrip}
                 ${body}
             </section>`;
         }
