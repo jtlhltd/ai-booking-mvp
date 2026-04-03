@@ -21223,8 +21223,9 @@ app.get('/api/clients/:key', async (req, res) => {
       clientKeys: Object.keys(c || {}).slice(0, 10)
     });
     
-    // Ensure we always return a properly formatted response
-    const response = { ok: true, client: c };
+    // Same list as outbound A/B self-service (comma-separated DASHBOARD_SELF_SERVICE_CLIENT_KEYS); drives outreach-only dashboard layout.
+    const dashboardOutreachMode = isDashboardSelfServiceClient(clientKey);
+    const response = { ok: true, client: { ...c, dashboardOutreachMode } };
     console.log(`[API] Sending response for ${clientKey}, response keys:`, Object.keys(response));
     
     // Check if response was already sent

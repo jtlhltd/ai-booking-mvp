@@ -1040,7 +1040,7 @@
             color: var(--primary);
         }
 
-        /* D2D Xpress (Tom): hide booking-calendar KPIs and related chrome */
+        /* Outreach dashboard (self-service client keys): hide booking-calendar KPIs and related chrome */
         body.tom-outreach-dashboard .tom-hide-for-outreach {
             display: none !important;
         }
@@ -5536,9 +5536,9 @@
                         </label>
                     </div>
                     <div class="tom-ab-setup-actions" style="margin-top:12px;">
-                        <button type="button" id="tomAbBundleDeployBtn" class="export-btn">Upload</button>
+                        <button type="button" id="tomAbCreativeUploadBtn" class="export-btn">Upload</button>
                     </div>
-                    <p id="tomAbBundleDeployMsg" class="tom-ab-test-meta" role="status" style="margin:8px 0 0 0;"></p>
+                    <p id="tomAbCreativeUploadMsg" class="tom-ab-test-meta" role="status" style="margin:8px 0 0 0;"></p>
 
                     <div id="tomAbTestSectionRoot" class="tom-ab-test-section-root tom-ab-test-section-root--below-upload"></div>
                 </section>
@@ -5933,19 +5933,26 @@
             const k = key.trim().toLowerCase();
             return k === DEMO_CLIENT_KEY || DEMO_URL_ALIASES.has(k);
         }
-        /** Tom's tenant (D2D Xpress): outreach-only UI — no appointments/ROI/conversion tiles; copy avoids booking/calendar framing */
-        const TOM_DASH_CLIENT_KEY = 'd2d-xpress-tom';
-        const TOM_OUTREACH_WORKFLOW_STEPS = [
+        /** Fallback until GET /api/clients/:key returns (must match server default for DASHBOARD_SELF_SERVICE_CLIENT_KEYS). */
+        const OUTREACH_DASHBOARD_CLIENT_KEYS_FALLBACK = ['d2d-xpress-tom'];
+        /** Outreach-only UI: no appointments/ROI/conversion tiles; copy avoids booking/calendar framing */
+        const OUTREACH_DASHBOARD_WORKFLOW_STEPS = [
             { icon: '📥', title: 'Leads received', desc: 'Contacts arrive from your lists, uploads, and integrations.' },
             { icon: '📞', title: 'Outbound calls', desc: 'We dial according to your hours and priorities and log every attempt.' },
             { icon: '📊', title: 'Outcomes tracked', desc: 'Reach, no pickup, and conversation signals stay visible here.' },
             { icon: '🔄', title: 'Follow-ups scheduled', desc: 'Retries queue after voicemail, busy, or no-answer when configured.' }
         ];
-        function isTomOutreachDashboard(clientKey) {
-            return clientKey === TOM_DASH_CLIENT_KEY;
+        /** True when server sent dashboardOutreachMode or key is in fallback list (before config loads). */
+        function isOutreachDashboardClient(clientKey) {
+            const k = clientKey != null ? String(clientKey).trim() : '';
+            if (!k) return false;
+            if (typeof window.__dashboardOutreachMode === 'boolean' && k === currentClient) {
+                return window.__dashboardOutreachMode;
+            }
+            return OUTREACH_DASHBOARD_CLIENT_KEYS_FALLBACK.includes(k);
         }
         function shouldShowRoiPanel(clientKey) {
-            return clientKey !== TOM_DASH_CLIENT_KEY;
+            return !isOutreachDashboardClient(clientKey);
         }
         function applyRoiPanelVisibility(clientKey) {
             const el = document.getElementById('roiPanel');
@@ -5955,16 +5962,12 @@
             el.setAttribute('aria-hidden', show ? 'false' : 'true');
         }
         function applyTomOutreachDashboardMode(clientKey) {
-            const on = isTomOutreachDashboard(clientKey);
+            const on = isOutreachDashboardClient(clientKey);
             document.body.classList.toggle('tom-outreach-dashboard', on);
             if (on) {
-                document.title = 'Client Dashboard — D2D Xpress Outreach';
+                document.title = 'Outreach dashboard';
                 const chip = document.getElementById('conciergeStatus');
                 if (chip) chip.textContent = '✓ Outreach active';
-                const intSub = document.getElementById('integrationsCardSubtitle');
-                if (intSub) {
-                    intSub.textContent = 'Channels connected for outreach (voice, SMS, and related integrations).';
-                }
                 const actT = document.getElementById('activeTitle');
                 const actS = document.getElementById('activeSubtitle');
                 if (actT) actT.textContent = 'Your outreach is active';
@@ -6759,7 +6762,7 @@ ${actionsRow}
                 if (hasClientConfig && (config.name || config.displayName || config.display_name)) {
                     clientNameEl.textContent = businessName;
                 } else {
-                    clientNameEl.textContent = isTomOutreachDashboard(config.key)
+                    clientNameEl.textContent = isOutreachDashboardClient(config.key)
                         ? 'Your outreach dashboard'
                         : 'Your Concierge Dashboard';
                 }
@@ -6773,8 +6776,8 @@ ${actionsRow}
             }
             
             // Store messaging for workflow rendering
-            config.customWorkflow = isTomOutreachDashboard(config.key)
-                ? TOM_OUTREACH_WORKFLOW_STEPS
+            config.customWorkflow = isOutreachDashboardClient(config.key)
+                ? OUTREACH_DASHBOARD_WORKFLOW_STEPS
                 : messaging.workflow;
             
             // Personalize all dashboard text with business name
@@ -6887,7 +6890,7 @@ ${actionsRow}
             if (statusCardCalls) statusCardCalls.textContent = `Calls We've Made for ${businessName}`;
             
             const statusCardConversion = document.getElementById('statusCardConversion');
-            if (statusCardConversion && !isTomOutreachDashboard(currentClient)) {
+            if (statusCardConversion && !isOutreachDashboardClient(currentClient)) {
                 statusCardConversion.textContent = `${businessName}'s Conversion Rate`;
             }
             
@@ -6901,34 +6904,34 @@ ${actionsRow}
             // Update active indicator
             const activeTitle = document.getElementById('activeTitle');
             if (activeTitle) {
-                activeTitle.textContent = isTomOutreachDashboard(currentClient)
+                activeTitle.textContent = isOutreachDashboardClient(currentClient)
                     ? `${businessName}'s outreach is active`
                     : `${businessName}'s concierge is active`;
             }
             
             const activeSubtitle = document.getElementById('activeSubtitle');
             if (activeSubtitle) {
-                activeSubtitle.textContent = isTomOutreachDashboard(currentClient)
+                activeSubtitle.textContent = isOutreachDashboardClient(currentClient)
                     ? `Dialling and logging activity for ${businessName}`
                     : `Working on ${businessName}'s leads right now`;
             }
 
             const conciergeChip = document.getElementById('conciergeStatus');
             if (conciergeChip) {
-                conciergeChip.textContent = isTomOutreachDashboard(currentClient) ? '✓ Outreach active' : '✓ Concierge Active';
+                conciergeChip.textContent = isOutreachDashboardClient(currentClient) ? '✓ Outreach active' : '✓ Concierge Active';
             }
             
             // Update card subtitles
             const callQualitySubtitle = document.getElementById('callQualitySubtitle');
             if (callQualitySubtitle) {
-                callQualitySubtitle.textContent = isTomOutreachDashboard(currentClient)
+                callQualitySubtitle.textContent = isOutreachDashboardClient(currentClient)
                     ? `Last 7 days of outbound dials for ${businessName}: pick-up rate, persistence, talk time, and dial patterns (server time).`
                     : `How effective our calls are for ${businessName} (7-day window).`;
             }
 
             const callInsightsSubtitle = document.getElementById('callInsightsSubtitle');
             if (callInsightsSubtitle) {
-                callInsightsSubtitle.textContent = isTomOutreachDashboard(currentClient)
+                callInsightsSubtitle.textContent = isOutreachDashboardClient(currentClient)
                     ? `Easy-to-read call timing tips for ${businessName} — focused on reaching people, not calendar bookings.`
                     : `Plain-English tips from your call times and answer rates.`;
             }
@@ -6939,7 +6942,7 @@ ${actionsRow}
             }
             
             const appointmentsSubtitle = document.getElementById('appointmentsSubtitle');
-            if (appointmentsSubtitle && !isTomOutreachDashboard(currentClient)) {
+            if (appointmentsSubtitle && !isOutreachDashboardClient(currentClient)) {
                 appointmentsSubtitle.textContent = `Appointments we booked for ${businessName}.`;
             }
             
@@ -6952,21 +6955,21 @@ ${actionsRow}
             // Update more card subtitles
             const conversionFunnelSubtitle = document.getElementById('conversionFunnelSubtitle');
             if (conversionFunnelSubtitle) {
-                conversionFunnelSubtitle.textContent = isTomOutreachDashboard(currentClient)
+                conversionFunnelSubtitle.textContent = isOutreachDashboardClient(currentClient)
                     ? `Real counts for ${businessName}. Percentages are share of CRM leads. Reached + no pickup = everyone we dialed (see Calls tile).`
                     : `Independent counts for ${businessName} — not a strict funnel. Bar length compares rows; % is vs total leads.`;
             }
             
             const weeklyActivitySubtitle = document.getElementById('weeklyActivitySubtitle');
             if (weeklyActivitySubtitle) {
-                weeklyActivitySubtitle.textContent = isTomOutreachDashboard(currentClient)
+                weeklyActivitySubtitle.textContent = isOutreachDashboardClient(currentClient)
                     ? `Daily outbound attempts (last 7 days) for ${businessName}. Point at a bar for durations, reach, voicemail, and week share. Retries can exceed unique leads dialed.`
                     : `Daily call attempts (last 7 days) for ${businessName}. Point at a bar for detailed per-day stats. Retries inflate totals vs unique leads dialed.`;
             }
             
             const todaysActivitySubtitle = document.getElementById('todaysActivitySubtitle');
             if (todaysActivitySubtitle) {
-                todaysActivitySubtitle.textContent = isTomOutreachDashboard(currentClient)
+                todaysActivitySubtitle.textContent = isOutreachDashboardClient(currentClient)
                     ? `Rolling 24-hour outreach, all-time dialing totals, and reach metrics for ${businessName}.`
                     : `Rolling 24 hours, all-time dialing, and how fast we reach new leads for ${businessName}.`;
             }
@@ -6983,14 +6986,14 @@ ${actionsRow}
             
             const integrationsSub = document.getElementById('integrationsCardSubtitle');
             if (integrationsSub) {
-                integrationsSub.textContent = isTomOutreachDashboard(currentClient)
+                integrationsSub.textContent = isOutreachDashboardClient(currentClient)
                     ? `Channels connected for ${businessName}'s outreach (voice, SMS, and related integrations).`
                     : `Everything connected to handle your bookings.`;
             }
 
             const pipelineH = document.getElementById('pipelineSnapshotHeading');
             if (pipelineH) {
-                pipelineH.textContent = isTomOutreachDashboard(currentClient) ? '📊 Engagement snapshot' : '📊 Pipeline snapshot';
+                pipelineH.textContent = isOutreachDashboardClient(currentClient) ? '📊 Engagement snapshot' : '📊 Pipeline snapshot';
             }
         }
         
@@ -7182,7 +7185,7 @@ ${actionsRow}
             // statusHintCalls already set above with answered/not answered breakdown
             const convHint = document.getElementById('statusHintConversion');
             if (convHint) {
-                convHint.textContent = isTomOutreachDashboard(currentClient)
+                convHint.textContent = isOutreachDashboardClient(currentClient)
                     ? `Pipeline outcome rate: ${winRate} — vs unique leads dialed (tile hidden here; see Call Quality for connect stats)`
                     : `Win rate: ${winRate}`;
             }
@@ -7204,7 +7207,7 @@ ${actionsRow}
         function renderRecentActivity(data) {
             const container = document.getElementById('recent-activity');
             if (!container) return;
-            const tom = isTomOutreachDashboard(currentClient);
+            const tom = isOutreachDashboardClient(currentClient);
             const m = data.metrics || {};
             const n = (v, fb = 0) => {
                 const x = v != null ? Number(v) : NaN;
@@ -7659,7 +7662,7 @@ ${actionsRow}
         function renderAppointments(appointments = []) {
             const container = document.getElementById('upcoming-appointments');
             if (!container) return;
-            if (isTomOutreachDashboard(currentClient)) {
+            if (isOutreachDashboardClient(currentClient)) {
                 container.innerHTML = '';
                 return;
             }
@@ -7772,7 +7775,7 @@ ${actionsRow}
                     }
                     if ((d.bookedRows ?? 0) > 0) {
                         lines.push(
-                            isTomOutreachDashboard(currentClient)
+                            isOutreachDashboardClient(currentClient)
                                 ? `${formatNumber(d.bookedRows)} interested / positive signal${d.bookedRows === 1 ? '' : 's'}`
                                 : `${formatNumber(d.bookedRows)} booked outcome${d.bookedRows === 1 ? '' : 's'}`
                         );
@@ -7878,7 +7881,7 @@ ${actionsRow}
             }
             const weeklySub = document.getElementById('weeklyActivitySubtitle');
             if (weeklySub) {
-                weeklySub.textContent = isTomOutreachDashboard(currentClient)
+                weeklySub.textContent = isOutreachDashboardClient(currentClient)
                     ? 'Bar height = outbound attempts that day. Point at a bar for durations, reach, voicemail, and share of the week.'
                     : 'Bar height = call attempts that day. Point at a bar for detailed stats. Retries inflate totals vs unique leads dialed.';
             }
@@ -7899,7 +7902,7 @@ ${actionsRow}
 
 
         async function renderSystemStatus(config) {
-            if (isTomOutreachDashboard(currentClient)) return;
+            if (isOutreachDashboardClient(currentClient)) return;
             const statusPhoneEl = document.getElementById('statusPhone');
             const statusCoverageEl = document.getElementById('statusCoverage');
             if (statusPhoneEl) statusPhoneEl.textContent = config.phone || 'Not supplied';
@@ -7982,7 +7985,7 @@ ${actionsRow}
                 .filter(Boolean)
                 .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
                 .join(' ');
-            if (isTomOutreachDashboard(currentClient)) {
+            if (isOutreachDashboardClient(currentClient)) {
                 if (out.toLowerCase() === 'booked') return 'Interested';
                 out = out.replace(/\bBooked\b/g, 'Interested');
             }
@@ -8825,7 +8828,7 @@ ${actionsRow}
 
             let body = '';
             const tomOutreachUi =
-                typeof isTomOutreachDashboard === 'function' && isTomOutreachDashboard(currentClient);
+                typeof isOutreachDashboardClient === 'function' && isOutreachDashboardClient(currentClient);
             if (ab && ab.mode === 'dimensional') {
                 body = renderTomAbDimensionalMonitoringBody(ab, lr, fe, minN);
             } else if (fe && Array.isArray(fe.variants) && fe.variants.length) {
@@ -8913,7 +8916,7 @@ ${actionsRow}
         }
 
         function initTomAbTestSetupPanel() {
-            if (!isTomOutreachDashboard(currentClient)) return;
+            if (!isOutreachDashboardClient(currentClient)) return;
             setTomAbActiveUploadDimension(getTomAbActiveUploadDimension());
             const sec = document.getElementById('tomAbOutreachAbSection');
             if (sec && sec.dataset.tomAbCreativesPreviewBound !== '1') {
@@ -8926,7 +8929,7 @@ ${actionsRow}
                     flushTomAbVisibleFieldToDraft(getTomAbActiveUploadDimension());
                     clearTimeout(previewT);
                     previewT = setTimeout(() => {
-                        if (isTomOutreachDashboard(currentClient)) renderTomAbTestSection(dashboardData);
+                        if (isOutreachDashboardClient(currentClient)) renderTomAbTestSection(dashboardData);
                     }, 140);
                 });
                 sec.addEventListener('click', (e) => {
@@ -8937,10 +8940,10 @@ ${actionsRow}
                     if (dim !== 'voice' && dim !== 'opening' && dim !== 'script') return;
                     flushTomAbVisibleFieldToDraft(getTomAbActiveUploadDimension());
                     setTomAbActiveUploadDimension(dim);
-                    if (isTomOutreachDashboard(currentClient)) renderTomAbTestSection(dashboardData);
+                    if (isOutreachDashboardClient(currentClient)) renderTomAbTestSection(dashboardData);
                 });
             }
-            const bbtn = document.getElementById('tomAbBundleDeployBtn');
+            const bbtn = document.getElementById('tomAbCreativeUploadBtn');
             if (bbtn && bbtn.dataset.bound !== '1') {
                 bbtn.dataset.bound = '1';
                 bbtn.addEventListener('click', () => tomAbDimensionImportUpload());
@@ -8960,7 +8963,7 @@ ${actionsRow}
         }
 
         async function tomAbDimensionImportUpload() {
-            const msg = document.getElementById('tomAbBundleDeployMsg');
+            const msg = document.getElementById('tomAbCreativeUploadMsg');
             const dim = getTomAbActiveUploadDimension();
             flushTomAbVisibleFieldToDraft(dim);
             let val = '';
@@ -8985,7 +8988,7 @@ ${actionsRow}
                       ? JSON.stringify({ firstMessage: val })
                       : JSON.stringify({ script: val });
             if (msg) msg.textContent = 'Uploading…';
-            const btn = document.getElementById('tomAbBundleDeployBtn');
+            const btn = document.getElementById('tomAbCreativeUploadBtn');
             if (btn) btn.disabled = true;
             try {
                 const res = await fetch(
@@ -9023,7 +9026,7 @@ ${actionsRow}
         function renderTomAbTestSection(data) {
             const root = document.getElementById('tomAbTestSectionRoot');
             if (!root) return;
-            if (!isTomOutreachDashboard(currentClient)) {
+            if (!isOutreachDashboardClient(currentClient)) {
                 root.innerHTML = '';
                 return;
             }
@@ -9274,7 +9277,7 @@ ${actionsRow}
         }
 
         function renderWorkflow(steps = []) {
-            if (isTomOutreachDashboard(currentClient)) return;
+            if (isOutreachDashboardClient(currentClient)) return;
             const container = document.getElementById('workflow');
             if (!container) return;
             if (!Array.isArray(steps) || steps.length === 0) {
@@ -9303,7 +9306,7 @@ ${actionsRow}
             const noPickupRaw = m.uniqueLeadsNoPickup ?? m.callsNotAnswered ?? 0;
             const noPickup = Math.min(Math.max(0, noPickupRaw), contacted || noPickupRaw);
             const booked = data.bookingsThisWeek || 0;
-            const tom = isTomOutreachDashboard(currentClient);
+            const tom = isOutreachDashboardClient(currentClient);
 
             const stages = tom
                 ? [
@@ -10102,7 +10105,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const sentimentRows = (patterns.sentimentBreakdown || []).slice(0, 8);
 
                 const periodDays = String(payload.period_days || payload.periodDays || 30);
-                const tomInsights = isTomOutreachDashboard(clientKey);
+                const tomInsights = isOutreachDashboardClient(clientKey);
                 const hc = routing?.howCalculated || {};
                 const tzTile = escapeHtml(hc.reportTimeZone || routing?.timeZone || 'UTC');
                 const minRank = hc.minCallsPerSlotForRanking ?? 6;
@@ -10992,7 +10995,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 if (document.visibilityState !== 'visible') return;
                 if (followUpEditing) return;
                 loadFollowUpQueue(currentClient, { page: followUpQueuePage, silent: true });
-            }, isTomOutreachDashboard(currentClient) ? 120000 : 90000);
+            }, 90000);
         }
 
         async function viewLeadTimeline(leadId, name) {
@@ -11512,7 +11515,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         async function renderCalendarDetails(data) {
             const container = document.getElementById('calendar-details');
             if (!container) return;
-            if (isTomOutreachDashboard(currentClient)) {
+            if (isOutreachDashboardClient(currentClient)) {
                 container.innerHTML = '';
                 return;
             }
@@ -11750,6 +11753,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         
                         if (data.ok && data.client) {
                             clientConfig = data.client;
+                            window.__dashboardOutreachMode =
+                                typeof clientConfig.dashboardOutreachMode === 'boolean'
+                                    ? clientConfig.dashboardOutreachMode
+                                    : OUTREACH_DASHBOARD_CLIENT_KEYS_FALLBACK.includes(currentClient);
                             console.log('[DASHBOARD] Loaded client config:', {
                                 name: clientConfig.name || clientConfig.displayName,
                                 description: clientConfig.description,
@@ -11831,6 +11838,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             // updateHeader will call applyClientBranding, so we don't need to call it separately
             // But ensure branding is applied even if updateHeader doesn't do it
             updateHeader(config, !!clientConfig);
+
+            applyRoiPanelVisibility(currentClient);
+            applyTomOutreachDashboardMode(currentClient);
+            initTomAbTestSetupPanel();
             
             // Always apply branding if available (as a fallback, in case updateHeader didn't)
             // This ensures colors and branding work even with partial data
@@ -11909,7 +11920,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             renderCalls(callsToRender);
             renderTomAbTestSection(dashboardData);
             renderWorkflow(
-                isTomOutreachDashboard(currentClient)
+                isOutreachDashboardClient(currentClient)
                     ? []
                     : (config.customWorkflow || config.workflow || CLIENT_CONFIG.demo_client.workflow)
             );
@@ -11943,7 +11954,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 });
             }, 100);
 
-            const dashboardPollMs = isTomOutreachDashboard(currentClient) ? 120000 : 60000;
+            const dashboardPollMs = 60000;
             setInterval(async () => {
                 if (document.visibilityState === 'hidden') return;
                 if (dashboardPollInFlight) return;
@@ -13141,7 +13152,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         }
 
         async function loadIntegrationHealth(clientKey) {
-            if (isTomOutreachDashboard(clientKey)) return;
+            if (isOutreachDashboardClient(clientKey)) return;
             if (clientKey === DEMO_CLIENT_KEY) {
                 renderIntegrationStatus(DEMO_INTEGRATIONS);
                 return;
