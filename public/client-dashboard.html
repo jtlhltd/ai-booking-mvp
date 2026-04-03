@@ -8420,6 +8420,17 @@ ${actionsRow}
                 </div>`;
         }
 
+        function tomAbVoiceSlotsAllSameId(vars) {
+            if (!Array.isArray(vars) || vars.length < 2) return false;
+            const ids = vars.map((v) => {
+                const t = v && v.tested;
+                return t && t.voiceId != null ? String(t.voiceId).trim() : '';
+            });
+            if (!ids.length || ids.some((id) => !id)) return false;
+            const first = ids[0];
+            return ids.every((id) => id === first);
+        }
+
         function renderTomAbCreativeDimColumn(dimKey, title, slot) {
             const exp = slot && slot.experimentName ? String(slot.experimentName).trim() : '';
             const vars = slot && slot.summary && Array.isArray(slot.summary.variants) ? slot.summary.variants : [];
@@ -8446,9 +8457,14 @@ ${actionsRow}
                     )
                     .join('');
             }
+            const sameVoiceNote =
+                dimKey === 'voice' && vars.length >= 2 && tomAbVoiceSlotsAllSameId(vars)
+                    ? `<p class="tom-ab-test-meta" role="note" style="margin:12px 0 0 0;">You uploaded <strong>one</strong> voice ID, so <strong>control</strong> and <strong>variant_b</strong> both show it on purpose: A/B needs two arms so leads can be assigned and counted separately. To <em>compare two different voices</em>, upload JSON with a <code>variants</code> array (two objects, each with <code>name</code> and <code>voiceId</code> or <code>voice</code>).</p>`
+                    : '';
             return `<div class="tom-ab-creative-dim-col" data-tom-ab-creative-dim="${dimKey}">
                 <h5 class="tom-ab-creative-dim-title">${escapeHtml(title)}</h5>
                 ${inner}
+                ${sameVoiceNote}
             </div>`;
         }
 
