@@ -9,6 +9,7 @@ import {
   isOutboundAbLivePickupOutcome
 } from './lib/outbound-ab-live-pickup.js';
 import { getCallAnalyticsEnvOverrideIso } from './lib/call-analytics-cutoff.js';
+import { activeRowsMatchOutboundAbStopSlice } from './lib/outbound-ab-stop-slice.js';
 
 const dbType = (process.env.DB_TYPE || '').toLowerCase();
 let pool = null;
@@ -2936,6 +2937,32 @@ function activeRowsAreScriptOnly(rows) {
     if (!p.hasScript || p.hasVoice || p.hasOpening) return false;
   }
   return true;
+}
+
+/**
+ * Deactivate every active experiment whose variants match this outbound A/B dimension slice
+ * (dimensional control `{}` + challenger, or legacy “all variants carry the same slice field”).
+ * Used when stopping a dimension so DB state cannot disagree with cleared vapi slots.
+ */
+export async function deactivateAllActiveOutboundAbSliceExperiments(clientKey, dimension) {
+  const d = String(dimension || '').trim().toLowerCase();
+  if (!clientKey || (d !== 'voice' && d !== 'opening' && d !== 'script')) return 0;
+  const active = await getActiveABTests(clientKey);
+  const byName = new Map();
+  for (const row of active) {
+    const n = row.experiment_name != null ? String(row.experiment_name).trim() : '';
+    if (!n) continue;
+    if (!byName.has(n)) byName.set(n, []);
+    byName.get(n).push(row);
+  }
+  let count = 0;
+  for (const [name, rows] of byName) {
+    if (activeRowsMatchOutboundAbStopSlice(rows, d)) {
+      await deactivateAbTestExperimentsByName(clientKey, name);
+      count += 1;
+    }
+  }
+  return count;
 }
 
 /**

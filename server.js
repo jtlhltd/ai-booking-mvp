@@ -24861,7 +24861,8 @@ async function runOutboundAbDimensionStop(clientKey, dimRaw, res) {
       return;
     }
     const { OUTBOUND_AB_VAPI_KEYS } = await import('./lib/outbound-ab-variant.js');
-    const { deactivateAbTestExperimentsByName } = await import('./db.js');
+    const { deactivateAbTestExperimentsByName, deactivateAllActiveOutboundAbSliceExperiments } =
+      await import('./db.js');
     const { vapiPatchAfterStopOutboundAbDimension } = await import('./lib/outbound-ab-focus.js');
     const { updateClientConfig } = await import('./lib/client-onboarding.js');
     const d = String(dimRaw || '').trim().toLowerCase();
@@ -24874,11 +24875,13 @@ async function runOutboundAbDimensionStop(clientKey, dimRaw, res) {
       lockClient?.vapi && typeof lockClient.vapi === 'object'
         ? String(lockClient.vapi[vapiKey] || '').trim()
         : '';
-    if (!expName) {
-      res.status(404).json({ ok: false, error: 'No experiment is configured for this dimension.' });
-      return;
+    if (expName) {
+      await deactivateAbTestExperimentsByName(clientKey, expName);
     }
-    await deactivateAbTestExperimentsByName(clientKey, expName);
+    const sliceExperimentsDeactivated = await deactivateAllActiveOutboundAbSliceExperiments(
+      clientKey,
+      d
+    );
     const vapiPatch = vapiPatchAfterStopOutboundAbDimension(lockClient.vapi, d);
     await updateClientConfig(clientKey, { vapi: vapiPatch });
     invalidateClientCache(clientKey);
@@ -24908,7 +24911,8 @@ async function runOutboundAbDimensionStop(clientKey, dimRaw, res) {
     res.json({
       ok: true,
       dimension: d,
-      stoppedExperimentName: expName,
+      stoppedExperimentName: expName || null,
+      sliceExperimentsDeactivated,
       dashboardDial: {
         dialActiveDimensions,
         dialWarning,
