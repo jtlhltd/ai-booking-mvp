@@ -8680,7 +8680,7 @@ ${actionsRow}
                     ? lrRaw
                     : {
                           serverTime: new Date().toISOString(),
-                          minSamplesPerVariant: 30,
+                          minSamplesPerVariant: 50,
                           notifyEmailConfigured: false,
                           focusExperiment: null,
                           reason: 'no_live_results_payload'
@@ -8694,7 +8694,7 @@ ${actionsRow}
             const minN =
                 typeof lr.minSamplesPerVariant === 'number' && Number.isFinite(lr.minSamplesPerVariant)
                     ? lr.minSamplesPerVariant
-                    : 30;
+                    : 50;
             const statusStrip = renderTomAbMonitoringStatusStrip(ab);
 
             let body = '';

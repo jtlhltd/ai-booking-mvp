@@ -57,8 +57,8 @@ test('experimentMeetsSampleThreshold: high assigned count does not substitute fo
 
 test('parseMinSamplesPerVariant: vapi and default', () => {
   assert.equal(parseMinSamplesPerVariant({ outboundAbMinSamplesPerVariant: '50' }), 50);
-  assert.equal(parseMinSamplesPerVariant({ outboundAbMinSamplesPerVariant: '1' }), 30);
-  assert.equal(parseMinSamplesPerVariant({}), 30);
+  assert.equal(parseMinSamplesPerVariant({ outboundAbMinSamplesPerVariant: '1' }), 50);
+  assert.equal(parseMinSamplesPerVariant({}), 50);
 });
 
 test('resolveSampleReadyNotifyEmail: YOUR_EMAIL', () => {

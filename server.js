@@ -9520,7 +9520,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       console.error('[DEMO DASHBOARD] outbound A/B liveResults error:', liveResErr?.message || liveResErr);
       liveResults = {
         serverTime: new Date().toISOString(),
-        minSamplesPerVariant: 30,
+        minSamplesPerVariant: 50,
         notifyEmailConfigured: false,
         focusExperiment: null,
         reason: 'build_error'
