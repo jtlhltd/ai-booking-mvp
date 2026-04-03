@@ -2583,6 +2583,42 @@ export async function deactivateAbTestExperimentsByName(clientKey, experimentNam
   );
 }
 
+/** Prefer `variant_b`, else first non-control variant name for an active experiment. */
+export async function resolveChallengerVariantNameForExperiment(clientKey, experimentName) {
+  const name = experimentName != null ? String(experimentName).trim() : '';
+  if (!clientKey || !name) return null;
+  const { rows } = await query(
+    `
+    SELECT variant_name FROM ab_test_experiments
+    WHERE client_key = $1 AND experiment_name = $2 AND is_active = TRUE
+      AND LOWER(variant_name) != 'control'
+    ORDER BY CASE WHEN LOWER(variant_name) = 'variant_b' THEN 0 ELSE 1 END, variant_name ASC
+    LIMIT 1
+  `,
+    [clientKey, name]
+  );
+  const vn = rows[0]?.variant_name;
+  return vn != null && String(vn).trim() ? String(vn).trim() : null;
+}
+
+/** In-place update so ab_test_results rows keep the same experiment_id. */
+export async function updateActiveAbTestVariantConfig({ clientKey, experimentName, variantName, variantConfig }) {
+  const en = experimentName != null ? String(experimentName).trim() : '';
+  const vn = variantName != null ? String(variantName).trim() : '';
+  if (!clientKey || !en || !vn) return null;
+  const cfg = variantConfig && typeof variantConfig === 'object' ? variantConfig : {};
+  const { rows } = await query(
+    `
+    UPDATE ab_test_experiments
+    SET variant_config = $4::jsonb
+    WHERE client_key = $1 AND experiment_name = $2 AND variant_name = $3 AND is_active = TRUE
+    RETURNING *
+  `,
+    [clientKey, en, vn, JSON.stringify(cfg)]
+  );
+  return rows[0] || null;
+}
+
 export async function recordABTestResult({ experimentId, clientKey, leadPhone, variantName, outcome, outcomeData = null }) {
   const outcomeDataJson = outcomeData ? JSON.stringify(outcomeData) : null;
   

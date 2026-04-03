@@ -24757,6 +24757,137 @@ async function runOutboundAbTestSetup(clientKey, body, res) {
   }
 }
 
+/** Update challenger variant_config in place (same experiment row ids — assignments stay valid). */
+async function runOutboundAbChallengerUpdate(clientKey, body, res) {
+  try {
+    const { isOutboundAbReviewPending, OUTBOUND_AB_REVIEW_PENDING_MESSAGE } = await import(
+      './lib/outbound-ab-review-lock.js'
+    );
+    invalidateClientCache(clientKey);
+    const lockClient = await getFullClient(clientKey);
+    if (isOutboundAbReviewPending(lockClient?.vapi)) {
+      res.status(423).json({ ok: false, error: OUTBOUND_AB_REVIEW_PENDING_MESSAGE });
+      return;
+    }
+    const { OUTBOUND_AB_VAPI_KEYS } = await import('./lib/outbound-ab-variant.js');
+    const dimRaw = body?.dimension != null ? String(body.dimension).trim().toLowerCase() : '';
+    if (dimRaw !== 'voice' && dimRaw !== 'opening' && dimRaw !== 'script') {
+      res.status(400).json({ ok: false, error: 'dimension must be voice, opening, or script' });
+      return;
+    }
+    const vapiKey = OUTBOUND_AB_VAPI_KEYS[dimRaw];
+    const expName =
+      lockClient?.vapi && typeof lockClient.vapi === 'object'
+        ? String(lockClient.vapi[vapiKey] || '').trim()
+        : '';
+    if (!expName) {
+      res.status(404).json({
+        ok: false,
+        error: 'No active outbound A/B experiment configured for this dimension.'
+      });
+      return;
+    }
+    const { resolveChallengerVariantNameForExperiment, updateActiveAbTestVariantConfig } = await import('./db.js');
+    const challengerName = await resolveChallengerVariantNameForExperiment(clientKey, expName);
+    if (!challengerName) {
+      res.status(404).json({ ok: false, error: 'No challenger variant row found for this experiment.' });
+      return;
+    }
+    let ch = '';
+    if (dimRaw === 'voice') {
+      ch = body.voice != null ? String(body.voice).trim() : '';
+    } else if (dimRaw === 'opening') {
+      ch = body.firstMessage != null ? String(body.firstMessage).trim() : '';
+    } else {
+      ch =
+        body.script != null
+          ? String(body.script).trim()
+          : body.systemMessage != null
+            ? String(body.systemMessage).trim()
+            : '';
+    }
+    if (!ch) {
+      res.status(400).json({ ok: false, error: 'Challenger value is empty' });
+      return;
+    }
+    const { resolveOutboundAbBaselineForDimension } = await import('./lib/outbound-ab-baseline.js');
+    const baseline = await resolveOutboundAbBaselineForDimension(clientKey, lockClient, dimRaw, {
+      excludeSameDimensionExperiment: true
+    });
+    if (baseline && ch === baseline) {
+      res.status(400).json({
+        ok: false,
+        error: 'New value matches your live assistant for this dimension. Use a different challenger.'
+      });
+      return;
+    }
+    const config =
+      dimRaw === 'voice' ? { voice: ch } : dimRaw === 'opening' ? { firstMessage: ch } : { script: ch };
+    const updated = await updateActiveAbTestVariantConfig({
+      clientKey,
+      experimentName: expName,
+      variantName: challengerName,
+      variantConfig: config
+    });
+    if (!updated) {
+      res.status(500).json({
+        ok: false,
+        error: 'Could not update challenger (experiment may have been deactivated).'
+      });
+      return;
+    }
+    res.json({
+      ok: true,
+      experimentName: expName,
+      dimension: dimRaw,
+      variantName: challengerName
+    });
+  } catch (error) {
+    console.error('[OUTBOUND AB CHALLENGER PATCH]', error);
+    res.status(500).json({ ok: false, error: error.message || String(error) });
+  }
+}
+
+/** Deactivate experiment for one dimension and clear vapi slot (+ refocus if needed). */
+async function runOutboundAbDimensionStop(clientKey, dimRaw, res) {
+  try {
+    const { isOutboundAbReviewPending, OUTBOUND_AB_REVIEW_PENDING_MESSAGE } = await import(
+      './lib/outbound-ab-review-lock.js'
+    );
+    invalidateClientCache(clientKey);
+    const lockClient = await getFullClient(clientKey);
+    if (isOutboundAbReviewPending(lockClient?.vapi)) {
+      res.status(423).json({ ok: false, error: OUTBOUND_AB_REVIEW_PENDING_MESSAGE });
+      return;
+    }
+    const { OUTBOUND_AB_VAPI_KEYS } = await import('./lib/outbound-ab-variant.js');
+    const { deactivateAbTestExperimentsByName } = await import('./db.js');
+    const { vapiPatchAfterStopOutboundAbDimension } = await import('./lib/outbound-ab-focus.js');
+    const { updateClientConfig } = await import('./lib/client-onboarding.js');
+    const d = String(dimRaw || '').trim().toLowerCase();
+    if (d !== 'voice' && d !== 'opening' && d !== 'script') {
+      res.status(400).json({ ok: false, error: 'dimension must be voice, opening, or script' });
+      return;
+    }
+    const vapiKey = OUTBOUND_AB_VAPI_KEYS[d];
+    const expName =
+      lockClient?.vapi && typeof lockClient.vapi === 'object'
+        ? String(lockClient.vapi[vapiKey] || '').trim()
+        : '';
+    if (!expName) {
+      res.status(404).json({ ok: false, error: 'No experiment is configured for this dimension.' });
+      return;
+    }
+    await deactivateAbTestExperimentsByName(clientKey, expName);
+    const vapiPatch = vapiPatchAfterStopOutboundAbDimension(lockClient.vapi, d);
+    await updateClientConfig(clientKey, { vapi: vapiPatch });
+    res.json({ ok: true, dimension: d, stoppedExperimentName: expName });
+  } catch (error) {
+    console.error('[OUTBOUND AB DIMENSION STOP]', error);
+    res.status(500).json({ ok: false, error: error.message || String(error) });
+  }
+}
+
 // Tom / dashboard: create outbound A/B variants for one dimension (voice | opening | script) + set matching vapi key
 app.post('/api/clients/:clientKey/outbound-ab-test', async (req, res) => {
   const { clientKey } = req.params;
@@ -24767,6 +24898,30 @@ app.post('/api/clients/:clientKey/outbound-ab-test', async (req, res) => {
     return res.status(401).json({ ok: false, error: 'Unauthorized' });
   }
   await runOutboundAbTestSetup(clientKey, req.body, res);
+});
+
+// Dashboard / API: update uploaded challenger without recreating experiment rows (keeps lead assignments).
+app.patch('/api/clients/:clientKey/outbound-ab-challenger', async (req, res) => {
+  const { clientKey } = req.params;
+  const apiKey = req.get('X-API-Key');
+  const keyOk = apiKey && apiKey === process.env.API_KEY;
+  const selfOk = isDashboardSelfServiceClient(clientKey);
+  if (!keyOk && !selfOk) {
+    return res.status(401).json({ ok: false, error: 'Unauthorized' });
+  }
+  await runOutboundAbChallengerUpdate(clientKey, req.body, res);
+});
+
+// Dashboard / API: stop dimensional test (deactivate + clear tenant vapi experiment slot).
+app.delete('/api/clients/:clientKey/outbound-ab-dimension/:dimension', async (req, res) => {
+  const { clientKey, dimension } = req.params;
+  const apiKey = req.get('X-API-Key');
+  const keyOk = apiKey && apiKey === process.env.API_KEY;
+  const selfOk = isDashboardSelfServiceClient(clientKey);
+  if (!keyOk && !selfOk) {
+    return res.status(401).json({ ok: false, error: 'Unauthorized' });
+  }
+  await runOutboundAbDimensionStop(clientKey, String(dimension || '').trim().toLowerCase(), res);
 });
 
 // Tom / dashboard: same as outbound-ab-test but body is JSON text + dimension (optional experimentName in JSON or top-level)

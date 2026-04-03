@@ -3,7 +3,8 @@
 import { describe, test, assertEqual, printSummary, resetStats } from '../utils/test-helpers.js';
 import {
   resolveOutboundAbDimensionsForDial,
-  outboundAbDialWarning
+  outboundAbDialWarning,
+  vapiPatchAfterStopOutboundAbDimension
 } from '../../lib/outbound-ab-focus.js';
 
 resetStats();
@@ -63,6 +64,48 @@ describe('outbound-ab-focus', () => {
       focusDimension: ''
     });
     assertEqual(w != null && w.length > 10, true);
+  });
+
+  test('vapiPatchAfterStop clears slot and refocuses when focus was stopped dim', () => {
+    const p = vapiPatchAfterStopOutboundAbDimension(
+      {
+        outboundAbVoiceExperiment: 'ev',
+        outboundAbOpeningExperiment: 'eo',
+        outboundAbScriptExperiment: '',
+        outboundAbFocusDimension: 'voice'
+      },
+      'voice'
+    );
+    assertEqual(p.outboundAbVoiceExperiment, '');
+    assertEqual(p.outboundAbOpeningExperiment, undefined);
+    assertEqual(p.outboundAbFocusDimension, 'opening');
+  });
+
+  test('vapiPatchAfterStop keeps focus when still valid', () => {
+    const p = vapiPatchAfterStopOutboundAbDimension(
+      {
+        outboundAbVoiceExperiment: 'ev',
+        outboundAbOpeningExperiment: 'eo',
+        outboundAbFocusDimension: 'opening'
+      },
+      'voice'
+    );
+    assertEqual(p.outboundAbVoiceExperiment, '');
+    assertEqual(p.outboundAbFocusDimension, 'opening');
+  });
+
+  test('vapiPatchAfterStop last dim clears focus', () => {
+    const p = vapiPatchAfterStopOutboundAbDimension(
+      {
+        outboundAbVoiceExperiment: 'ev',
+        outboundAbOpeningExperiment: '',
+        outboundAbScriptExperiment: '',
+        outboundAbFocusDimension: 'voice'
+      },
+      'voice'
+    );
+    assertEqual(p.outboundAbVoiceExperiment, '');
+    assertEqual(p.outboundAbFocusDimension, '');
   });
 });
 
