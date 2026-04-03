@@ -8845,7 +8845,32 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         SELECT c.call_id, c.id, c.lead_phone, c.status, c.outcome, c.created_at, c.duration, c.recording_url,
                c.transcript, c.retry_attempt, c.metadata,
                lm.name, lm.service
-        FROM calls c
+        FROM (
+          SELECT id, call_id, client_key, lead_phone, status, outcome, created_at, duration, recording_url,
+                 LEFT(COALESCE(transcript, ''), 512) AS transcript,
+                 retry_attempt,
+                 CASE WHEN metadata IS NULL THEN NULL
+                   ELSE COALESCE(
+                     jsonb_strip_nulls(jsonb_build_object(
+                       'fromQueue', metadata->'fromQueue',
+                       'reason',
+                         CASE
+                           WHEN jsonb_typeof(metadata->'reason') = 'string'
+                           THEN to_jsonb(LEFT(metadata->>'reason', 400))
+                           ELSE metadata->'reason'
+                         END,
+                       'abExperiment', metadata->'abExperiment',
+                       'abVariant', metadata->'abVariant',
+                       'abOutbound', metadata->'abOutbound'
+                     )),
+                     '{}'::jsonb
+                   )
+                 END AS metadata
+          FROM calls
+          WHERE client_key = $1
+          ORDER BY created_at DESC
+          LIMIT ${RECENT_CALLS_FEED_CAP}
+        ) c
         LEFT JOIN LATERAL (
           SELECT l.name, l.service
           FROM leads l
@@ -8861,28 +8886,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
           ORDER BY l.created_at DESC NULLS LAST
           LIMIT 1
         ) lm ON true
-        WHERE c.client_key = $1
         ORDER BY c.created_at DESC
-        LIMIT ${RECENT_CALLS_FEED_CAP}
-      `, [clientKey]).then(result => {
-        console.error('[DEMO DASHBOARD] Recent calls query result for clientKey:', clientKey);
-        console.error('[DEMO DASHBOARD] Row count:', result.rows?.length || 0);
-        if (result.rows && result.rows.length > 0) {
-          result.rows.forEach((r, i) => {
-            console.error(`[DEMO DASHBOARD] Call ${i + 1}:`, {
-              phone: r.lead_phone,
-              status: r.status,
-              outcome: r.outcome,
-              name: r.name || 'NULL',
-              service: r.service || 'NULL',
-              created_at: r.created_at
-            });
-          });
-        } else {
-          console.error('[DEMO DASHBOARD] No calls found in database for clientKey:', clientKey);
-        }
-        return result;
-      }),
+      `, [clientKey]),
       query(`
         SELECT DISTINCT ON (l.phone) 
                l.created_at AS lead_created, 
@@ -8981,14 +8986,6 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
 
     // Use unique leads called for display (not total call attempts)
     const displayCalls = uniqueLeadsCalled || 0;
-    
-    console.error('[DEMO DASHBOARD] Call metrics:', {
-      clientKey,
-      totalCalls,
-      uniqueLeadsCalled,
-      totalLeads,
-      ratio: totalLeads > 0 ? (uniqueLeadsCalled / totalLeads * 100).toFixed(1) + '%' : 'N/A'
-    });
 
     const wl = client?.whiteLabel || {};
     const monthlyFeeRaw = Number(wl.monthlyFee ?? wl.pricing?.monthlyFee ?? client?.monthlyFee ?? client?.pricing?.monthlyFee);
@@ -9282,17 +9279,6 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         abOutbound
       };
     });
-    
-    console.error('[DEMO DASHBOARD] Formatted recent calls for clientKey:', clientKey);
-    console.error('[DEMO DASHBOARD] Raw count:', recentCallRows.rows?.length || 0);
-    console.error('[DEMO DASHBOARD] Formatted count:', recentCalls.length);
-    if (recentCalls.length > 0) {
-      recentCalls.forEach((call, i) => {
-        console.error(`[DEMO DASHBOARD] Formatted call ${i + 1}:`, JSON.stringify(call, null, 2));
-      });
-    } else {
-      console.error('[DEMO DASHBOARD] No formatted calls to return');
-    }
 
     const responseDiffs = (responseRows.rows || [])
       .map(row => {
@@ -9691,12 +9677,35 @@ app.get('/api/events/:clientKey', async (req, res) => {
         SELECT c.call_id, c.id, c.lead_phone, c.status, c.outcome, c.created_at, c.duration, c.recording_url,
                c.transcript, c.retry_attempt, c.metadata,
                l.name, l.service
-        FROM calls c
+        FROM (
+          SELECT id, call_id, client_key, lead_phone, status, outcome, created_at, duration, recording_url,
+                 LEFT(COALESCE(transcript, ''), 512) AS transcript,
+                 retry_attempt,
+                 CASE WHEN metadata IS NULL THEN NULL
+                   ELSE COALESCE(
+                     jsonb_strip_nulls(jsonb_build_object(
+                       'fromQueue', metadata->'fromQueue',
+                       'reason',
+                         CASE
+                           WHEN jsonb_typeof(metadata->'reason') = 'string'
+                           THEN to_jsonb(LEFT(metadata->>'reason', 400))
+                           ELSE metadata->'reason'
+                         END,
+                       'abExperiment', metadata->'abExperiment',
+                       'abVariant', metadata->'abVariant',
+                       'abOutbound', metadata->'abOutbound'
+                     )),
+                     '{}'::jsonb
+                   )
+                 END AS metadata
+          FROM calls
+          WHERE client_key = $1
+            AND created_at > $2
+          ORDER BY created_at ASC
+          LIMIT 10
+        ) c
         LEFT JOIN leads l ON l.client_key = c.client_key AND l.phone = c.lead_phone
-        WHERE c.client_key = $1
-          AND c.created_at > $2
         ORDER BY c.created_at ASC
-        LIMIT 10
       `, [clientKey, lastSent]);
 
       for (const row of recentCallRows.rows || []) {

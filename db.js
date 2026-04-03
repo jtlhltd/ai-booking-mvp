@@ -255,6 +255,8 @@ async function initPostgres() {
     CREATE INDEX IF NOT EXISTS calls_status_idx ON calls(status);
     CREATE INDEX IF NOT EXISTS calls_outcome_idx ON calls(outcome);
     CREATE INDEX IF NOT EXISTS calls_created_idx ON calls(created_at);
+    -- Dashboard / activity: filter by tenant and order by recency (avoids sorting all calls per tenant)
+    CREATE INDEX IF NOT EXISTS calls_client_created_idx ON calls(client_key, created_at DESC);
 
     -- Aggregated transcript insights + routing recommendations (per tenant)
     CREATE TABLE IF NOT EXISTS call_insights (
@@ -1629,7 +1631,8 @@ export async function backfillCallTimeBanditObservations(clientKey, { days = 30,
 
     const { rows } = await query(
       `
-      SELECT c.call_id, c.created_at, c.outcome, c.status, c.duration, c.transcript, c.recording_url
+      SELECT c.call_id, c.created_at, c.outcome, c.status, c.duration,
+             LEFT(COALESCE(c.transcript, ''), 512) AS transcript, c.recording_url
       FROM calls c
       WHERE c.client_key = $1
         AND c.created_at >= NOW() - ($2::integer * INTERVAL '1 day')
