@@ -3241,6 +3241,58 @@
             margin-bottom: 0;
         }
 
+        .insights-methods-details {
+            margin-top: 10px;
+            border-radius: 10px;
+            border: 1px solid rgba(92, 106, 196, 0.22);
+            background: rgba(255, 255, 255, 0.5);
+            overflow: hidden;
+        }
+
+        .insights-methods-details > summary {
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 10px 12px;
+            color: var(--text-secondary);
+            list-style: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .insights-methods-details > summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .insights-methods-details > summary::after {
+            content: '▾';
+            font-size: 10px;
+            opacity: 0.65;
+        }
+
+        .insights-methods-details[open] > summary::after {
+            content: '▴';
+        }
+
+        .insights-methods-details[open] > summary {
+            border-bottom: 1px solid rgba(92, 106, 196, 0.12);
+        }
+
+        .insights-methods-details .insights-provenance-list {
+            margin: 0;
+            padding: 12px 14px 14px 1.75rem;
+        }
+
+        .insights-provenance-kicker {
+            font-size: 11px;
+            line-height: 1.5;
+            color: var(--text-secondary);
+            margin: 0 0 8px 0;
+            opacity: 0.95;
+        }
+
         .insights-action-list {
             margin: 0;
             padding-left: 1.15rem;
@@ -5501,7 +5553,9 @@
 
                 <article class="card card-insights-routing">
                     <h3>🧠 Insights & Routing</h3>
-                    <p class="card-subtitle" id="callInsightsSubtitle">Plain-English tips from your call times and answer rates.</p>
+                    <p class="card-subtitle" id="callInsightsSubtitle">
+                        When to dial, how often calls turn into conversations, and keyword themes — separate from A/B test sample counts.
+                    </p>
                     <div class="insights-card-toolbar" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
                         <small id="callInsightsMeta" style="color:var(--muted);">—</small>
                         <button type="button" id="callInsightsRefresh" class="export-btn secondary" style="padding:6px 10px;font-size:12px;">Refresh insights</button>
@@ -9585,7 +9639,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             let worst = null;
             for (const h of byHour) {
                 const attempts = h.attempts || 0;
-                if (attempts < 5) continue;
+                if (attempts < 6) continue;
                 const ar = h.answeredRate != null ? Number(h.answeredRate) : h.answered / attempts;
                 const pct = Math.round(ar * 100);
                 const hour = h.hour != null ? Number(h.hour) : 0;
@@ -9593,7 +9647,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 if (worst === null || pct < worst.pct) worst = { hour, pct, attempts };
             }
             if (!best) {
-                return '<p class="insights-panel-hint">We need <strong>at least 5 calls</strong> in an hour before we can compare that hour fairly.</p>';
+                return '<p class="insights-panel-hint">We need <strong>at least 6 calls</strong> in an hour before we compare that hour fairly (same rule as “best hours” ranking).</p>';
             }
             const weakLine =
                 worst && worst.hour !== best.hour
@@ -9705,16 +9759,28 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                       : '—';
             const minSlot = h.minCallsPerSlotForRanking ?? 6;
             return `<div class="insights-panel insights-panel--span insights-provenance">
-                <div class="insights-panel-title">How the summary numbers above are worked out</div>
-                <ul class="insights-provenance-list">
-                    <li><strong>Answered rate</strong> — We take your <strong>${n}</strong> most recent calls from the last <strong>${days}</strong> days (up to <strong>${cap}</strong> calls loaded from the database). “Answered” uses the same pickup/conversation check as elsewhere on this dashboard (not just “it rang”).</li>
-                    <li><strong>Best hours</strong> — Each call is placed in the <strong>hour it started</strong> using <strong>${tz}</strong>. The number in brackets (e.g. 18:00 <strong>(7)</strong>) is a simple <strong>0–100 score from answer rate</strong> at that hour. We only rank an hour after at least <strong>${minSlot}</strong> calls have been made in that hour.</li>
-                    <li><strong>Best days</strong> — Same idea by <strong>weekday</strong>, again needing at least <strong>${minSlot}</strong> calls on that day before it can appear in the list.</li>
-                    <li><strong>Top objections &amp; key phrases</strong> — When a call ends and we have a transcript, we run <strong>automatic keyword rules</strong> (e.g. words about cost → “price”, “call back later” → “timing”) and save the matches on that call. The counts you see are <strong>how often those tags showed up</strong> across this report — not a human listening to every call.</li>
-                    <li><strong>Suggested tweak</strong> — Pops up when a few <strong>simple rules</strong> trip (for example a lot of “not interested” outcomes). Your live assistant does <strong>not</strong> change by itself.</li>
-                    <li><strong>How reliable is this?</strong> — <strong>Answer rate, best hours, and best days</strong> are grounded in real call timestamps and outcomes — solid for spotting timing patterns. <strong>Objections and phrases</strong> are useful for <strong>trends</strong> but can miss nuance or misfire on a word here and there; use them to <strong>prioritize which recordings to review</strong>. <strong>Suggested tweaks</strong> are <strong>ideas to test</strong>, not promises. If a number surprises you, listen to a handful of calls before you rework the script.</li>
-                </ul>
-                <p class="insights-panel-hint" style="margin-top:10px">Click <strong>Refresh insights</strong> to rebuild this report from your latest calls.</p>
+                <div class="insights-panel-title">Methodology</div>
+                <p class="insights-provenance-kicker">
+                    <strong>Answered</strong> means a <strong>conversation signal</strong>, not merely that the phone rang.
+                    Outcomes such as <strong>voicemail</strong>, <strong>no-answer</strong>, <strong>busy</strong>, <strong>failed</strong>, <strong>declined</strong>, and <strong>rejected</strong> count as <strong>not</strong> answered — same heuristic as the rest of this dashboard.
+                    If the outcome is unclear, we may still count a call as answered when duration, transcript length, or a recording suggests a real interaction.
+                </p>
+                <p class="insights-provenance-kicker" style="margin-bottom:0">
+                    <strong>Note:</strong> “Best hours/days” only need <strong>${minSlot}+ calls per slot</strong> to rank; that is <strong>not</strong> the same as outbound A/B “sample ready” targets (live pickups per variant), which are shown in the A/B monitoring block.
+                </p>
+                <details class="insights-methods-details">
+                    <summary>Full calculation details</summary>
+                    <ul class="insights-provenance-list">
+                        <li><strong>Report window</strong> — Up to <strong>${cap}</strong> most recent calls from the last <strong>${days}</strong> days; figures above use <strong>${n}</strong> calls in this snapshot.</li>
+                        <li><strong>Answered rate</strong> — Share of those calls classified as answered (see kicker). Useful for overall reach, not calendar bookings.</li>
+                        <li><strong>Best hours</strong> — Each call is bucketed by <strong>start hour</strong> in <strong>${tz}</strong>. The bracket score (e.g. 18:00 <strong>(72)</strong>) is answered rate scaled to <strong>0–100</strong>. We only <strong>rank</strong> an hour after <strong>${minSlot}</strong> or more calls in that hour.</li>
+                        <li><strong>Best days</strong> — Same logic by <strong>weekday</strong>, with the same <strong>${minSlot}</strong>-call minimum before a day can rank.</li>
+                        <li><strong>Top objections &amp; key phrases</strong> — After a call, we run <strong>keyword rules</strong> on the transcript (e.g. cost → “price”, callback language → “timing”). Counts are <strong>how often tags fired</strong> in this window — automated, not a human review of every call.</li>
+                        <li><strong>Suggested tweak</strong> — Shown when simple rules fire (e.g. many “not interested” outcomes). Your production assistant <strong>does not change automatically</strong>.</li>
+                        <li><strong>How far to trust it</strong> — Timestamps and answered rates are good for <strong>timing patterns</strong>. Phrase tags are <strong>trend hints</strong>; spot-check recordings before big script changes. Suggested tweaks are <strong>experiments to consider</strong>, not guarantees.</li>
+                    </ul>
+                </details>
+                <p class="insights-panel-hint" style="margin-top:12px;margin-bottom:0">Click <strong>Refresh insights</strong> to rebuild from your latest calls.</p>
             </div>`;
         }
 
