@@ -11453,15 +11453,32 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
   }
 });
 
+function parseCallInsightsRoutingBlob(routing) {
+  if (routing == null) return null;
+  if (typeof routing === 'string') {
+    try {
+      return JSON.parse(routing);
+    } catch {
+      return null;
+    }
+  }
+  return typeof routing === 'object' ? routing : null;
+}
+
 // Aggregated “learning loop” insights from transcripts + routing recommendations
 app.get('/api/call-insights/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix: 'call-insights:v1:' }), async (req, res) => {
   try {
     const { clientKey } = req.params;
     const days = Math.max(1, Math.min(120, parseInt(req.query.days || 30, 10) || 30));
-    const { getLatestCallInsights, upsertCallInsights, getFullClient } = await import('./db.js');
+    const { getLatestCallInsights, upsertCallInsights, getFullClient, getCallAnalyticsFloorIso } = await import('./db.js');
     const existing = await getLatestCallInsights(clientKey);
     if (existing && existing.insights) {
-      return res.json({ ok: true, source: 'cache', ...existing });
+      const floorIso = await getCallAnalyticsFloorIso();
+      const r = parseCallInsightsRoutingBlob(existing.routing);
+      const storedSince = r?.howCalculated?.analyticsSince ?? null;
+      if (storedSince === floorIso) {
+        return res.json({ ok: true, source: 'cache', ...existing });
+      }
     }
 
     const client = await getFullClient(clientKey).catch(() => null);
