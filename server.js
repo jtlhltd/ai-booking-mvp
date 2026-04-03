@@ -9462,16 +9462,40 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       }
     }
 
+    let assistantSnap = null;
+    try {
+      const { getVapiAssistantCreativeSnapshot } = await import('./lib/outbound-ab-baseline.js');
+      assistantSnap = await getVapiAssistantCreativeSnapshot(client);
+    } catch (asErr) {
+      console.error('[DEMO DASHBOARD] assistant snapshot error:', asErr?.message || asErr);
+      assistantSnap = { voiceId: '', firstMessage: '', script: '', fetchFailedReason: 'snapshot_error' };
+    }
+    const scriptPreviewForAbPayload = (s) => {
+      if (!s || !String(s).trim()) return null;
+      const t = String(s).trim();
+      return t.length > 280 ? `${t.slice(0, 280).trim()}…` : t;
+    };
+    const vapiAssistantLive = {
+      voiceId: assistantSnap.voiceId ? String(assistantSnap.voiceId).trim() : null,
+      firstMessage: assistantSnap.firstMessage ? String(assistantSnap.firstMessage).trim() : null,
+      scriptPreview: scriptPreviewForAbPayload(assistantSnap.script),
+      fetchFailedReason: assistantSnap.fetchFailedReason || null
+    };
+
     try {
       const { enrichOutboundAbDashboardSummariesFromAssistant } = await import(
         './lib/outbound-ab-dashboard-enrich.js'
       );
-      await enrichOutboundAbDashboardSummariesFromAssistant(client, {
-        voiceSummary,
-        openingSummary,
-        scriptSummary,
-        legacyOutboundAbSummary
-      });
+      await enrichOutboundAbDashboardSummariesFromAssistant(
+        client,
+        {
+          voiceSummary,
+          openingSummary,
+          scriptSummary,
+          legacyOutboundAbSummary
+        },
+        { preloadedSnap: assistantSnap }
+      );
     } catch (enrichErr) {
       console.error('[DEMO DASHBOARD] outbound A/B assistant enrich error:', enrichErr?.message || enrichErr);
     }
@@ -9584,6 +9608,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         focusDimension: focusStored || null,
         dialActiveDimensions,
         dialWarning,
+        /** Live Vapi assistant fields (control baseline for voice / opener / script when not overridden by variant_b). */
+        vapiAssistantLive,
         bundlePhase:
           client?.vapi?.outboundAbBundlePhase != null &&
           String(client.vapi.outboundAbBundlePhase).trim() !== ''

@@ -8402,6 +8402,39 @@ ${actionsRow}
             return `<p class="tom-ab-creative-variant-body tom-ab-creative-preview-script">${scr}</p>${note}`;
         }
 
+        /** When there is no experiment for this dimension, show what is configured on the tenant Vapi assistant (same baseline control uses on dials). */
+        function renderTomAbVapiLiveBlock(dimKey, live) {
+            const L = live && typeof live === 'object' ? live : {};
+            const reason = L.fetchFailedReason != null && String(L.fetchFailedReason).trim() ? String(L.fetchFailedReason).trim() : '';
+            const fetchNote = reason
+                ? `<p class="tom-ab-test-meta" style="margin:6px 0 0 0;">Could not load from Vapi (<code style="font-size:0.85em;">${escapeHtml(
+                      reason
+                  )}</code>). Check <code>VAPI_PRIVATE_KEY</code> and tenant assistant id; see logs <code>[OUTBOUND AB BASELINE]</code>.</p>`
+                : '';
+            let body = '';
+            if (dimKey === 'voice') {
+                const id = L.voiceId != null && String(L.voiceId).trim() ? String(L.voiceId).trim() : '';
+                body = id
+                    ? `<code class="tom-ab-voice-code">${escapeHtml(id)}</code>`
+                    : `<span class="tom-ab-test-meta">No voice id in last assistant response.</span>`;
+            } else if (dimKey === 'opening') {
+                const msg = L.firstMessage != null && String(L.firstMessage).trim() ? String(L.firstMessage).trim() : '';
+                body = msg
+                    ? `<p class="tom-ab-opening-preview" style="margin:0;">${escapeHtml(msg)}</p>`
+                    : `<span class="tom-ab-test-meta">No opening line in last assistant response.</span>`;
+            } else {
+                const scr = L.scriptPreview != null && String(L.scriptPreview).trim() ? String(L.scriptPreview).trim() : '';
+                body = scr
+                    ? `<p class="tom-ab-creative-variant-body tom-ab-creative-preview-script" style="margin:0;">${escapeHtml(scr)}</p>`
+                    : `<span class="tom-ab-test-meta">No script preview in last assistant response.</span>`;
+            }
+            return `<div class="tom-ab-vapi-live-block" style="margin:0 0 12px 0;padding:10px 12px;border:1px solid rgba(0,0,0,0.08);border-radius:8px;background:rgba(0,0,0,0.02);">
+                <p class="tom-ab-test-meta" style="margin:0 0 6px 0;"><strong>Live on Vapi assistant</strong> — control for this dimension until you start a test.</p>
+                ${body}
+                ${fetchNote}
+            </div>`;
+        }
+
         function renderTomAbCreativeDraftOnly(dimKey, title) {
             const draft = tomAbPerDimDraft[dimKey] ? String(tomAbPerDimDraft[dimKey]).trim() : '';
             if (!draft) {
@@ -8431,12 +8464,13 @@ ${actionsRow}
             return ids.every((id) => id === first);
         }
 
-        function renderTomAbCreativeDimColumn(dimKey, title, slot) {
+        function renderTomAbCreativeDimColumn(dimKey, title, slot, ab) {
             const exp = slot && slot.experimentName ? String(slot.experimentName).trim() : '';
             const vars = slot && slot.summary && Array.isArray(slot.summary.variants) ? slot.summary.variants : [];
             let inner = '';
             if (!exp && !vars.length) {
-                inner = renderTomAbCreativeDraftOnly(dimKey, title);
+                const live = ab && ab.vapiAssistantLive;
+                inner = renderTomAbVapiLiveBlock(dimKey, live) + renderTomAbCreativeDraftOnly(dimKey, title);
             } else {
                 inner = exp
                     ? `<p class="tom-ab-test-meta" style="margin:0 0 10px 0;">Experiment <code style="font-size:0.78em;">${escapeHtml(
@@ -8612,16 +8646,16 @@ ${actionsRow}
                   ? '<span class="tom-ab-test-meta">Draft only</span>'
                   : '';
             const cols = [
-                renderTomAbCreativeDimColumn('voice', 'Voice ID', (ab && ab.voice) || {}),
-                renderTomAbCreativeDimColumn('opening', 'Opening line', (ab && ab.opening) || {}),
-                renderTomAbCreativeDimColumn('script', 'Script', (ab && ab.script) || {})
+                renderTomAbCreativeDimColumn('voice', 'Voice ID', (ab && ab.voice) || {}, ab),
+                renderTomAbCreativeDimColumn('opening', 'Opening line', (ab && ab.opening) || {}, ab),
+                renderTomAbCreativeDimColumn('script', 'Script', (ab && ab.script) || {}, ab)
             ].join('');
             return `<section class="tom-ab-creatives-preview" aria-labelledby="tom-ab-creatives-h">
                 <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap;">
                     <h4 class="tom-ab-panel-title" id="tom-ab-creatives-h" style="margin:0;">Your creatives</h4>
                     ${badge}
                 </div>
-                <p class="tom-ab-test-meta" style="margin:8px 0 0 0;">What’s live for each dimension (voice, opener, script). Upload each one separately above.</p>
+                <p class="tom-ab-test-meta" style="margin:8px 0 0 0;">Opening line and script work like voice: upload <strong>only the challenger</strong>. When a dimension has no test yet, the card shows your <strong>live Vapi assistant</strong> for that slice; after you start a test, <strong>control</strong> stays live on Vapi and <strong>variant_b</strong> is the challenger.</p>
                 <div class="tom-ab-creatives-dim-grid">${cols}</div>
             </section>`;
         }
