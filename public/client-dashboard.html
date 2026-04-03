@@ -8512,16 +8512,31 @@ ${actionsRow}
             return out;
         }
 
+        function tomAbDistinctCreativeValues(arr) {
+            if (!Array.isArray(arr) || !arr.length) return [];
+            return [...new Set(arr.map((x) => String(x || '').trim()).filter(Boolean))];
+        }
+
+        /** Prefill upload fields from live payload when the draft is empty — not browser autofill. Skip when every arm shows the same value (duplicate experiment); prefill would look like meaningless “autofill”. */
         function syncTomAbCreativeTextareasFromServer(ab) {
             const ex = extractTomAbCreativesFromPayload(ab);
             if (!tomAbPerDimDraft.voice.trim() && ex.voices.length >= 1) {
-                tomAbPerDimDraft.voice = ex.voices[0];
+                const distinct = tomAbDistinctCreativeValues(ex.voices);
+                if (distinct.length !== 1 || ex.voices.length === 1) {
+                    tomAbPerDimDraft.voice = ex.voices[0];
+                }
             }
             if (!tomAbPerDimDraft.opening.trim() && ex.openings.length >= 1) {
-                tomAbPerDimDraft.opening = ex.openings[0];
+                const distinct = tomAbDistinctCreativeValues(ex.openings);
+                if (distinct.length !== 1 || ex.openings.length === 1) {
+                    tomAbPerDimDraft.opening = ex.openings[0];
+                }
             }
             if (!tomAbPerDimDraft.script.trim() && ex.scripts.length >= 1) {
-                tomAbPerDimDraft.script = ex.scripts[0];
+                const distinct = tomAbDistinctCreativeValues(ex.scripts);
+                if (distinct.length !== 1 || ex.scripts.length === 1) {
+                    tomAbPerDimDraft.script = ex.scripts[0];
+                }
             }
         }
 
