@@ -5701,11 +5701,11 @@
         >
             <article class="card card-fullwidth tom-ab-client-console">
                 <h3>Creatives &amp; live test</h3>
-                <p class="card-subtitle">Use <strong>All creatives</strong> below to see live vs challenger for every dimension, edit challengers, stop tests, or clear drafts. Upload one challenger at a time above; control is always your live Vapi assistant.</p>
+                <p class="card-subtitle"><strong>All creatives</strong> lists what’s live on Vapi vs what’s on test. <strong>Delete</strong> removes a test for that slice. Use the field above only when you want to add a new challenger (upload). Control is always your live assistant.</p>
 
                 <section class="tom-ab-simple-upload" aria-label="Upload creatives and view test results">
                     <p class="tom-ab-test-meta" style="margin:0 0 14px 0;">
-                        Enter <strong>only the challenger</strong> (the thing you want to test). <strong>Control</strong> is never stored — each dial uses your <strong>live Vapi assistant</strong> for that dimension; the challenger is applied only when a lead is assigned to variant_b. When you adopt a winner, update the assistant in Vapi so it matches. Switch tabs to test another dimension.
+                        To <strong>add</strong> a challenger, pick voice / opening / script, paste the value, and click Upload. To <strong>remove</strong> a test or unsaved text, use <strong>Delete</strong> or <strong>Delete draft</strong> in All creatives below.
                     </p>
                     <fieldset class="tom-ab-dim-picker">
                         <legend>Upload type</legend>
@@ -8488,15 +8488,6 @@ ${actionsRow}
         }
 
         const tomAbPerDimDraft = { voice: '', opening: '', script: '' };
-        /** When set, upload for this dimension PATCHes the challenger instead of creating a new experiment. */
-        let tomAbPendingEditDim = null;
-
-        function updateTomAbUploadButtonLabel() {
-            const btn = document.getElementById('tomAbCreativeUploadBtn');
-            if (!btn) return;
-            const dim = getTomAbActiveUploadDimension();
-            btn.textContent = tomAbPendingEditDim === dim ? 'Save changes' : 'Upload';
-        }
 
         function getTomAbActiveUploadDimension() {
             const active = document.querySelector('#tomAbOutreachAbSection .tom-ab-dim-segment--active');
@@ -8549,7 +8540,6 @@ ${actionsRow}
                 btn.setAttribute('aria-selected', on ? 'true' : 'false');
             });
             applyTomAbDraftToVisibleField(dim);
-            updateTomAbUploadButtonLabel();
         }
 
         function tomAbFindChallengerVariantSummary(vars) {
@@ -8568,31 +8558,12 @@ ${actionsRow}
             return t.scriptPreview != null && String(t.scriptPreview).trim() ? String(t.scriptPreview).trim() : '';
         }
 
-        function tomAbBeginEditChallenger(dim) {
-            if (!isOutreachDashboardClient(currentClient)) return;
-            const ab = dashboardData && dashboardData.outboundAbTest;
-            if (!ab) return;
-            const slot = dim === 'voice' ? ab.voice : dim === 'opening' ? ab.opening : ab.script;
-            const vars = slot && slot.summary && Array.isArray(slot.summary.variants) ? slot.summary.variants : [];
-            const ch = tomAbFindChallengerVariantSummary(vars);
-            if (!ch) return;
-            const raw = tomAbChallengerRawFromVariant(dim, ch);
-            if (!raw) return;
-            tomAbPerDimDraft[dim] = raw;
-            tomAbPendingEditDim = dim;
-            setTomAbActiveUploadDimension(dim);
-            const msg = document.getElementById('tomAbCreativeUploadMsg');
-            if (msg) msg.textContent = 'Update the challenger below, then click Save changes.';
-        }
-
         function tomAbClearDimensionDraft(dim) {
             if (dim !== 'voice' && dim !== 'opening' && dim !== 'script') return;
             tomAbPerDimDraft[dim] = '';
-            if (tomAbPendingEditDim === dim) tomAbPendingEditDim = null;
             applyTomAbDraftToVisibleField(getTomAbActiveUploadDimension());
-            updateTomAbUploadButtonLabel();
             const msg = document.getElementById('tomAbCreativeUploadMsg');
-            if (msg) msg.textContent = 'Draft cleared.';
+            if (msg) msg.textContent = 'Draft deleted.';
             if (isOutreachDashboardClient(currentClient)) renderTomAbTestSection(dashboardData);
         }
 
@@ -8640,13 +8611,13 @@ ${actionsRow}
             const dimLabel = dim === 'voice' ? 'voice' : dim === 'opening' ? 'opening line' : 'script';
             if (
                 !confirm(
-                    `Stop the ${dimLabel} test? New dials will use your live Vapi assistant for that slice only (no challenger).`
+                    `Delete the ${dimLabel} test? The challenger will no longer be used on new dials; only your live Vapi assistant runs for that slice.`
                 )
             ) {
                 return;
             }
             const msg = document.getElementById('tomAbCreativeUploadMsg');
-            if (msg) msg.textContent = 'Stopping test…';
+            if (msg) msg.textContent = 'Deleting…';
             try {
                 const res = await fetch(
                     `${BASE_URL}/api/clients/${encodeURIComponent(currentClient)}/outbound-ab-dimension/${encodeURIComponent(dim)}`,
@@ -8654,11 +8625,9 @@ ${actionsRow}
                 );
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
-                if (tomAbPendingEditDim === dim) tomAbPendingEditDim = null;
                 tomAbPerDimDraft[dim] = '';
                 tomAbMergeOutboundAbAfterStop(dim, data);
                 renderTomAbTestSection(dashboardData);
-                updateTomAbUploadButtonLabel();
                 let livePayload = await fetchLiveData(currentClient);
                 if (!livePayload) {
                     await new Promise((r) => setTimeout(r, 500));
@@ -8673,10 +8642,9 @@ ${actionsRow}
                     renderCalls(dashboardData.recentCalls || []);
                     renderTomAbTestSection(dashboardData);
                 }
-                if (msg) msg.textContent = 'Test stopped for this dimension.';
-                updateTomAbUploadButtonLabel();
+                if (msg) msg.textContent = 'Deleted.';
             } catch (err) {
-                if (msg) msg.textContent = err.message || 'Could not stop test';
+                if (msg) msg.textContent = err.message || 'Could not delete';
             }
         }
 
@@ -8735,21 +8703,29 @@ ${actionsRow}
                   )}</code></p>`
                 : '';
             const draft = tomAbPerDimDraft[dimKey] ? String(tomAbPerDimDraft[dimKey]).trim() : '';
-            const draftLine = draft
-                ? `<p class="tom-ab-test-meta" style="margin:10px 0 0 0;">You have text in the upload field for this dimension (not saved). <button type="button" class="tom-ab-variant-action-btn" data-tom-ab-all-clear-draft="${escapeHtml(
-                      dimKey
-                  )}">Clear draft</button></p>`
+            const draftHint = draft
+                ? `<p class="tom-ab-test-meta" style="margin:10px 0 0 0;">Unsaved text in the upload field for this dimension.</p>`
                 : '';
-            const editStop =
-                onTest && chRaw
-                    ? `<div class="tom-ab-all-actions" role="group" aria-label="${escapeHtml(title)} actions">
-                        <button type="button" class="tom-ab-all-btn tom-ab-all-btn--primary" data-tom-ab-all-edit="${escapeHtml(
-                            dimKey
-                        )}">Edit challenger</button>
-                        <button type="button" class="tom-ab-all-btn tom-ab-all-btn--danger" data-tom-ab-all-stop="${escapeHtml(
-                            dimKey
-                        )}">Stop test</button>
-                    </div>`
+            const actionBtns = [];
+            if (onTest) {
+                actionBtns.push(
+                    `<button type="button" class="tom-ab-all-btn tom-ab-all-btn--danger" data-tom-ab-all-delete="${escapeHtml(
+                        dimKey
+                    )}">Delete</button>`
+                );
+            }
+            if (draft) {
+                actionBtns.push(
+                    `<button type="button" class="tom-ab-all-btn" data-tom-ab-all-delete-draft="${escapeHtml(
+                        dimKey
+                    )}">Delete draft</button>`
+                );
+            }
+            const actionsRow =
+                actionBtns.length > 0
+                    ? `<div class="tom-ab-all-actions" role="group" aria-label="${escapeHtml(title)} actions">${actionBtns.join(
+                          ''
+                      )}</div>`
                     : '';
             const sameVoiceNote =
                 dimKey === 'voice' && vars.length >= 2 && tomAbVoiceSlotsAllSameId(vars)
@@ -8768,8 +8744,8 @@ ${actionsRow}
                         <div class="tom-ab-all-row-body">${tomAbChallengerDisplayHtml(dimKey, chRaw)}</div>
                     </div>
                 </div>
-                ${draftLine}
-                ${editStop}
+                ${draftHint}
+                ${actionsRow}
                 ${sameVoiceNote}
             </article>`;
         }
@@ -8806,7 +8782,7 @@ ${actionsRow}
                     ${badge}
                 </div>
                 ${fetchBanner}
-                <p class="tom-ab-test-meta tom-ab-all-intro">Everything on one screen: <strong>live assistant</strong> (control) vs <strong>challenger</strong> per dimension. <strong>Edit challenger</strong> loads the upload area; <strong>Stop test</strong> ends the test for that slice; <strong>Clear draft</strong> empties unsaved text in the field.</p>
+                <p class="tom-ab-test-meta tom-ab-all-intro"><strong>Live on Vapi</strong> is control; <strong>Challenger</strong> is what you’re testing. <strong>Delete</strong> removes that dimension’s test. <strong>Delete draft</strong> clears unsaved text in the field above.</p>
                 <div class="tom-ab-all-creatives-stack">${cards}</div>
             </section>`;
         }
@@ -8874,77 +8850,8 @@ ${actionsRow}
             return renderTomAbAllCreativesDimensional(ab, live);
         }
 
-        function extractTomAbCreativesFromPayload(ab) {
-            const out = { voices: [], openings: [], scripts: [] };
-            if (!ab || typeof ab !== 'object') return out;
-            const fromSlot = (slot, kind) => {
-                const vars = slot && slot.summary && Array.isArray(slot.summary.variants) ? slot.summary.variants : [];
-                if (kind === 'voice') {
-                    return vars.map((v) => (v.tested && v.tested.voiceId ? String(v.tested.voiceId).trim() : '')).filter(Boolean);
-                }
-                if (kind === 'opening') {
-                    return vars.map((v) => (v.tested && v.tested.openingLine ? String(v.tested.openingLine).trim() : '')).filter(
-                        Boolean
-                    );
-                }
-                return vars
-                    .map((v) => {
-                        const t = v.tested || {};
-                        const full = t.script != null && String(t.script).trim() ? String(t.script).trim() : '';
-                        if (full) return full;
-                        return t.scriptPreview != null && String(t.scriptPreview).trim() ? String(t.scriptPreview).trim() : '';
-                    })
-                    .filter(Boolean);
-            };
-            if (ab.voice && ab.voice.experimentName) out.voices = fromSlot(ab.voice, 'voice');
-            if (ab.opening && ab.opening.experimentName) out.openings = fromSlot(ab.opening, 'opening');
-            if (ab.script && ab.script.experimentName) out.scripts = fromSlot(ab.script, 'script');
-            if (!out.voices.length && !out.openings.length && !out.scripts.length && ab.legacy && ab.legacy.experimentName) {
-                const vars =
-                    ab.legacy.summary && Array.isArray(ab.legacy.summary.variants) ? ab.legacy.summary.variants : [];
-                out.voices = vars.map((v) => (v.tested && v.tested.voiceId ? String(v.tested.voiceId).trim() : '')).filter(Boolean);
-                out.openings = vars
-                    .map((v) => (v.tested && v.tested.openingLine ? String(v.tested.openingLine).trim() : ''))
-                    .filter(Boolean);
-                out.scripts = vars
-                    .map((v) => {
-                        const t = v.tested || {};
-                        const full = t.script != null && String(t.script).trim() ? String(t.script).trim() : '';
-                        if (full) return full;
-                        return t.scriptPreview != null && String(t.scriptPreview).trim() ? String(t.scriptPreview).trim() : '';
-                    })
-                    .filter(Boolean);
-            }
-            return out;
-        }
-
-        function tomAbDistinctCreativeValues(arr) {
-            if (!Array.isArray(arr) || !arr.length) return [];
-            return [...new Set(arr.map((x) => String(x || '').trim()).filter(Boolean))];
-        }
-
-        /** Prefill upload fields from live payload when the draft is empty — not browser autofill. Skip when every arm shows the same value (duplicate experiment); prefill would look like meaningless “autofill”. */
-        function syncTomAbCreativeTextareasFromServer(ab) {
-            const ex = extractTomAbCreativesFromPayload(ab);
-            if (tomAbPendingEditDim !== 'voice' && !tomAbPerDimDraft.voice.trim() && ex.voices.length >= 1) {
-                const distinct = tomAbDistinctCreativeValues(ex.voices);
-                if (distinct.length !== 1 || ex.voices.length === 1) {
-                    tomAbPerDimDraft.voice = ex.voices[0];
-                }
-            }
-            if (tomAbPendingEditDim !== 'opening' && !tomAbPerDimDraft.opening.trim() && ex.openings.length >= 1) {
-                const distinct = tomAbDistinctCreativeValues(ex.openings);
-                if (distinct.length !== 1 || ex.openings.length === 1) {
-                    tomAbPerDimDraft.opening = ex.openings[0];
-                }
-            }
-            if (tomAbPendingEditDim !== 'script' && !tomAbPerDimDraft.script.trim() && ex.scripts.length >= 1) {
-                const distinct = tomAbDistinctCreativeValues(ex.scripts);
-                if (distinct.length !== 1 || ex.scripts.length === 1) {
-                    tomAbPerDimDraft.script = ex.scripts[0];
-                }
-            }
-        }
+        /** We do not copy server challengers into the upload field — All creatives shows what’s on test; the field is only for new uploads. */
+        function syncTomAbCreativeTextareasFromServer() {}
 
         function renderTomAbReviewBanner(ab) {
             if (!ab || !ab.reviewPending) return '';
@@ -9311,24 +9218,17 @@ ${actionsRow}
                     refreshTomOutboundAbLiveResults();
                     return;
                 }
-                const editAll = e.target.closest('[data-tom-ab-all-edit]');
-                if (editAll && sec.contains(editAll)) {
+                const delTest = e.target.closest('[data-tom-ab-all-delete]');
+                if (delTest && sec.contains(delTest)) {
                     e.preventDefault();
-                    const dim = editAll.getAttribute('data-tom-ab-all-edit');
-                    if (dim === 'voice' || dim === 'opening' || dim === 'script') tomAbBeginEditChallenger(dim);
-                    return;
-                }
-                const stopAll = e.target.closest('[data-tom-ab-all-stop]');
-                if (stopAll && sec.contains(stopAll)) {
-                    e.preventDefault();
-                    const dim = stopAll.getAttribute('data-tom-ab-all-stop');
+                    const dim = delTest.getAttribute('data-tom-ab-all-delete');
                     if (dim === 'voice' || dim === 'opening' || dim === 'script') tomAbStopDimensionTest(dim);
                     return;
                 }
-                const clearDraftBtn = e.target.closest('[data-tom-ab-all-clear-draft]');
-                if (clearDraftBtn && sec.contains(clearDraftBtn)) {
+                const delDraft = e.target.closest('[data-tom-ab-all-delete-draft]');
+                if (delDraft && sec.contains(delDraft)) {
                     e.preventDefault();
-                    const dim = clearDraftBtn.getAttribute('data-tom-ab-all-clear-draft');
+                    const dim = delDraft.getAttribute('data-tom-ab-all-delete-draft');
                     if (dim === 'voice' || dim === 'opening' || dim === 'script') tomAbClearDimensionDraft(dim);
                     return;
                 }
@@ -9354,36 +9254,26 @@ ${actionsRow}
                 }
                 return;
             }
-            const saveEdit = tomAbPendingEditDim === dim;
             const json =
                 dim === 'voice'
                     ? JSON.stringify({ voice: val })
                     : dim === 'opening'
                       ? JSON.stringify({ firstMessage: val })
                       : JSON.stringify({ script: val });
-            const patchBody =
-                dim === 'voice'
-                    ? JSON.stringify({ dimension: dim, voice: val })
-                    : dim === 'opening'
-                      ? JSON.stringify({ dimension: dim, firstMessage: val })
-                      : JSON.stringify({ dimension: dim, script: val });
-            if (msg) msg.textContent = saveEdit ? 'Saving…' : 'Uploading…';
+            if (msg) msg.textContent = 'Uploading…';
             const btn = document.getElementById('tomAbCreativeUploadBtn');
             if (btn) btn.disabled = true;
             try {
                 const res = await fetch(
-                    saveEdit
-                        ? `${BASE_URL}/api/clients/${encodeURIComponent(currentClient)}/outbound-ab-challenger`
-                        : `${BASE_URL}/api/clients/${encodeURIComponent(currentClient)}/outbound-ab-test-import`,
+                    `${BASE_URL}/api/clients/${encodeURIComponent(currentClient)}/outbound-ab-test-import`,
                     {
-                        method: saveEdit ? 'PATCH' : 'POST',
+                        method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: saveEdit ? patchBody : JSON.stringify({ dimension: dim, json })
+                        body: JSON.stringify({ dimension: dim, json })
                     }
                 );
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
-                if (saveEdit) tomAbPendingEditDim = null;
                 const livePayload = await fetchLiveData(currentClient);
                 if (livePayload) {
                     dashboardData = mergeData({}, livePayload, false);
@@ -9397,11 +9287,8 @@ ${actionsRow}
                 if (msg) {
                     const dimLabel =
                         dim === 'voice' ? 'Voice' : dim === 'opening' ? 'Opening line' : 'Script';
-                    msg.textContent = saveEdit
-                        ? `${dimLabel} challenger updated.`
-                        : `${dimLabel} uploaded. Live results update below.`;
+                    msg.textContent = `${dimLabel} uploaded.`;
                 }
-                updateTomAbUploadButtonLabel();
             } catch (err) {
                 if (msg) msg.textContent = err.message || 'Upload failed';
             } finally {
@@ -9427,7 +9314,6 @@ ${actionsRow}
             html += renderTomAbLiveResultsPanel(ab);
 
             root.innerHTML = html;
-            updateTomAbUploadButtonLabel();
         }
 
         function renderCalls(callsOverride) {
