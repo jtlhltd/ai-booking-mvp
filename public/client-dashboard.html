@@ -8624,10 +8624,10 @@ ${actionsRow}
             if (!ab || typeof ab !== 'object') return '';
             const dimLabels = { voice: 'Voice', opening: 'Opening line', script: 'Script' };
             const focusRaw = ab.focusDimension != null ? String(ab.focusDimension).trim().toLowerCase() : '';
-            const focusLabel = dimLabels[focusRaw];
-            const focusLine = focusLabel
-                ? `<strong>Active test on calls:</strong> ${focusLabel}<br><span class="tom-ab-test-meta">Only this piece is splitting across A/B variants on new dials for now. Change focus when you move to another dimension.</span>`
-                : `<strong>Active test on calls:</strong> <span class="tom-ab-test-meta">— When voice, opener, and script experiments are all set, pick which one rotates on dials.</span>`;
+            const slotHasExperiment = (dim) => {
+                const slot = ab[dim];
+                return !!(slot && slot.experimentName && String(slot.experimentName).trim());
+            };
             const dial = Array.isArray(ab.dialActiveDimensions) ? ab.dialActiveDimensions : [];
             const dialStr = dial
                 .map((x) => {
@@ -8636,6 +8636,18 @@ ${actionsRow}
                 })
                 .filter(Boolean)
                 .join(', ');
+            const activeExplainer =
+                '<span class="tom-ab-test-meta">Only this piece is splitting across A/B variants on new dials for now. Change focus when you move to another dimension.</span>';
+            let focusLine;
+            if (dialStr) {
+                focusLine = `<strong>Active test on calls</strong><br>${activeExplainer}`;
+            } else if (focusRaw && dimLabels[focusRaw] && !slotHasExperiment(focusRaw)) {
+                focusLine = `<strong>Configured dial focus:</strong> ${escapeHtml(dimLabels[focusRaw])}<br><span class="tom-ab-test-meta">No experiment is loaded for this dimension yet — upload above. Outbound dials are not rotating this factor until it’s set up.</span>`;
+            } else if (focusRaw && dimLabels[focusRaw] && slotHasExperiment(focusRaw)) {
+                focusLine = `<strong>Active test on calls:</strong> ${escapeHtml(dimLabels[focusRaw])}<br>${activeExplainer}`;
+            } else {
+                focusLine = `<strong>Active test on calls:</strong> <span class="tom-ab-test-meta">— When voice, opener, and script experiments are all set, pick which one rotates on dials.</span>`;
+            }
             const dialLine = dialStr ? `<br><strong>What’s live on each dial:</strong> ${escapeHtml(dialStr)}` : '';
             let bundleLine = '';
             if (ab.bundlePhase != null && String(ab.bundlePhase).trim() !== '') {
