@@ -33,6 +33,19 @@ test('parseOutboundAbBundleSpec: aliases', () => {
   assert.deepEqual(spec.scripts, ['s1', 's2']);
 });
 
+test('parseOutboundAbBundleSpec: single creative is duplicated for A/B shape', () => {
+  const spec = parseOutboundAbBundleSpec(
+    JSON.stringify({
+      voices: ['v1'],
+      openings: ['hi'],
+      scripts: ['s1']
+    })
+  );
+  assert.deepEqual(spec.voices, ['v1', 'v1']);
+  assert.deepEqual(spec.openings, ['hi', 'hi']);
+  assert.deepEqual(spec.scripts, ['s1', 's1']);
+});
+
 test('parseOutboundAbBundleSpec: rejects empty entry', () => {
   assert.throws(
     () =>

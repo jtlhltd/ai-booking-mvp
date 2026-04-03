@@ -1387,55 +1387,17 @@
             border-top: 1px solid var(--border, #e8eaf5);
         }
 
-        .tom-ab-creatives-list {
-            display: flex;
-            flex-direction: column;
+        .tom-ab-creatives-form-grid {
+            display: grid;
+            grid-template-columns: 1fr;
             gap: 14px;
-            margin-bottom: 10px;
+            margin-bottom: 4px;
         }
 
-        .tom-ab-creative-card {
-            padding: 14px 16px;
-            border-radius: 10px;
-            border: 1px solid var(--border, #e8eaf5);
-            background: rgba(255, 255, 255, 0.45);
-        }
-
-        .tom-ab-creative-card-head {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 10px;
-            margin-bottom: 12px;
-        }
-
-        .tom-ab-creative-card-label {
-            font-size: 0.9rem;
-            font-weight: 600;
-            color: var(--text, #2f3147);
-        }
-
-        .tom-ab-remove-creative-btn {
-            font-size: 0.8rem;
-            padding: 6px 12px;
-        }
-
-        .tom-ab-remove-creative-btn[hidden] {
-            display: none !important;
-        }
-
-        .tom-ab-creative-fields {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .tom-ab-creatives-form-actions {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 10px;
-            margin-top: 4px;
+        @media (min-width: 900px) {
+            .tom-ab-creatives-form-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
         }
 
         .tom-ab-creatives-preview {
@@ -5281,11 +5243,20 @@
 
                 <section class="tom-ab-simple-upload" aria-label="Upload creatives and view test results">
                     <p class="tom-ab-test-meta" style="margin:0 0 14px 0;">
-                        Each <strong>creative</strong> is one voice ID, one opening line, and one script together. Add at least <strong>two creatives</strong> to run a test, then tap Upload.
+                        <strong>One of each</strong> — a single voice ID, opening line, and script (same layout as before, without multiple lines or lists). Tap Upload when ready.
                     </p>
-                    <div id="tomAbCreativesList" class="tom-ab-creatives-list" aria-label="Creative variants"></div>
-                    <div class="tom-ab-creatives-form-actions">
-                        <button type="button" id="tomAbAddCreativeBtn" class="export-btn secondary">Add creative</button>
+                    <div class="tom-ab-creatives-form-grid">
+                        <label class="tom-ab-field">Voice ID <span class="tom-ab-test-meta" style="font-weight:400;">(ElevenLabs)</span>
+                            <input type="text" id="tomAbCreativeVoice" class="tom-ab-input" autocomplete="off" spellcheck="false" placeholder="e.g. 21m00Tcm4TlvDq8ikWAM">
+                        </label>
+                        <label class="tom-ab-field">Opening line
+                            <textarea id="tomAbCreativeOpening" class="tom-ab-textarea" rows="4" spellcheck="true" placeholder="Hi, it’s Tom from…"></textarea>
+                        </label>
+                        <label class="tom-ab-field">Script
+                            <textarea id="tomAbCreativeScript" class="tom-ab-textarea" rows="6" spellcheck="true" placeholder="You are a friendly outbound SDR…"></textarea>
+                        </label>
+                    </div>
+                    <div class="tom-ab-setup-actions" style="margin-top:12px;">
                         <button type="button" id="tomAbBundleDeployBtn" class="export-btn">Upload</button>
                     </div>
                     <p id="tomAbBundleDeployMsg" class="tom-ab-test-meta" role="status" style="margin:8px 0 0 0;"></p>
@@ -8043,96 +8014,16 @@ ${actionsRow}
             });
         }
 
-        const TOM_AB_MIN_CREATIVES = 2;
-
-        function ensureTomAbCreativesListSeeded() {
-            const list = document.getElementById('tomAbCreativesList');
-            if (!list || list.querySelector('[data-tom-ab-creative-row]')) return;
-            appendTomAbCreativeRow();
-            appendTomAbCreativeRow();
+        function readTomAbCreativeSingleFromForm() {
+            const voice = document.getElementById('tomAbCreativeVoice')?.value.trim() || '';
+            const opening = document.getElementById('tomAbCreativeOpening')?.value.trim() || '';
+            const script = document.getElementById('tomAbCreativeScript')?.value.trim() || '';
+            return { voice, opening, script };
         }
 
-        function renumberTomAbCreativeCards() {
-            const list = document.getElementById('tomAbCreativesList');
-            if (!list) return;
-            const rows = list.querySelectorAll('[data-tom-ab-creative-row]');
-            const n = rows.length;
-            rows.forEach((row, i) => {
-                const lab = row.querySelector('.tom-ab-creative-index');
-                if (lab) lab.textContent = String(i + 1);
-                const rm = row.querySelector('.tom-ab-remove-creative-btn');
-                if (rm) {
-                    if (n <= TOM_AB_MIN_CREATIVES) rm.setAttribute('hidden', '');
-                    else rm.removeAttribute('hidden');
-                }
-            });
-        }
-
-        function appendTomAbCreativeRow(preset) {
-            const list = document.getElementById('tomAbCreativesList');
-            if (!list) return;
-            const p = preset && typeof preset === 'object' ? preset : {};
-            const art = document.createElement('article');
-            art.className = 'tom-ab-creative-card';
-            art.setAttribute('data-tom-ab-creative-row', '');
-            art.innerHTML = `
-                <div class="tom-ab-creative-card-head">
-                    <span class="tom-ab-creative-card-label">Creative <span class="tom-ab-creative-index">1</span></span>
-                    <button type="button" class="export-btn secondary tom-ab-remove-creative-btn" aria-label="Remove this creative">Remove</button>
-                </div>
-                <div class="tom-ab-creative-fields">
-                    <label class="tom-ab-field">Voice ID <span class="tom-ab-test-meta" style="font-weight:400;">(ElevenLabs)</span>
-                        <input type="text" class="tom-ab-input tom-ab-creative-voice" autocomplete="off" spellcheck="false" placeholder="e.g. 21m00Tcm4TlvDq8ikWAM">
-                    </label>
-                    <label class="tom-ab-field">Opening line
-                        <textarea class="tom-ab-textarea tom-ab-creative-opening" rows="3" spellcheck="true" placeholder="Hi, it’s Tom from…"></textarea>
-                    </label>
-                    <label class="tom-ab-field">Script
-                        <textarea class="tom-ab-textarea tom-ab-creative-script" rows="5" spellcheck="true" placeholder="You are a friendly outbound SDR…"></textarea>
-                    </label>
-                </div>`;
-            const vIn = art.querySelector('.tom-ab-creative-voice');
-            const oIn = art.querySelector('.tom-ab-creative-opening');
-            const sIn = art.querySelector('.tom-ab-creative-script');
-            if (vIn && p.voice != null) vIn.value = String(p.voice);
-            if (oIn && p.opening != null) oIn.value = String(p.opening);
-            if (sIn && p.script != null) sIn.value = String(p.script);
-            list.appendChild(art);
-            renumberTomAbCreativeCards();
-        }
-
-        function readTomAbCreativesFromForm() {
-            const list = document.getElementById('tomAbCreativesList');
-            const rows = list ? [...list.querySelectorAll('[data-tom-ab-creative-row]')] : [];
-            const voices = [];
-            const openings = [];
-            const scripts = [];
-            const incompleteDisplayIndexes = [];
-            rows.forEach((row) => {
-                const v = row.querySelector('.tom-ab-creative-voice')?.value.trim() || '';
-                const o = row.querySelector('.tom-ab-creative-opening')?.value.trim() || '';
-                const s = row.querySelector('.tom-ab-creative-script')?.value.trim() || '';
-                const filled = (v ? 1 : 0) + (o ? 1 : 0) + (s ? 1 : 0);
-                if (filled === 0) return;
-                const displayIdx = row.querySelector('.tom-ab-creative-index')?.textContent?.trim() || '?';
-                if (filled < 3) {
-                    incompleteDisplayIndexes.push(displayIdx);
-                    return;
-                }
-                voices.push(v);
-                openings.push(o);
-                scripts.push(s);
-            });
-            return { voices, openings, scripts, incompleteDisplayIndexes };
-        }
-
-        function tomAbCreativesUploadError(read) {
-            if (read.incompleteDisplayIndexes.length) {
-                const x = read.incompleteDisplayIndexes[0];
-                return `Creative ${x} needs a voice ID, opening line, and script.`;
-            }
-            if (read.voices.length < TOM_AB_MIN_CREATIVES) {
-                return `Add at least ${TOM_AB_MIN_CREATIVES} complete creatives (fill every field or remove empty cards).`;
+        function tomAbSingleCreativeUploadError(t) {
+            if (!t.voice || !t.opening || !t.script) {
+                return 'Enter a voice ID, opening line, and script (one of each).';
             }
             return '';
         }
@@ -8147,6 +8038,15 @@ ${actionsRow}
                 if (v || o || s) triples.push({ voice: v, opening: o, script: s });
             }
             return triples;
+        }
+
+        function tomAbDedupeIdenticalPreviewTriples(triples) {
+            if (triples.length <= 1) return triples;
+            const f = triples[0];
+            const allSame = triples.every(
+                (t) => t.voice === f.voice && t.opening === f.opening && t.script === f.script
+            );
+            return allSame ? [f] : triples;
         }
 
         function extractTomAbCreativesFromPayload(ab) {
@@ -8194,40 +8094,30 @@ ${actionsRow}
         }
 
         function syncTomAbCreativeTextareasFromServer(ab) {
-            const list = document.getElementById('tomAbCreativesList');
-            if (!list) return;
-            let anyFilled = false;
-            list.querySelectorAll('[data-tom-ab-creative-row]').forEach((row) => {
-                const v = row.querySelector('.tom-ab-creative-voice')?.value.trim();
-                const o = row.querySelector('.tom-ab-creative-opening')?.value.trim();
-                const s = row.querySelector('.tom-ab-creative-script')?.value.trim();
-                if (v || o || s) anyFilled = true;
-            });
-            if (anyFilled) return;
+            const vEl = document.getElementById('tomAbCreativeVoice');
+            const oEl = document.getElementById('tomAbCreativeOpening');
+            const sEl = document.getElementById('tomAbCreativeScript');
+            if (!vEl || !oEl || !sEl) return;
+            if (vEl.value.trim() || oEl.value.trim() || sEl.value.trim()) return;
             const ex = extractTomAbCreativesFromPayload(ab);
-            if (ex.voices.length < 2) return;
-            const n = Math.min(ex.voices.length, ex.openings.length, ex.scripts.length);
-            if (n < 2) return;
-            list.innerHTML = '';
-            for (let i = 0; i < n; i++) {
-                appendTomAbCreativeRow({
-                    voice: ex.voices[i],
-                    opening: ex.openings[i],
-                    script: ex.scripts[i]
-                });
-            }
-            renumberTomAbCreativeCards();
+            if (ex.voices.length < 1 || ex.openings.length < 1 || ex.scripts.length < 1) return;
+            vEl.value = ex.voices[0];
+            oEl.value = ex.openings[0];
+            sEl.value = ex.scripts[0];
         }
 
         function renderTomAbCreativesPreviewPanel(ab) {
             const server = extractTomAbCreativesFromPayload(ab);
-            const form = readTomAbCreativesFromForm();
-            const useVoices = server.voices.length >= 2 ? server.voices : form.voices;
-            const useOpenings = server.openings.length >= 2 ? server.openings : form.openings;
-            const useScripts = server.scripts.length >= 2 ? server.scripts : form.scripts;
-            const hasServer =
-                server.voices.length >= 2 || server.openings.length >= 2 || server.scripts.length >= 2;
-            const triples = tomAbZipCreativesForPreview(useVoices, useOpenings, useScripts);
+            const form = readTomAbCreativeSingleFromForm();
+            const formVoices = form.voice ? [form.voice] : [];
+            const formOpenings = form.opening ? [form.opening] : [];
+            const formScripts = form.script ? [form.script] : [];
+            const useVoices = server.voices.length ? server.voices : formVoices;
+            const useOpenings = server.openings.length ? server.openings : formOpenings;
+            const useScripts = server.scripts.length ? server.scripts : formScripts;
+            const hasServer = server.voices.length > 0 || server.openings.length > 0 || server.scripts.length > 0;
+            const rawTriples = tomAbZipCreativesForPreview(useVoices, useOpenings, useScripts);
+            const triples = tomAbDedupeIdenticalPreviewTriples(rawTriples);
             const hasAny = triples.length > 0;
             const badge = hasServer
                 ? '<span class="tom-ab-test-meta">On test</span>'
@@ -8239,8 +8129,9 @@ ${actionsRow}
                 const voiceL = c.voice ? escapeHtml(c.voice) : '—';
                 const openL = c.opening ? escapeHtml(c.opening) : '—';
                 const scrL = c.script ? escapeHtml(c.script) : '—';
+                const title = triples.length === 1 ? 'Your creative' : `Creative ${i + 1}`;
                 return `<div class="tom-ab-creative-preview-card">
-                    <h5>Creative ${i + 1}</h5>
+                    <h5>${title}</h5>
                     <div class="tom-ab-creative-preview-bits">
                         <p class="tom-ab-test-meta" style="margin:0 0 2px 0;"><strong>Voice</strong></p>
                         <p style="margin:0 0 10px 0;"><code style="font-size:0.9em;word-break:break-all;">${voiceL}</code></p>
@@ -8265,7 +8156,7 @@ ${actionsRow}
                 ${grid}
                 ${
                     !hasAny
-                        ? '<p class="tom-ab-test-meta" style="margin:10px 0 0 0;">Nothing to show yet — add at least two creatives above, then Upload.</p>'
+                        ? '<p class="tom-ab-test-meta" style="margin:10px 0 0 0;">Nothing to show yet — enter voice, opening, and script above, then Upload.</p>'
                         : ''
                 }
             </section>`;
@@ -8400,37 +8291,16 @@ ${actionsRow}
 
         function initTomAbTestSetupPanel() {
             if (!isTomOutreachDashboard(currentClient)) return;
-            ensureTomAbCreativesListSeeded();
             const sec = document.getElementById('tomAbOutreachAbSection');
-            if (sec && sec.dataset.tomAbCreativesUiBound !== '1') {
-                sec.dataset.tomAbCreativesUiBound = '1';
+            if (sec && sec.dataset.tomAbCreativesPreviewBound !== '1') {
+                sec.dataset.tomAbCreativesPreviewBound = '1';
                 let previewT;
                 sec.addEventListener('input', (e) => {
-                    if (!e.target.closest('#tomAbCreativesList')) return;
+                    if (!e.target.closest('.tom-ab-creatives-form-grid')) return;
                     clearTimeout(previewT);
                     previewT = setTimeout(() => {
                         if (isTomOutreachDashboard(currentClient)) renderTomAbTestSection(dashboardData);
                     }, 140);
-                });
-                sec.addEventListener('click', (e) => {
-                    if (e.target.closest('#tomAbAddCreativeBtn')) {
-                        e.preventDefault();
-                        appendTomAbCreativeRow();
-                        if (isTomOutreachDashboard(currentClient)) renderTomAbTestSection(dashboardData);
-                        return;
-                    }
-                    const rm = e.target.closest('.tom-ab-remove-creative-btn');
-                    if (rm) {
-                        if (rm.hasAttribute('hidden')) return;
-                        e.preventDefault();
-                        const list = document.getElementById('tomAbCreativesList');
-                        const row = rm.closest('[data-tom-ab-creative-row]');
-                        const count = list ? list.querySelectorAll('[data-tom-ab-creative-row]').length : 0;
-                        if (!list || !row || count <= TOM_AB_MIN_CREATIVES) return;
-                        row.remove();
-                        renumberTomAbCreativeCards();
-                        if (isTomOutreachDashboard(currentClient)) renderTomAbTestSection(dashboardData);
-                    }
                 });
             }
             const bbtn = document.getElementById('tomAbBundleDeployBtn');
@@ -8454,14 +8324,17 @@ ${actionsRow}
 
         async function tomAbBundleDeploy() {
             const msg = document.getElementById('tomAbBundleDeployMsg');
-            const read = readTomAbCreativesFromForm();
-            const errLine = tomAbCreativesUploadError(read);
+            const t = readTomAbCreativeSingleFromForm();
+            const errLine = tomAbSingleCreativeUploadError(t);
             if (errLine) {
                 if (msg) msg.textContent = errLine;
                 return;
             }
-            const { voices, openings, scripts } = read;
-            const json = JSON.stringify({ voices, openings, scripts });
+            const json = JSON.stringify({
+                voices: [t.voice],
+                openings: [t.opening],
+                scripts: [t.script]
+            });
             if (msg) msg.textContent = 'Uploading…';
             const btn = document.getElementById('tomAbBundleDeployBtn');
             if (btn) btn.disabled = true;
@@ -8503,7 +8376,6 @@ ${actionsRow}
                 root.innerHTML = '';
                 return;
             }
-            ensureTomAbCreativesListSeeded();
             const ab = data && data.outboundAbTest;
             syncTomAbCreativeTextareasFromServer(ab);
 
