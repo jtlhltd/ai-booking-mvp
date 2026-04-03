@@ -8889,24 +8889,30 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         ORDER BY c.created_at DESC
       `, [clientKey]),
       query(`
-        SELECT DISTINCT ON (l.phone) 
-               l.created_at AS lead_created, 
-               c.created_at AS call_created
+        SELECT DISTINCT ON (l.phone)
+               l.created_at AS lead_created,
+               fc.call_created AS call_created
         FROM leads l
-        JOIN calls c ON c.client_key = l.client_key
-          AND (
-            c.lead_phone = l.phone
-            OR (
-              LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
-              AND RIGHT(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), 10)
-                = RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
+        INNER JOIN LATERAL (
+          SELECT c.created_at AS call_created
+          FROM calls c
+          WHERE c.client_key = l.client_key
+            AND c.created_at >= l.created_at
+            AND c.created_at <= l.created_at + INTERVAL '48 hours'
+            AND (
+              c.lead_phone = l.phone
+              OR (
+                LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
+                AND RIGHT(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), 10)
+                  = RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
+              )
             )
-          )
-        WHERE c.client_key = $1
+          ORDER BY c.created_at ASC
+          LIMIT 1
+        ) fc ON true
+        WHERE l.client_key = $1
           AND l.created_at >= NOW() - INTERVAL '30 days'
-          AND c.created_at >= l.created_at
-          AND c.created_at <= l.created_at + INTERVAL '48 hours'
-        ORDER BY l.phone, c.created_at ASC
+        ORDER BY l.phone, fc.call_created ASC, l.created_at ASC
         LIMIT 500
       `, [clientKey]),
       query(`

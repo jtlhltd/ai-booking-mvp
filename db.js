@@ -188,6 +188,7 @@ async function initPostgres() {
     );
     CREATE INDEX IF NOT EXISTS leads_tenant_idx ON leads(client_key);
     CREATE INDEX IF NOT EXISTS leads_phone_idx ON leads(client_key, phone);
+    CREATE INDEX IF NOT EXISTS leads_client_created_idx ON leads(client_key, created_at DESC);
     
     -- Add unique constraint on (client_key, phone) for ON CONFLICT support
     -- This allows upsert operations to prevent duplicate leads per client
@@ -253,6 +254,8 @@ async function initPostgres() {
     );
     CREATE INDEX IF NOT EXISTS calls_tenant_idx ON calls(client_key);
     CREATE INDEX IF NOT EXISTS calls_phone_idx ON calls(client_key, lead_phone);
+    -- First outbound within window (dashboard lead → first call): seek by tenant + phone + time
+    CREATE INDEX IF NOT EXISTS calls_client_phone_created_idx ON calls(client_key, lead_phone, created_at ASC);
     CREATE INDEX IF NOT EXISTS calls_status_idx ON calls(status);
     CREATE INDEX IF NOT EXISTS calls_outcome_idx ON calls(outcome);
     CREATE INDEX IF NOT EXISTS calls_created_idx ON calls(created_at);
