@@ -24546,12 +24546,80 @@ async function runOutboundAbTestSetup(clientKey, body, res) {
         .slice(0, 24);
       nameTrim = `ab_${slug || 'tenant'}_${nanoid(10)}`;
     }
-    if (!Array.isArray(variants) || variants.length < 2) {
+    if (!Array.isArray(variants) || variants.length < 1) {
+      res.status(400).json({ ok: false, error: 'At least one variant is required' });
+      return;
+    }
+    let variantsList = [...variants];
+    if (variantsList.length === 1) {
+      const { resolveOutboundAbBaselineForDimension } = await import('./lib/outbound-ab-baseline.js');
+      const baseline = await resolveOutboundAbBaselineForDimension(clientKey, lockClient, dimRaw);
+      const u = variantsList[0];
+      if (!baseline) {
+        res.status(400).json({
+          ok: false,
+          error: `Single ${dimRaw} upload: could not detect your current live ${dimRaw}. Upload two explicit variants in JSON, or configure your assistant (VAPI_PRIVATE_KEY + assistantId), vapi.assistantOverrides, or an active outbound A/B experiment so we can read the control arm.`
+        });
+        return;
+      }
+      if (dimRaw === 'voice') {
+        const ch = u.voice != null ? String(u.voice).trim() : '';
+        if (!ch) {
+          res.status(400).json({ ok: false, error: 'Challenger voice is empty' });
+          return;
+        }
+        if (ch === baseline) {
+          res.status(400).json({
+            ok: false,
+            error: 'New voice matches your current live voice. Use a different voice ID for the test.'
+          });
+          return;
+        }
+        variantsList = [{ name: 'control', voice: baseline }, { name: 'variant_b', voice: ch }];
+      } else if (dimRaw === 'opening') {
+        const ch = u.firstMessage != null ? String(u.firstMessage).trim() : '';
+        if (!ch) {
+          res.status(400).json({ ok: false, error: 'Challenger opening line is empty' });
+          return;
+        }
+        if (ch === baseline) {
+          res.status(400).json({
+            ok: false,
+            error: 'Opening line matches your current live line. Change the uploaded text to run a test.'
+          });
+          return;
+        }
+        variantsList = [
+          { name: 'control', firstMessage: baseline },
+          { name: 'variant_b', firstMessage: ch }
+        ];
+      } else {
+        const ch =
+          u.script != null
+            ? String(u.script).trim()
+            : u.systemMessage != null
+              ? String(u.systemMessage).trim()
+              : '';
+        if (!ch) {
+          res.status(400).json({ ok: false, error: 'Challenger script is empty' });
+          return;
+        }
+        if (ch === baseline) {
+          res.status(400).json({
+            ok: false,
+            error: 'Script matches your current live script. Change the uploaded script to run a test.'
+          });
+          return;
+        }
+        variantsList = [{ name: 'control', script: baseline }, { name: 'variant_b', script: ch }];
+      }
+    }
+    if (variantsList.length < 2) {
       res.status(400).json({ ok: false, error: 'At least two variants are required' });
       return;
     }
     const mapped = [];
-    for (const v of variants) {
+    for (const v of variantsList) {
       const vn = String(v.name || v.variantName || '').trim();
       if (!vn) {
         res.status(400).json({ ok: false, error: 'Each variant needs a name' });

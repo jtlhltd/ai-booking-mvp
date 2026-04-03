@@ -15,6 +15,7 @@ describe('outbound-ab-upload-spec', () => {
     assertEqual(r.variants.length, 2);
     assertEqual(r.variants[0].firstMessage, 'Hi A');
     assertEqual(r.variants[1].firstMessage, 'Hi B');
+    assertTrue(r.controlFromLive === false);
   });
 
   test('parses wrapped object with experimentName', () => {
@@ -29,28 +30,29 @@ describe('outbound-ab-upload-spec', () => {
     assertEqual(r.experimentName, 'my_exp');
     assertEqual(r.variants[0].voice, 'v1');
     assertEqual(r.variants[1].voice, 'v2');
+    assertTrue(r.controlFromLive === false);
   });
 
-  test('duplicates single variant in array (A/B shape)', () => {
+  test('single variant defers control to server (live baseline)', () => {
     const r = parseOutboundAbUploadSpec(JSON.stringify([{ name: 'only', script: 'x' }]), 'script');
-    assertEqual(r.variants.length, 2);
-    assertEqual(r.variants[0].name, 'control');
+    assertEqual(r.variants.length, 1);
+    assertEqual(r.variants[0].name, 'only');
     assertEqual(r.variants[0].script, 'x');
-    assertEqual(r.variants[1].name, 'variant_b');
-    assertEqual(r.variants[1].script, 'x');
+    assertTrue(r.controlFromLive === true);
   });
 
-  test('parses flat single-value object for script', () => {
+  test('parses flat single-value object for script (one row + flag)', () => {
     const r = parseOutboundAbUploadSpec(JSON.stringify({ script: 'one script body' }), 'script');
-    assertEqual(r.variants.length, 2);
+    assertEqual(r.variants.length, 1);
     assertEqual(r.variants[0].script, 'one script body');
-    assertEqual(r.variants[1].script, 'one script body');
+    assertTrue(r.controlFromLive === true);
   });
 
-  test('parses flat object for voice', () => {
+  test('parses flat object for voice (challenger only; control from live)', () => {
     const r = parseOutboundAbUploadSpec(JSON.stringify({ voiceId: 'vid123' }), 'voice');
-    assertEqual(r.variants.length, 2);
+    assertEqual(r.variants.length, 1);
     assertEqual(r.variants[0].voice, 'vid123');
+    assertTrue(r.controlFromLive === true);
   });
 });
 

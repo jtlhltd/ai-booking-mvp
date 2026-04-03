@@ -5519,7 +5519,7 @@
 
                 <section class="tom-ab-simple-upload" aria-label="Upload creatives and view test results">
                     <p class="tom-ab-test-meta" style="margin:0 0 14px 0;">
-                        Choose what you’re updating, enter <strong>only that one</strong> value, then Upload. Switch tabs to edit another piece later.
+                        Choose what you’re updating, enter <strong>only that one</strong> value, then Upload. For voice / opener / script, one value is your <strong>new</strong> variant — we keep <strong>control</strong> aligned with what’s live (assistant or current experiment). Switch tabs to edit another piece later.
                     </p>
                     <fieldset class="tom-ab-dim-picker">
                         <legend>Upload type</legend>
@@ -8459,7 +8459,7 @@ ${actionsRow}
             }
             const sameVoiceNote =
                 dimKey === 'voice' && vars.length >= 2 && tomAbVoiceSlotsAllSameId(vars)
-                    ? `<p class="tom-ab-test-meta" role="note" style="margin:12px 0 0 0;">You uploaded <strong>one</strong> voice ID, so <strong>control</strong> and <strong>variant_b</strong> both show it on purpose: A/B needs two arms so leads can be assigned and counted separately. To <em>compare two different voices</em>, upload JSON with a <code>variants</code> array (two objects, each with <code>name</code> and <code>voiceId</code> or <code>voice</code>).</p>`
+                    ? `<p class="tom-ab-test-meta" role="note" style="margin:12px 0 0 0;">Both arms show the same voice ID. If you didn’t mean that, upload JSON with two different <code>voiceId</code> values in a <code>variants</code> array, or upload one ID and we’ll set <strong>control</strong> from your live assistant / current experiment.</p>`
                     : '';
             return `<div class="tom-ab-creative-dim-col" data-tom-ab-creative-dim="${dimKey}">
                 <h5 class="tom-ab-creative-dim-title">${escapeHtml(title)}</h5>
