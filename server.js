@@ -24564,12 +24564,14 @@ async function runOutboundAbTestSetup(clientKey, body, res) {
     let variantsList = [...variants];
     if (variantsList.length === 1) {
       const { resolveOutboundAbBaselineForDimension } = await import('./lib/outbound-ab-baseline.js');
-      const baseline = await resolveOutboundAbBaselineForDimension(clientKey, lockClient, dimRaw);
+      const baseline = await resolveOutboundAbBaselineForDimension(clientKey, lockClient, dimRaw, {
+        excludeSameDimensionExperiment: true
+      });
       const u = variantsList[0];
       if (!baseline) {
         res.status(400).json({
           ok: false,
-          error: `Single ${dimRaw} upload: could not read a baseline ${dimRaw}. Control is taken from this tenant’s Vapi assistant first (needs VAPI_PRIVATE_KEY + assistantId), then vapi.assistantOverrides, then the current A/B experiment control. Upload two explicit variants in JSON, or fix assistant access.`
+          error: `Single ${dimRaw} upload: could not read a baseline ${dimRaw}. Control comes from this tenant’s Vapi assistant (VAPI_PRIVATE_KEY + vapi.assistantId), then vapi.assistantOverrides, then legacy outboundAbExperiment — we intentionally do not reuse the active ${dimRaw} experiment (it is what you are replacing). Check server logs for [OUTBOUND AB BASELINE] if the assistant request failed. You can also upload JSON with two explicit variants.`
         });
         return;
       }

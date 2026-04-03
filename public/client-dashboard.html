@@ -5519,7 +5519,7 @@
 
                 <section class="tom-ab-simple-upload" aria-label="Upload creatives and view test results">
                     <p class="tom-ab-test-meta" style="margin:0 0 14px 0;">
-                        Choose what you’re updating, enter <strong>only that one</strong> value, then Upload. For voice / opener / script, one value is your <strong>new</strong> variant — <strong>control</strong> matches your <strong>Vapi assistant</strong> (voice, first message, system prompt) when the server can read it, then tenant overrides, then the prior A/B control if needed. Switch tabs to edit another piece later.
+                        Choose what you’re updating, enter <strong>only that one</strong> value, then Upload. One value is your <strong>new</strong> variant — <strong>control</strong> is read from your <strong>Vapi assistant</strong> first, then tenant <code>vapi.assistantOverrides</code>, then a <strong>legacy</strong> combined A/B experiment if present. We do <strong>not</strong> copy the active voice/opener/script experiment (that’s the test you’re replacing). Switch tabs to edit another piece later.
                     </p>
                     <fieldset class="tom-ab-dim-picker">
                         <legend>Upload type</legend>
