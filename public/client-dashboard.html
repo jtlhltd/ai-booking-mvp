@@ -8432,6 +8432,45 @@ ${actionsRow}
             if (msg) msg.textContent = 'Update the challenger below, then click Save changes.';
         }
 
+        /** Apply stop-test response immediately so the UI clears even if /demo-dashboard fetch fails or times out. */
+        function tomAbMergeOutboundAbAfterStop(dim, data) {
+            if (!dashboardData || typeof dashboardData !== 'object') return;
+            const ab = dashboardData.outboundAbTest;
+            if (!ab || typeof ab !== 'object') return;
+            const key = dim === 'voice' ? 'voice' : dim === 'opening' ? 'opening' : 'script';
+            const stopped =
+                data && data.stoppedExperimentName != null ? String(data.stoppedExperimentName).trim() : '';
+            const next = { ...ab, [key]: { experimentName: null, experimentNameSource: null, summary: null } };
+            const dd = data && data.dashboardDial && typeof data.dashboardDial === 'object' ? data.dashboardDial : null;
+            if (dd) {
+                if (Array.isArray(dd.dialActiveDimensions)) next.dialActiveDimensions = dd.dialActiveDimensions;
+                if (Object.prototype.hasOwnProperty.call(dd, 'dialWarning')) next.dialWarning = dd.dialWarning;
+                if (Object.prototype.hasOwnProperty.call(dd, 'focusDimension')) next.focusDimension = dd.focusDimension;
+            }
+            const trimExp = (s) => (s != null && String(s).trim() !== '' ? String(s).trim() : '');
+            const hasVoice = trimExp(next.voice && next.voice.experimentName);
+            const hasOpening = trimExp(next.opening && next.opening.experimentName);
+            const hasScript = trimExp(next.script && next.script.experimentName);
+            const anyDim = !!(hasVoice || hasOpening || hasScript);
+            const leg = trimExp(next.legacy && next.legacy.experimentName);
+            if (!anyDim && leg) next.mode = 'legacy';
+            else next.mode = 'dimensional';
+            const lr = next.liveResults && typeof next.liveResults === 'object' ? { ...next.liveResults } : null;
+            if (lr) {
+                const fe = lr.focusExperiment;
+                if (
+                    fe &&
+                    (String(fe.dimension || '') === dim ||
+                        (stopped && String(fe.experimentName || '') === stopped))
+                ) {
+                    lr.focusExperiment = null;
+                    lr.reason = 'no_experiment_data';
+                }
+                next.liveResults = lr;
+            }
+            dashboardData = { ...dashboardData, outboundAbTest: next };
+        }
+
         async function tomAbStopDimensionTest(dim) {
             if (!isOutreachDashboardClient(currentClient)) return;
             const dimLabel = dim === 'voice' ? 'voice' : dim === 'opening' ? 'opening line' : 'script';
@@ -8453,7 +8492,14 @@ ${actionsRow}
                 if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
                 if (tomAbPendingEditDim === dim) tomAbPendingEditDim = null;
                 tomAbPerDimDraft[dim] = '';
-                const livePayload = await fetchLiveData(currentClient);
+                tomAbMergeOutboundAbAfterStop(dim, data);
+                renderTomAbTestSection(dashboardData);
+                updateTomAbUploadButtonLabel();
+                let livePayload = await fetchLiveData(currentClient);
+                if (!livePayload) {
+                    await new Promise((r) => setTimeout(r, 500));
+                    livePayload = await fetchLiveData(currentClient);
+                }
                 if (livePayload) {
                     dashboardData = mergeData({}, livePayload, false);
                     updateStatusBar(dashboardData);

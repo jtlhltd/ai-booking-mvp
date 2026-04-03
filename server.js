@@ -24881,7 +24881,40 @@ async function runOutboundAbDimensionStop(clientKey, dimRaw, res) {
     await deactivateAbTestExperimentsByName(clientKey, expName);
     const vapiPatch = vapiPatchAfterStopOutboundAbDimension(lockClient.vapi, d);
     await updateClientConfig(clientKey, { vapi: vapiPatch });
-    res.json({ ok: true, dimension: d, stoppedExperimentName: expName });
+    invalidateClientCache(clientKey);
+    const after = await getFullClient(clientKey);
+    const v = after?.vapi && typeof after.vapi === 'object' ? after.vapi : {};
+    const trimDial = (x) => (x != null && String(x).trim() !== '' ? String(x).trim() : '');
+    const voiceExp = trimDial(v.outboundAbVoiceExperiment);
+    const openingExp = trimDial(v.outboundAbOpeningExperiment);
+    const scriptExp = trimDial(v.outboundAbScriptExperiment);
+    const focusStored = trimDial(v.outboundAbFocusDimension).toLowerCase();
+    const focusValid =
+      focusStored === 'voice' || focusStored === 'opening' || focusStored === 'script' ? focusStored : '';
+    const { resolveOutboundAbDimensionsForDial, outboundAbDialWarning } = await import('./lib/outbound-ab-focus.js');
+    const dialPairs = resolveOutboundAbDimensionsForDial({
+      voiceExp,
+      openingExp,
+      scriptExp,
+      focusDimension: focusValid
+    });
+    const dialActiveDimensions = dialPairs.map((pair) => pair[0]);
+    const dialWarning = outboundAbDialWarning({
+      voiceExp,
+      openingExp,
+      scriptExp,
+      focusDimension: focusValid
+    });
+    res.json({
+      ok: true,
+      dimension: d,
+      stoppedExperimentName: expName,
+      dashboardDial: {
+        dialActiveDimensions,
+        dialWarning,
+        focusDimension: focusValid || null
+      }
+    });
   } catch (error) {
     console.error('[OUTBOUND AB DIMENSION STOP]', error);
     res.status(500).json({ ok: false, error: error.message || String(error) });
