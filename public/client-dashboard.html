@@ -8459,7 +8459,7 @@ ${actionsRow}
             }
             const sameVoiceNote =
                 dimKey === 'voice' && vars.length >= 2 && tomAbVoiceSlotsAllSameId(vars)
-                    ? `<p class="tom-ab-test-meta" role="note" style="margin:12px 0 0 0;">Both arms show the same voice ID. If you didn’t mean that, upload JSON with two different <code>voiceId</code> values in a <code>variants</code> array, or upload one ID and we’ll set <strong>control</strong> from your live assistant / current experiment.</p>`
+                    ? `<p class="tom-ab-test-meta" role="note" style="margin:12px 0 0 0;">Both rows show the same ID — <strong>control</strong> should be your Vapi assistant voice. If they match, that assistant is configured with this voice on Vapi, or the server could not fetch the assistant (set <code>VAPI_PRIVATE_KEY</code> and tenant <code>assistantId</code>; check logs for <code>[OUTBOUND AB BASELINE]</code>).</p>`
                     : '';
             return `<div class="tom-ab-creative-dim-col" data-tom-ab-creative-dim="${dimKey}">
                 <h5 class="tom-ab-creative-dim-title">${escapeHtml(title)}</h5>

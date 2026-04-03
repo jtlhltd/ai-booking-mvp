@@ -69,6 +69,15 @@ describe('outbound-ab-variant', () => {
     assertEqual(overrides.model.messages[0].content, 'Only this');
   });
 
+  test('dimensional control variant applies no overrides (live Vapi assistant)', () => {
+    const { overrides } = buildAssistantOverridesFromVariantConfig(
+      { voice: 'ignored', firstMessage: 'ignored', script: 'ignored' },
+      'voice',
+      { variantName: 'control' }
+    );
+    assertEqual(Object.keys(overrides).length, 0);
+  });
+
   test('mergeAssistantOverrides merges variableValues and prefers AB model.messages', () => {
     const merged = mergeAssistantOverrides(
       { variableValues: { a: '1' }, model: { model: 'gpt-4o', temperature: 0.1 } },
