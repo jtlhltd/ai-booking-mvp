@@ -5,24 +5,8 @@ import { buildOutboundAbLiveResultsPayload } from '../../lib/outbound-ab-live-re
 const summaryTwo = {
   hasDbVariants: true,
   variants: [
-    {
-      variantName: 'control',
-      totalLeads: 10,
-      livePickupLeads: 10,
-      convertedLeads: 0,
-      conversionRatePct: 0,
-      followUpLeads: 3,
-      followUpRatePct: 30
-    },
-    {
-      variantName: 'variant_b',
-      totalLeads: 12,
-      livePickupLeads: 12,
-      convertedLeads: 0,
-      conversionRatePct: 0,
-      followUpLeads: 4,
-      followUpRatePct: 33.33
-    }
+    { variantName: 'control', totalLeads: 10, livePickupLeads: 10, convertedLeads: 0, conversionRatePct: 0 },
+    { variantName: 'variant_b', totalLeads: 12, livePickupLeads: 12, convertedLeads: 0, conversionRatePct: 0 }
   ]
 };
 
@@ -69,8 +53,8 @@ test('dimensional: prefers sole dial dimension when set', () => {
   const openingSummary = {
     hasDbVariants: true,
     variants: [
-      { variantName: 'a', totalLeads: 5, livePickupLeads: 5, convertedLeads: 0, conversionRatePct: 0, followUpLeads: 1, followUpRatePct: 20 },
-      { variantName: 'b', totalLeads: 6, livePickupLeads: 6, convertedLeads: 0, conversionRatePct: 0, followUpLeads: 2, followUpRatePct: 33.33 }
+      { variantName: 'a', totalLeads: 5, livePickupLeads: 5, convertedLeads: 0, conversionRatePct: 0 },
+      { variantName: 'b', totalLeads: 6, livePickupLeads: 6, convertedLeads: 0, conversionRatePct: 0 }
     ]
   };
   const p = buildOutboundAbLiveResultsPayload({

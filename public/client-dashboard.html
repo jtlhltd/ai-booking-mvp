@@ -6555,7 +6555,7 @@ ${actionsRow}
                             return [
                                 v.variantName,
                                 v.totalLeads,
-                                v.followUpLeads ?? v.convertedLeads,
+                                v.convertedLeads,
                                 t.voiceId || '',
                                 (t.openingLine || '').slice(0, 40),
                                 (t.scriptPreview || '').slice(0, 40)
@@ -6569,7 +6569,7 @@ ${actionsRow}
                         return [
                             v.variantName,
                             v.totalLeads,
-                            v.followUpLeads ?? v.convertedLeads,
+                            v.convertedLeads,
                             t.voiceId || '',
                             (t.openingLine || '').slice(0, 40),
                             (t.scriptPreview || '').slice(0, 40)
@@ -8436,9 +8436,7 @@ ${actionsRow}
                             <strong>${escapeHtml(v.variantName)}</strong>
                             <span class="tom-ab-test-meta">${formatNumber(
                             typeof v.livePickupLeads === 'number' ? v.livePickupLeads : parseInt(v.livePickupLeads, 10) || 0
-                        )} live · ${formatNumber(v.totalLeads)} assigned · ${formatNumber(
-                            typeof v.followUpLeads === 'number' ? v.followUpLeads : parseInt(v.followUpLeads, 10) || 0
-                        )} follow-up</span>
+                        )} live · ${formatNumber(v.totalLeads)} assigned</span>
                         </div>
                         ${tomAbVariantCreativeSnippet(dimKey, v)}
                     </div>`
@@ -8667,12 +8665,6 @@ ${actionsRow}
             const tl = typeof v.totalLeads === 'number' ? v.totalLeads : parseInt(v.totalLeads, 10) || 0;
             const lpu =
                 typeof v.livePickupLeads === 'number' ? v.livePickupLeads : parseInt(v.livePickupLeads, 10) || 0;
-            const fu =
-                typeof v.followUpLeads === 'number' ? v.followUpLeads : parseInt(v.followUpLeads, 10) || 0;
-            const fuRate =
-                tl > 0 && v.followUpRatePct != null && Number.isFinite(Number(v.followUpRatePct))
-                    ? `${Number(v.followUpRatePct).toFixed(1)}%`
-                    : '—';
             const meets = lpu >= minN;
             const sampleCell = meets
                 ? `<span class="tom-ab-live-ok">✓ ${formatNumber(minN)}+</span>`
@@ -8681,8 +8673,6 @@ ${actionsRow}
                 <td><strong>${escapeHtml(v.variantName)}</strong></td>
                 <td>${formatNumber(lpu)}</td>
                 <td>${formatNumber(tl)}</td>
-                <td>${formatNumber(fu)}</td>
-                <td>${escapeHtml(fuRate)}</td>
                 <td>${sampleCell}</td>
             </tr>`;
         }
@@ -8690,8 +8680,6 @@ ${actionsRow}
         function tomAbMonitoringComparisonPlaceholderRows(minN) {
             const row = (name) => `<tr class="tom-ab-mon-placeholder-row">
                 <td><strong>${escapeHtml(name)}</strong></td>
-                <td>—</td>
-                <td>—</td>
                 <td>—</td>
                 <td>—</td>
                 <td><span class="tom-ab-live-progress">0 / ${formatNumber(minN)}</span></td>
@@ -8708,8 +8696,6 @@ ${actionsRow}
                                 <th scope="col">Variant</th>
                                 <th scope="col">Live pickups</th>
                                 <th scope="col">Assigned</th>
-                                <th scope="col" title="Numbers with at least two outbound calls logged">Follow-up dials</th>
-                                <th scope="col" title="Share of assigned leads (see Assigned column) with 2+ calls">% w/ follow-up</th>
                                 <th scope="col">Sample</th>
                             </tr>
                         </thead>`;
@@ -8743,7 +8729,7 @@ ${actionsRow}
                         <tbody>${
                             rows ||
                             tomAbMonitoringComparisonPlaceholderRows(minN) +
-                                `<tr><td colspan="6" class="tom-ab-test-meta" style="border-top:none;">Waiting for first assigned leads…</td></tr>`
+                                `<tr><td colspan="4" class="tom-ab-test-meta" style="border-top:none;">Waiting for first assigned leads…</td></tr>`
                         }</tbody>
                     </table>
                 </div>
@@ -8764,7 +8750,7 @@ ${actionsRow}
                   }</p>`
                 : `<p class="tom-ab-test-meta" style="margin:0 0 14px 0;"><strong>Comparison</strong> — control vs variant per dimension. Goal: <strong>${formatNumber(
                       minN
-                  )}</strong> live pickups each (answered, not voicemail) before we treat samples as solid. <strong>Follow-up dials</strong> counts assigned numbers with at least two outbound calls. <span class="tom-ab-live-pill">Primary in summary</span> is the slice the server highlights when several dimensions have data.</p>`;
+                  )}</strong> live pickups each (answered, not voicemail) before we treat samples as solid. Counts reflect the AI outbound dial only—not human follow-up calls off the sheet. <span class="tom-ab-live-pill">Primary in summary</span> is the slice the server highlights when several dimensions have data.</p>`;
             const blocks = [
                 renderTomAbDimensionMonitoringBlock('voice', 'Voice test', (ab && ab.voice) || {}, minN, primDim === 'voice'),
                 renderTomAbDimensionMonitoringBlock(
@@ -8856,8 +8842,6 @@ ${actionsRow}
                                     <th scope="col">Variant</th>
                                     <th scope="col">Live pickups</th>
                                     <th scope="col">Assigned</th>
-                                    <th scope="col" title="Numbers with at least two outbound calls logged">Follow-up dials</th>
-                                    <th scope="col" title="Share of assigned leads with 2+ calls">% w/ follow-up</th>
                                     <th scope="col">Sample target</th>
                                 </tr>
                             </thead>
