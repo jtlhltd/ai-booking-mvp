@@ -31,14 +31,26 @@ describe('outbound-ab-upload-spec', () => {
     assertEqual(r.variants[1].voice, 'v2');
   });
 
-  test('rejects one variant', () => {
-    let err;
-    try {
-      parseOutboundAbUploadSpec(JSON.stringify([{ name: 'only', script: 'x' }]), 'script');
-    } catch (e) {
-      err = e;
-    }
-    assertTrue(err && String(err.message).includes('At least two'));
+  test('duplicates single variant in array (A/B shape)', () => {
+    const r = parseOutboundAbUploadSpec(JSON.stringify([{ name: 'only', script: 'x' }]), 'script');
+    assertEqual(r.variants.length, 2);
+    assertEqual(r.variants[0].name, 'control');
+    assertEqual(r.variants[0].script, 'x');
+    assertEqual(r.variants[1].name, 'variant_b');
+    assertEqual(r.variants[1].script, 'x');
+  });
+
+  test('parses flat single-value object for script', () => {
+    const r = parseOutboundAbUploadSpec(JSON.stringify({ script: 'one script body' }), 'script');
+    assertEqual(r.variants.length, 2);
+    assertEqual(r.variants[0].script, 'one script body');
+    assertEqual(r.variants[1].script, 'one script body');
+  });
+
+  test('parses flat object for voice', () => {
+    const r = parseOutboundAbUploadSpec(JSON.stringify({ voiceId: 'vid123' }), 'voice');
+    assertEqual(r.variants.length, 2);
+    assertEqual(r.variants[0].voice, 'vid123');
   });
 });
 

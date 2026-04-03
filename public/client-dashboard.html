@@ -1387,17 +1387,55 @@
             border-top: 1px solid var(--border, #e8eaf5);
         }
 
-        .tom-ab-creatives-form-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 14px;
+        .tom-ab-dim-picker {
+            margin: 0 0 12px 0;
+            padding: 0;
+            border: none;
+        }
+
+        .tom-ab-dim-picker legend {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--muted);
+            margin-bottom: 8px;
+            padding: 0;
+        }
+
+        .tom-ab-dim-segments {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .tom-ab-dim-segment {
+            padding: 8px 14px;
+            border-radius: 999px;
+            border: 1px solid var(--border, #e8eaf5);
+            background: rgba(255, 255, 255, 0.5);
+            font-size: 0.85rem;
+            font-family: inherit;
+            cursor: pointer;
+            color: var(--text, #2f3147);
+        }
+
+        .tom-ab-dim-segment:hover {
+            border-color: var(--primary, #5c6ac4);
+            color: var(--primary, #5c6ac4);
+        }
+
+        .tom-ab-dim-segment--active {
+            border-color: var(--primary, #5c6ac4);
+            background: rgba(92, 106, 196, 0.12);
+            font-weight: 600;
+            color: var(--primary, #5c6ac4);
+        }
+
+        .tom-ab-single-upload-wrap {
             margin-bottom: 4px;
         }
 
-        @media (min-width: 900px) {
-            .tom-ab-creatives-form-grid {
-                grid-template-columns: repeat(3, 1fr);
-            }
+        .tom-ab-upload-field-hidden {
+            display: none !important;
         }
 
         .tom-ab-creatives-preview {
@@ -5239,21 +5277,24 @@
         >
             <article class="card card-fullwidth tom-ab-client-console">
                 <h3>Creatives &amp; live test</h3>
-                <p class="card-subtitle">Upload your creative bundle here. Phases, dial focus, and review handoffs are handled on our side — you only watch the numbers.</p>
+                <p class="card-subtitle">Upload voice, opening line, or script when you want — one field at a time. Phases, dial focus, and review handoffs are handled on our side — you only watch the numbers.</p>
 
                 <section class="tom-ab-simple-upload" aria-label="Upload creatives and view test results">
                     <p class="tom-ab-test-meta" style="margin:0 0 14px 0;">
-                        <strong>One of each</strong> — a single voice ID, opening line, and script (same layout as before, without multiple lines or lists). Tap Upload when ready.
+                        Choose what you’re updating, enter <strong>only that one</strong> value, then Upload. Switch tabs to edit another piece later.
                     </p>
-                    <div class="tom-ab-creatives-form-grid">
-                        <label class="tom-ab-field">Voice ID <span class="tom-ab-test-meta" style="font-weight:400;">(ElevenLabs)</span>
-                            <input type="text" id="tomAbCreativeVoice" class="tom-ab-input" autocomplete="off" spellcheck="false" placeholder="e.g. 21m00Tcm4TlvDq8ikWAM">
-                        </label>
-                        <label class="tom-ab-field">Opening line
-                            <textarea id="tomAbCreativeOpening" class="tom-ab-textarea" rows="4" spellcheck="true" placeholder="Hi, it’s Tom from…"></textarea>
-                        </label>
-                        <label class="tom-ab-field">Script
-                            <textarea id="tomAbCreativeScript" class="tom-ab-textarea" rows="6" spellcheck="true" placeholder="You are a friendly outbound SDR…"></textarea>
+                    <fieldset class="tom-ab-dim-picker">
+                        <legend>Upload type</legend>
+                        <div class="tom-ab-dim-segments" role="tablist" aria-label="Creative field to upload">
+                            <button type="button" class="tom-ab-dim-segment tom-ab-dim-segment--active" role="tab" aria-selected="true" data-tom-ab-dim="voice">Voice ID</button>
+                            <button type="button" class="tom-ab-dim-segment" role="tab" aria-selected="false" data-tom-ab-dim="opening">Opening line</button>
+                            <button type="button" class="tom-ab-dim-segment" role="tab" aria-selected="false" data-tom-ab-dim="script">Script</button>
+                        </div>
+                    </fieldset>
+                    <div class="tom-ab-single-upload-wrap">
+                        <label class="tom-ab-field"><span id="tomAbSingleUploadLabel">Voice ID (ElevenLabs)</span>
+                            <input type="text" id="tomAbUploadVoiceField" class="tom-ab-input" autocomplete="off" spellcheck="false" placeholder="e.g. 21m00Tcm4TlvDq8ikWAM">
+                            <textarea id="tomAbUploadTextField" class="tom-ab-textarea tom-ab-upload-field-hidden" rows="8" spellcheck="true" placeholder=""></textarea>
                         </label>
                     </div>
                     <div class="tom-ab-setup-actions" style="margin-top:12px;">
@@ -8014,18 +8055,59 @@ ${actionsRow}
             });
         }
 
-        function readTomAbCreativeSingleFromForm() {
-            const voice = document.getElementById('tomAbCreativeVoice')?.value.trim() || '';
-            const opening = document.getElementById('tomAbCreativeOpening')?.value.trim() || '';
-            const script = document.getElementById('tomAbCreativeScript')?.value.trim() || '';
-            return { voice, opening, script };
+        const tomAbPerDimDraft = { voice: '', opening: '', script: '' };
+
+        function getTomAbActiveUploadDimension() {
+            const active = document.querySelector('#tomAbOutreachAbSection .tom-ab-dim-segment--active');
+            const d = active && active.getAttribute('data-tom-ab-dim');
+            if (d === 'voice' || d === 'opening' || d === 'script') return d;
+            return 'voice';
         }
 
-        function tomAbSingleCreativeUploadError(t) {
-            if (!t.voice || !t.opening || !t.script) {
-                return 'Enter a voice ID, opening line, and script (one of each).';
+        function flushTomAbVisibleFieldToDraft(dim) {
+            const voiceEl = document.getElementById('tomAbUploadVoiceField');
+            const textEl = document.getElementById('tomAbUploadTextField');
+            if (dim === 'voice') {
+                tomAbPerDimDraft.voice = voiceEl ? String(voiceEl.value).trim() : '';
+            } else if (dim === 'opening') {
+                tomAbPerDimDraft.opening = textEl ? String(textEl.value).trim() : '';
+            } else {
+                tomAbPerDimDraft.script = textEl ? String(textEl.value).trim() : '';
             }
-            return '';
+        }
+
+        function applyTomAbDraftToVisibleField(dim) {
+            const voiceEl = document.getElementById('tomAbUploadVoiceField');
+            const textEl = document.getElementById('tomAbUploadTextField');
+            const lab = document.getElementById('tomAbSingleUploadLabel');
+            if (!voiceEl || !textEl) return;
+            if (lab) {
+                if (dim === 'voice') lab.textContent = 'Voice ID (ElevenLabs)';
+                else if (dim === 'opening') lab.textContent = 'Opening line';
+                else lab.textContent = 'Script';
+            }
+            if (dim === 'voice') {
+                voiceEl.classList.remove('tom-ab-upload-field-hidden');
+                textEl.classList.add('tom-ab-upload-field-hidden');
+                voiceEl.value = tomAbPerDimDraft.voice;
+            } else {
+                voiceEl.classList.add('tom-ab-upload-field-hidden');
+                textEl.classList.remove('tom-ab-upload-field-hidden');
+                textEl.value = dim === 'opening' ? tomAbPerDimDraft.opening : tomAbPerDimDraft.script;
+                textEl.placeholder =
+                    dim === 'opening' ? 'Hi, it’s Tom from…' : 'You are a friendly outbound SDR…';
+            }
+        }
+
+        function setTomAbActiveUploadDimension(dim) {
+            const sec = document.getElementById('tomAbOutreachAbSection');
+            if (!sec) return;
+            sec.querySelectorAll('[data-tom-ab-dim]').forEach((btn) => {
+                const on = btn.getAttribute('data-tom-ab-dim') === dim;
+                btn.classList.toggle('tom-ab-dim-segment--active', on);
+                btn.setAttribute('aria-selected', on ? 'true' : 'false');
+            });
+            applyTomAbDraftToVisibleField(dim);
         }
 
         function tomAbZipCreativesForPreview(voices, openings, scripts) {
@@ -8094,24 +8176,23 @@ ${actionsRow}
         }
 
         function syncTomAbCreativeTextareasFromServer(ab) {
-            const vEl = document.getElementById('tomAbCreativeVoice');
-            const oEl = document.getElementById('tomAbCreativeOpening');
-            const sEl = document.getElementById('tomAbCreativeScript');
-            if (!vEl || !oEl || !sEl) return;
-            if (vEl.value.trim() || oEl.value.trim() || sEl.value.trim()) return;
             const ex = extractTomAbCreativesFromPayload(ab);
-            if (ex.voices.length < 1 || ex.openings.length < 1 || ex.scripts.length < 1) return;
-            vEl.value = ex.voices[0];
-            oEl.value = ex.openings[0];
-            sEl.value = ex.scripts[0];
+            if (!tomAbPerDimDraft.voice.trim() && ex.voices.length >= 1) {
+                tomAbPerDimDraft.voice = ex.voices[0];
+            }
+            if (!tomAbPerDimDraft.opening.trim() && ex.openings.length >= 1) {
+                tomAbPerDimDraft.opening = ex.openings[0];
+            }
+            if (!tomAbPerDimDraft.script.trim() && ex.scripts.length >= 1) {
+                tomAbPerDimDraft.script = ex.scripts[0];
+            }
         }
 
         function renderTomAbCreativesPreviewPanel(ab) {
             const server = extractTomAbCreativesFromPayload(ab);
-            const form = readTomAbCreativeSingleFromForm();
-            const formVoices = form.voice ? [form.voice] : [];
-            const formOpenings = form.opening ? [form.opening] : [];
-            const formScripts = form.script ? [form.script] : [];
+            const formVoices = tomAbPerDimDraft.voice.trim() ? [tomAbPerDimDraft.voice.trim()] : [];
+            const formOpenings = tomAbPerDimDraft.opening.trim() ? [tomAbPerDimDraft.opening.trim()] : [];
+            const formScripts = tomAbPerDimDraft.script.trim() ? [tomAbPerDimDraft.script.trim()] : [];
             const useVoices = server.voices.length ? server.voices : formVoices;
             const useOpenings = server.openings.length ? server.openings : formOpenings;
             const useScripts = server.scripts.length ? server.scripts : formScripts;
@@ -8156,7 +8237,7 @@ ${actionsRow}
                 ${grid}
                 ${
                     !hasAny
-                        ? '<p class="tom-ab-test-meta" style="margin:10px 0 0 0;">Nothing to show yet — enter voice, opening, and script above, then Upload.</p>'
+                        ? '<p class="tom-ab-test-meta" style="margin:10px 0 0 0;">Nothing to show yet — pick a type, enter one value, then Upload.</p>'
                         : ''
                 }
             </section>`;
@@ -8291,22 +8372,36 @@ ${actionsRow}
 
         function initTomAbTestSetupPanel() {
             if (!isTomOutreachDashboard(currentClient)) return;
+            setTomAbActiveUploadDimension(getTomAbActiveUploadDimension());
             const sec = document.getElementById('tomAbOutreachAbSection');
             if (sec && sec.dataset.tomAbCreativesPreviewBound !== '1') {
                 sec.dataset.tomAbCreativesPreviewBound = '1';
                 let previewT;
                 sec.addEventListener('input', (e) => {
-                    if (!e.target.closest('.tom-ab-creatives-form-grid')) return;
+                    if (!e.target.closest('#tomAbUploadVoiceField') && !e.target.closest('#tomAbUploadTextField')) {
+                        return;
+                    }
+                    flushTomAbVisibleFieldToDraft(getTomAbActiveUploadDimension());
                     clearTimeout(previewT);
                     previewT = setTimeout(() => {
                         if (isTomOutreachDashboard(currentClient)) renderTomAbTestSection(dashboardData);
                     }, 140);
                 });
+                sec.addEventListener('click', (e) => {
+                    const seg = e.target.closest('[data-tom-ab-dim]');
+                    if (!seg || !sec.contains(seg)) return;
+                    e.preventDefault();
+                    const dim = seg.getAttribute('data-tom-ab-dim');
+                    if (dim !== 'voice' && dim !== 'opening' && dim !== 'script') return;
+                    flushTomAbVisibleFieldToDraft(getTomAbActiveUploadDimension());
+                    setTomAbActiveUploadDimension(dim);
+                    if (isTomOutreachDashboard(currentClient)) renderTomAbTestSection(dashboardData);
+                });
             }
             const bbtn = document.getElementById('tomAbBundleDeployBtn');
             if (bbtn && bbtn.dataset.bound !== '1') {
                 bbtn.dataset.bound = '1';
-                bbtn.addEventListener('click', () => tomAbBundleDeploy());
+                bbtn.addEventListener('click', () => tomAbDimensionImportUpload());
             }
         }
 
@@ -8322,29 +8417,41 @@ ${actionsRow}
             });
         }
 
-        async function tomAbBundleDeploy() {
+        async function tomAbDimensionImportUpload() {
             const msg = document.getElementById('tomAbBundleDeployMsg');
-            const t = readTomAbCreativeSingleFromForm();
-            const errLine = tomAbSingleCreativeUploadError(t);
-            if (errLine) {
-                if (msg) msg.textContent = errLine;
+            const dim = getTomAbActiveUploadDimension();
+            flushTomAbVisibleFieldToDraft(dim);
+            let val = '';
+            if (dim === 'voice') val = tomAbPerDimDraft.voice.trim();
+            else if (dim === 'opening') val = tomAbPerDimDraft.opening.trim();
+            else val = tomAbPerDimDraft.script.trim();
+            if (!val) {
+                if (msg) {
+                    msg.textContent =
+                        dim === 'voice'
+                            ? 'Enter a voice ID first.'
+                            : dim === 'opening'
+                              ? 'Enter an opening line first.'
+                              : 'Enter a script first.';
+                }
                 return;
             }
-            const json = JSON.stringify({
-                voices: [t.voice],
-                openings: [t.opening],
-                scripts: [t.script]
-            });
+            const json =
+                dim === 'voice'
+                    ? JSON.stringify({ voice: val })
+                    : dim === 'opening'
+                      ? JSON.stringify({ firstMessage: val })
+                      : JSON.stringify({ script: val });
             if (msg) msg.textContent = 'Uploading…';
             const btn = document.getElementById('tomAbBundleDeployBtn');
             if (btn) btn.disabled = true;
             try {
                 const res = await fetch(
-                    `${BASE_URL}/api/clients/${encodeURIComponent(currentClient)}/outbound-ab-test-bundle`,
+                    `${BASE_URL}/api/clients/${encodeURIComponent(currentClient)}/outbound-ab-test-import`,
                     {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ json })
+                        body: JSON.stringify({ dimension: dim, json })
                     }
                 );
                 const data = await res.json().catch(() => ({}));
@@ -8360,10 +8467,12 @@ ${actionsRow}
                     renderTomAbTestSection(dashboardData);
                 }
                 if (msg) {
-                    msg.textContent = 'Uploaded. Live results update below.';
+                    const dimLabel =
+                        dim === 'voice' ? 'Voice' : dim === 'opening' ? 'Opening line' : 'Script';
+                    msg.textContent = `${dimLabel} uploaded. Live results update below.`;
                 }
             } catch (err) {
-                if (msg) msg.textContent = err.message || 'Bundle deploy failed';
+                if (msg) msg.textContent = err.message || 'Upload failed';
             } finally {
                 if (btn) btn.disabled = false;
             }
@@ -8377,7 +8486,9 @@ ${actionsRow}
                 return;
             }
             const ab = data && data.outboundAbTest;
+            flushTomAbVisibleFieldToDraft(getTomAbActiveUploadDimension());
             syncTomAbCreativeTextareasFromServer(ab);
+            applyTomAbDraftToVisibleField(getTomAbActiveUploadDimension());
 
             let html = '';
             html += renderTomAbCreativesPreviewPanel(ab);
