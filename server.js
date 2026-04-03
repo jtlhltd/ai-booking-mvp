@@ -8692,8 +8692,9 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
   /** Live Activity Feed rows (keep in sync with client-dashboard ACTIVITY_FEED_DISPLAY_CAP). */
   const RECENT_CALLS_FEED_CAP = 40;
   try {
-    // Get client config first
-    const client = await getFullClient(clientKey);
+    // Always bypass tenant cache: it is per Node process; DELETE on worker A clears A’s cache
+    // while dashboard GET on worker B could still serve stale vapi (e.g. outboundAbVoiceExperiment) for minutes.
+    const client = await getFullClient(clientKey, { bypassCache: true });
     const activityChannel = activityFeedChannelLabel(client);
 
     const rollingSinceInstant = DateTime.now().setZone(DASHBOARD_ACTIVITY_TZ).minus({ hours: 24 });

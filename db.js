@@ -1185,15 +1185,21 @@ export async function listFullClients() {
 const clientCache = new Map();
 const CLIENT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-export async function getFullClient(clientKey) {
-  // Check cache first
+/**
+ * @param {string} clientKey
+ * @param {{ bypassCache?: boolean }} [options] When bypassCache is true, always read from DB (needed for dashboard: cache is per-process, so another worker may have stale vapi after a config update).
+ */
+export async function getFullClient(clientKey, options = {}) {
+  const bypassCache = options && typeof options === 'object' && options.bypassCache === true;
   const cacheKey = `client:${clientKey}`;
-  const cached = clientCache.get(cacheKey);
-  
-  if (cached && Date.now() < cached.expires) {
-    return cached.data;
+
+  if (!bypassCache) {
+    const cached = clientCache.get(cacheKey);
+    if (cached && Date.now() < cached.expires) {
+      return cached.data;
+    }
   }
-  
+
   // Fetch from database
   const { rows } = await query(`
     SELECT client_key, display_name, timezone, locale,
