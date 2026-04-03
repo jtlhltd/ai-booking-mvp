@@ -265,6 +265,9 @@ async function initPostgres() {
     -- Recording / voicemail lists: filter by tenant + time without scanning full transcript rows
     CREATE INDEX IF NOT EXISTS calls_client_recording_created_idx ON calls(client_key, created_at DESC)
       WHERE recording_url IS NOT NULL AND recording_url <> '';
+    -- Aligns with TRIM(recording_url) filters in /api/call-recordings and /api/voicemails
+    CREATE INDEX IF NOT EXISTS calls_client_recording_trim_created_idx ON calls (client_key, created_at DESC)
+      WHERE recording_url IS NOT NULL AND trim(recording_url) <> '';
 
     -- Aggregated transcript insights + routing recommendations (per tenant)
     CREATE TABLE IF NOT EXISTS call_insights (
@@ -424,6 +427,9 @@ async function initPostgres() {
       WHERE status = 'pending';
     -- Stale processing reset: WHERE status = 'processing' AND updated_at < ...
     CREATE INDEX IF NOT EXISTS retry_queue_processing_updated_idx ON retry_queue (updated_at) WHERE status = 'processing';
+    -- Dashboard /api/retry-queue/:clientKey — filter by tenant + pending + ORDER BY scheduled_for
+    CREATE INDEX IF NOT EXISTS retry_queue_client_pending_scheduled_idx
+      ON retry_queue (client_key, scheduled_for ASC NULLS LAST) WHERE status = 'pending';
 
     CREATE TABLE IF NOT EXISTS call_queue (
       id BIGSERIAL PRIMARY KEY,
@@ -444,6 +450,9 @@ async function initPostgres() {
     CREATE INDEX IF NOT EXISTS call_queue_phone_idx ON call_queue(client_key, lead_phone);
     CREATE INDEX IF NOT EXISTS call_queue_pending_scheduled_idx ON call_queue (scheduled_for ASC) WHERE status = 'pending';
     CREATE INDEX IF NOT EXISTS call_queue_processing_updated_idx ON call_queue (updated_at) WHERE status = 'processing';
+    CREATE INDEX IF NOT EXISTS call_queue_client_pending_vapi_scheduled_idx
+      ON call_queue (client_key, scheduled_for ASC NULLS LAST)
+      WHERE status = 'pending' AND call_type = 'vapi_call';
 
     CREATE TABLE IF NOT EXISTS cost_tracking (
       id BIGSERIAL PRIMARY KEY,
@@ -789,6 +798,18 @@ async function initPostgres() {
       CREATE INDEX IF NOT EXISTS calls_quality_idx ON calls(client_key, quality_score) WHERE quality_score IS NOT NULL;
       CREATE INDEX IF NOT EXISTS calls_sentiment_idx ON calls(client_key, sentiment) WHERE sentiment IS NOT NULL;
     `);
+
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS retry_queue_client_pending_scheduled_idx
+        ON retry_queue (client_key, scheduled_for ASC NULLS LAST) WHERE status = 'pending';
+      CREATE INDEX IF NOT EXISTS call_queue_client_pending_vapi_scheduled_idx
+        ON call_queue (client_key, scheduled_for ASC NULLS LAST)
+        WHERE status = 'pending' AND call_type = 'vapi_call';
+      CREATE INDEX IF NOT EXISTS calls_client_recording_trim_created_idx ON calls (client_key, created_at DESC)
+        WHERE recording_url IS NOT NULL AND trim(recording_url) <> '';
+    `).catch((idxErr) => {
+      console.warn('⚠️  Dashboard perf index migration (non-fatal):', idxErr.message);
+    });
     
     console.log('✅ Call quality columns migration complete');
   } catch (migrationError) {

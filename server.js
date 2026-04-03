@@ -11592,11 +11592,10 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
       query(`
         SELECT
           (SELECT COUNT(*)::int FROM retry_queue rq
-            WHERE rq.client_key = $1
-              AND LOWER(TRIM(COALESCE(rq.status, ''))) = 'pending') AS rq_pending,
+            WHERE rq.client_key = $1 AND rq.status = 'pending') AS rq_pending,
           (SELECT COUNT(*)::int FROM call_queue cq
             WHERE cq.client_key = $1
-              AND LOWER(TRIM(COALESCE(cq.status, ''))) = 'pending'
+              AND cq.status = 'pending'
               AND cq.call_type = 'vapi_call') AS cq_pending
       `, [clientKey]),
       query(`
@@ -11613,8 +11612,7 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
             'retry_queue'::text AS source,
             ${leadNameSubquery('rq', 'lead_phone')} AS name
           FROM retry_queue rq
-          WHERE rq.client_key = $1
-            AND LOWER(TRIM(COALESCE(rq.status, ''))) = 'pending'
+          WHERE rq.client_key = $1 AND rq.status = 'pending'
           UNION ALL
           SELECT
             cq.id,
@@ -11629,7 +11627,7 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
             ${leadNameSubquery('cq', 'lead_phone')} AS name
           FROM call_queue cq
           WHERE cq.client_key = $1
-            AND LOWER(TRIM(COALESCE(cq.status, ''))) = 'pending'
+            AND cq.status = 'pending'
             AND cq.call_type = 'vapi_call'
         ) combined
         ORDER BY combined.scheduled_for ASC NULLS LAST
@@ -11649,8 +11647,7 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
             'retry_queue'::text AS source,
             ${leadNameSubquery('rq', 'lead_phone')} AS name
           FROM retry_queue rq
-          WHERE rq.client_key = $1
-            AND LOWER(TRIM(COALESCE(rq.status, ''))) = 'pending'
+          WHERE rq.client_key = $1 AND rq.status = 'pending'
           ORDER BY rq.scheduled_for ASC NULLS LAST
           LIMIT $2
         `, [clientKey, RETRY_QUEUE_LIST_CAP]);
