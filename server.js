@@ -11567,29 +11567,103 @@ app.get('/api/call-time-bandit/:clientKey', async (req, res) => {
 
 // API endpoint for retry queue (pending follow-up rows + outbound calls waiting in call_queue)
 // No response cache: queue changes often; cached empty responses made the dashboard look "broken".
+// Lead names: one batched query (same match rules as the old per-row subquery) to avoid N× correlated lookups.
+async function fetchLeadNamesForRetryQueuePhones(clientKey, queuePhones) {
+  const phones = [...new Set((queuePhones || []).filter((p) => p != null && String(p) !== ''))];
+  if (phones.length === 0) return new Map();
+  const res = await query(
+    `
+    WITH qp AS (
+      SELECT DISTINCT p AS phone_raw
+      FROM unnest($2::text[]) AS x(p)
+      WHERE p IS NOT NULL AND p <> ''
+    )
+    SELECT DISTINCT ON (qp.phone_raw)
+      qp.phone_raw,
+      l.name
+    FROM qp
+    JOIN leads l ON l.client_key = $1
+      AND (
+        l.phone = qp.phone_raw
+        OR (
+          LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
+          AND RIGHT(regexp_replace(COALESCE(qp.phone_raw, ''), '[^0-9]', '', 'g'), 10)
+            = RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
+        )
+      )
+    ORDER BY qp.phone_raw, l.created_at DESC NULLS LAST
+    `,
+    [clientKey, phones]
+  );
+  const m = new Map();
+  for (const row of res.rows || []) {
+    if (row.phone_raw != null) m.set(row.phone_raw, row.name);
+  }
+  return m;
+}
+
 app.get('/api/retry-queue/:clientKey', async (req, res) => {
   try {
     const { clientKey } = req.params;
     res.set('Cache-Control', 'no-store');
-    const leadNameSubquery = (alias, phoneCol) => `
-      (SELECT l.name FROM leads l
-        WHERE l.client_key = ${alias}.client_key
-          AND (
-            l.phone = ${alias}.${phoneCol}
-            OR (
-              LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
-              AND RIGHT(regexp_replace(COALESCE(${alias}.${phoneCol}, ''), '[^0-9]', '', 'g'), 10)
-                = RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
-            )
-          )
-        ORDER BY l.created_at DESC NULLS LAST
-        LIMIT 1)`;
 
     // Full pending queue (no date window). List is capped for dashboard payload size.
     const RETRY_QUEUE_LIST_CAP = 500;
 
+    const listUnionSql = `
+      SELECT * FROM (
+        SELECT
+          rq.id,
+          rq.lead_phone,
+          rq.retry_type,
+          rq.retry_reason,
+          rq.scheduled_for,
+          rq.retry_attempt,
+          rq.max_retries,
+          rq.status,
+          'retry_queue'::text AS source
+        FROM retry_queue rq
+        WHERE rq.client_key = $1 AND rq.status = 'pending'
+        UNION ALL
+        SELECT
+          cq.id,
+          cq.lead_phone,
+          cq.call_type AS retry_type,
+          'call_queue'::text AS retry_reason,
+          cq.scheduled_for,
+          0 AS retry_attempt,
+          1 AS max_retries,
+          cq.status,
+          'call_queue'::text AS source
+        FROM call_queue cq
+        WHERE cq.client_key = $1
+          AND cq.status = 'pending'
+          AND cq.call_type = 'vapi_call'
+      ) combined
+      ORDER BY combined.scheduled_for ASC NULLS LAST
+      LIMIT $2
+    `;
+
+    const listRetryOnlySql = `
+      SELECT
+        rq.id,
+        rq.lead_phone,
+        rq.retry_type,
+        rq.retry_reason,
+        rq.scheduled_for,
+        rq.retry_attempt,
+        rq.max_retries,
+        rq.status,
+        'retry_queue'::text AS source
+      FROM retry_queue rq
+      WHERE rq.client_key = $1 AND rq.status = 'pending'
+      ORDER BY rq.scheduled_for ASC NULLS LAST
+      LIMIT $2
+    `;
+
     const [countRes, listRes] = await Promise.all([
-      query(`
+      query(
+        `
         SELECT
           (SELECT COUNT(*)::int FROM retry_queue rq
             WHERE rq.client_key = $1 AND rq.status = 'pending') AS rq_pending,
@@ -11597,67 +11671,24 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
             WHERE cq.client_key = $1
               AND cq.status = 'pending'
               AND cq.call_type = 'vapi_call') AS cq_pending
-      `, [clientKey]),
-      query(`
-        SELECT * FROM (
-          SELECT
-            rq.id,
-            rq.lead_phone,
-            rq.retry_type,
-            rq.retry_reason,
-            rq.scheduled_for,
-            rq.retry_attempt,
-            rq.max_retries,
-            rq.status,
-            'retry_queue'::text AS source,
-            ${leadNameSubquery('rq', 'lead_phone')} AS name
-          FROM retry_queue rq
-          WHERE rq.client_key = $1 AND rq.status = 'pending'
-          UNION ALL
-          SELECT
-            cq.id,
-            cq.lead_phone,
-            cq.call_type AS retry_type,
-            'call_queue'::text AS retry_reason,
-            cq.scheduled_for,
-            0 AS retry_attempt,
-            1 AS max_retries,
-            cq.status,
-            'call_queue'::text AS source,
-            ${leadNameSubquery('cq', 'lead_phone')} AS name
-          FROM call_queue cq
-          WHERE cq.client_key = $1
-            AND cq.status = 'pending'
-            AND cq.call_type = 'vapi_call'
-        ) combined
-        ORDER BY combined.scheduled_for ASC NULLS LAST
-        LIMIT $2
-      `, [clientKey, RETRY_QUEUE_LIST_CAP]).catch((unionErr) => {
+      `,
+        [clientKey]
+      ),
+      query(listUnionSql, [clientKey, RETRY_QUEUE_LIST_CAP]).catch((unionErr) => {
         console.warn('[RETRY QUEUE API] combined list failed, falling back to retry_queue only:', unionErr?.message || unionErr);
-        return query(`
-          SELECT
-            rq.id,
-            rq.lead_phone,
-            rq.retry_type,
-            rq.retry_reason,
-            rq.scheduled_for,
-            rq.retry_attempt,
-            rq.max_retries,
-            rq.status,
-            'retry_queue'::text AS source,
-            ${leadNameSubquery('rq', 'lead_phone')} AS name
-          FROM retry_queue rq
-          WHERE rq.client_key = $1 AND rq.status = 'pending'
-          ORDER BY rq.scheduled_for ASC NULLS LAST
-          LIMIT $2
-        `, [clientKey, RETRY_QUEUE_LIST_CAP]);
+        return query(listRetryOnlySql, [clientKey, RETRY_QUEUE_LIST_CAP]);
       })
     ]);
 
     const rqTotal = parseInt(countRes.rows?.[0]?.rq_pending || 0, 10);
     const cqTotal = parseInt(countRes.rows?.[0]?.cq_pending || 0, 10);
     const totalPending = rqTotal + cqTotal;
-    const result = { rows: listRes.rows || [] };
+    const rawRows = listRes.rows || [];
+    const nameByPhone = await fetchLeadNamesForRetryQueuePhones(
+      clientKey,
+      rawRows.map((r) => r.lead_phone)
+    );
+    const result = { rows: rawRows };
 
     const retryKindLabel = (source, retryType) => {
       const isCallQueue = source === 'call_queue';
@@ -11698,7 +11729,10 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
         sourceLabel: isCallQueue ? 'Call queue' : 'Retry queue',
         retryType: row.retry_type || null,
         kindLabel: retryKindLabel(row.source, row.retry_type),
-        name: row.name || 'Prospect',
+        name:
+          (row.lead_phone != null && nameByPhone.has(row.lead_phone)
+            ? nameByPhone.get(row.lead_phone)
+            : null) || 'Prospect',
         phone: row.lead_phone,
         attempts: isCallQueue ? 0 : row.retry_attempt,
         maxAttempts: isCallQueue ? 1 : row.max_retries,
