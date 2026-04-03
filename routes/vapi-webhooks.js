@@ -7,6 +7,7 @@ import { extractLogisticsFields } from '../lib/logistics-extractor.js';
 import { recordReceptionistTelemetry } from '../lib/demo-telemetry.js';
 import { storeCallContext } from '../lib/call-context-cache.js';
 import { verifyVapiSignature } from '../middleware/vapi-webhook-verification.js';
+import { mapVapiEndedReasonToOutcome } from '../lib/vapi-call-outcome-map.js';
 
 /**
  * Logistics sheet "Business Name" = company we dialed (callee), never the tenant `client_key` slug.
@@ -111,21 +112,6 @@ function formatMessagesToTranscript(messages) {
     })
     .filter(Boolean)
     .join('\n\n');
-}
-
-/** Map VAPI endedReason (docs.vapi.ai/calls/call-ended-reason) to our outcome for dashboard/analytics */
-function mapEndedReasonToOutcome(endedReason) {
-  if (!endedReason || typeof endedReason !== 'string') return null;
-  const r = endedReason.toLowerCase();
-  if (r.includes('customer-did-not-answer') || r.includes('did-not-answer')) return 'no-answer';
-  if (r.includes('customer-busy') || r.includes('busy')) return 'busy';
-  if (r === 'voicemail' || r.includes('voicemail')) return 'voicemail';
-  if (r.includes('rejected') || r.includes('declined') || r.includes('failed-to-connect') || r.includes('misdialed')) return 'declined';
-  if (r.includes('vonage-rejected') || r.includes('twilio-reported')) return 'declined';
-  if (r.includes('assistant-ended-call') || r.includes('customer-ended-call') || r.includes('vonage-completed')) return 'completed';
-  if (r.includes('silence-timed-out') || r.includes('exceeded-max-duration')) return 'completed';
-  if (r.includes('error') || r.includes('fault')) return 'failed';
-  return 'completed'; // default: call connected and ended somehow
 }
 
 // Enhanced VAPI webhook handler with comprehensive call tracking
@@ -283,11 +269,11 @@ async function processWebhookPayload(body, correlationId) {
     /*
      * Vapi often sends call.outcome as "failed" while endedReason is specific (e.g. customer-did-not-answer).
      * Previously we only mapped endedReason when outcome was empty — so the feed showed "Failed" for many no-answers.
-     * When outcome is a generic failure label, prefer mapEndedReasonToOutcome. Keep explicit assistant outcomes
+     * When outcome is a generic failure label, prefer mapVapiEndedReasonToOutcome. Keep explicit assistant outcomes
      * (booked, interested, completed, no-answer, voicemail, etc.).
      */
     if (endedReason) {
-      const fromEnded = mapEndedReasonToOutcome(endedReason);
+      const fromEnded = mapVapiEndedReasonToOutcome(endedReason);
       const oNorm = String(outcome ?? '').trim().toLowerCase();
       const genericTelephony = !oNorm || ['failed', 'error', 'unknown'].includes(oNorm);
       const assistantSetUseful = oNorm && !genericTelephony;
@@ -589,6 +575,21 @@ async function processWebhookPayload(body, correlationId) {
       metrics: vapiMetrics,
       analyzedAt: analysis.analyzedAt
     });
+
+    if (tenantKey && leadPhone) {
+      try {
+        const { recordOutboundAbLivePickups } = await import('../db.js');
+        await recordOutboundAbLivePickups({
+          clientKey: tenantKey,
+          leadPhone,
+          metadata,
+          outcome,
+          endedReason
+        });
+      } catch (livePuErr) {
+        console.warn('[OUTBOUND AB LIVE PICKUP] skipped:', livePuErr?.message || livePuErr);
+      }
+    }
 
     await recordReceptionistTelemetry({
       evt: 'receptionist.call_webhook',

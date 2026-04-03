@@ -7,14 +7,14 @@ import {
   getSampleReadyNotifiedMap
 } from '../../lib/outbound-ab-sample-ready-rules.js';
 
-test('experimentMeetsSampleThreshold: two arms both >= N', () => {
+test('experimentMeetsSampleThreshold: two arms both >= N live pickups', () => {
   assert.equal(
     experimentMeetsSampleThreshold(
       {
         hasDbVariants: true,
         variants: [
-          { variantName: 'a', totalLeads: 30, convertedLeads: 3 },
-          { variantName: 'b', totalLeads: 31, convertedLeads: 5 }
+          { variantName: 'a', totalLeads: 40, livePickupLeads: 30, convertedLeads: 3 },
+          { variantName: 'b', totalLeads: 45, livePickupLeads: 31, convertedLeads: 5 }
         ]
       },
       30
@@ -23,14 +23,30 @@ test('experimentMeetsSampleThreshold: two arms both >= N', () => {
   );
 });
 
-test('experimentMeetsSampleThreshold: one arm short', () => {
+test('experimentMeetsSampleThreshold: one arm short on live pickups', () => {
   assert.equal(
     experimentMeetsSampleThreshold(
       {
         hasDbVariants: true,
         variants: [
-          { variantName: 'a', totalLeads: 30, convertedLeads: 0 },
-          { variantName: 'b', totalLeads: 10, convertedLeads: 0 }
+          { variantName: 'a', totalLeads: 50, livePickupLeads: 30, convertedLeads: 0 },
+          { variantName: 'b', totalLeads: 50, livePickupLeads: 10, convertedLeads: 0 }
+        ]
+      },
+      30
+    ),
+    false
+  );
+});
+
+test('experimentMeetsSampleThreshold: high assigned count does not substitute for live pickups', () => {
+  assert.equal(
+    experimentMeetsSampleThreshold(
+      {
+        hasDbVariants: true,
+        variants: [
+          { variantName: 'a', totalLeads: 100, livePickupLeads: 5, convertedLeads: 0 },
+          { variantName: 'b', totalLeads: 100, livePickupLeads: 5, convertedLeads: 0 }
         ]
       },
       30

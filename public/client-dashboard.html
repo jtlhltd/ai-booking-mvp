@@ -8311,9 +8311,9 @@ ${actionsRow}
                         (v) => `<div class="tom-ab-creative-variant-row">
                         <div class="tom-ab-creative-variant-head">
                             <strong>${escapeHtml(v.variantName)}</strong>
-                            <span class="tom-ab-test-meta">${formatNumber(v.totalLeads)} leads · ${formatNumber(
-                            v.convertedLeads
-                        )} conv</span>
+                            <span class="tom-ab-test-meta">${formatNumber(
+                            typeof v.livePickupLeads === 'number' ? v.livePickupLeads : parseInt(v.livePickupLeads, 10) || 0
+                        )} live · ${formatNumber(v.totalLeads)} assigned · ${formatNumber(v.convertedLeads)} conv</span>
                         </div>
                         ${tomAbVariantCreativeSnippet(dimKey, v)}
                     </div>`
@@ -8540,15 +8540,18 @@ ${actionsRow}
 
         function tomAbMonitoringStatsRow(v, minN) {
             const tl = typeof v.totalLeads === 'number' ? v.totalLeads : parseInt(v.totalLeads, 10) || 0;
+            const lpu =
+                typeof v.livePickupLeads === 'number' ? v.livePickupLeads : parseInt(v.livePickupLeads, 10) || 0;
             const cl =
                 typeof v.convertedLeads === 'number' ? v.convertedLeads : parseInt(v.convertedLeads, 10) || 0;
-            const rate = tl > 0 && v.conversionRatePct != null ? `${Number(v.conversionRatePct).toFixed(1)}%` : '—';
-            const meets = tl >= minN;
+            const rate = lpu > 0 && v.conversionRatePct != null ? `${Number(v.conversionRatePct).toFixed(1)}%` : '—';
+            const meets = lpu >= minN;
             const sampleCell = meets
                 ? `<span class="tom-ab-live-ok">✓ ${formatNumber(minN)}+</span>`
-                : `<span class="tom-ab-live-progress">${formatNumber(tl)} / ${formatNumber(minN)}</span>`;
+                : `<span class="tom-ab-live-progress">${formatNumber(lpu)} / ${formatNumber(minN)}</span>`;
             return `<tr>
                 <td><strong>${escapeHtml(v.variantName)}</strong></td>
+                <td>${formatNumber(lpu)}</td>
                 <td>${formatNumber(tl)}</td>
                 <td>${formatNumber(cl)}</td>
                 <td>${escapeHtml(rate)}</td>
@@ -8559,6 +8562,7 @@ ${actionsRow}
         function tomAbMonitoringComparisonPlaceholderRows(minN) {
             const row = (name) => `<tr class="tom-ab-mon-placeholder-row">
                 <td><strong>${escapeHtml(name)}</strong></td>
+                <td>—</td>
                 <td>—</td>
                 <td>—</td>
                 <td>—</td>
@@ -8574,7 +8578,8 @@ ${actionsRow}
             const tableHead = `<thead>
                             <tr>
                                 <th scope="col">Variant</th>
-                                <th scope="col">Leads</th>
+                                <th scope="col">Live pickups</th>
+                                <th scope="col">Assigned</th>
                                 <th scope="col">Conv</th>
                                 <th scope="col">Rate</th>
                                 <th scope="col">Sample</th>
@@ -8610,7 +8615,7 @@ ${actionsRow}
                         <tbody>${
                             rows ||
                             tomAbMonitoringComparisonPlaceholderRows(minN) +
-                                `<tr><td colspan="5" class="tom-ab-test-meta" style="border-top:none;">Waiting for first assigned leads…</td></tr>`
+                                `<tr><td colspan="6" class="tom-ab-test-meta" style="border-top:none;">Waiting for first assigned leads…</td></tr>`
                         }</tbody>
                     </table>
                 </div>
@@ -8626,10 +8631,12 @@ ${actionsRow}
             const goalLine = goalMet
                 ? `<p class="tom-ab-live-ready"><strong>Sample target reached</strong> (${formatNumber(
                       minN
-                  )}+ per variant on the primary slice).${lr.notifyEmailConfigured ? ' Check email.' : ''}</p>`
+                  )}+ live pickups per variant on the primary slice, excluding voicemail).${
+                      lr.notifyEmailConfigured ? ' Check email.' : ''
+                  }</p>`
                 : `<p class="tom-ab-test-meta" style="margin:0 0 14px 0;"><strong>Comparison</strong> — control vs variant per dimension. Goal: <strong>${formatNumber(
                       minN
-                  )}</strong> leads each before we treat samples as solid. <span class="tom-ab-live-pill">Primary in summary</span> is the slice the server highlights when several dimensions have data.</p>`;
+                  )}</strong> live pickups each (answered, not voicemail) before we treat samples as solid. <span class="tom-ab-live-pill">Primary in summary</span> is the slice the server highlights when several dimensions have data.</p>`;
             const blocks = [
                 renderTomAbDimensionMonitoringBlock('voice', 'Voice test', (ab && ab.voice) || {}, minN, primDim === 'voice'),
                 renderTomAbDimensionMonitoringBlock(
@@ -8703,12 +8710,12 @@ ${actionsRow}
                           ? escapeHtml(fe.dimension)
                           : 'Combined test';
                 const readyLine = fe.allVariantsMeetMinSamples
-                    ? `<p class="tom-ab-live-ready"><strong>Sample target reached</strong> (${formatNumber(minN)}+ per variant).${
-                          lr.notifyEmailConfigured ? ' Check email.' : ''
-                      }</p>`
+                    ? `<p class="tom-ab-live-ready"><strong>Sample target reached</strong> (${formatNumber(
+                          minN
+                      )}+ live pickups per variant, excluding voicemail).${lr.notifyEmailConfigured ? ' Check email.' : ''}</p>`
                     : `<p class="tom-ab-test-meta" style="margin:0 0 10px 0;">Goal: <strong>${formatNumber(
                           minN
-                      )}</strong> leads per variant.</p>`;
+                      )}</strong> live pickups per variant (not voicemail).</p>`;
                 const rows = fe.variants.map((v) => tomAbMonitoringStatsRow(v, minN)).join('');
                 body = `<p class="tom-ab-test-meta" style="margin:0 0 8px 0;"><strong>${dimLine}</strong> · <code style="font-size:0.85em;">${escapeHtml(
                     fe.experimentName
@@ -8719,7 +8726,8 @@ ${actionsRow}
                             <thead>
                                 <tr>
                                     <th scope="col">Variant</th>
-                                    <th scope="col">Leads</th>
+                                    <th scope="col">Live pickups</th>
+                                    <th scope="col">Assigned</th>
                                     <th scope="col">Converted</th>
                                     <th scope="col">Rate</th>
                                     <th scope="col">Sample target</th>

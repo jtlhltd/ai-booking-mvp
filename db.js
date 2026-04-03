@@ -4,6 +4,10 @@ import path from 'path';
 import fs from 'fs';
 import Database from 'better-sqlite3';
 import { getCache } from './lib/cache.js';
+import {
+  collectOutboundAbExperimentNamesFromMetadata,
+  isOutboundAbLivePickupOutcome
+} from './lib/outbound-ab-live-pickup.js';
 
 const dbType = (process.env.DB_TYPE || '').toLowerCase();
 let pool = null;
@@ -2442,6 +2446,78 @@ export async function getABTestIndividualResults(experimentId) {
   return rows;
 }
 
+/**
+ * Record a post-assignment outcome for a lead (finds the `assigned` row for this experiment name).
+ */
+export async function recordABTestOutcome({ clientKey, experimentName, leadPhone, outcome, outcomeData = null }) {
+  try {
+    const activeTests = await getActiveABTests(clientKey);
+    const experimentVariants = activeTests.filter((test) => test.experiment_name === experimentName);
+
+    if (!experimentVariants || experimentVariants.length === 0) {
+      return null;
+    }
+
+    let assignment = null;
+    for (const variant of experimentVariants) {
+      const results = await getABTestIndividualResults(variant.id);
+      assignment = results.find((r) => r.lead_phone === leadPhone && r.outcome === 'assigned');
+      if (assignment) break;
+    }
+
+    if (!assignment) {
+      console.log('[AB TEST OUTCOME] No assignment found for lead', { clientKey, experimentName, leadPhone });
+      return null;
+    }
+
+    const result = await recordABTestResult({
+      experimentId: assignment.experiment_id,
+      clientKey,
+      leadPhone,
+      variantName: assignment.variant_name,
+      outcome,
+      outcomeData
+    });
+
+    console.log('[AB TEST OUTCOME RECORDED]', {
+      clientKey,
+      experimentName,
+      leadPhone,
+      variantName: assignment.variant_name,
+      outcome
+    });
+
+    return result;
+  } catch (error) {
+    console.error('[AB TEST OUTCOME RECORDING ERROR]', error);
+    return null;
+  }
+}
+
+/** After a call ends, record `live_pickup` per outbound A/B experiment on the call metadata (non-voicemail pickups only). */
+export async function recordOutboundAbLivePickups({
+  clientKey,
+  leadPhone,
+  metadata,
+  outcome,
+  endedReason
+}) {
+  if (!clientKey || !leadPhone) return;
+  if (!isOutboundAbLivePickupOutcome(outcome, endedReason)) return;
+  const names = collectOutboundAbExperimentNamesFromMetadata(metadata);
+  if (!names.length) return;
+  const outcomeData = { source: 'vapi_webhook', endedReason: endedReason || null, callOutcome: outcome ?? null };
+  for (const experimentName of names) {
+    await recordABTestOutcome({
+      clientKey,
+      experimentName,
+      leadPhone,
+      outcome: 'live_pickup',
+      outcomeData
+    });
+  }
+}
+
 export async function getABTestConversionRates(experimentId) {
   const { rows } = await query(`
     WITH variant_totals AS (
@@ -2450,6 +2526,14 @@ export async function getABTestConversionRates(experimentId) {
         COUNT(DISTINCT lead_phone) as total_leads
       FROM ab_test_results 
       WHERE experiment_id = $1
+      GROUP BY variant_name
+    ),
+    variant_live_pickups AS (
+      SELECT 
+        variant_name,
+        COUNT(DISTINCT lead_phone) as live_pickup_leads
+      FROM ab_test_results 
+      WHERE experiment_id = $1 AND outcome = 'live_pickup'
       GROUP BY variant_name
     ),
     variant_conversions AS (
@@ -2463,14 +2547,18 @@ export async function getABTestConversionRates(experimentId) {
     SELECT 
       vt.variant_name,
       vt.total_leads,
+      COALESCE(vlp.live_pickup_leads, 0) as live_pickup_leads,
       COALESCE(vc.converted_leads, 0) as converted_leads,
       CASE 
+        WHEN COALESCE(vlp.live_pickup_leads, 0) > 0 
+        THEN ROUND((COALESCE(vc.converted_leads, 0)::DECIMAL / vlp.live_pickup_leads) * 100, 2)
         WHEN vt.total_leads > 0 
         THEN ROUND((COALESCE(vc.converted_leads, 0)::DECIMAL / vt.total_leads) * 100, 2)
         ELSE 0 
       END as conversion_rate
     FROM variant_totals vt
-    LEFT JOIN variant_conversions vc ON vt.variant_name = vc.variant_name
+    LEFT JOIN variant_live_pickups vlp ON vlp.variant_name = vt.variant_name
+    LEFT JOIN variant_conversions vc ON vc.variant_name = vt.variant_name
     ORDER BY conversion_rate DESC
   `, [experimentId]);
   return rows;
@@ -2546,6 +2634,7 @@ export async function getOutboundAbExperimentSummary(clientKey, experimentName) 
     variants.push({
       variantName: row.variant_name,
       totalLeads: parseInt(agg?.total_leads ?? 0, 10),
+      livePickupLeads: parseInt(agg?.live_pickup_leads ?? 0, 10),
       convertedLeads: parseInt(agg?.converted_leads ?? 0, 10),
       conversionRatePct: agg?.conversion_rate != null ? Number(agg.conversion_rate) : 0,
       tested

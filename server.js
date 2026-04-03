@@ -13524,59 +13524,9 @@ async function selectABTestVariant(clientKey, experimentName, leadPhone) {
   return selectABTestVariantForLead(clientKey, experimentName, leadPhone);
 }
 
-async function recordABTestOutcome({ clientKey, experimentName, leadPhone, outcome, outcomeData = null }) {
-  try {
-    const { getActiveABTests, recordABTestResult } = await import('./db.js');
-    
-    const activeTests = await getActiveABTests(clientKey);
-    const experimentVariants = activeTests.filter(test => test.experiment_name === experimentName);
-    
-    if (!experimentVariants || experimentVariants.length === 0) {
-      return null;
-    }
-    
-    // Find the variant that was assigned to this lead across all experiments with this name
-    const { getABTestIndividualResults } = await import('./db.js');
-    let assignment = null;
-    
-    // Try each experiment variant to find the assignment
-    for (const variant of experimentVariants) {
-      const results = await getABTestIndividualResults(variant.id);
-      assignment = results.find(result => 
-        result.lead_phone === leadPhone && result.outcome === 'assigned'
-      );
-      if (assignment) {
-        break; // Found the assignment
-      }
-    }
-    
-    if (!assignment) {
-      console.log('[AB TEST OUTCOME] No assignment found for lead', { clientKey, experimentName, leadPhone });
-      return null;
-    }
-    
-    const result = await recordABTestResult({
-      experimentId: assignment.experiment_id,
-      clientKey,
-      leadPhone,
-      variantName: assignment.variant_name,
-      outcome,
-      outcomeData
-    });
-    
-    console.log('[AB TEST OUTCOME RECORDED]', {
-      clientKey,
-      experimentName,
-      leadPhone,
-      variantName: assignment.variant_name,
-      outcome
-    });
-    
-    return result;
-  } catch (error) {
-    console.error('[AB TEST OUTCOME RECORDING ERROR]', error);
-    return null;
-  }
+async function recordABTestOutcome(params) {
+  const { recordABTestOutcome: recordInDb } = await import('./db.js');
+  return recordInDb(params);
 }
 
 async function getABTestResults(clientKey, experimentName) {
