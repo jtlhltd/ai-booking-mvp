@@ -9462,6 +9462,20 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       }
     }
 
+    try {
+      const { enrichOutboundAbDashboardSummariesFromAssistant } = await import(
+        './lib/outbound-ab-dashboard-enrich.js'
+      );
+      await enrichOutboundAbDashboardSummariesFromAssistant(client, {
+        voiceSummary,
+        openingSummary,
+        scriptSummary,
+        legacyOutboundAbSummary
+      });
+    } catch (enrichErr) {
+      console.error('[DEMO DASHBOARD] outbound A/B assistant enrich error:', enrichErr?.message || enrichErr);
+    }
+
     const { resolveOutboundAbDimensionsForDial, outboundAbDialWarning } = await import(
       './lib/outbound-ab-focus.js'
     );
@@ -24568,44 +24582,34 @@ async function runOutboundAbTestSetup(clientKey, body, res) {
         excludeSameDimensionExperiment: true
       });
       const u = variantsList[0];
-      if (!baseline) {
-        res.status(400).json({
-          ok: false,
-          error: `Single ${dimRaw} upload: could not read a baseline ${dimRaw}. Control comes from this tenant’s Vapi assistant (VAPI_PRIVATE_KEY + vapi.assistantId), then vapi.assistantOverrides, then legacy outboundAbExperiment — we intentionally do not reuse the active ${dimRaw} experiment (it is what you are replacing). Check server logs for [OUTBOUND AB BASELINE] if the assistant request failed. You can also upload JSON with two explicit variants.`
-        });
-        return;
-      }
       if (dimRaw === 'voice') {
         const ch = u.voice != null ? String(u.voice).trim() : '';
         if (!ch) {
           res.status(400).json({ ok: false, error: 'Challenger voice is empty' });
           return;
         }
-        if (ch === baseline) {
+        if (baseline && ch === baseline) {
           res.status(400).json({
             ok: false,
-            error: 'New voice matches your current live voice. Use a different voice ID for the test.'
+            error: 'New voice matches your current live assistant voice. Use a different voice ID for the test.'
           });
           return;
         }
-        variantsList = [{ name: 'control', voice: baseline }, { name: 'variant_b', voice: ch }];
+        variantsList = [{ name: 'control' }, { name: 'variant_b', voice: ch }];
       } else if (dimRaw === 'opening') {
         const ch = u.firstMessage != null ? String(u.firstMessage).trim() : '';
         if (!ch) {
           res.status(400).json({ ok: false, error: 'Challenger opening line is empty' });
           return;
         }
-        if (ch === baseline) {
+        if (baseline && ch === baseline) {
           res.status(400).json({
             ok: false,
-            error: 'Opening line matches your current live line. Change the uploaded text to run a test.'
+            error: 'Opening line matches your current live assistant line. Change the uploaded text to run a test.'
           });
           return;
         }
-        variantsList = [
-          { name: 'control', firstMessage: baseline },
-          { name: 'variant_b', firstMessage: ch }
-        ];
+        variantsList = [{ name: 'control' }, { name: 'variant_b', firstMessage: ch }];
       } else {
         const ch =
           u.script != null
@@ -24617,14 +24621,14 @@ async function runOutboundAbTestSetup(clientKey, body, res) {
           res.status(400).json({ ok: false, error: 'Challenger script is empty' });
           return;
         }
-        if (ch === baseline) {
+        if (baseline && ch === baseline) {
           res.status(400).json({
             ok: false,
-            error: 'Script matches your current live script. Change the uploaded script to run a test.'
+            error: 'Script matches your current live assistant script. Change the uploaded script to run a test.'
           });
           return;
         }
-        variantsList = [{ name: 'control', script: baseline }, { name: 'variant_b', script: ch }];
+        variantsList = [{ name: 'control' }, { name: 'variant_b', script: ch }];
       }
     }
     if (variantsList.length < 2) {
@@ -24638,6 +24642,7 @@ async function runOutboundAbTestSetup(clientKey, body, res) {
         res.status(400).json({ ok: false, error: 'Each variant needs a name' });
         return;
       }
+      const isControlArm = vn.toLowerCase() === 'control';
       const voice = v.voice != null ? String(v.voice).trim() : '';
       const firstMessage = v.firstMessage != null ? String(v.firstMessage).trim() : '';
       const script =
@@ -24648,6 +24653,10 @@ async function runOutboundAbTestSetup(clientKey, body, res) {
             : '';
       const config = {};
       if (dimRaw === 'voice') {
+        if (isControlArm) {
+          mapped.push({ name: vn, config: {} });
+          continue;
+        }
         if (!voice) {
           res.status(400).json({
             ok: false,
@@ -24657,6 +24666,10 @@ async function runOutboundAbTestSetup(clientKey, body, res) {
         }
         config.voice = voice;
       } else if (dimRaw === 'opening') {
+        if (isControlArm) {
+          mapped.push({ name: vn, config: {} });
+          continue;
+        }
         if (!firstMessage) {
           res.status(400).json({
             ok: false,
@@ -24666,6 +24679,10 @@ async function runOutboundAbTestSetup(clientKey, body, res) {
         }
         config.firstMessage = firstMessage;
       } else {
+        if (isControlArm) {
+          mapped.push({ name: vn, config: {} });
+          continue;
+        }
         if (!script) {
           res.status(400).json({
             ok: false,
