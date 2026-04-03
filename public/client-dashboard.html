@@ -314,7 +314,7 @@
             max-height: min(58vh, 640px);
         }
 
-        /* Performance & Analytics: matched tile height; Insights scrolls inside */
+        /* Performance & Analytics: matched tile height for the three metric cards */
         .dashboard-section--analytics-row.dashboard-section--balanced-row .dashboard-grid > .card {
             height: min(58vh, 640px);
             max-height: min(58vh, 640px);
@@ -435,23 +435,29 @@
         }
 
         .dashboard-grid > .card > #call-quality,
-        .dashboard-grid > .card > #call-insights,
         .dashboard-grid > .card > #lead-journey,
         .dashboard-grid > .card > .weekly-chart-wrap {
             flex: 1 1 auto;
             min-height: 0;
         }
 
-        .dashboard-section--analytics-row .card-insights-routing > h3,
-        .dashboard-section--analytics-row .card-insights-routing > .card-subtitle,
-        .dashboard-section--analytics-row .card-insights-routing > .insights-card-toolbar {
+        .card-insights-routing {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .card-insights-routing > h3,
+        .card-insights-routing > .card-subtitle,
+        .card-insights-routing > .insights-card-toolbar {
             flex-shrink: 0;
         }
 
-        .dashboard-section--analytics-row .card-insights-routing > #call-insights.insights-root {
+        .card-insights-routing > #call-insights.insights-root {
             flex: 1 1 auto;
             min-height: 0;
             min-width: 0;
+            max-height: min(70vh, 760px);
             overflow-y: auto;
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
@@ -5610,19 +5616,22 @@
                     <p class="card-subtitle" id="callQualitySubtitle">How effective our calls are.</p>
                     <div id="call-quality" class="call-quality-grid"></div>
                 </article>
-
-                <article class="card card-insights-routing">
-                    <h3>🧠 Insights & Routing</h3>
-                    <p class="card-subtitle" id="callInsightsSubtitle">
-                        When to dial, how often calls turn into conversations, and keyword themes — separate from A/B test sample counts.
-                    </p>
-                    <div class="insights-card-toolbar" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
-                        <small id="callInsightsMeta" style="color:var(--muted);">—</small>
-                        <button type="button" id="callInsightsRefresh" class="export-btn secondary" style="padding:6px 10px;font-size:12px;">Refresh insights</button>
-                    </div>
-                    <div id="call-insights" class="insights-root thin-scroll" role="region" aria-label="Insights and routing detail"></div>
-                </article>
                 </div>
+        </section>
+
+        <!-- INSIGHTS & ROUTING: full-width block (same pattern as Creatives & live test) -->
+        <section class="dashboard-section" id="insightsRoutingSection" aria-label="Insights and routing">
+            <article class="card card-fullwidth card-insights-routing">
+                <h3>🧠 Insights & Routing</h3>
+                <p class="card-subtitle" id="callInsightsSubtitle">
+                    When to dial, how often calls turn into conversations, and keyword themes — separate from A/B test sample counts.
+                </p>
+                <div class="insights-card-toolbar" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+                    <small id="callInsightsMeta" style="color:var(--muted);">—</small>
+                    <button type="button" id="callInsightsRefresh" class="export-btn secondary" style="padding:6px 10px;font-size:12px;">Refresh insights</button>
+                </div>
+                <div id="call-insights" class="insights-root thin-scroll" role="region" aria-label="Insights and routing detail"></div>
+            </article>
         </section>
 
         <!-- LEAD MANAGEMENT SECTION -->
