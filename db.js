@@ -257,6 +257,9 @@ async function initPostgres() {
     CREATE INDEX IF NOT EXISTS calls_created_idx ON calls(created_at);
     -- Dashboard / activity: filter by tenant and order by recency (avoids sorting all calls per tenant)
     CREATE INDEX IF NOT EXISTS calls_client_created_idx ON calls(client_key, created_at DESC);
+    -- Recording / voicemail lists: filter by tenant + time without scanning full transcript rows
+    CREATE INDEX IF NOT EXISTS calls_client_recording_created_idx ON calls(client_key, created_at DESC)
+      WHERE recording_url IS NOT NULL AND recording_url <> '';
 
     -- Aggregated transcript insights + routing recommendations (per tenant)
     CREATE TABLE IF NOT EXISTS call_insights (
@@ -1407,9 +1410,15 @@ export async function upsertCall({
 
 export async function getCallsByTenant(clientKey, limit = 100) {
   const { rows } = await query(`
-    SELECT * FROM calls 
-    WHERE client_key = $1 
-    ORDER BY created_at DESC 
+    SELECT
+      id, call_id, client_key, lead_phone, status, outcome, duration, cost,
+      metadata, retry_attempt,
+      LEFT(COALESCE(transcript, ''), 512) AS transcript,
+      recording_url, sentiment, quality_score, objections, key_phrases, metrics,
+      analyzed_at, created_at, updated_at
+    FROM calls
+    WHERE client_key = $1
+    ORDER BY created_at DESC
     LIMIT $2
   `, [clientKey, limit]);
   return rows;
@@ -1805,9 +1814,15 @@ export async function recordCallTimeBanditAfterCallComplete({ clientKey, callId 
 
 export async function getCallsByPhone(clientKey, leadPhone, limit = 50) {
   const { rows } = await query(`
-    SELECT * FROM calls 
-    WHERE client_key = $1 AND lead_phone = $2 
-    ORDER BY created_at DESC 
+    SELECT
+      id, call_id, client_key, lead_phone, status, outcome, duration, cost,
+      metadata, retry_attempt,
+      LEFT(COALESCE(transcript, ''), 512) AS transcript,
+      recording_url, sentiment, quality_score, objections, key_phrases, metrics,
+      analyzed_at, created_at, updated_at
+    FROM calls
+    WHERE client_key = $1 AND lead_phone = $2
+    ORDER BY created_at DESC
     LIMIT $3
   `, [clientKey, leadPhone, limit]);
   return rows;

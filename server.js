@@ -11297,7 +11297,11 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
     try {
       const atpRows = await query(`
         WITH windowed AS (
-          SELECT * FROM calls
+          SELECT
+            lead_phone, created_at, outcome, status, duration,
+            LEFT(COALESCE(transcript::text, ''), 512) AS transcript,
+            recording_url
+          FROM calls
           WHERE client_key = $1
             AND created_at >= NOW() - INTERVAL '7 days'
         ),
@@ -11348,7 +11352,8 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
       try {
         const simpleAtp = await query(`
           WITH windowed AS (
-            SELECT * FROM calls
+            SELECT lead_phone, created_at, outcome, duration
+            FROM calls
             WHERE client_key = $1
               AND created_at >= NOW() - INTERVAL '7 days'
           ),
@@ -12007,7 +12012,15 @@ app.get('/api/call-recordings/:clientKey', async (req, res) => {
           c.created_at,
           lm.lead_id,
           lm.name
-        FROM calls c
+        FROM (
+          SELECT id, call_id, client_key, lead_phone, recording_url, duration, outcome, created_at
+          FROM calls
+          WHERE client_key = $1
+            AND recording_url IS NOT NULL
+            AND TRIM(recording_url) <> ''
+          ORDER BY created_at DESC
+          LIMIT $2
+        ) c
         LEFT JOIN LATERAL (
           SELECT l.id AS lead_id, l.name
           FROM leads l
@@ -12023,11 +12036,7 @@ app.get('/api/call-recordings/:clientKey', async (req, res) => {
           ORDER BY l.created_at DESC NULLS LAST
           LIMIT 1
         ) lm ON true
-        WHERE c.client_key = $1
-          AND c.recording_url IS NOT NULL
-          AND TRIM(c.recording_url) <> ''
         ORDER BY c.created_at DESC
-        LIMIT $2
       `, [clientKey, limit])
     ]);
 
@@ -12137,7 +12146,18 @@ app.get('/api/voicemails/:clientKey', async (req, res) => {
           c.transcript,
           lm.lead_id,
           lm.name
-        FROM calls c
+        FROM (
+          SELECT
+            id, call_id, client_key, lead_phone, recording_url, duration, outcome, created_at,
+            LEFT(COALESCE(transcript, ''), 512) AS transcript
+          FROM calls
+          WHERE client_key = $1
+            AND recording_url IS NOT NULL
+            AND TRIM(recording_url) <> ''
+            AND LOWER(COALESCE(outcome, '')) IN ('voicemail')
+          ORDER BY created_at DESC
+          LIMIT $2
+        ) c
         LEFT JOIN LATERAL (
           SELECT l.id AS lead_id, l.name
           FROM leads l
@@ -12153,12 +12173,7 @@ app.get('/api/voicemails/:clientKey', async (req, res) => {
           ORDER BY l.created_at DESC NULLS LAST
           LIMIT 1
         ) lm ON true
-        WHERE c.client_key = $1
-          AND c.recording_url IS NOT NULL
-          AND TRIM(c.recording_url) <> ''
-          AND LOWER(COALESCE(c.outcome, '')) IN ('voicemail')
         ORDER BY c.created_at DESC
-        LIMIT $2
       `, [clientKey, limit])
     ]);
 
