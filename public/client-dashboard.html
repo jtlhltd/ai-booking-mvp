@@ -5717,7 +5717,7 @@
                     </fieldset>
                     <div class="tom-ab-single-upload-wrap">
                         <label class="tom-ab-field"><span id="tomAbSingleUploadLabel">Voice ID (ElevenLabs)</span>
-                            <input type="text" id="tomAbUploadVoiceField" class="tom-ab-input" autocomplete="off" spellcheck="false" placeholder="e.g. 21m00Tcm4TlvDq8ikWAM">
+                            <input type="text" id="tomAbUploadVoiceField" class="tom-ab-input" autocomplete="off" spellcheck="false" placeholder="e.g. 21m00Tcm4TlvDq8ikWAM" minlength="10" maxlength="128" pattern="[A-Za-z0-9/_-]+" title="10–128 characters: letters, digits, and optional _ - / (ElevenLabs voice id).">
                             <textarea id="tomAbUploadTextField" class="tom-ab-textarea tom-ab-upload-field-hidden" rows="8" spellcheck="true" placeholder=""></textarea>
                         </label>
                     </div>
@@ -8489,6 +8489,16 @@ ${actionsRow}
 
         const tomAbPerDimDraft = { voice: '', opening: '', script: '' };
 
+        /** Keep in sync with lib/elevenlabs-voice-id.js */
+        const TOM_AB_VOICE_ID_REQUIREMENT =
+            'Voice ID must be 10–128 characters: letters, digits, and optional _ - / only (ElevenLabs voice id). Example: 21m00Tcm4TlvDq8ikWAM';
+
+        function tomAbVoiceIdLooksValid(s) {
+            const id = s != null ? String(s).trim() : '';
+            if (!id || id.length < 10 || id.length > 128) return false;
+            return /^[A-Za-z0-9_\-/]+$/.test(id);
+        }
+
         /** Clear stored draft + visible upload field so renderTomAbTestSection’s flush cannot copy stale DOM back into draft (e.g. autofill or old typo re-uploaded as “ghost” challenger). */
         function tomAbClearUploadFieldAndDraft(dim) {
             if (dim !== 'voice' && dim !== 'opening' && dim !== 'script') return;
@@ -9265,6 +9275,10 @@ ${actionsRow}
                               ? 'Enter an opening line first.'
                               : 'Enter a script first.';
                 }
+                return;
+            }
+            if (dim === 'voice' && !tomAbVoiceIdLooksValid(val)) {
+                if (msg) msg.textContent = TOM_AB_VOICE_ID_REQUIREMENT;
                 return;
             }
             const json =

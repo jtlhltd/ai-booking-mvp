@@ -19,17 +19,19 @@ describe('outbound-ab-upload-spec', () => {
   });
 
   test('parses wrapped object with experimentName', () => {
+    const id0 = '21m00Tcm4TlvDq8ikWAM';
+    const id1 = 'pNInz6obpgDQGcFmaJgB';
     const j = JSON.stringify({
       experimentName: 'my_exp',
       variants: [
-        { name: 'a', voice: 'v1' },
-        { name: 'b', voiceId: 'v2' }
+        { name: 'a', voice: id0 },
+        { name: 'b', voiceId: id1 }
       ]
     });
     const r = parseOutboundAbUploadSpec(j, 'voice');
     assertEqual(r.experimentName, 'my_exp');
-    assertEqual(r.variants[0].voice, 'v1');
-    assertEqual(r.variants[1].voice, 'v2');
+    assertEqual(r.variants[0].voice, id0);
+    assertEqual(r.variants[1].voice, id1);
     assertTrue(r.controlFromLive === false);
   });
 
@@ -49,9 +51,10 @@ describe('outbound-ab-upload-spec', () => {
   });
 
   test('parses flat object for voice (challenger only; control from live)', () => {
-    const r = parseOutboundAbUploadSpec(JSON.stringify({ voiceId: 'vid123' }), 'voice');
+    const id = '21m00Tcm4TlvDq8ikWAM';
+    const r = parseOutboundAbUploadSpec(JSON.stringify({ voiceId: id }), 'voice');
     assertEqual(r.variants.length, 1);
-    assertEqual(r.variants[0].voice, 'vid123');
+    assertEqual(r.variants[0].voice, id);
     assertTrue(r.controlFromLive === true);
   });
 });

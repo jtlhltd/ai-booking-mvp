@@ -24589,6 +24589,10 @@ async function runOutboundAbTestSetup(clientKey, body, res) {
       });
       return;
     }
+    const validateVoiceIdForAb =
+      dimRaw === 'voice'
+        ? (await import('./lib/elevenlabs-voice-id.js')).validateElevenLabsVoiceIdForAb
+        : null;
     let nameTrim = experimentName != null ? String(experimentName).trim() : '';
     if (!nameTrim) {
       const slug = String(clientKey)
@@ -24615,6 +24619,12 @@ async function runOutboundAbTestSetup(clientKey, body, res) {
           res.status(400).json({ ok: false, error: 'Challenger voice is empty' });
           return;
         }
+        const voiceCheck = validateVoiceIdForAb(ch);
+        if (!voiceCheck.ok) {
+          res.status(400).json({ ok: false, error: voiceCheck.error });
+          return;
+        }
+        ch = voiceCheck.id;
         if (baseline && ch === baseline) {
           res.status(400).json({
             ok: false,
@@ -24691,7 +24701,12 @@ async function runOutboundAbTestSetup(clientKey, body, res) {
           });
           return;
         }
-        config.voice = voice;
+        const voiceCheck = validateVoiceIdForAb(voice);
+        if (!voiceCheck.ok) {
+          res.status(400).json({ ok: false, error: voiceCheck.error });
+          return;
+        }
+        config.voice = voiceCheck.id;
       } else if (dimRaw === 'opening') {
         if (isControlArm) {
           mapped.push({ name: vn, config: {} });
@@ -24797,6 +24812,13 @@ async function runOutboundAbChallengerUpdate(clientKey, body, res) {
     let ch = '';
     if (dimRaw === 'voice') {
       ch = body.voice != null ? String(body.voice).trim() : '';
+      const { validateElevenLabsVoiceIdForAb } = await import('./lib/elevenlabs-voice-id.js');
+      const voiceCheck = validateElevenLabsVoiceIdForAb(ch);
+      if (!voiceCheck.ok) {
+        res.status(400).json({ ok: false, error: voiceCheck.error });
+        return;
+      }
+      ch = voiceCheck.id;
     } else if (dimRaw === 'opening') {
       ch = body.firstMessage != null ? String(body.firstMessage).trim() : '';
     } else {
