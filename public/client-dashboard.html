@@ -8489,6 +8489,19 @@ ${actionsRow}
 
         const tomAbPerDimDraft = { voice: '', opening: '', script: '' };
 
+        /** Clear stored draft + visible upload field so renderTomAbTestSection’s flush cannot copy stale DOM back into draft (e.g. autofill or old typo re-uploaded as “ghost” challenger). */
+        function tomAbClearUploadFieldAndDraft(dim) {
+            if (dim !== 'voice' && dim !== 'opening' && dim !== 'script') return;
+            tomAbPerDimDraft[dim] = '';
+            if (dim === 'voice') {
+                const voiceEl = document.getElementById('tomAbUploadVoiceField');
+                if (voiceEl) voiceEl.value = '';
+            } else {
+                const textEl = document.getElementById('tomAbUploadTextField');
+                if (textEl) textEl.value = '';
+            }
+        }
+
         function getTomAbActiveUploadDimension() {
             const active = document.querySelector('#tomAbOutreachAbSection .tom-ab-dim-segment--active');
             const d = active && active.getAttribute('data-tom-ab-dim');
@@ -8625,7 +8638,7 @@ ${actionsRow}
                 );
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
-                tomAbPerDimDraft[dim] = '';
+                tomAbClearUploadFieldAndDraft(dim);
                 tomAbMergeOutboundAbAfterStop(dim, data);
                 renderTomAbTestSection(dashboardData);
                 let livePayload = await fetchLiveData(currentClient);
