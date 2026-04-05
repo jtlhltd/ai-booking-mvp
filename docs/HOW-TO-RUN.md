@@ -52,17 +52,21 @@ npm start
 
 Server listens on `http://localhost:3000` (or `PORT`).
 
+**SQLite locally:** If you are not using Postgres (`DATABASE_URL` unset), the app uses **`data/app.db`**. That file is **not** in git (see `.gitignore`); it is created on first run. After a fresh clone you do not need to add it manually.
+
 ---
 
 ## Deploy to Render
 
 1. Connect the GitHub repo to Render (Web Service).
-2. **Build command:** leave default or `echo "no build step"`.
+2. **Build command:** The repo’s `render.yaml` runs **`npm ci --include=dev && npm test`** so devDependencies (Jest) are installed and **tests must pass** before the deploy succeeds. If you configure the service manually and want the same behavior, use that command; use `npm ci` only if you intentionally skip tests on Render (GitHub Actions still runs them on push/PR).
 3. **Start command:** `npm run render-start` (runs migrations then `node server.js`).
 4. In Render **Environment** tab, add all required variables (see above). Include `DATABASE_URL` from the Render Postgres instance if using it.
 5. Deploy. Render will set `RENDER_GIT_COMMIT` to the deployed commit.
 
 The repo’s `render.yaml` uses **`npm run render-start`** so migrations run before the server starts (same as the manual start command above).
+
+**Local Node version:** `.nvmrc` is **18** (matches `NODE_VERSION` in `render.yaml`). With [nvm](https://github.com/nvm-sh/nvm) or [fnm](https://github.com/Schniz/fnm): `nvm use` / `fnm use`.
 
 ---
 

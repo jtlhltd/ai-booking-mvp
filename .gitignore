@@ -1,11 +1,15 @@
-﻿node_modules
+node_modules
 .env
 data/*.log
 data/*.tmp
 data/*.db
 
-# Google Cloud credentials
-*.json
+# Cloud / API credential JSON (prefer env vars; never commit keys)
+credentials.json
+client_secret*.json
+*credentials*.json
+*service-account*.json
+*-firebase-adminsdk*.json
 
 # Call logs
 call-logs-*.csv

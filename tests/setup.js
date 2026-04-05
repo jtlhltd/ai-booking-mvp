@@ -1,14 +1,13 @@
-// tests/setup.js
-// Test setup and teardown
+// tests/setup.js — loaded for every Jest run (see jest.config.js setupFilesAfterEnv)
 
-// Set test environment variables
 process.env.NODE_ENV = 'test';
-process.env.DB_TYPE = 'postgres';
-process.env.DATABASE_URL = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL;
 
-// Increase timeout for integration tests
-jest.setTimeout(30000);
+// Optional Postgres for integration tests: set TEST_DATABASE_URL in the environment.
+if (process.env.TEST_DATABASE_URL) {
+  process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+  if (!process.env.DB_TYPE) {
+    process.env.DB_TYPE = 'postgres';
+  }
+}
 
-// Global test utilities
-global.sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
+global.sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

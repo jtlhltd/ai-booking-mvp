@@ -121,6 +121,8 @@ Server runs on `http://localhost:3000`
 | File | Purpose |
 |------|---------|
 | **`docs/HOW-TO-RUN.md`** | **How to run: env vars, migrations, local, Render, verify production** |
+| `SECURITY.md` | How to report security issues (private repo) |
+| `.nvmrc` | Node 18 for local dev (matches Render `NODE_VERSION` in `render.yaml`) |
 | `VAPI-FINAL-OPTIMIZED.txt` | Latest AI cold calling script (paste into Vapi dashboard) |
 | `.env.example` | Required environment variables |
 | `docs/archive/DEPLOYMENT-GUIDE.md` | Full deployment instructions |
