@@ -77,87 +77,126 @@ const envVars = {
   LOG_LEVEL: 'Logging level (debug/info/warn/error)'
 };
 
-// Generate .env template
+function pushKey(lines, key) {
+  const desc = envVars[key];
+  if (!desc) return;
+  lines.push(`# ${desc}`, `${key}=`, '');
+}
+
+function pushCommentedKey(lines, key) {
+  const desc = envVars[key];
+  if (!desc) return;
+  lines.push(`# ${desc}`, `# ${key}=`, '');
+}
+
+function pushSection(lines, title, keys, { commented = [] } = {}) {
+  lines.push(
+    '# ============================================',
+    `# ${title}`,
+    '# ============================================',
+    ''
+  );
+  for (const key of keys) {
+    pushKey(lines, key);
+  }
+  for (const key of commented) {
+    pushCommentedKey(lines, key);
+  }
+}
+
+// Generate .env template (empty values; descriptions as comments — safe to commit)
 function generateEnvTemplate() {
   const lines = [
     '# ============================================',
-    '# Environment Variables Template',
-    '# Generated from codebase analysis',
-    '# Copy values from Render dashboard:',
-    '# https://dashboard.render.com/web/srv-d2vvdqbuibrs73dq57ug',
+    '# Environment variables template',
+    '# See docs/HOW-TO-RUN.md. Regenerate: node scripts/generate-env-template.js',
     '# ============================================',
-    '',
-    '# ============================================',
-    '# CRITICAL - Required for basic functionality',
-    '# ============================================',
-    `API_KEY=${envVars.API_KEY ? '# ' + envVars.API_KEY : ''}`,
-    `DATABASE_URL=${envVars.DATABASE_URL ? '# ' + envVars.DATABASE_URL : ''}`,
-    '',
-    '# ============================================',
-    '# VAPI - Required for AI calling',
-    '# ============================================',
-    `VAPI_PRIVATE_KEY=${envVars.VAPI_PRIVATE_KEY ? '# ' + envVars.VAPI_PRIVATE_KEY : ''}`,
-    `VAPI_ASSISTANT_ID=${envVars.VAPI_ASSISTANT_ID ? '# ' + envVars.VAPI_ASSISTANT_ID : ''}`,
-    `VAPI_PHONE_NUMBER_ID=${envVars.VAPI_PHONE_NUMBER_ID ? '# ' + envVars.VAPI_PHONE_NUMBER_ID : ''}`,
-    `VAPI_TEMPLATE_ASSISTANT_ID=${envVars.VAPI_TEMPLATE_ASSISTANT_ID ? '# ' + envVars.VAPI_TEMPLATE_ASSISTANT_ID : ''}`,
-    `# VAPI_PUBLIC_KEY=${envVars.VAPI_PUBLIC_KEY ? '# ' + envVars.VAPI_PUBLIC_KEY : ''}`,
-    `# VAPI_API_KEY=${envVars.VAPI_API_KEY ? '# ' + envVars.VAPI_API_KEY : ''}`,
-    `# VAPI_ORIGIN=${envVars.VAPI_ORIGIN ? '# ' + envVars.VAPI_ORIGIN : ''}`,
-    '',
-    '# ============================================',
-    '# TWILIO - For SMS notifications (optional)',
-    '# ============================================',
-    `TWILIO_ACCOUNT_SID=${envVars.TWILIO_ACCOUNT_SID ? '# ' + envVars.TWILIO_ACCOUNT_SID : ''}`,
-    `TWILIO_AUTH_TOKEN=${envVars.TWILIO_AUTH_TOKEN ? '# ' + envVars.TWILIO_AUTH_TOKEN : ''}`,
-    `TWILIO_FROM_NUMBER=${envVars.TWILIO_FROM_NUMBER ? '# ' + envVars.TWILIO_FROM_NUMBER : ''}`,
-    `TWILIO_MESSAGING_SERVICE_SID=${envVars.TWILIO_MESSAGING_SERVICE_SID ? '# ' + envVars.TWILIO_MESSAGING_SERVICE_SID : ''}`,
-    '',
-    '# ============================================',
-    '# GOOGLE CALENDAR - For appointment booking (optional)',
-    '# ============================================',
-    `GOOGLE_CLIENT_EMAIL=${envVars.GOOGLE_CLIENT_EMAIL ? '# ' + envVars.GOOGLE_CLIENT_EMAIL : ''}`,
-    `GOOGLE_PRIVATE_KEY=${envVars.GOOGLE_PRIVATE_KEY ? '# ' + envVars.GOOGLE_PRIVATE_KEY : ''}`,
-    `GOOGLE_PRIVATE_KEY_B64=${envVars.GOOGLE_PRIVATE_KEY_B64 ? '# ' + envVars.GOOGLE_PRIVATE_KEY_B64 : ''}`,
-    `GOOGLE_CALENDAR_ID=${envVars.GOOGLE_CALENDAR_ID ? '# ' + envVars.GOOGLE_CALENDAR_ID : 'primary'}`,
-    '',
-    '# ============================================',
-    '# EMAIL - For email notifications (optional)',
-    '# ============================================',
-    `EMAIL_USER=${envVars.EMAIL_USER ? '# ' + envVars.EMAIL_USER : ''}`,
-    `EMAIL_PASS=${envVars.EMAIL_PASS ? '# ' + envVars.EMAIL_PASS : ''}`,
-    `YOUR_EMAIL=${envVars.YOUR_EMAIL ? '# ' + envVars.YOUR_EMAIL : ''}`,
-    '',
-    '# ============================================',
-    '# BUSINESS SEARCH APIs (optional)',
-    '# ============================================',
-    `GOOGLE_PLACES_API_KEY=${envVars.GOOGLE_PLACES_API_KEY ? '# ' + envVars.GOOGLE_PLACES_API_KEY : ''}`,
-    `COMPANIES_HOUSE_API_KEY=${envVars.COMPANIES_HOUSE_API_KEY ? '# ' + envVars.COMPANIES_HOUSE_API_KEY : ''}`,
-    `GOOGLE_SEARCH_API_KEY=${envVars.GOOGLE_SEARCH_API_KEY ? '# ' + envVars.GOOGLE_SEARCH_API_KEY : ''}`,
-    `GOOGLE_SEARCH_ENGINE_ID=${envVars.GOOGLE_SEARCH_ENGINE_ID ? '# ' + envVars.GOOGLE_SEARCH_ENGINE_ID : ''}`,
-    '',
-    '# ============================================',
-    '# OTHER CONFIGURATION',
-    '# ============================================',
-    `BASE_URL=${envVars.BASE_URL ? '# ' + envVars.BASE_URL : 'https://ai-booking-mvp.onrender.com'}`,
-    `PORT=${envVars.PORT ? '# ' + envVars.PORT : '3000'}`,
-    `TZ=${envVars.TZ ? '# ' + envVars.TZ : 'Europe/London'}`,
-    `NODE_ENV=${envVars.NODE_ENV ? '# ' + envVars.NODE_ENV : 'development'}`,
-    '',
-    '# ============================================',
-    '# TESTING (optional)',
-    '# ============================================',
-    `TEST_PHONE_NUMBER=${envVars.TEST_PHONE_NUMBER ? '# ' + envVars.TEST_PHONE_NUMBER : '+447491683261'}`,
-    '',
+    ''
+  ];
+
+  pushSection(lines, 'CRITICAL — required for basic functionality', [
+    'API_KEY',
+    'DATABASE_URL'
+  ]);
+
+  pushSection(
+    lines,
+    'VAPI — AI calling',
+    [
+      'VAPI_PRIVATE_KEY',
+      'VAPI_ASSISTANT_ID',
+      'VAPI_PHONE_NUMBER_ID',
+      'VAPI_TEMPLATE_ASSISTANT_ID'
+    ],
+    {
+      commented: [
+        'VAPI_PUBLIC_KEY',
+        'VAPI_API_KEY',
+        'VAPI_ORIGIN',
+        'VAPI_TEST_MODE',
+        'VAPI_DRY_RUN'
+      ]
+    }
+  );
+
+  pushSection(lines, 'TWILIO — SMS', [
+    'TWILIO_ACCOUNT_SID',
+    'TWILIO_AUTH_TOKEN',
+    'TWILIO_FROM_NUMBER',
+    'TWILIO_MESSAGING_SERVICE_SID'
+  ]);
+
+  pushSection(lines, 'GOOGLE CALENDAR', [
+    'GOOGLE_CLIENT_EMAIL',
+    'GOOGLE_PRIVATE_KEY',
+    'GOOGLE_PRIVATE_KEY_B64',
+    'GOOGLE_CALENDAR_ID'
+  ]);
+
+  pushSection(lines, 'EMAIL', ['EMAIL_USER', 'EMAIL_PASS', 'YOUR_EMAIL']);
+
+  pushSection(lines, 'BUSINESS SEARCH APIs (optional)', [
+    'GOOGLE_PLACES_API_KEY',
+    'COMPANIES_HOUSE_API_KEY',
+    'GOOGLE_SEARCH_API_KEY',
+    'GOOGLE_SEARCH_ENGINE_ID'
+  ]);
+
+  pushSection(lines, 'OTHER CONFIGURATION', [
+    'BASE_URL',
+    'PORT',
+    'TZ',
+    'TIMEZONE',
+    'NODE_ENV',
+    'TEST_PHONE_NUMBER'
+  ]);
+
+  lines.push(
     '# ============================================',
     '# ADVANCED (optional)',
     '# ============================================',
-    `# CONSENT_LINE=${envVars.CONSENT_LINE ? '# ' + envVars.CONSENT_LINE : ''}`,
-    `# DEFAULT_CLIENT_KEY=${envVars.DEFAULT_CLIENT_KEY ? '# ' + envVars.DEFAULT_CLIENT_KEY : ''}`,
-    `# SLACK_WEBHOOK_URL=${envVars.SLACK_WEBHOOK_URL ? '# ' + envVars.SLACK_WEBHOOK_URL : ''}`,
-    `# DB_TYPE=${envVars.DB_TYPE ? '# ' + envVars.DB_TYPE : ''}`,
-    `# LOG_LEVEL=${envVars.LOG_LEVEL ? '# ' + envVars.LOG_LEVEL : ''}`,
     ''
+  );
+  const advanced = [
+    'CONSENT_LINE',
+    'DEFAULT_CLIENT_KEY',
+    'SLACK_WEBHOOK_URL',
+    'BOOTSTRAP_CLIENTS_JSON',
+    'BOOKINGS_SHEET_ID',
+    'LOGISTICS_SHEET_ID',
+    'CALLBACK_INBOX_EMAIL',
+    'DEMO_MODE',
+    'LOG_BOOKING_DEBUG',
+    'RECEPTIONIST_TEST_MODE',
+    'DEMO_TELEMETRY_PATH',
+    'RECEPTIONIST_TELEMETRY_PATH',
+    'DEMO_SCRIPT_PATH',
+    'DB_TYPE',
+    'LOG_LEVEL'
   ];
+  for (const key of advanced) {
+    pushCommentedKey(lines, key);
+  }
 
   return lines.join('\n');
 }
@@ -171,14 +210,8 @@ fs.writeFileSync(envPath, template);
 console.log('✅ Generated .env.template file');
 console.log(`📁 Location: ${envPath}`);
 console.log('\n📋 Next steps:');
-console.log('1. Go to Render dashboard: https://dashboard.render.com/web/srv-d2vvdqbuibrs73dq57ug');
-console.log('2. Go to Environment tab');
-console.log('3. Copy each value and paste into .env.template');
-console.log('4. Rename .env.template to .env');
-console.log('\n💡 Tip: The most critical ones for your demo are:');
-console.log('   - VAPI_PRIVATE_KEY');
-console.log('   - VAPI_ASSISTANT_ID');
-console.log('   - VAPI_PHONE_NUMBER_ID');
-console.log('   - API_KEY');
+console.log('1. Copy to .env (or paste values from your host, e.g. Render → Environment)');
+console.log('2. See docs/HOW-TO-RUN.md for required variables and local run');
+console.log('\n💡 Critical for most deployments: DATABASE_URL, API_KEY, Vapi keys, VAPI_ASSISTANT_ID');
 
 

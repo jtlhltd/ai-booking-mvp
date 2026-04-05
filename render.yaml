@@ -3,7 +3,7 @@ services:
     name: ai-booking-mvp
     env: node
     buildCommand: npm ci
-    startCommand: node server.js
+    startCommand: npm run render-start
     plan: starter
     envVars:
       - key: NODE_VERSION

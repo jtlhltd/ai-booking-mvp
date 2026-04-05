@@ -62,6 +62,16 @@ Server listens on `http://localhost:3000` (or `PORT`).
 4. In Render **Environment** tab, add all required variables (see above). Include `DATABASE_URL` from the Render Postgres instance if using it.
 5. Deploy. Render will set `RENDER_GIT_COMMIT` to the deployed commit.
 
+The repo’s `render.yaml` uses **`npm run render-start`** so migrations run before the server starts (same as the manual start command above).
+
+---
+
+## GitHub: CI and branch protection (recommended)
+
+- **CI:** Pushes and pull requests to `main` / `master` run **GitHub Actions** (`.github/workflows/ci.yml`): `npm ci` and `npm test` on Node 18 and 20. Check results under the repo **Actions** tab or on the PR **Checks** section.
+- **Branch protection:** In GitHub: **Settings → Branches → Branch protection rules** (or **Rulesets**) for `main`. Enable **Require status checks to pass before merging** and select the **CI** jobs (e.g. `test (18)` and `test (20)`). That way failing tests block merges even though Render deploys independently.
+- **Dependabot:** `.github/dependabot.yml` opens weekly npm dependency update PRs; review and merge as you like.
+
 ---
 
 ## Verify production
