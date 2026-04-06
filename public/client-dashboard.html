@@ -195,6 +195,22 @@
             display: none;
         }
 
+        .dashboard-api-error-banner {
+            margin-top: 14px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            background: rgba(198, 40, 40, 0.1);
+            border: 1px solid rgba(198, 40, 40, 0.35);
+            font-size: 0.875rem;
+            line-height: 1.5;
+            color: var(--text, #1a1d2e);
+        }
+
+        .dashboard-api-error-banner code {
+            font-size: 0.8em;
+            word-break: break-all;
+        }
+
         .status-bar {
             display: flex;
             flex-wrap: wrap;
@@ -5301,6 +5317,12 @@
             color: #ffd54f;
         }
 
+        body[data-theme="dark"] .dashboard-api-error-banner {
+            background: rgba(239, 83, 80, 0.15);
+            border-color: rgba(239, 83, 80, 0.45);
+            color: #ffcdd2;
+        }
+
         body[data-theme="dark"] .active-indicator {
             background: rgba(27, 94, 32, 0.4);
             border-color: rgba(27, 94, 32, 0.6);
@@ -5797,6 +5819,10 @@
         
             <div class="demo-banner" id="demoBanner">
                 <strong>Demo environment:</strong> This sandbox mirrors the live dashboard your clients see. We just preload it with mock data for Looms.
+            </div>
+            <div class="dashboard-api-error-banner" id="dashboardApiErrorBanner" hidden role="alert">
+                <strong>Live metrics did not load.</strong>
+                Numbers come from <code>GET /api/demo-dashboard/&lt;your client key&gt;</code>. If that request fails or times out, tiles stay at zero while branding may still look correct. Check DevTools → Network, confirm the URL includes <code>?client=…</code>, then refresh.
             </div>
         </header>
 
@@ -6954,7 +6980,38 @@ ${actionsRow}
         let callRecordingsMeta = { totalWithRecordings: 0, limit: 50, isDemo: false };
         let callRecordingsOutcomeFilter = 'all';
         let liveEventSource = null;
-        
+        /** True when /api/demo-dashboard/:key failed so UI would otherwise show silent zeros. */
+        let dashboardLivePayloadFailed = false;
+
+        function setDashboardApiErrorVisible(show) {
+            const el = document.getElementById('dashboardApiErrorBanner');
+            if (el) el.hidden = !show;
+        }
+
+        function syncDashboardFreshnessUi() {
+            const freshnessText = document.getElementById('freshnessText');
+            if (!freshnessText) return;
+            const dot = document.getElementById('freshnessDot');
+            if (dashboardLivePayloadFailed) {
+                freshnessText.textContent = 'Live metrics unavailable';
+                if (dot) dot.classList.add('offline');
+                return;
+            }
+            if (dot) dot.classList.remove('offline');
+            const now = new Date();
+            const diffMs = now - lastDataUpdate;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffSecs = Math.floor((diffMs % 60000) / 1000);
+            if (diffMins < 1) {
+                freshnessText.textContent = `Updated ${diffSecs}s ago`;
+            } else if (diffMins < 60) {
+                freshnessText.textContent = `Updated ${diffMins}m ago`;
+            } else {
+                const diffHours = Math.floor(diffMins / 60);
+                freshnessText.textContent = `Updated ${diffHours}h ago`;
+            }
+        }
+
         function getClientFromURL() {
             const params = new URLSearchParams(window.location.search);
             const clientParam = (params.get('client') || '').trim();
@@ -12583,6 +12640,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             });
 
             // Always try to fetch real data from API
+            dashboardLivePayloadFailed = false;
+            setDashboardApiErrorVisible(false);
             try {
                 const livePayload = await fetchLiveData(currentClient);
                 if (livePayload) {
@@ -12591,18 +12650,25 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 } else if (currentClient === DEMO_CLIENT_KEY) {
                     // Only use demo data if it's the demo client and no API data
                     dashboardData = { ...DEMO_DATA };
+                } else {
+                    // fetchLiveData returns null on non-OK HTTP, missing payload.ok, timeout, or network error
+                    dashboardLivePayloadFailed = true;
+                    setDashboardApiErrorVisible(true);
                 }
-                // If no livePayload and not demo client, dashboardData stays as empty structure
             } catch (error) {
                 console.error('Failed to load dashboard data', error);
                 // Only show error for real clients, demo client can use demo data
                 if (currentClient !== DEMO_CLIENT_KEY) {
+                    dashboardLivePayloadFailed = true;
+                    setDashboardApiErrorVisible(true);
                     const leadsContainer = document.getElementById('leads-list');
                     if (leadsContainer) {
                         showError(leadsContainer, 'Unable to load dashboard data. Please refresh the page.', () => location.reload());
                     }
                 }
             }
+
+            syncDashboardFreshnessUi();
 
             // Render critical data first (non-blocking)
             updateStatusBar(dashboardData);
@@ -12667,6 +12733,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     const refreshPayload = await fetchLiveData(currentClient);
                     lastDataUpdate = new Date();
                     if (refreshPayload) {
+                        dashboardLivePayloadFailed = false;
+                        setDashboardApiErrorVisible(false);
                         const merged = mergeData(dashboardData, refreshPayload);
                         const fp = dashboardPollFingerprint(merged);
                         if (fp === lastDashboardPollFingerprint) return;
@@ -12692,6 +12760,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         await renderRetryQueue(dashboardData);
                         await renderCalendarDetails(dashboardData);
                         renderChart(config, dashboardData);
+                        syncDashboardFreshnessUi();
                     }
                 } catch (error) {
                     console.error('Failed to refresh dashboard data', error);
@@ -12844,28 +12913,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
         // Data freshness indicator
         function initDataFreshness() {
-            const freshnessText = document.getElementById('freshnessText');
-            if (!freshnessText) return;
-
-            function updateFreshness() {
-                const now = new Date();
-                const diffMs = now - lastDataUpdate;
-                const diffMins = Math.floor(diffMs / 60000);
-                const diffSecs = Math.floor((diffMs % 60000) / 1000);
-
-                if (diffMins < 1) {
-                    freshnessText.textContent = `Updated ${diffSecs}s ago`;
-                } else if (diffMins < 60) {
-                    freshnessText.textContent = `Updated ${diffMins}m ago`;
-                } else {
-                    const diffHours = Math.floor(diffMins / 60);
-                    freshnessText.textContent = `Updated ${diffHours}h ago`;
-                }
-            }
-
-            // Update freshness every 5s (was 1s — reduced main-thread churn on long sessions)
-            setInterval(updateFreshness, 5000);
-            updateFreshness();
+            if (!document.getElementById('freshnessText')) return;
+            setInterval(syncDashboardFreshnessUi, 5000);
+            syncDashboardFreshnessUi();
         }
 
         // Better error handling
