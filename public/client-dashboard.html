@@ -5835,8 +5835,8 @@
             </div>
             
         <section class="status-bar" role="region" aria-label="Dashboard statistics">
-            <div class="status-card" title="Total leads we're handling for you" role="article" aria-label="Leads we're managing">
-                <h4 id="statusCardLeads">Leads We're Managing</h4>
+            <div class="status-card" id="statusBarLeadsCard" title="Distinct phone numbers stored for this client in the CRM" role="article" aria-label="Unique contacts in CRM">
+                <h4 id="statusCardLeads">Unique contacts in CRM</h4>
                 <div class="status-value" id="statusTotalLeads" aria-live="polite">—</div>
                 <p class="status-hint" id="statusHintLeads">Loading...</p>
                 </div>
@@ -7472,7 +7472,11 @@ ${actionsRow}
             
             // Update status cards
             const statusCardLeads = document.getElementById('statusCardLeads');
-            if (statusCardLeads) statusCardLeads.textContent = `Leads We're Managing for ${businessName}`;
+            if (statusCardLeads) {
+                statusCardLeads.textContent = isOutreachDashboardClient(currentClient)
+                    ? 'Unique contacts in CRM'
+                    : `Leads We're Managing for ${businessName}`;
+            }
             
             const statusCardCalls = document.getElementById('statusCardCalls');
             if (statusCardCalls) statusCardCalls.textContent = `Calls We've Made for ${businessName}`;
@@ -7546,7 +7550,7 @@ ${actionsRow}
             const conversionFunnelSubtitle = document.getElementById('conversionFunnelSubtitle');
             if (conversionFunnelSubtitle) {
                 conversionFunnelSubtitle.textContent = isOutreachDashboardClient(currentClient)
-                    ? `Real counts for ${businessName}. Percentages are share of CRM leads. Reached + no pickup = everyone we dialed (see Calls tile). Click a stage to filter Recent Leads below.`
+                    ? `Real counts for ${businessName}. “Unique in CRM” is distinct phone numbers on file (one row per phone; uploads merge). Percentages are vs that total. Reached + no pickup = everyone we dialed. Click a stage to filter Recent Leads below.`
                     : `Independent counts for ${businessName} — not a strict funnel. Bar length compares rows; % is vs total leads.`;
             }
             
@@ -7767,9 +7771,29 @@ ${actionsRow}
             const leadTotalNum = data.totalLeads != null && Number.isFinite(Number(data.totalLeads))
                 ? Number(data.totalLeads)
                 : NaN;
-            let leadsHint = `Last 24h: ${last24} new`;
-            if (Number.isFinite(leadTotalNum) && leadTotalNum > 0 && uniqDial > 0 && leadTotalNum !== uniqDial) {
-                leadsHint += `\n${formatNumber(leadTotalNum)} in CRM · ${formatNumber(uniqDial)} with ≥1 dial`;
+            const tomOutreach = isOutreachDashboardClient(currentClient);
+            let leadsHint;
+            if (tomOutreach) {
+                leadsHint = `One saved row per phone. Imports update existing numbers — total only rises for new phones.\nLast 24h: ${last24} new`;
+                if (Number.isFinite(leadTotalNum) && leadTotalNum > 0 && uniqDial > 0 && leadTotalNum !== uniqDial) {
+                    leadsHint += `\n${formatNumber(leadTotalNum)} contacts · ${formatNumber(uniqDial)} with ≥1 dial`;
+                }
+            } else {
+                leadsHint = `Last 24h: ${last24} new`;
+                if (Number.isFinite(leadTotalNum) && leadTotalNum > 0 && uniqDial > 0 && leadTotalNum !== uniqDial) {
+                    leadsHint += `\n${formatNumber(leadTotalNum)} in CRM · ${formatNumber(uniqDial)} with ≥1 dial`;
+                }
+            }
+            const leadsCard = document.getElementById('statusBarLeadsCard');
+            if (leadsCard) {
+                if (tomOutreach) {
+                    leadsCard.title =
+                        'Distinct phone numbers in your CRM for this client. Uploads merge on phone: the same number does not create a second row, so this count is your true “people/companies we have on file,” not “rows in your last spreadsheet.”';
+                    leadsCard.setAttribute('aria-label', 'Unique contacts in CRM by phone number');
+                } else {
+                    leadsCard.title = "Total leads we're handling for you";
+                    leadsCard.setAttribute('aria-label', "Leads we're managing");
+                }
             }
             document.getElementById('statusHintLeads').textContent = leadsHint;
             // statusHintCalls already set above with answered/not answered breakdown
@@ -10083,10 +10107,38 @@ ${actionsRow}
 
             const stages = tom
                 ? [
-                    { label: 'Total leads', value: totalLeads, color: '#5c6ac4', icon: '📥', tip: 'Leads in your CRM for this workspace.' },
-                    { label: 'Leads we called', value: contacted, color: '#764ba2', icon: '📞', tip: 'Distinct numbers with at least one outbound dial (all time).' },
-                    { label: 'Reached (unique)', value: engaged, color: '#667eea', icon: '✓', tip: 'Numbers with at least one conversation-style dial (duration, transcript, or outcome).' },
-                    { label: 'No pickup (unique)', value: noPickup, color: '#546e7a', icon: '○', tip: 'Dialed at least once, never reached on our rules — includes ambiguous telco rows.' }
+                    {
+                        label: 'Unique in CRM',
+                        segment: 'all',
+                        value: totalLeads,
+                        color: '#5c6ac4',
+                        icon: '📥',
+                        tip: 'Distinct phone numbers on file for this client. One row per phone; re-imports update the same row — this number is the full set in the system, not “rows in your last file.”'
+                    },
+                    {
+                        label: 'Leads we called',
+                        segment: 'called',
+                        value: contacted,
+                        color: '#764ba2',
+                        icon: '📞',
+                        tip: 'Distinct numbers with at least one outbound dial (all time).'
+                    },
+                    {
+                        label: 'Reached (unique)',
+                        segment: 'reached',
+                        value: engaged,
+                        color: '#667eea',
+                        icon: '✓',
+                        tip: 'Numbers with at least one conversation-style dial (duration, transcript, or outcome).'
+                    },
+                    {
+                        label: 'No pickup (unique)',
+                        segment: 'no_pickup',
+                        value: noPickup,
+                        color: '#546e7a',
+                        icon: '○',
+                        tip: 'Dialed at least once, never reached on our rules — includes ambiguous telco rows.'
+                    }
                 ]
                 : [
                     { label: 'Total leads', value: totalLeads, color: '#5c6ac4', icon: '📥', tip: 'Leads in your CRM for this workspace.' },
@@ -10107,17 +10159,8 @@ ${actionsRow}
             const stageHtml = stages.map(stage => {
                 const barPct = maxValue > 0 ? Math.round((stage.value / maxValue) * 100) : 0;
                 const ofLeadsPct = totalLeads > 0 ? Math.round((stage.value / totalLeads) * 100) : 0;
-                const segKey =
-                    tom &&
-                    (stage.label === 'Total leads'
-                        ? 'all'
-                        : stage.label === 'Leads we called'
-                          ? 'called'
-                          : stage.label === 'Reached (unique)'
-                            ? 'reached'
-                            : stage.label === 'No pickup (unique)'
-                              ? 'no_pickup'
-                              : '');
+                const segKey = tom && stage.segment ? stage.segment : '';
+                const pctSuffix = tom ? '% of CRM contacts' : '% of leads';
                 const tipRaw = (stage.tip || '') + (segKey ? ' · Click to filter Recent Leads' : '');
                 const titleAttr = escapeHtml(tipRaw);
                 const clickClass = segKey ? ' funnel-stage--clickable' : '';
@@ -10130,7 +10173,7 @@ ${actionsRow}
                             <span class="funnel-label-text"><span class="funnel-icon" aria-hidden="true">${escapeHtml(stage.icon || '')}</span><span>${escapeHtml(stage.label)}</span></span>
                             <span class="funnel-value-wrap">
                                 <span class="funnel-value-num">${formatNumber(stage.value)}</span>
-                                <span class="funnel-percent">${ofLeadsPct}% of leads</span>
+                                <span class="funnel-percent">${ofLeadsPct}${escapeHtml(pctSuffix)}</span>
                             </span>
                         </div>
                         <div class="funnel-bar" role="presentation">
