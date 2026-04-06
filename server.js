@@ -8693,11 +8693,12 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
   const RECENT_CALLS_FEED_CAP = 40;
   /**
    * One scan of `calls` grouped by phone match key (tail-10 when length≥10, else full digits).
-   * Replaces per-lead LATERAL subqueries that caused multi-second dashboard queries in production.
+   * Run once per dashboard request; pass rows into lead + source queries via unnest (see second batch).
    * "Reached" matches the call_row semantics in the callCounts CTE above.
    */
-  const dashboardCallPhoneStatsCte = `
-    call_phone_stats AS (
+  const dashboardCallPhoneAggSql = `
+    SELECT phone_key, calls_n, reached_max
+    FROM (
       SELECT
         CASE
           WHEN LENGTH(regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g')) >= 10
@@ -8723,6 +8724,13 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       WHERE client_key = $1
         AND regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g') <> ''
       GROUP BY 1
+    ) x
+    WHERE x.phone_key IS NOT NULL
+  `;
+  const dashboardCallPhoneStatsFromArraysCte = `
+    call_phone_stats AS (
+      SELECT *
+      FROM unnest($2::text[], $3::int[], $4::int[]) AS u(phone_key, calls_n, reached_max)
     )`;
   /** Join key from leads.phone — must match call_phone_stats.phone_key. */
   const dashboardLeadPhoneKeySql = `
@@ -8758,13 +8766,12 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       bookingStats,
       serviceRows,
       apptByServiceRows,
-      leadRows,
+      callPhoneStatsAgg,
       recentCallRows,
       responseRows,
       touchpointRows,
       upcomingAppointmentRows,
-      callQueuePendingRow,
-      sourceOutreachStatsRows
+      callQueuePendingRow
     ] = await Promise.all([
       query(`
         SELECT COUNT(*) AS total,
@@ -8884,27 +8891,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         GROUP BY COALESCE(l.service, 'General')
         ORDER BY appointment_count DESC
       `, [clientKey]),
-      query(`
-        WITH ${dashboardCallPhoneStatsCte}
-        SELECT l.id,
-               l.name,
-               l.phone,
-               l.status,
-               l.service,
-               l.source,
-               l.notes,
-               l.created_at,
-               le.lead_score,
-               (COALESCE(cs.calls_n, 0) > 0) AS outreach_called,
-               (COALESCE(cs.reached_max, 0) > 0) AS outreach_reached
-        FROM leads l
-        LEFT JOIN lead_engagement le
-          ON le.client_key = l.client_key AND le.lead_phone = l.phone
-        LEFT JOIN call_phone_stats cs ON cs.phone_key = ${dashboardLeadPhoneKeySql}
-        WHERE l.client_key = $1
-        ORDER BY l.created_at DESC
-        LIMIT ${RECENT_LEADS_DASHBOARD_CAP}
-      `, [clientKey]),
+      query(dashboardCallPhoneAggSql, [clientKey]),
       query(`
         WITH lead_lookup AS (
           SELECT DISTINCT ON (phone_key)
@@ -9046,9 +9033,43 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         FROM call_queue
         WHERE client_key = $1
           AND status IN ('pending', 'processing')
-      `, [clientKey]),
+      `, [clientKey])
+    ]);
+
+    const phoneKeys = [];
+    const phoneCallsNs = [];
+    const phoneReachedMaxs = [];
+    for (const row of callPhoneStatsAgg.rows || []) {
+      if (row.phone_key == null || String(row.phone_key).trim() === '') continue;
+      phoneKeys.push(String(row.phone_key));
+      phoneCallsNs.push(parseInt(row.calls_n, 10) || 0);
+      phoneReachedMaxs.push(parseInt(row.reached_max, 10) || 0);
+    }
+
+    const [leadRows, sourceOutreachStatsRows] = await Promise.all([
       query(`
-        WITH ${dashboardCallPhoneStatsCte}
+        WITH ${dashboardCallPhoneStatsFromArraysCte}
+        SELECT l.id,
+               l.name,
+               l.phone,
+               l.status,
+               l.service,
+               l.source,
+               l.notes,
+               l.created_at,
+               le.lead_score,
+               (COALESCE(cs.calls_n, 0) > 0) AS outreach_called,
+               (COALESCE(cs.reached_max, 0) > 0) AS outreach_reached
+        FROM leads l
+        LEFT JOIN lead_engagement le
+          ON le.client_key = l.client_key AND le.lead_phone = l.phone
+        LEFT JOIN call_phone_stats cs ON cs.phone_key = ${dashboardLeadPhoneKeySql}
+        WHERE l.client_key = $1
+        ORDER BY l.created_at DESC
+        LIMIT ${RECENT_LEADS_DASHBOARD_CAP}
+      `, [clientKey, phoneKeys, phoneCallsNs, phoneReachedMaxs]),
+      query(`
+        WITH ${dashboardCallPhoneStatsFromArraysCte}
         SELECT
           COALESCE(NULLIF(TRIM(l.source), ''), '(no source)') AS source_label,
           COUNT(*)::int AS total_leads,
@@ -9060,7 +9081,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         GROUP BY COALESCE(NULLIF(TRIM(l.source), ''), '(no source)')
         ORDER BY total_leads DESC
         LIMIT 15
-      `, [clientKey])
+      `, [clientKey, phoneKeys, phoneCallsNs, phoneReachedMaxs])
     ]);
 
     const totalLeads = parseInt(leadCounts.rows?.[0]?.total || 0, 10);
