@@ -10230,6 +10230,18 @@ app.post('/api/leads/import', async (req, res) => {
       console.error('[LEAD IMPORT API] All body keys:', Object.keys(body));
       return res.status(400).json({ ok: false, error: 'Missing clientKey or leads payload' });
     }
+
+    let crmLeadCountBefore = null;
+    try {
+      const beforeCnt = await query(
+        'SELECT COUNT(*)::int AS n FROM leads WHERE client_key = $1',
+        [clientKey]
+      );
+      crmLeadCountBefore = parseInt(beforeCnt.rows?.[0]?.n ?? 0, 10);
+    } catch (beforeErr) {
+      console.error('[LEAD IMPORT] Could not count leads before import:', clientKey, beforeErr?.message);
+    }
+
     const inserted = [];
     let skippedInvalidPhone = 0;
     const leadsBatch = leads.slice(0, 200);
@@ -10295,6 +10307,17 @@ app.post('/api/leads/import', async (req, res) => {
     } catch (cntErr) {
       console.error('[LEAD IMPORT] Could not count leads for client:', clientKey, cntErr?.message);
     }
+
+    const netNewLeadsInCrm =
+      crmLeadCountBefore != null && totalLeadsInCrm != null
+        ? totalLeadsInCrm - crmLeadCountBefore
+        : null;
+    console.error('[LEAD IMPORT] CRM lead count delta:', {
+      clientKey,
+      before: crmLeadCountBefore,
+      after: totalLeadsInCrm,
+      netNew: netNewLeadsInCrm
+    });
 
     // Immediately call or queue new leads (call now = same request; else queue for cron)
     let callSummary = { inBusinessHours: null, shouldCallNow: null, called: 0, queued: 0, reason: null };
@@ -10387,7 +10410,9 @@ app.post('/api/leads/import', async (req, res) => {
       requestedCount: leads.length,
       processedBatchCount: leadsBatch.length,
       skippedInvalidPhone,
+      crmLeadCountBefore,
       totalLeadsInCrm,
+      netNewLeadsInCrm,
       leads: inserted.map(sanitizeLead),
       callSummary: inserted.length > 0 ? callSummary : undefined
     });

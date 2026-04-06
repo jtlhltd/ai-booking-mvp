@@ -13787,7 +13787,22 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const req = payload.requestedCount != null ? Number(payload.requestedCount) : null;
             const skip = Number(payload.skippedInvalidPhone) || 0;
             const total = payload.totalLeadsInCrm != null ? Number(payload.totalLeadsInCrm) : null;
+            const netNew =
+                payload.netNewLeadsInCrm != null && Number.isFinite(Number(payload.netNewLeadsInCrm))
+                    ? Number(payload.netNewLeadsInCrm)
+                    : null;
             const parts = [];
+            if (netNew != null) {
+                if (netNew > 0) {
+                    parts.push(`+${formatNumber(netNew)} new contact(s) in CRM`);
+                } else if (netNew === 0 && ins > 0) {
+                    parts.push(
+                        `0 new contacts — all ${formatNumber(ins)} phone(s) matched numbers already in CRM (updated, not added)`
+                    );
+                } else if (netNew === 0 && ins === 0 && (req || 0) > 0) {
+                    parts.push('0 new contacts — nothing was saved');
+                }
+            }
             if (total != null && Number.isFinite(total)) {
                 parts.push(`CRM total ${formatNumber(total)} unique lead(s)`);
             }
@@ -13800,7 +13815,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
             if (ins === 0 && (req || 0) > 0) {
                 parts.push('Nothing written — check phones or server logs');
-            } else if (ins > 0 && skip === 0 && (req || 0) > 0) {
+            } else if (netNew == null && ins > 0 && skip === 0 && (req || 0) > 0) {
                 parts.push('Total grows only for new numbers; same phone updates the existing lead');
             }
             return parts.join(' · ');
