@@ -1063,7 +1063,6 @@
         }
 
         body:not(.tom-outreach-dashboard) .outreach-capacity-strip,
-        body:not(.tom-outreach-dashboard) .outreach-source-stats-card,
         body:not(.tom-outreach-dashboard) .leads-funnel-chips {
             display: none !important;
         }
@@ -1132,25 +1131,6 @@
         button.leads-funnel-chip.leads-funnel-chip--active {
             background: rgba(92, 106, 196, 0.16);
             border-color: rgba(92, 106, 196, 0.5);
-            font-weight: 600;
-        }
-
-        .outreach-source-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.8125rem;
-            margin-top: 8px;
-        }
-
-        .outreach-source-table th,
-        .outreach-source-table td {
-            padding: 8px 10px;
-            text-align: left;
-            border-bottom: 1px solid var(--border, #e8eaf5);
-        }
-
-        .outreach-source-table th {
-            color: var(--muted);
             font-weight: 600;
         }
 
@@ -5916,14 +5896,6 @@
                     </div>
                 </article>
 
-                <article class="card card-chart outreach-source-stats-card" id="outreachSourceStatsCard" hidden>
-                    <h3>📂 Outcomes by lead source</h3>
-                    <p class="card-subtitle" id="outreachSourceStatsSubtitle">
-                        CRM totals by <strong>source</strong> (empty sources grouped as “no source”). Dialed = at least one outbound attempt to that lead; reached = at least one conversation-style dial.
-                    </p>
-                    <div id="outreachSourceStatsBody" class="thin-scroll"></div>
-                </article>
-
                 <article class="card">
                     <h3>📊 Call Quality</h3>
                     <p class="card-subtitle" id="callQualitySubtitle">How effective our calls are.</p>
@@ -6435,45 +6407,6 @@
             )}</strong> dial attempts in the last 24h.</p><p style="margin:0;">${etaHtml}</p>`;
         }
 
-        function renderOutreachSourceStats(data) {
-            const card = document.getElementById('outreachSourceStatsCard');
-            const body = document.getElementById('outreachSourceStatsBody');
-            if (!card || !body) return;
-            if (!isOutreachDashboardClient(currentClient)) {
-                card.hidden = true;
-                body.innerHTML = '';
-                return;
-            }
-            const rows = Array.isArray(data && data.sourceOutreachStats) ? data.sourceOutreachStats : [];
-            if (!rows.length) {
-                card.hidden = true;
-                body.innerHTML = '';
-                return;
-            }
-            card.hidden = false;
-            const trs = rows
-                .map((r) => {
-                    const label = r.sourceLabel != null ? String(r.sourceLabel) : '(no source)';
-                    const t = r.totalLeads != null ? Number(r.totalLeads) : 0;
-                    const d = r.dialedLeads != null ? Number(r.dialedLeads) : 0;
-                    const re = r.reachedLeads != null ? Number(r.reachedLeads) : 0;
-                    const pick = d > 0 ? Math.round((re / d) * 1000) / 10 : null;
-                    const pickCell = pick != null ? `${pick}%` : '—';
-                    return `<tr>
-                        <td>${escapeHtml(label)}</td>
-                        <td>${formatNumber(t)}</td>
-                        <td>${formatNumber(d)}</td>
-                        <td>${formatNumber(re)}</td>
-                        <td>${pickCell}</td>
-                    </tr>`;
-                })
-                .join('');
-            body.innerHTML = `<table class="outreach-source-table">
-                <thead><tr><th>Source</th><th>Leads</th><th>Dialed</th><th>Reached</th><th>Reach ÷ dialed</th></tr></thead>
-                <tbody>${trs}</tbody>
-            </table>`;
-        }
-
         const BASE_URL = window.location.origin;
         const THEME_KEY = 'dashboard_theme';
         
@@ -6954,8 +6887,7 @@ ${actionsRow}
                     roi: { profit: null, multiplier: null, percentage: null }
                 },
                 outboundAbTest: null,
-                outreachCapacity: null,
-                sourceOutreachStats: []
+                outreachCapacity: null
             };
         }
         
@@ -7036,11 +6968,6 @@ ${actionsRow}
                 return `${c.abVariant || ''}|${c.abExperiment || ''}`;
             }).join(',');
             const leadSig = leads.slice(0, 12).map((l) => String(l.id || l.phone || '')).join(',');
-            const src = Array.isArray(d.sourceOutreachStats) ? d.sourceOutreachStats : [];
-            const srcSig = src
-                .slice(0, 6)
-                .map((r) => `${r.sourceLabel || ''}:${r.dialedLeads || 0}:${r.reachedLeads || 0}`)
-                .join(';');
             const oc = d.outreachCapacity;
             const ocSig = oc
                 ? `${oc.leadsNeverDialed || 0}|${oc.callQueuePending || 0}|${oc.dialAttemptsLast24h || 0}`
@@ -7057,7 +6984,6 @@ ${actionsRow}
                 abSig,
                 leads.length,
                 leadSig,
-                srcSig,
                 ocSig,
                 appts.length,
                 String((appts[0] && (appts[0].id || appts[0].start)) || ''),
@@ -7161,10 +7087,7 @@ ${actionsRow}
                         : null,
                     outreachCapacity: livePayload.outreachCapacity && typeof livePayload.outreachCapacity === 'object'
                         ? { ...livePayload.outreachCapacity }
-                        : null,
-                    sourceOutreachStats: Array.isArray(livePayload.sourceOutreachStats)
-                        ? livePayload.sourceOutreachStats.slice()
-                        : []
+                        : null
                 };
             }
             
@@ -7243,12 +7166,7 @@ ${actionsRow}
                 outreachCapacity:
                     livePayload.outreachCapacity && typeof livePayload.outreachCapacity === 'object'
                         ? { ...livePayload.outreachCapacity }
-                        : base.outreachCapacity ?? null,
-                sourceOutreachStats: Array.isArray(livePayload.sourceOutreachStats)
-                    ? livePayload.sourceOutreachStats.slice()
-                    : Array.isArray(base.sourceOutreachStats)
-                      ? base.sourceOutreachStats
-                      : []
+                        : base.outreachCapacity ?? null
             };
         }
 
@@ -9029,7 +8947,6 @@ ${actionsRow}
                     updateStatusBar(dashboardData);
                     renderRecentActivity(dashboardData);
                     renderLeadJourney(dashboardData);
-                    renderOutreachSourceStats(dashboardData);
                     renderLeads(dashboardData.recentLeads || []);
                     renderCalls(dashboardData.recentCalls || []);
                     renderTomAbTestSection(dashboardData);
@@ -9600,7 +9517,6 @@ ${actionsRow}
                     updateStatusBar(dashboardData);
                     renderRecentActivity(dashboardData);
                     renderLeadJourney(dashboardData);
-                    renderOutreachSourceStats(dashboardData);
                     renderLeads(dashboardData.recentLeads || []);
                     renderCalls(dashboardData.recentCalls || []);
                     renderTomAbTestSection(dashboardData);
@@ -9724,7 +9640,6 @@ ${actionsRow}
                     updateStatusBar(dashboardData);
                     renderRecentActivity(dashboardData);
                     renderLeadJourney(dashboardData);
-                    renderOutreachSourceStats(dashboardData);
                     renderLeads(dashboardData.recentLeads || []);
                     renderCalls(dashboardData.recentCalls || []);
                     renderTomAbTestSection(dashboardData);
@@ -12653,7 +12568,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             loadLeadsFunnelSegmentForClient(currentClient);
             syncLeadsFunnelChipUi();
             renderLeadJourney(dashboardData);
-            renderOutreachSourceStats(dashboardData);
             renderLeads(dashboardData.recentLeads || []);
             renderAppointments(dashboardData.appointments || []);
             renderChart(config, dashboardData);
@@ -12718,7 +12632,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         }
                         await renderActiveIndicator(dashboardData);
                         renderLeadJourney(dashboardData);
-                        renderOutreachSourceStats(dashboardData);
                         renderLeads(dashboardData.recentLeads || []);
                         renderAppointments(dashboardData.appointments || []);
                         const callsToRender = dashboardData.recentCalls || [];
@@ -12867,7 +12780,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             updateStatusBar(dashboardData);
                             renderRecentActivity(dashboardData);
                             renderLeadJourney(dashboardData);
-                            renderOutreachSourceStats(dashboardData);
                             renderLeads(dashboardData.recentLeads || []);
                             renderAppointments(dashboardData.appointments || []);
                         }

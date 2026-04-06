@@ -9046,8 +9046,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       phoneReachedMaxs.push(parseInt(row.reached_max, 10) || 0);
     }
 
-    const [leadRows, sourceOutreachStatsRows] = await Promise.all([
-      query(`
+    const leadRows = await query(`
         WITH ${dashboardCallPhoneStatsFromArraysCte}
         SELECT l.id,
                l.name,
@@ -9067,22 +9066,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         WHERE l.client_key = $1
         ORDER BY l.created_at DESC
         LIMIT ${RECENT_LEADS_DASHBOARD_CAP}
-      `, [clientKey, phoneKeys, phoneCallsNs, phoneReachedMaxs]),
-      query(`
-        WITH ${dashboardCallPhoneStatsFromArraysCte}
-        SELECT
-          COALESCE(NULLIF(TRIM(l.source), ''), '(no source)') AS source_label,
-          COUNT(*)::int AS total_leads,
-          COUNT(*) FILTER (WHERE COALESCE(cs.calls_n, 0) > 0)::int AS dialed_leads,
-          COUNT(*) FILTER (WHERE COALESCE(cs.reached_max, 0) > 0)::int AS reached_leads
-        FROM leads l
-        LEFT JOIN call_phone_stats cs ON cs.phone_key = ${dashboardLeadPhoneKeySql}
-        WHERE l.client_key = $1
-        GROUP BY COALESCE(NULLIF(TRIM(l.source), ''), '(no source)')
-        ORDER BY total_leads DESC
-        LIMIT 15
-      `, [clientKey, phoneKeys, phoneCallsNs, phoneReachedMaxs])
-    ]);
+      `, [clientKey, phoneKeys, phoneCallsNs, phoneReachedMaxs]);
 
     const totalLeads = parseInt(leadCounts.rows?.[0]?.total || 0, 10);
     const last24hLeads = parseInt(leadCounts.rows?.[0]?.last24 || 0, 10);
@@ -9192,13 +9176,6 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         estimatedHoursToClearBacklog = Number(hrs.toFixed(1));
       }
     }
-
-    const sourceOutreachStats = (sourceOutreachStatsRows.rows || []).map((r) => ({
-      sourceLabel: r.source_label,
-      totalLeads: parseInt(r.total_leads, 10) || 0,
-      dialedLeads: parseInt(r.dialed_leads, 10) || 0,
-      reachedLeads: parseInt(r.reached_leads, 10) || 0
-    }));
 
     let highPriorityLeads = 0;
     let mediumPriorityLeads = 0;
@@ -9827,8 +9804,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         dialAttemptsLast24h: callsLast24h,
         dialsPerHour: Number(dialsPerHour.toFixed(2)),
         estimatedHoursToClearBacklog
-      },
-      sourceOutreachStats
+      }
     };
     res.set('Cache-Control', 'no-store, must-revalidate, max-age=0');
     res.json(payload);
