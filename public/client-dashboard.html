@@ -6968,6 +6968,8 @@ ${actionsRow}
         
         let currentClient = null;
         let dashboardData = createEmptyDashboardData();
+        /** Set during initDashboard; used by renderChart after import refresh. */
+        let currentDashboardChartConfig = null;
         let currentLeads = [];
         /** Full recent-leads array from API (search filters a view; modal uses indices into this). */
         let recentLeadsAllRows = [];
@@ -7056,6 +7058,38 @@ ${actionsRow}
                 lastDataUpdate = new Date();
             }
             return null;
+        }
+
+        /** Re-pull /api/demo-dashboard after CRM mutations so KPI tiles match Postgres without waiting for the 60s poll. */
+        async function refreshDashboardAfterMutation() {
+            if (!currentClient || currentClient === DEMO_CLIENT_KEY) return;
+            try {
+                const livePayload = await fetchLiveData(currentClient);
+                if (!livePayload || livePayload.ok !== true) return;
+                dashboardData = mergeData(dashboardData, livePayload, currentClient === DEMO_CLIENT_KEY);
+                lastDashboardPollFingerprint = dashboardPollFingerprint(dashboardData);
+                dashboardLivePayloadFailed = false;
+                setDashboardApiErrorVisible(false);
+                updateStatusBar(dashboardData);
+                renderRecentActivity(dashboardData);
+                renderLeadJourney(dashboardData);
+                loadLeadsFunnelSegmentForClient(currentClient);
+                syncLeadsFunnelChipUi();
+                renderLeads(dashboardData.recentLeads || [], { preserveFilter: true });
+                const chartCfg =
+                    currentDashboardChartConfig ||
+                    CLIENT_CONFIG[currentClient] ||
+                    CLIENT_CONFIG[DEMO_CLIENT_KEY] ||
+                    {};
+                renderChart(chartCfg, dashboardData);
+                renderAppointments(dashboardData.appointments || []);
+                if (isOutreachDashboardClient(currentClient)) {
+                    renderTomAbTestSection(dashboardData);
+                }
+                syncDashboardFreshnessUi();
+            } catch (e) {
+                console.warn('[DASHBOARD] refreshDashboardAfterMutation failed', e);
+            }
         }
 
         /** Cheap fingerprint so background polls can skip full re-renders when nothing changed. */
@@ -12589,6 +12623,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     config.accentColor = clientConfig.accentColor;
                 }
             }
+
+            currentDashboardChartConfig = config;
             
             // Update header with business name if available
             // REMOVED: This was overwriting updateHeader. Let updateHeader handle all header updates.
@@ -13768,7 +13804,11 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     !lead.phone || !demoLeads.some(dl => dl.phone === lead.phone)
                 );
                 dashboardData.recentLeads = [...demoLeads, ...existingLeads].slice(0, RECENT_LEADS_DASHBOARD_CAP);
+                dashboardData.totalLeads = (Number(dashboardData.totalLeads) || 0) + demoLeads.length;
                 renderLeads(dashboardData.recentLeads);
+                updateStatusBar(dashboardData);
+                renderRecentActivity(dashboardData);
+                renderLeadJourney(dashboardData);
                 setImportStatus(`${demoLeads.length} leads staged (demo)`, 'success');
                 showToast('Leads Imported', `${demoLeads.length} leads added (demo mode)`, 'success');
                 return;
@@ -13867,8 +13907,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 }
                 if (Array.isArray(payload.leads) && payload.leads.length) {
                     dashboardData.recentLeads = [...payload.leads, ...(dashboardData.recentLeads || [])].slice(0, RECENT_LEADS_DASHBOARD_CAP);
-                    renderLeads(dashboardData.recentLeads);
+                    renderLeads(dashboardData.recentLeads, { preserveFilter: true });
                 }
+                await refreshDashboardAfterMutation();
                 const cs = payload.callSummary;
                 if (cs) {
                     if (cs.reason === 'called' && cs.called > 0) {
