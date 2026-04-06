@@ -13771,6 +13771,41 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             });
         }
 
+        /** After import, server counts rows in Postgres — apply so KPIs update even if demo-dashboard refresh fails. */
+        function applyImportServerTotalsToDashboard(payload) {
+            if (!payload || payload.totalLeadsInCrm == null) return;
+            const n = parseInt(payload.totalLeadsInCrm, 10);
+            if (!Number.isFinite(n)) return;
+            dashboardData.totalLeads = n;
+            dashboardData.metrics = { ...(dashboardData.metrics || {}), totalLeads: n };
+            updateStatusBar(dashboardData);
+            renderRecentActivity(dashboardData);
+        }
+
+        function formatLeadImportResultSummary(payload) {
+            const ins = Number(payload.inserted) || 0;
+            const req = payload.requestedCount != null ? Number(payload.requestedCount) : null;
+            const skip = Number(payload.skippedInvalidPhone) || 0;
+            const total = payload.totalLeadsInCrm != null ? Number(payload.totalLeadsInCrm) : null;
+            const parts = [];
+            if (total != null && Number.isFinite(total)) {
+                parts.push(`CRM total ${formatNumber(total)} unique lead(s)`);
+            }
+            parts.push(`${formatNumber(ins)} row(s) upserted`);
+            if (req != null && Number.isFinite(req) && req > 200) {
+                parts.push(`only first 200 of ${formatNumber(req)} rows processed`);
+            }
+            if (skip > 0) {
+                parts.push(`${formatNumber(skip)} skipped (invalid phone — need 10–15 digits, digits and + only)`);
+            }
+            if (ins === 0 && (req || 0) > 0) {
+                parts.push('Nothing written — check phones or server logs');
+            } else if (ins > 0 && skip === 0 && (req || 0) > 0) {
+                parts.push('Total grows only for new numbers; same phone updates the existing lead');
+            }
+            return parts.join(' · ');
+        }
+
         async function submitLeadImport(leads = []) {
             console.log('[LEAD IMPORT] Starting import with leads:', leads.length);
             
@@ -13910,30 +13945,36 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     renderLeads(dashboardData.recentLeads, { preserveFilter: true });
                 }
                 await refreshDashboardAfterMutation();
+                applyImportServerTotalsToDashboard(payload);
+                const summary = formatLeadImportResultSummary(payload);
                 const cs = payload.callSummary;
                 if (cs) {
                     if (cs.reason === 'called' && cs.called > 0) {
-                        setImportStatus(`Imported ${payload.inserted} leads · Call initiated for ${cs.called}`, 'success');
-                        showToast('Import Complete', `Imported ${payload.inserted} leads. Call initiated for ${cs.called} lead(s).`, 'success');
+                        setImportStatus(`${summary} · Call initiated for ${cs.called}`, 'success');
+                        showToast('Import complete', `${summary}. Call initiated for ${cs.called} lead(s).`, 'success');
                     } else if (cs.reason === 'outside_business_hours' && cs.queued > 0) {
-                        setImportStatus(`Imported ${payload.inserted} leads · ${cs.queued} queued for next business hour`, 'success');
-                        showToast('Outside business hours', `${payload.inserted} leads imported. Calls will be made in the next business hour (${cs.queued} queued).`, 'info');
+                        setImportStatus(`${summary} · ${cs.queued} queued for next business hour`, 'success');
+                        showToast('Outside business hours', `${summary}. ${cs.queued} queued for next business hour.`, 'info');
                     } else if (cs.reason === 'call_failed' && cs.queued > 0) {
-                        setImportStatus(`Imported ${payload.inserted} · Call failed, ${cs.queued} queued for retry`, 'success');
-                        showToast('Call failed', `Leads imported but call failed (${payload.callSummary?.error || 'see logs'}). Queued for retry.`, 'info');
+                        setImportStatus(`${summary} · Call failed, ${cs.queued} queued for retry`, 'success');
+                        showToast('Call failed', `${summary}. Queued for retry (${payload.callSummary?.error || 'see logs'}).`, 'info');
                     } else if (cs.reason === 'vapi_not_configured' || cs.reason === 'client_not_enabled_or_no_vapi') {
-                        setImportStatus(`Imported ${payload.inserted} leads · Call skipped (VAPI not configured)`, 'success');
-                        showToast('Import complete', `${payload.inserted} leads imported. Calls skipped: VAPI not configured for this client.`, 'info');
+                        setImportStatus(`${summary} · Calls skipped (dialler not configured)`, 'success');
+                        showToast('Import complete', `${summary}. Outbound calls skipped for this client.`, 'info');
                     } else if (cs.reason === 'calls_background' && (cs.pendingOutbound ?? 0) > 0) {
-                        setImportStatus(`Imported ${payload.inserted} leads · Starting ${cs.pendingOutbound} call(s) in the background`, 'success');
-                        showToast('Import complete', `${payload.inserted} leads imported. Outbound calls are running in the background (one at a time, so this can take a while).`, 'info');
+                        setImportStatus(`${summary} · Starting ${cs.pendingOutbound} call(s) in the background`, 'success');
+                        showToast('Import complete', `${summary}. Outbound calls running in the background.`, 'info');
                     } else {
-                        setImportStatus(`Imported ${payload.inserted} leads`, 'success');
-                        showToast('Import Complete', `Successfully imported ${payload.inserted} leads`, 'success');
+                        setImportStatus(summary, 'success');
+                        showToast('Import complete', summary, 'success');
                     }
                 } else {
-                    setImportStatus(`Imported ${payload.inserted} leads`, 'success');
-                    showToast('Import Complete', `Successfully imported ${payload.inserted} leads`, 'success');
+                    setImportStatus(summary, payload.inserted === 0 && (payload.requestedCount || 0) > 0 ? 'error' : 'success');
+                    showToast(
+                        payload.inserted === 0 && (payload.requestedCount || 0) > 0 ? 'Import finished' : 'Import complete',
+                        summary,
+                        payload.inserted === 0 && (payload.requestedCount || 0) > 0 ? 'warning' : 'success'
+                    );
                 }
             } catch (error) {
                 console.error('Import failed', error);
