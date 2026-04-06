@@ -308,6 +308,14 @@
             box-sizing: border-box;
         }
 
+        /* Upload card: preview + confirm can exceed row height — scroll inside the tile */
+        .dashboard-section--balanced-row .dashboard-grid > .card.card-upload-leads {
+            overflow-x: hidden;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+        }
+
         /* Today’s Activity + neighbors need more vertical room for metric copy */
         .dashboard-section--operations-row.dashboard-section--balanced-row .dashboard-grid > .card {
             height: min(58vh, 640px);
@@ -2318,6 +2326,47 @@
 
         .import-status.error {
             color: #c62828;
+        }
+
+        .lead-import-preview {
+            margin-top: 10px;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            border-radius: 12px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.6);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            min-height: 0;
+        }
+
+        body[data-theme="dark"] .lead-import-preview {
+            background: rgba(30, 36, 51, 0.85);
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .lead-import-preview-summary {
+            font-size: 12px;
+            color: var(--muted-text, #6b7280);
+            flex-shrink: 0;
+        }
+
+        .lead-import-preview-table-wrap {
+            overflow: auto;
+            max-height: min(220px, 38vh);
+            min-height: 0;
+            flex-shrink: 1;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+        }
+
+        .lead-import-preview-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+            flex-shrink: 0;
+            padding-top: 4px;
+            scroll-margin-bottom: 8px;
         }
 
         .mix-list {
@@ -5977,10 +6026,10 @@
                     </div>
                     <input type="file" id="leadImportInput" accept=".csv,.xlsx,.xls,.xlsm" style="display:none">
                     <div class="import-status" id="leadImportStatus"></div>
-                    <div id="leadImportPreview" style="display:none;margin-top:10px;border:1px solid rgba(0,0,0,0.08);border-radius:12px;padding:10px;background:rgba(255,255,255,0.6);">
-                        <div id="leadImportPreviewSummary" style="font-size:12px;color:var(--muted-text, #6b7280);"></div>
-                        <div id="leadImportPreviewTableWrap" style="overflow:auto;margin-top:8px;max-height:220px;"></div>
-                        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">
+                    <div id="leadImportPreview" class="lead-import-preview" style="display:none">
+                        <div id="leadImportPreviewSummary" class="lead-import-preview-summary"></div>
+                        <div id="leadImportPreviewTableWrap" class="lead-import-preview-table-wrap thin-scroll"></div>
+                        <div class="lead-import-preview-actions">
                             <button type="button" id="leadImportCancel" class="export-btn secondary" style="font-size:12px;padding:6px 10px;">Cancel</button>
                             <button type="button" id="leadImportConfirm" class="export-btn" style="font-size:12px;padding:6px 10px;">Confirm upload</button>
                         </div>
@@ -13629,8 +13678,11 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 ${importedCount > 10 ? `<div style="margin-top:6px;font-size:11px;color:var(--muted-text, #6b7280);">Showing first 10 of ${formatNumber(importedCount)} leads.</div>` : ''}
             `;
 
-            preview.style.display = 'block';
+            preview.style.display = 'flex';
             setImportStatus('Preview ready — confirm to upload.', 'info');
+            requestAnimationFrame(() => {
+                document.querySelector('.lead-import-preview-actions')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            });
         }
 
         async function submitLeadImport(leads = []) {
