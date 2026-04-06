@@ -8691,6 +8691,53 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
   const RECENT_LEADS_DASHBOARD_CAP = 5000;
   /** Live Activity Feed rows (keep in sync with client-dashboard ACTIVITY_FEED_DISPLAY_CAP). */
   const RECENT_CALLS_FEED_CAP = 40;
+  /**
+   * One scan of `calls` grouped by phone match key (tail-10 when length≥10, else full digits).
+   * Replaces per-lead LATERAL subqueries that caused multi-second dashboard queries in production.
+   * "Reached" matches the call_row semantics in the callCounts CTE above.
+   */
+  const dashboardCallPhoneStatsCte = `
+    call_phone_stats AS (
+      SELECT
+        CASE
+          WHEN LENGTH(regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g')) >= 10
+          THEN RIGHT(regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g'), 10)
+          ELSE NULLIF(regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g'), '')
+        END AS phone_key,
+        COUNT(*)::int AS calls_n,
+        MAX(CASE WHEN (
+          (outcome IS NOT NULL AND outcome NOT IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected'))
+          OR (
+            outcome IS NULL
+            AND (
+              (COALESCE(duration, 0) >= 20 AND LOWER(TRIM(COALESCE(status, ''))) IN ('ended', 'completed', 'finished'))
+              OR (COALESCE(duration, 0) >= 40 AND LOWER(TRIM(COALESCE(status, ''))) NOT IN (
+                'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
+              ))
+              OR (COALESCE(transcript, '') <> '' AND LENGTH(TRIM(COALESCE(transcript, ''))) > 40)
+              OR (COALESCE(recording_url, '') <> '')
+            )
+          )
+        ) THEN 1 ELSE 0 END)::int AS reached_max
+      FROM calls
+      WHERE client_key = $1
+        AND regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g') <> ''
+      GROUP BY 1
+    )`;
+  /** Join key from leads.phone — must match call_phone_stats.phone_key. */
+  const dashboardLeadPhoneKeySql = `
+    CASE
+      WHEN LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
+      THEN RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
+      ELSE NULLIF(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), '')
+    END`;
+  /** Join key from calls.lead_phone for recent feed rows. */
+  const dashboardCallRowPhoneKeySql = `
+    CASE
+      WHEN LENGTH(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g')) >= 10
+      THEN RIGHT(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), 10)
+      ELSE NULLIF(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), '')
+    END`;
   try {
     // Always bypass tenant cache: it is per Node process; DELETE on worker A clears A’s cache
     // while dashboard GET on worker B could still serve stale vapi (e.g. outboundAbVoiceExperiment) for minutes.
@@ -8838,6 +8885,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         ORDER BY appointment_count DESC
       `, [clientKey]),
       query(`
+        WITH ${dashboardCallPhoneStatsCte}
         SELECT l.id,
                l.name,
                l.phone,
@@ -8852,39 +8900,34 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         FROM leads l
         LEFT JOIN lead_engagement le
           ON le.client_key = l.client_key AND le.lead_phone = l.phone
-        LEFT JOIN LATERAL (
-          SELECT
-            COUNT(*)::int AS calls_n,
-            MAX(CASE WHEN (
-              (c.outcome IS NOT NULL AND c.outcome NOT IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected'))
-              OR (
-                c.outcome IS NULL
-                AND (
-                  (COALESCE(c.duration, 0) >= 20 AND LOWER(TRIM(COALESCE(c.status, ''))) IN ('ended', 'completed', 'finished'))
-                  OR (COALESCE(c.duration, 0) >= 40 AND LOWER(TRIM(COALESCE(c.status, ''))) NOT IN (
-                    'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
-                  ))
-                  OR (COALESCE(c.transcript, '') <> '' AND LENGTH(TRIM(COALESCE(c.transcript, ''))) > 40)
-                  OR (COALESCE(c.recording_url, '') <> '')
-                )
-              )
-            ) THEN 1 ELSE 0 END)::int AS reached_max
-          FROM calls c
-          WHERE c.client_key = l.client_key
-            AND (
-              c.lead_phone = l.phone
-              OR (
-                LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
-                AND RIGHT(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), 10)
-                  = RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
-              )
-            )
-        ) cs ON true
+        LEFT JOIN call_phone_stats cs ON cs.phone_key = ${dashboardLeadPhoneKeySql}
         WHERE l.client_key = $1
         ORDER BY l.created_at DESC
         LIMIT ${RECENT_LEADS_DASHBOARD_CAP}
       `, [clientKey]),
       query(`
+        WITH lead_lookup AS (
+          SELECT DISTINCT ON (phone_key)
+            phone_key,
+            name,
+            service
+          FROM (
+            SELECT
+              CASE
+                WHEN LENGTH(regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g')) >= 10
+                THEN RIGHT(regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g'), 10)
+                ELSE NULLIF(regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g'), '')
+              END AS phone_key,
+              name,
+              service,
+              created_at
+            FROM leads
+            WHERE client_key = $1
+              AND regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') <> ''
+          ) z
+          WHERE z.phone_key IS NOT NULL
+          ORDER BY phone_key, created_at DESC NULLS LAST
+        )
         SELECT c.call_id, c.id, c.lead_phone, c.status, c.outcome, c.created_at, c.duration, c.recording_url,
                c.transcript, c.retry_attempt, c.metadata,
                lm.name, lm.service
@@ -8914,21 +8957,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
           ORDER BY created_at DESC
           LIMIT ${RECENT_CALLS_FEED_CAP}
         ) c
-        LEFT JOIN LATERAL (
-          SELECT l.name, l.service
-          FROM leads l
-          WHERE l.client_key = c.client_key
-            AND (
-              l.phone = c.lead_phone
-              OR (
-                LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
-                AND RIGHT(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), 10)
-                  = RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
-              )
-            )
-          ORDER BY l.created_at DESC NULLS LAST
-          LIMIT 1
-        ) lm ON true
+        LEFT JOIN lead_lookup lm ON lm.phone_key = ${dashboardCallRowPhoneKeySql}
         ORDER BY c.created_at DESC
       `, [clientKey]),
       query(`
@@ -9019,40 +9048,14 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
           AND status IN ('pending', 'processing')
       `, [clientKey]),
       query(`
+        WITH ${dashboardCallPhoneStatsCte}
         SELECT
           COALESCE(NULLIF(TRIM(l.source), ''), '(no source)') AS source_label,
           COUNT(*)::int AS total_leads,
           COUNT(*) FILTER (WHERE COALESCE(cs.calls_n, 0) > 0)::int AS dialed_leads,
           COUNT(*) FILTER (WHERE COALESCE(cs.reached_max, 0) > 0)::int AS reached_leads
         FROM leads l
-        LEFT JOIN LATERAL (
-          SELECT
-            COUNT(*)::int AS calls_n,
-            MAX(CASE WHEN (
-              (c.outcome IS NOT NULL AND c.outcome NOT IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected'))
-              OR (
-                c.outcome IS NULL
-                AND (
-                  (COALESCE(c.duration, 0) >= 20 AND LOWER(TRIM(COALESCE(c.status, ''))) IN ('ended', 'completed', 'finished'))
-                  OR (COALESCE(c.duration, 0) >= 40 AND LOWER(TRIM(COALESCE(c.status, ''))) NOT IN (
-                    'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
-                  ))
-                  OR (COALESCE(c.transcript, '') <> '' AND LENGTH(TRIM(COALESCE(c.transcript, ''))) > 40)
-                  OR (COALESCE(c.recording_url, '') <> '')
-                )
-              )
-            ) THEN 1 ELSE 0 END)::int AS reached_max
-          FROM calls c
-          WHERE c.client_key = l.client_key
-            AND (
-              c.lead_phone = l.phone
-              OR (
-                LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
-                AND RIGHT(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), 10)
-                  = RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
-              )
-            )
-        ) cs ON true
+        LEFT JOIN call_phone_stats cs ON cs.phone_key = ${dashboardLeadPhoneKeySql}
         WHERE l.client_key = $1
         GROUP BY COALESCE(NULLIF(TRIM(l.source), ''), '(no source)')
         ORDER BY total_leads DESC
@@ -11733,25 +11736,34 @@ async function fetchLeadNamesForRetryQueuePhones(clientKey, queuePhones) {
   if (phones.length === 0) return new Map();
   const res = await query(
     `
-    WITH qp AS (
-      SELECT DISTINCT p AS phone_raw
+    WITH qn AS (
+      SELECT DISTINCT p AS phone_raw,
+             regexp_replace(COALESCE(p, ''), '[^0-9]', '', 'g') AS qdig
       FROM unnest($2::text[]) AS x(p)
       WHERE p IS NOT NULL AND p <> ''
+    ),
+    lead_index AS (
+      SELECT phone AS phone,
+             name,
+             created_at,
+             regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') AS ldig
+      FROM leads
+      WHERE client_key = $1
+        AND regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') <> ''
     )
-    SELECT DISTINCT ON (qp.phone_raw)
-      qp.phone_raw,
-      l.name
-    FROM qp
-    JOIN leads l ON l.client_key = $1
-      AND (
-        l.phone = qp.phone_raw
-        OR (
-          LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
-          AND RIGHT(regexp_replace(COALESCE(qp.phone_raw, ''), '[^0-9]', '', 'g'), 10)
-            = RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
-        )
+    SELECT DISTINCT ON (qn.phone_raw)
+      qn.phone_raw,
+      li.name
+    FROM qn
+    JOIN lead_index li ON (
+      li.phone = qn.phone_raw
+      OR (
+        LENGTH(li.ldig) >= 10
+        AND LENGTH(qn.qdig) >= 10
+        AND RIGHT(li.ldig, 10) = RIGHT(qn.qdig, 10)
       )
-    ORDER BY qp.phone_raw, l.created_at DESC NULLS LAST
+    )
+    ORDER BY qn.phone_raw, li.created_at DESC NULLS LAST
     `,
     [clientKey, phones]
   );
