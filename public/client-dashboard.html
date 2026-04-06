@@ -1053,6 +1053,108 @@
             display: block !important;
         }
 
+        body:not(.tom-outreach-dashboard) .outreach-capacity-strip,
+        body:not(.tom-outreach-dashboard) .outreach-source-stats-card,
+        body:not(.tom-outreach-dashboard) .leads-funnel-chips {
+            display: none !important;
+        }
+
+        .outreach-capacity-strip {
+            margin: 0 0 18px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            background: rgba(92, 106, 196, 0.09);
+            border: 1px solid var(--border, #e8eaf5);
+            font-size: 0.875rem;
+            line-height: 1.5;
+            color: var(--text, #1a1d2e);
+        }
+
+        .outreach-capacity-strip strong {
+            font-weight: 650;
+        }
+
+        body.tom-outreach-dashboard .funnel-stage.funnel-stage--clickable {
+            cursor: pointer;
+            border-radius: 10px;
+            padding: 6px 8px;
+            margin: 0 -8px;
+            transition: background 0.15s ease;
+        }
+
+        body.tom-outreach-dashboard .funnel-stage.funnel-stage--clickable:hover {
+            background: rgba(92, 106, 196, 0.08);
+        }
+
+        body.tom-outreach-dashboard .funnel-stage.funnel-stage--active {
+            outline: 2px solid rgba(92, 106, 196, 0.45);
+            outline-offset: 2px;
+        }
+
+        .leads-funnel-chips {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .leads-funnel-chips-label {
+            font-size: 0.75rem;
+            color: var(--muted);
+            margin-right: 4px;
+        }
+
+        button.leads-funnel-chip {
+            font-size: 0.75rem;
+            padding: 5px 10px;
+            border-radius: 999px;
+            border: 1px solid var(--border, #e8eaf5);
+            background: var(--card-bg, #fff);
+            color: var(--text, #1a1d2e);
+            cursor: pointer;
+        }
+
+        button.leads-funnel-chip:hover {
+            border-color: rgba(92, 106, 196, 0.45);
+        }
+
+        button.leads-funnel-chip.leads-funnel-chip--active {
+            background: rgba(92, 106, 196, 0.16);
+            border-color: rgba(92, 106, 196, 0.5);
+            font-weight: 600;
+        }
+
+        .outreach-source-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8125rem;
+            margin-top: 8px;
+        }
+
+        .outreach-source-table th,
+        .outreach-source-table td {
+            padding: 8px 10px;
+            text-align: left;
+            border-bottom: 1px solid var(--border, #e8eaf5);
+        }
+
+        .outreach-source-table th {
+            color: var(--muted);
+            font-weight: 600;
+        }
+
+        .tom-ab-decision-hint {
+            margin: 10px 0 0;
+            padding: 10px 12px;
+            border-radius: 10px;
+            background: rgba(16, 185, 129, 0.08);
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            font-size: 0.8125rem;
+            line-height: 1.45;
+            color: var(--text, #1a1d2e);
+        }
+
         .tom-ab-test-table-wrap {
             overflow-x: auto;
             margin-top: 10px;
@@ -5694,6 +5796,8 @@
             </div>
         </section>
 
+        <div id="outreachCapacityStrip" class="outreach-capacity-strip" hidden aria-live="polite"></div>
+
         <section
             class="dashboard-section tom-ab-test-section"
             id="tomAbOutreachAbSection"
@@ -5796,6 +5900,13 @@
                     </div>
                 </article>
 
+                <article class="card card-chart outreach-source-stats-card" id="outreachSourceStatsCard" hidden>
+                    <h3>📂 Outcomes by lead source</h3>
+                    <p class="card-subtitle" id="outreachSourceStatsSubtitle">
+                        CRM totals by <strong>source</strong> (empty sources grouped as “no source”). Dialed = at least one outbound attempt to that lead; reached = at least one conversation-style dial.
+                    </p>
+                    <div id="outreachSourceStatsBody" class="thin-scroll"></div>
+                </article>
 
                 <article class="card">
                     <h3>📊 Call Quality</h3>
@@ -5831,6 +5942,13 @@
                     <div class="dashboard-list-toolbar">
                         <input type="search" id="leadsSearchInput" class="dashboard-list-search" placeholder="Search name, phone, service, status…" autocomplete="off" enterkeyhint="search">
                         <span id="leadsSearchHint" class="dashboard-search-hint" hidden></span>
+                    </div>
+                    <div id="leadsFunnelChips" class="leads-funnel-chips" role="toolbar" aria-label="Filter recent leads by pipeline segment">
+                        <span class="leads-funnel-chips-label">Pipeline filter</span>
+                        <button type="button" class="leads-funnel-chip leads-funnel-chip--active" data-funnel-chip="all">All loaded</button>
+                        <button type="button" class="leads-funnel-chip" data-funnel-chip="called">Dialed</button>
+                        <button type="button" class="leads-funnel-chip" data-funnel-chip="reached">Reached</button>
+                        <button type="button" class="leads-funnel-chip" data-funnel-chip="no_pickup">No pickup</button>
                     </div>
                     <div id="leads-list" class="leads-list thin-scroll"></div>
                     <div class="export-buttons">
@@ -6159,6 +6277,185 @@
                 if (actT) actT.textContent = 'Your outreach is active';
                 if (actS) actS.textContent = 'Dialling and logging activity';
             }
+        }
+
+        function loadLeadsFunnelSegmentForClient(clientKey) {
+            leadsFunnelSegment = 'all';
+            if (!clientKey || !isOutreachDashboardClient(clientKey)) return;
+            try {
+                const raw = localStorage.getItem(LEADS_FUNNEL_LS_PREFIX + clientKey);
+                if (raw === 'called' || raw === 'reached' || raw === 'no_pickup' || raw === 'all') {
+                    leadsFunnelSegment = raw;
+                }
+            } catch {
+                /* ignore */
+            }
+        }
+
+        function persistLeadsFunnelSegment() {
+            if (!currentClient || !isOutreachDashboardClient(currentClient)) return;
+            try {
+                localStorage.setItem(LEADS_FUNNEL_LS_PREFIX + currentClient, leadsFunnelSegment);
+            } catch {
+                /* ignore */
+            }
+        }
+
+        function setLeadsFunnelSegment(seg) {
+            const next =
+                seg === 'called' || seg === 'reached' || seg === 'no_pickup' || seg === 'all' ? seg : 'all';
+            leadsFunnelSegment = next;
+            persistLeadsFunnelSegment();
+            syncLeadsFunnelChipUi();
+            if (typeof renderLeadJourney === 'function' && dashboardData) {
+                renderLeadJourney(dashboardData);
+            }
+            repaintRecentLeadsList();
+            const listEl = document.getElementById('leads-list');
+            if (listEl && typeof listEl.scrollIntoView === 'function') {
+                try {
+                    listEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                } catch {
+                    /* ignore */
+                }
+            }
+        }
+
+        function syncLeadsFunnelChipUi() {
+            const root = document.getElementById('leadsFunnelChips');
+            if (!root) return;
+            root.querySelectorAll('[data-funnel-chip]').forEach((btn) => {
+                const v = btn.getAttribute('data-funnel-chip');
+                btn.classList.toggle('leads-funnel-chip--active', v === leadsFunnelSegment);
+            });
+        }
+
+        function leadMatchesFunnelSegment(lead, seg) {
+            if (!seg || seg === 'all') return true;
+            const called = !!lead.outreachCalled;
+            const reached = !!lead.outreachReached;
+            if (seg === 'called') return called;
+            if (seg === 'reached') return reached;
+            if (seg === 'no_pickup') return called && !reached;
+            return true;
+        }
+
+        function initLeadsFunnelFilterUi() {
+            const root = document.getElementById('leadsFunnelChips');
+            if (!root || root.dataset.bound === '1') return;
+            root.dataset.bound = '1';
+            root.addEventListener('click', (e) => {
+                const btn = e.target.closest('[data-funnel-chip]');
+                if (!btn || !root.contains(btn)) return;
+                e.preventDefault();
+                setLeadsFunnelSegment(btn.getAttribute('data-funnel-chip') || 'all');
+            });
+        }
+
+        function initLeadJourneyFunnelClicks() {
+            const host = document.getElementById('lead-journey');
+            if (!host || host.dataset.funnelClickBound === '1') return;
+            host.dataset.funnelClickBound = '1';
+            const activate = (seg) => {
+                if (!isOutreachDashboardClient(currentClient)) return;
+                setLeadsFunnelSegment(seg);
+            };
+            host.addEventListener('click', (e) => {
+                const row = e.target.closest('[data-funnel-segment]');
+                if (!row || !host.contains(row)) return;
+                if (!isOutreachDashboardClient(currentClient)) return;
+                e.preventDefault();
+                activate(row.getAttribute('data-funnel-segment') || 'all');
+            });
+            host.addEventListener('keydown', (e) => {
+                if (e.key !== 'Enter' && e.key !== ' ') return;
+                const row = e.target.closest('[data-funnel-segment]');
+                if (!row || !host.contains(row)) return;
+                if (!isOutreachDashboardClient(currentClient)) return;
+                e.preventDefault();
+                activate(row.getAttribute('data-funnel-segment') || 'all');
+            });
+        }
+
+        function renderOutreachCapacityStrip(data) {
+            const el = document.getElementById('outreachCapacityStrip');
+            if (!el) return;
+            if (!isOutreachDashboardClient(currentClient)) {
+                el.hidden = true;
+                el.innerHTML = '';
+                return;
+            }
+            const oc = data && data.outreachCapacity;
+            if (!oc || typeof oc !== 'object') {
+                el.hidden = true;
+                el.innerHTML = '';
+                return;
+            }
+            el.hidden = false;
+            const never = oc.leadsNeverDialed != null ? Number(oc.leadsNeverDialed) : 0;
+            const q = oc.callQueuePending != null ? Number(oc.callQueuePending) : 0;
+            const last24 = oc.dialAttemptsLast24h != null ? Number(oc.dialAttemptsLast24h) : 0;
+            const perHr = oc.dialsPerHour != null ? Number(oc.dialsPerHour) : 0;
+            const eta = oc.estimatedHoursToClearBacklog != null ? Number(oc.estimatedHoursToClearBacklog) : null;
+            let etaHtml = '';
+            if (never + q <= 0) {
+                etaHtml = '<span class="tom-ab-test-meta">No CRM backlog waiting for a first dial and nothing queued right now.</span>';
+            } else if (eta != null && Number.isFinite(eta) && eta > 0 && last24 > 0) {
+                if (eta <= 72) {
+                    etaHtml = `At the last-24h pace (~<strong>${formatNumber(perHr)}</strong> dial attempts/hr), clearing <strong>${formatNumber(
+                        never + q
+                    )}</strong> queued + not-yet-dialed units is roughly <strong>${formatNumber(Math.round(eta))}</strong> hours <span class="tom-ab-test-meta">(rough — real pacing follows business hours and priorities).</span>`;
+                } else {
+                    etaHtml = `At last-24h pace, backlog is on the order of <strong>${formatNumber(Math.round(eta / 24))}</strong> days <span class="tom-ab-test-meta">(rough estimate).</span>`;
+                }
+            } else {
+                etaHtml =
+                    '<span class="tom-ab-test-meta">Not enough recent dial volume to estimate how fast the backlog will clear.</span>';
+            }
+            el.innerHTML = `<p style="margin:0 0 8px 0;"><strong>Backlog &amp; pace</strong> · <strong>${formatNumber(
+                never
+            )}</strong> CRM leads not yet dialed · <strong>${formatNumber(q)}</strong> rows in the outbound queue (pending/processing) · <strong>${formatNumber(
+                last24
+            )}</strong> dial attempts in the last 24h.</p><p style="margin:0;">${etaHtml}</p>`;
+        }
+
+        function renderOutreachSourceStats(data) {
+            const card = document.getElementById('outreachSourceStatsCard');
+            const body = document.getElementById('outreachSourceStatsBody');
+            if (!card || !body) return;
+            if (!isOutreachDashboardClient(currentClient)) {
+                card.hidden = true;
+                body.innerHTML = '';
+                return;
+            }
+            const rows = Array.isArray(data && data.sourceOutreachStats) ? data.sourceOutreachStats : [];
+            if (!rows.length) {
+                card.hidden = true;
+                body.innerHTML = '';
+                return;
+            }
+            card.hidden = false;
+            const trs = rows
+                .map((r) => {
+                    const label = r.sourceLabel != null ? String(r.sourceLabel) : '(no source)';
+                    const t = r.totalLeads != null ? Number(r.totalLeads) : 0;
+                    const d = r.dialedLeads != null ? Number(r.dialedLeads) : 0;
+                    const re = r.reachedLeads != null ? Number(r.reachedLeads) : 0;
+                    const pick = d > 0 ? Math.round((re / d) * 1000) / 10 : null;
+                    const pickCell = pick != null ? `${pick}%` : '—';
+                    return `<tr>
+                        <td>${escapeHtml(label)}</td>
+                        <td>${formatNumber(t)}</td>
+                        <td>${formatNumber(d)}</td>
+                        <td>${formatNumber(re)}</td>
+                        <td>${pickCell}</td>
+                    </tr>`;
+                })
+                .join('');
+            body.innerHTML = `<table class="outreach-source-table">
+                <thead><tr><th>Source</th><th>Leads</th><th>Dialed</th><th>Reached</th><th>Reach ÷ dialed</th></tr></thead>
+                <tbody>${trs}</tbody>
+            </table>`;
         }
 
         const BASE_URL = window.location.origin;
@@ -6640,7 +6937,9 @@ ${actionsRow}
                     revenue: { total: null, bookings: 0, avgDealValue: null },
                     roi: { profit: null, multiplier: null, percentage: null }
                 },
-                outboundAbTest: null
+                outboundAbTest: null,
+                outreachCapacity: null,
+                sourceOutreachStats: []
             };
         }
         
@@ -6649,6 +6948,9 @@ ${actionsRow}
         let currentLeads = [];
         /** Full recent-leads array from API (search filters a view; modal uses indices into this). */
         let recentLeadsAllRows = [];
+        const LEADS_FUNNEL_LS_PREFIX = 'dash.outreach.leadsSegment.';
+        /** @type {'all'|'called'|'reached'|'no_pickup'} */
+        let leadsFunnelSegment = 'all';
         let retryQueueRowsAll = [];
         let retryQueueBarState = { shown: 0, isDemo: false, opts: {} };
         let callRecordingsAll = [];
@@ -6718,6 +7020,15 @@ ${actionsRow}
                 return `${c.abVariant || ''}|${c.abExperiment || ''}`;
             }).join(',');
             const leadSig = leads.slice(0, 12).map((l) => String(l.id || l.phone || '')).join(',');
+            const src = Array.isArray(d.sourceOutreachStats) ? d.sourceOutreachStats : [];
+            const srcSig = src
+                .slice(0, 6)
+                .map((r) => `${r.sourceLabel || ''}:${r.dialedLeads || 0}:${r.reachedLeads || 0}`)
+                .join(';');
+            const oc = d.outreachCapacity;
+            const ocSig = oc
+                ? `${oc.leadsNeverDialed || 0}|${oc.callQueuePending || 0}|${oc.dialAttemptsLast24h || 0}`
+                : '';
             const tp = d.touchpoints;
             const tpData = tp && Array.isArray(tp.data) ? tp.data.join(',') : '';
             return [
@@ -6730,6 +7041,8 @@ ${actionsRow}
                 abSig,
                 leads.length,
                 leadSig,
+                srcSig,
+                ocSig,
                 appts.length,
                 String((appts[0] && (appts[0].id || appts[0].start)) || ''),
                 tpData,
@@ -6829,7 +7142,13 @@ ${actionsRow}
                     activityTimezone: livePayload.activityTimezone || metrics.activityTimezone || DASHBOARD_ACTIVITY_TZ,
                     outboundAbTest: livePayload.outboundAbTest
                         ? { ...livePayload.outboundAbTest }
-                        : null
+                        : null,
+                    outreachCapacity: livePayload.outreachCapacity && typeof livePayload.outreachCapacity === 'object'
+                        ? { ...livePayload.outreachCapacity }
+                        : null,
+                    sourceOutreachStats: Array.isArray(livePayload.sourceOutreachStats)
+                        ? livePayload.sourceOutreachStats.slice()
+                        : []
                 };
             }
             
@@ -6904,7 +7223,16 @@ ${actionsRow}
                 roi: livePayload.roi ? livePayload.roi : base.roi,
                 activityAsOfIso: livePayload.activityAsOfIso ?? base.activityAsOfIso ?? null,
                 activityTimezone: livePayload.activityTimezone ?? base.activityTimezone ?? DASHBOARD_ACTIVITY_TZ,
-                outboundAbTest: livePayload.outboundAbTest ?? base.outboundAbTest ?? null
+                outboundAbTest: livePayload.outboundAbTest ?? base.outboundAbTest ?? null,
+                outreachCapacity:
+                    livePayload.outreachCapacity && typeof livePayload.outreachCapacity === 'object'
+                        ? { ...livePayload.outreachCapacity }
+                        : base.outreachCapacity ?? null,
+                sourceOutreachStats: Array.isArray(livePayload.sourceOutreachStats)
+                    ? livePayload.sourceOutreachStats.slice()
+                    : Array.isArray(base.sourceOutreachStats)
+                      ? base.sourceOutreachStats
+                      : []
             };
         }
 
@@ -7124,7 +7452,9 @@ ${actionsRow}
             
             const recentLeadsSubtitle = document.getElementById('recentLeadsSubtitle');
             if (recentLeadsSubtitle) {
-                recentLeadsSubtitle.textContent = `Recently added leads for ${businessName}, newest at the top. Search filters the list below; the summary line compares loaded rows to your CRM total. Export downloads the full set.`;
+                recentLeadsSubtitle.textContent = isOutreachDashboardClient(currentClient)
+                    ? `Recently added leads for ${businessName}, newest at the top. Use pipeline chips or the engagement snapshot above to slice dialed / reached / no pickup; search still applies on top. Export downloads the full CRM.`
+                    : `Recently added leads for ${businessName}, newest at the top. Search filters the list below; the summary line compares loaded rows to your CRM total. Export downloads the full set.`;
             }
             
             const appointmentsSubtitle = document.getElementById('appointmentsSubtitle');
@@ -7142,7 +7472,7 @@ ${actionsRow}
             const conversionFunnelSubtitle = document.getElementById('conversionFunnelSubtitle');
             if (conversionFunnelSubtitle) {
                 conversionFunnelSubtitle.textContent = isOutreachDashboardClient(currentClient)
-                    ? `Real counts for ${businessName}. Percentages are share of CRM leads. Reached + no pickup = everyone we dialed (see Calls tile).`
+                    ? `Real counts for ${businessName}. Percentages are share of CRM leads. Reached + no pickup = everyone we dialed (see Calls tile). Click a stage to filter Recent Leads below.`
                     : `Independent counts for ${businessName} — not a strict funnel. Bar length compares rows; % is vs total leads.`;
             }
             
@@ -7382,6 +7712,7 @@ ${actionsRow}
                     : respN != null && respN > 0
                         ? `Mean ${firstResponse} to first dial\n${formatNumber(respN)} leads in sample`
                         : `Mean ${firstResponse} to first dial`;
+            renderOutreachCapacityStrip(data);
         }
 
         function formatActivitySnapshot(iso, timeZone = DASHBOARD_ACTIVITY_TZ) {
@@ -7643,18 +7974,23 @@ ${actionsRow}
                 isDemo = false,
                 filterActive = false,
                 matchCount = 0,
-                listCap = RECENT_LEADS_DASHBOARD_CAP
+                listCap = RECENT_LEADS_DASHBOARD_CAP,
+                funnelOnly = false
             } = opts;
             if (!loaded && !filterActive) return '';
             if (isDemo) {
                 if (filterActive) {
-                    return `<div class="retry-queue-bar" role="status"><span><strong>${formatNumber(matchCount)}</strong> matches · demo data</span></div>`;
+                    const lbl = funnelOnly ? 'in this slice' : 'matches';
+                    return `<div class="retry-queue-bar" role="status"><span><strong>${formatNumber(matchCount)}</strong> ${lbl} · demo data</span></div>`;
                 }
                 return `<div class="retry-queue-bar" role="status"><span><strong>${formatNumber(loaded)}</strong> demo contacts</span></div>`;
             }
             const total = totalInCrm != null && Number.isFinite(Number(totalInCrm)) ? Math.max(0, Math.round(Number(totalInCrm))) : null;
             if (filterActive) {
-                const parts = [`<strong>${formatNumber(matchCount)}</strong> match${matchCount === 1 ? '' : 'es'}`];
+                const head = funnelOnly
+                    ? `<strong>${formatNumber(matchCount)}</strong> in this slice`
+                    : `<strong>${formatNumber(matchCount)}</strong> match${matchCount === 1 ? '' : 'es'}`;
+                const parts = [head];
                 parts.push(`${formatNumber(loaded)} loaded`);
                 if (total != null) parts.push(`${formatNumber(total)} in CRM`);
                 if (total != null && total > loaded && loaded >= listCap) {
@@ -7735,16 +8071,26 @@ ${actionsRow}
                 return;
             }
 
+            const funnelActive = isOutreachDashboardClient(currentClient) && leadsFunnelSegment !== 'all';
+            const funnelLabels = { called: 'Dialed', reached: 'Reached', no_pickup: 'No pickup' };
+            const funnelSuffix = funnelActive ? ` · ${funnelLabels[leadsFunnelSegment] || ''}` : '';
+
             const entries = recentLeadsAllRows
                 .map((lead, fullIndex) => ({ lead, fullIndex }))
-                .filter(({ lead }) => leadMatchesSearch(lead, filterQ));
+                .filter(({ lead }) => leadMatchesSearch(lead, filterQ))
+                .filter(({ lead }) => leadMatchesFunnelSegment(lead, leadsFunnelSegment));
             const loaded = recentLeadsAllRows.length;
             const matchCount = entries.length;
-            const filterActive = !!filterQ;
+            const filterActive = !!filterQ || funnelActive;
 
             if (hintEl) {
                 if (filterActive) {
-                    hintEl.textContent = matchCount ? `${formatNumber(matchCount)} match${matchCount === 1 ? '' : 'es'}` : 'No matches';
+                    const qPart = filterQ
+                        ? matchCount
+                            ? `${formatNumber(matchCount)} match${matchCount === 1 ? '' : 'es'}`
+                            : 'No matches'
+                        : '';
+                    hintEl.textContent = (qPart ? qPart : `${formatNumber(matchCount)} shown`) + funnelSuffix;
                     hintEl.hidden = false;
                 } else {
                     hintEl.textContent = '';
@@ -7758,15 +8104,21 @@ ${actionsRow}
                 isDemo,
                 filterActive,
                 matchCount,
-                listCap
+                listCap,
+                funnelOnly: funnelActive && !filterQ
             });
             const barHtml = bar || '';
             if (filterActive && !matchCount) {
+                const emptyMsg = filterQ
+                    ? 'Try another search term.'
+                    : funnelActive
+                      ? 'No leads in this pipeline slice in the loaded preview. Try another segment or export the full CRM.'
+                      : 'Try another search term.';
                 container.innerHTML = barHtml + `
                     <div class="empty-state" style="padding:16px 12px;">
                         <span class="empty-state-icon">🔍</span>
                         <div class="empty-state-title">No matches</div>
-                        <div class="empty-state-message">Try another search term.</div>
+                        <div class="empty-state-message">${escapeHtml(emptyMsg)}</div>
                     </div>
                 `;
             } else {
@@ -8661,6 +9013,7 @@ ${actionsRow}
                     updateStatusBar(dashboardData);
                     renderRecentActivity(dashboardData);
                     renderLeadJourney(dashboardData);
+                    renderOutreachSourceStats(dashboardData);
                     renderLeads(dashboardData.recentLeads || []);
                     renderCalls(dashboardData.recentCalls || []);
                     renderTomAbTestSection(dashboardData);
@@ -8957,6 +9310,45 @@ ${actionsRow}
             return `<div class="tom-ab-monitoring-status">${focusLine}${dialLine}${bundleLine}</div>${warn}${feed}`;
         }
 
+        function tomAbPickupRateCell(tl, lpu) {
+            const t = typeof tl === 'number' ? tl : parseInt(tl, 10) || 0;
+            const p = typeof lpu === 'number' ? lpu : parseInt(lpu, 10) || 0;
+            if (t <= 0) return '—';
+            const pct = Math.round((p / t) * 1000) / 10;
+            return `${pct}%`;
+        }
+
+        function tomAbDecisionHintForVariants(variants, minN) {
+            if (!Array.isArray(variants) || variants.length < 2) return '';
+            const rows = variants.map((v) => {
+                const tl = typeof v.totalLeads === 'number' ? v.totalLeads : parseInt(v.totalLeads, 10) || 0;
+                const lpu =
+                    typeof v.livePickupLeads === 'number' ? v.livePickupLeads : parseInt(v.livePickupLeads, 10) || 0;
+                const name = v.variantName != null ? String(v.variantName) : '—';
+                return { name, tl, lpu, rate: tl > 0 ? (lpu / tl) * 100 : 0 };
+            });
+            const sorted = rows.slice().sort((a, b) => b.rate - a.rate);
+            const best = sorted[0];
+            const worst = sorted[sorted.length - 1];
+            if (!best || !worst) return '';
+            const lowSamples = rows.some((r) => r.lpu < minN);
+            const diff = Math.abs(best.rate - worst.rate);
+            let msg = '';
+            if (lowSamples) {
+                msg = `Still collecting live pickups — wait until each arm has at least <strong>${formatNumber(
+                    minN
+                )}</strong> before treating differences as reliable.`;
+            } else if (diff < 4) {
+                msg =
+                    'Pickup rates are very close between arms — the gap may be noise. Keep the test running or decide on business grounds.';
+            } else if (best.name && best.name !== worst.name) {
+                msg = `<strong>${escapeHtml(best.name)}</strong> is ahead on live pickups as a share of assigned leads right now — worth favouring if the gap holds.`;
+            } else {
+                msg = 'Compare pickup % vs assigned leads below; the larger gap usually matters more once samples are solid.';
+            }
+            return `<p class="tom-ab-decision-hint" role="note">${msg}</p>`;
+        }
+
         function tomAbMonitoringStatsRow(v, minN) {
             const tl = typeof v.totalLeads === 'number' ? v.totalLeads : parseInt(v.totalLeads, 10) || 0;
             const lpu =
@@ -8965,10 +9357,12 @@ ${actionsRow}
             const sampleCell = meets
                 ? `<span class="tom-ab-live-ok">✓ ${formatNumber(minN)}+</span>`
                 : `<span class="tom-ab-live-progress">${formatNumber(lpu)} / ${formatNumber(minN)}</span>`;
+            const rateCell = tomAbPickupRateCell(tl, lpu);
             return `<tr>
                 <td><strong>${escapeHtml(v.variantName)}</strong></td>
                 <td>${formatNumber(lpu)}</td>
                 <td>${formatNumber(tl)}</td>
+                <td>${rateCell}</td>
                 <td>${sampleCell}</td>
             </tr>`;
         }
@@ -8976,6 +9370,7 @@ ${actionsRow}
         function tomAbMonitoringComparisonPlaceholderRows(minN) {
             const row = (name) => `<tr class="tom-ab-mon-placeholder-row">
                 <td><strong>${escapeHtml(name)}</strong></td>
+                <td>—</td>
                 <td>—</td>
                 <td>—</td>
                 <td><span class="tom-ab-live-progress">0 / ${formatNumber(minN)}</span></td>
@@ -8992,6 +9387,7 @@ ${actionsRow}
                                 <th scope="col">Variant</th>
                                 <th scope="col">Live pickups</th>
                                 <th scope="col">Assigned</th>
+                                <th scope="col">Pickup %</th>
                                 <th scope="col">Sample</th>
                             </tr>
                         </thead>`;
@@ -9010,6 +9406,7 @@ ${actionsRow}
                 </div>`;
             }
             const rows = variants.length ? variants.map((v) => tomAbMonitoringStatsRow(v, minN)).join('') : '';
+            const hint = variants.length >= 2 ? tomAbDecisionHintForVariants(variants, minN) : '';
             return `<div class="tom-ab-mon-dim-section" data-tom-ab-mon-dim="${dim}">
                 <h5 class="tom-ab-mon-dim-h">${escapeHtml(title)} ${pill}</h5>
                 ${
@@ -9025,10 +9422,11 @@ ${actionsRow}
                         <tbody>${
                             rows ||
                             tomAbMonitoringComparisonPlaceholderRows(minN) +
-                                `<tr><td colspan="4" class="tom-ab-test-meta" style="border-top:none;">Waiting for first assigned leads…</td></tr>`
+                                `<tr><td colspan="5" class="tom-ab-test-meta" style="border-top:none;">Waiting for first assigned leads…</td></tr>`
                         }</tbody>
                     </table>
                 </div>
+                ${hint}
             </div>`;
         }
 
@@ -9127,6 +9525,7 @@ ${actionsRow}
                           minN
                       )}</strong> live pickups per variant (not voicemail).</p>`;
                 const rows = fe.variants.map((v) => tomAbMonitoringStatsRow(v, minN)).join('');
+                const legHint = Array.isArray(fe.variants) && fe.variants.length >= 2 ? tomAbDecisionHintForVariants(fe.variants, minN) : '';
                 body = `<p class="tom-ab-test-meta" style="margin:0 0 8px 0;"><strong>${dimLine}</strong> · <code style="font-size:0.85em;">${escapeHtml(
                     fe.experimentName
                 )}</code></p>
@@ -9138,12 +9537,13 @@ ${actionsRow}
                                     <th scope="col">Variant</th>
                                     <th scope="col">Live pickups</th>
                                     <th scope="col">Assigned</th>
+                                    <th scope="col">Pickup %</th>
                                     <th scope="col">Sample target</th>
                                 </tr>
                             </thead>
                             <tbody>${rows}</tbody>
                         </table>
-                    </div>`;
+                    </div>${legHint}`;
             } else if (tomOutreachUi) {
                 body = renderTomAbDimensionalMonitoringBody(ab || {}, lr, fe, minN);
             } else {
@@ -9184,6 +9584,7 @@ ${actionsRow}
                     updateStatusBar(dashboardData);
                     renderRecentActivity(dashboardData);
                     renderLeadJourney(dashboardData);
+                    renderOutreachSourceStats(dashboardData);
                     renderLeads(dashboardData.recentLeads || []);
                     renderCalls(dashboardData.recentCalls || []);
                     renderTomAbTestSection(dashboardData);
@@ -9307,6 +9708,7 @@ ${actionsRow}
                     updateStatusBar(dashboardData);
                     renderRecentActivity(dashboardData);
                     renderLeadJourney(dashboardData);
+                    renderOutreachSourceStats(dashboardData);
                     renderLeads(dashboardData.recentLeads || []);
                     renderCalls(dashboardData.recentCalls || []);
                     renderTomAbTestSection(dashboardData);
@@ -9634,9 +10036,25 @@ ${actionsRow}
             const stageHtml = stages.map(stage => {
                 const barPct = maxValue > 0 ? Math.round((stage.value / maxValue) * 100) : 0;
                 const ofLeadsPct = totalLeads > 0 ? Math.round((stage.value / totalLeads) * 100) : 0;
-                const tip = stage.tip ? escapeHtml(stage.tip) : '';
+                const segKey =
+                    tom &&
+                    (stage.label === 'Total leads'
+                        ? 'all'
+                        : stage.label === 'Leads we called'
+                          ? 'called'
+                          : stage.label === 'Reached (unique)'
+                            ? 'reached'
+                            : stage.label === 'No pickup (unique)'
+                              ? 'no_pickup'
+                              : '');
+                const tipRaw = (stage.tip || '') + (segKey ? ' · Click to filter Recent Leads' : '');
+                const titleAttr = escapeHtml(tipRaw);
+                const clickClass = segKey ? ' funnel-stage--clickable' : '';
+                const activeClass = segKey && leadsFunnelSegment === segKey ? ' funnel-stage--active' : '';
+                const a11y = segKey ? ' role="button" tabindex="0"' : '';
+                const dataSeg = segKey ? ` data-funnel-segment="${escapeHtml(segKey)}"` : '';
                 return `
-                    <div class="funnel-stage" title="${tip}">
+                    <div class="funnel-stage${clickClass}${activeClass}" title="${titleAttr}"${a11y}${dataSeg}>
                         <div class="funnel-label">
                             <span class="funnel-label-text"><span class="funnel-icon" aria-hidden="true">${escapeHtml(stage.icon || '')}</span><span>${escapeHtml(stage.label)}</span></span>
                             <span class="funnel-value-wrap">
@@ -12057,6 +12475,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                                 typeof clientConfig.dashboardOutreachMode === 'boolean'
                                     ? clientConfig.dashboardOutreachMode
                                     : OUTREACH_DASHBOARD_CLIENT_KEYS_FALLBACK.includes(currentClient);
+                            loadLeadsFunnelSegmentForClient(currentClient);
+                            syncLeadsFunnelChipUi();
                             console.log('[DASHBOARD] Loaded client config:', {
                                 name: clientConfig.name || clientConfig.displayName,
                                 description: clientConfig.description,
@@ -12153,6 +12573,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
             initThemeToggle();
             initDashboardListSearch();
+            initLeadsFunnelFilterUi();
+            initLeadJourneyFunnelClicks();
             // Init test call button - it will fetch config if needed
             initTestCallButton(currentClient, config).catch(err => console.warn('Test call button init error:', err));
             initModalControls();
@@ -12212,7 +12634,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 initRoiSettingsPanel();
             }
             loadBuildFingerprint();
+            loadLeadsFunnelSegmentForClient(currentClient);
+            syncLeadsFunnelChipUi();
             renderLeadJourney(dashboardData);
+            renderOutreachSourceStats(dashboardData);
             renderLeads(dashboardData.recentLeads || []);
             renderAppointments(dashboardData.appointments || []);
             renderChart(config, dashboardData);
@@ -12277,6 +12702,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         }
                         await renderActiveIndicator(dashboardData);
                         renderLeadJourney(dashboardData);
+                        renderOutreachSourceStats(dashboardData);
                         renderLeads(dashboardData.recentLeads || []);
                         renderAppointments(dashboardData.appointments || []);
                         const callsToRender = dashboardData.recentCalls || [];
@@ -12424,10 +12850,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             dashboardData = mergeData(dashboardData, refreshPayload);
                             updateStatusBar(dashboardData);
                             renderRecentActivity(dashboardData);
+                            renderLeadJourney(dashboardData);
+                            renderOutreachSourceStats(dashboardData);
                             renderLeads(dashboardData.recentLeads || []);
                             renderAppointments(dashboardData.appointments || []);
-                }
-            } catch (error) {
+                        }
+                    } catch (error) {
                         console.error('Failed to refresh after coming online', error);
                     }
                 }, 1000);

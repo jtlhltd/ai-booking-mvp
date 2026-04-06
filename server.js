@@ -8715,7 +8715,9 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       recentCallRows,
       responseRows,
       touchpointRows,
-      upcomingAppointmentRows
+      upcomingAppointmentRows,
+      callQueuePendingRow,
+      sourceOutreachStatsRows
     ] = await Promise.all([
       query(`
         SELECT COUNT(*) AS total,
@@ -8844,10 +8846,40 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
                l.source,
                l.notes,
                l.created_at,
-               le.lead_score
+               le.lead_score,
+               (COALESCE(cs.calls_n, 0) > 0) AS outreach_called,
+               (COALESCE(cs.reached_max, 0) > 0) AS outreach_reached
         FROM leads l
         LEFT JOIN lead_engagement le
           ON le.client_key = l.client_key AND le.lead_phone = l.phone
+        LEFT JOIN LATERAL (
+          SELECT
+            COUNT(*)::int AS calls_n,
+            MAX(CASE WHEN (
+              (c.outcome IS NOT NULL AND c.outcome NOT IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected'))
+              OR (
+                c.outcome IS NULL
+                AND (
+                  (COALESCE(c.duration, 0) >= 20 AND LOWER(TRIM(COALESCE(c.status, ''))) IN ('ended', 'completed', 'finished'))
+                  OR (COALESCE(c.duration, 0) >= 40 AND LOWER(TRIM(COALESCE(c.status, ''))) NOT IN (
+                    'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
+                  ))
+                  OR (COALESCE(c.transcript, '') <> '' AND LENGTH(TRIM(COALESCE(c.transcript, ''))) > 40)
+                  OR (COALESCE(c.recording_url, '') <> '')
+                )
+              )
+            ) THEN 1 ELSE 0 END)::int AS reached_max
+          FROM calls c
+          WHERE c.client_key = l.client_key
+            AND (
+              c.lead_phone = l.phone
+              OR (
+                LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
+                AND RIGHT(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), 10)
+                  = RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
+              )
+            )
+        ) cs ON true
         WHERE l.client_key = $1
         ORDER BY l.created_at DESC
         LIMIT ${RECENT_LEADS_DASHBOARD_CAP}
@@ -8979,6 +9011,52 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
           AND a.start_iso >= NOW()
         ORDER BY a.start_iso ASC
         LIMIT 5
+      `, [clientKey]),
+      query(`
+        SELECT COUNT(*)::int AS n
+        FROM call_queue
+        WHERE client_key = $1
+          AND status IN ('pending', 'processing')
+      `, [clientKey]),
+      query(`
+        SELECT
+          COALESCE(NULLIF(TRIM(l.source), ''), '(no source)') AS source_label,
+          COUNT(*)::int AS total_leads,
+          COUNT(*) FILTER (WHERE COALESCE(cs.calls_n, 0) > 0)::int AS dialed_leads,
+          COUNT(*) FILTER (WHERE COALESCE(cs.reached_max, 0) > 0)::int AS reached_leads
+        FROM leads l
+        LEFT JOIN LATERAL (
+          SELECT
+            COUNT(*)::int AS calls_n,
+            MAX(CASE WHEN (
+              (c.outcome IS NOT NULL AND c.outcome NOT IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected'))
+              OR (
+                c.outcome IS NULL
+                AND (
+                  (COALESCE(c.duration, 0) >= 20 AND LOWER(TRIM(COALESCE(c.status, ''))) IN ('ended', 'completed', 'finished'))
+                  OR (COALESCE(c.duration, 0) >= 40 AND LOWER(TRIM(COALESCE(c.status, ''))) NOT IN (
+                    'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
+                  ))
+                  OR (COALESCE(c.transcript, '') <> '' AND LENGTH(TRIM(COALESCE(c.transcript, ''))) > 40)
+                  OR (COALESCE(c.recording_url, '') <> '')
+                )
+              )
+            ) THEN 1 ELSE 0 END)::int AS reached_max
+          FROM calls c
+          WHERE c.client_key = l.client_key
+            AND (
+              c.lead_phone = l.phone
+              OR (
+                LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
+                AND RIGHT(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), 10)
+                  = RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
+              )
+            )
+        ) cs ON true
+        WHERE l.client_key = $1
+        GROUP BY COALESCE(NULLIF(TRIM(l.source), ''), '(no source)')
+        ORDER BY total_leads DESC
+        LIMIT 15
       `, [clientKey])
     ]);
 
@@ -9073,9 +9151,30 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         service: row.service || 'Lead Follow-Up',
         source: row.source || 'Web form',
         timeAgo: formatTimeAgoLabel(row.created_at),
-        score: derivedScore
+        score: derivedScore,
+        outreachCalled: !!row.outreach_called,
+        outreachReached: !!row.outreach_reached
       };
     });
+
+    const callQueuePending = parseInt(callQueuePendingRow.rows?.[0]?.n || 0, 10);
+    const leadsNeverDialed = Math.max(0, totalLeads - (displayCalls || 0));
+    const dialsPerHour = callsLast24h / 24;
+    const backlogWorkUnits = leadsNeverDialed + callQueuePending;
+    let estimatedHoursToClearBacklog = null;
+    if (backlogWorkUnits > 0 && dialsPerHour > 0.05 && Number.isFinite(dialsPerHour)) {
+      const hrs = backlogWorkUnits / dialsPerHour;
+      if (Number.isFinite(hrs) && hrs <= 24 * 120) {
+        estimatedHoursToClearBacklog = Number(hrs.toFixed(1));
+      }
+    }
+
+    const sourceOutreachStats = (sourceOutreachStatsRows.rows || []).map((r) => ({
+      sourceLabel: r.source_label,
+      totalLeads: parseInt(r.total_leads, 10) || 0,
+      dialedLeads: parseInt(r.dialed_leads, 10) || 0,
+      reachedLeads: parseInt(r.reached_leads, 10) || 0
+    }));
 
     let highPriorityLeads = 0;
     let mediumPriorityLeads = 0;
@@ -9695,7 +9794,17 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         industry: client?.industry || client?.whiteLabel?.industry || null
       },
       activityAsOfIso: activityAsOfLondon.toISO(),
-      activityTimezone: DASHBOARD_ACTIVITY_TZ
+      activityTimezone: DASHBOARD_ACTIVITY_TZ,
+      outreachCapacity: {
+        crmTotalLeads: totalLeads,
+        uniqueLeadsDialed: displayCalls,
+        leadsNeverDialed,
+        callQueuePending,
+        dialAttemptsLast24h: callsLast24h,
+        dialsPerHour: Number(dialsPerHour.toFixed(2)),
+        estimatedHoursToClearBacklog
+      },
+      sourceOutreachStats
     };
     res.set('Cache-Control', 'no-store, must-revalidate, max-age=0');
     res.json(payload);
