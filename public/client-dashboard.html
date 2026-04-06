@@ -323,10 +323,12 @@
         .dashboard-section--analytics-row.dashboard-section--balanced-row .dashboard-grid > .card > #lead-journey,
         .dashboard-section--analytics-row.dashboard-section--balanced-row .dashboard-grid > .card > #call-quality {
             overflow-y: auto;
-            overflow-x: hidden;
+            overflow-x: visible;
             -webkit-overflow-scrolling: touch;
             overscroll-behavior: contain;
             padding-bottom: 6px;
+            padding-right: 2px;
+            box-sizing: border-box;
         }
 
         .dashboard-section--analytics-row.dashboard-section--balanced-row
@@ -986,9 +988,16 @@
             left: 0;
             right: 0;
             height: 3px;
+            /* Span full card width (abspos is relative to padding box; cancel horizontal padding). */
+            margin-left: -14px;
+            margin-right: -14px;
+            width: auto;
+            border-radius: 11px 11px 0 0;
             background: linear-gradient(90deg, var(--primary), var(--secondary));
             opacity: 0;
             transition: opacity 0.3s ease;
+            pointer-events: none;
+            z-index: 1;
         }
 
         .card:hover::before {
@@ -1078,7 +1087,8 @@
             cursor: pointer;
             border-radius: 10px;
             padding: 6px 8px;
-            margin: 0 -8px;
+            /* Do not use negative margin: #lead-journey uses overflow-x:hidden and clips labels. */
+            margin: 0;
             transition: background 0.15s ease;
         }
 
@@ -3008,6 +3018,9 @@
             justify-content: space-between;
             align-items: baseline;
             gap: 12px;
+            flex-wrap: wrap;
+            row-gap: 4px;
+            min-width: 0;
         }
 
         .funnel-label-text {
@@ -3030,6 +3043,9 @@
             gap: 6px;
             flex-shrink: 0;
             font-variant-numeric: tabular-nums;
+            margin-left: auto;
+            text-align: right;
+            white-space: nowrap;
         }
 
         .funnel-value-num {
