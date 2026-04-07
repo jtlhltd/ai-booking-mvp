@@ -6289,6 +6289,8 @@
         const DASHBOARD_ACTIVITY_TZ = 'Europe/London';
         /** Sync with server.js RECENT_CALLS_FEED_CAP (recent calls query LIMIT). */
         const ACTIVITY_FEED_DISPLAY_CAP = 40;
+        /** Sync with server.js POST /api/leads/import slice cap; client batches larger imports. */
+        const LEADS_IMPORT_MAX_PER_REQUEST = 200;
         let activityFeedOutcomeFilter = 'all';
         let activityFeedHideStartFailures = true;
         let activityFeedGroupRetries = true;
@@ -13835,7 +13837,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             summary.innerHTML = `
                 <div style="font-weight:600;color:inherit;">Ready to import from ${escapeHtml(fileName)}</div>
                 <div style="margin-top:4px;">
-                    Rows: <b>${formatNumber(totalRows)}</b> · Importing: <b>${formatNumber(importedCount)}</b> · Skipped (no phone): <b>${formatNumber(skippedRows)}</b>${invalidPhones ? ` · Invalid phone: <b>${formatNumber(invalidPhones)}</b>` : ''}
+                    Rows: <b>${formatNumber(totalRows)}</b> · Importing: <b>${formatNumber(importedCount)}</b> · Skipped (no phone): <b>${formatNumber(skippedRows)}</b>${invalidPhones ? ` · Invalid phone: <b>${formatNumber(invalidPhones)}</b>` : ''}${importedCount > LEADS_IMPORT_MAX_PER_REQUEST ? ` · Sends in batches of up to <b>${formatNumber(LEADS_IMPORT_MAX_PER_REQUEST)}</b> rows` : ''}
                 </div>
                 <div style="margin-top:4px;">Detected columns: ${mappingParts.join(' · ')}</div>
                 ${(excelNumericPhones || multiNumberCells || warnings.length) ? `
@@ -13915,8 +13917,16 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 parts.push(`CRM total ${formatNumber(total)} unique lead(s)`);
             }
             parts.push(`${formatNumber(ins)} row(s) upserted`);
-            if (req != null && Number.isFinite(req) && req > 200) {
-                parts.push(`only first 200 of ${formatNumber(req)} rows processed`);
+            const importBatchCount =
+                payload.importBatchCount != null ? Number(payload.importBatchCount) : null;
+            if (
+                importBatchCount != null &&
+                Number.isFinite(importBatchCount) &&
+                importBatchCount > 1
+            ) {
+                parts.push(
+                    `uploaded in ${formatNumber(importBatchCount)} batches (up to ${formatNumber(LEADS_IMPORT_MAX_PER_REQUEST)} rows each)`
+                );
             }
             if (skip > 0) {
                 parts.push(`${formatNumber(skip)} skipped (invalid phone — need 10–15 digits, digits and + only)`);
@@ -13947,16 +13957,20 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             console.log('[LEAD IMPORT] Current client:', currentClient, 'URL:', window.location.href);
             
             if (currentClient === DEMO_CLIENT_KEY) {
-                const demoLeads = leads.map((lead, idx) => ({
-                    id: Date.now() + idx,
-                    name: lead.name || lead.phone,
-                    phone: lead.phone,
-                    service: lead.service || 'Lead Follow-Up',
-                    source: lead.source || 'Import',
-                    status: 'New (demo)',
-                    lastMessage: 'Added via CSV import.',
-                    timeAgo: 'Just now'
-                }));
+                const demoLeads = leads.map((lead, idx) => {
+                    const n = normalizePhoneCandidate(lead.phone || '');
+                    const phone = n.ok ? n.normalized : String(lead.phone || '').trim();
+                    return {
+                        id: Date.now() + idx,
+                        name: lead.name || phone,
+                        phone,
+                        service: lead.service || 'Lead Follow-Up',
+                        source: lead.source || 'Import',
+                        status: 'New (demo)',
+                        lastMessage: 'Added via CSV import.',
+                        timeAgo: 'Just now'
+                    };
+                });
                 // Merge imported leads with existing, keeping imported at top
                 const existingLeads = (dashboardData.recentLeads || []).filter(lead => 
                     !lead.phone || !demoLeads.some(dl => dl.phone === lead.phone)
@@ -14057,16 +14071,16 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 }
 
                 // Primary endpoint (newer deployments): POST /api/leads/import
-                // Server processes up to 200 per request; we chunk so bigger sheets "just work".
-                const batchSize = 200;
+                // Server caps rows per request; we chunk so bigger sheets "just work".
                 const batches = [];
-                for (let i = 0; i < mappedLeads.length; i += batchSize) {
-                    batches.push(mappedLeads.slice(i, i + batchSize));
+                for (let i = 0; i < mappedLeads.length; i += LEADS_IMPORT_MAX_PER_REQUEST) {
+                    batches.push(mappedLeads.slice(i, i + LEADS_IMPORT_MAX_PER_REQUEST));
                 }
                 let aggregated = {
                     ok: true,
                     inserted: 0,
                     requestedCount: mappedLeads.length,
+                    importBatchCount: batches.length,
                     processedBatchCount: 0,
                     skippedInvalidPhone: 0,
                     leads: []
@@ -14150,6 +14164,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     payload.inserted = Number(payload.results.imported) || 0;
                     payload.requestedCount = Number(payload.results.total) || mappedLeads.length;
                     payload.skippedInvalidPhone = Number(payload.results.invalid) || 0;
+                    payload.importBatchCount = 1;
                 }
                 if (Array.isArray(payload.leads) && payload.leads.length) {
                     dashboardData.recentLeads = [...payload.leads, ...(dashboardData.recentLeads || [])].slice(0, RECENT_LEADS_DASHBOARD_CAP);
