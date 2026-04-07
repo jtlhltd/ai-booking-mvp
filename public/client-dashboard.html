@@ -13961,14 +13961,20 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 setImportStatus('Uploading leads...');
                 showToast('Uploading', 'Importing leads...', 'info');
                 
-                const response = await fetch(`${BASE_URL}/api/leads/import`, {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    },
-                    body: requestBodyString
-                });
+                async function postJson(url, bodyStringOrObject) {
+                    const body = typeof bodyStringOrObject === 'string' ? bodyStringOrObject : JSON.stringify(bodyStringOrObject);
+                    return await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body
+                    });
+                }
+
+                // Primary endpoint (newer deployments): POST /api/leads/import
+                let response = await postJson(`${BASE_URL}/api/leads/import`, requestBodyString);
                 
                 console.log('[LEAD IMPORT] Response received:', {
                     status: response.status,
@@ -13985,18 +13991,46 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         errorText: errorText,
                         requestBody: { clientKey: requestBody.clientKey, leadCount: requestBody.leads.length }
                     });
-                    let errorData;
-                    try {
-                        errorData = JSON.parse(errorText);
-                    } catch {
-                        throw new Error(`Import failed: ${response.status} ${response.statusText}. ${errorText}`);
+
+                    // Back-compat fallback (older deployments): POST /api/import-leads/:clientKey expects { csvData, ... }
+                    // This helps when the dashboard HTML is newer than the server build.
+                    if (response.status === 404 || /Cannot POST|not found|route/i.test(errorText || '')) {
+                        console.warn('[LEAD IMPORT] Falling back to /api/import-leads/:clientKey');
+                        const header = 'name,phone,service,source';
+                        const csvLines = mappedLeads.map(l => {
+                            const esc = (v) => `"${String(v ?? '').replaceAll('"', '""')}"`;
+                            return [esc(l.name), esc(l.phone), esc(l.service), esc(l.source)].join(',');
+                        });
+                        const csvData = [header, ...csvLines].join('\n');
+                        response = await postJson(`${BASE_URL}/api/import-leads/${encodeURIComponent(currentClient)}`, {
+                            csvData,
+                            validatePhones: false,
+                            autoStartCampaign: true
+                        });
+                        if (!response.ok) {
+                            const fbText = await response.text();
+                            throw new Error(`Import failed (fallback): ${response.status} ${response.statusText}. ${fbText}`);
+                        }
+                    } else {
+                        let errorData;
+                        try {
+                            errorData = JSON.parse(errorText);
+                        } catch {
+                            throw new Error(`Import failed: ${response.status} ${response.statusText}. ${errorText}`);
+                        }
+                        throw new Error(errorData.error || errorData.message || 'Import failed');
                     }
-                    throw new Error(errorData.error || errorData.message || 'Import failed');
                 }
                 
                 const payload = await response.json();
                 if (!payload?.ok) {
                     throw new Error(payload.error || 'Import failed');
+                }
+                // Normalize legacy response shape (from /api/import-leads/:clientKey) for summary/toasts.
+                if (payload?.results && payload.inserted == null) {
+                    payload.inserted = Number(payload.results.imported) || 0;
+                    payload.requestedCount = Number(payload.results.total) || mappedLeads.length;
+                    payload.skippedInvalidPhone = Number(payload.results.invalid) || 0;
                 }
                 if (Array.isArray(payload.leads) && payload.leads.length) {
                     dashboardData.recentLeads = [...payload.leads, ...(dashboardData.recentLeads || [])].slice(0, RECENT_LEADS_DASHBOARD_CAP);
