@@ -2,4 +2,5 @@
 -- via migratePostgresLeadsPhoneMatchKey() in db.js (add column, backfill, dedupe, drop old unique, new index).
 --
 -- phone_match_key: tail-10 digit key (or full digit string when fewer than 10 digits), aligned with dialer analytics.
--- UNIQUE (client_key, phone_match_key) WHERE phone_match_key IS NOT NULL supersedes UNIQUE (client_key, phone).
+-- Postgres: partial unique index on (client_key, phone_match_key) WHERE phone_match_key IS NOT NULL.
+-- Supersedes UNIQUE (client_key, phone) after dedupe and constraint drop (see db.js).
