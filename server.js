@@ -10244,10 +10244,14 @@ app.post('/api/leads/import', async (req, res) => {
 
     const inserted = [];
     let skippedInvalidPhone = 0;
-    const leadsBatch = leads.slice(0, 200);
-    if (leads.length > 200) {
-      console.error('[LEAD IMPORT] Truncating import to first 200 rows (received %s)', leads.length);
+    const LEADS_IMPORT_MAX_PER_REQUEST = 200;
+    const leadsBatch = leads.slice(0, LEADS_IMPORT_MAX_PER_REQUEST);
+    const truncated = leads.length > LEADS_IMPORT_MAX_PER_REQUEST;
+    if (truncated) {
+      console.error('[LEAD IMPORT] Truncating import to first %s rows (received %s)', LEADS_IMPORT_MAX_PER_REQUEST, leads.length);
     }
+    let failedWrites = 0;
+    const failedWriteSamples = [];
     for (const payload of leadsBatch) {
       const phone = validateAndSanitizePhone(payload.phone);
       if (!phone) {
@@ -10286,6 +10290,14 @@ app.post('/api/leads/import', async (req, res) => {
           detail: insertError.detail,
           constraint: insertError.constraint
         });
+        failedWrites += 1;
+        if (failedWriteSamples.length < 5) {
+          failedWriteSamples.push({
+            phone,
+            message: insertError?.message || 'insert failed',
+            code: insertError?.code || null
+          });
+        }
         // Continue with other leads even if one fails
       }
     }
@@ -10408,8 +10420,14 @@ app.post('/api/leads/import', async (req, res) => {
       ok: true,
       inserted: inserted.length,
       requestedCount: leads.length,
+      receivedCount: leads.length,
+      processedCount: leadsBatch.length,
       processedBatchCount: leadsBatch.length,
+      maxPerRequest: LEADS_IMPORT_MAX_PER_REQUEST,
+      truncated,
       skippedInvalidPhone,
+      failedWrites,
+      failedWriteSamples: failedWriteSamples.length ? failedWriteSamples : undefined,
       crmLeadCountBefore,
       totalLeadsInCrm,
       netNewLeadsInCrm,

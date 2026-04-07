@@ -13896,6 +13896,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const ins = Number(payload.inserted) || 0;
             const req = payload.requestedCount != null ? Number(payload.requestedCount) : null;
             const skip = Number(payload.skippedInvalidPhone) || 0;
+            const truncated = payload.truncated === true;
+            const maxPerRequest =
+                payload.maxPerRequest != null && Number.isFinite(Number(payload.maxPerRequest))
+                    ? Number(payload.maxPerRequest)
+                    : LEADS_IMPORT_MAX_PER_REQUEST;
+            const failedWrites = Number(payload.failedWrites) || 0;
             const total = payload.totalLeadsInCrm != null ? Number(payload.totalLeadsInCrm) : null;
             const netNew =
                 payload.netNewLeadsInCrm != null && Number.isFinite(Number(payload.netNewLeadsInCrm))
@@ -13928,8 +13934,14 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     `uploaded in ${formatNumber(importBatchCount)} batches (up to ${formatNumber(LEADS_IMPORT_MAX_PER_REQUEST)} rows each)`
                 );
             }
+            if (truncated) {
+                parts.push(`server truncated request to first ${formatNumber(maxPerRequest)} row(s)`);
+            }
             if (skip > 0) {
                 parts.push(`${formatNumber(skip)} skipped (invalid phone — need 10–15 digits, digits and + only)`);
+            }
+            if (failedWrites > 0) {
+                parts.push(`${formatNumber(failedWrites)} row(s) failed to write (see server logs)`);
             }
             if (ins === 0 && (req || 0) > 0) {
                 parts.push('Nothing written — check phones or server logs');
@@ -14083,6 +14095,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     importBatchCount: batches.length,
                     processedBatchCount: 0,
                     skippedInvalidPhone: 0,
+                    failedWrites: 0,
+                    truncated: false,
+                    maxPerRequest: LEADS_IMPORT_MAX_PER_REQUEST,
                     leads: []
                 };
                 let lastPayload = null;
@@ -14092,14 +14107,49 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 for (let bi = 0; bi < batches.length; bi++) {
                     const batch = batches[bi];
                     setImportStatus(batches.length > 1 ? `Uploading leads… (batch ${bi + 1}/${batches.length})` : 'Uploading leads...');
-                    response = await postBatchedLeads(batch);
-                    if (!response.ok) break;
-                    const payloadPart = await response.json();
+
+                    let payloadPart = null;
+                    let errorText = '';
+                    let attempt = 0;
+                    while (attempt < 2) {
+                        attempt += 1;
+                        try {
+                            response = await postBatchedLeads(batch);
+                            if (!response.ok) {
+                                errorText = await response.text();
+                                throw new Error(`HTTP ${response.status} ${response.statusText}`);
+                            }
+                            payloadPart = await response.json();
+                            break;
+                        } catch (e) {
+                            const maybeTransient =
+                                !response ||
+                                (response && response.status >= 500) ||
+                                /network|fetch|timeout|ECONN|EAI_AGAIN/i.test(String(e?.message || e));
+                            if (attempt < 2 && maybeTransient) {
+                                console.warn('[LEAD IMPORT] Batch upload failed, retrying once:', { bi, attempt, error: e?.message || e });
+                                await new Promise(r => setTimeout(r, 800));
+                                continue;
+                            }
+                            throw new Error(
+                                `Batch ${bi + 1}/${batches.length} failed after saving ${aggregated.inserted} row(s). ` +
+                                `${e?.message || 'Import failed'}` +
+                                (errorText ? ` · ${errorText}` : '')
+                            );
+                        }
+                    }
+
                     lastPayload = payloadPart;
                     if (!payloadPart?.ok) throw new Error(payloadPart.error || 'Import failed');
+
                     aggregated.inserted += Number(payloadPart.inserted) || 0;
-                    aggregated.processedBatchCount += Number(payloadPart.processedBatchCount) || batch.length;
+                    aggregated.processedBatchCount += Number(payloadPart.processedBatchCount ?? payloadPart.processedCount) || batch.length;
                     aggregated.skippedInvalidPhone += Number(payloadPart.skippedInvalidPhone) || 0;
+                    aggregated.failedWrites += Number(payloadPart.failedWrites) || 0;
+                    aggregated.truncated = aggregated.truncated || payloadPart.truncated === true;
+                    if (payloadPart.maxPerRequest != null) {
+                        aggregated.maxPerRequest = Number(payloadPart.maxPerRequest) || aggregated.maxPerRequest;
+                    }
                     if (Array.isArray(payloadPart.leads) && payloadPart.leads.length) {
                         aggregated.leads.push(...payloadPart.leads);
                     }
