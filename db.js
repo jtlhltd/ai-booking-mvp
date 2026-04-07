@@ -974,9 +974,10 @@ import { getRetryManager } from './lib/retry-logic.js';
 async function query(text, params = []) {
   const cache = getCache();
   const cacheKey = `query:${text}:${JSON.stringify(params)}`;
+  const upper = text.trim().toUpperCase();
   
   // For SELECT queries, check cache first
-  if (text.trim().toUpperCase().startsWith('SELECT')) {
+  if (upper.startsWith('SELECT')) {
     const cached = await cache.get(cacheKey);
     if (cached) {
       console.log('[DB CACHE] Serving cached query result');
@@ -999,7 +1000,7 @@ async function query(text, params = []) {
         sqliteText = text.replace(/\$\d+/g, '?');
       }
       const stmt = sqlite.prepare(sqliteText);
-      if (text.trim().toUpperCase().startsWith('SELECT')) {
+      if (upper.startsWith('SELECT')) {
         result = { rows: stmt.all(...params) };
       } else {
         result = stmt.run(...params);
@@ -1008,7 +1009,7 @@ async function query(text, params = []) {
       // JSON fallback
       const jsonDb = new JsonFileDatabase('./data');
       const stmt = jsonDb.prepare(text);
-      if (text.trim().toUpperCase().startsWith('SELECT')) {
+      if (upper.startsWith('SELECT')) {
         result = { rows: stmt.all(...params) };
       } else {
         result = stmt.run(...params);
@@ -1033,9 +1034,21 @@ async function query(text, params = []) {
     }
     
     // Cache SELECT results for 5 minutes
-    if (text.trim().toUpperCase().startsWith('SELECT') && result.rows) {
+    if (upper.startsWith('SELECT') && result.rows) {
       await cache.set(cacheKey, result, 300000); // 5 minutes
       console.log('[DB CACHE] Cached query result');
+    }
+
+    // If we mutated data, cached SELECTs may now be stale. Clear query cache.
+    // This fixes endpoints (like lead import) that do "count before" -> write -> "count after"
+    // and were incorrectly returning the cached pre-write counts.
+    if (upper.startsWith('INSERT') || upper.startsWith('UPDATE') || upper.startsWith('DELETE') || upper.startsWith('UPSERT')) {
+      try {
+        await cache.clear();
+        console.log('[DB CACHE] Cleared after mutation');
+      } catch (e) {
+        // Cache is best-effort; never fail the write.
+      }
     }
     
     return result;
