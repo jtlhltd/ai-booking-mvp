@@ -10440,6 +10440,44 @@ app.post('/api/leads/import', async (req, res) => {
   }
 });
 
+/**
+ * Which of the given match keys already exist for this client (any lead row with same tail-10 / digit key).
+ * Used by outreach dashboard import preview (new vs existing).
+ */
+app.post('/api/leads/existing-match-keys', async (req, res) => {
+  try {
+    const clientKey = req.body?.clientKey;
+    const matchKeys = req.body?.matchKeys;
+    if (!clientKey || typeof clientKey !== 'string' || !Array.isArray(matchKeys)) {
+      return res.status(400).json({ error: 'clientKey and matchKeys array required' });
+    }
+    const keys = [...new Set(matchKeys.map((k) => String(k ?? '').trim()).filter(Boolean))].slice(0, 2500);
+    if (!keys.length) {
+      return res.json({ existingKeys: [] });
+    }
+    const result = await query(
+      `SELECT DISTINCT pk AS phone_key
+       FROM (
+         SELECT
+           CASE
+             WHEN LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
+             THEN RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
+             ELSE NULLIF(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), '')
+           END AS pk
+         FROM leads l
+         WHERE l.client_key = $1
+       ) x
+       WHERE pk IS NOT NULL AND pk = ANY($2::text[])`,
+      [clientKey, keys]
+    );
+    const existingKeys = (result.rows || []).map((r) => r.phone_key).filter(Boolean);
+    return res.json({ existingKeys });
+  } catch (err) {
+    console.error('[EXISTING MATCH KEYS]', err);
+    return res.status(500).json({ error: err.message || 'Server error' });
+  }
+});
+
 async function getIntegrationStatuses(clientKey) {
   const integrations = [
     {

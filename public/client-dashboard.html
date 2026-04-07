@@ -2119,6 +2119,17 @@
             background: rgba(37, 99, 235, 0.15);
             color: #2563eb;
         }
+
+        .lead-dup-badge {
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            padding: 2px 8px;
+            border-radius: 6px;
+            background: rgba(180, 83, 9, 0.14);
+            color: #b45309;
+        }
         .theme-toggle {
             border: 1px solid rgba(92,106,196,0.3);
             background: transparent;
@@ -5148,6 +5159,11 @@
             color: #93c5fd;
         }
 
+        body[data-theme="dark"] .lead-dup-badge {
+            background: rgba(251, 191, 36, 0.15);
+            color: #fbbf24;
+        }
+
         body[data-theme="dark"] .activity-item {
             background: #252b3d;
             border-color: rgba(92,106,196,0.5);
@@ -8058,6 +8074,45 @@ ${actionsRow}
             return hay.includes(q);
         }
 
+        /** Tail-10 digits when length≥10; else shorter digit run; else email:key. Matches server demo-dashboard phone_key / POST /api/leads/existing-match-keys. */
+        function leadPhoneMatchKeyForDedupe(phone, email) {
+            const d = String(phone ?? '').replace(/\D/g, '');
+            if (d.length >= 10) return d.slice(-10);
+            if (d.length >= 1) return d;
+            const em = String(email ?? '').trim().toLowerCase();
+            if (em.includes('@')) return `email:${em}`;
+            return null;
+        }
+
+        /** Map fullIndex → duplicate-of hint when another loaded row shares the same phone match key (e.g. +44 vs 07). */
+        function computeOutreachLeadDuplicateHints(allRows) {
+            const hints = new Map();
+            if (!Array.isArray(allRows) || allRows.length < 2) return hints;
+            const keyToItems = new Map();
+            allRows.forEach((lead, fullIndex) => {
+                const k = leadPhoneMatchKeyForDedupe(lead.phone, lead.email);
+                if (!k || String(k).startsWith('email:')) return;
+                if (!keyToItems.has(k)) keyToItems.set(k, []);
+                const idNum = lead.id != null && lead.id !== '' ? Number(lead.id) : NaN;
+                keyToItems.get(k).push({
+                    fullIndex,
+                    id: Number.isFinite(idNum) ? idNum : fullIndex
+                });
+            });
+            for (const [, items] of keyToItems) {
+                if (items.length < 2) continue;
+                const sorted = items.slice().sort((a, b) => a.id - b.id);
+                const can = sorted[0];
+                const canonLead = allRows[can.fullIndex];
+                const canonName = (canonLead && String(canonLead.name || '').trim()) || `Lead #${can.id}`;
+                for (let i = 1; i < sorted.length; i++) {
+                    const it = sorted[i];
+                    hints.set(it.fullIndex, { canonicalId: can.id, canonicalName: canonName });
+                }
+            }
+            return hints;
+        }
+
         function retryMatchesSearch(lead, q) {
             if (!q) return true;
             const hay = [
@@ -8113,7 +8168,7 @@ ${actionsRow}
             return `<div class="retry-queue-bar" role="status"><span>${mainHtml}</span></div>`;
         }
 
-        function buildLeadItemHtml(lead, fullIndex) {
+        function buildLeadItemHtml(lead, fullIndex, dupHint = null) {
             const st = (lead.status || '').trim().toLowerCase();
             const showNewBadge = st === 'new' || st.startsWith('new ');
             const statusRaw = (lead.status || 'In follow-up').trim();
@@ -8124,6 +8179,12 @@ ${actionsRow}
             const timeBit = lead.timeAgo
                 ? `<span class="lead-meta-sep" aria-hidden="true">·</span><span class="lead-meta-added">${escapeHtml(lead.timeAgo)}</span>`
                 : '';
+            const dupTitle = dupHint
+                ? `Same phone match as older row: ${dupHint.canonicalName} — consider merging or skipping extra dials`
+                : '';
+            const dupBadge = dupHint
+                ? `<span class="lead-dup-badge" title="${escapeHtml(dupTitle)}" aria-label="${escapeHtml(dupTitle)}">Same #</span>`
+                : '';
             const fi = String(fullIndex);
             return `
                 <div class="lead-item" data-lead-full-index="${fi}" role="button" tabindex="0">
@@ -8131,6 +8192,7 @@ ${actionsRow}
                         <div class="lead-item-titles">
                             <span class="lead-name" title="${escapeHtml(lead.name || 'Prospect')}">${escapeHtml(lead.name || 'Prospect')}</span>
                             ${showNewBadge ? '<span class="lead-new-badge" aria-label="New lead">New</span>' : ''}
+                            ${dupBadge}
                             ${statusBlock}
                         </div>
                         <button type="button" class="timeline-btn" data-lead-full-index="${fi}" aria-label="View journey for ${escapeHtml(lead.name || 'lead')}">Journey</button>
@@ -8174,6 +8236,9 @@ ${actionsRow}
             const funnelActive = isOutreachDashboardClient(currentClient) && leadsFunnelSegment !== 'all';
             const funnelLabels = { called: 'Dialed', reached: 'Reached', no_pickup: 'No pickup' };
             const funnelSuffix = funnelActive ? ` · ${funnelLabels[leadsFunnelSegment] || ''}` : '';
+
+            const outreachDupHints =
+                isOutreachDashboardClient(currentClient) ? computeOutreachLeadDuplicateHints(recentLeadsAllRows) : null;
 
             const entries = recentLeadsAllRows
                 .map((lead, fullIndex) => ({ lead, fullIndex }))
@@ -8222,7 +8287,13 @@ ${actionsRow}
                     </div>
                 `;
             } else {
-                container.innerHTML = barHtml + entries.map(({ lead, fullIndex }) => buildLeadItemHtml(lead, fullIndex)).join('');
+                container.innerHTML =
+                    barHtml +
+                    entries
+                        .map(({ lead, fullIndex }) =>
+                            buildLeadItemHtml(lead, fullIndex, outreachDupHints ? outreachDupHints.get(fullIndex) : null)
+                        )
+                        .join('');
             }
             currentLeads = recentLeadsAllRows;
             attachLeadModalEvents();
@@ -13811,6 +13882,25 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             return { leads: parsedLeads, totalRows, skippedRows, invalidPhones, multiNumberCells, excelNumericPhones, warnings, mapping };
         }
 
+        function countImportNewVsCrm(leads, existingSet) {
+            let nNew = 0;
+            let nCrm = 0;
+            let nFileDup = 0;
+            const seen = new Set();
+            for (const l of leads) {
+                const k = leadPhoneMatchKeyForDedupe(l.phone, l.email);
+                if (!k || String(k).startsWith('email:')) continue;
+                if (seen.has(k)) {
+                    nFileDup += 1;
+                    continue;
+                }
+                seen.add(k);
+                if (existingSet.has(k)) nCrm += 1;
+                else nNew += 1;
+            }
+            return { nNew, nCrm, nFileDup };
+        }
+
         function renderLeadImportPreview(pending) {
             const preview = document.getElementById('leadImportPreview');
             const summary = document.getElementById('leadImportPreviewSummary');
@@ -13826,6 +13916,11 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const warnings = Array.isArray(pending?.warnings) ? pending.warnings : [];
             const mapping = pending?.mapping || {};
             const fileName = pending?.fileName || 'file';
+            const leads = pending?.leads || [];
+            const outreachDedupe =
+                typeof isOutreachDashboardClient === 'function' &&
+                isOutreachDashboardClient(currentClient) &&
+                currentClient !== DEMO_CLIENT_KEY;
 
             const mappingParts = [
                 mapping.phone ? `phone → “${escapeHtml(mapping.phone)}”` : 'phone → (not detected)',
@@ -13834,32 +13929,82 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 mapping.source ? `source → “${escapeHtml(mapping.source)}”` : null
             ].filter(Boolean);
 
-            summary.innerHTML = `
+            const baseWarningsBlock =
+                excelNumericPhones || multiNumberCells || warnings.length
+                    ? `
+                    <div style="margin-top:6px;font-size:11px;color:var(--muted-text, #6b7280);">
+                        ${excelNumericPhones ? `Excel numeric phones: <b>${formatNumber(excelNumericPhones)}</b>. ` : ''}
+                        ${multiNumberCells ? `Multi-number cells: <b>${formatNumber(multiNumberCells)}</b>. ` : ''}
+                        ${warnings.map((w) => escapeHtml(w)).join(' ')}
+                    </div>
+                `
+                    : '';
+
+            const paintPreview = (existingSet, opts = {}) => {
+                const { loadingCrm } = opts;
+                const counts = outreachDedupe ? countImportNewVsCrm(leads, existingSet) : null;
+                const dedupeBlock = outreachDedupe
+                    ? loadingCrm
+                        ? `<div style="margin-top:6px;font-size:12px;color:var(--muted-text,#6b7280);">Checking CRM for numbers you already have…</div>`
+                        : `<div style="margin-top:6px;font-size:12px;">New vs CRM <span style="color:var(--muted-text,#6b7280);">(tail-10 match, same as dialer)</span>:
+                            <b>${formatNumber(counts.nNew)}</b> new ·
+                            <b>${formatNumber(counts.nCrm)}</b> already in CRM ·
+                            <b>${formatNumber(counts.nFileDup)}</b> duplicate row(s) in this file</div>`
+                    : '';
+
+                summary.innerHTML = `
                 <div style="font-weight:600;color:inherit;">Ready to import from ${escapeHtml(fileName)}</div>
                 <div style="margin-top:4px;">
                     Rows: <b>${formatNumber(totalRows)}</b> · Importing: <b>${formatNumber(importedCount)}</b> · Skipped (no phone): <b>${formatNumber(skippedRows)}</b>${invalidPhones ? ` · Invalid phone: <b>${formatNumber(invalidPhones)}</b>` : ''}${importedCount > LEADS_IMPORT_MAX_PER_REQUEST ? ` · Sends in batches of up to <b>${formatNumber(LEADS_IMPORT_MAX_PER_REQUEST)}</b> rows` : ''}
                 </div>
                 <div style="margin-top:4px;">Detected columns: ${mappingParts.join(' · ')}</div>
-                ${(excelNumericPhones || multiNumberCells || warnings.length) ? `
-                    <div style="margin-top:6px;font-size:11px;color:var(--muted-text, #6b7280);">
-                        ${(excelNumericPhones ? `Excel numeric phones: <b>${formatNumber(excelNumericPhones)}</b>. ` : '')}
-                        ${(multiNumberCells ? `Multi-number cells: <b>${formatNumber(multiNumberCells)}</b>. ` : '')}
-                        ${warnings.map(w => escapeHtml(w)).join(' ')}
-                    </div>
-                ` : ''}
+                ${dedupeBlock}
+                ${baseWarningsBlock}
             `;
 
-            const sample = (pending?.leads || []).slice(0, 10);
-            const rowsHtml = sample.map(l => `
+                const sample = leads.slice(0, 10);
+                const fileSeen = new Set();
+                const vsHeader = outreachDedupe
+                    ? `<th style="text-align:left;padding:8px;border-bottom:1px solid rgba(0,0,0,0.08);font-size:12px;">vs CRM</th>`
+                    : '';
+                const rowsHtml = sample
+                    .map((l) => {
+                        const k = leadPhoneMatchKeyForDedupe(l.phone, l.email);
+                        let vs = '—';
+                        let vsStyle = '';
+                        if (outreachDedupe && !loadingCrm && k && !String(k).startsWith('email:')) {
+                            if (fileSeen.has(k)) {
+                                vs = 'Dup in file';
+                                vsStyle = 'color:#991b1b;font-weight:600;';
+                            } else {
+                                fileSeen.add(k);
+                                if (existingSet.has(k)) {
+                                    vs = 'In CRM';
+                                    vsStyle = 'color:#b45309;font-weight:600;';
+                                } else {
+                                    vs = 'New';
+                                    vsStyle = 'color:#15803d;font-weight:600;';
+                                }
+                            }
+                        } else if (outreachDedupe && loadingCrm) {
+                            vs = '…';
+                            vsStyle = 'color:var(--muted-text,#6b7280);';
+                        }
+                        const vsCell = outreachDedupe
+                            ? `<td style="padding:6px 8px;border-bottom:1px solid rgba(0,0,0,0.06);font-size:12px;${vsStyle}">${escapeHtml(vs)}</td>`
+                            : '';
+                        return `
                 <tr>
                     <td style="padding:6px 8px;border-bottom:1px solid rgba(0,0,0,0.06);font-size:12px;">${escapeHtml(l.name || '')}</td>
                     <td style="padding:6px 8px;border-bottom:1px solid rgba(0,0,0,0.06);font-size:12px;">${escapeHtml(l.phone || '')}</td>
                     <td style="padding:6px 8px;border-bottom:1px solid rgba(0,0,0,0.06);font-size:12px;">${escapeHtml(l.service || '')}</td>
                     <td style="padding:6px 8px;border-bottom:1px solid rgba(0,0,0,0.06);font-size:12px;">${escapeHtml(l.source || '')}</td>
-                </tr>
-            `).join('');
+                    ${vsCell}
+                </tr>`;
+                    })
+                    .join('');
 
-            tableWrap.innerHTML = `
+                tableWrap.innerHTML = `
                 <table style="width:100%;border-collapse:collapse;background:rgba(255,255,255,0.75);border:1px solid rgba(0,0,0,0.06);border-radius:10px;overflow:hidden;">
                     <thead>
                         <tr>
@@ -13867,6 +14012,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             <th style="text-align:left;padding:8px;border-bottom:1px solid rgba(0,0,0,0.08);font-size:12px;">Phone</th>
                             <th style="text-align:left;padding:8px;border-bottom:1px solid rgba(0,0,0,0.08);font-size:12px;">Service</th>
                             <th style="text-align:left;padding:8px;border-bottom:1px solid rgba(0,0,0,0.08);font-size:12px;">Source</th>
+                            ${vsHeader}
                         </tr>
                     </thead>
                     <tbody>${rowsHtml || ''}</tbody>
@@ -13874,11 +14020,38 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 ${importedCount > 10 ? `<div style="margin-top:6px;font-size:11px;color:var(--muted-text, #6b7280);">Showing first 10 of ${formatNumber(importedCount)} leads.</div>` : ''}
             `;
 
-            preview.style.display = 'flex';
-            setImportStatus('Preview ready — confirm to upload.', 'info');
-            requestAnimationFrame(() => {
-                document.querySelector('.lead-import-preview-actions')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-            });
+                preview.style.display = 'flex';
+                setImportStatus(
+                    loadingCrm ? 'Checking CRM for existing numbers…' : 'Preview ready — confirm to upload.',
+                    'info'
+                );
+                requestAnimationFrame(() => {
+                    document.querySelector('.lead-import-preview-actions')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                });
+            };
+
+            if (!outreachDedupe) {
+                paintPreview(new Set(), { loadingCrm: false });
+                return;
+            }
+
+            paintPreview(new Set(), { loadingCrm: true });
+            const matchKeys = [
+                ...new Set(
+                    leads
+                        .map((l) => leadPhoneMatchKeyForDedupe(l.phone, l.email))
+                        .filter((k) => k && !String(k).startsWith('email:'))
+                )
+            ].slice(0, 2500);
+
+            fetch(`${BASE_URL}/api/leads/existing-match-keys`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ clientKey: currentClient, matchKeys })
+            })
+                .then((r) => (r.ok ? r.json() : { existingKeys: [] }))
+                .then((j) => paintPreview(new Set(j.existingKeys || []), { loadingCrm: false }))
+                .catch(() => paintPreview(new Set(), { loadingCrm: false }));
         }
 
         /** After import, server counts rows in Postgres — apply so KPIs update even if demo-dashboard refresh fails. */
