@@ -18957,6 +18957,85 @@ app.post('/admin/clear-call-queue', async (req, res) => {
   }
 });
 
+// Admin endpoint to delete leads by filter (safety valve for bad imports).
+// NOTE: This is intentionally admin-only (X-API-Key) and requires a createdAfter timestamp.
+app.post('/admin/purge-leads', async (req, res) => {
+  try {
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { clientKey, createdAfter, createdBefore, source, service } = req.body || {};
+    if (!clientKey || typeof clientKey !== 'string' || !clientKey.trim()) {
+      return res.status(400).json({ ok: false, error: 'clientKey is required' });
+    }
+    if (!createdAfter || typeof createdAfter !== 'string') {
+      return res.status(400).json({ ok: false, error: 'createdAfter (ISO string) is required' });
+    }
+
+    const after = new Date(createdAfter);
+    if (!Number.isFinite(after.getTime())) {
+      return res.status(400).json({ ok: false, error: 'createdAfter must be a valid ISO timestamp' });
+    }
+    const before = createdBefore ? new Date(createdBefore) : null;
+    if (before && !Number.isFinite(before.getTime())) {
+      return res.status(400).json({ ok: false, error: 'createdBefore must be a valid ISO timestamp' });
+    }
+
+    const params = [clientKey.trim(), after.toISOString()];
+    let idx = 3;
+    const where = [
+      'client_key = $1',
+      'created_at >= $2'
+    ];
+    if (before) {
+      where.push(`created_at <= $${idx}`);
+      params.push(before.toISOString());
+      idx += 1;
+    }
+    if (source && typeof source === 'string' && source.trim()) {
+      where.push(`source = $${idx}`);
+      params.push(source.trim());
+      idx += 1;
+    }
+    if (service && typeof service === 'string' && service.trim()) {
+      where.push(`service = $${idx}`);
+      params.push(service.trim());
+      idx += 1;
+    }
+
+    const countRes = await query(
+      `SELECT COUNT(*)::int AS n FROM leads WHERE ${where.join(' AND ')}`,
+      params
+    );
+    const toDelete = Number(countRes.rows?.[0]?.n ?? 0) || 0;
+
+    const delRes = await query(
+      `DELETE FROM leads WHERE ${where.join(' AND ')}`,
+      params
+    );
+
+    console.log('[ADMIN PURGE LEADS]', {
+      clientKey,
+      createdAfter: after.toISOString(),
+      createdBefore: before ? before.toISOString() : null,
+      source: source || null,
+      service: service || null,
+      deleted: toDelete
+    });
+
+    return res.json({
+      ok: true,
+      deleted: toDelete,
+      message: `Deleted ${toDelete} lead(s).`
+    });
+  } catch (e) {
+    console.error('[ADMIN PURGE LEADS ERROR]', e?.message || String(e));
+    return res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
 // Admin endpoint to get cost optimization metrics
 app.get('/admin/cost-optimization/:tenantKey', async (req, res) => {
   try {
