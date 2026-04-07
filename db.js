@@ -10,6 +10,7 @@ import {
 } from './lib/outbound-ab-live-pickup.js';
 import { getCallAnalyticsEnvOverrideIso } from './lib/call-analytics-cutoff.js';
 import { activeRowsMatchOutboundAbStopSlice } from './lib/outbound-ab-stop-slice.js';
+import { phoneMatchKey } from './lib/lead-phone-key.js';
 
 const dbType = (process.env.DB_TYPE || '').toLowerCase();
 let pool = null;
@@ -87,6 +88,124 @@ class JsonFileDatabase {
     const match = sql.match(/FROM\s+(\w+)/i) || sql.match(/INTO\s+(\w+)/i) || sql.match(/UPDATE\s+(\w+)/i);
     return match ? match[1] : 'leads';
   }
+}
+
+/**
+ * Canonical tail-10 (etc.) key on leads — replaces UNIQUE(client_key, phone) after backfill + dedupe.
+ */
+async function migratePostgresLeadsPhoneMatchKey(pgPool) {
+  await pgPool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'leads' AND column_name = 'phone_match_key'
+      ) THEN
+        ALTER TABLE leads ADD COLUMN phone_match_key TEXT;
+        RAISE NOTICE 'Added column leads.phone_match_key';
+      END IF;
+    END $$;
+  `);
+
+  await pgPool.query(`
+    UPDATE leads SET phone_match_key = (
+      CASE
+        WHEN LENGTH(regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g')) >= 10
+        THEN RIGHT(regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g'), 10)
+        ELSE NULLIF(regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g'), '')
+      END
+    )
+    WHERE phone_match_key IS NULL AND phone IS NOT NULL;
+  `);
+
+  await pgPool.query(`
+    UPDATE appointments a
+    SET lead_id = k.keep_id
+    FROM (
+      SELECT client_key, phone_match_key, MIN(id) AS keep_id
+      FROM leads
+      WHERE phone_match_key IS NOT NULL
+      GROUP BY client_key, phone_match_key
+      HAVING COUNT(*) > 1
+    ) k
+    INNER JOIN leads ld ON ld.client_key = k.client_key
+      AND ld.phone_match_key = k.phone_match_key
+      AND ld.id <> k.keep_id
+    WHERE a.lead_id = ld.id;
+  `);
+
+  await pgPool.query(`
+    DELETE FROM leads ld
+    USING (
+      SELECT client_key, phone_match_key, MIN(id) AS keep_id
+      FROM leads
+      WHERE phone_match_key IS NOT NULL
+      GROUP BY client_key, phone_match_key
+    ) k
+    WHERE ld.client_key = k.client_key
+      AND ld.phone_match_key = k.phone_match_key
+      AND ld.id <> k.keep_id;
+  `);
+
+  await pgPool.query(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'leads_client_key_phone_unique'
+      ) THEN
+        ALTER TABLE leads DROP CONSTRAINT leads_client_key_phone_unique;
+        RAISE NOTICE 'Dropped leads_client_key_phone_unique (superseded by phone_match_key)';
+      END IF;
+    END $$;
+  `);
+
+  await pgPool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS leads_client_phone_match_key_uniq
+    ON leads (client_key, phone_match_key)
+    WHERE phone_match_key IS NOT NULL;
+  `);
+
+  console.log('✅ leads.phone_match_key migration complete');
+}
+
+async function migrateSqliteLeadsPhoneMatchKey() {
+  if (!sqlite) return;
+  try {
+    sqlite.exec('ALTER TABLE leads ADD COLUMN phone_match_key TEXT');
+  } catch {
+    /* column may already exist */
+  }
+  const rows = sqlite.prepare('SELECT id, phone FROM leads').all();
+  const upd = sqlite.prepare('UPDATE leads SET phone_match_key = ? WHERE id = ?');
+  for (const r of rows) {
+    const k = phoneMatchKey(r.phone);
+    if (k) upd.run(k, r.id);
+  }
+  const dupGroups = sqlite.prepare(`
+    SELECT client_key, phone_match_key, MIN(id) AS keep_id
+    FROM leads
+    WHERE phone_match_key IS NOT NULL
+    GROUP BY client_key, phone_match_key
+    HAVING COUNT(*) > 1
+  `).all();
+  for (const g of dupGroups) {
+    sqlite.prepare(
+      `UPDATE appointments SET lead_id = ? WHERE lead_id IN (
+        SELECT id FROM leads WHERE client_key = ? AND phone_match_key = ? AND id != ?
+      )`
+    ).run(g.keep_id, g.client_key, g.phone_match_key, g.keep_id);
+    sqlite.prepare(
+      `DELETE FROM leads WHERE client_key = ? AND phone_match_key = ? AND id != ?`
+    ).run(g.client_key, g.phone_match_key, g.keep_id);
+  }
+  try {
+    sqlite.exec(
+      'CREATE UNIQUE INDEX IF NOT EXISTS leads_client_phone_match_key_uniq ON leads (client_key, phone_match_key)'
+    );
+  } catch (e) {
+    console.warn('⚠️  SQLite phone_match_key unique index:', e.message);
+  }
+  console.log('✅ SQLite leads.phone_match_key migration complete');
 }
 
 // ---------------------- Postgres ----------------------
@@ -818,6 +937,12 @@ async function initPostgres() {
     // Don't fail startup if migration fails - columns might already exist
   }
 
+  try {
+    await migratePostgresLeadsPhoneMatchKey(pool);
+  } catch (pkErr) {
+    console.error('⚠️  leads phone_match_key migration error (non-fatal):', pkErr.message);
+  }
+
     DB_PATH = 'postgres';
     console.log('✅ DB: Postgres connected');
     return 'postgres';
@@ -954,6 +1079,9 @@ export async function init() {
   // Use SQLite (when DB_TYPE is not 'postgres' or not set)
   console.log('🔄 Initializing SQLite...');
   const r = initSqlite();
+  await migrateSqliteLeadsPhoneMatchKey().catch((e) =>
+    console.warn('⚠️  SQLite phone_match_key migration:', e.message)
+  );
   await getCallAnalyticsFloorIso().catch((e) =>
     console.warn('[call_analytics_floor] init:', e.message)
   );
@@ -1376,18 +1504,21 @@ export async function deleteClient(clientKey) {
 
 // Extra helpers some libs call
 export async function findOrCreateLead({ tenantKey, phone, name = null, service = null, source = null }) {
+  const mk = phoneMatchKey(phone);
   let out = await query(
-    'SELECT * FROM leads WHERE client_key=$1 AND phone=$2 ORDER BY created_at DESC LIMIT 1',
-    [tenantKey, phone]
+    mk
+      ? 'SELECT * FROM leads WHERE client_key=$1 AND phone_match_key=$2 ORDER BY created_at DESC LIMIT 1'
+      : 'SELECT * FROM leads WHERE client_key=$1 AND phone=$2 ORDER BY created_at DESC LIMIT 1',
+    mk ? [tenantKey, mk] : [tenantKey, phone]
   );
   if (out.rows && out.rows.length) return out.rows[0];
   out = await query(
-    'INSERT INTO leads (client_key, name, phone, service, source) VALUES ($1,$2,$3,$4,$5) RETURNING *',
-    [tenantKey, name, phone, service, source]
+    'INSERT INTO leads (client_key, name, phone, phone_match_key, service, source) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
+    [tenantKey, name, phone, mk, service, source]
   );
   if (out.rows) return out.rows[0];
   const row = sqlite.prepare('SELECT last_insert_rowid() as id').get();
-  return { id: row?.id, client_key: tenantKey, name, phone, service, source };
+  return { id: row?.id, client_key: tenantKey, name, phone, phone_match_key: mk, service, source };
 }
 
 export async function getLeadsByClient(clientKey, limit = 100) {

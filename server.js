@@ -109,6 +109,8 @@ import twilio from 'twilio';
 import { createHash } from 'crypto';
 import { performanceMiddleware, getPerformanceMonitor } from './lib/performance-monitor.js';
 import { cacheMiddleware, getCache } from './lib/cache.js';
+import { phoneMatchKey } from './lib/lead-phone-key.js';
+import { isOptedOut } from './lib/lead-deduplication.js';
 
 import { makeJwtAuth, insertEvent, freeBusy } from './gcal.js';
 import {
@@ -8732,13 +8734,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       SELECT *
       FROM unnest($2::text[], $3::int[], $4::int[]) AS u(phone_key, calls_n, reached_max)
     )`;
-  /** Join key from leads.phone — must match call_phone_stats.phone_key. */
-  const dashboardLeadPhoneKeySql = `
-    CASE
-      WHEN LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
-      THEN RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
-      ELSE NULLIF(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), '')
-    END`;
+  /** Stored canonical key — must match call_phone_stats.phone_key (tail-10 from dialer). */
+  const dashboardLeadPhoneKeyRef = 'l.phone_match_key';
   /** Join key from calls.lead_phone for recent feed rows. */
   const dashboardCallRowPhoneKeySql = `
     CASE
@@ -8894,26 +8891,14 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       query(dashboardCallPhoneAggSql, [clientKey]),
       query(`
         WITH lead_lookup AS (
-          SELECT DISTINCT ON (phone_key)
-            phone_key,
+          SELECT DISTINCT ON (phone_match_key)
+            phone_match_key AS phone_key,
             name,
             service
-          FROM (
-            SELECT
-              CASE
-                WHEN LENGTH(regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g')) >= 10
-                THEN RIGHT(regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g'), 10)
-                ELSE NULLIF(regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g'), '')
-              END AS phone_key,
-              name,
-              service,
-              created_at
-            FROM leads
-            WHERE client_key = $1
-              AND regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') <> ''
-          ) z
-          WHERE z.phone_key IS NOT NULL
-          ORDER BY phone_key, created_at DESC NULLS LAST
+          FROM leads
+          WHERE client_key = $1
+            AND phone_match_key IS NOT NULL
+          ORDER BY phone_match_key, created_at DESC NULLS LAST
         )
         SELECT c.call_id, c.id, c.lead_phone, c.status, c.outcome, c.created_at, c.duration, c.recording_url,
                c.transcript, c.retry_attempt, c.metadata,
@@ -8948,7 +8933,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         ORDER BY c.created_at DESC
       `, [clientKey]),
       query(`
-        SELECT DISTINCT ON (l.phone)
+        SELECT DISTINCT ON (l.phone_match_key)
                l.created_at AS lead_created,
                fc.call_created AS call_created
         FROM leads l
@@ -8961,9 +8946,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
             AND (
               c.lead_phone = l.phone
               OR (
-                LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
-                AND RIGHT(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), 10)
-                  = RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
+                l.phone_match_key IS NOT NULL
+                AND RIGHT(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), 10) = l.phone_match_key
               )
             )
           ORDER BY c.created_at ASC
@@ -8971,7 +8955,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         ) fc ON true
         WHERE l.client_key = $1
           AND l.created_at >= NOW() - INTERVAL '30 days'
-        ORDER BY l.phone, fc.call_created ASC, l.created_at ASC
+        ORDER BY l.phone_match_key, fc.call_created ASC, l.created_at ASC
         LIMIT 500
       `, [clientKey]),
       query(`
@@ -9062,7 +9046,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         FROM leads l
         LEFT JOIN lead_engagement le
           ON le.client_key = l.client_key AND le.lead_phone = l.phone
-        LEFT JOIN call_phone_stats cs ON cs.phone_key = ${dashboardLeadPhoneKeySql}
+        LEFT JOIN call_phone_stats cs ON cs.phone_key = ${dashboardLeadPhoneKeyRef}
         WHERE l.client_key = $1
         ORDER BY l.created_at DESC
         LIMIT ${RECENT_LEADS_DASHBOARD_CAP}
@@ -10244,6 +10228,7 @@ app.post('/api/leads/import', async (req, res) => {
 
     const inserted = [];
     let skippedInvalidPhone = 0;
+    let skippedOptedOut = 0;
     const LEADS_IMPORT_MAX_PER_REQUEST = 200;
     const leadsBatch = leads.slice(0, LEADS_IMPORT_MAX_PER_REQUEST);
     const truncated = leads.length > LEADS_IMPORT_MAX_PER_REQUEST;
@@ -10259,22 +10244,33 @@ app.post('/api/leads/import', async (req, res) => {
         console.error('[LEAD IMPORT] Skipping lead with invalid phone:', payload);
         continue;
       }
+      if (await isOptedOut(phone)) {
+        skippedOptedOut += 1;
+        console.error('[LEAD IMPORT] Skipping opted-out phone:', phone);
+        continue;
+      }
+      const mk = phoneMatchKey(phone);
+      if (!mk) {
+        skippedInvalidPhone += 1;
+        console.error('[LEAD IMPORT] Skipping lead — no phone match key:', phone);
+        continue;
+      }
       const name = sanitizeInput(payload.name || phone, 120);
       const service = sanitizeInput(payload.service || 'Lead Follow-Up', 120);
       const source = sanitizeInput(payload.source || 'Import', 120);
       
-      console.error('[LEAD IMPORT] Inserting lead:', { clientKey, name, phone, service, source });
+      console.error('[LEAD IMPORT] Inserting lead:', { clientKey, name, phone, service, source, phone_match_key: mk });
       
       try {
         const result = await query(`
-          INSERT INTO leads (client_key, name, phone, service, source, status)
-          VALUES ($1, $2, $3, $4, $5, 'new')
-          ON CONFLICT (client_key, phone)
-          DO UPDATE SET name = EXCLUDED.name,
+          INSERT INTO leads (client_key, name, phone, phone_match_key, service, source, status)
+          VALUES ($1, $2, $3, $4, $5, $6, 'new')
+          ON CONFLICT (client_key, phone_match_key) DO UPDATE SET name = EXCLUDED.name,
+                        phone = EXCLUDED.phone,
                         service = COALESCE(EXCLUDED.service, leads.service),
                         source = COALESCE(EXCLUDED.source, leads.source)
           RETURNING id, name, phone, service, source, status, notes
-        `, [clientKey, name, phone, service, source]);
+        `, [clientKey, name, phone, mk, service, source]);
         
         if (result.rows?.[0]) {
           inserted.push(result.rows[0]);
@@ -10426,6 +10422,7 @@ app.post('/api/leads/import', async (req, res) => {
       maxPerRequest: LEADS_IMPORT_MAX_PER_REQUEST,
       truncated,
       skippedInvalidPhone,
+      skippedOptedOut,
       failedWrites,
       failedWriteSamples: failedWriteSamples.length ? failedWriteSamples : undefined,
       crmLeadCountBefore,
@@ -10456,18 +10453,11 @@ app.post('/api/leads/existing-match-keys', async (req, res) => {
       return res.json({ existingKeys: [] });
     }
     const result = await query(
-      `SELECT DISTINCT pk AS phone_key
-       FROM (
-         SELECT
-           CASE
-             WHEN LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
-             THEN RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
-             ELSE NULLIF(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), '')
-           END AS pk
-         FROM leads l
-         WHERE l.client_key = $1
-       ) x
-       WHERE pk IS NOT NULL AND pk = ANY($2::text[])`,
+      `SELECT DISTINCT phone_match_key AS phone_key
+       FROM leads
+       WHERE client_key = $1
+         AND phone_match_key IS NOT NULL
+         AND phone_match_key = ANY($2::text[])`,
       [clientKey, keys]
     );
     const existingKeys = (result.rows || []).map((r) => r.phone_key).filter(Boolean);
@@ -18358,18 +18348,21 @@ app.post('/api/calendar/check-book', async (req, res) => {
         await withTransaction(async (txQuery) => {
         // Get or create lead first
         let leadId = null;
+          const lmk = phoneMatchKey(lead.phone);
           const existingLead = await txQuery(
-          'SELECT id FROM leads WHERE client_key = $1 AND phone = $2 LIMIT 1',
-          [client?.clientKey, lead.phone]
-        );
+            lmk
+              ? 'SELECT id FROM leads WHERE client_key = $1 AND phone_match_key = $2 LIMIT 1'
+              : 'SELECT id FROM leads WHERE client_key = $1 AND phone = $2 LIMIT 1',
+            lmk ? [client?.clientKey, lmk] : [client?.clientKey, lead.phone]
+          );
         
         if (existingLead?.rows?.[0]?.id) {
           leadId = existingLead.rows[0].id;
         } else {
           // Create lead if it doesn't exist
             const newLead = await txQuery(
-            'INSERT INTO leads (client_key, name, phone, service, status, source) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
-            [client?.clientKey, lead.name, lead.phone, requestedService || 'appointment', 'booked', 'demo']
+            'INSERT INTO leads (client_key, name, phone, phone_match_key, service, status, source) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
+            [client?.clientKey, lead.name, lead.phone, lmk, requestedService || 'appointment', 'booked', 'demo']
           );
           if (newLead?.rows?.[0]?.id) {
             leadId = newLead.rows[0].id;

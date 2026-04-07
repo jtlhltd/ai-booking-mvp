@@ -8074,7 +8074,7 @@ ${actionsRow}
             return hay.includes(q);
         }
 
-        /** Tail-10 digits when length≥10; else shorter digit run; else email:key. Matches server demo-dashboard phone_key / POST /api/leads/existing-match-keys. */
+        /** Keep in sync with lib/lead-phone-key.js phoneMatchKey (+ email fallback for import rows only). */
         function leadPhoneMatchKeyForDedupe(phone, email) {
             const d = String(phone ?? '').replace(/\D/g, '');
             if (d.length >= 10) return d.slice(-10);
@@ -13946,10 +13946,11 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const dedupeBlock = outreachDedupe
                     ? loadingCrm
                         ? `<div style="margin-top:6px;font-size:12px;color:var(--muted-text,#6b7280);">Checking CRM for numbers you already have…</div>`
-                        : `<div style="margin-top:6px;font-size:12px;">New vs CRM <span style="color:var(--muted-text,#6b7280);">(tail-10 match, same as dialer)</span>:
+                        : `<div style="margin-top:6px;font-size:12px;">New vs CRM <span style="color:var(--muted-text,#6b7280);">(stored <code style="font-size:11px;">phone_match_key</code>, same as dialer)</span>:
                             <b>${formatNumber(counts.nNew)}</b> new ·
                             <b>${formatNumber(counts.nCrm)}</b> already in CRM ·
-                            <b>${formatNumber(counts.nFileDup)}</b> duplicate row(s) in this file</div>`
+                            <b>${formatNumber(counts.nFileDup)}</b> duplicate row(s) in this file
+                            <div style="margin-top:4px;font-size:11px;color:var(--muted-text,#6b7280);">After upload, the result line below is authoritative (net new + opted-out skips).</div></div>`
                     : '';
 
                 summary.innerHTML = `
@@ -14069,6 +14070,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const ins = Number(payload.inserted) || 0;
             const req = payload.requestedCount != null ? Number(payload.requestedCount) : null;
             const skip = Number(payload.skippedInvalidPhone) || 0;
+            const skipOpt = Number(payload.skippedOptedOut) || 0;
             const truncated = payload.truncated === true;
             const maxPerRequest =
                 payload.maxPerRequest != null && Number.isFinite(Number(payload.maxPerRequest))
@@ -14112,6 +14114,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
             if (skip > 0) {
                 parts.push(`${formatNumber(skip)} skipped (invalid phone — need 10–15 digits, digits and + only)`);
+            }
+            if (skipOpt > 0) {
+                parts.push(`${formatNumber(skipOpt)} skipped (opted out)`);
             }
             if (failedWrites > 0) {
                 parts.push(`${formatNumber(failedWrites)} row(s) failed to write (see server logs)`);
@@ -14268,6 +14273,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     importBatchCount: batches.length,
                     processedBatchCount: 0,
                     skippedInvalidPhone: 0,
+                    skippedOptedOut: 0,
                     failedWrites: 0,
                     truncated: false,
                     maxPerRequest: LEADS_IMPORT_MAX_PER_REQUEST,
@@ -14318,6 +14324,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     aggregated.inserted += Number(payloadPart.inserted) || 0;
                     aggregated.processedBatchCount += Number(payloadPart.processedBatchCount ?? payloadPart.processedCount) || batch.length;
                     aggregated.skippedInvalidPhone += Number(payloadPart.skippedInvalidPhone) || 0;
+                    aggregated.skippedOptedOut += Number(payloadPart.skippedOptedOut) || 0;
                     aggregated.failedWrites += Number(payloadPart.failedWrites) || 0;
                     aggregated.truncated = aggregated.truncated || payloadPart.truncated === true;
                     if (payloadPart.maxPerRequest != null) {
