@@ -13501,6 +13501,29 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
         let pendingLeadImport = null;
 
+        function normalizePhoneCandidate(rawPhone) {
+            const raw = String(rawPhone ?? '').trim();
+            if (!raw) return { ok: false, normalized: '', reason: 'empty', raw };
+            // Handle cells that contain multiple numbers like "+44... / 0123..." by picking the first valid candidate.
+            const tokens = raw
+                .split(/[\/;|]/g)
+                .map((t) => t.trim())
+                .filter(Boolean);
+            const candidates = tokens.length ? tokens : [raw];
+            for (const c of candidates) {
+                const cleaned = String(c).replace(/[^\d+]/g, '');
+                if (cleaned.length >= 10 && cleaned.length <= 15) {
+                    return { ok: true, normalized: cleaned, reason: 'ok', raw };
+                }
+            }
+            const cleaned = raw.replace(/[^\d+]/g, '');
+            return { ok: false, normalized: cleaned, reason: 'invalid_length', raw };
+        }
+
+        function isLikelyExcelNumericPhone(val) {
+            return typeof val === 'number' && Number.isFinite(val);
+        }
+
         function handleLeadImportFile(file) {
             setImportStatus(`Processing ${file.name}...`);
             const filename = String(file?.name || '').toLowerCase();
@@ -13524,13 +13547,17 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const totalRows = Number(parsed?.totalRows || 0);
                 const skippedRows = Number(parsed?.skippedRows || 0);
                 const mapping = parsed?.mapping || {};
+                const invalidPhones = Number(parsed?.invalidPhones || 0);
+                const multiNumberCells = Number(parsed?.multiNumberCells || 0);
+                const excelNumericPhones = Number(parsed?.excelNumericPhones || 0);
+                const warnings = Array.isArray(parsed?.warnings) ? parsed.warnings : [];
 
                 if (!leads.length) {
                     setImportStatus('No valid rows found (missing phone numbers?)', 'error');
                     return;
                 }
 
-                pendingLeadImport = { leads, fileName: file.name, totalRows, skippedRows, mapping };
+                pendingLeadImport = { leads, fileName: file.name, totalRows, skippedRows, invalidPhones, multiNumberCells, excelNumericPhones, warnings, mapping };
                 renderLeadImportPreview(pendingLeadImport);
             };
             reader.onerror = () => setImportStatus('Unable to read file', 'error');
@@ -13611,9 +13638,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         }
 
         function parseCsv(text) {
-            if (!text) return { leads: [], totalRows: 0, skippedRows: 0, mapping: {} };
+            if (!text) return { leads: [], totalRows: 0, skippedRows: 0, invalidPhones: 0, multiNumberCells: 0, warnings: [], mapping: {} };
             const lines = text.trim().split(/\r?\n/);
-            if (lines.length < 2) return { leads: [], totalRows: Math.max(0, lines.length - 1), skippedRows: Math.max(0, lines.length - 1), mapping: {} };
+            if (lines.length < 2) return { leads: [], totalRows: Math.max(0, lines.length - 1), skippedRows: Math.max(0, lines.length - 1), invalidPhones: 0, multiNumberCells: 0, warnings: [], mapping: {} };
             
             // Parse CSV line handling quoted values
             function parseCSVLine(line) {
@@ -13672,21 +13699,31 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             console.log('[CSV PARSE] Column mapping:', mapping);
             
             let skippedRows = 0;
+            let invalidPhones = 0;
+            let multiNumberCells = 0;
             const parsedLeads = lines
                 .map((line, lineNum) => {
                     if (!line.trim()) return null;
                     const cells = parseCSVLine(line);
                     
-                    const phone = cells[phoneIdx] || '';
-                    if (!phone || !phone.trim()) {
+                    const phoneRaw = cells[phoneIdx] || '';
+                    if (!phoneRaw || !String(phoneRaw).trim()) {
                         console.warn(`[CSV PARSE] Row ${lineNum + 2}: No phone number found, skipping`);
                         skippedRows += 1;
                         return null; // Skip rows without phone
                     }
+                    if (String(phoneRaw).includes('/') || String(phoneRaw).includes(';') || String(phoneRaw).includes('|')) {
+                        multiNumberCells += 1;
+                    }
+                    const normalized = normalizePhoneCandidate(phoneRaw);
+                    if (!normalized.ok) {
+                        invalidPhones += 1;
+                        return null;
+                    }
                     
                     return {
                         name: nameIdx >= 0 ? (cells[nameIdx] || '').trim() : '',
-                        phone: phone.trim(),
+                        phone: normalized.normalized,
                         service: serviceIdx >= 0 ? (cells[serviceIdx] || '').trim() : '',
                         source: sourceIdx >= 0 ? (cells[sourceIdx] || '').trim() : ''
                     };
@@ -13694,20 +13731,23 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 .filter(lead => lead && lead.phone && lead.phone.trim());
             
             console.log(`[CSV PARSE] Parsed ${parsedLeads.length} valid leads from ${lines.length} rows`);
-            return { leads: parsedLeads, totalRows, skippedRows, mapping };
+            const warnings = [];
+            if (multiNumberCells > 0) warnings.push(`${multiNumberCells} cell(s) contained multiple numbers (we used the first valid one).`);
+            if (invalidPhones > 0) warnings.push(`${invalidPhones} row(s) had invalid phone formatting (need 10–15 digits, digits and + only).`);
+            return { leads: parsedLeads, totalRows, skippedRows, invalidPhones, multiNumberCells, warnings, mapping };
         }
 
         function parseExcel(arrayBuffer) {
-            if (!arrayBuffer) return { leads: [], totalRows: 0, skippedRows: 0, mapping: {} };
+            if (!arrayBuffer) return { leads: [], totalRows: 0, skippedRows: 0, invalidPhones: 0, multiNumberCells: 0, excelNumericPhones: 0, warnings: [], mapping: {} };
             if (typeof XLSX === 'undefined') {
                 throw new Error('XLSX library not loaded');
             }
             const workbook = XLSX.read(arrayBuffer, { type: 'array' });
             const firstSheetName = workbook.SheetNames?.[0];
-            if (!firstSheetName) return { leads: [], totalRows: 0, skippedRows: 0, mapping: {} };
+            if (!firstSheetName) return { leads: [], totalRows: 0, skippedRows: 0, invalidPhones: 0, multiNumberCells: 0, excelNumericPhones: 0, warnings: [], mapping: {} };
             const sheet = workbook.Sheets[firstSheetName];
             const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-            if (!Array.isArray(rows) || rows.length < 2) return { leads: [], totalRows: Math.max(0, (rows?.length || 0) - 1), skippedRows: Math.max(0, (rows?.length || 0) - 1), mapping: {} };
+            if (!Array.isArray(rows) || rows.length < 2) return { leads: [], totalRows: Math.max(0, (rows?.length || 0) - 1), skippedRows: Math.max(0, (rows?.length || 0) - 1), invalidPhones: 0, multiNumberCells: 0, excelNumericPhones: 0, warnings: [], mapping: {} };
 
             const rawHeaders = rows[0].map(h => String(h || '').trim());
             const headers = rawHeaders.map(h => h.toLowerCase());
@@ -13728,7 +13768,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
             if (phoneIdx === -1) {
                 console.warn('[XLSX PARSE] No phone column found. Available headers:', rawHeaders);
-                return { leads: [], totalRows, skippedRows: totalRows, mapping: {} };
+                return { leads: [], totalRows, skippedRows: totalRows, invalidPhones: 0, multiNumberCells: 0, excelNumericPhones: 0, warnings: [], mapping: {} };
             }
 
             const mapping = {
@@ -13739,20 +13779,34 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             };
 
             let skippedRows = 0;
+            let invalidPhones = 0;
+            let multiNumberCells = 0;
+            let excelNumericPhones = 0;
             const parsedLeads = rows.slice(1).map((cells) => {
                 if (!Array.isArray(cells)) return null;
-                const phone = String(cells[phoneIdx] || '').trim();
-                if (!phone) { skippedRows += 1; return null; }
+                const phoneCell = cells[phoneIdx];
+                if (phoneCell == null || String(phoneCell).trim() === '') { skippedRows += 1; return null; }
+                if (isLikelyExcelNumericPhone(phoneCell)) excelNumericPhones += 1;
+                const rawPhone = isLikelyExcelNumericPhone(phoneCell) ? String(Math.trunc(phoneCell)) : String(phoneCell).trim();
+                if (String(rawPhone).includes('/') || String(rawPhone).includes(';') || String(rawPhone).includes('|')) {
+                    multiNumberCells += 1;
+                }
+                const normalized = normalizePhoneCandidate(rawPhone);
+                if (!normalized.ok) { invalidPhones += 1; return null; }
                 return {
                     name: nameIdx >= 0 ? String(cells[nameIdx] || '').trim() : '',
-                    phone,
+                    phone: normalized.normalized,
                     service: serviceIdx >= 0 ? String(cells[serviceIdx] || '').trim() : '',
                     source: sourceIdx >= 0 ? String(cells[sourceIdx] || '').trim() : ''
                 };
             }).filter(Boolean);
 
             console.log(`[XLSX PARSE] Parsed ${parsedLeads.length} leads from ${rows.length - 1} rows`);
-            return { leads: parsedLeads, totalRows, skippedRows, mapping };
+            const warnings = [];
+            if (excelNumericPhones > 0) warnings.push(`${excelNumericPhones} phone cell(s) looked numeric in Excel. If you see missing leading zeros, format the phone column as Text and re-export.`);
+            if (multiNumberCells > 0) warnings.push(`${multiNumberCells} cell(s) contained multiple numbers (we used the first valid one).`);
+            if (invalidPhones > 0) warnings.push(`${invalidPhones} row(s) had invalid phone formatting (need 10–15 digits, digits and + only).`);
+            return { leads: parsedLeads, totalRows, skippedRows, invalidPhones, multiNumberCells, excelNumericPhones, warnings, mapping };
         }
 
         function renderLeadImportPreview(pending) {
@@ -13764,6 +13818,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const importedCount = pending?.leads?.length || 0;
             const totalRows = pending?.totalRows || importedCount;
             const skippedRows = pending?.skippedRows || Math.max(0, totalRows - importedCount);
+            const invalidPhones = pending?.invalidPhones || 0;
+            const multiNumberCells = pending?.multiNumberCells || 0;
+            const excelNumericPhones = pending?.excelNumericPhones || 0;
+            const warnings = Array.isArray(pending?.warnings) ? pending.warnings : [];
             const mapping = pending?.mapping || {};
             const fileName = pending?.fileName || 'file';
 
@@ -13777,9 +13835,16 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             summary.innerHTML = `
                 <div style="font-weight:600;color:inherit;">Ready to import from ${escapeHtml(fileName)}</div>
                 <div style="margin-top:4px;">
-                    Rows: <b>${formatNumber(totalRows)}</b> · Importing: <b>${formatNumber(importedCount)}</b> · Skipped (no phone): <b>${formatNumber(skippedRows)}</b>
+                    Rows: <b>${formatNumber(totalRows)}</b> · Importing: <b>${formatNumber(importedCount)}</b> · Skipped (no phone): <b>${formatNumber(skippedRows)}</b>${invalidPhones ? ` · Invalid phone: <b>${formatNumber(invalidPhones)}</b>` : ''}
                 </div>
                 <div style="margin-top:4px;">Detected columns: ${mappingParts.join(' · ')}</div>
+                ${(excelNumericPhones || multiNumberCells || warnings.length) ? `
+                    <div style="margin-top:6px;font-size:11px;color:var(--muted-text, #6b7280);">
+                        ${(excelNumericPhones ? `Excel numeric phones: <b>${formatNumber(excelNumericPhones)}</b>. ` : '')}
+                        ${(multiNumberCells ? `Multi-number cells: <b>${formatNumber(multiNumberCells)}</b>. ` : '')}
+                        ${warnings.map(w => escapeHtml(w)).join(' ')}
+                    </div>
+                ` : ''}
             `;
 
             const sample = (pending?.leads || []).slice(0, 10);
@@ -13912,15 +13977,27 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 }
                 
                 // Map and filter leads
-                const mappedLeads = leads.map(lead => ({
-                    name: lead.name || '',
-                    phone: lead.phone || '',
-                    service: lead.service || 'Lead Follow-Up',
-                    source: lead.source || 'Import'
-                })).filter(lead => lead.phone && lead.phone.trim()); // Only send leads with valid phone numbers
+                let invalidPhonesLocal = 0;
+                const mappedLeads = leads.map(lead => {
+                    const normalized = normalizePhoneCandidate(lead.phone || '');
+                    if (!normalized.ok) {
+                        invalidPhonesLocal += 1;
+                        return null;
+                    }
+                    return {
+                        name: lead.name || '',
+                        phone: normalized.normalized,
+                        service: lead.service || 'Lead Follow-Up',
+                        source: lead.source || 'Import'
+                    };
+                }).filter(Boolean);
                 
                 if (!mappedLeads || mappedLeads.length === 0) {
                     throw new Error('No valid leads found. Ensure your CSV has a "phone" column with phone numbers.');
+                }
+
+                if (invalidPhonesLocal > 0) {
+                    showToast('Some rows skipped', `${invalidPhonesLocal} row(s) had invalid phone formatting and were skipped before upload.`, 'warning', 4500);
                 }
                 
                 const requestBody = { 
@@ -13973,8 +14050,51 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     });
                 }
 
+                async function postBatchedLeads(batchLeads) {
+                    const bodyObj = { clientKey: currentClient, leads: batchLeads };
+                    const bodyStr = JSON.stringify(bodyObj);
+                    return await postJson(`${BASE_URL}/api/leads/import`, bodyStr);
+                }
+
                 // Primary endpoint (newer deployments): POST /api/leads/import
-                let response = await postJson(`${BASE_URL}/api/leads/import`, requestBodyString);
+                // Server processes up to 200 per request; we chunk so bigger sheets "just work".
+                const batchSize = 200;
+                const batches = [];
+                for (let i = 0; i < mappedLeads.length; i += batchSize) {
+                    batches.push(mappedLeads.slice(i, i + batchSize));
+                }
+                let aggregated = {
+                    ok: true,
+                    inserted: 0,
+                    requestedCount: mappedLeads.length,
+                    processedBatchCount: 0,
+                    skippedInvalidPhone: 0,
+                    leads: []
+                };
+                let lastPayload = null;
+                let usedFallback = false;
+
+                let response = null;
+                for (let bi = 0; bi < batches.length; bi++) {
+                    const batch = batches[bi];
+                    setImportStatus(batches.length > 1 ? `Uploading leads… (batch ${bi + 1}/${batches.length})` : 'Uploading leads...');
+                    response = await postBatchedLeads(batch);
+                    if (!response.ok) break;
+                    const payloadPart = await response.json();
+                    lastPayload = payloadPart;
+                    if (!payloadPart?.ok) throw new Error(payloadPart.error || 'Import failed');
+                    aggregated.inserted += Number(payloadPart.inserted) || 0;
+                    aggregated.processedBatchCount += Number(payloadPart.processedBatchCount) || batch.length;
+                    aggregated.skippedInvalidPhone += Number(payloadPart.skippedInvalidPhone) || 0;
+                    if (Array.isArray(payloadPart.leads) && payloadPart.leads.length) {
+                        aggregated.leads.push(...payloadPart.leads);
+                    }
+                    // Keep latest totals for summary
+                    aggregated.totalLeadsInCrm = payloadPart.totalLeadsInCrm ?? aggregated.totalLeadsInCrm;
+                    aggregated.netNewLeadsInCrm = payloadPart.netNewLeadsInCrm ?? aggregated.netNewLeadsInCrm;
+                    aggregated.crmLeadCountBefore = payloadPart.crmLeadCountBefore ?? aggregated.crmLeadCountBefore;
+                    aggregated.callSummary = payloadPart.callSummary ?? aggregated.callSummary;
+                }
                 
                 console.log('[LEAD IMPORT] Response received:', {
                     status: response.status,
@@ -13996,6 +14116,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     // This helps when the dashboard HTML is newer than the server build.
                     if (response.status === 404 || /Cannot POST|not found|route/i.test(errorText || '')) {
                         console.warn('[LEAD IMPORT] Falling back to /api/import-leads/:clientKey');
+                        usedFallback = true;
                         const header = 'name,phone,service,source';
                         const csvLines = mappedLeads.map(l => {
                             const esc = (v) => `"${String(v ?? '').replaceAll('"', '""')}"`;
@@ -14021,11 +14142,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         throw new Error(errorData.error || errorData.message || 'Import failed');
                     }
                 }
-                
-                const payload = await response.json();
-                if (!payload?.ok) {
-                    throw new Error(payload.error || 'Import failed');
-                }
+
+                const payload = usedFallback ? await response.json() : aggregated;
+                if (!payload?.ok) throw new Error(payload.error || 'Import failed');
                 // Normalize legacy response shape (from /api/import-leads/:clientKey) for summary/toasts.
                 if (payload?.results && payload.inserted == null) {
                     payload.inserted = Number(payload.results.imported) || 0;
