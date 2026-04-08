@@ -550,6 +550,28 @@
             min-height: 0;
         }
 
+        /* Make list cards scroll internally (e.g. voicemail listener) */
+        .card.card-list {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .card.card-list > .thin-scroll {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+            padding-right: 6px;
+        }
+
+        /* Ensure voicemail listener gets a usable scroll height even when card grows */
+        #voicemail-listener.thin-scroll {
+            max-height: min(62vh, 560px);
+        }
+
         .card-metrics {
             min-height: 0;
         }
