@@ -1314,7 +1314,7 @@ app.get('/api/admin/search', async (req, res) => {
     
     // Search clients
     if (!type || type === 'clients') {
-      const clients = await listFullClients();
+      const clients = await listClientSummaries();
       results.clients = clients.filter(client => 
         client.displayName?.toLowerCase().includes(q.toLowerCase()) ||
         client.clientKey?.toLowerCase().includes(q.toLowerCase()) ||
@@ -1366,7 +1366,7 @@ app.get('/api/admin/filter', async (req, res) => {
     
     switch(type) {
       case 'clients':
-        const clients = await listFullClients();
+        const clients = await listClientSummaries();
         results = clients.filter(client => {
           if (filterObj.status && client.isEnabled !== (filterObj.status === 'active')) return false;
           if (filterObj.industry && client.industry !== filterObj.industry) return false;
@@ -1593,7 +1593,7 @@ app.get('/api/admin/analytics/advanced', async (req, res) => {
 
 // Helper function for analytics overview
 async function getAnalyticsOverview(startDate, endDate, clientKey) {
-  const clients = clientKey ? [await getFullClient(clientKey)] : await listFullClients();
+  const clients = clientKey ? [await getFullClient(clientKey)] : await listClientSummaries();
   
   let totalLeads = 0;
   let totalCalls = 0;
@@ -1643,7 +1643,7 @@ async function getAnalyticsOverview(startDate, endDate, clientKey) {
 
 // Helper function for analytics trends
 async function getAnalyticsTrends(startDate, endDate, clientKey) {
-  const clients = clientKey ? [await getFullClient(clientKey)] : await listFullClients();
+  const clients = clientKey ? [await getFullClient(clientKey)] : await listClientSummaries();
   const trends = [];
   
   // Generate daily trends for the period
@@ -1696,7 +1696,7 @@ async function getAnalyticsTrends(startDate, endDate, clientKey) {
 
 // Helper function for performance metrics
 async function getPerformanceMetrics(startDate, endDate, clientKey) {
-  const clients = clientKey ? [await getFullClient(clientKey)] : await listFullClients();
+  const clients = clientKey ? [await getFullClient(clientKey)] : await listClientSummaries();
   const metrics = [];
   
   for (const client of clients) {
@@ -1743,7 +1743,7 @@ async function getPerformanceMetrics(startDate, endDate, clientKey) {
 
 // Helper function for AI insights
 async function getAIInsights(startDate, endDate, clientKey) {
-  const clients = clientKey ? [await getFullClient(clientKey)] : await listFullClients();
+  const clients = clientKey ? [await getFullClient(clientKey)] : await listClientSummaries();
   const insights = [];
   
   for (const client of clients) {
@@ -1808,7 +1808,7 @@ async function getAIInsights(startDate, endDate, clientKey) {
 
 // Helper function for forecasts
 async function getForecasts(startDate, endDate, clientKey) {
-  const clients = clientKey ? [await getFullClient(clientKey)] : await listFullClients();
+  const clients = clientKey ? [await getFullClient(clientKey)] : await listClientSummaries();
   const forecasts = [];
   
   for (const client of clients) {
