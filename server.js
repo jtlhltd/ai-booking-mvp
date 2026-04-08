@@ -22371,6 +22371,7 @@ async function processVapiCallFromQueue(call) {
 async function queueNewLeadsForCalling() {
   try {
     console.log('[LEAD QUEUER] Checking for new leads to queue...');
+    const leadQueueBatchSize = Math.max(1, Math.min(300, parseInt(process.env.LEAD_QUEUE_BATCH_SIZE || '120', 10) || 120));
     
     // Get all clients
     const clients = await listFullClients();
@@ -22424,7 +22425,7 @@ async function queueNewLeadsForCalling() {
               AND (c.call_id IS NULL OR c.call_id NOT LIKE 'failed_q%')
             )
           ORDER BY l.created_at ASC
-          LIMIT 20
+          LIMIT ${leadQueueBatchSize}
         `, [client.clientKey]);
         
         if (newLeads.rows.length === 0) {
