@@ -388,6 +388,10 @@ async function initPostgres() {
     -- Aligns with TRIM(recording_url) filters in /api/call-recordings and /api/voicemails
     CREATE INDEX IF NOT EXISTS calls_client_recording_trim_created_idx ON calls (client_key, created_at DESC)
       WHERE recording_url IS NOT NULL AND trim(recording_url) <> '';
+    -- Catch-up requeue: find failed_q backlog efficiently
+    CREATE INDEX IF NOT EXISTS calls_failed_q_client_phone_created_desc_idx
+      ON calls (client_key, lead_phone, created_at DESC)
+      WHERE call_id LIKE 'failed_q%';
 
     -- Aggregated transcript insights + routing recommendations (per tenant)
     CREATE TABLE IF NOT EXISTS call_insights (

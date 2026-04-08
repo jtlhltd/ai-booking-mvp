@@ -22151,10 +22151,16 @@ async function processCallQueue() {
         `SELECT COUNT(*)::int AS n FROM call_queue WHERE status = 'pending'`
       );
       const pendingTotal = pendingCountRows?.[0]?.n ?? 0;
-      if (pendingTotal === 0) {
+
+      // Top-up threshold: keep some work queued so the processor doesn't go idle
+      const catchupMinPending = Math.max(0, Math.min(2000, parseInt(process.env.FAILED_Q_CATCHUP_MIN_PENDING || '100', 10) || 100));
+
+      if (pendingTotal <= catchupMinPending) {
         const catchupClientLimit = Math.max(1, Math.min(10, parseInt(process.env.FAILED_Q_CATCHUP_CLIENT_LIMIT || '3', 10) || 3));
         const catchupPerClient = Math.max(1, Math.min(200, parseInt(process.env.FAILED_Q_CATCHUP_BATCH_SIZE || '50', 10) || 50));
-        const lookbackDays = Math.max(1, Math.min(60, parseInt(process.env.FAILED_Q_CATCHUP_LOOKBACK_DAYS || '14', 10) || 14));
+        // Long catch-up horizon so we can recover after extended credit outages.
+        // Keep a cap to prevent pathologically slow scans if the table is huge.
+        const lookbackDays = Math.max(1, Math.min(730, parseInt(process.env.FAILED_Q_CATCHUP_LOOKBACK_DAYS || '365', 10) || 365));
 
         const { rows: clientsWithBacklog } = await query(
           `
