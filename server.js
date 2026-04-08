@@ -22090,7 +22090,7 @@ async function processVapiRetry(retry) {
 // Call queue processor - runs every 2 minutes to process pending calls
 async function processCallQueue() {
   try {
-    const { getPendingCalls, updateCallQueueStatus, cancelDuplicatePendingCalls } = await import('./db.js');
+    const { getPendingCalls, updateCallQueueStatus, cancelDuplicatePendingCalls, addToCallQueue } = await import('./db.js');
 
     // Self-heal: if the server restarted mid-item, rows can get stuck in 'processing' forever.
     // Reset anything older than 10 minutes back to 'pending' so it can be retried/deferred.
@@ -22140,6 +22140,92 @@ async function processCallQueue() {
       }
     } catch (e) {
       console.warn('[CALL QUEUE PROCESSOR] Failed to pull forward scheduled calls:', e?.message || e);
+    }
+
+    // Catch-up: if the queue is empty but we have a backlog of synthetic failed_q attempts
+    // (e.g. during a VAPI outage/credit depletion), requeue a small batch so work resumes.
+    // This intentionally does NOT depend on lead.status='new' because those leads may have been
+    // transitioned during earlier (failed) attempts.
+    try {
+      const { rows: pendingCountRows } = await query(
+        `SELECT COUNT(*)::int AS n FROM call_queue WHERE status = 'pending'`
+      );
+      const pendingTotal = pendingCountRows?.[0]?.n ?? 0;
+      if (pendingTotal === 0) {
+        const catchupClientLimit = Math.max(1, Math.min(10, parseInt(process.env.FAILED_Q_CATCHUP_CLIENT_LIMIT || '3', 10) || 3));
+        const catchupPerClient = Math.max(1, Math.min(200, parseInt(process.env.FAILED_Q_CATCHUP_BATCH_SIZE || '50', 10) || 50));
+        const lookbackDays = Math.max(1, Math.min(60, parseInt(process.env.FAILED_Q_CATCHUP_LOOKBACK_DAYS || '14', 10) || 14));
+
+        const { rows: clientsWithBacklog } = await query(
+          `
+            SELECT client_key, COUNT(DISTINCT lead_phone)::int AS n
+            FROM calls
+            WHERE call_id LIKE 'failed_q%'
+              AND created_at >= now() - ($1::int || ' days')::interval
+            GROUP BY client_key
+            ORDER BY n DESC
+            LIMIT $2
+          `,
+          [lookbackDays, catchupClientLimit]
+        );
+
+        for (const row of clientsWithBacklog) {
+          const clientKey = row.client_key;
+          const client = await getFullClient(clientKey);
+          if (client && !isBusinessHours(client)) continue;
+
+          const { rows: phones } = await query(
+            `
+              WITH candidates AS (
+                SELECT c.lead_phone, MAX(c.created_at) AS last_failed
+                FROM calls c
+                WHERE c.client_key = $1
+                  AND c.call_id LIKE 'failed_q%'
+                  AND c.created_at >= now() - ($2::int || ' days')::interval
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM calls ok
+                    WHERE ok.client_key = c.client_key
+                      AND ok.lead_phone = c.lead_phone
+                      AND ok.call_id NOT LIKE 'failed_q%'
+                      AND ok.created_at >= now() - ($2::int || ' days')::interval
+                  )
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM call_queue cq
+                    WHERE cq.client_key = c.client_key
+                      AND cq.lead_phone = c.lead_phone
+                      AND cq.status IN ('pending', 'processing')
+                  )
+                GROUP BY c.lead_phone
+                ORDER BY last_failed DESC
+                LIMIT $3
+              )
+              SELECT lead_phone FROM candidates
+            `,
+            [clientKey, lookbackDays, catchupPerClient]
+          );
+
+          if ((phones?.length || 0) === 0) continue;
+
+          let queued = 0;
+          for (const p of phones) {
+            const jitterMs = Math.floor(Math.random() * 120_000); // 0-120s
+            await addToCallQueue({
+              clientKey,
+              leadPhone: p.lead_phone,
+              priority: 5,
+              scheduledFor: new Date(Date.now() + jitterMs),
+              callType: 'vapi_call',
+              callData: { triggerType: 'catch_up_failed_q' }
+            });
+            queued++;
+          }
+          console.log('[CALL QUEUE PROCESSOR] Requeued failed_q backlog:', { clientKey, queued, lookbackDays });
+        }
+      }
+    } catch (e) {
+      console.warn('[CALL QUEUE PROCESSOR] Failed_q catch-up failed:', e?.message || e);
     }
 
     const pendingCalls = await getPendingCalls(20); // Process up to 20 calls at a time
