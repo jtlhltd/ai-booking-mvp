@@ -10087,7 +10087,7 @@ ${actionsRow}
                     ? `<a class="recording-open-link transcript-btn transcript-btn--compact" href="${escapeHtml(recHref)}" target="_blank" rel="noopener noreferrer" aria-label="Open call recording">Recording</a>`
                     : '';
                 const transcriptBtnHtml = activityCallHasTranscript(call)
-                    ? `<button type="button" class="transcript-btn transcript-btn--compact" onclick="viewTranscript(${transcriptIdJs}, ${transcriptNameJs})" aria-label="View call transcript">Transcript</button>`
+                    ? `<button type="button" class="transcript-btn transcript-btn--compact" data-view-transcript="${escapeHtml(transcriptId)}" data-view-name="${escapeHtml(call.name || 'Prospect')}" aria-label="View call transcript">Transcript</button>`
                     : '';
                 const actionsHtml = [recLinkHtml, transcriptBtnHtml].filter(Boolean).join('');
                 const detailsBlockHtml = buildActivityDetailsBlockHtml(call);
@@ -10412,6 +10412,19 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     </div>
                 `;
             }
+        }
+
+        // Delegate transcript button clicks (avoid inline onclick; works under stricter CSP)
+        if (!window.__transcriptDelegationBound) {
+            window.__transcriptDelegationBound = true;
+            document.addEventListener('click', (e) => {
+                const btn = e.target.closest('[data-view-transcript]');
+                if (!btn) return;
+                e.preventDefault();
+                const id = btn.getAttribute('data-view-transcript');
+                const name = btn.getAttribute('data-view-name') || 'Prospect';
+                if (id) viewTranscript(id, name);
+            });
         }
 
         function closeTranscriptModal() {
