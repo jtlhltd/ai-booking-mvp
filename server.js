@@ -21958,10 +21958,18 @@ async function processRetryQueue() {
     // Self-heal: reset stale processing retries so they can be deferred/retried.
     try {
       const { rowCount } = await query(`
-        UPDATE retry_queue
+        WITH stale AS (
+          SELECT id
+          FROM retry_queue
+          WHERE status = 'processing'
+            AND updated_at < NOW() - INTERVAL '10 minutes'
+          ORDER BY updated_at ASC
+          LIMIT 500
+        )
+        UPDATE retry_queue rq
         SET status = 'pending', updated_at = NOW()
-        WHERE status = 'processing'
-          AND updated_at < NOW() - INTERVAL '10 minutes'
+        FROM stale
+        WHERE rq.id = stale.id
       `);
       if ((rowCount || 0) > 0) {
         console.warn('[RETRY PROCESSOR] Reset stale processing rows to pending:', rowCount);
@@ -22088,10 +22096,18 @@ async function processCallQueue() {
     // Reset anything older than 10 minutes back to 'pending' so it can be retried/deferred.
     try {
       const { rowCount } = await query(`
-        UPDATE call_queue
+        WITH stale AS (
+          SELECT id
+          FROM call_queue
+          WHERE status = 'processing'
+            AND updated_at < NOW() - INTERVAL '10 minutes'
+          ORDER BY updated_at ASC
+          LIMIT 500
+        )
+        UPDATE call_queue cq
         SET status = 'pending', updated_at = NOW()
-        WHERE status = 'processing'
-          AND updated_at < NOW() - INTERVAL '10 minutes'
+        FROM stale
+        WHERE cq.id = stale.id
       `);
       if ((rowCount || 0) > 0) {
         console.warn('[CALL QUEUE PROCESSOR] Reset stale processing rows to pending:', rowCount);
