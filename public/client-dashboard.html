@@ -4249,19 +4249,65 @@
         .follow-up-queue-table th[data-col="business-name"] {
             position: sticky;
             left: 0;
-            z-index: 3;
-            background: var(--surface, #ffffff);
+            /* Above scrolling cells (later columns paint on top by default in some engines) */
+            z-index: 8;
+            background-color: var(--surface, #ffffff);
+            background-clip: padding-box;
+            /* Opaque column + edge shadow so horizontal scroll never shows through */
+            box-shadow: 6px 0 14px -8px rgba(16, 26, 62, 0.22);
             min-width: 11rem;
             max-width: 18rem;
         }
 
         .follow-up-queue-table th[data-col="business-name"] {
-            z-index: 6;
+            /* Corner: sticky top + sticky left — must sit above other headers and body cells */
+            z-index: 14;
+            box-shadow:
+                6px 0 14px -8px rgba(16, 26, 62, 0.22),
+                0 2px 6px rgba(16, 26, 62, 0.07);
         }
 
         body[data-theme="dark"] .follow-up-queue-table td[data-col="business-name"],
         body[data-theme="dark"] .follow-up-queue-table th[data-col="business-name"] {
-            background: var(--surface, #252b3d);
+            background-color: var(--surface, #252b3d);
+            box-shadow: 6px 0 18px -8px rgba(0, 0, 0, 0.45);
+        }
+
+        body[data-theme="dark"] .follow-up-queue-table th[data-col="business-name"] {
+            box-shadow:
+                6px 0 18px -8px rgba(0, 0, 0, 0.45),
+                0 2px 8px rgba(0, 0, 0, 0.25);
+        }
+
+        /* tr:hover td uses translucent bg — without this, sticky column becomes see-through and text overlaps */
+        .follow-up-queue-table tr:hover td[data-col="business-name"] {
+            background-color: var(--surface, #ffffff);
+            box-shadow:
+                6px 0 14px -8px rgba(16, 26, 62, 0.22),
+                inset 0 0 0 9999px rgba(92, 106, 196, 0.05);
+        }
+
+        .follow-up-queue-table thead tr:hover th[data-col="business-name"] {
+            background-color: var(--surface, #ffffff);
+            background-image: linear-gradient(180deg, rgba(92, 106, 196, 0.09) 0%, rgba(92, 106, 196, 0.04) 100%);
+            box-shadow:
+                6px 0 14px -8px rgba(16, 26, 62, 0.22),
+                0 2px 6px rgba(16, 26, 62, 0.07);
+        }
+
+        body[data-theme="dark"] .follow-up-queue-table tr:hover td[data-col="business-name"] {
+            background-color: var(--surface, #252b3d);
+            box-shadow:
+                6px 0 18px -8px rgba(0, 0, 0, 0.45),
+                inset 0 0 0 9999px rgba(124, 134, 220, 0.08);
+        }
+
+        body[data-theme="dark"] .follow-up-queue-table thead tr:hover th[data-col="business-name"] {
+            background-color: var(--surface, #252b3d);
+            background-image: linear-gradient(180deg, rgba(124, 134, 220, 0.14) 0%, rgba(124, 134, 220, 0.06) 100%);
+            box-shadow:
+                6px 0 18px -8px rgba(0, 0, 0, 0.45),
+                0 2px 8px rgba(0, 0, 0, 0.25);
         }
 
         .follow-up-queue-table td[data-col="decision-maker"],
