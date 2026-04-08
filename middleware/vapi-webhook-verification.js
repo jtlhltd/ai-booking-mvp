@@ -13,9 +13,21 @@ import crypto from 'crypto';
  */
 export function verifyVapiSignature(req, res, next) {
   const secret = process.env.VAPI_WEBHOOK_SECRET;
+  const requireInProd =
+    String(process.env.VAPI_WEBHOOK_REQUIRE_SIGNATURE || '').trim() !== ''
+      ? !['0', 'false', 'no'].includes(String(process.env.VAPI_WEBHOOK_REQUIRE_SIGNATURE).trim().toLowerCase())
+      : String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
   
   // If no secret is configured, skip verification (for development/testing)
   if (!secret) {
+    if (requireInProd) {
+      console.error('[VAPI WEBHOOK] Missing VAPI_WEBHOOK_SECRET in a signature-required environment');
+      return res.status(500).json({
+        ok: false,
+        error: 'Webhook verification misconfigured',
+        message: 'VAPI_WEBHOOK_SECRET must be configured to accept VAPI webhooks'
+      });
+    }
     console.warn('[VAPI WEBHOOK] No VAPI_WEBHOOK_SECRET configured, skipping signature verification');
     return next();
   }
@@ -50,10 +62,15 @@ export function verifyVapiSignature(req, res, next) {
     .digest('hex');
   
   // Use constant-time comparison to prevent timing attacks
-  const isValid = crypto.timingSafeEqual(
-    Buffer.from(signature),
-    Buffer.from(expectedSignature)
-  );
+  let isValid = false;
+  try {
+    isValid = crypto.timingSafeEqual(
+      Buffer.from(signature),
+      Buffer.from(expectedSignature)
+    );
+  } catch {
+    isValid = false;
+  }
   
   if (!isValid) {
     console.error('[VAPI WEBHOOK] Invalid signature', {

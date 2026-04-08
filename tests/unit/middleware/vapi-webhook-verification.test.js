@@ -8,12 +8,26 @@ import { verifyVapiSignature } from '../../../middleware/vapi-webhook-verificati
 describe('VAPI Webhook Signature Verification', () => {
   const originalSecret = process.env.VAPI_WEBHOOK_SECRET;
   const secret = 'test-secret-key-12345';
+  const originalNodeEnv = process.env.NODE_ENV;
+  const originalRequire = process.env.VAPI_WEBHOOK_REQUIRE_SIGNATURE;
   
   beforeEach(() => {
     process.env.VAPI_WEBHOOK_SECRET = secret;
+    process.env.NODE_ENV = 'test';
+    delete process.env.VAPI_WEBHOOK_REQUIRE_SIGNATURE;
   });
   
   afterEach(() => {
+    if (originalNodeEnv) {
+      process.env.NODE_ENV = originalNodeEnv;
+    } else {
+      delete process.env.NODE_ENV;
+    }
+    if (originalRequire) {
+      process.env.VAPI_WEBHOOK_REQUIRE_SIGNATURE = originalRequire;
+    } else {
+      delete process.env.VAPI_WEBHOOK_REQUIRE_SIGNATURE;
+    }
     if (originalSecret) {
       process.env.VAPI_WEBHOOK_SECRET = originalSecret;
     } else {
@@ -39,6 +53,28 @@ describe('VAPI Webhook Signature Verification', () => {
     
     expect(next).toHaveBeenCalled();
     expect(res.status).not.toHaveBeenCalled();
+  });
+
+  test('should reject if secret missing when signature required', () => {
+    process.env.NODE_ENV = 'production';
+    delete process.env.VAPI_WEBHOOK_SECRET;
+    delete process.env.VAPI_WEBHOOK_REQUIRE_SIGNATURE;
+
+    const req = {
+      get: () => null,
+      body: { test: 'data' },
+      correlationId: 'test-123'
+    };
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn()
+    };
+    const next = jest.fn();
+
+    verifyVapiSignature(req, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(next).not.toHaveBeenCalled();
   });
   
   test('should reject request with missing signature', () => {
