@@ -22116,6 +22116,32 @@ async function processCallQueue() {
       console.warn('[CALL QUEUE PROCESSOR] Failed to reset stale processing rows:', e?.message || e);
     }
 
+    // Catch-up: if we have pending calls scheduled later today, pull a small batch forward
+    // so the system starts working immediately (e.g. after VAPI credits are restored).
+    try {
+      const { rowCount } = await query(`
+        WITH to_pull AS (
+          SELECT id
+          FROM call_queue
+          WHERE status = 'pending'
+            AND call_type = 'vapi_call'
+            AND scheduled_for > NOW()
+            AND scheduled_for <= NOW() + INTERVAL '24 hours'
+          ORDER BY scheduled_for ASC
+          LIMIT 10
+        )
+        UPDATE call_queue cq
+        SET scheduled_for = NOW(), updated_at = NOW()
+        FROM to_pull
+        WHERE cq.id = to_pull.id
+      `);
+      if ((rowCount || 0) > 0) {
+        console.log('[CALL QUEUE PROCESSOR] Pulled forward scheduled calls:', rowCount);
+      }
+    } catch (e) {
+      console.warn('[CALL QUEUE PROCESSOR] Failed to pull forward scheduled calls:', e?.message || e);
+    }
+
     const pendingCalls = await getPendingCalls(20); // Process up to 20 calls at a time
     
     if (pendingCalls.length === 0) {
@@ -22419,10 +22445,14 @@ async function queueNewLeadsForCalling() {
             const scheduledBaseline = shouldCallNow
               ? new Date()
               : getNextBusinessHour(client);
-            const scheduledFor = await scheduleAtOptimalCallWindow(client, routing, scheduledBaseline, {
-              fallbackTz: TIMEZONE,
-              clientKey: client.clientKey
-            });
+            // If we're within business hours, schedule immediately (with small jitter) rather than pushing
+            // everything to a single "optimal window" later in the day.
+            const scheduledFor = shouldCallNow
+              ? new Date(Date.now() + Math.floor(Math.random() * 120_000)) // 0-120s jitter
+              : await scheduleAtOptimalCallWindow(client, routing, scheduledBaseline, {
+                  fallbackTz: TIMEZONE,
+                  clientKey: client.clientKey
+                });
 
             // Calculate priority based on lead age and source
             const leadAge = Math.floor((Date.now() - new Date(lead.created_at).getTime()) / (1000 * 60 * 60)); // hours
