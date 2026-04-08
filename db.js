@@ -557,7 +557,7 @@ async function initPostgres() {
     CREATE INDEX IF NOT EXISTS retry_queue_pending_webhook_type_scheduled_idx
       ON retry_queue (retry_type varchar_pattern_ops, scheduled_for ASC)
       WHERE status = 'pending';
-    -- Prefix LIKE 'appointment_reminder%' / 'follow_up_%' + pending + scheduled range (lib/database-health.js)
+    -- Prefix LIKE 'appointment\_reminder%' / 'follow\_up\_%' ESCAPE '\\' + pending + scheduled (lib/database-health.js)
     CREATE INDEX IF NOT EXISTS retry_queue_pending_reason_scheduled_idx
       ON retry_queue (retry_reason varchar_pattern_ops, scheduled_for ASC)
       WHERE status = 'pending';
@@ -2364,7 +2364,7 @@ export async function cancelPendingFollowUps(clientKey, leadPhone) {
     UPDATE retry_queue 
     SET status = 'cancelled', updated_at = now()
     WHERE client_key = $1 AND lead_phone = $2 AND status = 'pending'
-      AND retry_reason LIKE 'follow_up_%'
+      AND retry_reason LIKE 'follow\\_up\\_%' ESCAPE '\\'
   `, [clientKey, leadPhone]);
 }
 
