@@ -541,6 +541,10 @@ async function initPostgres() {
     CREATE INDEX IF NOT EXISTS retry_queue_pending_scheduled_idx ON retry_queue (scheduled_for ASC) WHERE status = 'pending';
     -- Prefix LIKE 'webhook_%' + pending (lib/webhook-retry.js)
     CREATE INDEX IF NOT EXISTS retry_queue_pending_type_pattern_idx ON retry_queue (retry_type varchar_pattern_ops) WHERE status = 'pending';
+    -- Webhook retry due scan: pending + retry_type LIKE 'webhook_%' + ORDER BY scheduled_for
+    CREATE INDEX IF NOT EXISTS retry_queue_pending_webhook_type_scheduled_idx
+      ON retry_queue (retry_type varchar_pattern_ops, scheduled_for ASC)
+      WHERE status = 'pending';
     -- Prefix LIKE 'appointment_reminder%' / 'follow_up_%' + pending + scheduled range (lib/database-health.js)
     CREATE INDEX IF NOT EXISTS retry_queue_pending_reason_scheduled_idx
       ON retry_queue (retry_reason varchar_pattern_ops, scheduled_for ASC)
@@ -1306,6 +1310,42 @@ function mapTenantRow(r) {
 const listFullClientsCache = { data: null, expires: 0 };
 const LIST_FULL_CLIENTS_TTL = 60 * 1000; // 1 minute
 
+// Summary list cache: avoids large JSON columns for admin/analytics pages
+const listClientSummariesCache = { data: null, expires: 0 };
+const LIST_CLIENT_SUMMARIES_TTL = 60 * 1000; // 1 minute
+
+export async function listClientSummaries() {
+  if (listClientSummariesCache.data !== null && Date.now() < listClientSummariesCache.expires) {
+    return listClientSummariesCache.data;
+  }
+
+  const { rows } = await query(`
+    SELECT client_key, display_name, timezone, locale, is_enabled, created_at,
+           vapi_json, white_label_config
+    FROM tenants
+    ORDER BY created_at DESC
+  `);
+
+  const data = rows.map(r => ({
+    clientKey: r.client_key,
+    displayName: r.display_name,
+    timezone: r.timezone,
+    locale: r.locale,
+    isEnabled: r.is_enabled,
+    createdAt: r.created_at,
+    email: (r?.vapi_json && typeof r.vapi_json === 'object')
+      ? (r.vapi_json.email || r.vapi_json.client_email || null)
+      : null,
+    industry: (r?.white_label_config && typeof r.white_label_config === 'object')
+      ? (r.white_label_config.industry || null)
+      : null
+  }));
+
+  listClientSummariesCache.data = data;
+  listClientSummariesCache.expires = Date.now() + LIST_CLIENT_SUMMARIES_TTL;
+  return data;
+}
+
 export async function listFullClients() {
   if (listFullClientsCache.data !== null && Date.now() < listFullClientsCache.expires) {
     return listFullClientsCache.data;
@@ -1374,6 +1414,8 @@ export function invalidateClientCache(clientKey) {
   // Invalidate list cache so new/updated clients appear
   listFullClientsCache.data = null;
   listFullClientsCache.expires = 0;
+  listClientSummariesCache.data = null;
+  listClientSummariesCache.expires = 0;
 }
 
 /**

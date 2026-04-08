@@ -117,6 +117,7 @@ import {
   init as initDb,
   upsertFullClient,
   getFullClient,
+  listClientSummaries,
   listFullClients,
   deleteClient,
   DB_PATH,
@@ -235,7 +236,7 @@ io.on('connection', (socket) => {
 
 // Helper functions for real-time data
 async function getBusinessStats() {
-  const clients = await listFullClients();
+  const clients = await listClientSummaries();
   const activeClients = clients.filter(c => c.isEnabled).length;
   const monthlyRevenue = activeClients * 500;
   
@@ -299,7 +300,7 @@ async function getRecentActivity() {
 }
 
 async function getClientsData() {
-  const clients = await listFullClients();
+  const clients = await listClientSummaries();
   const clientData = [];
   
   for (const client of clients) {
@@ -340,7 +341,7 @@ async function getClientsData() {
 }
 
 async function getCallsData() {
-  const clients = await listFullClients();
+  const clients = await listClientSummaries();
   
   let totalCalls = 0;
   let totalBookings = 0;
@@ -388,7 +389,7 @@ async function getCallsData() {
 }
 
 async function getAnalyticsData() {
-  const clients = await listFullClients();
+  const clients = await listClientSummaries();
   
   let totalLeads = 0;
   let totalCalls = 0;
@@ -610,7 +611,7 @@ app.get('/pipeline', (req, res) => {
 // Admin API endpoints
 app.get('/api/admin/business-stats', async (req, res) => {
   try {
-    const clients = await listFullClients();
+    const clients = await listClientSummaries();
     const activeClients = clients.filter(c => c.isEnabled).length;
     
     // Calculate monthly revenue based on active clients (£500 per client per month)
@@ -757,7 +758,7 @@ app.get('/api/admin/recent-activity', async (req, res) => {
 
 app.get('/api/admin/clients', async (req, res) => {
   try {
-    const clients = await listFullClients();
+    const clients = await listClientSummaries();
     const clientData = [];
     
     for (const client of clients) {
@@ -820,7 +821,7 @@ app.get('/api/admin/clients', async (req, res) => {
 app.get('/api/admin/calls', async (req, res) => {
   try {
     const { getCallsByTenant } = await import('./db.js');
-    const clients = await listFullClients();
+    const clients = await listClientSummaries();
     
     // Get real call data
     let totalCalls = 0;
@@ -878,7 +879,7 @@ app.get('/api/admin/calls', async (req, res) => {
 
 app.get('/api/admin/analytics', async (req, res) => {
   try {
-    const clients = await listFullClients();
+    const clients = await listClientSummaries();
     
     // Calculate conversion funnel
     let totalLeads = 0;
