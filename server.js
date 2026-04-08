@@ -22218,10 +22218,18 @@ async function processVapiCallFromQueue(call) {
       throw new Error('Client not found');
     }
     
-    // Get existing lead for context
-    const clients = await listFullClients();
-    const leads = clients.flatMap(c => c.leads || []);
-    const existingLead = leads.find(l => l.phone === leadPhone && l.tenantKey === clientKey);
+    // Get existing lead for context (DB-backed; avoids loading all tenants)
+    const leadRes = await query(
+      `
+        SELECT id, name, phone, service, source, notes, status, created_at
+        FROM leads
+        WHERE client_key = $1 AND phone = $2
+        ORDER BY created_at DESC
+        LIMIT 1
+      `,
+      [clientKey, leadPhone]
+    );
+    const existingLead = leadRes?.rows?.[0] || null;
     
     // Select optimal assistant
     const assistantConfig = await selectOptimalAssistant({ 
@@ -22283,6 +22291,22 @@ async function processVapiCallFromQueue(call) {
     }
     
     if (!vapiResult || !vapiResult.ok || vapiResult.error) {
+      const detailsStr = typeof vapiResult?.details === 'string' ? vapiResult.details : '';
+      const isNoCredits =
+        vapiResult?.error === 'vapi_client_error' &&
+        /wallet balance|purchase more credits|upgrade your plan/i.test(detailsStr);
+
+      if (isNoCredits) {
+        // Don't create a fake failed call record; just defer the queue item so it runs when credits are back.
+        const next = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes backoff
+        await query(
+          `UPDATE call_queue SET status = 'pending', scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
+          [next, call.id]
+        );
+        console.warn('[QUEUE CALL] Deferred due to VAPI credits', { queueId: call.id, scheduledFor: next.toISOString() });
+        return;
+      }
+
       // Record failed attempt so lead queuer doesn't re-queue this lead every 5 min (87 attempts from 10 leads)
       const { upsertCall } = await import('./db.js');
       const failedCallId = `failed_q${call.id}_${Date.now()}`;
@@ -22370,6 +22394,8 @@ async function queueNewLeadsForCalling() {
               AND c.lead_phone = l.phone
               -- Cooldown: allow re-calling after 3 days
               AND c.created_at >= NOW() - INTERVAL '3 days'
+              -- Ignore synthetic failed queue call markers; they should not block catch-up
+              AND (c.call_id IS NULL OR c.call_id NOT LIKE 'failed_q%')
             )
           ORDER BY l.created_at ASC
           LIMIT 20
