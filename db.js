@@ -165,6 +165,14 @@ async function migratePostgresLeadsPhoneMatchKey(pgPool) {
     WHERE phone_match_key IS NOT NULL;
   `);
 
+  // Dashboard lead_lookup CTE: DISTINCT ON (phone_match_key) ... ORDER BY created_at DESC
+  // Needs (client_key, phone_match_key, created_at DESC) to avoid sorting/scanning many rows.
+  await pgPool.query(`
+    CREATE INDEX IF NOT EXISTS leads_client_phone_match_key_created_desc_idx
+    ON leads (client_key, phone_match_key, created_at DESC)
+    WHERE phone_match_key IS NOT NULL;
+  `);
+
   console.log('✅ leads.phone_match_key migration complete');
 }
 
@@ -555,6 +563,9 @@ async function initPostgres() {
       WHERE status = 'pending';
     -- Stale processing reset: WHERE status = 'processing' AND updated_at < ...
     CREATE INDEX IF NOT EXISTS retry_queue_processing_updated_idx ON retry_queue (updated_at) WHERE status = 'processing';
+    -- Include id for index-only stale scans + deterministic tie-break
+    CREATE INDEX IF NOT EXISTS retry_queue_processing_updated_id_idx
+      ON retry_queue (updated_at ASC, id ASC) WHERE status = 'processing';
     -- Dashboard /api/retry-queue/:clientKey — filter by tenant + pending + ORDER BY scheduled_for
     CREATE INDEX IF NOT EXISTS retry_queue_client_pending_scheduled_idx
       ON retry_queue (client_key, scheduled_for ASC NULLS LAST) WHERE status = 'pending';
@@ -578,6 +589,13 @@ async function initPostgres() {
     CREATE INDEX IF NOT EXISTS call_queue_phone_idx ON call_queue(client_key, lead_phone);
     CREATE INDEX IF NOT EXISTS call_queue_pending_scheduled_idx ON call_queue (scheduled_for ASC) WHERE status = 'pending';
     CREATE INDEX IF NOT EXISTS call_queue_processing_updated_idx ON call_queue (updated_at) WHERE status = 'processing';
+    -- Fast due scan: WHERE status='pending' AND scheduled_for<=now() ORDER BY priority, scheduled_for LIMIT N
+    CREATE INDEX IF NOT EXISTS call_queue_pending_priority_scheduled_idx
+      ON call_queue (priority ASC, scheduled_for ASC)
+      WHERE status = 'pending';
+    -- Include id for index-only stale scans + deterministic tie-break
+    CREATE INDEX IF NOT EXISTS call_queue_processing_updated_id_idx
+      ON call_queue (updated_at ASC, id ASC) WHERE status = 'processing';
     CREATE INDEX IF NOT EXISTS call_queue_client_pending_vapi_scheduled_idx
       ON call_queue (client_key, scheduled_for ASC NULLS LAST)
       WHERE status = 'pending' AND call_type = 'vapi_call';
