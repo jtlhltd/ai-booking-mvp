@@ -1703,10 +1703,11 @@ export async function getCallAnalyticsFloorIso() {
   if (_callAnalyticsFloorIsoCache) return _callAnalyticsFloorIsoCache;
 
   try {
+    const DEFAULT_FLOOR_DAYS = 365;
     if (dbType === 'postgres' && pool) {
       await query(`
         INSERT INTO call_analytics_floor (id, floor_at)
-        VALUES (1, now())
+        VALUES (1, now() - INTERVAL '${DEFAULT_FLOOR_DAYS} days')
         ON CONFLICT (id) DO NOTHING
       `);
     } else if (sqlite) {
@@ -1719,6 +1720,22 @@ export async function getCallAnalyticsFloorIso() {
     }
     const { rows } = await query(`SELECT floor_at FROM call_analytics_floor WHERE id = 1`);
     const t = rows?.[0]?.floor_at;
+
+    // If the floor was initialized too recently (e.g. first boot), widen it so analytics/learning
+    // can see meaningful history. This is idempotent and only ever moves the floor earlier.
+    if (dbType === 'postgres' && pool && t) {
+      const floorMs = new Date(t).getTime();
+      const minMs = Date.now() - DEFAULT_FLOOR_DAYS * 86400000;
+      if (Number.isFinite(floorMs) && floorMs > minMs) {
+        await query(
+          `UPDATE call_analytics_floor SET floor_at = NOW() - INTERVAL '${DEFAULT_FLOOR_DAYS} days' WHERE id = 1`
+        );
+        const { rows: rr } = await query(`SELECT floor_at FROM call_analytics_floor WHERE id = 1`);
+        const tt = rr?.[0]?.floor_at;
+        _callAnalyticsFloorIsoCache = tt ? new Date(tt).toISOString() : new Date().toISOString();
+        return _callAnalyticsFloorIsoCache;
+      }
+    }
     _callAnalyticsFloorIsoCache = t
       ? new Date(t).toISOString()
       : new Date().toISOString();
