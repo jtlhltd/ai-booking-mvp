@@ -329,7 +329,8 @@
             overflow-x: hidden;
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
-            overscroll-behavior: contain;
+            /* Allow wheel scroll to propagate to the page when the panel can't scroll further */
+            overscroll-behavior: auto;
         }
 
         /* Today’s Activity + neighbors need more vertical room for metric copy */
@@ -349,7 +350,8 @@
             overflow-y: auto;
             overflow-x: visible;
             -webkit-overflow-scrolling: touch;
-            overscroll-behavior: contain;
+            /* Don't trap mouse wheel inside the card */
+            overscroll-behavior: auto;
             padding-bottom: 6px;
             padding-right: 2px;
             box-sizing: border-box;
@@ -362,7 +364,8 @@
             overflow-y: auto;
             overflow-x: hidden;
             -webkit-overflow-scrolling: touch;
-            overscroll-behavior: contain;
+            /* Don't trap mouse wheel inside the card */
+            overscroll-behavior: auto;
             min-height: 0;
         }
 
