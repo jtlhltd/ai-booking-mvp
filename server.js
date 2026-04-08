@@ -22234,77 +22234,95 @@ async function processCallQueue() {
       console.warn('[CALL QUEUE PROCESSOR] Failed_q catch-up failed:', e?.message || e);
     }
 
-    const pendingCalls = await getPendingCalls(20); // Process up to 20 calls at a time
+    const maxCallsPerRun = Math.max(1, Math.min(500, parseInt(process.env.CALL_QUEUE_MAX_PER_RUN || '50', 10) || 50));
+    const maxConcurrentCalls = Math.max(1, Math.min(25, parseInt(process.env.CALL_QUEUE_MAX_CONCURRENT || '5', 10) || 5));
+
+    const pendingCalls = await getPendingCalls(maxCallsPerRun);
     
     if (pendingCalls.length === 0) {
       console.log('[CALL QUEUE PROCESSOR] No pending calls found');
       return;
     }
     
-    console.log('[CALL QUEUE PROCESSOR]', { pendingCount: pendingCalls.length, callIds: pendingCalls.map(c => c.id) });
-    
-    for (const call of pendingCalls) {
-      try {
-        if (call.call_type === 'vapi_call') {
-          const qhClient = await getFullClient(call.client_key);
-          if (qhClient && !isBusinessHours(qhClient)) {
-            const next = getNextBusinessHour(qhClient);
-            await query(
-              `UPDATE call_queue SET scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
-              [next, call.id]
-            );
-            console.log('[CALL QUEUE PROCESSOR] Deferred — outside business hours', { id: call.id, scheduledFor: next });
-            continue;
-          }
-        }
+    console.log('[CALL QUEUE PROCESSOR]', {
+      pendingCount: pendingCalls.length,
+      maxCallsPerRun,
+      maxConcurrentCalls
+    });
 
-        // Mark as processing
-        await updateCallQueueStatus(call.id, 'processing');
-        
-        // Process the call based on type
-        if (call.call_type === 'vapi_call') {
-          await processVapiCallFromQueue(call);
-          const { rows: stRows } = await query(`SELECT status FROM call_queue WHERE id = $1`, [call.id]);
-          if (stRows?.[0]?.status === 'pending') {
-            console.log('[CALL QUEUE PROCESSOR] Item rescheduled during handler; skipping complete.', { id: call.id });
-            continue;
-          }
+    async function processOneQueueCall(call) {
+      if (call.call_type === 'vapi_call') {
+        const qhClient = await getFullClient(call.client_key);
+        if (qhClient && !isBusinessHours(qhClient)) {
+          const next = getNextBusinessHour(qhClient);
+          await query(
+            `UPDATE call_queue SET scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
+            [next, call.id]
+          );
+          console.log('[CALL QUEUE PROCESSOR] Deferred — outside business hours', { id: call.id, scheduledFor: next });
+          return;
         }
-        
-        // Mark as completed
-        await updateCallQueueStatus(call.id, 'completed');
-        // Cancel any other pending queue rows for same client+phone so we don't call again
-        const cancelled = await cancelDuplicatePendingCalls(call.client_key, call.lead_phone, call.id);
-        if (cancelled > 0) {
-          console.log('[CALL QUEUE PROCESSOR] Cancelled duplicate pending rows:', { client_key: call.client_key, lead_phone: call.lead_phone, cancelled });
+      }
+
+      // Mark as processing
+      await updateCallQueueStatus(call.id, 'processing');
+
+      // Process the call based on type
+      if (call.call_type === 'vapi_call') {
+        await processVapiCallFromQueue(call);
+        const { rows: stRows } = await query(`SELECT status FROM call_queue WHERE id = $1`, [call.id]);
+        if (stRows?.[0]?.status === 'pending') {
+          console.log('[CALL QUEUE PROCESSOR] Item rescheduled during handler; skipping complete.', { id: call.id });
+          return;
         }
-        
-      } catch (callError) {
-        console.error('[CALL QUEUE PROCESSING ERROR]', {
-          callId: call.id,
-          error: callError.message
-        });
-        
-        // Mark as failed
-        await updateCallQueueStatus(call.id, 'failed');
-        
-        // Add to retry queue if it's a retryable error
-        const errorType = categorizeError({ message: callError.message });
-        if (['network', 'server_error', 'rate_limit'].includes(errorType)) {
-          const { addToRetryQueue } = await import('./db.js');
-          await addToRetryQueue({
-            clientKey: call.client_key,
-            leadPhone: call.lead_phone,
-            retryType: 'vapi_call',
-            retryReason: errorType,
-            retryData: call.call_data,
-            scheduledFor: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes later
-            retryAttempt: 1,
-            maxRetries: 3
+      }
+
+      // Mark as completed
+      await updateCallQueueStatus(call.id, 'completed');
+      // Cancel any other pending queue rows for same client+phone so we don't call again
+      const cancelled = await cancelDuplicatePendingCalls(call.client_key, call.lead_phone, call.id);
+      if (cancelled > 0) {
+        console.log('[CALL QUEUE PROCESSOR] Cancelled duplicate pending rows:', { client_key: call.client_key, lead_phone: call.lead_phone, cancelled });
+      }
+    }
+
+    // Concurrency-limited processing (avoid serial backlog drift)
+    let idx = 0;
+    async function worker() {
+      while (idx < pendingCalls.length) {
+        const call = pendingCalls[idx++];
+        try {
+          await processOneQueueCall(call);
+        } catch (callError) {
+          console.error('[CALL QUEUE PROCESSING ERROR]', {
+            callId: call?.id,
+            error: callError?.message || String(callError)
           });
+
+          if (call?.id) {
+            await updateCallQueueStatus(call.id, 'failed');
+          }
+
+          const errorType = categorizeError({ message: callError?.message || String(callError) });
+          if (call && ['network', 'server_error', 'rate_limit'].includes(errorType)) {
+            const { addToRetryQueue } = await import('./db.js');
+            await addToRetryQueue({
+              clientKey: call.client_key,
+              leadPhone: call.lead_phone,
+              retryType: 'vapi_call',
+              retryReason: errorType,
+              retryData: call.call_data,
+              scheduledFor: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes later
+              retryAttempt: 1,
+              maxRetries: 3
+            });
+          }
         }
       }
     }
+
+    const workers = Array.from({ length: Math.min(maxConcurrentCalls, pendingCalls.length) }, () => worker());
+    await Promise.all(workers);
     
   } catch (error) {
     console.error('[CALL QUEUE PROCESSOR ERROR]', error);
