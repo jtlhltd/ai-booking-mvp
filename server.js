@@ -10417,7 +10417,7 @@ app.post('/api/leads/import', async (req, res) => {
           (client.isEnabled || allowEnvVapiFallback) &&
           (client.vapi?.assistantId || client?.vapiAssistantId || (allowEnvVapiFallback && process.env.VAPI_ASSISTANT_ID))
         ) {
-          const { addToCallQueue, getLatestCallInsights } = await import('./db.js');
+          const { addToCallQueue, getLatestCallInsights, getCallTimeBanditState } = await import('./db.js');
           const { scheduleAtOptimalCallWindow } = await import('./lib/optimal-call-window.js');
           const insightsRow = await getLatestCallInsights(clientKey).catch(() => null);
           const routing = insightsRow?.routing;
@@ -10427,13 +10427,7 @@ app.post('/api/leads/import', async (req, res) => {
           callSummary.inBusinessHours = inBusinessHours;
           callSummary.shouldCallNow = shouldCallNow;
           const scheduledBaseline = shouldCallNow ? new Date() : getNextBusinessHour(client);
-          const scheduledFor = shouldCallNow
-            ? scheduledBaseline
-            : await scheduleAtOptimalCallWindow(client, routing, scheduledBaseline, {
-              fallbackTz: TIMEZONE,
-              clientKey,
-              jitterKey: `import:${clientKey}`
-            });
+          const importBanditArms = await getCallTimeBanditState(clientKey).catch(() => ({}));
           console.log('[LEAD IMPORT] Call decision:', {
             clientKey,
             allowEnvVapiFallback,
@@ -10457,6 +10451,12 @@ app.post('/api/leads/import', async (req, res) => {
             let queuedCount = 0;
             for (const lead of inserted) {
               try {
+                const scheduledFor = await scheduleAtOptimalCallWindow(client, routing, scheduledBaseline, {
+                  fallbackTz: TIMEZONE,
+                  clientKey,
+                  jitterKey: `import:${clientKey}:${lead.id}:${lead.phone}`,
+                  banditArms: importBanditArms
+                });
                 await addToCallQueue({
                   clientKey, leadPhone: lead.phone, priority: 8, scheduledFor,
                   callType: 'vapi_call',
@@ -22273,7 +22273,8 @@ async function processCallQueue() {
               LIMIT $2
             )
             UPDATE call_queue cq
-            SET scheduled_for = $3::timestamptz + ((picked.rn - 1) * ($4::int * INTERVAL '1 second')),
+            SET scheduled_for = $3::timestamptz
+                + (((picked.rn - 1) * $4::bigint) + (abs(picked.id) % 3599) + 1) * INTERVAL '1 second',
                 updated_at = NOW()
             FROM picked
             WHERE cq.id = picked.id
