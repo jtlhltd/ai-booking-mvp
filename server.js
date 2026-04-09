@@ -22188,6 +22188,34 @@ async function processCallQueue() {
       console.warn('[CALL QUEUE PROCESSOR] Failed to reset stale processing rows:', e?.message || e);
     }
 
+    // Self-heal: protect against "phantom completed" rows that have no initiated_call_id.
+    // These can exist from earlier buggy builds; requeue them so the lead actually gets dialed.
+    try {
+      const { rowCount } = await query(`
+        WITH bad AS (
+          SELECT id
+          FROM call_queue
+          WHERE status = 'completed'
+            AND initiated_call_id IS NULL
+            AND call_type = 'vapi_call'
+            AND updated_at >= NOW() - INTERVAL '48 hours'
+          ORDER BY updated_at DESC
+          LIMIT 500
+        )
+        UPDATE call_queue cq
+        SET status = 'pending',
+            scheduled_for = NOW(),
+            updated_at = NOW()
+        FROM bad
+        WHERE cq.id = bad.id
+      `);
+      if ((rowCount || 0) > 0) {
+        console.warn('[CALL QUEUE PROCESSOR] Requeued phantom-completed rows:', rowCount);
+      }
+    } catch (e) {
+      console.warn('[CALL QUEUE PROCESSOR] Failed to requeue phantom-completed rows:', e?.message || e);
+    }
+
     // Catch-up: if we have pending calls scheduled later today, pull a small batch forward
     // so the system starts working immediately (e.g. after VAPI credits are restored).
     try {
