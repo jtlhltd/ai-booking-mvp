@@ -6395,7 +6395,7 @@
             return k === DEMO_CLIENT_KEY || DEMO_URL_ALIASES.has(k);
         }
         /** Fallback until GET /api/clients/:key returns (must match server default for DASHBOARD_SELF_SERVICE_CLIENT_KEYS). */
-        const OUTREACH_DASHBOARD_CLIENT_KEYS_FALLBACK = ['d2d-xpress-tom'];
+        const OUTREACH_DASHBOARD_CLIENT_KEYS_FALLBACK = [];
         /** Outreach-only UI: no appointments/ROI/conversion tiles; copy avoids booking/calendar framing */
         const OUTREACH_DASHBOARD_WORKFLOW_STEPS = [
             { icon: '📥', title: 'Leads received', desc: 'Contacts arrive from your lists, uploads, and integrations.' },

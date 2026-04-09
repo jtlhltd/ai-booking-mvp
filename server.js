@@ -10393,20 +10393,30 @@ app.post('/api/leads/import', async (req, res) => {
     if (inserted.length > 0) {
       try {
         const client = await getFullClient(clientKey);
-        const tomOutboundRelaxedImport = clientKey === 'd2d-xpress-tom';
-        const hasVapi = !!(client?.vapi?.assistantId || client?.vapiAssistantId || (tomOutboundRelaxedImport && process.env.VAPI_ASSISTANT_ID));
-        const isEnabled = !!client?.isEnabled || tomOutboundRelaxedImport;
+        const allowEnvVapiFallback =
+          String(process.env.IMPORT_ALLOW_ENV_VAPI_FALLBACK || '').trim() !== '' &&
+          !['0', 'false', 'no', 'off'].includes(String(process.env.IMPORT_ALLOW_ENV_VAPI_FALLBACK).trim().toLowerCase());
+        const hasVapi = !!(
+          client?.vapi?.assistantId ||
+          client?.vapiAssistantId ||
+          (allowEnvVapiFallback && process.env.VAPI_ASSISTANT_ID)
+        );
+        const isEnabled = !!client?.isEnabled || allowEnvVapiFallback;
         if (!client) {
           console.log('[LEAD IMPORT] No client found for', clientKey);
           callSummary.reason = 'client_not_found';
-        } else if (!isEnabled && !tomOutboundRelaxedImport) {
+        } else if (!isEnabled && !allowEnvVapiFallback) {
           console.log('[LEAD IMPORT] Client not enabled, skipping call/queue:', clientKey);
           callSummary.reason = 'client_not_enabled';
         } else if (!hasVapi) {
           console.log('[LEAD IMPORT] Client missing VAPI assistantId (and no env fallback), skipping call/queue:', clientKey);
           callSummary.reason = 'vapi_not_configured';
         }
-        if (client && (client.isEnabled || tomOutboundRelaxedImport) && (client.vapi?.assistantId || client?.vapiAssistantId || (tomOutboundRelaxedImport && process.env.VAPI_ASSISTANT_ID))) {
+        if (
+          client &&
+          (client.isEnabled || allowEnvVapiFallback) &&
+          (client.vapi?.assistantId || client?.vapiAssistantId || (allowEnvVapiFallback && process.env.VAPI_ASSISTANT_ID))
+        ) {
           const { addToCallQueue, getLatestCallInsights } = await import('./db.js');
           const { scheduleAtOptimalCallWindow } = await import('./lib/optimal-call-window.js');
           const insightsRow = await getLatestCallInsights(clientKey).catch(() => null);
@@ -10426,7 +10436,7 @@ app.post('/api/leads/import', async (req, res) => {
             });
           console.log('[LEAD IMPORT] Call decision:', {
             clientKey,
-            tomOutboundRelaxedImport,
+            allowEnvVapiFallback,
             inBusinessHours,
             shouldCallNow
           });
@@ -25325,7 +25335,8 @@ function getDashboardSelfServiceClientKeys() {
       .map((s) => s.trim())
       .filter(Boolean);
   }
-  return ['d2d-xpress-tom'];
+  // Safer default: self-service is opt-in via env.
+  return [];
 }
 function isDashboardSelfServiceClient(clientKey) {
   return getDashboardSelfServiceClientKeys().includes(clientKey);
