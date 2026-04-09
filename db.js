@@ -459,6 +459,11 @@ async function initPostgres() {
     -- Aligns with TRIM(recording_url) filters in /api/call-recordings and /api/voicemails
     CREATE INDEX IF NOT EXISTS calls_client_recording_trim_created_idx ON calls (client_key, created_at DESC)
       WHERE recording_url IS NOT NULL AND trim(recording_url) <> '';
+    -- Voicemail listener: tenant + recency without scanning all recordings
+    CREATE INDEX IF NOT EXISTS calls_client_voicemail_trim_created_desc_idx ON calls (client_key, created_at DESC)
+      WHERE recording_url IS NOT NULL
+        AND trim(recording_url) <> ''
+        AND lower(coalesce(outcome, '')) = 'voicemail';
     -- Catch-up requeue: find failed_q backlog efficiently
     CREATE INDEX IF NOT EXISTS calls_failed_q_client_phone_created_desc_idx
       ON calls (client_key, lead_phone, created_at DESC)
@@ -1043,6 +1048,10 @@ async function initPostgres() {
         WHERE status = 'pending' AND call_type = 'vapi_call';
       CREATE INDEX IF NOT EXISTS calls_client_recording_trim_created_idx ON calls (client_key, created_at DESC)
         WHERE recording_url IS NOT NULL AND trim(recording_url) <> '';
+      CREATE INDEX IF NOT EXISTS calls_client_voicemail_trim_created_desc_idx ON calls (client_key, created_at DESC)
+        WHERE recording_url IS NOT NULL
+          AND trim(recording_url) <> ''
+          AND lower(coalesce(outcome, '')) = 'voicemail';
       CREATE INDEX IF NOT EXISTS call_queue_client_vapi_completed_initiated_idx
         ON call_queue (client_key)
         WHERE status = 'completed' AND call_type = 'vapi_call' AND initiated_call_id IS NOT NULL;

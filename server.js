@@ -12489,7 +12489,7 @@ app.get('/api/call-recordings/:clientKey', async (req, res) => {
           lm.lead_id,
           lm.name
         FROM (
-          SELECT id, call_id, client_key, lead_phone, recording_url, duration, outcome, created_at
+          SELECT id, call_id, client_key, lead_phone, lead_phone_match_key, recording_url, duration, outcome, created_at
           FROM calls
           WHERE client_key = $1
             AND recording_url IS NOT NULL
@@ -12502,14 +12502,22 @@ app.get('/api/call-recordings/:clientKey', async (req, res) => {
           FROM leads l
           WHERE l.client_key = c.client_key
             AND (
-              l.phone = c.lead_phone
+              (c.lead_phone_match_key IS NOT NULL AND l.phone_match_key = c.lead_phone_match_key)
+              OR (l.phone = c.lead_phone)
               OR (
-                LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
+                c.lead_phone_match_key IS NULL
+                AND LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
                 AND RIGHT(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), 10)
                   = RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
               )
             )
-          ORDER BY l.created_at DESC NULLS LAST
+          ORDER BY
+            CASE
+              WHEN c.lead_phone_match_key IS NOT NULL AND l.phone_match_key = c.lead_phone_match_key THEN 0
+              WHEN l.phone = c.lead_phone THEN 1
+              ELSE 2
+            END,
+            l.created_at DESC NULLS LAST
           LIMIT 1
         ) lm ON true
         ORDER BY c.created_at DESC
@@ -12624,7 +12632,7 @@ app.get('/api/voicemails/:clientKey', async (req, res) => {
           lm.name
         FROM (
           SELECT
-            id, call_id, client_key, lead_phone, recording_url, duration, outcome, created_at,
+            id, call_id, client_key, lead_phone, lead_phone_match_key, recording_url, duration, outcome, created_at,
             LEFT(COALESCE(transcript, ''), 512) AS transcript
           FROM calls
           WHERE client_key = $1
@@ -12639,14 +12647,22 @@ app.get('/api/voicemails/:clientKey', async (req, res) => {
           FROM leads l
           WHERE l.client_key = c.client_key
             AND (
-              l.phone = c.lead_phone
+              (c.lead_phone_match_key IS NOT NULL AND l.phone_match_key = c.lead_phone_match_key)
+              OR (l.phone = c.lead_phone)
               OR (
-                LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
+                c.lead_phone_match_key IS NULL
+                AND LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
                 AND RIGHT(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), 10)
                   = RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
               )
             )
-          ORDER BY l.created_at DESC NULLS LAST
+          ORDER BY
+            CASE
+              WHEN c.lead_phone_match_key IS NOT NULL AND l.phone_match_key = c.lead_phone_match_key THEN 0
+              WHEN l.phone = c.lead_phone THEN 1
+              ELSE 2
+            END,
+            l.created_at DESC NULLS LAST
           LIMIT 1
         ) lm ON true
         ORDER BY c.created_at DESC
