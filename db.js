@@ -1039,6 +1039,9 @@ async function initPostgres() {
         WHERE status = 'pending' AND call_type = 'vapi_call';
       CREATE INDEX IF NOT EXISTS calls_client_recording_trim_created_idx ON calls (client_key, created_at DESC)
         WHERE recording_url IS NOT NULL AND trim(recording_url) <> '';
+      CREATE INDEX IF NOT EXISTS call_queue_client_vapi_completed_initiated_idx
+        ON call_queue (client_key)
+        WHERE status = 'completed' AND call_type = 'vapi_call' AND initiated_call_id IS NOT NULL;
     `).catch((idxErr) => {
       console.warn('⚠️  Dashboard perf index migration (non-fatal):', idxErr.message);
     });
