@@ -25329,14 +25329,14 @@ app.post('/api/onboard-client', async (req, res) => {
 /** Tenant keys allowed to use dashboard A/B setup without API key (override with DASHBOARD_SELF_SERVICE_CLIENT_KEYS). */
 function getDashboardSelfServiceClientKeys() {
   const e = process.env.DASHBOARD_SELF_SERVICE_CLIENT_KEYS;
-  if (e != null && String(e).trim() !== '') {
-    return String(e)
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
+  if (e === undefined) {
+    // Default: primary outreach tenant can use A/B setup without API key.
+    return ['d2d-xpress-tom'];
   }
-  // Safer default: self-service is opt-in via env.
-  return [];
+  return String(e)
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 function isDashboardSelfServiceClient(clientKey) {
   return getDashboardSelfServiceClientKeys().includes(clientKey);
