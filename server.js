@@ -123,7 +123,8 @@ import {
   DB_PATH,
   query,
   pool,
-  invalidateClientCache
+  invalidateClientCache,
+  smearCallQueueScheduledFor
 } from './db.js'; // SQLite-backed tenants
 import { 
   authenticateApiKey, 
@@ -22345,7 +22346,7 @@ async function processCallQueue() {
         )
         UPDATE call_queue cq
         SET status = 'pending',
-            scheduled_for = NOW(),
+            scheduled_for = clock_timestamp() + ((cq.id % 997)::int + 1) * INTERVAL '1 millisecond',
             updated_at = NOW()
         FROM bad
         WHERE cq.id = bad.id
@@ -22372,7 +22373,8 @@ async function processCallQueue() {
           LIMIT 10
         )
         UPDATE call_queue cq
-        SET scheduled_for = NOW(), updated_at = NOW()
+        SET scheduled_for = clock_timestamp() + ((cq.id % 997)::int + 1) * INTERVAL '1 millisecond',
+            updated_at = NOW()
         FROM to_pull
         WHERE cq.id = to_pull.id
       `);
@@ -22495,7 +22497,12 @@ async function processCallQueue() {
       if (call.call_type === 'vapi_call') {
         const qhClient = await getFullClient(call.client_key);
         if (qhClient && !isBusinessHours(qhClient)) {
-          const next = getNextBusinessHour(qhClient);
+          const next = smearCallQueueScheduledFor(
+            getNextBusinessHour(qhClient),
+            call.client_key,
+            call.lead_phone,
+            call.id
+          );
           await query(
             `UPDATE call_queue SET scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
             [next, call.id]
@@ -22519,7 +22526,12 @@ async function processCallQueue() {
         // Safety: never mark completed unless we actually initiated a Vapi call id.
         // This prevents phantom "completed" queue rows when call initiation didn't happen.
         if (!v?.callId) {
-          const next = new Date(Date.now() + 2 * 60 * 1000);
+          const next = smearCallQueueScheduledFor(
+            new Date(Date.now() + 2 * 60 * 1000),
+            call.client_key,
+            call.lead_phone,
+            call.id
+          );
           await query(
             `UPDATE call_queue SET status = 'pending', scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
             [next, call.id]
@@ -22669,7 +22681,12 @@ async function processVapiCallFromQueue(call) {
     });
 
     if (vapiResult?.error === 'outside_business_hours') {
-      const next = getNextBusinessHour(client);
+      const next = smearCallQueueScheduledFor(
+        getNextBusinessHour(client),
+        clientKey,
+        leadPhone,
+        call.id
+      );
       await query(
         `UPDATE call_queue SET status = 'pending', scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
         [next, call.id]
@@ -22686,7 +22703,12 @@ async function processVapiCallFromQueue(call) {
 
       if (isNoCredits) {
         // Don't create a fake failed call record; just defer the queue item so it runs when credits are back.
-        const next = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes backoff
+        const next = smearCallQueueScheduledFor(
+          new Date(Date.now() + 15 * 60 * 1000),
+          clientKey,
+          leadPhone,
+          call.id
+        );
         await query(
           `UPDATE call_queue SET status = 'pending', scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
           [next, call.id]
@@ -22720,7 +22742,12 @@ async function processVapiCallFromQueue(call) {
     // even before Vapi webhooks arrive.
     if (!vapiCallId) {
       // Defensive: if we don't get a call id, we can't correlate webhooks; reschedule.
-      const next = new Date(Date.now() + 2 * 60 * 1000);
+      const next = smearCallQueueScheduledFor(
+        new Date(Date.now() + 2 * 60 * 1000),
+        clientKey,
+        leadPhone,
+        call.id
+      );
       await query(
         `UPDATE call_queue SET status = 'pending', scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
         [next, call.id]
@@ -22764,7 +22791,12 @@ async function processVapiCallFromQueue(call) {
       );
     } catch (e) {
       console.warn('[QUEUE CALL] Failed to record initiated call:', e?.message || e);
-      const next = new Date(Date.now() + 2 * 60 * 1000);
+      const next = smearCallQueueScheduledFor(
+        new Date(Date.now() + 2 * 60 * 1000),
+        clientKey,
+        leadPhone,
+        call.id
+      );
       await query(
         `UPDATE call_queue SET status = 'pending', scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
         [next, call.id]
