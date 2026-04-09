@@ -13,22 +13,25 @@ import crypto from 'crypto';
  */
 export function verifyVapiSignature(req, res, next) {
   const secret = process.env.VAPI_WEBHOOK_SECRET;
-  const requireInProd =
+  const requireExplicit =
     String(process.env.VAPI_WEBHOOK_REQUIRE_SIGNATURE || '').trim() !== ''
       ? !['0', 'false', 'no'].includes(String(process.env.VAPI_WEBHOOK_REQUIRE_SIGNATURE).trim().toLowerCase())
-      : String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
+      : false;
+  // Only enforce signature verification when we actually have a secret configured,
+  // or when the operator explicitly requires it via env.
+  const requireSignature = requireExplicit || !!secret;
   
   // If no secret is configured, skip verification (for development/testing)
   if (!secret) {
-    if (requireInProd) {
-      console.error('[VAPI WEBHOOK] Missing VAPI_WEBHOOK_SECRET in a signature-required environment');
+    if (requireExplicit) {
+      console.error('[VAPI WEBHOOK] Missing VAPI_WEBHOOK_SECRET but signature verification is explicitly required');
       return res.status(500).json({
         ok: false,
         error: 'Webhook verification misconfigured',
-        message: 'VAPI_WEBHOOK_SECRET must be configured to accept VAPI webhooks'
+        message: 'Set VAPI_WEBHOOK_SECRET (or disable VAPI_WEBHOOK_REQUIRE_SIGNATURE) to accept VAPI webhooks'
       });
     }
-    console.warn('[VAPI WEBHOOK] No VAPI_WEBHOOK_SECRET configured, skipping signature verification');
+    console.error('[VAPI WEBHOOK] No VAPI_WEBHOOK_SECRET configured — accepting webhooks without verification');
     return next();
   }
   

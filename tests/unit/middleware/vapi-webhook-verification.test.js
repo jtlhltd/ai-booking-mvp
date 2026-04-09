@@ -56,9 +56,8 @@ describe('VAPI Webhook Signature Verification', () => {
   });
 
   test('should reject if secret missing when signature required', () => {
-    process.env.NODE_ENV = 'production';
     delete process.env.VAPI_WEBHOOK_SECRET;
-    delete process.env.VAPI_WEBHOOK_REQUIRE_SIGNATURE;
+    process.env.VAPI_WEBHOOK_REQUIRE_SIGNATURE = 'true';
 
     const req = {
       get: () => null,
