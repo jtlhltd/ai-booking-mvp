@@ -22164,6 +22164,124 @@ async function processCallQueue() {
   try {
     const { getPendingCalls, updateCallQueueStatus, cancelDuplicatePendingCalls, addToCallQueue } = await import('./db.js');
 
+    // Hard safety: never let a huge overdue backlog trigger "call everything now".
+    // We cap how many calls can be due "today" per client and push overflow to the next business window.
+    const dailyCapDefault = 150;
+    const dailyCap = Math.max(0, Math.min(5000, parseInt(process.env.CALL_QUEUE_DAILY_CAP || String(dailyCapDefault), 10) || dailyCapDefault));
+    const overdueKeepDue = Math.max(0, Math.min(500, parseInt(process.env.CALL_QUEUE_OVERDUE_KEEP_DUE || '50', 10) || 50));
+    const rescheduleBatchLimit = Math.max(100, Math.min(10000, parseInt(process.env.CALL_QUEUE_RESCHEDULE_BATCH_LIMIT || '3000', 10) || 3000));
+    const spacingSeconds = Math.max(15, Math.min(600, parseInt(process.env.CALL_QUEUE_RESCHEDULE_SPACING_SECONDS || '120', 10) || 120)); // default 2m
+
+    try {
+      // Find clients with large overdue pending backlogs.
+      const { rows: overdueClients } = await query(
+        `
+          SELECT client_key, COUNT(*)::int AS overdue_pending
+          FROM call_queue
+          WHERE status = 'pending'
+            AND call_type = 'vapi_call'
+            AND scheduled_for < NOW()
+          GROUP BY client_key
+          HAVING COUNT(*) > $1
+          ORDER BY overdue_pending DESC
+          LIMIT 20
+        `,
+        [overdueKeepDue]
+      );
+
+      for (const oc of overdueClients) {
+        const clientKey = oc.client_key;
+        const overduePending = parseInt(oc.overdue_pending || 0, 10) || 0;
+        if (!clientKey || overduePending <= overdueKeepDue) continue;
+
+        // Compute "today" bounds in tenant timezone, expressed as UTC instants.
+        let tz = TIMEZONE;
+        try {
+          const c = await getFullClient(clientKey);
+          tz = c?.booking?.timezone || c?.timezone || TIMEZONE;
+        } catch {
+          tz = TIMEZONE;
+        }
+
+        const { rows: bRows } = await query(
+          `
+            SELECT
+              ((date_trunc('day', NOW() AT TIME ZONE $1)) AT TIME ZONE $1) AS day_start_utc,
+              ((date_trunc('day', NOW() AT TIME ZONE $1) + INTERVAL '1 day') AT TIME ZONE $1) AS day_end_utc,
+              ((date_trunc('day', NOW() AT TIME ZONE $1) + INTERVAL '1 day' + INTERVAL '9 hours') AT TIME ZONE $1) AS tomorrow_9am_utc
+          `,
+          [tz]
+        );
+        const dayStartUtc = bRows?.[0]?.day_start_utc;
+        const dayEndUtc = bRows?.[0]?.day_end_utc;
+        const tomorrow9Utc = bRows?.[0]?.tomorrow_9am_utc;
+        if (!dayStartUtc || !dayEndUtc || !tomorrow9Utc) continue;
+
+        // How many are already "today" (pending/processing) + how many calls already started today?
+        const { rows: capRows } = await query(
+          `
+            SELECT
+              (SELECT COUNT(*)::int
+               FROM call_queue
+               WHERE client_key = $1
+                 AND call_type = 'vapi_call'
+                 AND status IN ('pending','processing')
+                 AND scheduled_for >= $2 AND scheduled_for < $3
+              ) AS queued_today,
+              (SELECT COUNT(*)::int
+               FROM calls
+               WHERE client_key = $1
+                 AND created_at >= $2 AND created_at < $3
+              ) AS calls_today
+          `,
+          [clientKey, dayStartUtc, dayEndUtc]
+        );
+        const queuedToday = parseInt(capRows?.[0]?.queued_today || 0, 10) || 0;
+        const callsToday = parseInt(capRows?.[0]?.calls_today || 0, 10) || 0;
+        const remainingToday = Math.max(0, dailyCap - (queuedToday + callsToday));
+
+        // If we're at/over cap, push almost everything overdue to tomorrow.
+        // If we still have remaining capacity today, keep a small due buffer and push overflow.
+        const keepDue = remainingToday > 0 ? Math.min(overdueKeepDue, remainingToday) : 0;
+        const toMove = Math.max(0, overduePending - keepDue);
+        if (toMove <= 0) continue;
+
+        const moveLimit = Math.min(rescheduleBatchLimit, toMove);
+        const { rowCount } = await query(
+          `
+            WITH picked AS (
+              SELECT id, ROW_NUMBER() OVER (ORDER BY scheduled_for ASC, id ASC) AS rn
+              FROM call_queue
+              WHERE client_key = $1
+                AND call_type = 'vapi_call'
+                AND status = 'pending'
+                AND scheduled_for < NOW()
+              LIMIT $2
+            )
+            UPDATE call_queue cq
+            SET scheduled_for = $3::timestamptz + ((picked.rn - 1) * ($4::int * INTERVAL '1 second')),
+                updated_at = NOW()
+            FROM picked
+            WHERE cq.id = picked.id
+          `,
+          [clientKey, moveLimit, tomorrow9Utc, spacingSeconds]
+        );
+        if ((rowCount || 0) > 0) {
+          console.warn('[CALL QUEUE PROCESSOR] Pushed overdue backlog to tomorrow window:', {
+            clientKey,
+            moved: rowCount,
+            overduePending,
+            keepDue,
+            remainingToday,
+            dailyCap,
+            tz
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('[CALL QUEUE PROCESSOR] Overdue reschedule guard failed:', e?.message || e);
+    }
+
     // Self-heal: if the server restarted mid-item, rows can get stuck in 'processing' forever.
     // Reset anything older than 10 minutes back to 'pending' so it can be retried/deferred.
     try {
