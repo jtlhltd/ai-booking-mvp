@@ -4,15 +4,15 @@
  * outboundAbScriptExperiment instead (or use the Tom dashboard).
  *
  * Usage:
- *   node scripts/set-outbound-ab-experiment.js d2d-xpress-tom tom_outbound_v1
+ *   node scripts/set-outbound-ab-experiment.js <client_key> <experiment_name>
  */
 import 'dotenv/config';
 import { init, query, invalidateClientCache } from '../db.js';
 
-const clientKey = process.argv[2] || 'd2d-xpress-tom';
+const clientKey = (process.argv[2] || '').trim();
 const experimentName = (process.argv[3] || '').trim();
 
-if (!experimentName) {
+if (!clientKey || !experimentName) {
   console.error('Usage: node scripts/set-outbound-ab-experiment.js <client_key> <experiment_name>');
   process.exit(1);
 }

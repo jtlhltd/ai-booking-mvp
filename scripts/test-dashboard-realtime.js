@@ -207,7 +207,11 @@ async function testDataFlow(clientKey) {
 }
 
 // Main
-const clientKey = process.argv[2] || 'd2d-xpress-tom';
+const clientKey = (process.argv[2] || '').trim() || process.env.AB_CLIENT_KEY;
+if (!clientKey) {
+  log(`\nUsage: node scripts/test-dashboard-realtime.js <client_key> (or set AB_CLIENT_KEY)`, 'red');
+  process.exit(1);
+}
 
 testDataFlow(clientKey)
   .then(() => {

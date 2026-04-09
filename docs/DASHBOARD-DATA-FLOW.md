@@ -92,14 +92,15 @@ We've verified:
 
 ### Test 1: Check Database
 ```sql
-SELECT COUNT(*) FROM leads WHERE client_key = 'd2d-xpress-tom';
-SELECT COUNT(*) FROM calls WHERE client_key = 'd2d-xpress-tom';
-SELECT COUNT(*) FROM appointments WHERE client_key = 'd2d-xpress-tom';
+-- replace with your tenant client_key
+SELECT COUNT(*) FROM leads WHERE client_key = '<client_key>';
+SELECT COUNT(*) FROM calls WHERE client_key = '<client_key>';
+SELECT COUNT(*) FROM appointments WHERE client_key = '<client_key>';
 ```
 
 ### Test 2: Check Dashboard API
 ```bash
-curl https://ai-booking-mvp.onrender.com/api/demo-dashboard/d2d-xpress-tom
+curl https://ai-booking-mvp.onrender.com/api/demo-dashboard/<client_key>
 ```
 
 Should return:
@@ -112,14 +113,14 @@ Should return:
 
 ### Test 3: Check Real-Time Events
 ```bash
-curl -N https://ai-booking-mvp.onrender.com/api/events/d2d-xpress-tom
+curl -N https://ai-booking-mvp.onrender.com/api/events/<client_key>
 ```
 
 Should stream events as they occur.
 
 ### Test 4: Run Test Script
 ```bash
-node scripts/test-dashboard-realtime.js d2d-xpress-tom
+node scripts/test-dashboard-realtime.js <client_key>
 ```
 
 ## ⚠️ Important Notes

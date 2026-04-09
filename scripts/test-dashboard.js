@@ -106,7 +106,11 @@ async function testDashboard(clientKey) {
 }
 
 // Main
-const clientKey = process.argv[2] || 'd2d-xpress-tom';
+const clientKey = (process.argv[2] || '').trim() || process.env.AB_CLIENT_KEY;
+if (!clientKey) {
+  console.error('Usage: node scripts/test-dashboard.js <client_key> (or set AB_CLIENT_KEY)');
+  process.exit(1);
+}
 
 testDashboard(clientKey)
   .then(result => {
