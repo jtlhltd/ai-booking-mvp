@@ -22531,6 +22531,35 @@ async function processVapiCallFromQueue(call) {
       }).catch((e) => console.error('[QUEUE VAPI CALL] Failed to record failed attempt:', e.message));
       throw new Error(vapiResult?.error || vapiResult?.details || 'VAPI call failed');
     }
+
+    // Record an initiated call immediately so the dashboard reflects real outbound attempts
+    // even before Vapi webhooks arrive.
+    if (!vapiResult?.id) {
+      // Defensive: if we don't get a call id, we can't correlate webhooks; reschedule.
+      const next = new Date(Date.now() + 2 * 60 * 1000);
+      await query(
+        `UPDATE call_queue SET status = 'pending', scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
+        [next, call.id]
+      );
+      console.warn('[QUEUE CALL] Missing VAPI call id; rescheduled', { queueId: call.id, scheduledFor: next.toISOString() });
+      return;
+    }
+    try {
+      const { upsertCall } = await import('./db.js');
+      await upsertCall({
+        callId: vapiResult.id,
+        clientKey,
+        leadPhone,
+        status: 'initiated',
+        outcome: null,
+        duration: null,
+        cost: null,
+        metadata: { queueId: call.id, fromQueue: true, triggerType: callData?.triggerType || null },
+        retryAttempt: call.retry_attempt || 0
+      });
+    } catch (e) {
+      console.warn('[QUEUE CALL] Failed to record initiated call:', e?.message || e);
+    }
     
     console.log('[QUEUE CALL SUCCESS]', {
       queueId: call.id,
