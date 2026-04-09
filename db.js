@@ -2475,14 +2475,36 @@ export async function cleanupOldRetries(daysOld = 7) {
 }
 
 // Call queue functions
+/** Break exact .000s timestamps so many rows never share the same instant (ops top-of-hour + dial spread). */
+function smearVapiQueueTimestamp(scheduledFor, clientKey, leadPhone) {
+  const t = scheduledFor instanceof Date ? new Date(scheduledFor.getTime()) : new Date(scheduledFor);
+  if (Number.isNaN(t.getTime())) return t;
+  const ms = t.getTime();
+  if (ms % 1000 !== 0) return t;
+  let h = 0x811c9dc5;
+  const s = `${clientKey}\0${leadPhone}\0${ms}`;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  const extra = 1 + ((h >>> 0) % 998);
+  return new Date(ms + extra);
+}
+
 export async function addToCallQueue({ clientKey, leadPhone, priority = 5, scheduledFor, callType, callData }) {
   const callDataJson = callData ? JSON.stringify(callData) : null;
-  
+  const when =
+    callType === 'vapi_call'
+      ? smearVapiQueueTimestamp(scheduledFor, clientKey, leadPhone ?? '')
+      : scheduledFor instanceof Date
+        ? scheduledFor
+        : scheduledFor;
+
   const { rows } = await query(`
     INSERT INTO call_queue (client_key, lead_phone, priority, scheduled_for, call_type, call_data, status)
     VALUES ($1, $2, $3, $4, $5, $6, 'pending')
     RETURNING *
-  `, [clientKey, leadPhone, priority, scheduledFor, callType, callDataJson]);
+  `, [clientKey, leadPhone, priority, when, callType, callDataJson]);
   
   return rows[0];
 }

@@ -22281,7 +22281,8 @@ async function processCallQueue() {
             )
             UPDATE call_queue cq
             SET scheduled_for = $3::timestamptz
-                + (((picked.rn - 1) * $4::bigint) + (abs(picked.id) % 3599) + 1) * INTERVAL '1 second',
+                + (((picked.rn - 1) * $4::bigint) + (abs(picked.id) % 3599) + 1) * INTERVAL '1 second'
+                + ((abs(picked.id) % 997) + 1) * INTERVAL '1 millisecond',
                 updated_at = NOW()
             FROM picked
             WHERE cq.id = picked.id
