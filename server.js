@@ -10069,7 +10069,8 @@ async function processLeadImportOutboundCalls({ clientKey, client, inserted }) {
         const next = getNextBusinessHour(client);
         const scheduledFor = await scheduleAtOptimalCallWindow(client, routing, next, {
           fallbackTz: TIMEZONE,
-          clientKey
+          clientKey,
+          jitterKey: lead.phone
         });
         await addToCallQueue({
           clientKey, leadPhone: lead.phone, priority: 8, scheduledFor,
@@ -10094,7 +10095,8 @@ async function processLeadImportOutboundCalls({ clientKey, client, inserted }) {
         const next = getNextBusinessHour(client);
         const scheduledFor = await scheduleAtOptimalCallWindow(client, routing, next, {
           fallbackTz: TIMEZONE,
-          clientKey
+          clientKey,
+          jitterKey: lead.phone
         });
         await addToCallQueue({
           clientKey, leadPhone: lead.phone, priority: 8, scheduledFor,
@@ -10108,7 +10110,8 @@ async function processLeadImportOutboundCalls({ clientKey, client, inserted }) {
         const retryBaseline = isBusinessHours(client) ? new Date() : getNextBusinessHour(client);
         const retryWhen = await scheduleAtOptimalCallWindow(client, routing, retryBaseline, {
           fallbackTz: TIMEZONE,
-          clientKey
+          clientKey,
+          jitterKey: lead.phone
         });
         await addToCallQueue({
           clientKey, leadPhone: lead.phone, priority: 8, scheduledFor: retryWhen,
@@ -10418,7 +10421,8 @@ app.post('/api/leads/import', async (req, res) => {
             ? scheduledBaseline
             : await scheduleAtOptimalCallWindow(client, routing, scheduledBaseline, {
               fallbackTz: TIMEZONE,
-              clientKey
+              clientKey,
+              jitterKey: `import:${clientKey}`
             });
           console.log('[LEAD IMPORT] Call decision:', {
             clientKey,
@@ -22881,7 +22885,8 @@ async function queueNewLeadsForCalling() {
               ? new Date(Date.now() + Math.floor(Math.random() * 120_000)) // 0-120s jitter
               : await scheduleAtOptimalCallWindow(client, routing, scheduledBaseline, {
                   fallbackTz: TIMEZONE,
-                  clientKey: client.clientKey
+                  clientKey: client.clientKey,
+                  jitterKey: lead.phone
                 });
 
             // If we're in business hours, also top-up a buffer for tomorrow (up to caps) so the system
@@ -22896,7 +22901,8 @@ async function queueNewLeadsForCalling() {
               const tomorrowBaseline = new Date(Date.now() + 24 * 60 * 60 * 1000);
               finalScheduledFor = await scheduleAtOptimalCallWindow(client, routing, tomorrowBaseline, {
                 fallbackTz: TIMEZONE,
-                clientKey: client.clientKey
+                clientKey: client.clientKey,
+                jitterKey: `tomorrow:${lead.phone}`
               });
               scheduleTag = 'tomorrow_buffer';
               tomorrowStillNeeded -= 1;
