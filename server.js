@@ -22588,6 +22588,11 @@ async function processVapiCallFromQueue(call) {
       if (!verifyRows?.[0]) {
         throw new Error('call_persist_verify_failed');
       }
+      // Stamp the queue row with the initiated call id so DB-level constraints can enforce correctness.
+      await query(
+        `UPDATE call_queue SET initiated_call_id = $1, updated_at = NOW() WHERE id = $2`,
+        [vapiCallId, call.id]
+      );
     } catch (e) {
       console.warn('[QUEUE CALL] Failed to record initiated call:', e?.message || e);
       const next = new Date(Date.now() + 2 * 60 * 1000);

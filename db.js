@@ -582,11 +582,34 @@ async function initPostgres() {
       created_at TIMESTAMPTZ DEFAULT now(),
       updated_at TIMESTAMPTZ DEFAULT now()
     );
+    -- Backfill / migration support for older databases
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'call_queue' AND column_name = 'initiated_call_id'
+      ) THEN
+        ALTER TABLE call_queue ADD COLUMN initiated_call_id TEXT;
+      END IF;
+    END $$;
+    -- DB-level guard: never allow a row to be marked completed unless we have an initiated call id.
+    -- Use NOT VALID so we can add without scanning existing rows; it will still enforce on new writes.
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'call_queue_completed_requires_call_id'
+      ) THEN
+        ALTER TABLE call_queue
+          ADD CONSTRAINT call_queue_completed_requires_call_id
+          CHECK (status <> 'completed' OR initiated_call_id IS NOT NULL) NOT VALID;
+      END IF;
+    END $$;
     CREATE INDEX IF NOT EXISTS call_queue_tenant_idx ON call_queue(client_key);
     CREATE INDEX IF NOT EXISTS call_queue_scheduled_idx ON call_queue(scheduled_for);
     CREATE INDEX IF NOT EXISTS call_queue_status_idx ON call_queue(status);
     CREATE INDEX IF NOT EXISTS call_queue_priority_idx ON call_queue(priority);
     CREATE INDEX IF NOT EXISTS call_queue_phone_idx ON call_queue(client_key, lead_phone);
+    CREATE INDEX IF NOT EXISTS call_queue_initiated_call_id_idx ON call_queue(initiated_call_id) WHERE initiated_call_id IS NOT NULL;
     CREATE INDEX IF NOT EXISTS call_queue_pending_scheduled_idx ON call_queue (scheduled_for ASC) WHERE status = 'pending';
     CREATE INDEX IF NOT EXISTS call_queue_processing_updated_idx ON call_queue (updated_at) WHERE status = 'processing';
     -- Fast due scan: WHERE status='pending' AND scheduled_for<=now() ORDER BY priority, scheduled_for LIMIT N
