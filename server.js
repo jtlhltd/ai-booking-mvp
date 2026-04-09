@@ -10263,15 +10263,72 @@ app.post('/api/leads/import', async (req, res) => {
       console.error('[LEAD IMPORT] Inserting lead:', { clientKey, name, phone, service, source, phone_match_key: mk });
       
       try {
-        const result = await query(`
-          INSERT INTO leads (client_key, name, phone, phone_match_key, service, source, status)
-          VALUES ($1, $2, $3, $4, $5, $6, 'new')
-          ON CONFLICT (client_key, phone_match_key) DO UPDATE SET name = EXCLUDED.name,
-                        phone = EXCLUDED.phone,
-                        service = COALESCE(EXCLUDED.service, leads.service),
-                        source = COALESCE(EXCLUDED.source, leads.source)
-          RETURNING id, name, phone, service, source, status, notes
-        `, [clientKey, name, phone, mk, service, source]);
+        // Primary path: fast upsert based on UNIQUE(client_key, phone_match_key)
+        // If the unique index isn't present yet (race during migrations), Postgres throws:
+        // "there is no unique or exclusion constraint matching the ON CONFLICT specification".
+        // We catch that and fall back to a safe select-then-update/insert path.
+        let result;
+        try {
+          result = await query(
+            `
+              INSERT INTO leads (client_key, name, phone, phone_match_key, service, source, status)
+              VALUES ($1, $2, $3, $4, $5, $6, 'new')
+              ON CONFLICT (client_key, phone_match_key) DO UPDATE
+              SET name = EXCLUDED.name,
+                  phone = EXCLUDED.phone,
+                  service = COALESCE(EXCLUDED.service, leads.service),
+                  source = COALESCE(EXCLUDED.source, leads.source)
+              RETURNING id, name, phone, service, source, status, notes
+            `,
+            [clientKey, name, phone, mk, service, source]
+          );
+        } catch (conflictErr) {
+          const msg = String(conflictErr?.message || '');
+          const code = conflictErr?.code;
+          const isMissingConflictConstraint =
+            code === '42P10' ||
+            msg.includes('no unique or exclusion constraint matching the ON CONFLICT specification');
+
+          if (!isMissingConflictConstraint) throw conflictErr;
+
+          // Fallback: explicit upsert without relying on ON CONFLICT
+          // (keeps imports working during/after schema transitions).
+          const existing = await query(
+            `
+              SELECT id
+              FROM leads
+              WHERE client_key = $1 AND phone_match_key = $2
+              ORDER BY created_at DESC
+              LIMIT 1
+            `,
+            [clientKey, mk]
+          );
+          const existingId = existing?.rows?.[0]?.id;
+
+          if (existingId) {
+            result = await query(
+              `
+                UPDATE leads
+                SET name = $2,
+                    phone = $3,
+                    service = COALESCE($4, service),
+                    source = COALESCE($5, source)
+                WHERE id = $1
+                RETURNING id, name, phone, service, source, status, notes
+              `,
+              [existingId, name, phone, service, source]
+            );
+          } else {
+            result = await query(
+              `
+                INSERT INTO leads (client_key, name, phone, phone_match_key, service, source, status)
+                VALUES ($1, $2, $3, $4, $5, $6, 'new')
+                RETURNING id, name, phone, service, source, status, notes
+              `,
+              [clientKey, name, phone, mk, service, source]
+            );
+          }
+        }
         
         if (result.rows?.[0]) {
           inserted.push(result.rows[0]);
