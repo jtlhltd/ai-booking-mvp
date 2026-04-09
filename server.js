@@ -22605,11 +22605,7 @@ async function queueNewLeadsForCalling() {
         // Check both call_queue (pending calls) AND calls table (completed calls)
         // Also exclude leads we already queued/completed in the last 24h to avoid re-calling when webhook is delayed
         const newLeads = await query(`
-          SELECT l.id, l.name, l.phone, l.service, l.source, l.status, l.created_at,
-                 (SELECT COUNT(*) FROM call_queue cq 
-                  WHERE cq.client_key = l.client_key 
-                  AND cq.lead_phone = l.phone 
-                  AND cq.status IN ('completed', 'processing')) as call_count
+          SELECT l.id, l.name, l.phone, l.service, l.source, l.status, l.created_at
           FROM leads l
           WHERE l.client_key = $1
             AND l.status = 'new'
@@ -22619,13 +22615,6 @@ async function queueNewLeadsForCalling() {
               WHERE cq.client_key = l.client_key 
               AND cq.lead_phone = l.phone 
               AND cq.status = 'pending'
-            )
-            AND NOT EXISTS (
-              SELECT 1 FROM call_queue cq2
-              WHERE cq2.client_key = l.client_key
-              AND cq2.lead_phone = l.phone
-              AND cq2.status IN ('completed', 'processing')
-              AND cq2.updated_at >= NOW() - INTERVAL '24 hours'
             )
             AND NOT EXISTS (
               SELECT 1 FROM calls c
