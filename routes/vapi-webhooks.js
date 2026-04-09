@@ -565,6 +565,12 @@ async function processWebhookPayload(body, correlationId) {
       keyPhrases: analysis.keyPhrases.slice(0, 3)
     });
 
+    // Persist endedReason on the call row so transcript UI can show who hung up (Vapi does not always put it in call.metadata).
+    const baseMeta =
+      typeof metadata === 'object' && metadata != null && !Array.isArray(metadata) ? { ...metadata } : {};
+    if (endedReason) baseMeta.endedReason = endedReason;
+    const metadataForStore = Object.keys(baseMeta).length > 0 ? baseMeta : metadata;
+
     // Update call tracking in database with quality data
     await updateCallTracking({
       callId,
@@ -574,7 +580,7 @@ async function processWebhookPayload(body, correlationId) {
       outcome,
       duration,
       cost,
-      metadata,
+      metadata: metadataForStore,
       timestamp: new Date().toISOString(),
       // Quality data (NEW)
       transcript,

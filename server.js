@@ -8191,6 +8191,68 @@ function formatVapiEndedReasonDisplay(reason) {
     .join(' ');
 }
 
+/** For transcript modal: map Vapi `endedReason` to who ended a live call. */
+function inferCallEndedByFromVapiReason(endedReason) {
+  const detail = formatVapiEndedReasonDisplay(endedReason);
+  if (!endedReason || typeof endedReason !== 'string') {
+    return {
+      callEndedBy: 'unknown',
+      callEndedByLabel: 'Who ended the call: not recorded',
+      endedReasonDetail: ''
+    };
+  }
+  const r = endedReason.toLowerCase();
+  if (r.includes('assistant-ended-call')) {
+    return { callEndedBy: 'assistant', callEndedByLabel: 'Ended by: AI', endedReasonDetail: detail };
+  }
+  if (r.includes('customer-ended-call')) {
+    return { callEndedBy: 'customer', callEndedByLabel: 'Ended by: contact', endedReasonDetail: detail };
+  }
+  if (r.includes('silence-timed-out')) {
+    return { callEndedBy: 'system', callEndedByLabel: 'Ended by: system (silence timeout)', endedReasonDetail: detail };
+  }
+  if (r.includes('exceeded-max-duration')) {
+    return { callEndedBy: 'system', callEndedByLabel: 'Ended by: system (max duration)', endedReasonDetail: detail };
+  }
+  if (
+    r.includes('customer-did-not-answer') ||
+    r.includes('did-not-answer') ||
+    r.includes('voicemail') ||
+    r.includes('customer-busy') ||
+    r.includes('rejected') ||
+    r.includes('failed-to-connect') ||
+    r.includes('misdialed') ||
+    r.includes('vonage-rejected') ||
+    r.includes('twilio-reported') ||
+    r.includes('error') ||
+    r.includes('fault')
+  ) {
+    return {
+      callEndedBy: 'unknown',
+      callEndedByLabel: detail ? `End reason: ${detail}` : 'Who ended the call: not applicable',
+      endedReasonDetail: detail
+    };
+  }
+  if (r.includes('vonage-completed')) {
+    return {
+      callEndedBy: 'unknown',
+      callEndedByLabel: 'Call completed (carrier — who hung up not specified)',
+      endedReasonDetail: detail
+    };
+  }
+  return {
+    callEndedBy: 'unknown',
+    callEndedByLabel: detail ? `End reason: ${detail}` : 'Who ended the call: unknown',
+    endedReasonDetail: detail
+  };
+}
+
+function endedReasonFromCallRow(row) {
+  const m = parseCallsRowMetadata(row?.metadata);
+  if (!m || typeof m !== 'object') return null;
+  return m.endedReason || m.endReason || null;
+}
+
 function outcomeToFriendlyLabel(outcome) {
   if (!outcome) return null;
   const o = (outcome || '').toLowerCase();
@@ -10906,7 +10968,7 @@ app.get('/api/calls/:callId/transcript', async (req, res) => {
         try {
           // Try exact match first
           result = await query(`
-            SELECT transcript, summary, duration, created_at, call_id, id, lead_phone
+            SELECT transcript, summary, duration, created_at, call_id, id, lead_phone, metadata
             FROM calls
             WHERE client_key = $2
               AND call_id = $1
@@ -10917,7 +10979,7 @@ app.get('/api/calls/:callId/transcript', async (req, res) => {
           // If not found, try case-insensitive match (some databases might store it differently)
           if (!result.rows || result.rows.length === 0) {
             result = await query(`
-              SELECT transcript, summary, duration, created_at, call_id, id, lead_phone
+              SELECT transcript, summary, duration, created_at, call_id, id, lead_phone, metadata
               FROM calls
               WHERE client_key = $2
                 AND LOWER(call_id) = LOWER($1)
@@ -10942,7 +11004,7 @@ app.get('/api/calls/:callId/transcript', async (req, res) => {
         if (!isNaN(numericId) && numericId > 0) {
           try {
             result = await query(`
-              SELECT transcript, summary, duration, created_at, call_id, id, lead_phone
+              SELECT transcript, summary, duration, created_at, call_id, id, lead_phone, metadata
               FROM calls
               WHERE client_key = $2
                 AND id = $1
@@ -10965,7 +11027,7 @@ app.get('/api/calls/:callId/transcript', async (req, res) => {
       if (!result.rows || result.rows.length === 0) {
         try {
           result = await query(`
-            SELECT transcript, summary, duration, created_at, call_id, id, lead_phone
+            SELECT transcript, summary, duration, created_at, call_id, id, lead_phone, metadata
             FROM calls
             WHERE client_key = $2
               AND lead_phone = $1
@@ -11103,9 +11165,15 @@ app.get('/api/calls/:callId/transcript', async (req, res) => {
                   transcriptLength: transcript.length
                 });
                 
+                const vapiEndedReason = vapiCall.endedReason || null;
                 // Save it to our database for future lookups
                 try {
                   const { upsertCall } = await import('./db.js');
+                  const metaBase =
+                    typeof vapiCall.metadata === 'object' && vapiCall.metadata && !Array.isArray(vapiCall.metadata)
+                      ? { ...vapiCall.metadata }
+                      : {};
+                  if (vapiEndedReason) metaBase.endedReason = vapiEndedReason;
                   await upsertCall({
                     callId: callId,
                     clientKey: clientKey,
@@ -11115,18 +11183,22 @@ app.get('/api/calls/:callId/transcript', async (req, res) => {
                     duration: vapiCall.duration || null,
                     cost: vapiCall.cost || null,
                     transcript: transcript,
-                    metadata: vapiCall.metadata || {}
+                    metadata: Object.keys(metaBase).length ? metaBase : vapiCall.metadata || {}
                   });
                 } catch (saveError) {
                   console.error('[TRANSCRIPT FALLBACK] Failed to save to DB:', saveError);
                 }
-                
+
+                const vapiEndedPayload = inferCallEndedByFromVapiReason(vapiEndedReason);
                 return res.json({
                   ok: true,
                   transcript: typeof transcript === 'string' ? transcript : JSON.stringify(transcript),
                   duration: vapiCall.duration,
                   timestamp: vapiCall.createdAt || new Date().toISOString(),
-                  source: 'vapi_api'
+                  source: 'vapi_api',
+                  callEndedBy: vapiEndedPayload.callEndedBy,
+                  callEndedByLabel: vapiEndedPayload.callEndedByLabel,
+                  endedReasonDetail: vapiEndedPayload.endedReasonDetail || null
                 });
               }
             }
@@ -11141,6 +11213,8 @@ app.get('/api/calls/:callId/transcript', async (req, res) => {
     
     const row = result.rows[0];
     const transcript = row.transcript || row.summary || null;
+    const endedReasonRow = endedReasonFromCallRow(row);
+    const endedPayload = inferCallEndedByFromVapiReason(endedReasonRow);
     
     console.error('[TRANSCRIPT FOUND]', { 
       callId: row.call_id, 
@@ -11157,7 +11231,10 @@ app.get('/api/calls/:callId/transcript', async (req, res) => {
         duration: row.duration,
         timestamp: row.created_at,
         callId: row.call_id,
-        dbId: row.id
+        dbId: row.id,
+        callEndedBy: endedPayload.callEndedBy,
+        callEndedByLabel: endedPayload.callEndedByLabel,
+        endedReasonDetail: endedPayload.endedReasonDetail || null
       });
     }
     
@@ -11165,7 +11242,10 @@ app.get('/api/calls/:callId/transcript', async (req, res) => {
       ok: true,
       transcript: typeof transcript === 'string' ? transcript : JSON.stringify(transcript),
       duration: row.duration,
-      timestamp: row.created_at
+      timestamp: row.created_at,
+      callEndedBy: endedPayload.callEndedBy,
+      callEndedByLabel: endedPayload.callEndedByLabel,
+      endedReasonDetail: endedPayload.endedReasonDetail || null
     });
   } catch (error) {
     console.error('[TRANSCRIPT ERROR]', error);

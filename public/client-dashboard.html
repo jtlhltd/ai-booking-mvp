@@ -3253,6 +3253,33 @@
             overflow-y: auto;
         }
 
+        .transcript-ended-by {
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            line-height: 1.45;
+            background: rgba(92, 106, 196, 0.08);
+            border: 1px solid rgba(92, 106, 196, 0.2);
+            color: var(--text, #2f3147);
+            margin-bottom: 10px;
+        }
+
+        .transcript-ended-by__headline {
+            font-weight: 600;
+        }
+
+        .transcript-ended-by__detail {
+            margin-top: 4px;
+            font-size: 0.82rem;
+            opacity: 0.88;
+            font-weight: 400;
+        }
+
+        .transcript-ended-by--unknown {
+            background: rgba(100, 110, 130, 0.08);
+            border-color: rgba(100, 110, 130, 0.2);
+        }
+
         .transcript-content {
             font-family: 'Monaco', 'Courier New', monospace;
             font-size: 0.85rem;
@@ -3262,7 +3289,7 @@
             padding: 16px;
             background: #f8f9fa;
             border-radius: 8px;
-            margin-top: 12px;
+            margin-top: 0;
         }
 
         .forecast-chart {
@@ -5438,6 +5465,17 @@
             border: 1px solid rgba(92,106,196,0.5);
         }
 
+        body[data-theme="dark"] .transcript-ended-by {
+            background: rgba(92, 106, 196, 0.15);
+            border-color: rgba(92, 106, 196, 0.35);
+            color: #e8eaf4;
+        }
+
+        body[data-theme="dark"] .transcript-ended-by--unknown {
+            background: rgba(120, 130, 160, 0.12);
+            border-color: rgba(140, 150, 180, 0.25);
+        }
+
         body[data-theme="dark"] .timeline-item {
             border-left-color: rgba(92,106,196,0.5);
         }
@@ -6356,6 +6394,7 @@
                 <button class="modal-close" id="transcriptCloseBtn" aria-label="Close transcript modal">&times;</button>
             </div>
             <div class="modal-body">
+                <div id="transcriptEndedBy" class="transcript-ended-by" hidden></div>
                 <div class="transcript-content" id="transcriptContent" role="region" aria-live="polite">Loading transcript...</div>
             </div>
         </div>
@@ -10366,12 +10405,38 @@ ${actionsRow}
             }, duration);
         }
 
+        function clearTranscriptEndedByBanner() {
+            const el = document.getElementById('transcriptEndedBy');
+            if (!el) return;
+            el.hidden = true;
+            el.innerHTML = '';
+            el.className = 'transcript-ended-by';
+        }
+
+        function setTranscriptEndedByBanner(payload) {
+            const el = document.getElementById('transcriptEndedBy');
+            if (!el) return;
+            const label = payload && payload.callEndedByLabel ? String(payload.callEndedByLabel).trim() : '';
+            if (!label) {
+                clearTranscriptEndedByBanner();
+                return;
+            }
+            el.hidden = false;
+            const who = payload.callEndedBy || 'unknown';
+            el.className = 'transcript-ended-by transcript-ended-by--' + who;
+            const detail = payload.endedReasonDetail ? String(payload.endedReasonDetail).trim() : '';
+            const showDetail = detail && detail !== label && !label.includes(detail);
+            const sub = showDetail ? `<div class="transcript-ended-by__detail">${escapeHtml(detail)}</div>` : '';
+            el.innerHTML = `<div class="transcript-ended-by__headline">${escapeHtml(label)}</div>${sub}`;
+        }
+
         async function viewTranscript(callId, name) {
             const modal = document.getElementById('transcriptModal');
             const titleEl = document.getElementById('transcriptModalTitle');
             const contentEl = document.getElementById('transcriptContent');
             if (!modal || !titleEl || !contentEl) return;
 
+            clearTranscriptEndedByBanner();
             titleEl.textContent = `Call Transcript: ${name}`;
             contentEl.textContent = 'Loading transcript...';
             modal.classList.add('open');
@@ -10461,7 +10526,20 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     contentEl.textContent = 'Transcript not available for this call.';
                     return;
                 }
+                const demoEndedBy = {
+                    'demo-call-1': { callEndedBy: 'assistant', callEndedByLabel: 'Ended by: AI', endedReasonDetail: 'Assistant ended call after booking' },
+                    'demo-1': { callEndedBy: 'assistant', callEndedByLabel: 'Ended by: AI', endedReasonDetail: 'Assistant ended call after booking' },
+                    'demo-call-2': { callEndedBy: 'customer', callEndedByLabel: 'Ended by: contact', endedReasonDetail: 'Customer ended call' },
+                    'demo-2': { callEndedBy: 'customer', callEndedByLabel: 'Ended by: contact', endedReasonDetail: 'Customer ended call' },
+                    'demo-call-3': { callEndedBy: 'assistant', callEndedByLabel: 'Ended by: AI', endedReasonDetail: 'Assistant ended call' },
+                    'demo-3': { callEndedBy: 'assistant', callEndedByLabel: 'Ended by: AI', endedReasonDetail: 'Assistant ended call' },
+                    'demo-call-4': { callEndedBy: 'customer', callEndedByLabel: 'Ended by: contact', endedReasonDetail: 'Customer ended call' },
+                    'demo-4': { callEndedBy: 'customer', callEndedByLabel: 'Ended by: contact', endedReasonDetail: 'Customer ended call' },
+                    'demo-call-5': { callEndedBy: 'unknown', callEndedByLabel: 'End reason: Voicemail', endedReasonDetail: 'Voicemail' },
+                    'demo-5': { callEndedBy: 'unknown', callEndedByLabel: 'End reason: Voicemail', endedReasonDetail: 'Voicemail' }
+                };
                 setTimeout(() => {
+                    setTranscriptEndedByBanner(demoEndedBy[callId] || demoEndedBy[demoKey] || null);
                     contentEl.innerHTML = `<pre style="white-space: pre-wrap; font-family: 'Inter', sans-serif; line-height: 1.6; color: var(--text); margin: 0;">${transcript}</pre>`;
                 }, 300);
                 return;
@@ -10471,12 +10549,15 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const response = await fetch(`${BASE_URL}/api/calls/${callId}/transcript?clientKey=${currentClient}`);
                 const payload = await response.json();
                 if (response.ok && payload?.ok && payload.transcript) {
+                    setTranscriptEndedByBanner(payload);
                     contentEl.textContent = payload.transcript;
                 } else {
+                    clearTranscriptEndedByBanner();
                     contentEl.textContent = 'Transcript not available for this call.';
                 }
             } catch (error) {
                 console.error('Failed to load transcript', error);
+                clearTranscriptEndedByBanner();
                 contentEl.innerHTML = `
                     <div class="error-message" role="alert">
                         <span class="error-message-icon">⚠️</span>
@@ -10506,6 +10587,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         function closeTranscriptModal() {
             const modal = document.getElementById('transcriptModal');
             if (modal) modal.classList.remove('open');
+            clearTranscriptEndedByBanner();
         }
 
         async function renderActiveIndicator(data) {
