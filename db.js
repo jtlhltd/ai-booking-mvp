@@ -176,6 +176,41 @@ async function migratePostgresLeadsPhoneMatchKey(pgPool) {
   console.log('✅ leads.phone_match_key migration complete');
 }
 
+/** Dashboard lead→first-call lateral join: indexable match on tail-10 digits (avoids regexp per call row). */
+async function migratePostgresCallsLeadPhoneMatchKey(pgPool) {
+  await pgPool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'calls' AND column_name = 'lead_phone_match_key'
+      ) THEN
+        ALTER TABLE calls ADD COLUMN lead_phone_match_key TEXT;
+        RAISE NOTICE 'Added column calls.lead_phone_match_key';
+      END IF;
+    END $$;
+  `);
+
+  await pgPool.query(`
+    UPDATE calls SET lead_phone_match_key = (
+      CASE
+        WHEN LENGTH(regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g')) >= 10
+        THEN RIGHT(regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g'), 10)
+        ELSE NULLIF(regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g'), '')
+      END
+    )
+    WHERE lead_phone_match_key IS NULL AND lead_phone IS NOT NULL;
+  `);
+
+  await pgPool.query(`
+    CREATE INDEX IF NOT EXISTS calls_client_lead_phone_match_key_created_idx
+    ON calls (client_key, lead_phone_match_key, created_at ASC)
+    WHERE lead_phone_match_key IS NOT NULL;
+  `);
+
+  console.log('✅ calls.lead_phone_match_key migration complete');
+}
+
 async function migrateSqliteLeadsPhoneMatchKey() {
   if (!sqlite) return;
   try {
@@ -214,6 +249,33 @@ async function migrateSqliteLeadsPhoneMatchKey() {
     console.warn('⚠️  SQLite phone_match_key unique index:', e.message);
   }
   console.log('✅ SQLite leads.phone_match_key migration complete');
+}
+
+async function migrateSqliteCallsLeadPhoneMatchKey() {
+  if (!sqlite) return;
+  try {
+    sqlite.exec('ALTER TABLE calls ADD COLUMN lead_phone_match_key TEXT');
+  } catch {
+    /* column may already exist */
+  }
+  try {
+    const rows = sqlite.prepare('SELECT id, lead_phone FROM calls WHERE lead_phone_match_key IS NULL').all();
+    const upd = sqlite.prepare('UPDATE calls SET lead_phone_match_key = ? WHERE id = ?');
+    for (const r of rows) {
+      upd.run(phoneMatchKey(r.lead_phone), r.id);
+    }
+  } catch (e) {
+    if (!String(e.message || e).includes('no such table')) {
+      console.warn('⚠️  SQLite calls.lead_phone_match_key backfill:', e.message || e);
+    }
+  }
+  try {
+    sqlite.exec(
+      'CREATE INDEX IF NOT EXISTS calls_client_lead_phone_match_key_created_idx ON calls (client_key, lead_phone_match_key, created_at ASC)'
+    );
+  } catch {
+    /* table may not exist yet */
+  }
 }
 
 // ---------------------- Postgres ----------------------
@@ -364,6 +426,7 @@ async function initPostgres() {
       call_id TEXT UNIQUE NOT NULL,
       client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
       lead_phone TEXT NOT NULL,
+      lead_phone_match_key TEXT,
       status TEXT NOT NULL,
       outcome TEXT,
       duration INTEGER,
@@ -992,6 +1055,12 @@ async function initPostgres() {
     console.error('⚠️  leads phone_match_key migration error (non-fatal):', pkErr.message);
   }
 
+  try {
+    await migratePostgresCallsLeadPhoneMatchKey(pool);
+  } catch (ckErr) {
+    console.error('⚠️  calls lead_phone_match_key migration error (non-fatal):', ckErr.message);
+  }
+
     DB_PATH = 'postgres';
     console.log('✅ DB: Postgres connected');
     return 'postgres';
@@ -1130,6 +1199,9 @@ export async function init() {
   const r = initSqlite();
   await migrateSqliteLeadsPhoneMatchKey().catch((e) =>
     console.warn('⚠️  SQLite phone_match_key migration:', e.message)
+  );
+  await migrateSqliteCallsLeadPhoneMatchKey().catch((e) =>
+    console.warn('⚠️  SQLite calls.lead_phone_match_key migration:', e.message)
   );
   await getCallAnalyticsFloorIso().catch((e) =>
     console.warn('[call_analytics_floor] init:', e.message)
@@ -1659,16 +1731,19 @@ export async function upsertCall({
   const objectionsJson = objections ? JSON.stringify(objections) : null;
   const keyPhrasesJson = keyPhrases ? JSON.stringify(keyPhrases) : null;
   const metricsJson = metrics ? JSON.stringify(metrics) : null;
-  
+  const leadPhoneMatchKey = phoneMatchKey(leadPhone);
+
   await query(`
     INSERT INTO calls (
-      call_id, client_key, lead_phone, status, outcome, duration, cost, metadata, retry_attempt,
+      call_id, client_key, lead_phone, lead_phone_match_key, status, outcome, duration, cost, metadata, retry_attempt,
       transcript, recording_url, sentiment, quality_score, objections, key_phrases, metrics, analyzed_at,
       updated_at
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, now())
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, now())
     ON CONFLICT (call_id) 
     DO UPDATE SET 
+      lead_phone = EXCLUDED.lead_phone,
+      lead_phone_match_key = EXCLUDED.lead_phone_match_key,
       status = EXCLUDED.status,
       outcome = EXCLUDED.outcome,
       duration = EXCLUDED.duration,
@@ -1685,7 +1760,7 @@ export async function upsertCall({
       analyzed_at = EXCLUDED.analyzed_at,
       updated_at = now()
   `, [
-    callId, clientKey, leadPhone, status, outcome, duration, cost, metadataJson, retryAttempt,
+    callId, clientKey, leadPhone, leadPhoneMatchKey, status, outcome, duration, cost, metadataJson, retryAttempt,
     transcript, recordingUrl, sentiment, qualityScore, objectionsJson, keyPhrasesJson, metricsJson, analyzedAt
   ]);
 }

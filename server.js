@@ -8948,7 +8948,13 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
               c.lead_phone = l.phone
               OR (
                 l.phone_match_key IS NOT NULL
-                AND RIGHT(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), 10) = l.phone_match_key
+                AND (
+                  c.lead_phone_match_key = l.phone_match_key
+                  OR (
+                    c.lead_phone_match_key IS NULL
+                    AND RIGHT(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), 10) = l.phone_match_key
+                  )
+                )
               )
             )
           ORDER BY c.created_at ASC
@@ -11900,18 +11906,19 @@ async function fetchLeadNamesForRetryQueuePhones(clientKey, queuePhones) {
     `
     WITH qn AS (
       SELECT DISTINCT p AS phone_raw,
-             regexp_replace(COALESCE(p, ''), '[^0-9]', '', 'g') AS qdig
+             regexp_replace(COALESCE(p, ''), '[^0-9]', '', 'g') AS qdig,
+             CASE
+               WHEN LENGTH(regexp_replace(COALESCE(p, ''), '[^0-9]', '', 'g')) >= 10
+               THEN RIGHT(regexp_replace(COALESCE(p, ''), '[^0-9]', '', 'g'), 10)
+               ELSE NULLIF(regexp_replace(COALESCE(p, ''), '[^0-9]', '', 'g'), '')
+             END AS qkey
       FROM unnest($2::text[]) AS x(p)
       WHERE p IS NOT NULL AND p <> ''
     ),
     lead_index AS (
-      SELECT phone AS phone,
-             name,
-             created_at,
-             regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') AS ldig
+      SELECT phone, phone_match_key, name, created_at
       FROM leads
       WHERE client_key = $1
-        AND regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g') <> ''
     )
     SELECT DISTINCT ON (qn.phone_raw)
       qn.phone_raw,
@@ -11920,9 +11927,9 @@ async function fetchLeadNamesForRetryQueuePhones(clientKey, queuePhones) {
     JOIN lead_index li ON (
       li.phone = qn.phone_raw
       OR (
-        LENGTH(li.ldig) >= 10
-        AND LENGTH(qn.qdig) >= 10
-        AND RIGHT(li.ldig, 10) = RIGHT(qn.qdig, 10)
+        li.phone_match_key IS NOT NULL
+        AND qn.qkey IS NOT NULL
+        AND li.phone_match_key = qn.qkey
       )
     )
     ORDER BY qn.phone_raw, li.created_at DESC NULLS LAST
