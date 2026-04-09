@@ -22341,10 +22341,21 @@ async function processCallQueue() {
 
       // Process the call based on type
       if (call.call_type === 'vapi_call') {
-        await processVapiCallFromQueue(call);
+        const v = await processVapiCallFromQueue(call);
         const { rows: stRows } = await query(`SELECT status FROM call_queue WHERE id = $1`, [call.id]);
         if (stRows?.[0]?.status === 'pending') {
           console.log('[CALL QUEUE PROCESSOR] Item rescheduled during handler; skipping complete.', { id: call.id });
+          return;
+        }
+        // Safety: never mark completed unless we actually initiated a Vapi call id.
+        // This prevents phantom "completed" queue rows when call initiation didn't happen.
+        if (!v?.callId) {
+          const next = new Date(Date.now() + 2 * 60 * 1000);
+          await query(
+            `UPDATE call_queue SET status = 'pending', scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
+            [next, call.id]
+          );
+          console.warn('[CALL QUEUE PROCESSOR] No Vapi call id from handler; rescheduled', { id: call.id, scheduledFor: next.toISOString() });
           return;
         }
       }
@@ -22572,7 +22583,7 @@ async function processVapiCallFromQueue(call) {
       callId: vapiCallId || 'pending',
       priority: call.priority
     });
-    
+    return { ok: true, callId: vapiCallId };
   } catch (error) {
     console.error('[QUEUE VAPI CALL ERROR]', {
       queueId: call.id,
