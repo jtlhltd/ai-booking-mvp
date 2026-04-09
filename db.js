@@ -679,6 +679,10 @@ async function initPostgres() {
     CREATE INDEX IF NOT EXISTS call_queue_pending_priority_scheduled_idx
       ON call_queue (priority ASC, scheduled_for ASC)
       WHERE status = 'pending';
+    -- Due worker: ORDER BY scheduled_for, priority avoids scanning all future high-priority rows first
+    CREATE INDEX IF NOT EXISTS call_queue_pending_scheduled_priority_idx
+      ON call_queue (scheduled_for ASC, priority ASC)
+      WHERE status = 'pending';
     -- Include id for index-only stale scans + deterministic tie-break
     CREATE INDEX IF NOT EXISTS call_queue_processing_updated_id_idx
       ON call_queue (updated_at ASC, id ASC) WHERE status = 'processing';
@@ -1042,6 +1046,9 @@ async function initPostgres() {
       CREATE INDEX IF NOT EXISTS call_queue_client_vapi_completed_initiated_idx
         ON call_queue (client_key)
         WHERE status = 'completed' AND call_type = 'vapi_call' AND initiated_call_id IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS call_queue_pending_scheduled_priority_idx
+        ON call_queue (scheduled_for ASC, priority ASC)
+        WHERE status = 'pending';
     `).catch((idxErr) => {
       console.warn('⚠️  Dashboard perf index migration (non-fatal):', idxErr.message);
     });
@@ -2513,10 +2520,12 @@ export async function addToCallQueue({ clientKey, leadPhone, priority = 5, sched
 }
 
 export async function getPendingCalls(limit = 100) {
+  // Order by time first so the planner can use (scheduled_for, priority) on pending rows and stop at LIMIT.
+  // Priority-first ordering would scan huge "future high-priority" prefixes before due low-priority work (multi-second).
   const { rows } = await query(`
     SELECT * FROM call_queue 
     WHERE status = 'pending' AND scheduled_for <= now()
-    ORDER BY priority ASC, scheduled_for ASC
+    ORDER BY scheduled_for ASC, priority ASC
     LIMIT $1
   `, [limit]);
   return rows;
