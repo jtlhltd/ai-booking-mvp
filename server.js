@@ -22334,19 +22334,23 @@ async function processCallQueue() {
     // These can exist from earlier buggy builds; requeue them so the lead actually gets dialed.
     try {
       const { rowCount } = await query(`
-        WITH bad AS (
+        WITH picked AS (
           SELECT id
           FROM call_queue
           WHERE status = 'completed'
             AND initiated_call_id IS NULL
             AND call_type = 'vapi_call'
             AND updated_at >= NOW() - INTERVAL '48 hours'
-          ORDER BY updated_at DESC
+          ORDER BY updated_at DESC, id
           LIMIT 500
+        ),
+        bad AS (
+          SELECT id, ROW_NUMBER() OVER (ORDER BY id) AS rn
+          FROM picked
         )
         UPDATE call_queue cq
         SET status = 'pending',
-            scheduled_for = clock_timestamp() + ((cq.id % 997)::int + 1) * INTERVAL '1 millisecond',
+            scheduled_for = NOW() + bad.rn * INTERVAL '1 millisecond',
             updated_at = NOW()
         FROM bad
         WHERE cq.id = bad.id
@@ -22362,18 +22366,22 @@ async function processCallQueue() {
     // so the system starts working immediately (e.g. after VAPI credits are restored).
     try {
       const { rowCount } = await query(`
-        WITH to_pull AS (
+        WITH picked AS (
           SELECT id
           FROM call_queue
           WHERE status = 'pending'
             AND call_type = 'vapi_call'
             AND scheduled_for > NOW()
             AND scheduled_for <= NOW() + INTERVAL '24 hours'
-          ORDER BY scheduled_for ASC
+          ORDER BY scheduled_for ASC, id
           LIMIT 10
+        ),
+        to_pull AS (
+          SELECT id, ROW_NUMBER() OVER (ORDER BY id) AS rn
+          FROM picked
         )
         UPDATE call_queue cq
-        SET scheduled_for = clock_timestamp() + ((cq.id % 997)::int + 1) * INTERVAL '1 millisecond',
+        SET scheduled_for = NOW() + to_pull.rn * INTERVAL '1 millisecond',
             updated_at = NOW()
         FROM to_pull
         WHERE cq.id = to_pull.id
