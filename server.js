@@ -22572,8 +22572,31 @@ async function processVapiCallFromQueue(call) {
         metadata: { queueId: call.id, fromQueue: true, triggerType: callData?.triggerType || null },
         retryAttempt: call.retry_attempt || 0
       });
+      // Verify the call row exists (and is correlated to this queue row) before we allow the queue item to complete.
+      // If this fails, we reschedule rather than silently "completing" work that didn't persist.
+      const { rows: verifyRows } = await query(
+        `
+          SELECT 1
+          FROM calls
+          WHERE client_key = $1
+            AND call_id = $2
+            AND (metadata->>'queueId') = $3
+          LIMIT 1
+        `,
+        [clientKey, vapiCallId, String(call.id)]
+      );
+      if (!verifyRows?.[0]) {
+        throw new Error('call_persist_verify_failed');
+      }
     } catch (e) {
       console.warn('[QUEUE CALL] Failed to record initiated call:', e?.message || e);
+      const next = new Date(Date.now() + 2 * 60 * 1000);
+      await query(
+        `UPDATE call_queue SET status = 'pending', scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
+        [next, call.id]
+      );
+      console.warn('[QUEUE CALL] Rescheduled due to call persist failure', { queueId: call.id, scheduledFor: next.toISOString() });
+      return;
     }
     
     console.log('[QUEUE CALL SUCCESS]', {
