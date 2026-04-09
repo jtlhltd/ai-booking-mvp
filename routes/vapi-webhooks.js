@@ -286,12 +286,23 @@ async function processWebhookPayload(body, correlationId) {
       }
     }
 
-    // Release VAPI concurrency slot when call ends (this is what VAPI's "concurrency limit" is based on)
+    // Release VAPI concurrency slot when the call is known to have ended.
+    // In practice, Vapi does not always deliver end-of-call-report reliably/quickly,
+    // but it often sends call.status='ended' and/or call.endedAt on other webhook types.
     const isEndOfCallReport = body.type === 'end-of-call-report' || body.message?.type === 'end-of-call-report';
-    if (isEndOfCallReport && callId) {
+    const endedAt = body.call?.endedAt || body.endedAt || body.call?.endTime || body.endTime;
+    const statusNorm = String(status || '').trim().toLowerCase();
+    const looksEnded =
+      isEndOfCallReport ||
+      statusNorm === 'ended' ||
+      statusNorm === 'completed' ||
+      (!!endedAt) ||
+      // endedReason is only meaningful at end-of-call; treat it as a strong signal.
+      (!!endedReason && (statusNorm === 'initiated' || !statusNorm));
+    if (callId && looksEnded) {
       try {
         const { releaseVapiSlot } = await import('../lib/instant-calling.js');
-        releaseVapiSlot({ callId, reason: 'end_of_call_report' });
+        releaseVapiSlot({ callId, reason: isEndOfCallReport ? 'end_of_call_report' : 'call_ended_signal' });
       } catch (e) {
         console.warn('[VAPI CONCURRENCY] Failed to release slot from webhook:', e?.message || e);
       }
