@@ -22532,9 +22532,13 @@ async function processVapiCallFromQueue(call) {
       throw new Error(vapiResult?.error || vapiResult?.details || 'VAPI call failed');
     }
 
+    // Normalize call id return shape from different Vapi helpers.
+    // `callLeadInstantly` returns `{ ok: true, callId: '...' }` (not `.id`).
+    const vapiCallId = vapiResult?.id || vapiResult?.callId || null;
+
     // Record an initiated call immediately so the dashboard reflects real outbound attempts
     // even before Vapi webhooks arrive.
-    if (!vapiResult?.id) {
+    if (!vapiCallId) {
       // Defensive: if we don't get a call id, we can't correlate webhooks; reschedule.
       const next = new Date(Date.now() + 2 * 60 * 1000);
       await query(
@@ -22547,7 +22551,7 @@ async function processVapiCallFromQueue(call) {
     try {
       const { upsertCall } = await import('./db.js');
       await upsertCall({
-        callId: vapiResult.id,
+        callId: vapiCallId,
         clientKey,
         leadPhone,
         status: 'initiated',
@@ -22565,7 +22569,7 @@ async function processVapiCallFromQueue(call) {
       queueId: call.id,
       clientKey,
       leadPhone,
-      callId: vapiResult.id || 'pending',
+      callId: vapiCallId || 'pending',
       priority: call.priority
     });
     
