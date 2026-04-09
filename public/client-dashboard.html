@@ -3536,18 +3536,19 @@
         .insights-hour-bars {
             display: flex;
             align-items: flex-end;
-            justify-content: flex-start;
+            justify-content: space-between;
             gap: 3px;
             height: 118px;
             padding-top: 6px;
-            width: max-content;
-            min-width: 100%;
+            width: 100%;
+            max-width: 100%;
         }
 
         .insights-hour-bar-wrap {
-            flex: 0 0 auto;
-            width: 16px;
-            min-width: 16px;
+            flex: 1 1 0;
+            width: auto;
+            min-width: 10px;
+            max-width: 18px;
             display: flex;
             flex-direction: column;
             align-items: center;
