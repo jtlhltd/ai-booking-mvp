@@ -21978,56 +21978,71 @@ async function processRetryQueue() {
       console.warn('[RETRY PROCESSOR] Failed to reset stale processing rows:', e?.message || e);
     }
 
-    const pendingRetries = await getPendingRetries(50);
+    const maxRetriesPerRun = Math.max(1, Math.min(500, parseInt(process.env.RETRY_QUEUE_MAX_PER_RUN || '200', 10) || 200));
+    const maxConcurrentRetries = Math.max(1, Math.min(25, parseInt(process.env.RETRY_QUEUE_MAX_CONCURRENT || '5', 10) || 5));
+
+    const pendingRetries = await getPendingRetries(maxRetriesPerRun);
     
     if (pendingRetries.length === 0) {
       return;
     }
     
-    console.log('[RETRY PROCESSOR]', { pendingCount: pendingRetries.length });
-    
-    for (const retry of pendingRetries) {
-      try {
-        if (retry.retry_type === 'vapi_call' && retry.client_key) {
-          const rClient = await getFullClient(retry.client_key);
-          if (rClient && !isBusinessHours(rClient)) {
-            const next = getNextBusinessHour(rClient);
-            await query(
-              `UPDATE retry_queue SET scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
-              [next, retry.id]
-            );
-            console.log('[RETRY PROCESSOR] Deferred — outside business hours', { id: retry.id, scheduledFor: next });
-            continue;
-          }
-        }
+    console.log('[RETRY PROCESSOR]', {
+      pendingCount: pendingRetries.length,
+      maxRetriesPerRun,
+      maxConcurrentRetries
+    });
 
-        // Mark as processing
-        await updateRetryStatus(retry.id, 'processing');
-        
-        // Process the retry based on type
-        if (retry.retry_type === 'vapi_call') {
-          await processVapiRetry(retry);
-        }
-        
-        // Mark as completed
-        await updateRetryStatus(retry.id, 'completed');
-        
-      } catch (retryError) {
-        console.error('[RETRY PROCESSING ERROR]', {
-          retryId: retry.id,
-          error: retryError.message
-        });
-        
-        // Check if we should retry again or mark as failed
-        if (retry.retry_attempt < retry.max_retries) {
-          // Schedule another retry
-          await updateRetryStatus(retry.id, 'pending', retry.retry_attempt + 1);
-        } else {
-          // Max retries reached, mark as failed
-          await updateRetryStatus(retry.id, 'failed');
+    let idx = 0;
+    async function worker() {
+      while (true) {
+        const retry = pendingRetries[idx++];
+        if (!retry) return;
+
+        try {
+          if (retry.retry_type === 'vapi_call' && retry.client_key) {
+            const rClient = await getFullClient(retry.client_key);
+            if (rClient && !isBusinessHours(rClient)) {
+              const next = getNextBusinessHour(rClient);
+              await query(
+                `UPDATE retry_queue SET scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
+                [next, retry.id]
+              );
+              console.log('[RETRY PROCESSOR] Deferred — outside business hours', { id: retry.id, scheduledFor: next });
+              continue;
+            }
+          }
+
+          // Mark as processing
+          await updateRetryStatus(retry.id, 'processing');
+
+          // Process the retry based on type
+          if (retry.retry_type === 'vapi_call') {
+            await processVapiRetry(retry);
+          }
+
+          // Mark as completed
+          await updateRetryStatus(retry.id, 'completed');
+        } catch (retryError) {
+          console.error('[RETRY PROCESSING ERROR]', {
+            retryId: retry.id,
+            error: retryError.message
+          });
+
+          // Check if we should retry again or mark as failed
+          if (retry.retry_attempt < retry.max_retries) {
+            // Schedule another retry
+            await updateRetryStatus(retry.id, 'pending', retry.retry_attempt + 1);
+          } else {
+            // Max retries reached, mark as failed
+            await updateRetryStatus(retry.id, 'failed');
+          }
         }
       }
     }
+
+    const workerCount = Math.min(maxConcurrentRetries, pendingRetries.length);
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
     
   } catch (error) {
     console.error('[RETRY PROCESSOR ERROR]', error);
