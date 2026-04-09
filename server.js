@@ -25576,7 +25576,7 @@ async function runOutboundAbTestSetup(clientKey, body, res) {
       });
       const u = variantsList[0];
       if (dimRaw === 'voice') {
-        const ch = u.voice != null ? String(u.voice).trim() : '';
+        let ch = u.voice != null ? String(u.voice).trim() : '';
         if (!ch) {
           res.status(400).json({ ok: false, error: 'Challenger voice is empty' });
           return;

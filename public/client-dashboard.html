@@ -7157,16 +7157,18 @@ ${actionsRow}
         }
 
         let lastDataUpdate = new Date();
-        async function fetchLiveData(clientKey) {
+        async function fetchLiveData(clientKey, options = {}) {
+            const bustCache = options && options.bustCache === true;
             if (clientKey !== DEMO_CLIENT_KEY) {
                 try {
                     // Add timeout to prevent hanging
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-                    
-                    const res = await fetch(`${BASE_URL}/api/demo-dashboard/${clientKey}`, {
-                        signal: controller.signal
-                    });
+                    const q = bustCache ? `?t=${Date.now()}` : '';
+                    const res = await fetch(
+                        `${BASE_URL}/api/demo-dashboard/${encodeURIComponent(clientKey)}${q}`,
+                        { signal: controller.signal }
+                    );
                     clearTimeout(timeoutId);
                     
                     if (res.ok) {
@@ -9986,7 +9988,11 @@ ${actionsRow}
                 );
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
-                const livePayload = await fetchLiveData(currentClient);
+                let livePayload = await fetchLiveData(currentClient, { bustCache: true });
+                if (!livePayload) {
+                    await new Promise((r) => setTimeout(r, 500));
+                    livePayload = await fetchLiveData(currentClient, { bustCache: true });
+                }
                 if (livePayload) {
                     dashboardData = mergeData({}, livePayload, false);
                     updateStatusBar(dashboardData);
@@ -9999,7 +10005,9 @@ ${actionsRow}
                 if (msg) {
                     const dimLabel =
                         dim === 'voice' ? 'Voice' : dim === 'opening' ? 'Opening line' : 'Script';
-                    msg.textContent = `${dimLabel} uploaded.`;
+                    msg.textContent = livePayload
+                        ? `${dimLabel} uploaded.`
+                        : `${dimLabel} saved on server — dashboard refresh timed out; reload the page to see the challenger.`;
                 }
             } catch (err) {
                 if (msg) msg.textContent = err.message || 'Upload failed';
