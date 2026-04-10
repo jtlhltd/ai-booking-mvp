@@ -14787,13 +14787,14 @@ function safeAsync(handler) {
   };
 }
 
-// Business hours detection (Luxon + tenant timezone; see lib/business-hours.js)
+// Business hours for outbound dialing (Luxon + tenant timezone; see lib/business-hours.js).
+// Weekends are excluded unless ALLOW_OUTBOUND_WEEKEND_CALLS is set.
 function isBusinessHours(tenant = null) {
-  return isBusinessHoursForTenant(tenant, new Date(), TIMEZONE);
+  return isBusinessHoursForTenant(tenant, new Date(), TIMEZONE, { forOutboundDial: true });
 }
 
 function getNextBusinessHour(tenant = null) {
-  return getNextBusinessOpenForTenant(tenant, new Date(), TIMEZONE);
+  return getNextBusinessOpenForTenant(tenant, new Date(), TIMEZONE, { forOutboundDial: true });
 }
 
 // Intelligent call scheduling
@@ -17284,7 +17285,7 @@ app.post('/webhooks/twilio-inbound', express.urlencoded({ extended: false }), tw
               timestamp: new Date().toISOString(),
               leadScore: existingLead?.score || 0,
               leadStatus: existingLead?.status || 'new',
-              businessHours: isBusinessHours() ? 'within' : 'outside',
+              businessHours: isBusinessHours(client) ? 'within' : 'outside',
               retryAttempt: 0 // Track retry attempts
             },
             assistantOverrides: {
@@ -23086,7 +23087,14 @@ async function queueNewLeadsForCalling() {
               tomorrowStillNeeded > 0 &&
               queuedTomorrowThisRun < maxTomorrowToQueuePerRun
             ) {
-              const tomorrowBaseline = new Date(Date.now() + 24 * 60 * 60 * 1000);
+              const tzQ = client.timezone || TIMEZONE;
+              const tomorrowStart = DateTime.now().setZone(tzQ).plus({ days: 1 }).startOf('day').toJSDate();
+              const tomorrowBaseline = getNextBusinessOpenForTenant(
+                client,
+                tomorrowStart,
+                TIMEZONE,
+                { forOutboundDial: true }
+              );
               finalScheduledFor = await scheduleAtOptimalCallWindow(client, routing, tomorrowBaseline, {
                 fallbackTz: TIMEZONE,
                 clientKey: client.clientKey,
@@ -25152,7 +25160,7 @@ app.post('/admin/vapi/test-call', async (req, res) => {
     }
 
     const tzTenant = { booking: { timezone: TIMEZONE } };
-    if (!isBusinessHoursForTenant(tzTenant, new Date(), TIMEZONE)) {
+    if (!isBusinessHoursForTenant(tzTenant, new Date(), TIMEZONE, { forOutboundDial: true })) {
       return res.status(403).json({
         error: 'outside_business_hours',
         message: 'Test calls are only allowed during configured business hours (use tenant timezone).'

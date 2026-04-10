@@ -13,7 +13,11 @@ const tenant = {
 describe('Optimal call window', () => {});
 
 (async () => {
-  const base1 = new Date('2026-04-02T10:00:00.000Z');
+  const prevJitter = process.env.OPTIMAL_CALL_JITTER_MAX_SECONDS;
+  process.env.OPTIMAL_CALL_JITTER_MAX_SECONDS = '0';
+
+  // Plain Wed (no UK public holiday) so clamp + bank-holiday logic does not shift the baseline.
+  const base1 = new Date('2026-06-10T10:00:00.000Z');
   const out1 = await scheduleAtOptimalCallWindow(tenant, null, base1, {
     fallbackTz: 'Europe/London',
     banditArms: {}
@@ -26,7 +30,7 @@ describe('Optimal call window', () => {});
       bestWeekdays: []
     }
   };
-  const base2 = new Date('2026-04-02T10:00:00.000Z');
+  const base2 = new Date('2026-06-10T10:00:00.000Z');
   process.env.CALL_TIME_THOMPSON = '0';
   const out2 = await scheduleAtOptimalCallWindow(tenant, routing2, base2, {
     fallbackTz: 'Europe/London',
@@ -49,7 +53,7 @@ describe('Optimal call window', () => {});
   process.env.CALL_TIME_THOMPSON = '0';
   process.env.OPTIMAL_CALL_MAX_DELAY_MS = String(4 * 60 * 60 * 1000);
   try {
-    const base3 = new Date('2026-04-02T08:00:00.000Z');
+    const base3 = new Date('2026-06-10T08:00:00.000Z');
     const out3 = await scheduleAtOptimalCallWindow(tenant, routing3, base3, {
       fallbackTz: 'Europe/London',
       banditArms: {}
@@ -61,6 +65,9 @@ describe('Optimal call window', () => {});
     else process.env.OPTIMAL_CALL_MAX_DELAY_MS = prevDelay;
     delete process.env.CALL_TIME_THOMPSON;
   }
+
+  if (prevJitter === undefined) delete process.env.OPTIMAL_CALL_JITTER_MAX_SECONDS;
+  else process.env.OPTIMAL_CALL_JITTER_MAX_SECONDS = prevJitter;
 
   process.exit(printSummary());
 })().catch(err => {
