@@ -3190,6 +3190,34 @@ export async function getABTestLivePickupDurationStats(experimentId) {
   };
 }
 
+/** Completeness (0-100) for converted rows (sheet append), from outcome_data.completenessScore. */
+export async function getABTestConvertedCompletenessStats(experimentId) {
+  const { rows } = await query(
+    `
+    SELECT
+      COUNT(*)::int AS n,
+      ROUND(AVG((outcome_data->>'completenessScore')::double precision), 1) AS avg_score,
+      ROUND(
+        (PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY (outcome_data->>'completenessScore')::double precision))::numeric,
+        1
+      ) AS median_score
+    FROM ab_test_results
+    WHERE experiment_id = $1
+      AND outcome = 'converted'
+      AND (outcome_data->>'completenessScore') IS NOT NULL
+      AND (outcome_data->>'completenessScore')::double precision >= 0
+  `,
+    [experimentId]
+  );
+  const r = rows[0];
+  if (!r || !r.n) return { n: 0, avgScore: null, medianScore: null };
+  return {
+    n: parseInt(r.n, 10) || 0,
+    avgScore: r.avg_score != null ? Number(r.avg_score) : null,
+    medianScore: r.median_score != null ? Number(r.median_score) : null
+  };
+}
+
 /** Safe previews of variant_config for dashboards (voice, opening, script). */
 export function summarizeOutboundVariantConfig(variantConfig) {
   let c = variantConfig;
@@ -3258,6 +3286,7 @@ export async function getOutboundAbExperimentSummary(clientKey, experimentName) 
       rates.find((r) => r.variant_name === row.variant_name) || (rates.length === 1 ? rates[0] : null);
     const tested = summarizeOutboundVariantConfig(row.variant_config);
     const dur = await getABTestLivePickupDurationStats(row.id);
+    const comp = await getABTestConvertedCompletenessStats(row.id);
     variants.push({
       variantName: row.variant_name,
       totalLeads: parseInt(agg?.total_leads ?? 0, 10),
@@ -3267,6 +3296,9 @@ export async function getOutboundAbExperimentSummary(clientKey, experimentName) 
       livePickupDurationCount: dur.n,
       avgTalkSeconds: dur.avgSec,
       medianTalkSeconds: dur.medianSec,
+      convertedCompletenessCount: comp.n,
+      avgCompletenessScore: comp.avgScore,
+      medianCompletenessScore: comp.medianScore,
       tested
     });
   }

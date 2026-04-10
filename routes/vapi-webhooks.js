@@ -1252,6 +1252,36 @@ async function processWebhookPayload(body, correlationId) {
               // This aligns monitoring with "row written" rather than bookings (which may not apply to outreach).
               try {
                 if (tenantKey && leadPhone) {
+                  const computeCompleteness = (row) => {
+                    const r = row && typeof row === 'object' ? row : {};
+                    const present = (v) => {
+                      if (v == null) return false;
+                      if (Array.isArray(v)) return v.filter(Boolean).length > 0;
+                      const s = String(v).trim();
+                      return s !== '' && s.toLowerCase() !== 'unknown' && s.toLowerCase() !== 'n/a';
+                    };
+                    // Core fields we expect the script to capture for logistics.
+                    const fields = [
+                      r.email,
+                      r.international,
+                      r.mainCouriers,
+                      r.internationalShipmentsPerWeek || r.frequency,
+                      r.mainCountries,
+                      r.exampleShipment,
+                      r.exampleShipmentCost,
+                      r.ukShipmentsPerWeek || r.domesticFrequency,
+                      r.ukCourier,
+                      r.standardRateUpToKg,
+                      r.excludingFuelVat,
+                      r.singleVsMulti,
+                      r.decisionMaker
+                    ];
+                    const total = fields.length;
+                    const filled = fields.reduce((n, v) => n + (present(v) ? 1 : 0), 0);
+                    const score = total > 0 ? Math.round((filled / total) * 1000) / 10 : 0; // 0–100, one decimal
+                    return { score, filled, total };
+                  };
+                  const completeness = computeCompleteness(sheetData);
                   const { collectOutboundAbExperimentNamesFromMetadata } = await import('../lib/outbound-ab-live-pickup.js');
                   const { recordABTestOutcome } = await import('../db.js');
                   const expNames = collectOutboundAbExperimentNamesFromMetadata(metadata);
@@ -1264,7 +1294,10 @@ async function processWebhookPayload(body, correlationId) {
                       outcomeData: {
                         source: 'sheet_append',
                         sheetId: logisticsSheetId,
-                        callId: callId || null
+                        callId: callId || null,
+                        completenessScore: completeness.score,
+                        completenessFilled: completeness.filled,
+                        completenessTotal: completeness.total
                       }
                     });
                   }
