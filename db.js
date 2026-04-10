@@ -1849,6 +1849,77 @@ export async function upsertCall({
   ]);
 }
 
+/**
+ * True if this tenant already has any `calls` row for this number on the tenant's local calendar day
+ * (outbound attempts, failed_q markers, webhooks, etc. all count as "dialed today").
+ * Opt out: ALLOW_MULTIPLE_OUTBOUND_CALLS_PER_DAY=1|true|yes
+ */
+export async function hasOutboundCallAttemptToday(clientKey, leadPhone, timezone = 'Europe/London') {
+  if (/^(1|true|yes)$/i.test(String(process.env.ALLOW_MULTIPLE_OUTBOUND_CALLS_PER_DAY || '').trim())) {
+    return false;
+  }
+  const raw = leadPhone != null ? String(leadPhone).trim() : '';
+  if (!clientKey || !raw) return false;
+  const qk = phoneMatchKey(raw);
+
+  if (dbType === 'postgres' && pool) {
+    // Bypass SELECT query cache — result must be fresh for every dial decision.
+    const exec = () =>
+      pool.query(
+        `
+      SELECT EXISTS (
+        SELECT 1
+        FROM calls c
+        WHERE c.client_key = $1
+          AND (
+            c.lead_phone = $2
+            OR (
+              $3::text IS NOT NULL
+              AND c.lead_phone_match_key IS NOT NULL
+              AND c.lead_phone_match_key = $3
+            )
+            OR (
+              $3::text IS NOT NULL
+              AND c.lead_phone_match_key IS NULL
+              AND LENGTH(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g')) >= 10
+              AND RIGHT(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), 10) = $3
+            )
+          )
+          AND ((c.created_at AT TIME ZONE $4)::date = (NOW() AT TIME ZONE $4)::date)
+      ) AS y
+      `,
+        [clientKey, raw, qk, timezone]
+      );
+    const { rows } = pgQueryLimiter ? await pgQueryLimiter.run(exec) : await exec();
+    return !!rows[0]?.y;
+  }
+
+  const { DateTime } = await import('luxon');
+  const todayStr = DateTime.now().setZone(timezone).toISODate();
+  const { rows } = await query(
+    `
+    SELECT created_at FROM calls
+    WHERE client_key = $1
+      AND created_at >= datetime('now', '-2 days')
+      AND (
+        lead_phone = $2
+        OR (
+          $3 IS NOT NULL AND lead_phone_match_key IS NOT NULL AND lead_phone_match_key = $3
+        )
+      )
+    `,
+    [clientKey, raw, qk]
+  );
+  for (const r of rows || []) {
+    const t = r.created_at;
+    const js = t instanceof Date ? t : new Date(t);
+    if (Number.isNaN(js.getTime())) continue;
+    const d = DateTime.fromJSDate(js, { zone: 'utc' }).setZone(timezone).toISODate();
+    if (d === todayStr) return true;
+  }
+  return false;
+}
+
 export async function getCallsByTenant(clientKey, limit = 100) {
   const { rows } = await query(`
     SELECT

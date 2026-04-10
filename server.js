@@ -22248,6 +22248,26 @@ async function processRetryQueue() {
               console.log('[RETRY PROCESSOR] Deferred — outside business hours', { id: retry.id, scheduledFor: next });
               continue;
             }
+            const rTz = rClient?.booking?.timezone || rClient?.timezone || TIMEZONE;
+            const { hasOutboundCallAttemptToday } = await import('./db.js');
+            if (await hasOutboundCallAttemptToday(retry.client_key, retry.lead_phone, rTz)) {
+              const nextLocalDayStart = DateTime.now().setZone(rTz).plus({ days: 1 }).startOf('day').toJSDate();
+              const nextOpen = getNextBusinessOpenForTenant(
+                rClient || { booking: { timezone: rTz }, timezone: rTz },
+                nextLocalDayStart,
+                TIMEZONE,
+                { forOutboundDial: true }
+              );
+              await query(
+                `UPDATE retry_queue SET scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
+                [nextOpen, retry.id]
+              );
+              console.log('[RETRY PROCESSOR] Deferred — daily dial limit (one per number per local day)', {
+                id: retry.id,
+                scheduledFor: nextOpen
+              });
+              continue;
+            }
           }
 
           // Mark as processing
@@ -22861,6 +22881,24 @@ async function processVapiCallFromQueue(call) {
       console.log('[QUEUE CALL] Deferred to business hours', { queueId: call.id, scheduledFor: next });
       return;
     }
+
+    if (vapiResult?.error === 'daily_dial_limit') {
+      const tzQ = client?.booking?.timezone || client?.timezone || TIMEZONE;
+      const nextLocalDayStart = DateTime.now().setZone(tzQ).plus({ days: 1 }).startOf('day').toJSDate();
+      const nextOpen = getNextBusinessOpenForTenant(client, nextLocalDayStart, TIMEZONE, {
+        forOutboundDial: true
+      });
+      const nextSmear = smearCallQueueScheduledFor(nextOpen, clientKey, leadPhone, call.id);
+      await query(
+        `UPDATE call_queue SET status = 'pending', scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
+        [nextSmear, call.id]
+      );
+      console.log('[QUEUE CALL] Deferred — daily dial limit (one attempt per number per local day)', {
+        queueId: call.id,
+        scheduledFor: nextSmear
+      });
+      return;
+    }
     
     if (!vapiResult || !vapiResult.ok || vapiResult.error) {
       const detailsStr = typeof vapiResult?.details === 'string' ? vapiResult.details : '';
@@ -23014,7 +23052,7 @@ async function queueNewLeadsForCalling() {
       try {
         // Get new leads that haven't been called yet
         // Check both call_queue (pending calls) AND calls table (completed calls)
-        // Also exclude leads we already queued/completed in the last 24h to avoid re-calling when webhook is delayed
+        // One outbound attempt per phone per local calendar day (tenant timezone); 3-day cooldown for re-dial after a real attempt
         const newLeads = await query(`
           SELECT l.id, l.name, l.phone, l.service, l.source, l.status, l.created_at
           FROM leads l
@@ -23037,6 +23075,25 @@ async function queueNewLeadsForCalling() {
             AND NOT EXISTS (
               SELECT 1 FROM calls c
               WHERE c.client_key = l.client_key
+              AND (
+                c.lead_phone = l.phone
+                OR (
+                  l.phone_match_key IS NOT NULL
+                  AND c.lead_phone_match_key IS NOT NULL
+                  AND c.lead_phone_match_key = l.phone_match_key
+                )
+                OR (
+                  l.phone_match_key IS NOT NULL
+                  AND c.lead_phone_match_key IS NULL
+                  AND LENGTH(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g')) >= 10
+                  AND RIGHT(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), 10) = l.phone_match_key
+                )
+              )
+              AND ((c.created_at AT TIME ZONE $2)::date = (NOW() AT TIME ZONE $2)::date)
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM calls c
+              WHERE c.client_key = l.client_key
               AND c.lead_phone = l.phone
               -- Cooldown: allow re-calling after 3 days
               AND c.created_at >= NOW() - INTERVAL '3 days'
@@ -23045,7 +23102,7 @@ async function queueNewLeadsForCalling() {
             )
           ORDER BY l.created_at ASC
           LIMIT ${leadQueueBatchSize}
-        `, [client.clientKey]);
+        `, [client.clientKey, client.timezone || TIMEZONE]);
         
         if (newLeads.rows.length === 0) {
           continue;
