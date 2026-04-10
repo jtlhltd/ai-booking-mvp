@@ -9606,33 +9606,104 @@ ${actionsRow}
             return `${pct}%`;
         }
 
-        function tomAbDecisionHintForVariants(variants, minN) {
+        const TOM_AB_MON_TABLE_COLSPAN = 7;
+
+        function tomAbFormatTalkSeconds(sec) {
+            if (sec == null || !Number.isFinite(Number(sec))) return '—';
+            const s = Math.round(Number(sec));
+            if (s < 60) return `${s}s`;
+            const m = Math.floor(s / 60);
+            const r = s % 60;
+            return r ? `${m}m ${r}s` : `${m}m`;
+        }
+
+        /** Conversion rate already computed server-side as converted ÷ live pickups when pickups exist. */
+        function tomAbConvAfterPickupCell(v) {
+            const lpu =
+                typeof v.livePickupLeads === 'number' ? v.livePickupLeads : parseInt(v.livePickupLeads, 10) || 0;
+            if (lpu <= 0) return '—';
+            const pct =
+                v.conversionRatePct != null && Number.isFinite(Number(v.conversionRatePct))
+                    ? Number(v.conversionRatePct)
+                    : null;
+            if (pct == null) return '—';
+            return `${Math.round(pct * 10) / 10}%`;
+        }
+
+        function tomAbMedianTalkCell(v) {
+            const med = v.medianTalkSeconds != null ? Number(v.medianTalkSeconds) : null;
+            if (med != null && Number.isFinite(med)) return tomAbFormatTalkSeconds(med);
+            return '—';
+        }
+
+        function tomAbMonitoringTableHead(opts = {}) {
+            const sampleLabel = opts.sampleLabel != null ? String(opts.sampleLabel) : 'Sample';
+            return `<thead>
+                            <tr>
+                                <th scope="col">Variant</th>
+                                <th scope="col">Live pickups</th>
+                                <th scope="col">Assigned</th>
+                                <th scope="col">Pickup %</th>
+                                <th scope="col" title="Converted leads ÷ live answered calls (not voicemail)">Conv. after pickup</th>
+                                <th scope="col" title="Median call length when duration was recorded (newer webhooks)">Median talk</th>
+                                <th scope="col">${escapeHtml(sampleLabel)}</th>
+                            </tr>
+                        </thead>`;
+        }
+
+        function tomAbDecisionHintForVariants(variants, minN, dimension) {
             if (!Array.isArray(variants) || variants.length < 2) return '';
+            const dimKey = dimension != null ? String(dimension).trim().toLowerCase() : '';
             const rows = variants.map((v) => {
                 const tl = typeof v.totalLeads === 'number' ? v.totalLeads : parseInt(v.totalLeads, 10) || 0;
                 const lpu =
                     typeof v.livePickupLeads === 'number' ? v.livePickupLeads : parseInt(v.livePickupLeads, 10) || 0;
                 const name = v.variantName != null ? String(v.variantName) : '—';
-                return { name, tl, lpu, rate: tl > 0 ? (lpu / tl) * 100 : 0 };
+                const convPct =
+                    v.conversionRatePct != null && Number.isFinite(Number(v.conversionRatePct))
+                        ? Number(v.conversionRatePct)
+                        : 0;
+                return { name, tl, lpu, convPct, rate: tl > 0 ? (lpu / tl) * 100 : 0 };
             });
             const sorted = rows.slice().sort((a, b) => b.rate - a.rate);
             const best = sorted[0];
             const worst = sorted[sorted.length - 1];
             if (!best || !worst) return '';
             const lowSamples = rows.some((r) => r.lpu < minN);
-            const diff = Math.abs(best.rate - worst.rate);
             let msg = '';
             if (lowSamples) {
-                msg = `Still collecting live pickups — wait until each arm has at least <strong>${formatNumber(
-                    minN
-                )}</strong> before treating differences as reliable.`;
-            } else if (diff < 4) {
-                msg =
-                    'Pickup rates are very close between arms — the gap may be noise. Keep the test running or decide on business grounds.';
-            } else if (best.name && best.name !== worst.name) {
-                msg = `<strong>${escapeHtml(best.name)}</strong> is ahead on live pickups as a share of assigned leads right now — worth favouring if the gap holds.`;
+                if (dimKey === 'voice') {
+                    msg = `Still collecting live pickups — wait until each arm has at least <strong>${formatNumber(
+                        minN
+                    )}</strong> answered (non-voicemail) calls. For <strong>voice</strong>, rely more on <strong>conv. after pickup</strong> and <strong>median talk</strong> than on pickup % (callers cannot hear the voice before they answer).`;
+                } else {
+                    msg = `Still collecting live pickups — wait until each arm has at least <strong>${formatNumber(
+                        minN
+                    )}</strong> before treating differences as reliable.`;
+                }
+            } else if (dimKey === 'voice') {
+                const byConv = rows.slice().sort((a, b) => b.convPct - a.convPct);
+                const bc = byConv[0];
+                const wc = byConv[byConv.length - 1];
+                const diff = Math.abs(bc.convPct - wc.convPct);
+                if (diff < 2) {
+                    msg =
+                        'Conversion after pickup is very close between arms — the gap may be noise. Voice is only heard after answer; keep running or decide on business grounds.';
+                } else if (bc.name && bc.name !== wc.name) {
+                    msg = `<strong>${escapeHtml(bc.name)}</strong> is ahead on <strong>conversion after pickup</strong> — a better read for voice quality than pickup %.`;
+                } else {
+                    msg = 'Compare <strong>conv. after pickup</strong> and <strong>median talk</strong> for voice tests; pickup % is mainly an assignment balance check.';
+                }
             } else {
-                msg = 'Compare pickup % vs assigned leads below; the larger gap usually matters more once samples are solid.';
+                const diff = Math.abs(best.rate - worst.rate);
+                if (diff < 4) {
+                    msg =
+                        'Pickup rates are very close between arms — the gap may be noise. Keep the test running or decide on business grounds.';
+                } else if (best.name && best.name !== worst.name) {
+                    msg = `<strong>${escapeHtml(best.name)}</strong> is ahead on live pickups as a share of assigned leads right now — worth favouring if the gap holds.`;
+                } else {
+                    msg = 'Compare pickup % vs assigned leads below; the larger gap usually matters more once samples are solid.';
+                }
             }
             return `<p class="tom-ab-decision-hint" role="note">${msg}</p>`;
         }
@@ -9646,11 +9717,15 @@ ${actionsRow}
                 ? `<span class="tom-ab-live-ok">✓ ${formatNumber(minN)}+</span>`
                 : `<span class="tom-ab-live-progress">${formatNumber(lpu)} / ${formatNumber(minN)}</span>`;
             const rateCell = tomAbPickupRateCell(tl, lpu);
+            const convCell = tomAbConvAfterPickupCell(v);
+            const medCell = tomAbMedianTalkCell(v);
             return `<tr>
                 <td><strong>${escapeHtml(v.variantName)}</strong></td>
                 <td>${formatNumber(lpu)}</td>
                 <td>${formatNumber(tl)}</td>
                 <td>${rateCell}</td>
+                <td>${convCell}</td>
+                <td>${medCell}</td>
                 <td>${sampleCell}</td>
             </tr>`;
         }
@@ -9658,6 +9733,8 @@ ${actionsRow}
         function tomAbMonitoringComparisonPlaceholderRows(minN) {
             const row = (name) => `<tr class="tom-ab-mon-placeholder-row">
                 <td><strong>${escapeHtml(name)}</strong></td>
+                <td>—</td>
+                <td>—</td>
                 <td>—</td>
                 <td>—</td>
                 <td>—</td>
@@ -9670,15 +9747,12 @@ ${actionsRow}
             const exp = slot && slot.experimentName ? String(slot.experimentName).trim() : '';
             const variants = slot && slot.summary && Array.isArray(slot.summary.variants) ? slot.summary.variants : [];
             const pill = isPrimaryFocus ? '<span class="tom-ab-live-pill">Primary in summary</span>' : '';
-            const tableHead = `<thead>
-                            <tr>
-                                <th scope="col">Variant</th>
-                                <th scope="col">Live pickups</th>
-                                <th scope="col">Assigned</th>
-                                <th scope="col">Pickup %</th>
-                                <th scope="col">Sample</th>
-                            </tr>
-                        </thead>`;
+            const dimKey = dim != null ? String(dim).trim().toLowerCase() : '';
+            const tableHead = tomAbMonitoringTableHead({ sampleLabel: 'Sample' });
+            const voiceNote =
+                dimKey === 'voice'
+                    ? `<p class="tom-ab-test-meta" style="margin:0 0 8px 0;">Callers only hear the assistant <strong>after</strong> they answer. Use <strong>Conv. after pickup</strong> and <strong>Median talk</strong> to judge the voice; <strong>Pickup %</strong> is mainly a check that random assignment is balanced.</p>`
+                    : '';
             if (!exp && !variants.length) {
                 return `<div class="tom-ab-mon-dim-section" data-tom-ab-mon-dim="${dim}">
                     <h5 class="tom-ab-mon-dim-h">${escapeHtml(title)} ${pill}</h5>
@@ -9694,9 +9768,10 @@ ${actionsRow}
                 </div>`;
             }
             const rows = variants.length ? variants.map((v) => tomAbMonitoringStatsRow(v, minN)).join('') : '';
-            const hint = variants.length >= 2 ? tomAbDecisionHintForVariants(variants, minN) : '';
+            const hint = variants.length >= 2 ? tomAbDecisionHintForVariants(variants, minN, dimKey) : '';
             return `<div class="tom-ab-mon-dim-section" data-tom-ab-mon-dim="${dim}">
                 <h5 class="tom-ab-mon-dim-h">${escapeHtml(title)} ${pill}</h5>
+                ${voiceNote}
                 ${
                     exp
                         ? `<p class="tom-ab-test-meta" style="margin:0 0 8px 0;"><code style="font-size:0.78em;">${escapeHtml(
@@ -9710,7 +9785,7 @@ ${actionsRow}
                         <tbody>${
                             rows ||
                             tomAbMonitoringComparisonPlaceholderRows(minN) +
-                                `<tr><td colspan="5" class="tom-ab-test-meta" style="border-top:none;">Waiting for first assigned leads…</td></tr>`
+                                `<tr><td colspan="${TOM_AB_MON_TABLE_COLSPAN}" class="tom-ab-test-meta" style="border-top:none;">Waiting for first assigned leads…</td></tr>`
                         }</tbody>
                     </table>
                 </div>
@@ -9732,7 +9807,7 @@ ${actionsRow}
                   }</p>`
                 : `<p class="tom-ab-test-meta" style="margin:0 0 14px 0;"><strong>Comparison</strong> — control vs variant per dimension. Goal: <strong>${formatNumber(
                       minN
-                  )}</strong> live pickups each (answered, not voicemail) before we treat samples as solid. Counts reflect the AI outbound dial only—not human follow-up calls off the sheet. <span class="tom-ab-live-pill">Primary in summary</span> is the slice the server highlights when several dimensions have data.</p>`;
+                  )}</strong> live pickups each (answered, not voicemail) before we treat samples as solid. For <strong>voice</strong>, prefer <strong>conv. after pickup</strong> and <strong>median talk</strong> over pickup rate. Counts reflect the AI outbound dial only—not human follow-up calls off the sheet. <span class="tom-ab-live-pill">Primary in summary</span> is the slice the server highlights when several dimensions have data.</p>`;
             const blocks = [
                 renderTomAbDimensionMonitoringBlock('voice', 'Voice test', (ab && ab.voice) || {}, minN, primDim === 'voice'),
                 renderTomAbDimensionMonitoringBlock(
@@ -9813,22 +9888,22 @@ ${actionsRow}
                           minN
                       )}</strong> live pickups per variant (not voicemail).</p>`;
                 const rows = fe.variants.map((v) => tomAbMonitoringStatsRow(v, minN)).join('');
-                const legHint = Array.isArray(fe.variants) && fe.variants.length >= 2 ? tomAbDecisionHintForVariants(fe.variants, minN) : '';
+                const legHint =
+                    Array.isArray(fe.variants) && fe.variants.length >= 2
+                        ? tomAbDecisionHintForVariants(fe.variants, minN, fe.dimension)
+                        : '';
+                const voiceBanner =
+                    fe.dimension === 'voice'
+                        ? `<p class="tom-ab-test-meta" style="margin:0 0 8px 0;">Callers only hear the assistant <strong>after</strong> they answer. Use <strong>Conv. after pickup</strong> and <strong>Median talk</strong> to judge the voice; <strong>Pickup %</strong> is mainly assignment balance.</p>`
+                        : '';
                 body = `<p class="tom-ab-test-meta" style="margin:0 0 8px 0;"><strong>${dimLine}</strong> · <code style="font-size:0.85em;">${escapeHtml(
                     fe.experimentName
                 )}</code></p>
+                    ${voiceBanner}
                     ${readyLine}
                     <div class="tom-ab-test-table-wrap" style="margin-top:10px;">
                         <table class="tom-ab-test-table" aria-label="Live outbound A B results">
-                            <thead>
-                                <tr>
-                                    <th scope="col">Variant</th>
-                                    <th scope="col">Live pickups</th>
-                                    <th scope="col">Assigned</th>
-                                    <th scope="col">Pickup %</th>
-                                    <th scope="col">Sample target</th>
-                                </tr>
-                            </thead>
+                            ${tomAbMonitoringTableHead({ sampleLabel: 'Sample target' })}
                             <tbody>${rows}</tbody>
                         </table>
                     </div>${legHint}`;

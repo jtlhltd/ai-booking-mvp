@@ -601,7 +601,8 @@ async function processWebhookPayload(body, correlationId) {
           leadPhone,
           metadata,
           outcome,
-          endedReason
+          endedReason,
+          durationSeconds: duration
         });
       } catch (livePuErr) {
         console.warn('[OUTBOUND AB LIVE PICKUP] skipped:', livePuErr?.message || livePuErr);

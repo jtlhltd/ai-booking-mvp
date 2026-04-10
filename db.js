@@ -3091,13 +3091,20 @@ export async function recordOutboundAbLivePickups({
   leadPhone,
   metadata,
   outcome,
-  endedReason
+  endedReason,
+  durationSeconds: rawDurationSeconds = null
 }) {
   if (!clientKey || !leadPhone) return;
   if (!isOutboundAbLivePickupOutcome(outcome, endedReason)) return;
   const names = collectOutboundAbExperimentNamesFromMetadata(metadata);
   if (!names.length) return;
+  let durationSeconds = null;
+  if (rawDurationSeconds != null && rawDurationSeconds !== '') {
+    const n = Number(rawDurationSeconds);
+    if (Number.isFinite(n) && n > 0) durationSeconds = Math.round(n * 10) / 10;
+  }
   const outcomeData = { source: 'vapi_webhook', endedReason: endedReason || null, callOutcome: outcome ?? null };
+  if (durationSeconds != null) outcomeData.durationSeconds = durationSeconds;
   for (const experimentName of names) {
     await recordABTestOutcome({
       clientKey,
@@ -3153,6 +3160,34 @@ export async function getABTestConversionRates(experimentId) {
     ORDER BY conversion_rate DESC
   `, [experimentId]);
   return rows;
+}
+
+/** Median/avg talk time (seconds) for live_pickup rows that recorded durationSeconds (post-deploy webhooks). */
+export async function getABTestLivePickupDurationStats(experimentId) {
+  const { rows } = await query(
+    `
+    SELECT
+      COUNT(*)::int AS n,
+      ROUND(AVG((outcome_data->>'durationSeconds')::double precision), 1) AS avg_sec,
+      ROUND(
+        (PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY (outcome_data->>'durationSeconds')::double precision))::numeric,
+        1
+      ) AS median_sec
+    FROM ab_test_results
+    WHERE experiment_id = $1
+      AND outcome = 'live_pickup'
+      AND (outcome_data->>'durationSeconds') IS NOT NULL
+      AND (outcome_data->>'durationSeconds')::double precision > 0
+  `,
+    [experimentId]
+  );
+  const r = rows[0];
+  if (!r || !r.n) return { n: 0, avgSec: null, medianSec: null };
+  return {
+    n: parseInt(r.n, 10) || 0,
+    avgSec: r.avg_sec != null ? Number(r.avg_sec) : null,
+    medianSec: r.median_sec != null ? Number(r.median_sec) : null
+  };
 }
 
 /** Safe previews of variant_config for dashboards (voice, opening, script). */
@@ -3222,12 +3257,16 @@ export async function getOutboundAbExperimentSummary(clientKey, experimentName) 
     const agg =
       rates.find((r) => r.variant_name === row.variant_name) || (rates.length === 1 ? rates[0] : null);
     const tested = summarizeOutboundVariantConfig(row.variant_config);
+    const dur = await getABTestLivePickupDurationStats(row.id);
     variants.push({
       variantName: row.variant_name,
       totalLeads: parseInt(agg?.total_leads ?? 0, 10),
       livePickupLeads: parseInt(agg?.live_pickup_leads ?? 0, 10),
       convertedLeads: parseInt(agg?.converted_leads ?? 0, 10),
       conversionRatePct: agg?.conversion_rate != null ? Number(agg.conversion_rate) : 0,
+      livePickupDurationCount: dur.n,
+      avgTalkSeconds: dur.avgSec,
+      medianTalkSeconds: dur.medianSec,
       tested
     });
   }
