@@ -3214,9 +3214,15 @@ export async function getABTestConversionRates(experimentId) {
       COALESCE(vc.converted_leads, 0) as converted_leads,
       CASE 
         WHEN COALESCE(vlp.live_pickup_leads, 0) > 0 
-        THEN ROUND((COALESCE(vc.converted_leads, 0)::DECIMAL / vlp.live_pickup_leads) * 100, 2)
+        THEN ROUND(
+          CAST((COALESCE(vc.converted_leads, 0)::numeric / vlp.live_pickup_leads::numeric) * 100 AS numeric),
+          2
+        )
         WHEN vt.total_leads > 0 
-        THEN ROUND((COALESCE(vc.converted_leads, 0)::DECIMAL / vt.total_leads) * 100, 2)
+        THEN ROUND(
+          CAST((COALESCE(vc.converted_leads, 0)::numeric / vt.total_leads::numeric) * 100 AS numeric),
+          2
+        )
         ELSE 0 
       END as conversion_rate
     FROM variant_totals vt
@@ -3233,16 +3239,19 @@ export async function getABTestLivePickupDurationStats(experimentId) {
     `
     SELECT
       COUNT(*)::int AS n,
-      ROUND(AVG((outcome_data->>'durationSeconds')::double precision), 1) AS avg_sec,
+      ROUND(CAST(AVG((outcome_data->>'durationSeconds')::numeric) AS numeric), 1) AS avg_sec,
       ROUND(
-        (PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY (outcome_data->>'durationSeconds')::double precision))::numeric,
+        CAST(
+          PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY (outcome_data->>'durationSeconds')::numeric)
+          AS numeric
+        ),
         1
       ) AS median_sec
     FROM ab_test_results
     WHERE experiment_id = $1
       AND outcome = 'live_pickup'
       AND (outcome_data->>'durationSeconds') IS NOT NULL
-      AND (outcome_data->>'durationSeconds')::double precision > 0
+      AND (outcome_data->>'durationSeconds')::numeric > 0
   `,
     [experimentId]
   );
@@ -3261,16 +3270,19 @@ export async function getABTestConvertedCompletenessStats(experimentId) {
     `
     SELECT
       COUNT(*)::int AS n,
-      ROUND(AVG((outcome_data->>'completenessScore')::double precision), 1) AS avg_score,
+      ROUND(CAST(AVG((outcome_data->>'completenessScore')::numeric) AS numeric), 1) AS avg_score,
       ROUND(
-        (PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY (outcome_data->>'completenessScore')::double precision))::numeric,
+        CAST(
+          PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY (outcome_data->>'completenessScore')::numeric)
+          AS numeric
+        ),
         1
       ) AS median_score
     FROM ab_test_results
     WHERE experiment_id = $1
       AND outcome = 'converted'
       AND (outcome_data->>'completenessScore') IS NOT NULL
-      AND (outcome_data->>'completenessScore')::double precision >= 0
+      AND (outcome_data->>'completenessScore')::numeric >= 0
   `,
     [experimentId]
   );

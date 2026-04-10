@@ -103,7 +103,12 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import compression from 'compression';
 import { getDemoOverrides, formatOverridesForTelemetry, loadDemoScript } from './lib/demo-script.js';
-import { isBusinessHoursForTenant, getNextBusinessOpenForTenant } from './lib/business-hours.js';
+import {
+  isBusinessHoursForTenant,
+  getNextBusinessOpenForTenant,
+  clampOutboundDialToAllowedWindow,
+  allowOutboundWeekendCalls
+} from './lib/business-hours.js';
 import { recordDemoTelemetry, readDemoTelemetry, clearDemoTelemetry, recordReceptionistTelemetry, readReceptionistTelemetry, clearReceptionistTelemetry } from './lib/demo-telemetry.js';
 import twilio from 'twilio';
 import { createHash } from 'crypto';
@@ -9062,7 +9067,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
           COUNT(DISTINCT lead_phone)::int AS unique_phones,
           COUNT(*) FILTER (WHERE outcome = 'booked')::int AS booked_rows,
           COUNT(*) FILTER (WHERE LOWER(TRIM(COALESCE(outcome::text, ''))) = 'voicemail')::int AS voicemail_rows,
-          COALESCE(ROUND(AVG(CASE WHEN COALESCE(duration, 0) > 0 THEN duration::numeric END)), 0)::int AS avg_duration_sec,
+          ROUND(COALESCE(AVG(CASE WHEN COALESCE(duration, 0) > 0 THEN duration::numeric END), 0::numeric), 0)::int AS avg_duration_sec,
           COALESCE(MAX(CASE WHEN COALESCE(duration, 0) > 0 THEN duration END), 0)::int AS max_duration_sec,
           COUNT(DISTINCT CASE WHEN is_answered THEN lead_phone END)::int AS unique_reached
         FROM daily
@@ -12055,6 +12060,24 @@ async function fetchLeadNamesForRetryQueuePhones(clientKey, queuePhones) {
   return m;
 }
 
+/**
+ * Retry-queue API: for outbound dials, show the next allowed dial instant (weekdays + hours),
+ * not a raw scheduled_for that may fall on Sat/Sun or outside hours (e.g. "tomorrow 9am" from Fri).
+ * SMS/email follow-ups keep the stored time unchanged.
+ */
+function effectiveDialScheduledForApiDisplay(row, tenant) {
+  if (!row?.scheduled_for) return null;
+  const raw = new Date(row.scheduled_for);
+  if (Number.isNaN(raw.getTime())) return null;
+  if (allowOutboundWeekendCalls()) return raw;
+  const t = String(row.retry_type || '').toLowerCase();
+  const isOutboundDial =
+    row.source === 'call_queue' ||
+    (row.source === 'retry_queue' && (t === 'vapi_call' || t === 'call'));
+  if (!isOutboundDial) return raw;
+  return clampOutboundDialToAllowedWindow(tenant, raw, TIMEZONE);
+}
+
 app.get('/api/retry-queue/:clientKey', async (req, res) => {
   try {
     const { clientKey } = req.params;
@@ -12142,6 +12165,7 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
       rawRows.map((r) => r.lead_phone)
     );
     const result = { rows: rawRows };
+    const tenant = await getFullClient(clientKey).catch(() => null);
 
     const retryKindLabel = (source, retryType) => {
       const isCallQueue = source === 'call_queue';
@@ -12155,7 +12179,7 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
     };
 
     const mapRow = (row) => {
-      const sched = row.scheduled_for ? new Date(row.scheduled_for) : null;
+      const sched = effectiveDialScheduledForApiDisplay(row, tenant);
       const schedOk = sched && !Number.isNaN(sched.getTime());
       const isCallQueue = row.source === 'call_queue';
       const nextRetryShort = schedOk
@@ -12194,13 +12218,18 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
           : (typeof row.retry_reason === 'string' && row.retry_reason.startsWith('follow_up_')
             ? 'Follow-up call scheduled'
             : (row.retry_reason || 'Scheduled follow-up')),
-        scheduledFor: row.scheduled_for,
+        scheduledFor: schedOk ? sched.toISOString() : null,
         nextRetry: nextRetryShort,
         nextRetryLong
       };
     };
 
     const merged = (result.rows || []).map(mapRow);
+    merged.sort((a, b) => {
+      const ta = a.scheduledFor ? new Date(a.scheduledFor).getTime() : Number.POSITIVE_INFINITY;
+      const tb = b.scheduledFor ? new Date(b.scheduledFor).getTime() : Number.POSITIVE_INFINITY;
+      return ta - tb;
+    });
     const truncated = totalPending > merged.length;
 
     res.json({
