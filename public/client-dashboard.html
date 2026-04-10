@@ -10844,7 +10844,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
 
             try {
-                const response = await fetch(`${BASE_URL}/api/call-quality/${currentClient}`);
+                const response = await fetch(`${BASE_URL}/api/call-quality/${encodeURIComponent(currentClient)}`);
                 const payload = await response.json();
                 if (response.ok && payload?.ok) {
                     const sec = payload.avgDurationSeconds ?? payload.avgDuration;
@@ -11491,7 +11491,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
 
             try {
-                const response = await fetch(`${BASE_URL}/api/retry-queue/${currentClient}`, { cache: 'no-store' });
+                const response = await fetch(`${BASE_URL}/api/retry-queue/${encodeURIComponent(currentClient)}`, { cache: 'no-store' });
                 const payload = await response.json().catch(() => ({}));
                 if (!response.ok || !payload?.ok) {
                     retryQueueRowsAll = [];

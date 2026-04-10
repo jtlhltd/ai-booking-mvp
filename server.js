@@ -11604,13 +11604,25 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
     try {
       const allCalls = await query(`
       WITH windowed AS (
-        SELECT *
+        SELECT
+          lead_phone,
+          outcome,
+          status,
+          duration,
+          LEFT(COALESCE(transcript::text, ''), 512) AS transcript_snip,
+          COALESCE(recording_url::text, '') AS recording_url_txt
         FROM calls
         WHERE client_key = $1
           AND created_at >= NOW() - INTERVAL '7 days'
       ),
       flags AS (
-        SELECT *,
+        SELECT
+          lead_phone,
+          outcome,
+          status,
+          duration,
+          transcript_snip,
+          recording_url_txt,
           (
             (outcome IS NOT NULL AND outcome::text NOT IN (
               'no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected'
@@ -11625,8 +11637,8 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
                     'declined', 'rejected', 'voicemail'
                   )
                 )
-                OR (COALESCE(transcript::text, '') <> '' AND LENGTH(TRIM(COALESCE(transcript::text, ''))) > 40)
-                OR (COALESCE(recording_url::text, '') <> '')
+                OR (transcript_snip <> '' AND LENGTH(TRIM(transcript_snip)) > 40)
+                OR (recording_url_txt <> '')
               )
             )
           ) AS is_answered,
@@ -11696,7 +11708,9 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
       console.warn('[CALL QUALITY] appointments count skipped:', apptErr?.message || apptErr);
     }
 
-    const peakHour = await query(`
+    let peakHour = { rows: [] };
+    try {
+      peakHour = await query(`
       SELECT EXTRACT(HOUR FROM created_at)::int AS hour_of_day,
              COUNT(*)::int AS cnt
       FROM calls
@@ -11706,6 +11720,9 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
       ORDER BY cnt DESC
       LIMIT 1
     `, [clientKey]);
+    } catch (peakErr) {
+      console.warn('[CALL QUALITY] peak hour skipped:', peakErr?.message || peakErr);
+    }
 
     let peakWeekdayLabel = '—';
     let peakWeekdayDialCount = 0;
@@ -12160,10 +12177,15 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
     const cqTotal = parseInt(countRes.rows?.[0]?.cq_pending || 0, 10);
     const totalPending = rqTotal + cqTotal;
     const rawRows = listRes.rows || [];
-    const nameByPhone = await fetchLeadNamesForRetryQueuePhones(
-      clientKey,
-      rawRows.map((r) => r.lead_phone)
-    );
+    let nameByPhone = new Map();
+    try {
+      nameByPhone = await fetchLeadNamesForRetryQueuePhones(
+        clientKey,
+        rawRows.map((r) => r.lead_phone)
+      );
+    } catch (nameErr) {
+      console.warn('[RETRY QUEUE API] lead name lookup failed (continuing without names):', nameErr?.message || nameErr);
+    }
     const result = { rows: rawRows };
     const tenant = await getFullClient(clientKey).catch(() => null);
 
