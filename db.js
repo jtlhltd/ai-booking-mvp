@@ -1653,9 +1653,23 @@ export async function upsertFullClient(c) {
   if (c.clientKey) {
     invalidateClientCache(c.clientKey);
   }
+  const existingRow = c.clientKey ? await getFullClient(c.clientKey) : null;
+  const baseVapi =
+    existingRow?.vapi && typeof existingRow.vapi === 'object' && !Array.isArray(existingRow.vapi)
+      ? { ...existingRow.vapi }
+      : {};
+  let vapi;
+  if (c.vapi === undefined) {
+    vapi = baseVapi;
+  } else if (c.vapi === null) {
+    vapi = {};
+  } else if (typeof c.vapi === 'object' && !Array.isArray(c.vapi)) {
+    vapi = { ...baseVapi, ...c.vapi };
+  } else {
+    vapi = baseVapi;
+  }
   const numbers_json = c.numbers ? JSON.stringify(c.numbers) : null;
   const twilio_json = c.sms ? JSON.stringify(c.sms) : null;
-  const vapi = c.vapi || {};
   if (c.vapiAssistantId) vapi.assistantId = c.vapiAssistantId;
   if (c.vapiPhoneNumberId) vapi.phoneNumberId = c.vapiPhoneNumberId;
   const vapi_json = Object.keys(vapi).length ? JSON.stringify(vapi) : null;
@@ -3491,6 +3505,66 @@ export async function inferOutboundAbExperimentNamesForDimensions(clientKey) {
     opening: openingCandidates.length === 1 ? openingCandidates[0] : null,
     script: scriptCandidates.length === 1 ? scriptCandidates[0] : null
   };
+}
+
+/**
+ * Recover dashboard / dialer linkage when vapi_json lost outboundAb*Experiment keys but the
+ * bundle triple (…_voice, …_open, …_script) is still active in ab_test_experiments.
+ * Picks the newest triple by max(created_at) across the three experiment names.
+ */
+export async function inferOutboundAbBundleTriple(clientKey) {
+  if (!clientKey) return null;
+  const { rows } = await query(
+    `
+    SELECT experiment_name, MAX(created_at) AS newest
+    FROM ab_test_experiments
+    WHERE client_key = $1 AND is_active = TRUE
+    GROUP BY experiment_name
+    `,
+    [clientKey]
+  );
+  const names = new Set();
+  const newestByName = new Map();
+  for (const row of rows || []) {
+    const n = row.experiment_name != null ? String(row.experiment_name).trim() : '';
+    if (!n) continue;
+    names.add(n);
+    const t = row.newest != null ? new Date(row.newest).getTime() : 0;
+    newestByName.set(n, t);
+  }
+  const stems = new Map();
+  for (const name of names) {
+    if (!name.startsWith('ab_b_')) continue;
+    let stem;
+    let dim;
+    if (name.endsWith('_voice')) {
+      stem = name.slice(0, -6);
+      dim = 'voice';
+    } else if (name.endsWith('_script')) {
+      stem = name.slice(0, -7);
+      dim = 'script';
+    } else if (name.endsWith('_open')) {
+      stem = name.slice(0, -5);
+      dim = 'opening';
+    } else continue;
+    if (!stems.has(stem)) stems.set(stem, {});
+    stems.get(stem)[dim] = name;
+  }
+  const complete = [];
+  for (const [stem, o] of stems) {
+    if (o.voice && o.opening && o.script) {
+      const t = Math.max(
+        newestByName.get(o.voice) || 0,
+        newestByName.get(o.opening) || 0,
+        newestByName.get(o.script) || 0
+      );
+      complete.push({ stem, voice: o.voice, opening: o.opening, script: o.script, t });
+    }
+  }
+  if (complete.length === 0) return null;
+  complete.sort((a, b) => b.t - a.t);
+  const pick = complete[0];
+  return { voice: pick.voice, opening: pick.opening, script: pick.script };
 }
 
 // Security and Authentication functions

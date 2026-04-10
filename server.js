@@ -8810,7 +8810,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
   try {
     // Always bypass tenant cache: it is per Node process; DELETE on worker A clears A’s cache
     // while dashboard GET on worker B could still serve stale vapi (e.g. outboundAbVoiceExperiment) for minutes.
-    const client = await getFullClient(clientKey, { bypassCache: true });
+    let client = await getFullClient(clientKey, { bypassCache: true });
     const activityChannel = activityFeedChannelLabel(client);
 
     const rollingSinceInstant = DateTime.now().setZone(DASHBOARD_ACTIVITY_TZ).minus({ hours: 24 });
@@ -9564,6 +9564,37 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         }
       } catch (infErr) {
         console.error('[DEMO DASHBOARD] outbound A/B dimension infer error:', infErr?.message || infErr);
+      }
+    }
+    if (!voiceExpName && !openingExpName && !scriptExpName) {
+      try {
+        const { inferOutboundAbBundleTriple } = await import('./db.js');
+        const triple = await inferOutboundAbBundleTriple(clientKey);
+        if (triple) {
+          voiceExpName = triple.voice;
+          openingExpName = triple.opening;
+          scriptExpName = triple.script;
+          voiceExpSource = 'inferred_bundle';
+          openingExpSource = 'inferred_bundle';
+          scriptExpSource = 'inferred_bundle';
+          const hadOutboundAbSlot =
+            trimAbExp(client?.vapi?.outboundAbVoiceExperiment) ||
+            trimAbExp(client?.vapi?.outboundAbOpeningExperiment) ||
+            trimAbExp(client?.vapi?.outboundAbScriptExperiment);
+          if (!hadOutboundAbSlot) {
+            const { updateClientConfig } = await import('./lib/client-onboarding.js');
+            await updateClientConfig(clientKey, {
+              vapi: {
+                outboundAbVoiceExperiment: triple.voice,
+                outboundAbOpeningExperiment: triple.opening,
+                outboundAbScriptExperiment: triple.script
+              }
+            });
+            client = await getFullClient(clientKey, { bypassCache: true });
+          }
+        }
+      } catch (bundleInfErr) {
+        console.error('[DEMO DASHBOARD] outbound A/B bundle infer error:', bundleInfErr?.message || bundleInfErr);
       }
     }
     const dimensionalMode = !!(voiceExpName || openingExpName || scriptExpName);
