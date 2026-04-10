@@ -1,4 +1,5 @@
 // db.js (ESM) — Postgres first, SQLite fallback, and helpers expected by server/libs
+import { createHash } from 'crypto';
 import { Pool } from 'pg';
 import path from 'path';
 import fs from 'fs';
@@ -515,6 +516,18 @@ async function initPostgres() {
     CREATE INDEX IF NOT EXISTS calls_failed_q_client_phone_created_desc_idx
       ON calls (client_key, lead_phone, created_at DESC)
       WHERE call_id LIKE 'failed_q%';
+
+    -- One outbound dial "slot" per tenant + phone_match_key + local calendar day (race-safe with advisory lock + row).
+    CREATE TABLE IF NOT EXISTS outbound_dial_daily_claim (
+      id BIGSERIAL PRIMARY KEY,
+      client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
+      phone_match_key TEXT NOT NULL,
+      dial_date DATE NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      UNIQUE (client_key, phone_match_key, dial_date)
+    );
+    CREATE INDEX IF NOT EXISTS outbound_dial_daily_claim_lookup_idx
+      ON outbound_dial_daily_claim (client_key, dial_date);
 
     -- Aggregated transcript insights + routing recommendations (per tenant)
     CREATE TABLE IF NOT EXISTS call_insights (
@@ -1849,9 +1862,15 @@ export async function upsertCall({
   ]);
 }
 
+/** Key stored in outbound_dial_daily_claim; must match lead-queuer COALESCE expression. */
+function outboundDialClaimKeyFromRaw(raw) {
+  return phoneMatchKey(raw) ?? '__nodigits__';
+}
+
 /**
  * True if this tenant already has any `calls` row for this number on the tenant's local calendar day
- * (outbound attempts, failed_q markers, webhooks, etc. all count as "dialed today").
+ * (outbound attempts, failed_q markers, webhooks, etc. all count as "dialed today"),
+ * or an active daily dial claim row (race guard before a `calls` row exists).
  * Opt out: ALLOW_MULTIPLE_OUTBOUND_CALLS_PER_DAY=1|true|yes
  */
 export async function hasOutboundCallAttemptToday(clientKey, leadPhone, timezone = 'Europe/London') {
@@ -1861,13 +1880,15 @@ export async function hasOutboundCallAttemptToday(clientKey, leadPhone, timezone
   const raw = leadPhone != null ? String(leadPhone).trim() : '';
   if (!clientKey || !raw) return false;
   const qk = phoneMatchKey(raw);
+  const claimKey = outboundDialClaimKeyFromRaw(raw);
 
   if (dbType === 'postgres' && pool) {
     // Bypass SELECT query cache — result must be fresh for every dial decision.
     const exec = () =>
       pool.query(
         `
-      SELECT EXISTS (
+      SELECT (
+        EXISTS (
         SELECT 1
         FROM calls c
         WHERE c.client_key = $1
@@ -1886,9 +1907,17 @@ export async function hasOutboundCallAttemptToday(clientKey, leadPhone, timezone
             )
           )
           AND ((c.created_at AT TIME ZONE $4)::date = (NOW() AT TIME ZONE $4)::date)
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM outbound_dial_daily_claim d
+          WHERE d.client_key = $1
+            AND d.phone_match_key = $5
+            AND d.dial_date = (NOW() AT TIME ZONE $4)::date
+        )
       ) AS y
       `,
-        [clientKey, raw, qk, timezone]
+        [clientKey, raw, qk, timezone, claimKey]
       );
     const { rows } = pgQueryLimiter ? await pgQueryLimiter.run(exec) : await exec();
     return !!rows[0]?.y;
@@ -1918,6 +1947,99 @@ export async function hasOutboundCallAttemptToday(clientKey, leadPhone, timezone
     if (d === todayStr) return true;
   }
   return false;
+}
+
+/**
+ * Reserve one outbound dial slot for this tenant + phone for the tenant's local calendar day (Postgres).
+ * Serializes concurrent workers via pg_advisory_xact_lock; pairs with hasOutboundCallAttemptToday (claims count).
+ * Non-Postgres: best-effort check only (no cross-process race safety).
+ */
+export async function claimOutboundDialSlotForToday(clientKey, leadPhone, timezone = 'Europe/London') {
+  if (/^(1|true|yes)$/i.test(String(process.env.ALLOW_MULTIPLE_OUTBOUND_CALLS_PER_DAY || '').trim())) {
+    return { ok: true, reason: 'bypass_env' };
+  }
+  const raw = leadPhone != null ? String(leadPhone).trim() : '';
+  if (!clientKey || !raw) return { ok: false, reason: 'invalid' };
+
+  const qk = phoneMatchKey(raw);
+  const claimKey = outboundDialClaimKeyFromRaw(raw);
+
+  if (dbType !== 'postgres' || !pool) {
+    const blocked = await hasOutboundCallAttemptToday(clientKey, raw, timezone);
+    return { ok: !blocked, reason: blocked ? 'nonpg_or_calls' : 'ok_nonpg' };
+  }
+
+  const c = await pool.connect();
+  try {
+    await c.query('BEGIN');
+    const dateRow = await c.query(`SELECT (NOW() AT TIME ZONE $1)::date::text AS d`, [timezone]);
+    const dialDateStr = dateRow.rows[0]?.d;
+    if (!dialDateStr) {
+      await c.query('ROLLBACK');
+      return { ok: false, reason: 'date' };
+    }
+
+    const h = createHash('sha256').update(`${clientKey}\0${claimKey}\0${dialDateStr}`).digest();
+    const k1 = (h.readUInt32BE(0) & 0x7fffffff) || 1;
+    const k2 = (h.readUInt32BE(4) & 0x7fffffff) || 1;
+    await c.query('SELECT pg_advisory_xact_lock($1, $2)', [k1, k2]);
+
+    const existsCalls = await c.query(
+      `
+      SELECT EXISTS (
+        SELECT 1 FROM calls c
+        WHERE c.client_key = $1
+          AND (
+            c.lead_phone = $2
+            OR (
+              $3::text IS NOT NULL
+              AND c.lead_phone_match_key IS NOT NULL
+              AND c.lead_phone_match_key = $3
+            )
+            OR (
+              $3::text IS NOT NULL
+              AND c.lead_phone_match_key IS NULL
+              AND LENGTH(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g')) >= 10
+              AND RIGHT(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), 10) = $3
+            )
+          )
+          AND ((c.created_at AT TIME ZONE $4)::date = $5::date)
+      ) AS y
+      `,
+      [clientKey, raw, qk, timezone, dialDateStr]
+    );
+    if (existsCalls.rows[0]?.y) {
+      await c.query('ROLLBACK');
+      return { ok: false, reason: 'calls_today' };
+    }
+
+    const ins = await c.query(
+      `
+      INSERT INTO outbound_dial_daily_claim (client_key, phone_match_key, dial_date)
+      VALUES ($1, $2, $3::date)
+      ON CONFLICT (client_key, phone_match_key, dial_date) DO NOTHING
+      RETURNING id
+      `,
+      [clientKey, claimKey, dialDateStr]
+    );
+
+    if (!ins.rows?.length) {
+      await c.query('ROLLBACK');
+      return { ok: false, reason: 'claim_held' };
+    }
+
+    await c.query('COMMIT');
+    return { ok: true, reason: 'claimed' };
+  } catch (e) {
+    try {
+      await c.query('ROLLBACK');
+    } catch (_) {
+      /* ignore */
+    }
+    throw e;
+  } finally {
+    c.release();
+  }
 }
 
 export async function getCallsByTenant(clientKey, limit = 100) {

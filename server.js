@@ -22249,8 +22249,13 @@ async function processRetryQueue() {
               continue;
             }
             const rTz = rClient?.booking?.timezone || rClient?.timezone || TIMEZONE;
-            const { hasOutboundCallAttemptToday } = await import('./db.js');
-            if (await hasOutboundCallAttemptToday(retry.client_key, retry.lead_phone, rTz)) {
+            const { claimOutboundDialSlotForToday } = await import('./db.js');
+            const retryDialClaim = await claimOutboundDialSlotForToday(
+              retry.client_key,
+              retry.lead_phone,
+              rTz
+            );
+            if (!retryDialClaim.ok) {
               const nextLocalDayStart = DateTime.now().setZone(rTz).plus({ days: 1 }).startOf('day').toJSDate();
               const nextOpen = getNextBusinessOpenForTenant(
                 rClient || { booking: { timezone: rTz }, timezone: rTz },
@@ -22264,7 +22269,8 @@ async function processRetryQueue() {
               );
               console.log('[RETRY PROCESSOR] Deferred — daily dial limit (one per number per local day)', {
                 id: retry.id,
-                scheduledFor: nextOpen
+                scheduledFor: nextOpen,
+                reason: retryDialClaim.reason
               });
               continue;
             }
@@ -23090,6 +23096,19 @@ async function queueNewLeadsForCalling() {
                 )
               )
               AND ((c.created_at AT TIME ZONE $2)::date = (NOW() AT TIME ZONE $2)::date)
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM outbound_dial_daily_claim d
+              WHERE d.client_key = l.client_key
+                AND d.dial_date = (NOW() AT TIME ZONE $2)::date
+                AND d.phone_match_key = COALESCE(
+                  l.phone_match_key,
+                  (CASE WHEN LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
+                    THEN RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
+                    ELSE NULLIF(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), '')
+                  END),
+                  '__nodigits__'
+                )
             )
             AND NOT EXISTS (
               SELECT 1 FROM calls c
