@@ -6653,7 +6653,8 @@
         function isRetryScheduledOverdue(iso) {
             if (!iso) return false;
             const t = new Date(iso).getTime();
-            return Number.isFinite(t) && t < Date.now() - 90 * 1000;
+            // Grace window: small drift is normal under load (cron cadence + rate limits).
+            return Number.isFinite(t) && t < Date.now() - 10 * 60 * 1000;
         }
 
         /** Relative time until/since scheduled_for (server / browser local clock). */
@@ -6663,13 +6664,13 @@
             if (!Number.isFinite(t)) return '';
             const diffMs = t - Date.now();
             const absMin = Math.round(Math.abs(diffMs) / 60000);
-            if (diffMs < -120000) {
+            if (diffMs < -10 * 60 * 1000) {
                 if (absMin < 60) return `${absMin} min late`;
                 const h = Math.floor(absMin / 60);
                 const m = absMin % 60;
                 return m > 0 ? `${h}h ${m}m late` : `${h}h late`;
             }
-            if (diffMs <= 120000) return 'Due now';
+            if (diffMs <= 10 * 60 * 1000) return 'Due now';
             if (absMin < 60) return `in ${absMin} min`;
             const h = Math.floor(absMin / 60);
             const m = absMin % 60;
