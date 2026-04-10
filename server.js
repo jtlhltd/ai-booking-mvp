@@ -22153,8 +22153,8 @@ async function processRetryQueue() {
       console.warn('[RETRY PROCESSOR] Failed to reset stale processing rows:', e?.message || e);
     }
 
-    const maxRetriesPerRun = Math.max(1, Math.min(500, parseInt(process.env.RETRY_QUEUE_MAX_PER_RUN || '200', 10) || 200));
-    const maxConcurrentRetries = Math.max(1, Math.min(25, parseInt(process.env.RETRY_QUEUE_MAX_CONCURRENT || '5', 10) || 5));
+    const maxRetriesPerRun = Math.max(1, Math.min(500, parseInt(process.env.RETRY_QUEUE_MAX_PER_RUN || '120', 10) || 120));
+    const maxConcurrentRetries = Math.max(1, Math.min(25, parseInt(process.env.RETRY_QUEUE_MAX_CONCURRENT || '3', 10) || 3));
 
     const pendingRetries = await getPendingRetries(maxRetriesPerRun);
     
@@ -22170,6 +22170,7 @@ async function processRetryQueue() {
 
     let idx = 0;
     async function worker() {
+      await new Promise((r) => setTimeout(r, Math.floor(Math.random() * 350)));
       while (true) {
         const retry = pendingRetries[idx++];
         if (!retry) return;
@@ -22581,8 +22582,8 @@ async function processCallQueue() {
       console.warn('[CALL QUEUE PROCESSOR] Failed_q catch-up failed:', e?.message || e);
     }
 
-    const maxCallsPerRun = Math.max(1, Math.min(500, parseInt(process.env.CALL_QUEUE_MAX_PER_RUN || '50', 10) || 50));
-    const maxConcurrentCalls = Math.max(1, Math.min(25, parseInt(process.env.CALL_QUEUE_MAX_CONCURRENT || '5', 10) || 5));
+    const maxCallsPerRun = Math.max(1, Math.min(500, parseInt(process.env.CALL_QUEUE_MAX_PER_RUN || '40', 10) || 40));
+    const maxConcurrentCalls = Math.max(1, Math.min(25, parseInt(process.env.CALL_QUEUE_MAX_CONCURRENT || '3', 10) || 3));
 
     const pendingCalls = await getPendingCalls(maxCallsPerRun);
     
@@ -22657,6 +22658,7 @@ async function processCallQueue() {
     // Concurrency-limited processing (avoid serial backlog drift)
     let idx = 0;
     async function worker() {
+      await new Promise((r) => setTimeout(r, Math.floor(Math.random() * 350)));
       while (idx < pendingCalls.length) {
         const call = pendingCalls[idx++];
         try {

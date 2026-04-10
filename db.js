@@ -14,8 +14,35 @@ import { phoneMatchKey } from './lib/lead-phone-key.js';
 
 const dbType = (process.env.DB_TYPE || '').toLowerCase();
 let pool = null;
+/** When set, caps simultaneous in-flight `pool.query` calls (whole process shares one limit). */
+let pgQueryLimiter = null;
 let sqlite = null;
 let DB_PATH = 'postgres';
+
+/**
+ * Serialize excess load so small Postgres tiers are not hit by many parallel workers/webhooks at once.
+ * @param {number} maxConcurrent
+ */
+function createQueryConcurrencyLimiter(maxConcurrent) {
+  let active = 0;
+  const queue = [];
+  return {
+    maxConcurrent,
+    async run(fn) {
+      if (active >= maxConcurrent) {
+        await new Promise((resolve) => queue.push(resolve));
+      }
+      active++;
+      try {
+        return await fn();
+      } finally {
+        active--;
+        const next = queue.shift();
+        if (next) next();
+      }
+    }
+  };
+}
 
 console.log('🔍 Database configuration:', {
   DB_TYPE: process.env.DB_TYPE,
@@ -293,22 +320,42 @@ async function initPostgres() {
   
   try {
     // Render Postgres often allows ~100 max_connections; the app should use a modest slice per process.
-    // Default 25: dashboard Promise.all + webhooks + cron can briefly need many concurrent queries.
+    // On Render, default 12 pool slots — basic tiers choke when the app opens many parallel queries.
     // Override with DB_POOL_MAX; cap avoids accidental runaway values.
     const rawMax = parseInt(process.env.DB_POOL_MAX, 10);
+    const defaultPoolMax = process.env.RENDER === 'true' ? 12 : 25;
     const maxConnections =
-      Number.isFinite(rawMax) && rawMax >= 2 ? Math.min(rawMax, 80) : 25;
+      Number.isFinite(rawMax) && rawMax >= 2 ? Math.min(rawMax, 80) : defaultPoolMax;
     
     pool = new Pool({
       connectionString: dbUrl,
       ssl: { rejectUnauthorized: false },
-      max: maxConnections, // Reduced to match database connection limits (Render free tier = 3)
+      max: maxConnections,
       idleTimeoutMillis: 10000, // Close idle connections after 10 seconds (more aggressive)
       connectionTimeoutMillis: 5000, // Reduced to 5 seconds for faster failure detection
       statement_timeout: 20000, // 20 second query timeout to prevent hanging queries
       allowExitOnIdle: true, // Allow pool to close when idle
     });
-    
+
+    // Smooth spikes: cron + webhooks + queue workers often align; tiny Render Postgres cannot serve 20+ parallel queries.
+    const rawQc = parseInt(process.env.DB_QUERY_CONCURRENCY, 10);
+    let queryConc;
+    if (rawQc === 0) {
+      queryConc = null; // explicit disable
+    } else if (Number.isFinite(rawQc) && rawQc > 0) {
+      queryConc = Math.min(rawQc, maxConnections);
+    } else if (process.env.RENDER === 'true') {
+      queryConc = Math.min(8, maxConnections);
+    } else {
+      queryConc = null;
+    }
+    pgQueryLimiter = queryConc ? createQueryConcurrencyLimiter(queryConc) : null;
+    if (pgQueryLimiter) {
+      console.log(
+        `🔌 DB query concurrency cap: ${queryConc} simultaneous queries (DB_QUERY_CONCURRENCY=0 disables)`
+      );
+    }
+
     console.log(`🔌 Database pool configured: max=${maxConnections} connections`);
 
     // Test connection first with timeout
@@ -1262,7 +1309,8 @@ async function query(text, params = []) {
   
   try {
     if (dbType === 'postgres' && pool) {
-      result = await pool.query(text, params);
+      const exec = () => pool.query(text, params);
+      result = pgQueryLimiter ? await pgQueryLimiter.run(exec) : await exec();
     } else if (sqlite) {
       // Convert PostgreSQL-style placeholders ($1, $2, etc.) to SQLite-style (?)
       let sqliteText = text;
