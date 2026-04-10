@@ -929,6 +929,7 @@ async function initPostgres() {
       created_at TIMESTAMPTZ DEFAULT now()
     );
     CREATE INDEX IF NOT EXISTS ab_test_results_experiment_idx ON ab_test_results(experiment_id);
+    CREATE INDEX IF NOT EXISTS ab_test_results_experiment_outcome_idx ON ab_test_results (experiment_id, outcome);
     CREATE INDEX IF NOT EXISTS ab_test_results_tenant_idx ON ab_test_results(client_key);
     CREATE INDEX IF NOT EXISTS ab_test_results_phone_idx ON ab_test_results(client_key, lead_phone);
     CREATE INDEX IF NOT EXISTS ab_test_results_outcome_idx ON ab_test_results(outcome);
@@ -3374,118 +3375,192 @@ export async function recordOutboundAbLivePickups({
   }
 }
 
-export async function getABTestConversionRates(experimentId) {
-  const { rows } = await query(`
+function abTestExperimentIdPlaceholders(count, startAt = 1) {
+  return Array.from({ length: count }, (_, i) => `$${startAt + i}`).join(', ');
+}
+
+/** @param {number[]} experimentIds */
+async function loadAbTestConversionRatesByExperimentIds(experimentIds) {
+  const ids = [...new Set(experimentIds.map((id) => Number(id)).filter((n) => Number.isFinite(n) && n > 0))];
+  if (!ids.length) return new Map();
+  const n = ids.length;
+  const ph1 = abTestExperimentIdPlaceholders(n, 1);
+  const ph2 = abTestExperimentIdPlaceholders(n, n + 1);
+  const ph3 = abTestExperimentIdPlaceholders(n, 2 * n + 1);
+  const params = [...ids, ...ids, ...ids];
+  const { rows } = await query(
+    `
     WITH variant_totals AS (
-      SELECT 
+      SELECT
+        experiment_id,
         variant_name,
-        COUNT(DISTINCT lead_phone) as total_leads
-      FROM ab_test_results 
-      WHERE experiment_id = $1
-      GROUP BY variant_name
+        COUNT(DISTINCT lead_phone) AS total_leads
+      FROM ab_test_results
+      WHERE experiment_id IN (${ph1})
+      GROUP BY experiment_id, variant_name
     ),
     variant_live_pickups AS (
-      SELECT 
+      SELECT
+        experiment_id,
         variant_name,
-        COUNT(DISTINCT lead_phone) as live_pickup_leads
-      FROM ab_test_results 
-      WHERE experiment_id = $1 AND outcome = 'live_pickup'
-      GROUP BY variant_name
+        COUNT(DISTINCT lead_phone) AS live_pickup_leads
+      FROM ab_test_results
+      WHERE experiment_id IN (${ph2}) AND outcome = 'live_pickup'
+      GROUP BY experiment_id, variant_name
     ),
     variant_conversions AS (
-      SELECT 
+      SELECT
+        experiment_id,
         variant_name,
-        COUNT(DISTINCT lead_phone) as converted_leads
-      FROM ab_test_results 
-      WHERE experiment_id = $1 AND outcome = 'converted'
-      GROUP BY variant_name
+        COUNT(DISTINCT lead_phone) AS converted_leads
+      FROM ab_test_results
+      WHERE experiment_id IN (${ph3}) AND outcome = 'converted'
+      GROUP BY experiment_id, variant_name
     )
-    SELECT 
+    SELECT
+      vt.experiment_id,
       vt.variant_name,
       vt.total_leads,
-      COALESCE(vlp.live_pickup_leads, 0) as live_pickup_leads,
-      COALESCE(vc.converted_leads, 0) as converted_leads,
-      CASE 
-        WHEN COALESCE(vlp.live_pickup_leads, 0) > 0 
+      COALESCE(vlp.live_pickup_leads, 0) AS live_pickup_leads,
+      COALESCE(vc.converted_leads, 0) AS converted_leads,
+      CASE
+        WHEN COALESCE(vlp.live_pickup_leads, 0) > 0
         THEN ROUND(
           CAST((COALESCE(vc.converted_leads, 0)::numeric / vlp.live_pickup_leads::numeric) * 100 AS numeric),
           2
         )
-        WHEN vt.total_leads > 0 
+        WHEN vt.total_leads > 0
         THEN ROUND(
           CAST((COALESCE(vc.converted_leads, 0)::numeric / vt.total_leads::numeric) * 100 AS numeric),
           2
         )
-        ELSE 0 
-      END as conversion_rate
+        ELSE 0
+      END AS conversion_rate
     FROM variant_totals vt
-    LEFT JOIN variant_live_pickups vlp ON vlp.variant_name = vt.variant_name
-    LEFT JOIN variant_conversions vc ON vc.variant_name = vt.variant_name
-    ORDER BY conversion_rate DESC
-  `, [experimentId]);
-  return rows;
+    LEFT JOIN variant_live_pickups vlp
+      ON vlp.experiment_id = vt.experiment_id AND vlp.variant_name = vt.variant_name
+    LEFT JOIN variant_conversions vc
+      ON vc.experiment_id = vt.experiment_id AND vc.variant_name = vt.variant_name
+    ORDER BY vt.experiment_id ASC, conversion_rate DESC
+  `,
+    params
+  );
+  /** @type {Map<number, object[]>} */
+  const byExp = new Map();
+  for (const r of rows || []) {
+    const eid = Number(r.experiment_id);
+    const row = {
+      variant_name: r.variant_name,
+      total_leads: r.total_leads,
+      live_pickup_leads: r.live_pickup_leads,
+      converted_leads: r.converted_leads,
+      conversion_rate: r.conversion_rate
+    };
+    if (!byExp.has(eid)) byExp.set(eid, []);
+    byExp.get(eid).push(row);
+  }
+  return byExp;
+}
+
+export async function getABTestConversionRates(experimentId) {
+  const m = await loadAbTestConversionRatesByExperimentIds([experimentId]);
+  return m.get(Number(experimentId)) || [];
+}
+
+/** @param {number[]} experimentIds */
+async function loadAbTestLivePickupDurationStatsByExperimentIds(experimentIds) {
+  const ids = [...new Set(experimentIds.map((id) => Number(id)).filter((n) => Number.isFinite(n) && n > 0))];
+  if (!ids.length) return new Map();
+  const ph = abTestExperimentIdPlaceholders(ids.length);
+  const { rows } = await query(
+    `
+    SELECT
+      experiment_id,
+      COUNT(*)::int AS n,
+      ROUND(CAST(AVG(val) AS numeric), 1) AS avg_sec,
+      ROUND(
+        CAST((PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY val)) AS numeric),
+        1
+      ) AS median_sec
+    FROM (
+      SELECT
+        experiment_id,
+        (outcome_data->>'durationSeconds')::numeric AS val
+      FROM ab_test_results
+      WHERE experiment_id IN (${ph})
+        AND outcome = 'live_pickup'
+        AND (outcome_data->>'durationSeconds') IS NOT NULL
+        AND (outcome_data->>'durationSeconds')::numeric > 0
+    ) t
+    GROUP BY experiment_id
+  `,
+    ids
+  );
+  /** @type {Map<number, { n: number, avgSec: number|null, medianSec: number|null }>} */
+  const m = new Map();
+  for (const r of rows || []) {
+    const eid = Number(r.experiment_id);
+    m.set(eid, {
+      n: parseInt(r.n, 10) || 0,
+      avgSec: r.avg_sec != null ? Number(r.avg_sec) : null,
+      medianSec: r.median_sec != null ? Number(r.median_sec) : null
+    });
+  }
+  return m;
 }
 
 /** Median/avg talk time (seconds) for live_pickup rows that recorded durationSeconds (post-deploy webhooks). */
 export async function getABTestLivePickupDurationStats(experimentId) {
+  const m = await loadAbTestLivePickupDurationStatsByExperimentIds([experimentId]);
+  return m.get(Number(experimentId)) || { n: 0, avgSec: null, medianSec: null };
+}
+
+/** @param {number[]} experimentIds */
+async function loadAbTestConvertedCompletenessStatsByExperimentIds(experimentIds) {
+  const ids = [...new Set(experimentIds.map((id) => Number(id)).filter((n) => Number.isFinite(n) && n > 0))];
+  if (!ids.length) return new Map();
+  const ph = abTestExperimentIdPlaceholders(ids.length);
   const { rows } = await query(
     `
     SELECT
+      experiment_id,
       COUNT(*)::int AS n,
-      ROUND(CAST(AVG((outcome_data->>'durationSeconds')::numeric) AS numeric), 1) AS avg_sec,
+      ROUND(CAST(AVG(val) AS numeric), 1) AS avg_score,
       ROUND(
-        CAST(
-          PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY (outcome_data->>'durationSeconds')::numeric)
-          AS numeric
-        ),
+        CAST((PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY val)) AS numeric),
         1
-      ) AS median_sec
-    FROM ab_test_results
-    WHERE experiment_id = $1
-      AND outcome = 'live_pickup'
-      AND (outcome_data->>'durationSeconds') IS NOT NULL
-      AND (outcome_data->>'durationSeconds')::numeric > 0
+      ) AS median_score
+    FROM (
+      SELECT
+        experiment_id,
+        (outcome_data->>'completenessScore')::numeric AS val
+      FROM ab_test_results
+      WHERE experiment_id IN (${ph})
+        AND outcome = 'converted'
+        AND (outcome_data->>'completenessScore') IS NOT NULL
+        AND (outcome_data->>'completenessScore')::numeric >= 0
+    ) t
+    GROUP BY experiment_id
   `,
-    [experimentId]
+    ids
   );
-  const r = rows[0];
-  if (!r || !r.n) return { n: 0, avgSec: null, medianSec: null };
-  return {
-    n: parseInt(r.n, 10) || 0,
-    avgSec: r.avg_sec != null ? Number(r.avg_sec) : null,
-    medianSec: r.median_sec != null ? Number(r.median_sec) : null
-  };
+  /** @type {Map<number, { n: number, avgScore: number|null, medianScore: number|null }>} */
+  const m = new Map();
+  for (const r of rows || []) {
+    const eid = Number(r.experiment_id);
+    m.set(eid, {
+      n: parseInt(r.n, 10) || 0,
+      avgScore: r.avg_score != null ? Number(r.avg_score) : null,
+      medianScore: r.median_score != null ? Number(r.median_score) : null
+    });
+  }
+  return m;
 }
 
 /** Completeness (0-100) for converted rows (sheet append), from outcome_data.completenessScore. */
 export async function getABTestConvertedCompletenessStats(experimentId) {
-  const { rows } = await query(
-    `
-    SELECT
-      COUNT(*)::int AS n,
-      ROUND(CAST(AVG((outcome_data->>'completenessScore')::numeric) AS numeric), 1) AS avg_score,
-      ROUND(
-        CAST(
-          PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY (outcome_data->>'completenessScore')::numeric)
-          AS numeric
-        ),
-        1
-      ) AS median_score
-    FROM ab_test_results
-    WHERE experiment_id = $1
-      AND outcome = 'converted'
-      AND (outcome_data->>'completenessScore') IS NOT NULL
-      AND (outcome_data->>'completenessScore')::numeric >= 0
-  `,
-    [experimentId]
-  );
-  const r = rows[0];
-  if (!r || !r.n) return { n: 0, avgScore: null, medianScore: null };
-  return {
-    n: parseInt(r.n, 10) || 0,
-    avgScore: r.avg_score != null ? Number(r.avg_score) : null,
-    medianScore: r.median_score != null ? Number(r.median_score) : null
-  };
+  const m = await loadAbTestConvertedCompletenessStatsByExperimentIds([experimentId]);
+  return m.get(Number(experimentId)) || { n: 0, avgScore: null, medianScore: null };
 }
 
 /** Safe previews of variant_config for dashboards (voice, opening, script). */
@@ -3549,14 +3624,21 @@ export async function getOutboundAbExperimentSummary(clientKey, experimentName) 
   if (!experiments.length) {
     return { experimentName: name, variants: [], hasDbVariants: false };
   }
+  const expIds = experiments.map((e) => e.id);
+  const [ratesByExp, durByExp, compByExp] = await Promise.all([
+    loadAbTestConversionRatesByExperimentIds(expIds),
+    loadAbTestLivePickupDurationStatsByExperimentIds(expIds),
+    loadAbTestConvertedCompletenessStatsByExperimentIds(expIds)
+  ]);
   const variants = [];
   for (const row of experiments) {
-    const rates = await getABTestConversionRates(row.id);
+    const eid = Number(row.id);
+    const rates = ratesByExp.get(eid) || [];
     const agg =
       rates.find((r) => r.variant_name === row.variant_name) || (rates.length === 1 ? rates[0] : null);
     const tested = summarizeOutboundVariantConfig(row.variant_config);
-    const dur = await getABTestLivePickupDurationStats(row.id);
-    const comp = await getABTestConvertedCompletenessStats(row.id);
+    const dur = durByExp.get(eid) || { n: 0, avgSec: null, medianSec: null };
+    const comp = compByExp.get(eid) || { n: 0, avgScore: null, medianScore: null };
     variants.push({
       variantName: row.variant_name,
       totalLeads: parseInt(agg?.total_leads ?? 0, 10),
