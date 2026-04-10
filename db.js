@@ -428,6 +428,10 @@ async function initPostgres() {
     CREATE INDEX IF NOT EXISTS leads_tenant_idx ON leads(client_key);
     CREATE INDEX IF NOT EXISTS leads_phone_idx ON leads(client_key, phone);
     CREATE INDEX IF NOT EXISTS leads_client_created_idx ON leads(client_key, created_at DESC);
+    -- queueNewLeadsForCalling: status=new, created_at window, ORDER BY created_at ASC (avoids scanning all tenant leads)
+    CREATE INDEX IF NOT EXISTS leads_queuer_new_created_asc_idx
+      ON leads (client_key, created_at ASC)
+      WHERE status = 'new';
     
     -- Add unique constraint on (client_key, phone) for ON CONFLICT support
     -- This allows upsert operations to prevent duplicate leads per client
@@ -496,6 +500,10 @@ async function initPostgres() {
     CREATE INDEX IF NOT EXISTS calls_phone_idx ON calls(client_key, lead_phone);
     -- First outbound within window (dashboard lead → first call): seek by tenant + phone + time
     CREATE INDEX IF NOT EXISTS calls_client_phone_created_idx ON calls(client_key, lead_phone, created_at ASC);
+    -- queueNewLeadsForCalling NOT EXISTS: in-flight dial for same tenant + phone
+    CREATE INDEX IF NOT EXISTS calls_client_phone_active_status_idx
+      ON calls (client_key, lead_phone)
+      WHERE status IN ('initiated', 'in_progress');
     CREATE INDEX IF NOT EXISTS calls_status_idx ON calls(status);
     CREATE INDEX IF NOT EXISTS calls_outcome_idx ON calls(outcome);
     CREATE INDEX IF NOT EXISTS calls_created_idx ON calls(created_at);
@@ -737,6 +745,10 @@ async function initPostgres() {
     CREATE INDEX IF NOT EXISTS call_queue_status_idx ON call_queue(status);
     CREATE INDEX IF NOT EXISTS call_queue_priority_idx ON call_queue(priority);
     CREATE INDEX IF NOT EXISTS call_queue_phone_idx ON call_queue(client_key, lead_phone);
+    -- queueNewLeadsForCalling NOT EXISTS: pending queue row for same tenant + phone
+    CREATE INDEX IF NOT EXISTS call_queue_client_phone_pending_idx
+      ON call_queue (client_key, lead_phone)
+      WHERE status = 'pending';
     CREATE INDEX IF NOT EXISTS call_queue_initiated_call_id_idx ON call_queue(initiated_call_id) WHERE initiated_call_id IS NOT NULL;
     CREATE INDEX IF NOT EXISTS call_queue_pending_scheduled_idx ON call_queue (scheduled_for ASC) WHERE status = 'pending';
     CREATE INDEX IF NOT EXISTS call_queue_processing_updated_idx ON call_queue (updated_at) WHERE status = 'processing';
