@@ -1248,6 +1248,30 @@ async function processWebhookPayload(body, correlationId) {
               });
               await sheets.appendLogistics(logisticsSheetId, sheetData);
               console.log('[LOGISTICS SHEET APPEND] ✅ SUCCESS', { callId, phone: leadPhone });
+              // Outbound A/B: treat a successful *sheet row append* as a conversion event.
+              // This aligns monitoring with "row written" rather than bookings (which may not apply to outreach).
+              try {
+                if (tenantKey && leadPhone) {
+                  const { collectOutboundAbExperimentNamesFromMetadata } = await import('../lib/outbound-ab-live-pickup.js');
+                  const { recordABTestOutcome } = await import('../db.js');
+                  const expNames = collectOutboundAbExperimentNamesFromMetadata(metadata);
+                  for (const experimentName of expNames) {
+                    await recordABTestOutcome({
+                      clientKey: tenantKey,
+                      experimentName,
+                      leadPhone,
+                      outcome: 'converted',
+                      outcomeData: {
+                        source: 'sheet_append',
+                        sheetId: logisticsSheetId,
+                        callId: callId || null
+                      }
+                    });
+                  }
+                }
+              } catch (abConvErr) {
+                console.warn('[OUTBOUND AB CONVERSION] skipped:', abConvErr?.message || abConvErr);
+              }
               markProcessed(callId);
             }
           } else {
