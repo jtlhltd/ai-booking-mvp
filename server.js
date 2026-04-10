@@ -25778,13 +25778,38 @@ async function runOutboundAbTestSetup(clientKey, body, res) {
     await updateClientConfig(clientKey, {
       vapi: { [vapiKey]: nameTrim, outboundAbFocusDimension: dimRaw }
     });
+    const { getOutboundAbExperimentSummary } = await import('./db.js');
+    const { enrichOutboundAbDashboardSummariesFromAssistant } = await import(
+      './lib/outbound-ab-dashboard-enrich.js'
+    );
+    const summaryClient = await getFullClient(clientKey, { bypassCache: true });
+    let voiceSummary = null;
+    let openingSummary = null;
+    let scriptSummary = null;
+    if (dimRaw === 'voice') {
+      voiceSummary = await getOutboundAbExperimentSummary(clientKey, nameTrim);
+    } else if (dimRaw === 'opening') {
+      openingSummary = await getOutboundAbExperimentSummary(clientKey, nameTrim);
+    } else {
+      scriptSummary = await getOutboundAbExperimentSummary(clientKey, nameTrim);
+    }
+    if (summaryClient) {
+      await enrichOutboundAbDashboardSummariesFromAssistant(
+        summaryClient,
+        { voiceSummary, openingSummary, scriptSummary, legacyOutboundAbSummary: null },
+        {}
+      );
+    }
+    const slotSummary =
+      dimRaw === 'voice' ? voiceSummary : dimRaw === 'opening' ? openingSummary : scriptSummary;
     res.json({
       ok: true,
       experimentName: nameTrim,
       dimension: dimRaw,
       vapiKey,
       variantCount: mapped.length,
-      outboundAbFocusDimension: dimRaw
+      outboundAbFocusDimension: dimRaw,
+      slotSummary
     });
   } catch (error) {
     console.error('[OUTBOUND AB TEST SETUP ERROR]', error);
@@ -25878,11 +25903,36 @@ async function runOutboundAbChallengerUpdate(clientKey, body, res) {
       });
       return;
     }
+    const { getOutboundAbExperimentSummary } = await import('./db.js');
+    const { enrichOutboundAbDashboardSummariesFromAssistant } = await import(
+      './lib/outbound-ab-dashboard-enrich.js'
+    );
+    const summaryClient = await getFullClient(clientKey, { bypassCache: true });
+    let voiceSummary = null;
+    let openingSummary = null;
+    let scriptSummary = null;
+    if (dimRaw === 'voice') {
+      voiceSummary = await getOutboundAbExperimentSummary(clientKey, expName);
+    } else if (dimRaw === 'opening') {
+      openingSummary = await getOutboundAbExperimentSummary(clientKey, expName);
+    } else {
+      scriptSummary = await getOutboundAbExperimentSummary(clientKey, expName);
+    }
+    if (summaryClient) {
+      await enrichOutboundAbDashboardSummariesFromAssistant(
+        summaryClient,
+        { voiceSummary, openingSummary, scriptSummary, legacyOutboundAbSummary: null },
+        {}
+      );
+    }
+    const slotSummary =
+      dimRaw === 'voice' ? voiceSummary : dimRaw === 'opening' ? openingSummary : scriptSummary;
     res.json({
       ok: true,
       experimentName: expName,
       dimension: dimRaw,
-      variantName: challengerName
+      variantName: challengerName,
+      slotSummary
     });
   } catch (error) {
     console.error('[OUTBOUND AB CHALLENGER PATCH]', error);

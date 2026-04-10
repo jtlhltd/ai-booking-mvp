@@ -10039,6 +10039,41 @@ ${actionsRow}
             });
         }
 
+        /** Apply server-returned A/B slot so the challenger appears even if /demo-dashboard lags or times out. */
+        function tomAbMergeOutboundAbSlotFromServer(dim, data) {
+            if (!dashboardData || typeof dashboardData !== 'object') return;
+            if (dim !== 'voice' && dim !== 'opening' && dim !== 'script') return;
+            if (!data || typeof data !== 'object') return;
+            const ab =
+                dashboardData.outboundAbTest && typeof dashboardData.outboundAbTest === 'object'
+                    ? { ...dashboardData.outboundAbTest }
+                    : {};
+            const key = dim === 'voice' ? 'voice' : dim === 'opening' ? 'opening' : 'script';
+            const exp = data.experimentName != null ? String(data.experimentName).trim() : '';
+            ab[key] = {
+                ...(ab[key] && typeof ab[key] === 'object' ? ab[key] : {}),
+                experimentName: exp || null,
+                experimentNameSource: 'vapi',
+                summary: data.slotSummary && typeof data.slotSummary === 'object' ? data.slotSummary : null
+            };
+            if (data.outboundAbFocusDimension != null && String(data.outboundAbFocusDimension).trim()) {
+                ab.focusDimension = String(data.outboundAbFocusDimension).trim();
+            }
+            dashboardData.outboundAbTest = ab;
+        }
+
+        async function fetchLiveDataWithRetries(clientKey, options = {}) {
+            const tries = Math.max(1, Number(options.tries) || 4);
+            const delayMs = Number(options.delayMs) >= 0 ? Number(options.delayMs) : 250;
+            for (let i = 0; i < tries; i++) {
+                const bust = options.bustCache === true || i > 0;
+                const p = await fetchLiveData(clientKey, bust ? { bustCache: true } : {});
+                if (p && p.ok) return p;
+                if (i < tries - 1) await new Promise((r) => setTimeout(r, delayMs));
+            }
+            return null;
+        }
+
         async function tomAbDimensionImportUpload() {
             const msg = document.getElementById('tomAbCreativeUploadMsg');
             const dim = getTomAbActiveUploadDimension();
@@ -10082,11 +10117,19 @@ ${actionsRow}
                 );
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
-                let livePayload = await fetchLiveData(currentClient, { bustCache: true });
-                if (!livePayload) {
-                    await new Promise((r) => setTimeout(r, 500));
-                    livePayload = await fetchLiveData(currentClient, { bustCache: true });
+                if (data.slotSummary && data.dimension) {
+                    tomAbMergeOutboundAbSlotFromServer(String(data.dimension).trim().toLowerCase(), {
+                        experimentName: data.experimentName,
+                        slotSummary: data.slotSummary,
+                        outboundAbFocusDimension: data.outboundAbFocusDimension
+                    });
+                    renderTomAbTestSection(dashboardData);
                 }
+                let livePayload = await fetchLiveDataWithRetries(currentClient, {
+                    bustCache: true,
+                    tries: 5,
+                    delayMs: 250
+                });
                 if (livePayload) {
                     dashboardData = mergeData({}, livePayload, false);
                     updateStatusBar(dashboardData);
@@ -10099,9 +10142,15 @@ ${actionsRow}
                 if (msg) {
                     const dimLabel =
                         dim === 'voice' ? 'Voice' : dim === 'opening' ? 'Opening line' : 'Script';
+                    const hasSlot =
+                        data.slotSummary &&
+                        Array.isArray(data.slotSummary.variants) &&
+                        data.slotSummary.variants.length > 0;
                     msg.textContent = livePayload
                         ? `${dimLabel} uploaded.`
-                        : `${dimLabel} saved on server — dashboard refresh timed out; reload the page to see the challenger.`;
+                        : hasSlot
+                          ? `${dimLabel} uploaded — full dashboard sync is still catching up; refresh if KPIs look stale.`
+                          : `${dimLabel} saved on server — dashboard refresh timed out; reload the page to confirm.`;
                 }
             } catch (err) {
                 if (msg) msg.textContent = err.message || 'Upload failed';
