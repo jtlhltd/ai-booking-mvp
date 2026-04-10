@@ -8772,28 +8772,37 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     FROM (
       SELECT
         CASE
-          WHEN LENGTH(regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g')) >= 10
-          THEN RIGHT(regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g'), 10)
-          ELSE NULLIF(regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g'), '')
+          WHEN LENGTH(regexp_replace(COALESCE(s.lead_phone, ''), '[^0-9]', '', 'g')) >= 10
+          THEN RIGHT(regexp_replace(COALESCE(s.lead_phone, ''), '[^0-9]', '', 'g'), 10)
+          ELSE NULLIF(regexp_replace(COALESCE(s.lead_phone, ''), '[^0-9]', '', 'g'), '')
         END AS phone_key,
         COUNT(*)::int AS calls_n,
         MAX(CASE WHEN (
-          (outcome IS NOT NULL AND outcome NOT IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected'))
+          (s.outcome IS NOT NULL AND s.outcome NOT IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected'))
           OR (
-            outcome IS NULL
+            s.outcome IS NULL
             AND (
-              (COALESCE(duration, 0) >= 20 AND LOWER(TRIM(COALESCE(status, ''))) IN ('ended', 'completed', 'finished'))
-              OR (COALESCE(duration, 0) >= 40 AND LOWER(TRIM(COALESCE(status, ''))) NOT IN (
+              (COALESCE(s.duration, 0) >= 20 AND LOWER(TRIM(COALESCE(s.status, ''))) IN ('ended', 'completed', 'finished'))
+              OR (COALESCE(s.duration, 0) >= 40 AND LOWER(TRIM(COALESCE(s.status, ''))) NOT IN (
                 'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
               ))
-              OR (COALESCE(transcript, '') <> '' AND LENGTH(TRIM(COALESCE(transcript, ''))) > 40)
-              OR (COALESCE(recording_url, '') <> '')
+              OR (COALESCE(s.transcript_snip, '') <> '' AND LENGTH(TRIM(COALESCE(s.transcript_snip, ''))) > 40)
+              OR (COALESCE(s.recording_url, '') <> '')
             )
           )
         ) THEN 1 ELSE 0 END)::int AS reached_max
-      FROM calls
-      WHERE client_key = $1
-        AND regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g') <> ''
+      FROM (
+        SELECT
+          lead_phone,
+          outcome,
+          duration,
+          status,
+          LEFT(COALESCE(transcript, ''), 512) AS transcript_snip,
+          recording_url
+        FROM calls
+        WHERE client_key = $1
+          AND regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g') <> ''
+      ) s
       GROUP BY 1
     ) x
     WHERE x.phone_key IS NOT NULL
@@ -8825,6 +8834,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     const touchpointDayKeySql = isPostgres
       ? `to_char(created_at AT TIME ZONE '${DASHBOARD_ACTIVITY_TZ}', 'YYYY-MM-DD')`
       : `strftime('%Y-%m-%d', created_at)`;
+    const touchpointDayKeyFromD = touchpointDayKeySql.replace(/\bcreated_at\b/g, 'd.created_at');
 
     const [
       leadCounts,
@@ -8848,45 +8858,55 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       query(`
         WITH call_row AS (
           SELECT
-            lead_phone,
-            outcome,
-            duration,
-            status,
-            transcript,
-            recording_url,
-            created_at,
+            raw.lead_phone,
+            raw.outcome,
+            raw.duration,
+            raw.status,
+            raw.transcript_snip,
+            raw.recording_url,
+            raw.created_at,
             (
-              (outcome IS NOT NULL AND outcome NOT IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected'))
+              (raw.outcome IS NOT NULL AND raw.outcome NOT IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected'))
               OR (
-                outcome IS NULL
+                raw.outcome IS NULL
                 AND (
-                  (COALESCE(duration, 0) >= 20 AND LOWER(TRIM(COALESCE(status, ''))) IN ('ended', 'completed', 'finished'))
-                  OR (COALESCE(duration, 0) >= 40 AND LOWER(TRIM(COALESCE(status, ''))) NOT IN (
+                  (COALESCE(raw.duration, 0) >= 20 AND LOWER(TRIM(COALESCE(raw.status, ''))) IN ('ended', 'completed', 'finished'))
+                  OR (COALESCE(raw.duration, 0) >= 40 AND LOWER(TRIM(COALESCE(raw.status, ''))) NOT IN (
                     'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
                   ))
-                  OR (COALESCE(transcript, '') <> '' AND LENGTH(TRIM(COALESCE(transcript, ''))) > 40)
-                  OR (COALESCE(recording_url, '') <> '')
+                  OR (COALESCE(raw.transcript_snip, '') <> '' AND LENGTH(TRIM(COALESCE(raw.transcript_snip, ''))) > 40)
+                  OR (COALESCE(raw.recording_url, '') <> '')
                 )
               )
             ) AS is_answered,
             (
-              outcome IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected')
+              raw.outcome IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected')
               OR (
-                outcome IS NULL
+                raw.outcome IS NULL
                 AND (
-                  LOWER(TRIM(COALESCE(status, ''))) IN (
+                  LOWER(TRIM(COALESCE(raw.status, ''))) IN (
                     'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
                   )
                   OR (
-                    LOWER(TRIM(COALESCE(status, ''))) IN ('ended', 'completed', 'finished')
-                    AND COALESCE(duration, 0) > 0
-                    AND COALESCE(duration, 0) < 12
+                    LOWER(TRIM(COALESCE(raw.status, ''))) IN ('ended', 'completed', 'finished')
+                    AND COALESCE(raw.duration, 0) > 0
+                    AND COALESCE(raw.duration, 0) < 12
                   )
                 )
               )
             ) AS is_not_answered
-          FROM calls
-          WHERE client_key = $1
+          FROM (
+            SELECT
+              lead_phone,
+              outcome,
+              duration,
+              status,
+              LEFT(COALESCE(transcript, ''), 512) AS transcript_snip,
+              recording_url,
+              created_at
+            FROM calls
+            WHERE client_key = $1
+          ) raw
         ),
         lead_class AS (
           SELECT
@@ -9036,30 +9056,40 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       query(`
         WITH daily AS (
           SELECT
-            ${touchpointDayKeySql} AS bucket_day,
-            lead_phone,
-            outcome,
-            duration,
-            status,
-            transcript,
-            recording_url,
+            ${touchpointDayKeyFromD} AS bucket_day,
+            d.lead_phone,
+            d.outcome,
+            d.duration,
+            d.status,
+            d.transcript_snip,
+            d.recording_url,
             (
-              (outcome IS NOT NULL AND outcome NOT IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected'))
+              (d.outcome IS NOT NULL AND d.outcome NOT IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected'))
               OR (
-                outcome IS NULL
+                d.outcome IS NULL
                 AND (
-                  (COALESCE(duration, 0) >= 20 AND LOWER(TRIM(COALESCE(status, ''))) IN ('ended', 'completed', 'finished'))
-                  OR (COALESCE(duration, 0) >= 40 AND LOWER(TRIM(COALESCE(status, ''))) NOT IN (
+                  (COALESCE(d.duration, 0) >= 20 AND LOWER(TRIM(COALESCE(d.status, ''))) IN ('ended', 'completed', 'finished'))
+                  OR (COALESCE(d.duration, 0) >= 40 AND LOWER(TRIM(COALESCE(d.status, ''))) NOT IN (
                     'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
                   ))
-                  OR (COALESCE(transcript, '') <> '' AND LENGTH(TRIM(COALESCE(transcript, ''))) > 40)
-                  OR (COALESCE(recording_url, '') <> '')
+                  OR (COALESCE(d.transcript_snip, '') <> '' AND LENGTH(TRIM(COALESCE(d.transcript_snip, ''))) > 40)
+                  OR (COALESCE(d.recording_url, '') <> '')
                 )
               )
             ) AS is_answered
-          FROM calls
-          WHERE client_key = $1
-            AND created_at >= ${sqlDaysAgo(6)}
+          FROM (
+            SELECT
+              lead_phone,
+              outcome,
+              duration,
+              status,
+              LEFT(COALESCE(transcript, ''), 512) AS transcript_snip,
+              recording_url,
+              created_at
+            FROM calls
+            WHERE client_key = $1
+              AND created_at >= ${sqlDaysAgo(6)}
+          ) d
         )
         SELECT
           bucket_day,
@@ -9294,19 +9324,24 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         const o = String(r.outcome ?? '').trim().toLowerCase();
         return GENERIC_OUTCOMES.has(o);
       })
-      .slice(0, 20);
+      .slice(0, 8);
     const vapiByCallId = new Map();
     if (vapiKey && rowsNeedingOutcome.length > 0) {
       const fetched = await Promise.all(rowsNeedingOutcome.map(async (r) => {
+        const ac = new AbortController();
+        const t = setTimeout(() => ac.abort(), 3500);
         try {
           const res = await fetch(`https://api.vapi.ai/call/${r.call_id}`, {
-            headers: { Authorization: `Bearer ${vapiKey}` }
+            headers: { Authorization: `Bearer ${vapiKey}` },
+            signal: ac.signal
           });
           if (!res.ok) return { call_id: r.call_id, data: null };
           const data = await res.json();
           return { call_id: r.call_id, data };
         } catch {
           return { call_id: r.call_id, data: null };
+        } finally {
+          clearTimeout(t);
         }
       }));
       fetched.forEach(({ call_id, data }) => {

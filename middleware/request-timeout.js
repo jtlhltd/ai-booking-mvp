@@ -76,6 +76,10 @@ export function getTimeoutForPath(path) {
   if (path.includes('/health') || path.includes('/ping')) {
     return TIMEOUTS.health;
   }
+  // Heavy DB + optional Vapi fan-out; must not use 10s "stats" bucket (path contains "dashboard")
+  if (path.includes('/demo-dashboard')) {
+    return TIMEOUTS.analytics;
+  }
   if (path.includes('/stats') || path.includes('/dashboard')) {
     return TIMEOUTS.stats;
   }
