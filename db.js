@@ -854,6 +854,9 @@ async function initPostgres() {
     CREATE INDEX IF NOT EXISTS ab_test_tenant_idx ON ab_test_experiments(client_key);
     CREATE INDEX IF NOT EXISTS ab_test_name_idx ON ab_test_experiments(experiment_name);
     CREATE INDEX IF NOT EXISTS ab_test_active_idx ON ab_test_experiments(is_active);
+    CREATE INDEX IF NOT EXISTS ab_test_experiments_client_active_created_idx
+      ON ab_test_experiments (client_key, created_at DESC)
+      WHERE is_active = TRUE;
 
     CREATE TABLE IF NOT EXISTS ab_test_results (
       id BIGSERIAL PRIMARY KEY,
