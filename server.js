@@ -128,6 +128,7 @@ import {
   DB_PATH,
   query,
   pool,
+  poolQuerySelect,
   invalidateClientCache,
   smearCallQueueScheduledFor
 } from './db.js'; // SQLite-backed tenants
@@ -8807,6 +8808,144 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     ) x
     WHERE x.phone_key IS NOT NULL
   `;
+  /** Postgres only: one scan of `calls` for both KPI aggregates and per-phone outreach stats (was two round-trips). */
+  const demoDashboardCallsAndPhoneStatsSql = `
+    WITH raw AS (
+      SELECT
+        lead_phone,
+        outcome,
+        duration,
+        status,
+        LEFT(COALESCE(transcript, ''), 512) AS transcript_snip,
+        recording_url,
+        created_at
+      FROM calls
+      WHERE client_key = $1
+    ),
+    call_row AS (
+      SELECT
+        raw.lead_phone,
+        raw.outcome,
+        raw.duration,
+        raw.status,
+        raw.transcript_snip,
+        raw.recording_url,
+        raw.created_at,
+        (
+          (raw.outcome IS NOT NULL AND raw.outcome NOT IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected'))
+          OR (
+            raw.outcome IS NULL
+            AND (
+              (COALESCE(raw.duration, 0) >= 20 AND LOWER(TRIM(COALESCE(raw.status, ''))) IN ('ended', 'completed', 'finished'))
+              OR (COALESCE(raw.duration, 0) >= 40 AND LOWER(TRIM(COALESCE(raw.status, ''))) NOT IN (
+                'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
+              ))
+              OR (COALESCE(raw.transcript_snip, '') <> '' AND LENGTH(TRIM(COALESCE(raw.transcript_snip, ''))) > 40)
+              OR (COALESCE(raw.recording_url, '') <> '')
+            )
+          )
+        ) AS is_answered,
+        (
+          raw.outcome IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected')
+          OR (
+            raw.outcome IS NULL
+            AND (
+              LOWER(TRIM(COALESCE(raw.status, ''))) IN (
+                'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
+              )
+              OR (
+                LOWER(TRIM(COALESCE(raw.status, ''))) IN ('ended', 'completed', 'finished')
+                AND COALESCE(raw.duration, 0) > 0
+                AND COALESCE(raw.duration, 0) < 12
+              )
+            )
+          )
+        ) AS is_not_answered
+      FROM raw AS raw
+    ),
+    lead_class AS (
+      SELECT
+        lead_phone,
+        MAX(CASE WHEN is_answered THEN 1 ELSE 0 END) AS has_ans,
+        MAX(CASE WHEN is_not_answered THEN 1 ELSE 0 END) AS has_no
+      FROM call_row
+      GROUP BY lead_phone
+    ),
+    agg AS (
+      SELECT
+        COUNT(*) AS total,
+        COUNT(DISTINCT lead_phone) AS unique_leads_called,
+        COUNT(*) FILTER (WHERE created_at >= $2) AS last24,
+        COUNT(*) FILTER (WHERE outcome = 'booked') AS booked,
+        COUNT(*) FILTER (WHERE is_answered) AS answered,
+        COUNT(*) FILTER (WHERE is_not_answered) AS not_answered,
+        COUNT(*) FILTER (WHERE outcome IS NULL AND NOT is_answered AND NOT is_not_answered) AS outcome_pending
+      FROM call_row
+    ),
+    main_stats AS (
+      SELECT
+        agg.total,
+        agg.unique_leads_called,
+        agg.last24,
+        (SELECT COUNT(DISTINCT cr.lead_phone)::int FROM call_row cr WHERE cr.created_at >= $2) AS unique_leads_called_last24,
+        agg.booked,
+        agg.answered,
+        agg.not_answered,
+        agg.outcome_pending,
+        (SELECT COUNT(*)::int FROM lead_class WHERE has_ans >= 1) AS reached_leads,
+        (SELECT COUNT(*)::int FROM lead_class WHERE has_ans = 0) AS no_pickup_only_leads,
+        0::int AS pending_only_leads,
+        (SELECT COUNT(DISTINCT cr.lead_phone)::int FROM call_row cr
+          WHERE cr.created_at >= $2 AND cr.is_answered) AS unique_reached_last24,
+        (SELECT COUNT(*)::int FROM (
+            SELECT cr.lead_phone
+            FROM call_row cr
+            WHERE cr.created_at >= $2
+            GROUP BY cr.lead_phone
+            HAVING MAX(CASE WHEN cr.is_answered THEN 1 ELSE 0 END) = 0
+          ) u) AS unique_no_pickup_last24
+      FROM agg
+    ),
+    phone_grouped AS (
+      SELECT x.phone_key, x.calls_n, x.reached_max
+      FROM (
+        SELECT
+          CASE
+            WHEN LENGTH(regexp_replace(COALESCE(s.lead_phone, ''), '[^0-9]', '', 'g')) >= 10
+            THEN RIGHT(regexp_replace(COALESCE(s.lead_phone, ''), '[^0-9]', '', 'g'), 10)
+            ELSE NULLIF(regexp_replace(COALESCE(s.lead_phone, ''), '[^0-9]', '', 'g'), '')
+          END AS phone_key,
+          COUNT(*)::int AS calls_n,
+          MAX(CASE WHEN (
+            (s.outcome IS NOT NULL AND s.outcome NOT IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected'))
+            OR (
+              s.outcome IS NULL
+              AND (
+                (COALESCE(s.duration, 0) >= 20 AND LOWER(TRIM(COALESCE(s.status, ''))) IN ('ended', 'completed', 'finished'))
+                OR (COALESCE(s.duration, 0) >= 40 AND LOWER(TRIM(COALESCE(s.status, ''))) NOT IN (
+                  'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
+                ))
+                OR (COALESCE(s.transcript_snip, '') <> '' AND LENGTH(TRIM(COALESCE(s.transcript_snip, ''))) > 40)
+                OR (COALESCE(s.recording_url, '') <> '')
+              )
+            )
+          ) THEN 1 ELSE 0 END)::int AS reached_max
+        FROM (
+          SELECT lead_phone, outcome, duration, status, transcript_snip, recording_url
+          FROM raw
+          WHERE regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g') <> ''
+        ) s
+        GROUP BY 1
+      ) x
+      WHERE x.phone_key IS NOT NULL
+    )
+    SELECT
+      ms.*,
+      COALESCE((SELECT array_agg(phone_key ORDER BY phone_key) FROM phone_grouped), ARRAY[]::text[]) AS dashboard_phone_keys,
+      COALESCE((SELECT array_agg(calls_n ORDER BY phone_key) FROM phone_grouped), ARRAY[]::int[]) AS dashboard_phone_calls_ns,
+      COALESCE((SELECT array_agg(reached_max ORDER BY phone_key) FROM phone_grouped), ARRAY[]::int[]) AS dashboard_phone_reached_maxs
+    FROM main_stats ms
+  `;
   const dashboardCallPhoneStatsFromArraysCte = `
     call_phone_stats AS (
       SELECT *
@@ -8822,9 +8961,9 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       ELSE NULLIF(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), '')
     END`;
   try {
-    // Always bypass tenant cache: it is per Node process; DELETE on worker A clears A’s cache
-    // while dashboard GET on worker B could still serve stale vapi (e.g. outboundAbVoiceExperiment) for minutes.
-    let client = await getFullClient(clientKey, { bypassCache: true });
+    // Use tenant cache to avoid an extra DB round-trip on every poll; invalidateClientCache runs on updates.
+    // After outbound A/B bundle infer we still refetch with bypassCache when config was written.
+    let client = await getFullClient(clientKey, { bypassCache: false });
     const activityChannel = activityFeedChannelLabel(client);
 
     const rollingSinceInstant = DateTime.now().setZone(DASHBOARD_ACTIVITY_TZ).minus({ hours: 24 });
@@ -8836,26 +8975,34 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       : `strftime('%Y-%m-%d', created_at)`;
     const touchpointDayKeyFromD = touchpointDayKeySql.replace(/\bcreated_at\b/g, 'd.created_at');
 
-    const [
-      leadCounts,
-      callCounts,
-      bookingStats,
-      serviceRows,
-      apptByServiceRows,
-      callPhoneStatsAgg,
-      recentCallRows,
-      responseRows,
-      touchpointRows,
-      upcomingAppointmentRows,
-      callQueuePendingRow
-    ] = await Promise.all([
-      query(`
-        SELECT COUNT(*) AS total,
-               COUNT(*) FILTER (WHERE created_at >= $2) AS last24
-        FROM leads
-        WHERE client_key = $1
-      `, [clientKey, activityRollingSinceIso]),
-      query(`
+    const loadDashboardCallMetricsBundle = async () => {
+      if (isPostgres) {
+        const merged = await query(demoDashboardCallsAndPhoneStatsSql, [clientKey, activityRollingSinceIso]);
+        const row = merged.rows?.[0];
+        if (!row) {
+          return { callCounts: { rows: [{}] }, callPhoneStatsAgg: { rows: [] } };
+        }
+        const keys = row.dashboard_phone_keys || [];
+        const ns = row.dashboard_phone_calls_ns || [];
+        const mx = row.dashboard_phone_reached_maxs || [];
+        const phoneRows = keys.map((phone_key, i) => ({
+          phone_key,
+          calls_n: parseInt(ns[i], 10) || 0,
+          reached_max: parseInt(mx[i], 10) || 0
+        }));
+        const {
+          dashboard_phone_keys: _dk,
+          dashboard_phone_calls_ns: _dn,
+          dashboard_phone_reached_maxs: _dm,
+          ...stats
+        } = row;
+        return {
+          callCounts: { rows: [stats] },
+          callPhoneStatsAgg: { rows: phoneRows }
+        };
+      }
+      const [cc, pa] = await Promise.all([
+        query(`
         WITH call_row AS (
           SELECT
             raw.lead_phone,
@@ -8950,6 +9097,30 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
                  ) u) AS unique_no_pickup_last24
         FROM agg
       `, [clientKey, activityRollingSinceIso]),
+        query(dashboardCallPhoneAggSql, [clientKey])
+      ]);
+      return { callCounts: cc, callPhoneStatsAgg: pa };
+    };
+
+    const [
+      leadCounts,
+      callMetricsBundle,
+      bookingStats,
+      serviceRows,
+      apptByServiceRows,
+      recentCallRows,
+      responseRows,
+      touchpointRows,
+      upcomingAppointmentRows,
+      callQueuePendingRow
+    ] = await Promise.all([
+      query(`
+        SELECT COUNT(*) AS total,
+               COUNT(*) FILTER (WHERE created_at >= $2) AS last24
+        FROM leads
+        WHERE client_key = $1
+      `, [clientKey, activityRollingSinceIso]),
+      loadDashboardCallMetricsBundle(),
       query(`
         SELECT COUNT(*) AS total,
                COUNT(*) FILTER (WHERE status IN ('no_show','no-show')) AS no_shows,
@@ -9124,6 +9295,9 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
           AND status IN ('pending', 'processing')
       `, [clientKey])
     ]);
+
+    const callCounts = callMetricsBundle.callCounts;
+    const callPhoneStatsAgg = callMetricsBundle.callPhoneStatsAgg;
 
     const phoneKeys = [];
     const phoneCallsNs = [];
@@ -9674,15 +9848,11 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     if (dimensionalMode) {
       try {
         const { getOutboundAbExperimentSummary } = await import('./db.js');
-        if (voiceExpName) {
-          voiceSummary = await getOutboundAbExperimentSummary(clientKey, voiceExpName);
-        }
-        if (openingExpName) {
-          openingSummary = await getOutboundAbExperimentSummary(clientKey, openingExpName);
-        }
-        if (scriptExpName) {
-          scriptSummary = await getOutboundAbExperimentSummary(clientKey, scriptExpName);
-        }
+        [voiceSummary, openingSummary, scriptSummary] = await Promise.all([
+          voiceExpName ? getOutboundAbExperimentSummary(clientKey, voiceExpName) : Promise.resolve(null),
+          openingExpName ? getOutboundAbExperimentSummary(clientKey, openingExpName) : Promise.resolve(null),
+          scriptExpName ? getOutboundAbExperimentSummary(clientKey, scriptExpName) : Promise.resolve(null)
+        ]);
       } catch (abSumErr) {
         console.error('[DEMO DASHBOARD] outbound A/B dimensional summary error:', abSumErr?.message || abSumErr);
       }
@@ -11635,9 +11805,9 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
   try {
     const { clientKey } = req.params;
 
-    let stats = {};
-    try {
-      const allCalls = await query(`
+    const loadCallQualityPrimaryStats = async () => {
+      try {
+        const allCalls = await poolQuerySelect(`
       WITH windowed AS (
         SELECT
           lead_phone,
@@ -11705,10 +11875,10 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
         COUNT(*) FILTER (WHERE LOWER(TRIM(COALESCE(outcome::text, ''))) = 'voicemail')::int AS voicemail_attempts
       FROM flags
     `, [clientKey]);
-      stats = allCalls.rows?.[0] || {};
-    } catch (primaryErr) {
-      console.error('[CALL QUALITY] primary aggregate failed, using fallback:', primaryErr?.message || primaryErr);
-      const simple = await query(`
+        return allCalls.rows?.[0] || {};
+      } catch (primaryErr) {
+        console.error('[CALL QUALITY] primary aggregate failed, using fallback:', primaryErr?.message || primaryErr);
+        const simple = await poolQuerySelect(`
         SELECT
           COUNT(*)::int AS total_calls,
           COUNT(DISTINCT lead_phone)::int AS unique_leads,
@@ -11727,81 +11897,15 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
         WHERE client_key = $1
           AND created_at >= NOW() - INTERVAL '7 days'
       `, [clientKey]);
-      stats = simple.rows?.[0] || {};
-    }
-
-    let appts7d = 0;
-    try {
-      const apptCount = await query(`
-      SELECT COUNT(*)::int AS n
-      FROM appointments
-      WHERE client_key = $1
-        AND created_at >= NOW() - INTERVAL '7 days'
-    `, [clientKey]);
-      appts7d = parseInt(apptCount.rows?.[0]?.n || 0, 10);
-    } catch (apptErr) {
-      console.warn('[CALL QUALITY] appointments count skipped:', apptErr?.message || apptErr);
-    }
-
-    let peakHour = { rows: [] };
-    try {
-      peakHour = await query(`
-      SELECT EXTRACT(HOUR FROM created_at)::int AS hour_of_day,
-             COUNT(*)::int AS cnt
-      FROM calls
-      WHERE client_key = $1
-        AND created_at >= NOW() - INTERVAL '7 days'
-      GROUP BY 1
-      ORDER BY cnt DESC
-      LIMIT 1
-    `, [clientKey]);
-    } catch (peakErr) {
-      console.warn('[CALL QUALITY] peak hour skipped:', peakErr?.message || peakErr);
-    }
-
-    let peakWeekdayLabel = '—';
-    let peakWeekdayDialCount = 0;
-    try {
-      const dowRows = await query(`
-        SELECT EXTRACT(ISODOW FROM created_at)::int AS isodow,
-               COUNT(*)::int AS cnt
-        FROM calls
-        WHERE client_key = $1
-          AND created_at >= NOW() - INTERVAL '7 days'
-        GROUP BY 1
-        ORDER BY cnt DESC, isodow ASC
-        LIMIT 1
-      `, [clientKey]);
-      const dr = dowRows.rows?.[0];
-      const isoLabels = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      const d = parseInt(dr?.isodow, 10);
-      if (dr && Number(dr.cnt) > 0 && d >= 1 && d <= 7) {
-        peakWeekdayLabel = isoLabels[d] || '—';
-        peakWeekdayDialCount = parseInt(dr.cnt, 10) || 0;
+        return simple.rows?.[0] || {};
       }
-    } catch (dowErr) {
-      console.warn('[CALL QUALITY] peak weekday skipped:', dowErr?.message || dowErr);
-    }
+    };
 
-    let medianDurationSeconds = 0;
-    try {
-      const medRows = await query(`
-        SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration::double precision) AS m
-        FROM calls
-        WHERE client_key = $1
-          AND created_at >= NOW() - INTERVAL '7 days'
-          AND COALESCE(duration, 0) > 0
-      `, [clientKey]);
-      const raw = medRows.rows?.[0]?.m;
-      medianDurationSeconds = raw != null && Number.isFinite(Number(raw)) ? Math.round(Number(raw)) : 0;
-    } catch (medErr) {
-      console.warn('[CALL QUALITY] median duration skipped:', medErr?.message || medErr);
-    }
-
-    let avgCallsToFirstPickup = null;
-    let leadsWithFirstPickup7d = 0;
-    try {
-      const atpRows = await query(`
+    const loadCallQualityAtp = async () => {
+      let avgCallsToFirstPickup = null;
+      let leadsWithFirstPickup7d = 0;
+      try {
+        const atpRows = await poolQuerySelect(`
         WITH windowed AS (
           SELECT
             lead_phone, created_at, outcome, status, duration,
@@ -11847,16 +11951,16 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
           AVG(attempts_to_first_pickup::numeric) AS avg_attempts
         FROM first_pick
       `, [clientKey]);
-      const ar = atpRows.rows?.[0];
-      leadsWithFirstPickup7d = parseInt(ar?.lead_count || 0, 10);
-      const rawAvg = ar?.avg_attempts;
-      if (leadsWithFirstPickup7d > 0 && rawAvg != null && Number.isFinite(Number(rawAvg))) {
-        avgCallsToFirstPickup = Math.round(Number(rawAvg) * 10) / 10;
-      }
-    } catch (atpErr) {
-      console.warn('[CALL QUALITY] avg calls to pickup skipped:', atpErr?.message || atpErr);
-      try {
-        const simpleAtp = await query(`
+        const ar = atpRows.rows?.[0];
+        leadsWithFirstPickup7d = parseInt(ar?.lead_count || 0, 10);
+        const rawAvg = ar?.avg_attempts;
+        if (leadsWithFirstPickup7d > 0 && rawAvg != null && Number.isFinite(Number(rawAvg))) {
+          avgCallsToFirstPickup = Math.round(Number(rawAvg) * 10) / 10;
+        }
+      } catch (atpErr) {
+        console.warn('[CALL QUALITY] avg calls to pickup skipped:', atpErr?.message || atpErr);
+        try {
+          const simpleAtp = await poolQuerySelect(`
           WITH windowed AS (
             SELECT lead_phone, created_at, outcome, duration
             FROM calls
@@ -11887,16 +11991,93 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
             AVG(attempts_to_first_pickup::numeric) AS avg_attempts
           FROM first_pick
         `, [clientKey]);
-        const ar = simpleAtp.rows?.[0];
-        leadsWithFirstPickup7d = parseInt(ar?.lead_count || 0, 10);
-        const rawAvg = ar?.avg_attempts;
-        if (leadsWithFirstPickup7d > 0 && rawAvg != null && Number.isFinite(Number(rawAvg))) {
-          avgCallsToFirstPickup = Math.round(Number(rawAvg) * 10) / 10;
+          const ar2 = simpleAtp.rows?.[0];
+          leadsWithFirstPickup7d = parseInt(ar2?.lead_count || 0, 10);
+          const rawAvg2 = ar2?.avg_attempts;
+          if (leadsWithFirstPickup7d > 0 && rawAvg2 != null && Number.isFinite(Number(rawAvg2))) {
+            avgCallsToFirstPickup = Math.round(Number(rawAvg2) * 10) / 10;
+          }
+        } catch (e2) {
+          console.warn('[CALL QUALITY] avg calls to pickup fallback failed:', e2?.message || e2);
         }
-      } catch (e2) {
-        console.warn('[CALL QUALITY] avg calls to pickup fallback failed:', e2?.message || e2);
       }
+      return { avgCallsToFirstPickup, leadsWithFirstPickup7d };
+    };
+
+    const [
+      stats,
+      apptCount,
+      peakHour,
+      dowRows,
+      medRows,
+      atpParsed
+    ] = await Promise.all([
+      loadCallQualityPrimaryStats(),
+      poolQuerySelect(`
+      SELECT COUNT(*)::int AS n
+      FROM appointments
+      WHERE client_key = $1
+        AND created_at >= NOW() - INTERVAL '7 days'
+    `, [clientKey]).catch((apptErr) => {
+        console.warn('[CALL QUALITY] appointments count skipped:', apptErr?.message || apptErr);
+        return { rows: [{ n: 0 }] };
+      }),
+      poolQuerySelect(`
+      SELECT EXTRACT(HOUR FROM created_at)::int AS hour_of_day,
+             COUNT(*)::int AS cnt
+      FROM calls
+      WHERE client_key = $1
+        AND created_at >= NOW() - INTERVAL '7 days'
+      GROUP BY 1
+      ORDER BY cnt DESC
+      LIMIT 1
+    `, [clientKey]).catch((peakErr) => {
+        console.warn('[CALL QUALITY] peak hour skipped:', peakErr?.message || peakErr);
+        return { rows: [] };
+      }),
+      poolQuerySelect(`
+        SELECT EXTRACT(ISODOW FROM created_at)::int AS isodow,
+               COUNT(*)::int AS cnt
+        FROM calls
+        WHERE client_key = $1
+          AND created_at >= NOW() - INTERVAL '7 days'
+        GROUP BY 1
+        ORDER BY cnt DESC, isodow ASC
+        LIMIT 1
+      `, [clientKey]).catch((dowErr) => {
+        console.warn('[CALL QUALITY] peak weekday skipped:', dowErr?.message || dowErr);
+        return { rows: [] };
+      }),
+      poolQuerySelect(`
+        SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duration::double precision) AS m
+        FROM calls
+        WHERE client_key = $1
+          AND created_at >= NOW() - INTERVAL '7 days'
+          AND COALESCE(duration, 0) > 0
+      `, [clientKey]).catch((medErr) => {
+        console.warn('[CALL QUALITY] median duration skipped:', medErr?.message || medErr);
+        return { rows: [] };
+      }),
+      loadCallQualityAtp()
+    ]);
+
+    const appts7d = parseInt(apptCount.rows?.[0]?.n || 0, 10);
+    let peakWeekdayLabel = '—';
+    let peakWeekdayDialCount = 0;
+    const dr = dowRows.rows?.[0];
+    const isoLabels = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const d = parseInt(dr?.isodow, 10);
+    if (dr && Number(dr.cnt) > 0 && d >= 1 && d <= 7) {
+      peakWeekdayLabel = isoLabels[d] || '—';
+      peakWeekdayDialCount = parseInt(dr.cnt, 10) || 0;
     }
+    let medianDurationSeconds = 0;
+    const rawMed = medRows.rows?.[0]?.m;
+    if (rawMed != null && Number.isFinite(Number(rawMed))) {
+      medianDurationSeconds = Math.round(Number(rawMed));
+    }
+    const avgCallsToFirstPickup = atpParsed.avgCallsToFirstPickup;
+    const leadsWithFirstPickup7d = atpParsed.leadsWithFirstPickup7d;
 
     const bookingsFromCalls = parseInt(stats.bookings_from_calls || 0, 10);
     const totalCalls = parseInt(stats.total_calls || 0, 10);
@@ -12071,7 +12252,7 @@ app.get('/api/call-time-bandit/:clientKey', async (req, res) => {
 async function fetchLeadNamesForRetryQueuePhones(clientKey, queuePhones) {
   const phones = [...new Set((queuePhones || []).filter((p) => p != null && String(p) !== ''))];
   if (phones.length === 0) return new Map();
-  const res = await query(
+  const res = await poolQuerySelect(
     `
     WITH qn AS (
       SELECT DISTINCT p AS phone_raw,
@@ -12190,7 +12371,7 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
     `;
 
     const [countRes, listRes] = await Promise.all([
-      query(
+      poolQuerySelect(
         `
         SELECT
           (SELECT COUNT(*)::int FROM retry_queue rq
@@ -12202,9 +12383,9 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
       `,
         [clientKey]
       ),
-      query(listUnionSql, [clientKey, RETRY_QUEUE_LIST_CAP]).catch((unionErr) => {
+      poolQuerySelect(listUnionSql, [clientKey, RETRY_QUEUE_LIST_CAP]).catch((unionErr) => {
         console.warn('[RETRY QUEUE API] combined list failed, falling back to retry_queue only:', unionErr?.message || unionErr);
-        return query(listRetryOnlySql, [clientKey, RETRY_QUEUE_LIST_CAP]);
+        return poolQuerySelect(listRetryOnlySql, [clientKey, RETRY_QUEUE_LIST_CAP]);
       })
     ]);
 
@@ -12727,7 +12908,7 @@ app.get('/api/voicemails/:clientKey', async (req, res) => {
     const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 50, 1), 200);
 
     const [countRes, result] = await Promise.all([
-      query(`
+      poolQuerySelect(`
         SELECT COUNT(*)::int AS n
         FROM calls c
         WHERE c.client_key = $1
@@ -12735,7 +12916,7 @@ app.get('/api/voicemails/:clientKey', async (req, res) => {
           AND TRIM(c.recording_url) <> ''
           AND LOWER(COALESCE(c.outcome, '')) IN ('voicemail')
       `, [clientKey]),
-      query(`
+      poolQuerySelect(`
         SELECT
           c.id,
           c.call_id,
@@ -12828,7 +13009,8 @@ app.get('/api/call-recordings/:clientKey/stream/:callRowId', async (req, res) =>
     if (!Number.isFinite(idNum) || idNum <= 0) {
       return res.status(400).json({ ok: false, error: 'Invalid recording id' });
     }
-    const row = await query(
+    // poolQuerySelect: no pgQueryLimiter / perf tracker (many <audio> tags + pool wait were firing critical alerts).
+    const row = await poolQuerySelect(
       `SELECT recording_url FROM calls WHERE id = $1 AND client_key = $2
          AND recording_url IS NOT NULL AND TRIM(recording_url) <> ''`,
       [idNum, clientKey]
@@ -23116,7 +23298,7 @@ async function queueNewLeadsForCalling() {
         // Get new leads that haven't been called yet
         // Check both call_queue (pending calls) AND calls table (completed calls)
         // One outbound attempt per phone per local calendar day (tenant timezone); 3-day cooldown for re-dial after a real attempt
-        const newLeads = await query(`
+        const newLeads = await poolQuerySelect(`
           SELECT l.id, l.name, l.phone, l.service, l.source, l.status, l.created_at
           FROM leads l
           WHERE l.client_key = $1

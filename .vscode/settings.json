@@ -1,0 +1,43 @@
+{
+  "sqltools.connections": [
+    {
+      "name": "AI Booking MVP - Local",
+      "driver": "PostgreSQL",
+      "server": "localhost",
+      "port": 5432,
+      "database": "ai_booking_mvp",
+      "username": "postgres",
+      "password": "",
+      "connectionTimeout": 30
+    },
+    {
+      "name": "AI Booking MVP - Render",
+      "driver": "PostgreSQL",
+      "server": "your-render-postgres-host",
+      "port": 5432,
+      "database": "your-render-db-name",
+      "username": "your-render-username",
+      "password": "your-render-password",
+      "ssl": true,
+      "connectionTimeout": 30
+    }
+  ],
+  "rest-client.environmentVariables": {
+    "local": {
+      "baseUrl": "http://localhost:3000"
+    },
+    "production": {
+      "baseUrl": "https://ai-booking-mvp.onrender.com"
+    }
+  },
+  "files.associations": {
+    "*.env*": "dotenv"
+  },
+  "rainbow_csv.enable_auto_csv_lint": true,
+  "rainbow_csv.csv_lint_detect_trailing_spaces": true
+}
+
+
+
+
+

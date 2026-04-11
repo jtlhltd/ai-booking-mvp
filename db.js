@@ -428,9 +428,10 @@ async function initPostgres() {
     CREATE INDEX IF NOT EXISTS leads_tenant_idx ON leads(client_key);
     CREATE INDEX IF NOT EXISTS leads_phone_idx ON leads(client_key, phone);
     CREATE INDEX IF NOT EXISTS leads_client_created_idx ON leads(client_key, created_at DESC);
-    -- queueNewLeadsForCalling: status=new, created_at window, ORDER BY created_at ASC (avoids scanning all tenant leads)
-    CREATE INDEX IF NOT EXISTS leads_queuer_new_created_asc_idx
+    -- queueNewLeadsForCalling: partial index + INCLUDE for index-only plans (reduces heap fetches on hot path)
+    CREATE INDEX IF NOT EXISTS leads_queuer_new_created_cover_idx
       ON leads (client_key, created_at ASC)
+      INCLUDE (id, name, phone, service, source, status)
       WHERE status = 'new';
     
     -- Add unique constraint on (client_key, phone) for ON CONFLICT support
@@ -1134,6 +1135,10 @@ async function initPostgres() {
       CREATE INDEX IF NOT EXISTS call_queue_pending_scheduled_priority_idx
         ON call_queue (scheduled_for ASC, priority ASC)
         WHERE status = 'pending';
+      CREATE INDEX IF NOT EXISTS leads_queuer_new_created_cover_idx
+        ON leads (client_key, created_at ASC)
+        INCLUDE (id, name, phone, service, source, status)
+        WHERE status = 'new';
     `).catch((idxErr) => {
       console.warn('⚠️  Dashboard perf index migration (non-fatal):', idxErr.message);
     });
@@ -1407,6 +1412,17 @@ async function query(text, params = []) {
     }
     throw error;
   }
+}
+
+/**
+ * Hot-path SELECT: uses pool.query directly (no pgQueryLimiter, no SELECT cache, no perf tracker).
+ * For trivial indexed reads that must not queue behind heavy dashboard/worker traffic.
+ */
+export async function poolQuerySelect(text, params = []) {
+  if (dbType === 'postgres' && pool) {
+    return pool.query(text, params);
+  }
+  return query(text, params);
 }
 
 // Wrap database operations with error handling
@@ -2208,7 +2224,7 @@ async function maybeRebuildBanditArmsForCutoffThrottled(clientKey) {
 
 export async function getCallTimeBanditState(clientKey) {
   try {
-    const { rows } = await query(`
+    const { rows } = await poolQuerySelect(`
       SELECT arms FROM call_time_bandit WHERE client_key = $1
     `, [clientKey]);
     const arms = rows?.[0]?.arms;
@@ -2242,11 +2258,11 @@ export async function getCallTimeBanditForDashboard(clientKey) {
     const minIso = await getCallAnalyticsFloorIso();
 
     const [{ rows: br }, { rows: cr }] = await Promise.all([
-      query(
+      poolQuerySelect(
         `SELECT arms, updated_at FROM call_time_bandit WHERE client_key = $1`,
         [clientKey]
       ),
-      query(
+      poolQuerySelect(
         `
         SELECT COUNT(*) AS c
         FROM call_time_bandit_observations o
@@ -2303,7 +2319,7 @@ export async function getCallTimeBanditForDashboard(clientKey) {
       .slice(0, 12);
 
     const [{ rows: recentObs }, { rows: recentSched }, { rows: c7 }] = await Promise.all([
-      query(
+      poolQuerySelect(
         `
         SELECT o.call_id, o.hour, o.success, o.created_at
         FROM call_time_bandit_observations o
@@ -2314,7 +2330,7 @@ export async function getCallTimeBanditForDashboard(clientKey) {
       `,
         [clientKey, minIso]
       ),
-      query(
+      poolQuerySelect(
         `
         SELECT baseline_at, chosen_at, source, hour_chosen, delay_minutes, created_at
         FROM call_schedule_decisions
@@ -2324,7 +2340,7 @@ export async function getCallTimeBanditForDashboard(clientKey) {
       `,
         [clientKey, minIso]
       ),
-      query(
+      poolQuerySelect(
         `
         SELECT COUNT(*) AS c
         FROM call_time_bandit_observations o
@@ -3400,7 +3416,7 @@ async function loadAbTestConversionRatesByExperimentIds(experimentIds) {
   const ph2 = abTestExperimentIdPlaceholders(n, n + 1);
   const ph3 = abTestExperimentIdPlaceholders(n, 2 * n + 1);
   const params = [...ids, ...ids, ...ids];
-  const { rows } = await query(
+  const { rows } = await poolQuerySelect(
     `
     WITH variant_totals AS (
       SELECT
@@ -3484,7 +3500,7 @@ async function loadAbTestLivePickupDurationStatsByExperimentIds(experimentIds) {
   const ids = [...new Set(experimentIds.map((id) => Number(id)).filter((n) => Number.isFinite(n) && n > 0))];
   if (!ids.length) return new Map();
   const ph = abTestExperimentIdPlaceholders(ids.length);
-  const { rows } = await query(
+  const { rows } = await poolQuerySelect(
     `
     SELECT
       experiment_id,
@@ -3532,7 +3548,7 @@ async function loadAbTestConvertedCompletenessStatsByExperimentIds(experimentIds
   const ids = [...new Set(experimentIds.map((id) => Number(id)).filter((n) => Number.isFinite(n) && n > 0))];
   if (!ids.length) return new Map();
   const ph = abTestExperimentIdPlaceholders(ids.length);
-  const { rows } = await query(
+  const { rows } = await poolQuerySelect(
     `
     SELECT
       experiment_id,

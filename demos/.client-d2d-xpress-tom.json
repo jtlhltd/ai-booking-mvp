@@ -1,0 +1,72 @@
+{
+  "clientKey": "d2d-xpress-tom",
+  "displayName": "D2D Xpress",
+  "timezone": "Europe/London",
+  "locale": "en-GB",
+  "numbers": {
+    "primary": "0844 493 0694"
+  },
+  "sms": {},
+  "vapi": {
+    "assistantId": "b1ba0ad3-c519-4ab7-aa6f-9fba6516a0ee",
+    "outboundAbExperiment": "tom_outbound_v1"
+  },
+  "calendarId": null,
+  "booking": {
+    "timezone": "Europe/London",
+    "daysAhead": 30,
+    "slotDuration": 30,
+    "bufferMinutes": 0,
+    "businessHours": "9am-5pm Mon-Fri",
+    "defaultDurationMin": 30
+  },
+  "smsTemplates": {},
+  "whiteLabel": {
+    "name": "D2D Xpress",
+    "phone": "0844 493 0694",
+    "status": "Live",
+    "tagline": "We're calling every lead you've already paid for and booking them into your calendar.",
+    "branding": {
+      "logo": "🏢",
+      "fontFamily": "'Inter', sans-serif",
+      "accentColor": "#10b981",
+      "primaryColor": "#5c6ac4",
+      "secondaryColor": "#3a4a9f"
+    },
+    "industry": "shipping",
+    "location": "Manchester",
+    "services": [
+      "Shipping"
+    ],
+    "description": "Your AI booking assistant is following up on leads and scheduling appointments 24/7 for D2D Xpress.",
+    "businessName": "D2D Xpress",
+    "businessHours": "9am-5pm Mon-Fri"
+  },
+  "isEnabled": true,
+  "createdAt": "2025-11-25T15:30:41.071Z",
+  "vapiAssistantId": "b1ba0ad3-c519-4ab7-aa6f-9fba6516a0ee",
+  "vapiPhoneNumberId": null,
+  "serviceMap": {
+    "undefined": "Shipping"
+  },
+  "logo": "🏢",
+  "primaryColor": "#5c6ac4",
+  "secondaryColor": "#3a4a9f",
+  "accentColor": "#10b981",
+  "fontFamily": "'Inter', sans-serif",
+  "description": "Your AI booking assistant is following up on leads and scheduling appointments 24/7 for D2D Xpress.",
+  "tagline": "We're calling every lead you've already paid for and booking them into your calendar.",
+  "status": "Live",
+  "industry": "shipping",
+  "services": [
+    "Shipping"
+  ],
+  "location": "Manchester",
+  "phone": "0844 493 0694",
+  "businessHours": "9am-5pm Mon-Fri",
+  "name": "D2D Xpress",
+  "vapi_json": {
+    "assistantId": "b1ba0ad3-c519-4ab7-aa6f-9fba6516a0ee",
+    "outboundAbExperiment": "tom_outbound_v1"
+  }
+}
