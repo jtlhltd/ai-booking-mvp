@@ -7164,7 +7164,7 @@ ${actionsRow}
                 try {
                     // Add timeout to prevent hanging
                     const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 55000); // align with server demo-dashboard budget (analytics tier)
+                    const timeoutId = setTimeout(() => controller.abort(), 115000); // align with server demo-dashboard budget (request-timeout demoDashboard tier)
                     const q = bustCache ? `?t=${Date.now()}` : '';
                     const res = await fetch(
                         `${BASE_URL}/api/demo-dashboard/${encodeURIComponent(clientKey)}${q}`,

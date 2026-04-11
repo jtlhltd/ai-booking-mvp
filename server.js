@@ -9148,7 +9148,6 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         GROUP BY COALESCE(l.service, 'General')
         ORDER BY appointment_count DESC
       `, [clientKey]),
-      query(dashboardCallPhoneAggSql, [clientKey]),
       query(`
         WITH lead_lookup AS (
           SELECT DISTINCT ON (phone_match_key)

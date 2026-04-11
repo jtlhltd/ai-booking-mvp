@@ -61,6 +61,8 @@ export const TIMEOUTS = {
   // Long-running operations
   bulkImport: 120000,  // 2 minutes
   analytics: 60000,    // 1 minute
+  /** Heavy DB + optional Vapi fan-out; must exceed client-dashboard fetch abort (see public/client-dashboard.html). */
+  demoDashboard: 120000,
   reports: 90000,      // 1.5 minutes
   
   // Webhooks (should be fast)
@@ -78,7 +80,7 @@ export function getTimeoutForPath(path) {
   }
   // Heavy DB + optional Vapi fan-out; must not use 10s "stats" bucket (path contains "dashboard")
   if (path.includes('/demo-dashboard')) {
-    return TIMEOUTS.analytics;
+    return TIMEOUTS.demoDashboard;
   }
   if (path.includes('/stats') || path.includes('/dashboard')) {
     return TIMEOUTS.stats;
