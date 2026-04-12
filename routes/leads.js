@@ -2,6 +2,7 @@ import express from 'express';
 import * as store from '../store.js';
 import * as sheets from '../sheets.js';
 import { normalizePhone } from '../util/phone.js';
+import { sendOperatorAlert } from '../lib/operator-alerts.js';
 
 const router = express.Router();
 
@@ -85,8 +86,26 @@ router.post('/api/leads', authTenant, async (req, res) => {
       });
       createdNew = true;
 
-      const { rowNumber } = await sheets.appendLead(tenant.gsheet_id, row);
-      if (rowNumber) await store.leads.updateSheetRowId(row.id, String(rowNumber));
+      try {
+        const { rowNumber } = await sheets.appendLead(tenant.gsheet_id, row);
+        if (rowNumber) await store.leads.updateSheetRowId(row.id, String(rowNumber));
+      } catch (sheetErr) {
+        await sendOperatorAlert({
+          subject: `Sheet append failed (${tenant.key}) — /api/leads`,
+          html: `<p><code>appendLead</code> failed after DB insert.</p><pre>${JSON.stringify(
+            {
+              clientKey: tenant.key,
+              gsheet_id: tenant.gsheet_id ? '[set]' : null,
+              message: sheetErr?.message
+            },
+            null,
+            2
+          )}</pre>`,
+          dedupeKey: `sheet-append-lead:${tenant.key}`,
+          throttleMinutes: 30
+        }).catch(() => {});
+        throw sheetErr;
+      }
     }
 
     // --- NEW: fire the outbound call (non-blocking — we don’t wait for result)

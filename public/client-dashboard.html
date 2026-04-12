@@ -1200,6 +1200,49 @@
             display: none;
         }
 
+        .usage-meters-strip {
+            margin: 0 0 16px 0;
+            padding: 12px 14px;
+            border-radius: 12px;
+            border: 1px solid var(--border, #e8eaf5);
+            background: var(--surface, #fff);
+            font-size: 0.875rem;
+        }
+
+        .usage-meters-strip h4 {
+            margin: 0 0 10px 0;
+            font-size: 0.9375rem;
+            font-weight: 650;
+        }
+
+        .usage-meter-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 10px 16px;
+        }
+
+        .usage-meter-item strong {
+            display: block;
+            font-size: 1.125rem;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .usage-meter-cap-bar {
+            height: 6px;
+            border-radius: 999px;
+            background: var(--border, #e8eaf5);
+            margin-top: 6px;
+            overflow: hidden;
+        }
+
+        .usage-meter-cap-bar > span {
+            display: block;
+            height: 100%;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #5c6ac4, #7b8ce8);
+            max-width: 100%;
+        }
+
         @media (max-width: 768px) {
             body.tom-outreach-dashboard .tom-ab-mobile-section-toggle {
                 display: flex;
@@ -6119,6 +6162,7 @@
         </section>
 
         <div id="outreachCapacityStrip" class="outreach-capacity-strip" hidden aria-live="polite"></div>
+        <div id="usageMetersStrip" class="usage-meters-strip" hidden aria-live="polite"></div>
 
         <section
             class="dashboard-section tom-ab-test-section"
@@ -6806,6 +6850,64 @@
             )}</strong> dial attempts in the last 24h.</p><p style="margin:0;">${etaHtml}</p>${trendsHtml}`;
         }
 
+        function renderUsageMetersStrip(data) {
+            const el = document.getElementById('usageMetersStrip');
+            if (!el) return;
+            const um = data && data.usageMeters && typeof data.usageMeters === 'object' ? data.usageMeters : null;
+            if (!um || !um.windows) {
+                el.hidden = true;
+                el.innerHTML = '';
+                return;
+            }
+            el.hidden = false;
+            const w7 = um.windows.last7Days || {};
+            const w30 = um.windows.last30Days || {};
+            const caps = um.caps || {};
+            const capCalls = caps.monthlyDialAttempts != null ? Number(caps.monthlyDialAttempts) : null;
+            const capMins = caps.monthlyTalkMinutes != null ? Number(caps.monthlyTalkMinutes) : null;
+            const d30 = Number(w30.dialAttempts) || 0;
+            const m30 = Number(w30.talkMinutes) || 0;
+            let capHtml = '';
+            if ((capCalls && capCalls > 0) || (capMins && capMins > 0)) {
+                const pctCalls =
+                    capCalls && capCalls > 0 ? Math.min(100, Math.round((d30 / capCalls) * 1000) / 10) : null;
+                const pctMins =
+                    capMins && capMins > 0 ? Math.min(100, Math.round((m30 / capMins) * 1000) / 10) : null;
+                capHtml = '<div class="usage-meter-grid" style="margin-top:12px">';
+                if (pctCalls != null) {
+                    capHtml += `<div class="usage-meter-item"><span class="tom-ab-test-meta">30d dials vs monthly cap</span><strong>${pctCalls}%</strong><div class="usage-meter-cap-bar"><span style="width:${pctCalls}%"></span></div><span class="tom-ab-test-meta">${formatNumber(
+                        d30
+                    )} / ${formatNumber(capCalls)}</span></div>`;
+                }
+                if (pctMins != null) {
+                    capHtml += `<div class="usage-meter-item"><span class="tom-ab-test-meta">30d talk min vs cap</span><strong>${pctMins}%</strong><div class="usage-meter-cap-bar"><span style="width:${pctMins}%"></span></div><span class="tom-ab-test-meta">${m30} / ${formatNumber(
+                        capMins
+                    )} min</span></div>`;
+                }
+                capHtml += '</div>';
+            }
+            el.innerHTML = `<h4>Usage meters</h4><div class="usage-meter-grid">
+                <div class="usage-meter-item"><span class="tom-ab-test-meta">Last 7 days · dial attempts</span><strong>${formatNumber(
+                    Number(w7.dialAttempts) || 0
+                )}</strong></div>
+                <div class="usage-meter-item"><span class="tom-ab-test-meta">Last 7 days · talk time</span><strong>${Number(
+                    w7.talkMinutes
+                ).toFixed(1)} min</strong></div>
+                <div class="usage-meter-item"><span class="tom-ab-test-meta">Last 30 days · dial attempts</span><strong>${formatNumber(
+                    d30
+                )}</strong></div>
+                <div class="usage-meter-item"><span class="tom-ab-test-meta">Last 30 days · talk time</span><strong>${m30.toFixed(1)} min</strong></div>
+                <div class="usage-meter-item"><span class="tom-ab-test-meta">Last 30 days · new leads</span><strong>${formatNumber(
+                    Number(w30.newLeads) || 0
+                )}</strong></div>
+                <div class="usage-meter-item"><span class="tom-ab-test-meta">Last 30 days · appointments</span><strong>${formatNumber(
+                    Number(w30.appointments) || 0
+                )}</strong></div>
+            </div>${capHtml}<p class="tom-ab-test-meta" style="margin:10px 0 0 0;">${escapeHtml(
+                caps.note || 'Rolling windows from your live CRM and call logs.'
+            )}</p>`;
+        }
+
         const BASE_URL = window.location.origin;
         const THEME_KEY = 'dashboard_theme';
         
@@ -7250,6 +7352,18 @@ ${actionsRow}
                 costs: { total: 612.4, perCall: 12.4 },
                 revenue: { total: 6280, bookings: 18, avgDealValue: 349 },
                 roi: { profit: 5667.6, multiplier: 10.3, percentage: 930 }
+            },
+            usageMeters: {
+                asOf: new Date().toISOString(),
+                windows: {
+                    last7Days: { dialAttempts: 142, talkMinutes: 58.2 },
+                    last30Days: { dialAttempts: 580, talkMinutes: 241.5, newLeads: 95, appointments: 22 }
+                },
+                caps: {
+                    monthlyDialAttempts: 2000,
+                    monthlyTalkMinutes: 600,
+                    note: 'Demo values — set USAGE_CAP_MONTHLY_CALLS / USAGE_CAP_MONTHLY_MINUTES on Render to show plan caps for live tenants.'
+                }
             }
         };
 
@@ -7287,7 +7401,8 @@ ${actionsRow}
                     roi: { profit: null, multiplier: null, percentage: null }
                 },
                 outboundAbTest: null,
-                outreachCapacity: null
+                outreachCapacity: null,
+                usageMeters: null
             };
         }
         
@@ -7568,7 +7683,11 @@ ${actionsRow}
                         : null,
                     outreachCapacity: livePayload.outreachCapacity && typeof livePayload.outreachCapacity === 'object'
                         ? { ...livePayload.outreachCapacity }
-                        : null
+                        : null,
+                    usageMeters:
+                        livePayload.usageMeters && typeof livePayload.usageMeters === 'object'
+                            ? { ...livePayload.usageMeters }
+                            : null
                 };
             }
             
@@ -7647,7 +7766,11 @@ ${actionsRow}
                 outreachCapacity:
                     livePayload.outreachCapacity && typeof livePayload.outreachCapacity === 'object'
                         ? { ...livePayload.outreachCapacity }
-                        : base.outreachCapacity ?? null
+                        : base.outreachCapacity ?? null,
+                usageMeters:
+                    livePayload.usageMeters && typeof livePayload.usageMeters === 'object'
+                        ? { ...livePayload.usageMeters }
+                        : base.usageMeters ?? null
             };
         }
 
@@ -8172,6 +8295,7 @@ ${actionsRow}
                         ? `Mean ${firstResponse} to first dial\n${formatNumber(respN)} leads in sample`
                         : `Mean ${firstResponse} to first dial`;
             renderOutreachCapacityStrip(data);
+            renderUsageMetersStrip(data);
         }
 
         function formatActivitySnapshot(iso, timeZone = DASHBOARD_ACTIVITY_TZ) {

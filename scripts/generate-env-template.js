@@ -45,7 +45,9 @@ const envVars = {
   // Email
   EMAIL_USER: 'Email username for SMTP',
   EMAIL_PASS: 'Email password/app password',
-  YOUR_EMAIL: 'Your email address',
+  YOUR_EMAIL: 'Operator inbox: sheet/dashboard alerts + weekly stack summary (PDF)',
+  USAGE_CAP_MONTHLY_CALLS: 'Optional: monthly dial cap for dashboard usage meter (30d bar)',
+  USAGE_CAP_MONTHLY_MINUTES: 'Optional: monthly talk-minute cap for dashboard usage meter',
   
   // Business Search APIs
   GOOGLE_PLACES_API_KEY: 'Google Places API key',
@@ -153,7 +155,13 @@ function generateEnvTemplate() {
     'GOOGLE_CALENDAR_ID'
   ]);
 
-  pushSection(lines, 'EMAIL', ['EMAIL_USER', 'EMAIL_PASS', 'YOUR_EMAIL']);
+  pushSection(lines, 'EMAIL', [
+    'EMAIL_USER',
+    'EMAIL_PASS',
+    'YOUR_EMAIL',
+    'USAGE_CAP_MONTHLY_CALLS',
+    'USAGE_CAP_MONTHLY_MINUTES'
+  ]);
 
   pushSection(lines, 'BUSINESS SEARCH APIs (optional)', [
     'GOOGLE_PLACES_API_KEY',

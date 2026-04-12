@@ -161,6 +161,7 @@ import opsRouter from './routes/ops.js';
 import * as store from './store.js';
 import * as sheets from './sheets.js';
 import messagingService from './lib/messaging-service.js';
+import { sendOperatorAlert } from './lib/operator-alerts.js';
 import { AIInsightsEngine, LeadScoringEngine } from './lib/ai-insights.js';
 import { getCallContext, storeCallContext, getMostRecentCallContext, getCallContextCacheStats } from './lib/call-context-cache.js';
 // Real API integration - dynamic imports will be used in endpoints
@@ -9297,7 +9298,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       touchpointRows,
       upcomingAppointmentRows,
       callQueuePendingRow,
-      outreachPulseRows
+      outreachPulseRows,
+      usageMetersRow
     ] = await Promise.all([
       query(`
         SELECT COUNT(*) AS total,
@@ -9480,7 +9482,25 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       `, [clientKey]),
       isPostgres
         ? query(demoDashboardOutreachPulseSql, outreachPulseParams)
-        : query(demoDashboardOutreachPulseSqlite, outreachPulseParams)
+        : query(demoDashboardOutreachPulseSqlite, outreachPulseParams),
+      query(
+        `
+        SELECT
+          (SELECT COUNT(*) FROM calls WHERE client_key = $1 AND created_at >= ${sqlDaysAgo(7)}) AS calls_7d,
+          (SELECT COALESCE(SUM(COALESCE(duration, 0)), 0) FROM calls WHERE client_key = $1 AND created_at >= ${sqlDaysAgo(
+            7
+          )}) AS talk_seconds_7d,
+          (SELECT COUNT(*) FROM calls WHERE client_key = $1 AND created_at >= ${sqlDaysAgo(30)}) AS calls_30d,
+          (SELECT COALESCE(SUM(COALESCE(duration, 0)), 0) FROM calls WHERE client_key = $1 AND created_at >= ${sqlDaysAgo(
+            30
+          )}) AS talk_seconds_30d,
+          (SELECT COUNT(*) FROM leads WHERE client_key = $1 AND created_at >= ${sqlDaysAgo(30)}) AS leads_new_30d,
+          (SELECT COUNT(*) FROM appointments WHERE client_key = $1 AND created_at >= ${sqlDaysAgo(
+            30
+          )}) AS appointments_30d
+        `,
+        [clientKey]
+      )
     ]);
 
     const callCounts = callMetricsBundle.callCounts;
@@ -10206,6 +10226,33 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     const reviewPendingSince =
       reviewPending && reviewPendingSinceRaw !== '' ? reviewPendingSinceRaw : null;
 
+    const uRow = usageMetersRow.rows?.[0] || {};
+    const sec7 = Number(uRow.talk_seconds_7d) || 0;
+    const sec30 = Number(uRow.talk_seconds_30d) || 0;
+    const capCalls = parseInt(String(process.env.USAGE_CAP_MONTHLY_CALLS || '').trim(), 10);
+    const capMins = parseInt(String(process.env.USAGE_CAP_MONTHLY_MINUTES || '').trim(), 10);
+    const usageMeters = {
+      asOf: new Date().toISOString(),
+      windows: {
+        last7Days: {
+          dialAttempts: Number(uRow.calls_7d) || 0,
+          talkMinutes: Math.round((sec7 / 60) * 10) / 10
+        },
+        last30Days: {
+          dialAttempts: Number(uRow.calls_30d) || 0,
+          talkMinutes: Math.round((sec30 / 60) * 10) / 10,
+          newLeads: Number(uRow.leads_new_30d) || 0,
+          appointments: Number(uRow.appointments_30d) || 0
+        }
+      },
+      caps: {
+        monthlyDialAttempts: Number.isFinite(capCalls) && capCalls > 0 ? capCalls : null,
+        monthlyTalkMinutes: Number.isFinite(capMins) && capMins > 0 ? capMins : null,
+        note:
+          'Optional USAGE_CAP_MONTHLY_CALLS / USAGE_CAP_MONTHLY_MINUTES on Render — display hints until billing enforces limits.'
+      }
+    };
+
     const payload = {
       ok: true,
       source: 'live',
@@ -10341,12 +10388,23 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         withinScheduledDialWindow,
         trends7d,
         trends30d
-      }
+      },
+      usageMeters
     };
     res.set('Cache-Control', 'no-store, must-revalidate, max-age=0');
     res.json(payload);
   } catch (error) {
     console.error('[DEMO DASHBOARD ERROR]', error);
+    await sendOperatorAlert({
+      subject: `Dashboard sync failed for ${String(clientKey)}`,
+      html: `<p><code>GET /api/demo-dashboard/${String(clientKey)}</code> failed.</p><pre>${JSON.stringify(
+        { message: error?.message, stack: error?.stack?.split('\n').slice(0, 10).join('\n') },
+        null,
+        2
+      )}</pre>`,
+      dedupeKey: `demo-dash-fail:${String(clientKey)}`,
+      throttleMinutes: 90
+    }).catch(() => {});
     res.status(500).json({ ok: false, error: error.message });
   }
 });
@@ -11036,6 +11094,29 @@ app.post('/api/leads/import', async (req, res) => {
       }
     }
 
+    if (failedWrites > 0 && leads.length > 0 && failedWrites >= Math.max(5, Math.ceil(leads.length * 0.5))) {
+      await sendOperatorAlert({
+        subject: `Lead import: many CRM writes failed (${clientKey})`,
+        html: `<p><strong>${failedWrites}</strong> of <strong>${leads.length}</strong> rows failed DB insert for <code>${String(
+          clientKey
+        )}</code>.</p><pre>${JSON.stringify({ failedWriteSamples }, null, 2)}</pre>`,
+        dedupeKey: `lead-import-bulk-fail:${String(clientKey)}`,
+        throttleMinutes: 45
+      }).catch(() => {});
+    }
+    if (inserted.length > 0 && callSummary?.reason === 'error' && callSummary?.error) {
+      await sendOperatorAlert({
+        subject: `Lead import post-insert sync error (${clientKey})`,
+        html: `<p>Inserted ${inserted.length} lead(s) but call/queue follow-up failed.</p><pre>${JSON.stringify(
+          callSummary,
+          null,
+          2
+        )}</pre>`,
+        dedupeKey: `lead-import-sync:${String(clientKey)}`,
+        throttleMinutes: 30
+      }).catch(() => {});
+    }
+
     return res.json({
       ok: true,
       inserted: inserted.length,
@@ -11057,6 +11138,22 @@ app.post('/api/leads/import', async (req, res) => {
     });
   } catch (error) {
     console.error('[LEAD IMPORT ERROR]', error);
+    const ck =
+      req.body?.clientKey ||
+      req.body?.client_key ||
+      req.body?.clientkey ||
+      req.body?.ClientKey ||
+      'unknown';
+    await sendOperatorAlert({
+      subject: `Lead import API failed (${ck})`,
+      html: `<p><code>/api/leads/import</code> returned 500.</p><pre>${JSON.stringify(
+        { clientKey: ck, message: error?.message, stack: error?.stack?.split('\n').slice(0, 12).join('\n') },
+        null,
+        2
+      )}</pre>`,
+      dedupeKey: `lead-import-500:${String(ck)}`,
+      throttleMinutes: 60
+    }).catch(() => {});
     res.status(500).json({ ok: false, error: error.message });
   }
 });
@@ -24038,6 +24135,16 @@ app.post('/tools/access_google_sheet', async (req, res) => {
     const logisticsSheetId = tenant?.vapi_json?.logisticsSheetId || tenant?.vapi?.logisticsSheetId || tenant?.gsheet_id || process.env.LOGISTICS_SHEET_ID;
     
     if (!logisticsSheetId) {
+      await sendOperatorAlert({
+        subject: 'Google Sheet not configured (tool call blocked)',
+        html: `<p><strong>access_google_sheet</strong> rejected: no sheet ID for tenant.</p><pre>${JSON.stringify(
+          { tenantKey: tenantKey || null, action },
+          null,
+          2
+        )}</pre><p>Configure <code>gsheet_id</code> / logistics sheet on the tenant or <code>LOGISTICS_SHEET_ID</code> on the server.</p>`,
+        dedupeKey: `sheet-missing:${String(tenantKey || 'unknown')}`,
+        throttleMinutes: 120
+      }).catch(() => {});
       return res.status(400).json({ error: 'Google Sheet ID not configured' });
     }
     
@@ -24102,6 +24209,16 @@ app.post('/tools/access_google_sheet', async (req, res) => {
     
   } catch (error) {
     console.error('[GOOGLE SHEET TOOL ERROR]', error);
+    await sendOperatorAlert({
+      subject: 'Google Sheet tool failed (access_google_sheet)',
+      html: `<p><strong>access_google_sheet</strong> threw:</p><pre>${JSON.stringify(
+        { message: error?.message, stack: error?.stack?.split('\n').slice(0, 8).join('\n') },
+        null,
+        2
+      )}</pre>`,
+      dedupeKey: 'sheet-tool-error:access_google_sheet',
+      throttleMinutes: 30
+    }).catch(() => {});
     return res.status(500).json({ 
       error: 'Failed to access Google Sheet',
       message: error.message 

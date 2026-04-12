@@ -3,6 +3,7 @@ import * as store from '../store.js';
 import * as sheets from '../sheets.js';
 import { analyzeCall } from '../lib/call-quality-analysis.js';
 import messagingService from '../lib/messaging-service.js';
+import { sendOperatorAlert } from '../lib/operator-alerts.js';
 import { extractLogisticsFields } from '../lib/logistics-extractor.js';
 import { recordReceptionistTelemetry } from '../lib/demo-telemetry.js';
 import { storeCallContext } from '../lib/call-context-cache.js';
@@ -1331,6 +1332,21 @@ async function processWebhookPayload(body, correlationId) {
         }
       } catch (sheetErr) {
         console.error('[LOGISTICS SHEET ERROR]', sheetErr?.message || sheetErr);
+        await sendOperatorAlert({
+          subject: `Logistics sheet sync failed (${String(tenantKey || 'unknown')})`,
+          html: `<p>Vapi end-of-call logistics sheet write/update failed.</p><pre>${JSON.stringify(
+            {
+              tenantKey: tenantKey || null,
+              callId: callId || null,
+              message: sheetErr?.message,
+              stack: sheetErr?.stack ? String(sheetErr.stack).split('\n').slice(0, 10).join('\n') : null
+            },
+            null,
+            2
+          )}</pre>`,
+          dedupeKey: `logistics-sheet:${String(tenantKey || 'unknown')}`,
+          throttleMinutes: 45
+        }).catch(() => {});
       }
     } else if (logisticsSheetId && callId && (recordingUrl || transcript) && !noUsefulOutcome) {
       // Assistant ID doesn't match, but we still want to update existing rows with call metadata
@@ -1370,6 +1386,20 @@ async function processWebhookPayload(body, correlationId) {
           error: updateError.message,
           callId
         });
+        await sendOperatorAlert({
+          subject: `Logistics sheet metadata update failed (${String(tenantKey || 'unknown')})`,
+          html: `<p>Assistant-mismatch fallback path could not update the sheet.</p><pre>${JSON.stringify(
+            {
+              tenantKey: tenantKey || null,
+              callId: callId || null,
+              message: updateError?.message
+            },
+            null,
+            2
+          )}</pre>`,
+          dedupeKey: `logistics-sheet-update:${String(tenantKey || 'unknown')}`,
+          throttleMinutes: 45
+        }).catch(() => {});
       }
     }
 
