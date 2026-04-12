@@ -10250,8 +10250,16 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         monthlyTalkMinutes: Number.isFinite(capMins) && capMins > 0 ? capMins : null,
         note:
           'Optional USAGE_CAP_MONTHLY_CALLS / USAGE_CAP_MONTHLY_MINUTES on Render — display hints until billing enforces limits.'
+      },
+      plan: {
+        name: trimEnvDashboard('USAGE_PLAN_NAME'),
+        periodNote: trimEnvDashboard('USAGE_PLAN_PERIOD_NOTE'),
+        upgradeUrl: trimEnvDashboard('USAGE_UPGRADE_URL'),
+        supportEmail: trimEnvDashboard('SUPPORT_CONTACT_EMAIL')
       }
     };
+
+    const dashboardExperience = buildDashboardExperience(client, activityAsOfLondon.toISO());
 
     const payload = {
       ok: true,
@@ -10389,7 +10397,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         trends7d,
         trends30d
       },
-      usageMeters
+      usageMeters,
+      dashboardExperience
     };
     res.set('Cache-Control', 'no-store, must-revalidate, max-age=0');
     res.json(payload);
@@ -12838,6 +12847,89 @@ function resolveLogisticsSpreadsheetId(client) {
     || process.env.LOGISTICS_SHEET_ID
     || null
   );
+}
+
+function trimEnvDashboard(key) {
+  const v = process.env[key];
+  if (v == null || String(v).trim() === '') return null;
+  return String(v).trim();
+}
+
+function parseDashboardPrivacyBullets() {
+  const raw = trimEnvDashboard('DASHBOARD_PRIVACY_BULLETS');
+  if (raw) {
+    return raw
+      .split('|')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 10);
+  }
+  return [
+    'Leads and call records for this workspace are stored in the booking system database and power the numbers on this page.',
+    'When a Google Sheet is linked in your workspace settings, the voice stack may read or append rows your playbook defines.',
+    'For questions about exports, retention, or corrections, use the support contact shown on this dashboard.'
+  ];
+}
+
+/**
+ * Client-dashboard-only bundle: integrations, sync timestamps, privacy copy, build ids, read-only flag.
+ */
+function buildDashboardExperience(client, metricsAsOfIso) {
+  const v = client?.vapi && typeof client.vapi === 'object' && !Array.isArray(client.vapi) ? client.vapi : {};
+  const voiceOk = !!(client?.vapiAssistantId || v.assistantId);
+  const tenantLogistics = !!(v.logisticsSheetId && String(v.logisticsSheetId).trim());
+  const resolvedSheet = resolveLogisticsSpreadsheetId(client);
+  const logisticsAny = !!resolvedSheet;
+  const crmLeadSheet = !!(v.gsheet_id || v.gsheetId || v.crmSheetId || v.googleSheetId);
+  const smsOk = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN);
+  const readOnlyGlobal = /^(1|true|yes)$/i.test(String(process.env.DASHBOARD_GLOBAL_READ_ONLY || '').trim());
+  const readOnlyTenant = v.dashboardReadOnly === true || String(v.dashboardReadOnly || '').toLowerCase() === 'true';
+
+  const sheetHint = tenantLogistics
+    ? 'Logistics / call-result sheet id is set on this workspace.'
+    : logisticsAny
+      ? 'A sheet id is available via server default (e.g. LOGISTICS_SHEET_ID). Prefer setting logisticsSheetId on the tenant for production.'
+      : 'No logistics sheet id — voice tool writes to Sheets may fail until configured.';
+
+  return {
+    integrations: [
+      {
+        id: 'voice',
+        label: 'Voice (Vapi)',
+        ok: voiceOk,
+        hint: voiceOk ? 'Assistant is linked for outbound/inbound flows.' : 'Add assistantId to this workspace Vapi config.'
+      },
+      {
+        id: 'google_sheets',
+        label: 'Google Sheets',
+        ok: logisticsAny || crmLeadSheet,
+        hint: `${sheetHint}${crmLeadSheet ? ' Lead-list / CRM sheet id also present.' : ''}`.trim()
+      },
+      {
+        id: 'sms',
+        label: 'SMS (Twilio)',
+        ok: smsOk,
+        hint: smsOk ? 'Server Twilio credentials are set (tenant may still need templates).' : 'Twilio env vars missing — SMS may be unavailable.'
+      }
+    ],
+    sync: {
+      metricsAsOfIso: metricsAsOfIso || null,
+      payloadGeneratedAtIso: new Date().toISOString()
+    },
+    privacy: {
+      bullets: parseDashboardPrivacyBullets(),
+      exportNote:
+        trimEnvDashboard('DASHBOARD_PRIVACY_EXPORT_NOTE') ||
+        'To export leads or ask for a CRM snapshot, email the support contact below. This dashboard does not erase your data.'
+    },
+    app: {
+      version: trimEnvDashboard('DASHBOARD_APP_VERSION'),
+      commit: trimEnvDashboard('RENDER_GIT_COMMIT')
+    },
+    ui: {
+      readOnly: readOnlyGlobal || readOnlyTenant
+    }
+  };
 }
 
 function isFollowUpQueueDemoClient(clientKey) {

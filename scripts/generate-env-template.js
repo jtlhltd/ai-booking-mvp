@@ -48,6 +48,15 @@ const envVars = {
   YOUR_EMAIL: 'Operator inbox: sheet/dashboard alerts + weekly stack summary (PDF)',
   USAGE_CAP_MONTHLY_CALLS: 'Optional: monthly dial cap for dashboard usage meter (30d bar)',
   USAGE_CAP_MONTHLY_MINUTES: 'Optional: monthly talk-minute cap for dashboard usage meter',
+  USAGE_PLAN_NAME: 'Plan label shown on client dashboard',
+  USAGE_PLAN_PERIOD_NOTE: 'Billing period / reset note for dashboard',
+  USAGE_UPGRADE_URL: 'https URL for upgrade or billing (dashboard link)',
+  SUPPORT_CONTACT_EMAIL: 'Support email shown on client dashboard',
+  DASHBOARD_APP_VERSION: 'Optional version string shown in dashboard sync footer',
+  RENDER_GIT_COMMIT: 'Set by Render: short git SHA in dashboard footer',
+  DASHBOARD_GLOBAL_READ_ONLY: 'If 1/true: hide imports & A/B uploads on all client dashboards',
+  DASHBOARD_PRIVACY_BULLETS: 'Pipe-separated bullets for “Your data” panel (| between items)',
+  DASHBOARD_PRIVACY_EXPORT_NOTE: 'Short paragraph under privacy bullets (exports / requests)',
   
   // Business Search APIs
   GOOGLE_PLACES_API_KEY: 'Google Places API key',
@@ -160,7 +169,16 @@ function generateEnvTemplate() {
     'EMAIL_PASS',
     'YOUR_EMAIL',
     'USAGE_CAP_MONTHLY_CALLS',
-    'USAGE_CAP_MONTHLY_MINUTES'
+    'USAGE_CAP_MONTHLY_MINUTES',
+    'USAGE_PLAN_NAME',
+    'USAGE_PLAN_PERIOD_NOTE',
+    'USAGE_UPGRADE_URL',
+    'SUPPORT_CONTACT_EMAIL',
+    'DASHBOARD_APP_VERSION',
+    'RENDER_GIT_COMMIT',
+    'DASHBOARD_GLOBAL_READ_ONLY',
+    'DASHBOARD_PRIVACY_BULLETS',
+    'DASHBOARD_PRIVACY_EXPORT_NOTE'
   ]);
 
   pushSection(lines, 'BUSINESS SEARCH APIs (optional)', [

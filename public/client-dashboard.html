@@ -1243,6 +1243,154 @@
             max-width: 100%;
         }
 
+        .dashboard-api-error-detail {
+            display: block;
+            margin: 8px 0;
+            font-size: 0.8125rem;
+            color: #5c1a1a;
+            font-family: ui-monospace, monospace;
+            word-break: break-word;
+        }
+
+        .dashboard-readonly-banner {
+            margin: 0 0 14px 0;
+            padding: 10px 14px;
+            border-radius: 10px;
+            border: 1px solid #c4b5fd;
+            background: #f5f3ff;
+            color: #3730a3;
+            font-size: 0.875rem;
+        }
+
+        .dashboard-onboarding-card {
+            margin: 0 0 16px 0;
+            padding: 14px 16px;
+            border-radius: 12px;
+            border: 1px solid var(--border, #e8eaf5);
+            background: var(--surface, #fff);
+        }
+
+        .dashboard-onboarding-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+
+        .dashboard-onboarding-title {
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 650;
+        }
+
+        .dashboard-onboarding-dismiss {
+            border: none;
+            background: transparent;
+            color: var(--muted, #5c6478);
+            font-size: 0.8125rem;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+
+        .dashboard-onboarding-steps {
+            margin: 0;
+            padding-left: 1.25rem;
+            font-size: 0.875rem;
+            line-height: 1.55;
+            color: var(--text, #1a1d2e);
+        }
+
+        .dashboard-onboarding-steps li.done {
+            color: var(--muted, #5c6478);
+            text-decoration: line-through;
+        }
+
+        .dashboard-experience-panel {
+            margin: 0 0 18px 0;
+            padding: 14px 16px;
+            border-radius: 12px;
+            border: 1px solid var(--border, #e8eaf5);
+            background: var(--surface, #fff);
+        }
+
+        .dashboard-experience-head {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .dashboard-experience-title {
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 650;
+        }
+
+        .dashboard-integration-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .dashboard-int-card {
+            border-radius: 10px;
+            border: 1px solid var(--border, #e8eaf5);
+            padding: 10px 12px;
+            font-size: 0.8125rem;
+        }
+
+        .dashboard-int-card.ok {
+            border-color: rgba(34, 197, 94, 0.45);
+            background: rgba(240, 253, 244, 0.6);
+        }
+
+        .dashboard-int-card.warn {
+            border-color: rgba(251, 191, 36, 0.55);
+            background: rgba(255, 251, 235, 0.7);
+        }
+
+        .dashboard-int-card strong {
+            display: block;
+            font-size: 0.875rem;
+            margin-bottom: 4px;
+        }
+
+        .dashboard-sync-meta,
+        .dashboard-plan-hints {
+            font-size: 0.8125rem;
+            color: var(--muted, #5c6478);
+            margin-bottom: 10px;
+            line-height: 1.45;
+        }
+
+        .dashboard-privacy-block {
+            font-size: 0.8125rem;
+            line-height: 1.5;
+            color: var(--text, #1a1d2e);
+        }
+
+        .dashboard-privacy-block ul {
+            margin: 8px 0 0 1.1rem;
+            padding: 0;
+        }
+
+        body[data-dashboard-read-only='1'] .card-upload-leads,
+        body[data-dashboard-read-only='1'] #leadImportButton,
+        body[data-dashboard-read-only='1'] #leadDropzone,
+        body[data-dashboard-read-only='1'] #leadPasteToggle,
+        body[data-dashboard-read-only='1'] #tomAbCreativeUploadBtn,
+        body[data-dashboard-read-only='1'] .test-call-btn,
+        body[data-dashboard-read-only='1'] [data-tom-ab-all-delete],
+        body[data-dashboard-read-only='1'] [data-tom-ab-all-delete-draft] {
+            pointer-events: none !important;
+            opacity: 0.45 !important;
+            filter: grayscale(0.2);
+        }
+
         @media (max-width: 768px) {
             body.tom-outreach-dashboard .tom-ab-mobile-section-toggle {
                 display: flex;
@@ -6116,9 +6264,42 @@
             </div>
             <div class="dashboard-api-error-banner" id="dashboardApiErrorBanner" hidden role="alert">
                 <strong>Live metrics did not load.</strong>
+                <span id="dashboardApiErrorDetail" class="dashboard-api-error-detail"></span>
                 Numbers come from <code>GET /api/demo-dashboard/&lt;your client key&gt;</code>. If that request fails or times out, tiles stay at zero while branding may still look correct. Check DevTools → Network, confirm the URL includes <code>?client=…</code>, then refresh.
             </div>
         </header>
+
+        <div id="dashboardReadOnlyBanner" class="dashboard-readonly-banner" hidden role="status">
+            <strong>View-only mode.</strong> Imports, uploads, and other edits are hidden. Open without <code>?view=viewer</code> or ask your operator to turn off read-only for this workspace.
+        </div>
+
+        <section
+            id="dashboardOnboardingSection"
+            class="dashboard-onboarding-card"
+            aria-label="Getting started checklist"
+            hidden
+        >
+            <div class="dashboard-onboarding-head">
+                <h2 class="dashboard-onboarding-title">Getting started</h2>
+                <button type="button" class="dashboard-onboarding-dismiss" id="dashboardOnboardingDismiss" aria-label="Dismiss checklist">
+                    Hide
+                </button>
+            </div>
+            <ol class="dashboard-onboarding-steps" id="dashboardOnboardingSteps"></ol>
+        </section>
+
+        <section id="dashboardExperienceSection" class="dashboard-experience-panel" aria-label="Connections and data" hidden>
+            <div class="dashboard-experience-head">
+                <h2 class="dashboard-experience-title">Connections &amp; data</h2>
+                <button type="button" class="export-btn secondary" id="copyDebugBundleBtn" style="padding:6px 12px;font-size:12px;">
+                    Copy debug bundle
+                </button>
+            </div>
+            <div class="dashboard-integration-grid" id="dashboardIntegrationGrid" aria-live="polite"></div>
+            <div class="dashboard-sync-meta" id="dashboardSyncMeta"></div>
+            <div class="dashboard-plan-hints" id="dashboardPlanHints"></div>
+            <div class="dashboard-privacy-block" id="dashboardPrivacyBlock"></div>
+        </section>
 
         <div class="active-indicator pulse" id="activeIndicator">
             <div class="active-indicator-dot"></div>
@@ -6903,7 +7084,17 @@
                 <div class="usage-meter-item"><span class="tom-ab-test-meta">Last 30 days · appointments</span><strong>${formatNumber(
                     Number(w30.appointments) || 0
                 )}</strong></div>
-            </div>${capHtml}<p class="tom-ab-test-meta" style="margin:10px 0 0 0;">${escapeHtml(
+            </div>${capHtml}${(() => {
+                const pl = um.plan && typeof um.plan === 'object' ? um.plan : {};
+                if (!pl.name && !pl.periodNote && !pl.upgradeUrl) return '';
+                const bits = [pl.name, pl.periodNote].map((x) => (x ? String(x).trim() : '')).filter(Boolean);
+                const upRaw = pl.upgradeUrl ? String(pl.upgradeUrl).trim() : '';
+                const up = /^https?:\/\//i.test(upRaw) ? upRaw : '';
+                const link = up
+                    ? ` · <a href="${escapeHtml(up)}" rel="noopener noreferrer" target="_blank">Plan / billing</a>`
+                    : '';
+                return `<p class="tom-ab-test-meta" style="margin-top:8px;"><strong>Plan</strong> · ${escapeHtml(bits.join(' — '))}${link}</p>`;
+            })()}<p class="tom-ab-test-meta" style="margin:10px 0 0 0;">${escapeHtml(
                 caps.note || 'Rolling windows from your live CRM and call logs.'
             )}</p>`;
         }
@@ -7363,7 +7554,33 @@ ${actionsRow}
                     monthlyDialAttempts: 2000,
                     monthlyTalkMinutes: 600,
                     note: 'Demo values — set USAGE_CAP_MONTHLY_CALLS / USAGE_CAP_MONTHLY_MINUTES on Render to show plan caps for live tenants.'
+                },
+                plan: {
+                    name: 'Demo Growth',
+                    periodNote: 'Usage shown is sample data.',
+                    upgradeUrl: '',
+                    supportEmail: ''
                 }
+            },
+            dashboardExperience: {
+                integrations: [
+                    { id: 'voice', label: 'Voice (Vapi)', ok: true, hint: 'Demo assistant is linked.' },
+                    { id: 'google_sheets', label: 'Google Sheets', ok: true, hint: 'Demo: sheets would be wired per tenant in production.' },
+                    { id: 'sms', label: 'SMS (Twilio)', ok: true, hint: 'Demo: assumes platform SMS is available.' }
+                ],
+                sync: {
+                    metricsAsOfIso: new Date().toISOString(),
+                    payloadGeneratedAtIso: new Date().toISOString()
+                },
+                privacy: {
+                    bullets: [
+                        'This sandbox uses mock rows — nothing here is a real person.',
+                        'Production tenants see the same layout backed by your database and optional Sheet mirrors.'
+                    ],
+                    exportNote: 'Demo: export behaviour is not connected.'
+                },
+                app: { version: 'demo', commit: null },
+                ui: { readOnly: false }
             }
         };
 
@@ -7402,7 +7619,8 @@ ${actionsRow}
                 },
                 outboundAbTest: null,
                 outreachCapacity: null,
-                usageMeters: null
+                usageMeters: null,
+                dashboardExperience: null
             };
         }
         
@@ -7424,12 +7642,195 @@ ${actionsRow}
         let liveEventSource = null;
         /** True when /api/demo-dashboard/:key failed so UI would otherwise show silent zeros. */
         let dashboardLivePayloadFailed = false;
+        /** Last fetch error (HTTP or network) for the dashboard API — safe to show in UI. */
+        let lastDashboardFetchError = '';
         /** Outreach brief first paint: full lead list still loading in background. */
         let outreachBriefListPending = false;
 
-        function setDashboardApiErrorVisible(show) {
+        function setDashboardApiErrorVisible(show, detailText = '') {
             const el = document.getElementById('dashboardApiErrorBanner');
             if (el) el.hidden = !show;
+            const det = document.getElementById('dashboardApiErrorDetail');
+            if (det) {
+                det.textContent = show && detailText ? String(detailText).slice(0, 500) : '';
+            }
+        }
+
+        function isDashboardViewerUrl() {
+            try {
+                const p = new URLSearchParams(window.location.search);
+                return p.get('view') === 'viewer' || p.get('role') === 'viewer';
+            } catch {
+                return false;
+            }
+        }
+
+        function applyDashboardReadOnly(data) {
+            const serverRo = !!(data && data.dashboardExperience && data.dashboardExperience.ui && data.dashboardExperience.ui.readOnly);
+            const ro = serverRo || isDashboardViewerUrl();
+            document.body.dataset.dashboardReadOnly = ro ? '1' : '0';
+            const ban = document.getElementById('dashboardReadOnlyBanner');
+            if (ban) ban.hidden = !ro;
+        }
+
+        function renderDashboardExperiencePanel(data) {
+            const sec = document.getElementById('dashboardExperienceSection');
+            const grid = document.getElementById('dashboardIntegrationGrid');
+            const syncEl = document.getElementById('dashboardSyncMeta');
+            const planEl = document.getElementById('dashboardPlanHints');
+            const priv = document.getElementById('dashboardPrivacyBlock');
+            if (!sec || !grid || !syncEl || !planEl || !priv) return;
+            const dx = data && data.dashboardExperience && typeof data.dashboardExperience === 'object' ? data.dashboardExperience : null;
+            if (!dx) {
+                sec.hidden = true;
+                return;
+            }
+            sec.hidden = false;
+            const items = Array.isArray(dx.integrations) ? dx.integrations : [];
+            grid.innerHTML = items
+                .map((it) => {
+                    const ok = !!it.ok;
+                    const cls = ok ? 'ok' : 'warn';
+                    const label = escapeHtml(it.label || it.id || 'Integration');
+                    const hint = escapeHtml(it.hint || '');
+                    const badge = ok ? '● OK' : '● Check';
+                    return `<div class="dashboard-int-card ${cls}"><strong>${label}</strong><span class="tom-ab-test-meta">${badge}</span><p style="margin:6px 0 0 0;">${hint}</p></div>`;
+                })
+                .join('');
+
+            const tz = data.activityTimezone || DASHBOARD_ACTIVITY_TZ;
+            const asOf = dx.sync && dx.sync.metricsAsOfIso ? formatActivitySnapshot(dx.sync.metricsAsOfIso, tz) : '—';
+            const gen = dx.sync && dx.sync.payloadGeneratedAtIso ? formatActivitySnapshot(dx.sync.payloadGeneratedAtIso, tz) : '—';
+            const ver = dx.app && dx.app.version ? escapeHtml(dx.app.version) : '';
+            const com = dx.app && dx.app.commit ? escapeHtml(String(dx.app.commit).slice(0, 12)) : '';
+            syncEl.innerHTML = `<strong>Sync</strong> · Metrics window as-of: <strong>${asOf}</strong> · Payload built: <strong>${gen}</strong>${
+                ver || com
+                    ? ` · Build: ${ver || '—'}${com ? ` (<code>${com}</code>)` : ''}`
+                    : ''
+            }`;
+
+            const um = data.usageMeters && typeof data.usageMeters === 'object' ? data.usageMeters : null;
+            const pl = um && um.plan && typeof um.plan === 'object' ? um.plan : {};
+            const planName = pl.name ? escapeHtml(pl.name) : '';
+            const periodNote = pl.periodNote ? escapeHtml(pl.periodNote) : '';
+            const upUrlRaw = pl.upgradeUrl ? String(pl.upgradeUrl).trim() : '';
+            const upUrl = /^https?:\/\//i.test(upUrlRaw) ? upUrlRaw : '';
+            const sup = pl.supportEmail ? escapeHtml(pl.supportEmail) : '';
+            let planHtml = '';
+            if (planName || periodNote || upUrl || sup) {
+                planHtml += '<strong>Plan</strong> · ';
+                if (planName) planHtml += `${planName}. `;
+                if (periodNote) planHtml += `${periodNote} `;
+                if (upUrl)
+                    planHtml += `<a href="${escapeHtml(upUrl)}" rel="noopener noreferrer" target="_blank">Upgrade / billing</a> `;
+                if (sup) planHtml += ` · Support: <a href="mailto:${sup}">${sup}</a>`;
+            } else {
+                planHtml =
+                    '<strong>Plan</strong> · Optional: set <code>USAGE_PLAN_NAME</code>, <code>USAGE_PLAN_PERIOD_NOTE</code>, <code>USAGE_UPGRADE_URL</code>, and <code>SUPPORT_CONTACT_EMAIL</code> on the server to show your commercial terms here.';
+            }
+            planEl.innerHTML = planHtml;
+
+            const bullets = Array.isArray(dx.privacy && dx.privacy.bullets) ? dx.privacy.bullets : [];
+            const expNote = dx.privacy && dx.privacy.exportNote ? escapeHtml(dx.privacy.exportNote) : '';
+            priv.innerHTML = `<strong>Your data</strong><ul>${bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join('')}</ul><p style="margin:8px 0 0 0;">${expNote}</p>`;
+        }
+
+        function renderOnboardingChecklist() {
+            const sec = document.getElementById('dashboardOnboardingSection');
+            const ol = document.getElementById('dashboardOnboardingSteps');
+            if (!sec || !ol) return;
+            const ck = currentClient || getClientFromURL();
+            try {
+                if (localStorage.getItem(`dash.onboard.dismiss.${ck}`) === '1') {
+                    sec.hidden = true;
+                    return;
+                }
+            } catch {
+                /* ignore */
+            }
+            sec.hidden = false;
+            const demo = ck === DEMO_CLIENT_KEY;
+            const liveOk = !dashboardLivePayloadFailed;
+            const leadsOk = (Number(dashboardData.totalLeads) || 0) > 0;
+            let importOk = false;
+            try {
+                importOk = localStorage.getItem(`dash.onboard.leadImport.${ck}`) === '1';
+            } catch {
+                importOk = false;
+            }
+            const callsOk = (Number(dashboardData.totalCalls) || 0) > 0 || (dashboardData.recentCalls && dashboardData.recentCalls.length > 0);
+            const steps = [
+                {
+                    done: !demo,
+                    text: demo
+                        ? 'Use a real client link (?client=your_workspace) to see live metrics for that tenant.'
+                        : 'Client workspace is selected in the URL.'
+                },
+                { done: liveOk, text: 'Live dashboard metrics loaded successfully from the server.' },
+                {
+                    done: leadsOk || importOk,
+                    text: 'At least one lead is in the CRM, or you completed a CSV import for this workspace.'
+                },
+                { done: callsOk, text: 'Outbound call activity has started (dials appear in metrics or the activity feed).' }
+            ];
+            ol.innerHTML = steps
+                .map((s) => `<li class="${s.done ? 'done' : ''}">${escapeHtml(s.text)}</li>`)
+                .join('');
+        }
+
+        function buildDebugBundlePayload() {
+            const ck = currentClient || getClientFromURL();
+            const um = dashboardData.usageMeters && typeof dashboardData.usageMeters === 'object' ? dashboardData.usageMeters : {};
+            return {
+                kind: 'ai-booking-dashboard-debug',
+                clientKey: ck,
+                href: String(window.location.href || '').split('?')[0],
+                capturedAt: new Date().toISOString(),
+                dashboardLivePayloadFailed,
+                lastDashboardFetchError: lastDashboardFetchError || null,
+                viewerUrl: isDashboardViewerUrl(),
+                usageMetersSummary: {
+                    dials7d: um.windows && um.windows.last7Days ? um.windows.last7Days.dialAttempts : null,
+                    dials30d: um.windows && um.windows.last30Days ? um.windows.last30Days.dialAttempts : null
+                },
+                integrationsOk:
+                    dashboardData.dashboardExperience && Array.isArray(dashboardData.dashboardExperience.integrations)
+                        ? dashboardData.dashboardExperience.integrations.map((x) => ({ id: x.id, ok: !!x.ok }))
+                        : null
+            };
+        }
+
+        async function copyDebugBundleToClipboard() {
+            const text = JSON.stringify(buildDebugBundlePayload(), null, 2);
+            try {
+                await navigator.clipboard.writeText(text);
+                showToast('Copied', 'Debug bundle copied to clipboard.', 'success');
+            } catch {
+                showToast('Copy failed', 'Could not access clipboard — select and copy from the console log instead.', 'warning');
+                console.log('[DEBUG BUNDLE]', text);
+            }
+        }
+
+        function initDashboardExperienceUi() {
+            const btn = document.getElementById('copyDebugBundleBtn');
+            if (btn && btn.dataset.bound !== '1') {
+                btn.dataset.bound = '1';
+                btn.addEventListener('click', () => copyDebugBundleToClipboard());
+            }
+            const dis = document.getElementById('dashboardOnboardingDismiss');
+            if (dis && dis.dataset.bound !== '1') {
+                dis.dataset.bound = '1';
+                dis.addEventListener('click', () => {
+                    const ck = currentClient || getClientFromURL();
+                    try {
+                        localStorage.setItem(`dash.onboard.dismiss.${ck}`, '1');
+                    } catch {
+                        /* ignore */
+                    }
+                    const sec = document.getElementById('dashboardOnboardingSection');
+                    if (sec) sec.hidden = true;
+                });
+            }
         }
 
         function syncDashboardFreshnessUi() {
@@ -7487,17 +7888,31 @@ ${actionsRow}
                     if (res.ok) {
                         const payload = await res.json();
                         if (payload && payload.ok) {
+                            lastDashboardFetchError = '';
                             lastDataUpdate = new Date();
                             return payload;
                         }
-                        // Return null if API returns error
+                        lastDashboardFetchError =
+                            payload && payload.error
+                                ? `API error: ${String(payload.error).slice(0, 240)}`
+                                : 'API returned an unexpected payload (missing ok).';
                         return null;
                     }
+                    let errBody = '';
+                    try {
+                        errBody = await res.text();
+                    } catch {
+                        errBody = '';
+                    }
+                    lastDashboardFetchError = `HTTP ${res.status}${errBody ? ` — ${errBody.slice(0, 240)}` : ''}`;
+                    return null;
                 } catch (err) {
                     if (err.name === 'AbortError') {
                         console.warn('Data fetch timeout - server may be slow');
+                        lastDashboardFetchError = 'Request timed out while loading live metrics (115s budget).';
                     } else {
                         console.warn('Live data unavailable', err.message);
+                        lastDashboardFetchError = `Network: ${String(err.message || err).slice(0, 240)}`;
                     }
                     // Don't throw - return null to allow dashboard to continue with existing data
                     return null;
@@ -7687,6 +8102,10 @@ ${actionsRow}
                     usageMeters:
                         livePayload.usageMeters && typeof livePayload.usageMeters === 'object'
                             ? { ...livePayload.usageMeters }
+                            : null,
+                    dashboardExperience:
+                        livePayload.dashboardExperience && typeof livePayload.dashboardExperience === 'object'
+                            ? { ...livePayload.dashboardExperience }
                             : null
                 };
             }
@@ -7770,7 +8189,11 @@ ${actionsRow}
                 usageMeters:
                     livePayload.usageMeters && typeof livePayload.usageMeters === 'object'
                         ? { ...livePayload.usageMeters }
-                        : base.usageMeters ?? null
+                        : base.usageMeters ?? null,
+                dashboardExperience:
+                    livePayload.dashboardExperience && typeof livePayload.dashboardExperience === 'object'
+                        ? { ...livePayload.dashboardExperience }
+                        : base.dashboardExperience ?? null
             };
         }
 
@@ -8296,6 +8719,9 @@ ${actionsRow}
                         : `Mean ${firstResponse} to first dial`;
             renderOutreachCapacityStrip(data);
             renderUsageMetersStrip(data);
+            renderDashboardExperiencePanel(data);
+            renderOnboardingChecklist();
+            applyDashboardReadOnly(data);
         }
 
         function formatActivitySnapshot(iso, timeZone = DASHBOARD_ACTIVITY_TZ) {
@@ -10541,6 +10967,10 @@ ${actionsRow}
         }
 
         async function tomAbDimensionImportUpload() {
+            if (document.body.dataset.dashboardReadOnly === '1') {
+                showToast('View-only', 'Uploads are disabled in viewer mode.', 'info');
+                return;
+            }
             const msg = document.getElementById('tomAbCreativeUploadMsg');
             const dim = getTomAbActiveUploadDimension();
             flushTomAbVisibleFieldToDraft(dim);
@@ -13565,6 +13995,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             initTestCallButton(currentClient, config).catch(err => console.warn('Test call button init error:', err));
             initModalControls();
             initImporter();
+            initDashboardExperienceUi();
             initAccessibility();
             initKeyboardShortcuts();
             initOfflineDetection();
@@ -13590,7 +14021,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
             // Always try to fetch real data from API
             dashboardLivePayloadFailed = false;
-            setDashboardApiErrorVisible(false);
+            lastDashboardFetchError = '';
+            setDashboardApiErrorVisible(false, '');
             let outreachBriefHydrate = false;
             try {
                 const useInitialBrief =
@@ -13607,14 +14039,15 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 } else {
                     // fetchLiveData returns null on non-OK HTTP, missing payload.ok, timeout, or network error
                     dashboardLivePayloadFailed = true;
-                    setDashboardApiErrorVisible(true);
+                    setDashboardApiErrorVisible(true, lastDashboardFetchError);
                 }
             } catch (error) {
                 console.error('Failed to load dashboard data', error);
                 // Only show error for real clients, demo client can use demo data
                 if (currentClient !== DEMO_CLIENT_KEY) {
                     dashboardLivePayloadFailed = true;
-                    setDashboardApiErrorVisible(true);
+                    lastDashboardFetchError = lastDashboardFetchError || String(error.message || error).slice(0, 240);
+                    setDashboardApiErrorVisible(true, lastDashboardFetchError);
                     const leadsContainer = document.getElementById('leads-list');
                     if (leadsContainer) {
                         showError(leadsContainer, 'Unable to load dashboard data. Please refresh the page.', () => location.reload());
@@ -13645,6 +14078,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         renderCalls(callsToRender);
                         renderTomAbTestSection(dashboardData);
                         syncDashboardFreshnessUi();
+                        updateStatusBar(dashboardData);
                         showToast(
                             'Full list loaded',
                             'Recent leads and calls now include the full synced dataset.',
@@ -13721,7 +14155,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     lastDataUpdate = new Date();
                     if (refreshPayload) {
                         dashboardLivePayloadFailed = false;
-                        setDashboardApiErrorVisible(false);
+                        lastDashboardFetchError = '';
+                        setDashboardApiErrorVisible(false, '');
                         const merged = mergeData(dashboardData, refreshPayload);
                         const fp = dashboardPollFingerprint(merged);
                         if (fp === lastDashboardPollFingerprint) return;
@@ -13747,6 +14182,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         await renderRetryQueue(dashboardData);
                         await renderCalendarDetails(dashboardData);
                         renderChart(config, dashboardData);
+                        syncDashboardFreshnessUi();
+                    } else if (currentClient !== DEMO_CLIENT_KEY) {
+                        dashboardLivePayloadFailed = true;
+                        setDashboardApiErrorVisible(true, lastDashboardFetchError);
                         syncDashboardFreshnessUi();
                     }
                 } catch (error) {
@@ -14966,6 +15405,11 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
         async function submitLeadImport(leads = []) {
             console.log('[LEAD IMPORT] Starting import with leads:', leads.length);
+
+            if (document.body.dataset.dashboardReadOnly === '1') {
+                setImportStatus('View-only mode: imports are disabled. Remove ?view=viewer or ask your operator.', 'error');
+                return;
+            }
             
             if (!Array.isArray(leads) || !leads.length) {
                 console.warn('[LEAD IMPORT] No leads provided');
@@ -15008,6 +15452,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 renderLeadJourney(dashboardData);
                 setImportStatus(`${demoLeads.length} leads staged (demo)`, 'success');
                 showToast('Leads Imported', `${demoLeads.length} leads added (demo mode)`, 'success');
+                try {
+                    localStorage.setItem(`dash.onboard.leadImport.${currentClient}`, '1');
+                } catch {
+                    /* ignore */
+                }
+                renderOnboardingChecklist();
                 return;
             }
             try {
@@ -15266,6 +15716,14 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         summary,
                         payload.inserted === 0 && (payload.requestedCount || 0) > 0 ? 'warning' : 'success'
                     );
+                }
+                if ((Number(payload.inserted) || 0) > 0) {
+                    try {
+                        localStorage.setItem(`dash.onboard.leadImport.${currentClient}`, '1');
+                    } catch {
+                        /* ignore */
+                    }
+                    renderOnboardingChecklist();
                 }
             } catch (error) {
                 console.error('Import failed', error);
