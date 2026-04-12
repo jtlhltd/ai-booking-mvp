@@ -9,6 +9,7 @@ import { recordReceptionistTelemetry } from '../lib/demo-telemetry.js';
 import { storeCallContext } from '../lib/call-context-cache.js';
 import { verifyVapiSignature } from '../middleware/vapi-webhook-verification.js';
 import { mapVapiEndedReasonToOutcome } from '../lib/vapi-call-outcome-map.js';
+import { vapiWebhookVerboseLog } from '../lib/vapi-webhook-verbose-log.js';
 
 /**
  * Logistics sheet "Business Name" = company we dialed (callee), never the tenant `client_key` slug.
@@ -51,7 +52,7 @@ router.use('/webhooks/vapi', (req, res, next) => {
     // Body already parsed by global express.json() middleware
     req.rawBody = Buffer.from(JSON.stringify(req.body), 'utf8');
     // req.body is already the parsed object, so we're good
-    console.log('[VAPI WEBHOOK MIDDLEWARE] Body already parsed, using directly. Keys:', Object.keys(req.body || {}));
+    vapiWebhookVerboseLog('[VAPI WEBHOOK MIDDLEWARE] Body already parsed, using directly. Keys:', Object.keys(req.body || {}));
   } else if (Buffer.isBuffer(req.body)) {
     // Body is a Buffer (from express.raw() if it was used)
     req.rawBody = req.body;
@@ -128,31 +129,30 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
   req.correlationId = correlationId;
   req.id = correlationId;
   
-  console.log(`[${correlationId}] [VAPI WEBHOOK] ==================== NEW WEBHOOK RECEIVED ====================`);
-  console.log(`[${correlationId}] [VAPI WEBHOOK] Timestamp:`, new Date().toISOString());
+  console.log(`[${correlationId}] [VAPI WEBHOOK] received type=${body?.message?.type || body?.type || 'unknown'}`);
   
   try {
     // RAW envelope debug (before any normalization) - per VAPI troubleshooting
-    console.log('RAW TYPE:', body?.message?.type || body?.type);
+    vapiWebhookVerboseLog('RAW TYPE:', body?.message?.type || body?.type);
     if (body?.message?.type === 'end-of-call-report') {
       const rawCall = body?.message?.call;
-      console.log('RAW CALL KEYS:', rawCall ? Object.keys(rawCall) : 'NO CALL');
-      console.log('RAW HAS ARTIFACT FIELD:', rawCall ? 'artifact' in rawCall : 'NO CALL');
-      console.log('RAW ARTIFACT VALUE:', rawCall?.artifact);
+      vapiWebhookVerboseLog('RAW CALL KEYS:', rawCall ? Object.keys(rawCall) : 'NO CALL');
+      vapiWebhookVerboseLog('RAW HAS ARTIFACT FIELD:', rawCall ? 'artifact' in rawCall : 'NO CALL');
+      vapiWebhookVerboseLog('RAW ARTIFACT VALUE:', rawCall?.artifact);
       // VAPI diagnostic: message.call.messages count
       const mc = rawCall?.messages;
       const msgCount = Array.isArray(mc) ? mc.length : null;
       const msgKeys = mc && typeof mc === 'object' && !Array.isArray(mc) ? Object.keys(mc) : null;
-      console.log('RAW message.call.messages: type=%s, length=%s, keys=%s', typeof mc, msgCount ?? 'N/A', msgKeys ? JSON.stringify(msgKeys) : 'N/A');
+      vapiWebhookVerboseLog('RAW message.call.messages: type=%s, length=%s, keys=%s', typeof mc, msgCount ?? 'N/A', msgKeys ? JSON.stringify(msgKeys) : 'N/A');
     }
     // Temporary debug: log full payload for end-of-call-report to verify analysis.structuredData
     if (req.body?.type === 'end-of-call-report') {
-      console.log('END OF CALL PAYLOAD:', JSON.stringify(req.body, null, 2));
+      vapiWebhookVerboseLog('END OF CALL PAYLOAD:', JSON.stringify(req.body, null, 2));
     }
-    console.log(`[${correlationId}] [VAPI WEBHOOK DEBUG] Raw body:`, JSON.stringify(req.body, null, 2));
-    console.log(`[${correlationId}] [VAPI WEBHOOK DEBUG] Raw body type:`, typeof req.body);
-    console.log(`[${correlationId}] [VAPI WEBHOOK DEBUG] Body keys:`, Object.keys(req.body || {}));
-    console.log(`[${correlationId}] [VAPI WEBHOOK DEBUG] Headers:`, JSON.stringify(req.headers, null, 2));
+    vapiWebhookVerboseLog(`[${correlationId}] [VAPI WEBHOOK DEBUG] Raw body:`, JSON.stringify(req.body, null, 2));
+    vapiWebhookVerboseLog(`[${correlationId}] [VAPI WEBHOOK DEBUG] Raw body type:`, typeof req.body);
+    vapiWebhookVerboseLog(`[${correlationId}] [VAPI WEBHOOK DEBUG] Body keys:`, Object.keys(req.body || {}));
+    vapiWebhookVerboseLog(`[${correlationId}] [VAPI WEBHOOK DEBUG] Headers:`, JSON.stringify(req.headers, null, 2));
     // Support VAPI "message" envelope (chat/preview and some assistants)
     const message = body.message || null;
     if (message && typeof message === 'object') {
@@ -257,10 +257,10 @@ async function processWebhookPayload(body, correlationId) {
     // EOCR debug: prove what structuredData looks like at webhook time
     if (body.type === 'end-of-call-report' || msg.type === 'end-of-call-report') {
       const sd = callObj?.analysis?.structuredData ?? body.analysis?.structuredData ?? {};
-      console.log('[EOCR DEBUG] callId:', callObj?.id);
-      console.log('[EOCR DEBUG] status:', callObj?.status, 'endedAt:', callObj?.endedAt);
-      console.log('[EOCR DEBUG] structuredData:', sd);
-      console.log('[EOCR DEBUG] structuredDataKeys:', Object.keys(sd ?? {}));
+      vapiWebhookVerboseLog('[EOCR DEBUG] callId:', callObj?.id);
+      vapiWebhookVerboseLog('[EOCR DEBUG] status:', callObj?.status, 'endedAt:', callObj?.endedAt);
+      vapiWebhookVerboseLog('[EOCR DEBUG] structuredData:', sd);
+      vapiWebhookVerboseLog('[EOCR DEBUG] structuredDataKeys:', Object.keys(sd ?? {}));
     }
 
     const callId = body.call?.id || body.id || body.callId || body.message?.call?.id || body.message?.callId;
@@ -481,28 +481,28 @@ async function processWebhookPayload(body, correlationId) {
     }
     if (!tenantKey) tenantKey = 'test_client';
 
-    console.log('[VAPI WEBHOOK] ==================== COMPLETE DEBUG ====================');
-    console.log('[VAPI WEBHOOK] 🆔 CallId:', callId);
-    console.log('[VAPI WEBHOOK] 🏢 TenantKey components:', {
+    vapiWebhookVerboseLog('[VAPI WEBHOOK] ==================== COMPLETE DEBUG ====================');
+    vapiWebhookVerboseLog('[VAPI WEBHOOK] 🆔 CallId:', callId);
+    vapiWebhookVerboseLog('[VAPI WEBHOOK] 🏢 TenantKey components:', {
       'metadata.tenantKey': metadata.tenantKey,
       'metadata.clientKey': metadata.clientKey,
       'FINAL tenantKey': tenantKey
     });
-    console.log('[VAPI WEBHOOK] 📞 Phone extraction:', { 
+    vapiWebhookVerboseLog('[VAPI WEBHOOK] 📞 Phone extraction:', { 
       'metadata.leadPhone': metadata.leadPhone,
       'body.customer?.number': body.customer?.number,
       'body.call?.customer?.number': body.call?.customer?.number,
       'body.phone': body.phone,
       'FINAL leadPhone': leadPhone
     });
-    console.log('[VAPI WEBHOOK] 👤 Name:', leadName);
-    console.log('[VAPI WEBHOOK] 📊 Status:', status);
+    vapiWebhookVerboseLog('[VAPI WEBHOOK] 👤 Name:', leadName);
+    vapiWebhookVerboseLog('[VAPI WEBHOOK] 📊 Status:', status);
     
     // ALWAYS store the callId for this tenant, even without phone
     // The booking endpoint will fetch phone from VAPI API using this callId
     if (callId) {
-      console.log('[VAPI WEBHOOK] ✅✅✅ STORING CALL CONTEXT (even without phone) ✅✅✅');
-      console.log('[VAPI WEBHOOK] Storage payload:', JSON.stringify({
+      vapiWebhookVerboseLog('[VAPI WEBHOOK] ✅✅✅ STORING CALL CONTEXT (even without phone) ✅✅✅');
+      vapiWebhookVerboseLog('[VAPI WEBHOOK] Storage payload:', JSON.stringify({
         callId: callId,
         phone: leadPhone || null,
         name: leadName || null,
@@ -519,10 +519,10 @@ async function processWebhookPayload(body, correlationId) {
         timestamp: Date.now()
       });
       
-      console.log('[VAPI WEBHOOK] ✅ STORAGE COMPLETE');
+      vapiWebhookVerboseLog('[VAPI WEBHOOK] ✅ STORAGE COMPLETE');
     } else {
-      console.log('[VAPI WEBHOOK] ❌❌❌ NOT STORING - NO CALL ID ❌❌❌');
-      console.log('[VAPI WEBHOOK] Missing data debug:', { 
+      vapiWebhookVerboseLog('[VAPI WEBHOOK] ❌❌❌ NOT STORING - NO CALL ID ❌❌❌');
+      vapiWebhookVerboseLog('[VAPI WEBHOOK] Missing data debug:', { 
         hasCallId: !!callId,
         callIdValue: callId,
         callIdType: typeof callId,
@@ -562,9 +562,9 @@ async function processWebhookPayload(body, correlationId) {
       callId,
       sentiment: analysis.sentiment,
       qualityScore: analysis.qualityScore,
-      objections: analysis.objections,
       keyPhrases: analysis.keyPhrases.slice(0, 3)
     });
+    vapiWebhookVerboseLog('[CALL ANALYSIS] objections:', analysis.objections);
 
     // Persist endedReason on the call row so transcript UI can show who hung up (Vapi does not always put it in call.metadata).
     const baseMeta =
@@ -629,7 +629,7 @@ async function processWebhookPayload(body, correlationId) {
     // Check multiple possible locations for toolCalls
     const toolCalls = body.toolCalls || body.call?.toolCalls || body.message?.toolCalls || [];
     
-    console.log('[VAPI WEBHOOK] Tool calls check:', {
+    vapiWebhookVerboseLog('[VAPI WEBHOOK] Tool calls check:', {
       'body.toolCalls': !!body.toolCalls,
       'body.call?.toolCalls': !!body.call?.toolCalls,
       'body.message?.toolCalls': !!body.message?.toolCalls,
@@ -638,7 +638,7 @@ async function processWebhookPayload(body, correlationId) {
     });
     
     if (toolCalls && toolCalls.length > 0) {
-      console.log('[VAPI WEBHOOK] Processing tool calls:', toolCalls.length);
+      vapiWebhookVerboseLog('[VAPI WEBHOOK] Processing tool calls:', toolCalls.length);
       
       // Import function handlers
       const { handleVapiFunctionCall } = await import('../lib/vapi-function-handlers.js');
@@ -692,7 +692,7 @@ async function processWebhookPayload(body, correlationId) {
           
           // Handle calendar_checkAndBook - we have the customer phone in the webhook!
           if (functionName === 'calendar_checkAndBook') {
-            console.log('[VAPI WEBHOOK] 🔧 Intercepting calendar_checkAndBook - customer phone:', leadPhone);
+            vapiWebhookVerboseLog('[VAPI WEBHOOK] 🔧 Intercepting calendar_checkAndBook - customer phone:', leadPhone);
             
             // Add phone to function args from webhook data
             const argsWithPhone = {
@@ -706,31 +706,31 @@ async function processWebhookPayload(body, correlationId) {
               phone: leadPhone || functionArgs.phone || ''
             };
             
-            console.log('[VAPI WEBHOOK] 📞 Enhanced args with phone:', JSON.stringify(argsWithPhone, null, 2));
+            vapiWebhookVerboseLog('[VAPI WEBHOOK] 📞 Enhanced args with phone:', JSON.stringify(argsWithPhone, null, 2));
             
-            // Call booking endpoint directly with phone included
-            try {
-              const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || 'http://localhost:3000';
-              const bookingResponse = await fetch(`${PUBLIC_BASE_URL}/api/calendar/check-book`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'X-Client-Key': tenantKey,
-                  'X-Call-Id': callId || '',
-                  'X-Customer-Phone': leadPhone || ''
-                },
-                body: JSON.stringify(argsWithPhone)
-              });
-              
-              const bookingResult = await bookingResponse.json();
-              console.log('[VAPI WEBHOOK] ✅ Booking result:', bookingResult);
-              
-              // Store the result for VAPI to use (this won't work for function calls, but we log it)
-              return bookingResult;
-            } catch (error) {
-              console.error('[VAPI WEBHOOK] ❌ Error calling booking endpoint:', error);
-              return { error: error.message };
-            }
+            // Defer HTTP booking call so webhook processing yields sooner (Vapi already got HTTP 200).
+            setImmediate(() => {
+              void (async () => {
+                try {
+                  const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || 'http://localhost:3000';
+                  const bookingResponse = await fetch(`${PUBLIC_BASE_URL}/api/calendar/check-book`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'X-Client-Key': tenantKey,
+                      'X-Call-Id': callId || '',
+                      'X-Customer-Phone': leadPhone || ''
+                    },
+                    body: JSON.stringify(argsWithPhone)
+                  });
+                  const bookingResult = await bookingResponse.json();
+                  vapiWebhookVerboseLog('[VAPI WEBHOOK] ✅ Booking result:', bookingResult);
+                } catch (error) {
+                  console.error('[VAPI WEBHOOK] ❌ Error calling booking endpoint:', error);
+                }
+              })();
+            });
+            return { ok: true, deferred: true };
           }
           
           // Legacy functions (keep existing logic)
@@ -816,13 +816,17 @@ async function processWebhookPayload(body, correlationId) {
                 <p><strong>Recording:</strong> <a href="${recordingUrl || 'N/A'}">Listen to call</a></p>
               `;
               
-              await messagingService.sendEmail({
-                to: callbackInboxEmail,
-                subject: emailSubject,
-                html: emailBody
+              setImmediate(() => {
+                void messagingService.sendEmail({
+                  to: callbackInboxEmail,
+                  subject: emailSubject,
+                  html: emailBody
+                }).then(() => {
+                  vapiWebhookVerboseLog('[VAPI WEBHOOK] Callback email sent via tool call');
+                }).catch((err) => {
+                  console.error('[VAPI WEBHOOK] Callback email failed:', err?.message || err);
+                });
               });
-              
-              console.log('[VAPI WEBHOOK] Callback email sent via tool call');
             }
           }
           
@@ -843,7 +847,7 @@ async function processWebhookPayload(body, correlationId) {
       'b1ba0ad3-c519-4ab7-aa6f-9fba6516a8ee'  // Tom D2D (from diagnostic)
     ]);
     
-    console.log('[LOGISTICS SHEET ID DEBUG]', {
+    vapiWebhookVerboseLog('[LOGISTICS SHEET ID DEBUG]', {
       'tenant?.vapi?.logisticsSheetId': tenant?.vapi?.logisticsSheetId,
       'tenant?.gsheet_id': tenant?.gsheet_id,
       'process.env.LOGISTICS_SHEET_ID': process.env.LOGISTICS_SHEET_ID,
@@ -859,13 +863,13 @@ async function processWebhookPayload(body, correlationId) {
     
     // CRITICAL DEBUG: Log exact condition check
     if (!logisticsSheetId) {
-      console.log('[LOGISTICS SKIP] No sheet ID configured');
+      vapiWebhookVerboseLog('[LOGISTICS SKIP] No sheet ID configured');
     }
     if (!transcript || transcript.length < 50) {
-      console.log('[LOGISTICS SKIP] No meaningful transcript available:', { hasTranscript: !!transcript, length: transcript?.length });
+      vapiWebhookVerboseLog('[LOGISTICS SKIP] No meaningful transcript available:', { hasTranscript: !!transcript, length: transcript?.length });
     }
     if (assistantId && !ALLOWED_LOGISTICS_ASSISTANT_IDS.has(assistantId)) {
-      console.log('[LOGISTICS SKIP] Assistant ID mismatch - not processing logistics extraction:', {
+      vapiWebhookVerboseLog('[LOGISTICS SKIP] Assistant ID mismatch - not processing logistics extraction:', {
         received: assistantId,
         expected: [...ALLOWED_LOGISTICS_ASSISTANT_IDS]
       });
@@ -894,22 +898,22 @@ async function processWebhookPayload(body, correlationId) {
     const structuredOutput = hasArtifactStructured ? artifactStructured : (hasAnalysisStructured ? analysisStructured : legacyStructured);
     
     // Debug: Log what VAPI is sending (including artifact path for Structured Output)
-    console.log('[LOGISTICS DEBUG] Status received:', status);
+    vapiWebhookVerboseLog('[LOGISTICS DEBUG] Status received:', status);
     if (body.type === 'end-of-call-report' || msg?.type === 'end-of-call-report') {
-      console.log('STRUCTURED OUTPUTS (artifact path):', JSON.stringify(artifactOutputs, null, 2));
-      console.log('[LOGISTICS DEBUG] call.artifact:', JSON.stringify(callObj?.artifact, null, 2));
+      vapiWebhookVerboseLog('STRUCTURED OUTPUTS (artifact path):', JSON.stringify(artifactOutputs, null, 2));
+      vapiWebhookVerboseLog('[LOGISTICS DEBUG] call.artifact:', JSON.stringify(callObj?.artifact, null, 2));
     }
-    console.log('[LOGISTICS DEBUG] Structured output:', JSON.stringify(structuredOutput, null, 2));
-    console.log('[LOGISTICS DEBUG] Transcript length:', transcript.length);
-    console.log('[LOGISTICS DEBUG] Transcript present sources:', {
+    vapiWebhookVerboseLog('[LOGISTICS DEBUG] Structured output:', JSON.stringify(structuredOutput, null, 2));
+    vapiWebhookVerboseLog('[LOGISTICS DEBUG] Transcript length:', transcript.length);
+    vapiWebhookVerboseLog('[LOGISTICS DEBUG] Transcript present sources:', {
       call_transcript: !!(body.call?.transcript),
       body_transcript: !!(body.transcript),
       body_summary: !!(body.summary),
       eocr_transcript: !!eocrTranscript,
       messages_aggregated: Array.isArray(body.messages)
     });
-    console.log('[LOGISTICS DEBUG] Extract if transcript exists and has content:', !!(transcript && transcript.length >= 50));
-    console.log('[LOGISTICS DEBUG] GOOGLE_SA_JSON_BASE64 configured:', !!process.env.GOOGLE_SA_JSON_BASE64);
+    vapiWebhookVerboseLog('[LOGISTICS DEBUG] Extract if transcript exists and has content:', !!(transcript && transcript.length >= 50));
+    vapiWebhookVerboseLog('[LOGISTICS DEBUG] GOOGLE_SA_JSON_BASE64 configured:', !!process.env.GOOGLE_SA_JSON_BASE64);
     
     // Extract when we have a transcript (minimum 50 chars to avoid noise from connection-only webhooks)
     // Track extracted call IDs to prevent duplicates
@@ -918,8 +922,9 @@ async function processWebhookPayload(body, correlationId) {
     
     // Only proceed if assistant ID exists and matches the allowed one
     const assistantMatches = ALLOWED_LOGISTICS_ASSISTANT_IDS.has(assistantId);
-    
-    console.log('[LOGISTICS CONDITION CHECK]', {
+    const noUsefulOutcome = ['no-answer', 'busy', 'declined', 'rejected'].includes(outcome);
+
+    vapiWebhookVerboseLog('[LOGISTICS CONDITION CHECK]', {
       eventType: body.type || msg.type,
       isEndOfCallReport,
       logisticsSheetId: !!logisticsSheetId,
@@ -933,14 +938,17 @@ async function processWebhookPayload(body, correlationId) {
     
     // CRITICAL: Only append on end-of-call-report. structuredData only exists there.
     if (!isEndOfCallReport) {
-      console.log('[LOGISTICS SKIP] Not end-of-call-report — structured extraction only runs on that event');
+      vapiWebhookVerboseLog('[LOGISTICS SKIP] Not end-of-call-report — structured extraction only runs on that event');
     }
-    
+
+    // Defer manual structured-output fetch, Google Sheets I/O, and callback emails so post-200 work yields sooner.
+    setImmediate(() => {
+      void (async () => {
     // WORKAROUND: When artifact is suppressed, call VAPI /structured-output/run to force extraction from transcript
     let manualStructuredOutput = null;
     if (isEndOfCallReport && callId && hasTranscript && !hasStructuredData && process.env.VAPI_PRIVATE_KEY) {
       try {
-        console.log('[LOGISTICS] Running manual structured extraction for call:', callId);
+        vapiWebhookVerboseLog('[LOGISTICS] Running manual structured extraction for call:', callId);
         const res = await fetch('https://api.vapi.ai/structured-output/run', {
           method: 'POST',
           headers: {
@@ -954,10 +962,10 @@ async function processWebhookPayload(body, correlationId) {
           })
         });
         const data = await res.json();
-        console.log('[LOGISTICS] Structured Output Run Response:', JSON.stringify(data, null, 2));
+        vapiWebhookVerboseLog('[LOGISTICS] Structured Output Run Response:', JSON.stringify(data, null, 2));
         manualStructuredOutput = data?.results?.[0]?.output ?? null;
         if (manualStructuredOutput && typeof manualStructuredOutput === 'object' && Object.keys(manualStructuredOutput).length > 0) {
-          console.log('[LOGISTICS] MANUAL STRUCTURED RESULT:', JSON.stringify(manualStructuredOutput, null, 2));
+          vapiWebhookVerboseLog('[LOGISTICS] MANUAL STRUCTURED RESULT:', JSON.stringify(manualStructuredOutput, null, 2));
         }
       } catch (err) {
         console.error('[LOGISTICS] Structured extraction failed:', err);
@@ -969,14 +977,13 @@ async function processWebhookPayload(body, correlationId) {
     
     // Don't create sheet rows when they didn't pick up (or call couldn't connect)
     // Note: VAPI sometimes uses "rejected" directly; we also map endedReason→outcome above.
-    const noUsefulOutcome = ['no-answer', 'busy', 'declined', 'rejected'].includes(outcome);
     if (noUsefulOutcome) {
-      console.log('[LOGISTICS SHEET] Skipping sheet write — outcome indicates no useful call:', outcome);
+      vapiWebhookVerboseLog('[LOGISTICS SHEET] Skipping sheet write — outcome indicates no useful call:', outcome);
     }
     
     if (isEndOfCallReport && logisticsSheetId && (hasTranscript || effectiveHasStructuredData) && assistantMatches && !noUsefulOutcome) {
-      console.log('STRUCTURED DATA RECEIVED:', JSON.stringify(effectiveStructuredOutput, null, 2));
-      console.log('[LOGISTICS] STARTING EXTRACTION...');
+      vapiWebhookVerboseLog('STRUCTURED DATA RECEIVED:', JSON.stringify(effectiveStructuredOutput, null, 2));
+      vapiWebhookVerboseLog('[LOGISTICS] STARTING EXTRACTION...');
       try {
         // Use structured output if available, otherwise fall back to transcript extraction
         // SOURCE PRIORITY: 1) manual API (workaround), 2) artifact, 3) analysis, 4) transcript
@@ -1002,7 +1009,7 @@ async function processWebhookPayload(body, correlationId) {
             excludingFuelVat: exclFromInc || s['Excl Fuel & VAT?'] || s.exclFuelVAT || '',
             singleVsMulti: s['Single vs Multi-parcel'] || s.singleVsMulti || s.singleVsMultiParcel || ''
           };
-          console.log('[LOGISTICS] Using structured output (artifact or analysis):', JSON.stringify(extracted, null, 2));
+          vapiWebhookVerboseLog('[LOGISTICS] Using structured output (artifact or analysis):', JSON.stringify(extracted, null, 2));
         } else {
           // Use human-only transcript for regex extraction to avoid contamination from assistant prompts/menus
           const humanOnlyTranscript = (() => {
@@ -1030,7 +1037,7 @@ async function processWebhookPayload(body, correlationId) {
           })();
 
           if (effectiveStructuredOutput) {
-            console.log('[LOGISTICS] Using legacy structured output data:', JSON.stringify(effectiveStructuredOutput, null, 2));
+            vapiWebhookVerboseLog('[LOGISTICS] Using legacy structured output data:', JSON.stringify(effectiveStructuredOutput, null, 2));
             // Transform legacy structured output to match our expected format
             extracted = {
               email: effectiveStructuredOutput.email || '',
@@ -1055,7 +1062,7 @@ async function processWebhookPayload(body, correlationId) {
               }
             });
           } else {
-            console.log('[LOGISTICS] Using transcript extraction (no structured output)');
+            vapiWebhookVerboseLog('[LOGISTICS] Using transcript extraction (no structured output)');
             extracted = extractLogisticsFields(humanOnlyTranscript);
           }
 
@@ -1197,8 +1204,8 @@ async function processWebhookPayload(body, correlationId) {
           return fields.some(v => typeof v === 'string' ? v.trim() !== '' : !!v);
         })();
         
-        console.log('[LOGISTICS SHEET DATA] Writing to sheet:', JSON.stringify(sheetData, null, 2));
-        console.log('[LOGISTICS SHEET] Call metadata for update:', {
+        vapiWebhookVerboseLog('[LOGISTICS SHEET DATA] Writing to sheet:', JSON.stringify(sheetData, null, 2));
+        vapiWebhookVerboseLog('[LOGISTICS SHEET] Call metadata for update:', {
           callId: callId || 'MISSING',
           recordingUrl: recordingUrl || 'MISSING',
           transcriptLength: transcript?.length || 0,
@@ -1209,7 +1216,7 @@ async function processWebhookPayload(body, correlationId) {
         });
         
         try {
-          console.log('[LOGISTICS SHEET] Attempting to update or append to sheet:', logisticsSheetId);
+          vapiWebhookVerboseLog('[LOGISTICS SHEET] Attempting to update or append to sheet:', logisticsSheetId);
           
           // First try to update existing row (created by tool call during the call)
           // Try by callId first (more reliable), then fall back to phone
@@ -1219,14 +1226,14 @@ async function processWebhookPayload(body, correlationId) {
             transcriptSnippet: transcript.slice(0, 500) || '',
             calledNumber: leadPhone || ''
           };
-          console.log('[LOGISTICS SHEET] Update data:', JSON.stringify(updateData, null, 2));
+          vapiWebhookVerboseLog('[LOGISTICS SHEET] Update data:', JSON.stringify(updateData, null, 2));
           
           const updated = await sheets.updateLogisticsRowByPhone(logisticsSheetId, leadPhone, updateData);
           
           if (!updated) {
             // If no row found to update, only append if we actually gained any logistics info.
             if (!hasAnyLogisticsInfo) {
-              console.log('[LOGISTICS SHEET] Skipping append — no logistics info gained from call', {
+              vapiWebhookVerboseLog('[LOGISTICS SHEET] Skipping append — no logistics info gained from call', {
                 callId,
                 phone: leadPhone,
                 outcome,
@@ -1234,8 +1241,8 @@ async function processWebhookPayload(body, correlationId) {
               });
               markProcessed(callId);
             } else {
-              console.log('[LOGISTICS SHEET] No existing row found, appending new row');
-              console.log('[EOCR SHEET ROW]', {
+              vapiWebhookVerboseLog('[LOGISTICS SHEET] No existing row found, appending new row');
+              vapiWebhookVerboseLog('[EOCR SHEET ROW]', {
                 email: sheetData.email,
                 phone: sheetData.phone,
                 international: sheetData.international,
@@ -1248,7 +1255,7 @@ async function processWebhookPayload(body, correlationId) {
                 callbackNeeded: sheetData.callbackNeeded
               });
               await sheets.appendLogistics(logisticsSheetId, sheetData);
-              console.log('[LOGISTICS SHEET APPEND] ✅ SUCCESS', { callId, phone: leadPhone });
+              vapiWebhookVerboseLog('[LOGISTICS SHEET APPEND] ✅ SUCCESS', { callId, phone: leadPhone });
               // Outbound A/B: treat a successful *sheet row append* as a conversion event.
               // This aligns monitoring with "row written" rather than bookings (which may not apply to outreach).
               try {
@@ -1309,7 +1316,7 @@ async function processWebhookPayload(body, correlationId) {
               markProcessed(callId);
             }
           } else {
-            console.log('[LOGISTICS SHEET] ✅ Updated existing row with call metadata', { callId, phone: leadPhone });
+            vapiWebhookVerboseLog('[LOGISTICS SHEET] ✅ Updated existing row with call metadata', { callId, phone: leadPhone });
             markProcessed(callId);
           }
         } catch (sheetError) {
@@ -1328,7 +1335,11 @@ async function processWebhookPayload(body, correlationId) {
         if (sheetData.callbackNeeded === 'TRUE' && callbackInbox) {
           const subject = `Callback needed: ${sheetData.businessName || 'Unknown business'} (${leadPhone})`;
           const body = `A receptionist requested a callback or decision maker was unavailable.\n\nBusiness: ${sheetData.businessName || 'Unknown'}\nReceptionist: ${sheetData.receptionistName || 'Unknown'}\nPhone: ${leadPhone}\nEmail: ${extracted.email || 'N/A'}\nInternational: ${extracted.international || 'N/A'}\nCouriers: ${(extracted.mainCouriers || []).join(', ') || 'N/A'}\nFrequency: ${extracted.frequency || 'N/A'}\nCountries: ${(extracted.mainCountries || []).join(', ') || 'N/A'}\nExample Shipment: ${extracted.exampleShipment || 'N/A'} (Cost: ${extracted.exampleShipmentCost || 'N/A'})\nRecording: ${recordingUrl || 'N/A'}\nCall ID: ${callId}\n\nTranscript snippet:\n${transcript.slice(0, 800)}`;
-          await messagingService.sendEmail({ to: callbackInbox, subject, body }).catch(() => {});
+          setImmediate(() => {
+            void messagingService.sendEmail({ to: callbackInbox, subject, body }).catch((err) => {
+              console.error('[LOGISTICS] Callback inbox email failed:', err?.message || err);
+            });
+          });
         }
       } catch (sheetErr) {
         console.error('[LOGISTICS SHEET ERROR]', sheetErr?.message || sheetErr);
@@ -1351,10 +1362,10 @@ async function processWebhookPayload(body, correlationId) {
     } else if (logisticsSheetId && callId && (recordingUrl || transcript) && !noUsefulOutcome) {
       // Assistant ID doesn't match, but we still want to update existing rows with call metadata
       // This handles cases where the tool call created a row but assistant ID wasn't set in webhook
-      console.log('[LOGISTICS] Assistant ID mismatch or missing, but attempting to update existing row with call metadata');
+      vapiWebhookVerboseLog('[LOGISTICS] Assistant ID mismatch or missing, but attempting to update existing row with call metadata');
       
       try {
-        console.log('[LOGISTICS SHEET] Attempting to update existing row by callId:', callId);
+        vapiWebhookVerboseLog('[LOGISTICS SHEET] Attempting to update existing row by callId:', callId);
         
         const updateData = {
           callId: callId || '',
@@ -1362,18 +1373,18 @@ async function processWebhookPayload(body, correlationId) {
           transcriptSnippet: transcript ? transcript.slice(0, 500) : '',
           calledNumber: leadPhone || ''
         };
-        console.log('[LOGISTICS SHEET] Update data:', JSON.stringify(updateData, null, 2));
+        vapiWebhookVerboseLog('[LOGISTICS SHEET] Update data:', JSON.stringify(updateData, null, 2));
         
         // Try to update by callId (phone might be empty in end-of-call webhook)
           const updated = await sheets.updateLogisticsRowByPhone(logisticsSheetId, leadPhone || '', updateData);
         
         if (updated) {
-          console.log('[LOGISTICS SHEET] ✅ Updated existing row with call metadata (no assistant match)', { callId });
+          vapiWebhookVerboseLog('[LOGISTICS SHEET] ✅ Updated existing row with call metadata (no assistant match)', { callId });
           markProcessed(callId);
         } else {
           // Never create a brand-new row in assistant-mismatch fallback path.
           // This path is metadata-only and caused Unknown-only rows.
-          console.log('[LOGISTICS SHEET] Skipping fallback append — no existing row and assistant mismatch', {
+          vapiWebhookVerboseLog('[LOGISTICS SHEET] Skipping fallback append — no existing row and assistant mismatch', {
             callId,
             phone: leadPhone,
             outcome,
@@ -1402,6 +1413,16 @@ async function processWebhookPayload(body, correlationId) {
         }).catch(() => {});
       }
     }
+      })().catch((deferredErr) => {
+        console.error(`[${correlationId}] [VAPI WEBHOOK] Deferred logistics pipeline failed:`, deferredErr?.message || deferredErr);
+        sendOperatorAlert({
+          subject: `Deferred logistics pipeline failed (${String(tenantKey || 'unknown')})`,
+          html: `<p>${String(deferredErr?.message || deferredErr)}</p><pre>${String(deferredErr?.stack || '').split('\n').slice(0, 15).join('\n')}</pre>`,
+          dedupeKey: `deferred-logistics-pipeline:${String(tenantKey || 'unknown')}`,
+          throttleMinutes: 60
+        }).catch(() => {});
+      });
+    });
 
     // Handle specific outcomes
     if (outcome === 'booked' || body.booked === true) {

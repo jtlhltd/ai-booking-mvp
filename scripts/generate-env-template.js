@@ -29,6 +29,7 @@ const envVars = {
   VAPI_ORIGIN: 'Vapi API origin (default: https://api.vapi.ai)',
   VAPI_TEST_MODE: 'Enable test mode (true/false)',
   VAPI_DRY_RUN: 'Enable dry run mode (true/false)',
+  VAPI_WEBHOOK_VERBOSE: 'Log full Vapi webhook payloads and logistics debug (true/false; avoid in production)',
   
   // Twilio
   TWILIO_ACCOUNT_SID: 'Twilio account SID',
@@ -145,7 +146,8 @@ function generateEnvTemplate() {
         'VAPI_API_KEY',
         'VAPI_ORIGIN',
         'VAPI_TEST_MODE',
-        'VAPI_DRY_RUN'
+        'VAPI_DRY_RUN',
+        'VAPI_WEBHOOK_VERBOSE'
       ]
     }
   );
