@@ -8804,15 +8804,32 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         ) THEN 1 ELSE 0 END)::int AS reached_max
       FROM (
         SELECT
-          lead_phone,
-          outcome,
-          duration,
-          status,
-          LEFT(COALESCE(transcript, ''), 512) AS transcript_snip,
-          recording_url
-        FROM calls
-        WHERE client_key = $1
-          AND regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g') <> ''
+          c.lead_phone,
+          c.outcome,
+          c.duration,
+          c.status,
+          COALESCE(ts.transcript_snip, '') AS transcript_snip,
+          c.recording_url
+        FROM calls c
+        LEFT JOIN LATERAL (
+          SELECT LEFT(COALESCE(c.transcript, ''), 512) AS transcript_snip
+          WHERE c.outcome IS NULL
+            AND COALESCE(c.recording_url, '') = ''
+            AND NOT (
+              (
+                COALESCE(c.duration, 0) >= 20
+                AND LOWER(TRIM(COALESCE(c.status, ''))) IN ('ended', 'completed', 'finished')
+              )
+              OR (
+                COALESCE(c.duration, 0) >= 40
+                AND LOWER(TRIM(COALESCE(c.status, ''))) NOT IN (
+                  'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
+                )
+              )
+            )
+        ) ts ON TRUE
+        WHERE c.client_key = $1
+          AND regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g') <> ''
       ) s
       GROUP BY 1
     ) x
@@ -8822,15 +8839,32 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
   const demoDashboardCallsAndPhoneStatsSql = `
     WITH raw AS (
       SELECT
-        lead_phone,
-        outcome,
-        duration,
-        status,
-        LEFT(COALESCE(transcript, ''), 512) AS transcript_snip,
-        recording_url,
-        created_at
-      FROM calls
-      WHERE client_key = $1
+        c.lead_phone,
+        c.outcome,
+        c.duration,
+        c.status,
+        COALESCE(ts.transcript_snip, '') AS transcript_snip,
+        c.recording_url,
+        c.created_at
+      FROM calls c
+      LEFT JOIN LATERAL (
+        SELECT LEFT(COALESCE(c.transcript, ''), 512) AS transcript_snip
+        WHERE c.outcome IS NULL
+          AND COALESCE(c.recording_url, '') = ''
+          AND NOT (
+            (
+              COALESCE(c.duration, 0) >= 20
+              AND LOWER(TRIM(COALESCE(c.status, ''))) IN ('ended', 'completed', 'finished')
+            )
+            OR (
+              COALESCE(c.duration, 0) >= 40
+              AND LOWER(TRIM(COALESCE(c.status, ''))) NOT IN (
+                'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
+              )
+            )
+          )
+      ) ts ON TRUE
+      WHERE c.client_key = $1
     ),
     call_row AS (
       SELECT
@@ -8996,16 +9030,33 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     const demoDashboardOutreachPulseSql = `
       WITH raw AS (
         SELECT
-          lead_phone,
-          outcome,
-          duration,
-          status,
-          LEFT(COALESCE(transcript, ''), 512) AS transcript_snip,
-          recording_url,
-          created_at
-        FROM calls
-        WHERE client_key = $1
-          AND created_at >= $2::timestamptz
+          c.lead_phone,
+          c.outcome,
+          c.duration,
+          c.status,
+          COALESCE(ts.transcript_snip, '') AS transcript_snip,
+          c.recording_url,
+          c.created_at
+        FROM calls c
+        LEFT JOIN LATERAL (
+          SELECT LEFT(COALESCE(c.transcript, ''), 512) AS transcript_snip
+          WHERE c.outcome IS NULL
+            AND COALESCE(c.recording_url, '') = ''
+            AND NOT (
+              (
+                COALESCE(c.duration, 0) >= 20
+                AND LOWER(TRIM(COALESCE(c.status, ''))) IN ('ended', 'completed', 'finished')
+              )
+              OR (
+                COALESCE(c.duration, 0) >= 40
+                AND LOWER(TRIM(COALESCE(c.status, ''))) NOT IN (
+                  'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
+                )
+              )
+            )
+        ) ts ON TRUE
+        WHERE c.client_key = $1
+          AND c.created_at >= $2::timestamptz
       ),
       call_row AS (
         SELECT
@@ -9084,7 +9135,15 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
           outcome,
           duration,
           status,
-          SUBSTR(COALESCE(transcript, ''), 1, 512) AS transcript_snip,
+          CASE
+            WHEN outcome IS NOT NULL THEN ''
+            WHEN COALESCE(recording_url, '') <> '' THEN ''
+            WHEN COALESCE(duration, 0) >= 20 AND LOWER(TRIM(COALESCE(status, ''))) IN ('ended', 'completed', 'finished') THEN ''
+            WHEN COALESCE(duration, 0) >= 40 AND LOWER(TRIM(COALESCE(status, ''))) NOT IN (
+              'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
+            ) THEN ''
+            ELSE SUBSTR(COALESCE(transcript, ''), 1, 512)
+          END AS transcript_snip,
           recording_url,
           created_at
         FROM calls
@@ -9229,15 +9288,23 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
             ) AS is_not_answered
           FROM (
             SELECT
-              lead_phone,
-              outcome,
-              duration,
-              status,
-              LEFT(COALESCE(transcript, ''), 512) AS transcript_snip,
-              recording_url,
-              created_at
-            FROM calls
-            WHERE client_key = $1
+              c.lead_phone,
+              c.outcome,
+              c.duration,
+              c.status,
+              CASE
+                WHEN c.outcome IS NOT NULL THEN ''
+                WHEN COALESCE(c.recording_url, '') <> '' THEN ''
+                WHEN COALESCE(c.duration, 0) >= 20 AND LOWER(TRIM(COALESCE(c.status, ''))) IN ('ended', 'completed', 'finished') THEN ''
+                WHEN COALESCE(c.duration, 0) >= 40 AND LOWER(TRIM(COALESCE(c.status, ''))) NOT IN (
+                  'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
+                ) THEN ''
+                ELSE SUBSTR(COALESCE(c.transcript, ''), 1, 512)
+              END AS transcript_snip,
+              c.recording_url,
+              c.created_at
+            FROM calls c
+            WHERE c.client_key = $1
           ) raw
         ),
         lead_class AS (
@@ -9436,16 +9503,33 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
             ) AS is_answered
           FROM (
             SELECT
-              lead_phone,
-              outcome,
-              duration,
-              status,
-              LEFT(COALESCE(transcript, ''), 512) AS transcript_snip,
-              recording_url,
-              created_at
-            FROM calls
-            WHERE client_key = $1
-              AND created_at >= ${sqlDaysAgo(6)}
+              c.lead_phone,
+              c.outcome,
+              c.duration,
+              c.status,
+              COALESCE(ts.transcript_snip, '') AS transcript_snip,
+              c.recording_url,
+              c.created_at
+            FROM calls c
+            LEFT JOIN LATERAL (
+              SELECT LEFT(COALESCE(c.transcript, ''), 512) AS transcript_snip
+              WHERE c.outcome IS NULL
+                AND COALESCE(c.recording_url, '') = ''
+                AND NOT (
+                  (
+                    COALESCE(c.duration, 0) >= 20
+                    AND LOWER(TRIM(COALESCE(c.status, ''))) IN ('ended', 'completed', 'finished')
+                  )
+                  OR (
+                    COALESCE(c.duration, 0) >= 40
+                    AND LOWER(TRIM(COALESCE(c.status, ''))) NOT IN (
+                      'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
+                    )
+                  )
+                )
+            ) ts ON TRUE
+            WHERE c.client_key = $1
+              AND c.created_at >= ${sqlDaysAgo(6)}
           ) d
         )
         SELECT
@@ -12158,15 +12242,33 @@ app.get('/api/call-quality/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix:
         const allCalls = await poolQuerySelect(`
       WITH windowed AS (
         SELECT
-          lead_phone,
-          outcome,
-          status,
-          duration,
-          LEFT(COALESCE(transcript::text, ''), 512) AS transcript_snip,
-          COALESCE(recording_url::text, '') AS recording_url_txt
-        FROM calls
-        WHERE client_key = $1
-          AND created_at >= NOW() - INTERVAL '7 days'
+          c.lead_phone,
+          c.outcome,
+          c.status,
+          c.duration,
+          COALESCE(ts.transcript_snip, '') AS transcript_snip,
+          COALESCE(c.recording_url::text, '') AS recording_url_txt
+        FROM calls c
+        LEFT JOIN LATERAL (
+          SELECT LEFT(COALESCE(c.transcript::text, ''), 512) AS transcript_snip
+          WHERE c.outcome IS NULL
+            AND COALESCE(c.recording_url::text, '') = ''
+            AND NOT (
+              (
+                COALESCE(c.duration, 0) >= 20
+                AND LOWER(TRIM(COALESCE(c.status::text, ''))) IN ('ended', 'completed', 'finished')
+              )
+              OR (
+                COALESCE(c.duration, 0) >= 40
+                AND LOWER(TRIM(COALESCE(c.status::text, ''))) NOT IN (
+                  'failed', 'busy', 'no-answer', 'canceled', 'cancelled',
+                  'declined', 'rejected', 'voicemail'
+                )
+              )
+            )
+        ) ts ON TRUE
+        WHERE c.client_key = $1
+          AND c.created_at >= NOW() - INTERVAL '7 days'
       ),
       flags AS (
         SELECT
