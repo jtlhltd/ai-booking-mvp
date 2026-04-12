@@ -6025,7 +6025,7 @@
                 <div class="status-value" id="statusCallsNotAnswered" aria-live="polite">—</div>
                 <p class="status-hint" id="statusHintNoPickup">Loading...</p>
             </div>
-            <div class="status-card tom-hide-for-outreach" title="Conversion rate from our follow-up" role="article" aria-label="Our conversion rate">
+            <div class="status-card" id="statusBarConnectOrConversionCard" title="Conversion rate from our follow-up" role="article" aria-label="Our conversion rate">
                 <h4 id="statusCardConversion">Our Conversion Rate</h4>
                 <div class="status-value" id="statusConversionRate" aria-live="polite">—</div>
                 <p class="status-hint" id="statusHintConversion">Loading...</p>
@@ -7917,6 +7917,7 @@ ${actionsRow}
         }
 
         function updateStatusBar(data) {
+            const tomOutreach = isOutreachDashboardClient(currentClient);
             const totalLeads = formatNumber(data.totalLeads);
             const totalCalls = formatNumber(data.totalCalls);
             const totalCallsNum =
@@ -8007,7 +8008,27 @@ ${actionsRow}
                     : 'No numbers in this bucket';
             }
             
-            document.getElementById('statusConversionRate').textContent = conversion;
+            const connectOrConvCard = document.getElementById('statusBarConnectOrConversionCard');
+            const convTitleEl = document.getElementById('statusCardConversion');
+            if (tomOutreach) {
+                const ar = data.metrics?.answerRate != null ? Number(data.metrics.answerRate) : NaN;
+                const uniqDialForRate = Number(data.metrics?.uniqueLeadsCalled ?? data.totalCalls ?? 0) || 0;
+                if (convTitleEl) convTitleEl.textContent = 'Connect rate (all time)';
+                document.getElementById('statusConversionRate').textContent =
+                    Number.isFinite(ar) && uniqDialForRate > 0 ? `${Math.round(ar)}%` : '—';
+                if (connectOrConvCard) {
+                    connectOrConvCard.title =
+                        'Unique numbers with a conversation signal ÷ unique numbers we have dialled at least once (all time). Not the same as A/B experiment rows below.';
+                    connectOrConvCard.setAttribute('aria-label', 'Outbound connect rate');
+                }
+            } else {
+                if (convTitleEl) convTitleEl.textContent = 'Our Conversion Rate';
+                document.getElementById('statusConversionRate').textContent = conversion;
+                if (connectOrConvCard) {
+                    connectOrConvCard.title = 'Conversion rate from our follow-up';
+                    connectOrConvCard.setAttribute('aria-label', 'Our conversion rate');
+                }
+            }
             document.getElementById('statusFirstResponse').textContent = firstResponse;
 
             const last24 = formatNumber(data.last24hLeads ?? 0);
@@ -8017,7 +8038,6 @@ ${actionsRow}
             const leadTotalNum = data.totalLeads != null && Number.isFinite(Number(data.totalLeads))
                 ? Number(data.totalLeads)
                 : NaN;
-            const tomOutreach = isOutreachDashboardClient(currentClient);
             let leadsHint;
             if (tomOutreach) {
                 leadsHint = `One saved row per phone. Imports update existing numbers — total only rises for new phones.\nLast 24h: ${last24} new`;
@@ -8045,8 +8065,8 @@ ${actionsRow}
             // statusHintCalls already set above with answered/not answered breakdown
             const convHint = document.getElementById('statusHintConversion');
             if (convHint) {
-                convHint.textContent = isOutreachDashboardClient(currentClient)
-                    ? `Pipeline outcome rate: ${winRate} — vs unique leads dialed (tile hidden here; see Call Quality for connect stats)`
+                convHint.textContent = tomOutreach
+                    ? 'Reached ÷ dialed (unique numbers). Booking-style “conversion %” is not the goal for cold outreach — use reach, connect rate, and the 7d/30d strip above the A/B console.'
                     : `Win rate: ${winRate}`;
             }
             const respN = data.metrics?.firstResponseSampleSize;
@@ -8124,7 +8144,7 @@ ${actionsRow}
                 : '';
 
             const foot = tom
-                ? `Rolling 24h window (${actTz.replace(/_/g, ' ')}). Hover the ? on “Last 24 hours” for full definitions.`
+                ? `Rolling 24h window (${actTz.replace(/_/g, ' ')}). Hover the ? on “Last 24 hours” for full definitions. This outreach view centres on dials and reach — calendar bookings are not the headline KPI here.`
                 : `<strong>How to read this:</strong> 24-hour figures are a rolling 24h window in ${actTz.replace(/_/g, ' ')} (same instant boundary for leads, dials, and reach). All-time dials include retries. Reached + no pickup partition unique numbers dialed (ambiguous rows = no pickup). Response time is mean minutes from lead created to first outbound dial (recent leads sample).`;
 
             container.innerHTML = `
@@ -10282,6 +10302,7 @@ ${actionsRow}
             applyTomAbDraftToVisibleField(getTomAbActiveUploadDimension());
 
             let html = '';
+            html += `<p class="tom-ab-test-meta" style="margin:0 0 14px 0; max-width:68rem;"><strong>How A/B counts relate to your CRM:</strong> the tables below only include leads <strong>assigned to this experiment</strong> after it started (per dimension). Your <strong>Unique contacts in CRM</strong> tile is everyone on file — including numbers dialled before the test or outside the live slice — so variant <strong>N</strong> can stay at <strong>0</strong> while CRM totals look large. That is expected until new assignments flow in.</p>`;
             html += renderTomAbAllCreativesManager(ab);
             html += renderTomAbReviewBanner(ab);
             html += renderTomAbLiveResultsPanel(ab);

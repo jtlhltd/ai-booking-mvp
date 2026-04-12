@@ -8984,6 +8984,13 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       : `strftime('%Y-%m-%d', created_at)`;
     const touchpointDayKeyFromD = touchpointDayKeySql.replace(/\bcreated_at\b/g, 'd.created_at');
 
+    /** Same calendar-day boundaries as touchpoints / activity copy (London), passed as UTC ISO for Postgres + SQLite. */
+    const outreachPulseAnchor = DateTime.now().setZone(DASHBOARD_ACTIVITY_TZ);
+    const outreachPulseCutoff40Iso = outreachPulseAnchor.minus({ days: 40 }).toUTC().toISO();
+    const outreachPulseCutoff30Iso = outreachPulseAnchor.minus({ days: 30 }).toUTC().toISO();
+    const outreachPulseCutoff7Iso = outreachPulseAnchor.minus({ days: 7 }).toUTC().toISO();
+    const outreachPulseParams = [clientKey, outreachPulseCutoff40Iso, outreachPulseCutoff30Iso, outreachPulseCutoff7Iso];
+
     /** Rolling 7d/30d dial + reach counts and last dial time (Postgres); SQLite uses `demoDashboardOutreachPulseSqlite` with the same “reached” rules. */
     const demoDashboardOutreachPulseSql = `
       WITH raw AS (
@@ -8997,7 +9004,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
           created_at
         FROM calls
         WHERE client_key = $1
-          AND created_at >= NOW() - INTERVAL '40 days'
+          AND created_at >= $2::timestamptz
       ),
       call_row AS (
         SELECT
@@ -9024,15 +9031,15 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       ),
       agg_windows AS (
         SELECT
-          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')::int AS attempts_7d,
-          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days')::int AS attempts_30d,
+          COUNT(*) FILTER (WHERE created_at >= $4::timestamptz)::int AS attempts_7d,
+          COUNT(*) FILTER (WHERE created_at >= $3::timestamptz)::int AS attempts_30d,
           COUNT(DISTINCT CASE
-            WHEN created_at >= NOW() - INTERVAL '7 days'
+            WHEN created_at >= $4::timestamptz
               AND regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g') <> ''
             THEN lead_phone
           END)::int AS unique_called_7d,
           COUNT(DISTINCT CASE
-            WHEN created_at >= NOW() - INTERVAL '30 days'
+            WHEN created_at >= $3::timestamptz
               AND regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g') <> ''
             THEN lead_phone
           END)::int AS unique_called_30d
@@ -9041,7 +9048,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       reach_7d AS (
         SELECT COUNT(*)::int AS n FROM (
           SELECT lead_phone FROM call_row
-          WHERE created_at >= NOW() - INTERVAL '7 days'
+          WHERE created_at >= $4::timestamptz
           GROUP BY lead_phone
           HAVING MAX(CASE WHEN is_answered THEN 1 ELSE 0 END) > 0
         ) s
@@ -9049,7 +9056,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       reach_30d AS (
         SELECT COUNT(*)::int AS n FROM (
           SELECT lead_phone FROM call_row
-          WHERE created_at >= NOW() - INTERVAL '30 days'
+          WHERE created_at >= $3::timestamptz
           GROUP BY lead_phone
           HAVING MAX(CASE WHEN is_answered THEN 1 ELSE 0 END) > 0
         ) s
@@ -9081,7 +9088,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
           created_at
         FROM calls
         WHERE client_key = $1
-          AND datetime(created_at) >= datetime('now', '-40 days')
+          AND created_at >= $2
       ),
       call_row AS (
         SELECT
@@ -9108,16 +9115,16 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       ),
       agg_windows AS (
         SELECT
-          CAST(COALESCE(SUM(CASE WHEN datetime(created_at) >= datetime('now', '-7 days') THEN 1 ELSE 0 END), 0) AS INTEGER) AS attempts_7d,
-          CAST(COALESCE(SUM(CASE WHEN datetime(created_at) >= datetime('now', '-30 days') THEN 1 ELSE 0 END), 0) AS INTEGER) AS attempts_30d,
+          CAST(COALESCE(SUM(CASE WHEN created_at >= $4 THEN 1 ELSE 0 END), 0) AS INTEGER) AS attempts_7d,
+          CAST(COALESCE(SUM(CASE WHEN created_at >= $3 THEN 1 ELSE 0 END), 0) AS INTEGER) AS attempts_30d,
           CAST(COALESCE((
             SELECT COUNT(DISTINCT lead_phone) FROM call_row cr
-            WHERE datetime(cr.created_at) >= datetime('now', '-7 days')
+            WHERE cr.created_at >= $4
               AND COALESCE(cr.lead_phone, '') GLOB '*[0-9]*'
           ), 0) AS INTEGER) AS unique_called_7d,
           CAST(COALESCE((
             SELECT COUNT(DISTINCT lead_phone) FROM call_row cr
-            WHERE datetime(cr.created_at) >= datetime('now', '-30 days')
+            WHERE cr.created_at >= $3
               AND COALESCE(cr.lead_phone, '') GLOB '*[0-9]*'
           ), 0) AS INTEGER) AS unique_called_30d
         FROM call_row
@@ -9125,7 +9132,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       reach_7d AS (
         SELECT CAST(COUNT(*) AS INTEGER) AS n FROM (
           SELECT lead_phone FROM call_row
-          WHERE datetime(created_at) >= datetime('now', '-7 days')
+          WHERE created_at >= $4
           GROUP BY lead_phone
           HAVING MAX(is_answered) > 0
         ) s
@@ -9133,7 +9140,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       reach_30d AS (
         SELECT CAST(COUNT(*) AS INTEGER) AS n FROM (
           SELECT lead_phone FROM call_row
-          WHERE datetime(created_at) >= datetime('now', '-30 days')
+          WHERE created_at >= $3
           GROUP BY lead_phone
           HAVING MAX(is_answered) > 0
         ) s
@@ -9472,8 +9479,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
           AND status IN ('pending', 'processing')
       `, [clientKey]),
       isPostgres
-        ? query(demoDashboardOutreachPulseSql, [clientKey])
-        : query(demoDashboardOutreachPulseSqlite, [clientKey])
+        ? query(demoDashboardOutreachPulseSql, outreachPulseParams)
+        : query(demoDashboardOutreachPulseSqlite, outreachPulseParams)
     ]);
 
     const callCounts = callMetricsBundle.callCounts;
