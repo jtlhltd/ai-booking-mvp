@@ -8984,7 +8984,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       : `strftime('%Y-%m-%d', created_at)`;
     const touchpointDayKeyFromD = touchpointDayKeySql.replace(/\bcreated_at\b/g, 'd.created_at');
 
-    /** Rolling 7d/30d dial + reach counts and last dial time (Postgres); aligns with demo-dashboard call_row “reached” semantics. */
+    /** Rolling 7d/30d dial + reach counts and last dial time (Postgres); SQLite uses `demoDashboardOutreachPulseSqlite` with the same “reached” rules. */
     const demoDashboardOutreachPulseSql = `
       WITH raw AS (
         SELECT
@@ -9052,6 +9052,90 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
           WHERE created_at >= NOW() - INTERVAL '30 days'
           GROUP BY lead_phone
           HAVING MAX(CASE WHEN is_answered THEN 1 ELSE 0 END) > 0
+        ) s
+      )
+      SELECT
+        ld.last_dial_attempt_at,
+        aw.attempts_7d,
+        aw.attempts_30d,
+        aw.unique_called_7d,
+        aw.unique_called_30d,
+        r7.n AS unique_reached_7d,
+        r30.n AS unique_reached_30d
+      FROM last_dial ld
+      CROSS JOIN agg_windows aw
+      CROSS JOIN reach_7d r7
+      CROSS JOIN reach_30d r30
+    `;
+
+    /** Same outreach pulse as Postgres, for SQLite local/tests (digit filter uses GLOB vs regexp_replace). */
+    const demoDashboardOutreachPulseSqlite = `
+      WITH raw AS (
+        SELECT
+          lead_phone,
+          outcome,
+          duration,
+          status,
+          SUBSTR(COALESCE(transcript, ''), 1, 512) AS transcript_snip,
+          recording_url,
+          created_at
+        FROM calls
+        WHERE client_key = $1
+          AND datetime(created_at) >= datetime('now', '-40 days')
+      ),
+      call_row AS (
+        SELECT
+          lead_phone,
+          created_at,
+          CASE WHEN
+            (outcome IS NOT NULL AND outcome NOT IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected'))
+            OR (
+              outcome IS NULL
+              AND (
+                (COALESCE(duration, 0) >= 20 AND LOWER(TRIM(COALESCE(status, ''))) IN ('ended', 'completed', 'finished'))
+                OR (COALESCE(duration, 0) >= 40 AND LOWER(TRIM(COALESCE(status, ''))) NOT IN (
+                  'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
+                ))
+                OR (COALESCE(transcript_snip, '') <> '' AND LENGTH(TRIM(COALESCE(transcript_snip, ''))) > 40)
+                OR (COALESCE(recording_url, '') <> '')
+              )
+            )
+          THEN 1 ELSE 0 END AS is_answered
+        FROM raw
+      ),
+      last_dial AS (
+        SELECT MAX(created_at) AS last_dial_attempt_at FROM calls WHERE client_key = $1
+      ),
+      agg_windows AS (
+        SELECT
+          CAST(COALESCE(SUM(CASE WHEN datetime(created_at) >= datetime('now', '-7 days') THEN 1 ELSE 0 END), 0) AS INTEGER) AS attempts_7d,
+          CAST(COALESCE(SUM(CASE WHEN datetime(created_at) >= datetime('now', '-30 days') THEN 1 ELSE 0 END), 0) AS INTEGER) AS attempts_30d,
+          CAST(COALESCE((
+            SELECT COUNT(DISTINCT lead_phone) FROM call_row cr
+            WHERE datetime(cr.created_at) >= datetime('now', '-7 days')
+              AND COALESCE(cr.lead_phone, '') GLOB '*[0-9]*'
+          ), 0) AS INTEGER) AS unique_called_7d,
+          CAST(COALESCE((
+            SELECT COUNT(DISTINCT lead_phone) FROM call_row cr
+            WHERE datetime(cr.created_at) >= datetime('now', '-30 days')
+              AND COALESCE(cr.lead_phone, '') GLOB '*[0-9]*'
+          ), 0) AS INTEGER) AS unique_called_30d
+        FROM call_row
+      ),
+      reach_7d AS (
+        SELECT CAST(COUNT(*) AS INTEGER) AS n FROM (
+          SELECT lead_phone FROM call_row
+          WHERE datetime(created_at) >= datetime('now', '-7 days')
+          GROUP BY lead_phone
+          HAVING MAX(is_answered) > 0
+        ) s
+      ),
+      reach_30d AS (
+        SELECT CAST(COUNT(*) AS INTEGER) AS n FROM (
+          SELECT lead_phone FROM call_row
+          WHERE datetime(created_at) >= datetime('now', '-30 days')
+          GROUP BY lead_phone
+          HAVING MAX(is_answered) > 0
         ) s
       )
       SELECT
@@ -9389,27 +9473,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       `, [clientKey]),
       isPostgres
         ? query(demoDashboardOutreachPulseSql, [clientKey])
-        : query(
-            `
-            SELECT
-              (SELECT MAX(created_at) FROM calls WHERE client_key = $1) AS last_dial_attempt_at,
-              (SELECT CAST(COALESCE(SUM(CASE WHEN created_at >= datetime('now', '-7 days') THEN 1 ELSE 0 END), 0) AS INTEGER)
-                FROM calls WHERE client_key = $1) AS attempts_7d,
-              (SELECT CAST(COALESCE(SUM(CASE WHEN created_at >= datetime('now', '-30 days') THEN 1 ELSE 0 END), 0) AS INTEGER)
-                FROM calls WHERE client_key = $1) AS attempts_30d,
-              (SELECT CAST(COALESCE(COUNT(DISTINCT lead_phone), 0) AS INTEGER) FROM calls c2
-                WHERE c2.client_key = $1
-                  AND c2.created_at >= datetime('now', '-7 days')
-                  AND TRIM(COALESCE(c2.lead_phone, '')) <> '') AS unique_called_7d,
-              (SELECT CAST(COALESCE(COUNT(DISTINCT lead_phone), 0) AS INTEGER) FROM calls c2
-                WHERE c2.client_key = $1
-                  AND c2.created_at >= datetime('now', '-30 days')
-                  AND TRIM(COALESCE(c2.lead_phone, '')) <> '') AS unique_called_30d,
-              NULL AS unique_reached_7d,
-              NULL AS unique_reached_30d
-            `,
-            [clientKey]
-          )
+        : query(demoDashboardOutreachPulseSqlite, [clientKey])
     ]);
 
     const callCounts = callMetricsBundle.callCounts;
