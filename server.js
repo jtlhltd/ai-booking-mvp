@@ -12857,18 +12857,12 @@ function trimEnvDashboard(key) {
 
 function parseDashboardPrivacyBullets() {
   const raw = trimEnvDashboard('DASHBOARD_PRIVACY_BULLETS');
-  if (raw) {
-    return raw
-      .split('|')
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .slice(0, 10);
-  }
-  return [
-    'Leads and call records for this workspace are stored in the booking system database and power the numbers on this page.',
-    'When a Google Sheet is linked in your workspace settings, the voice stack may read or append rows your playbook defines.',
-    'For questions about exports, retention, or corrections, use the support contact shown on this dashboard.'
-  ];
+  if (!raw) return [];
+  return raw
+    .split('|')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 10);
 }
 
 /**
@@ -12918,9 +12912,7 @@ function buildDashboardExperience(client, metricsAsOfIso) {
     },
     privacy: {
       bullets: parseDashboardPrivacyBullets(),
-      exportNote:
-        trimEnvDashboard('DASHBOARD_PRIVACY_EXPORT_NOTE') ||
-        'To export leads or ask for a CRM snapshot, email the support contact below. This dashboard does not erase your data.'
+      exportNote: trimEnvDashboard('DASHBOARD_PRIVACY_EXPORT_NOTE')
     },
     app: {
       version: trimEnvDashboard('DASHBOARD_APP_VERSION'),

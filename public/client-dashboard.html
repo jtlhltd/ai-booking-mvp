@@ -1262,50 +1262,6 @@
             font-size: 0.875rem;
         }
 
-        .dashboard-onboarding-card {
-            margin: 0 0 16px 0;
-            padding: 14px 16px;
-            border-radius: 12px;
-            border: 1px solid var(--border, #e8eaf5);
-            background: var(--surface, #fff);
-        }
-
-        .dashboard-onboarding-head {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            margin-bottom: 10px;
-        }
-
-        .dashboard-onboarding-title {
-            margin: 0;
-            font-size: 1rem;
-            font-weight: 650;
-        }
-
-        .dashboard-onboarding-dismiss {
-            border: none;
-            background: transparent;
-            color: var(--muted, #5c6478);
-            font-size: 0.8125rem;
-            cursor: pointer;
-            text-decoration: underline;
-        }
-
-        .dashboard-onboarding-steps {
-            margin: 0;
-            padding-left: 1.25rem;
-            font-size: 0.875rem;
-            line-height: 1.55;
-            color: var(--text, #1a1d2e);
-        }
-
-        .dashboard-onboarding-steps li.done {
-            color: var(--muted, #5c6478);
-            text-decoration: line-through;
-        }
-
         .dashboard-experience-panel {
             margin: 0 0 18px 0;
             padding: 14px 16px;
@@ -1359,8 +1315,7 @@
             margin-bottom: 4px;
         }
 
-        .dashboard-sync-meta,
-        .dashboard-plan-hints {
+        .dashboard-sync-meta {
             font-size: 0.8125rem;
             color: var(--muted, #5c6478);
             margin-bottom: 10px;
@@ -6273,21 +6228,6 @@
             <strong>View-only mode.</strong> Imports, uploads, and other edits are hidden. Open without <code>?view=viewer</code> or ask your operator to turn off read-only for this workspace.
         </div>
 
-        <section
-            id="dashboardOnboardingSection"
-            class="dashboard-onboarding-card"
-            aria-label="Getting started checklist"
-            hidden
-        >
-            <div class="dashboard-onboarding-head">
-                <h2 class="dashboard-onboarding-title">Getting started</h2>
-                <button type="button" class="dashboard-onboarding-dismiss" id="dashboardOnboardingDismiss" aria-label="Dismiss checklist">
-                    Hide
-                </button>
-            </div>
-            <ol class="dashboard-onboarding-steps" id="dashboardOnboardingSteps"></ol>
-        </section>
-
         <section id="dashboardExperienceSection" class="dashboard-experience-panel" aria-label="Connections and data" hidden>
             <div class="dashboard-experience-head">
                 <h2 class="dashboard-experience-title">Connections &amp; data</h2>
@@ -6297,8 +6237,7 @@
             </div>
             <div class="dashboard-integration-grid" id="dashboardIntegrationGrid" aria-live="polite"></div>
             <div class="dashboard-sync-meta" id="dashboardSyncMeta"></div>
-            <div class="dashboard-plan-hints" id="dashboardPlanHints"></div>
-            <div class="dashboard-privacy-block" id="dashboardPrivacyBlock"></div>
+            <div class="dashboard-privacy-block" id="dashboardPrivacyBlock" hidden></div>
         </section>
 
         <div class="active-indicator pulse" id="activeIndicator">
@@ -7572,13 +7511,6 @@ ${actionsRow}
                     metricsAsOfIso: new Date().toISOString(),
                     payloadGeneratedAtIso: new Date().toISOString()
                 },
-                privacy: {
-                    bullets: [
-                        'This sandbox uses mock rows — nothing here is a real person.',
-                        'Production tenants see the same layout backed by your database and optional Sheet mirrors.'
-                    ],
-                    exportNote: 'Demo: export behaviour is not connected.'
-                },
                 app: { version: 'demo', commit: null },
                 ui: { readOnly: false }
             }
@@ -7677,9 +7609,8 @@ ${actionsRow}
             const sec = document.getElementById('dashboardExperienceSection');
             const grid = document.getElementById('dashboardIntegrationGrid');
             const syncEl = document.getElementById('dashboardSyncMeta');
-            const planEl = document.getElementById('dashboardPlanHints');
             const priv = document.getElementById('dashboardPrivacyBlock');
-            if (!sec || !grid || !syncEl || !planEl || !priv) return;
+            if (!sec || !grid || !syncEl || !priv) return;
             const dx = data && data.dashboardExperience && typeof data.dashboardExperience === 'object' ? data.dashboardExperience : null;
             if (!dx) {
                 sec.hidden = true;
@@ -7709,73 +7640,17 @@ ${actionsRow}
                     : ''
             }`;
 
-            const um = data.usageMeters && typeof data.usageMeters === 'object' ? data.usageMeters : null;
-            const pl = um && um.plan && typeof um.plan === 'object' ? um.plan : {};
-            const planName = pl.name ? escapeHtml(pl.name) : '';
-            const periodNote = pl.periodNote ? escapeHtml(pl.periodNote) : '';
-            const upUrlRaw = pl.upgradeUrl ? String(pl.upgradeUrl).trim() : '';
-            const upUrl = /^https?:\/\//i.test(upUrlRaw) ? upUrlRaw : '';
-            const sup = pl.supportEmail ? escapeHtml(pl.supportEmail) : '';
-            let planHtml = '';
-            if (planName || periodNote || upUrl || sup) {
-                planHtml += '<strong>Plan</strong> · ';
-                if (planName) planHtml += `${planName}. `;
-                if (periodNote) planHtml += `${periodNote} `;
-                if (upUrl)
-                    planHtml += `<a href="${escapeHtml(upUrl)}" rel="noopener noreferrer" target="_blank">Upgrade / billing</a> `;
-                if (sup) planHtml += ` · Support: <a href="mailto:${sup}">${sup}</a>`;
-            } else {
-                planHtml =
-                    '<strong>Plan</strong> · Optional: set <code>USAGE_PLAN_NAME</code>, <code>USAGE_PLAN_PERIOD_NOTE</code>, <code>USAGE_UPGRADE_URL</code>, and <code>SUPPORT_CONTACT_EMAIL</code> on the server to show your commercial terms here.';
-            }
-            planEl.innerHTML = planHtml;
-
             const bullets = Array.isArray(dx.privacy && dx.privacy.bullets) ? dx.privacy.bullets : [];
             const expNote = dx.privacy && dx.privacy.exportNote ? escapeHtml(dx.privacy.exportNote) : '';
-            priv.innerHTML = `<strong>Your data</strong><ul>${bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join('')}</ul><p style="margin:8px 0 0 0;">${expNote}</p>`;
-        }
-
-        function renderOnboardingChecklist() {
-            const sec = document.getElementById('dashboardOnboardingSection');
-            const ol = document.getElementById('dashboardOnboardingSteps');
-            if (!sec || !ol) return;
-            const ck = currentClient || getClientFromURL();
-            try {
-                if (localStorage.getItem(`dash.onboard.dismiss.${ck}`) === '1') {
-                    sec.hidden = true;
-                    return;
-                }
-            } catch {
-                /* ignore */
+            if (!bullets.length && !expNote) {
+                priv.hidden = true;
+                priv.innerHTML = '';
+            } else {
+                priv.hidden = false;
+                const list = bullets.length ? `<ul>${bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join('')}</ul>` : '';
+                const note = expNote ? `<p style="margin:8px 0 0 0;">${expNote}</p>` : '';
+                priv.innerHTML = `<strong>Your data</strong>${list}${note}`;
             }
-            sec.hidden = false;
-            const demo = ck === DEMO_CLIENT_KEY;
-            const liveOk = !dashboardLivePayloadFailed;
-            const leadsOk = (Number(dashboardData.totalLeads) || 0) > 0;
-            let importOk = false;
-            try {
-                importOk = localStorage.getItem(`dash.onboard.leadImport.${ck}`) === '1';
-            } catch {
-                importOk = false;
-            }
-            const callsOk = (Number(dashboardData.totalCalls) || 0) > 0 || (dashboardData.recentCalls && dashboardData.recentCalls.length > 0);
-            const steps = [
-                {
-                    done: !demo,
-                    text: demo
-                        ? 'Use a real client link (?client=your_workspace) to see live metrics for that tenant.'
-                        : 'Client workspace is selected in the URL.'
-                },
-                { done: liveOk, text: 'Live dashboard metrics loaded successfully from the server.' },
-                {
-                    done: leadsOk || importOk,
-                    text: 'At least one lead is in the CRM, or you completed a CSV import for this workspace.'
-                },
-                { done: callsOk, text: 'Outbound call activity has started (dials appear in metrics or the activity feed).' }
-            ];
-            ol.innerHTML = steps
-                .map((s) => `<li class="${s.done ? 'done' : ''}">${escapeHtml(s.text)}</li>`)
-                .join('');
         }
 
         function buildDebugBundlePayload() {
@@ -7816,20 +7691,6 @@ ${actionsRow}
             if (btn && btn.dataset.bound !== '1') {
                 btn.dataset.bound = '1';
                 btn.addEventListener('click', () => copyDebugBundleToClipboard());
-            }
-            const dis = document.getElementById('dashboardOnboardingDismiss');
-            if (dis && dis.dataset.bound !== '1') {
-                dis.dataset.bound = '1';
-                dis.addEventListener('click', () => {
-                    const ck = currentClient || getClientFromURL();
-                    try {
-                        localStorage.setItem(`dash.onboard.dismiss.${ck}`, '1');
-                    } catch {
-                        /* ignore */
-                    }
-                    const sec = document.getElementById('dashboardOnboardingSection');
-                    if (sec) sec.hidden = true;
-                });
             }
         }
 
@@ -8720,7 +8581,6 @@ ${actionsRow}
             renderOutreachCapacityStrip(data);
             renderUsageMetersStrip(data);
             renderDashboardExperiencePanel(data);
-            renderOnboardingChecklist();
             applyDashboardReadOnly(data);
         }
 
@@ -15452,12 +15312,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 renderLeadJourney(dashboardData);
                 setImportStatus(`${demoLeads.length} leads staged (demo)`, 'success');
                 showToast('Leads Imported', `${demoLeads.length} leads added (demo mode)`, 'success');
-                try {
-                    localStorage.setItem(`dash.onboard.leadImport.${currentClient}`, '1');
-                } catch {
-                    /* ignore */
-                }
-                renderOnboardingChecklist();
                 return;
             }
             try {
@@ -15716,14 +15570,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         summary,
                         payload.inserted === 0 && (payload.requestedCount || 0) > 0 ? 'warning' : 'success'
                     );
-                }
-                if ((Number(payload.inserted) || 0) > 0) {
-                    try {
-                        localStorage.setItem(`dash.onboard.leadImport.${currentClient}`, '1');
-                    } catch {
-                        /* ignore */
-                    }
-                    renderOnboardingChecklist();
                 }
             } catch (error) {
                 console.error('Import failed', error);
