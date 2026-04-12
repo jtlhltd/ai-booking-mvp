@@ -6691,15 +6691,13 @@
                     '<span class="tom-ab-test-meta">Not enough recent dial volume to estimate how fast the backlog will clear.</span>';
             }
 
-            const fmtPct = (p) => (p == null || Number.isNaN(Number(p)) ? '—' : `${formatNumber(Number(p))}%`);
             const t7 = oc.trends7d && typeof oc.trends7d === 'object' ? oc.trends7d : {};
             const t30 = oc.trends30d && typeof oc.trends30d === 'object' ? oc.trends30d : {};
             const trendBlock = (label, t) => {
                 const att = t.dialAttempts != null ? formatNumber(Number(t.dialAttempts) || 0) : '—';
                 const uc = t.uniqueLeadsCalled != null ? formatNumber(Number(t.uniqueLeadsCalled) || 0) : '—';
                 const ur = t.uniqueLeadsReached != null ? formatNumber(Number(t.uniqueLeadsReached) || 0) : '—';
-                const ar = fmtPct(t.answerRatePct);
-                return `<div class="outreach-capacity-trend-col"><h4>${label}</h4><p><strong>${att}</strong> dial attempts<br><strong>${uc}</strong> unique numbers dialled<br><strong>${ur}</strong> unique reached<br>Answer rate (unique): <strong>${ar}</strong></p></div>`;
+                return `<div class="outreach-capacity-trend-col"><h4>${label}</h4><p><strong>${att}</strong> dial attempts<br><strong>${uc}</strong> unique numbers dialled<br><strong>${ur}</strong> unique reached</p></div>`;
             };
             const trendsHtml = `<div class="outreach-capacity-trends">${trendBlock('Last 7 days', t7)}${trendBlock(
                 'Last 30 days',
@@ -10302,7 +10300,7 @@ ${actionsRow}
             applyTomAbDraftToVisibleField(getTomAbActiveUploadDimension());
 
             let html = '';
-            html += `<p class="tom-ab-test-meta" style="margin:0 0 14px 0; max-width:68rem;"><strong>How A/B counts relate to your CRM:</strong> the tables below only include leads <strong>assigned to this experiment</strong> after it started (per dimension). Your <strong>Unique contacts in CRM</strong> tile is everyone on file — including numbers dialled before the test or outside the live slice — so variant <strong>N</strong> can stay at <strong>0</strong> while CRM totals look large. That is expected until new assignments flow in.</p>`;
+            html += `<p class="tom-ab-test-meta" style="margin:0 0 12px 0;max-width:68rem;"><strong>A/B vs CRM:</strong> each table only counts leads assigned to this experiment after it went live. <strong>Unique contacts</strong> is your full CRM, so a variant can show <strong>0</strong> while totals look high.</p>`;
             html += renderTomAbAllCreativesManager(ab);
             html += renderTomAbReviewBanner(ab);
             html += renderTomAbLiveResultsPanel(ab);
