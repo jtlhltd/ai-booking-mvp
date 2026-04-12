@@ -1171,6 +1171,87 @@
             line-height: 1.45;
         }
 
+        .tom-ab-mobile-section-toggle {
+            display: none;
+            width: 100%;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin: 0 0 12px 0;
+            padding: 12px 14px;
+            border-radius: 12px;
+            border: 1px solid var(--border, #e8eaf5);
+            background: var(--surface, #fff);
+            font: inherit;
+            font-weight: 650;
+            color: var(--text, #1a1d2e);
+            cursor: pointer;
+            text-align: left;
+        }
+
+        .tom-ab-mobile-section-toggle-chevron {
+            flex-shrink: 0;
+            font-size: 0.75rem;
+            color: var(--muted, #5c6478);
+            transition: transform 0.2s ease;
+        }
+
+        .tom-ab-collapsible-shell.tom-ab-collapsed {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            body.tom-outreach-dashboard .tom-ab-mobile-section-toggle {
+                display: flex;
+            }
+
+            body.tom-outreach-dashboard .tom-ab-mobile-section-toggle[aria-expanded='false'] .tom-ab-mobile-section-toggle-chevron {
+                transform: rotate(-90deg);
+            }
+        }
+
+        .scroll-to-metrics-btn {
+            position: fixed;
+            right: 16px;
+            bottom: 20px;
+            z-index: 95;
+            padding: 10px 14px;
+            border-radius: 999px;
+            border: 1px solid rgba(92, 106, 196, 0.35);
+            background: rgba(255, 255, 255, 0.96);
+            color: var(--primary, #5c6ac4);
+            font-size: 0.8125rem;
+            font-weight: 650;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+            cursor: pointer;
+        }
+
+        body:not(.tom-outreach-dashboard) .scroll-to-metrics-btn {
+            display: none !important;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .fade-in {
+                animation: none !important;
+                opacity: 1 !important;
+                transform: none !important;
+            }
+
+            .active-indicator.pulse,
+            .active-indicator-dot,
+            .data-freshness-dot {
+                animation: none !important;
+            }
+
+            .skeleton {
+                animation: none !important;
+            }
+
+            .tom-ab-mobile-section-toggle-chevron {
+                transition: none !important;
+            }
+        }
+
         body.tom-outreach-dashboard .funnel-stage.funnel-stage--clickable {
             cursor: pointer;
             border-radius: 10px;
@@ -6004,7 +6085,7 @@
                 </div>
             </div>
             
-        <section class="status-bar" role="region" aria-label="Dashboard statistics">
+        <section class="status-bar" id="dashboardMetricsAnchor" role="region" aria-label="Dashboard statistics">
             <div class="status-card" id="statusBarLeadsCard" title="Distinct phone numbers stored for this client in the CRM" role="article" aria-label="Unique contacts in CRM">
                 <h4 id="statusCardLeads">Unique contacts in CRM</h4>
                 <div class="status-value" id="statusTotalLeads" aria-live="polite">—</div>
@@ -6044,6 +6125,17 @@
             id="tomAbOutreachAbSection"
             aria-label="A B tests outbound"
         >
+            <button
+                type="button"
+                class="tom-ab-mobile-section-toggle"
+                id="tomAbMobileSectionToggle"
+                aria-expanded="true"
+                aria-controls="tomAbCollapsibleShell"
+            >
+                <span class="tom-ab-mobile-section-toggle-label">Creatives &amp; live test</span>
+                <span class="tom-ab-mobile-section-toggle-chevron" aria-hidden="true">▼</span>
+            </button>
+            <div id="tomAbCollapsibleShell" class="tom-ab-collapsible-shell">
             <article class="card card-fullwidth tom-ab-client-console">
                 <h3>Creatives &amp; live test</h3>
                 <p class="card-subtitle"><strong>All creatives</strong> lists what’s live on Vapi vs what’s on test. <strong>Delete</strong> removes a test for that slice. Use the field above only when you want to add a new challenger (upload). Control is always your live assistant.</p>
@@ -6074,6 +6166,7 @@
                     <div id="tomAbTestSectionRoot" class="tom-ab-test-section-root tom-ab-test-section-root--below-upload"></div>
                 </section>
             </article>
+            </div>
         </section>
 
         <section class="roi-panel" id="roiPanel" aria-hidden="false">
@@ -6172,6 +6265,7 @@
                 <article class="card card-list">
                     <h3>📋 Recent Leads</h3>
                     <p class="card-subtitle" id="recentLeadsSubtitle">Recently added leads, newest at the top. Use search to filter; export is the full CRM.</p>
+                    <p id="leadsBriefSyncHint" class="tom-ab-test-meta" style="margin:4px 0 8px 0;" hidden aria-live="polite"></p>
                     <div class="dashboard-list-toolbar">
                         <input type="search" id="leadsSearchInput" class="dashboard-list-search" placeholder="Search name, phone, service, status…" autocomplete="off" enterkeyhint="search">
                         <span id="leadsSearchHint" class="dashboard-search-hint" hidden></span>
@@ -6403,6 +6497,8 @@
     <div class="keyboard-hint" id="keyboardHint" role="tooltip" aria-hidden="true">
         Press <kbd>?</kbd> for keyboard shortcuts
     </div>
+
+    <button type="button" id="scrollToMetricsBtn" class="scroll-to-metrics-btn" hidden aria-label="Back to metrics">↑ Metrics</button>
 
     <div class="toast-container" id="toastContainer"></div>
     <p id="buildFingerprint" class="build-fingerprint" aria-live="polite" style="text-align:center;font-size:11px;color:var(--muted);margin:16px 8px 24px;"></p>
@@ -6663,10 +6759,9 @@
 
             let lastDialHtml = '';
             if (oc.lastDialAttemptAt) {
-                const abs = formatActivitySnapshot(oc.lastDialAttemptAt, data.activityTimezone || DASHBOARD_ACTIVITY_TZ);
-                lastDialHtml = `<p class="outreach-strip-last-dial">Last dial attempt: <strong>${formatTimeAgo(
-                    oc.lastDialAttemptAt
-                )}</strong>${abs ? ` <span class="tom-ab-test-meta">(${abs})</span>` : ''}</p>`;
+                const tz = data.activityTimezone || DASHBOARD_ACTIVITY_TZ;
+                const relAbs = formatRelativeWithAbsolute(oc.lastDialAttemptAt, tz);
+                lastDialHtml = `<p class="outreach-strip-last-dial">Last dial attempt: <strong>${escapeHtml(relAbs)}</strong></p>`;
             } else {
                 lastDialHtml =
                     '<p class="outreach-strip-last-dial"><span class="tom-ab-test-meta">No dial attempts recorded yet.</span></p>';
@@ -7214,6 +7309,8 @@ ${actionsRow}
         let liveEventSource = null;
         /** True when /api/demo-dashboard/:key failed so UI would otherwise show silent zeros. */
         let dashboardLivePayloadFailed = false;
+        /** Outreach brief first paint: full lead list still loading in background. */
+        let outreachBriefListPending = false;
 
         function setDashboardApiErrorVisible(show) {
             const el = document.getElementById('dashboardApiErrorBanner');
@@ -8083,6 +8180,14 @@ ${actionsRow}
             return d.toLocaleString('en-GB', { timeZone, dateStyle: 'medium', timeStyle: 'short' });
         }
 
+        /** “5m ago” plus absolute clock for the same instant (QOL #7). */
+        function formatRelativeWithAbsolute(iso, timeZone = DASHBOARD_ACTIVITY_TZ) {
+            if (!iso) return '';
+            const abs = formatActivitySnapshot(iso, timeZone);
+            const rel = formatTimeAgo(iso);
+            return abs ? `${rel} (${abs})` : rel;
+        }
+
         function renderRecentActivity(data) {
             const container = document.getElementById('recent-activity');
             if (!container) return;
@@ -8462,6 +8567,21 @@ ${actionsRow}
             const filterQ = (searchEl && searchEl.value) ? searchEl.value.trim().toLowerCase() : '';
             const listCap = dashboardData.recentLeadsListCap ?? RECENT_LEADS_DASHBOARD_CAP;
             const isDemo = currentClient === DEMO_CLIENT_KEY;
+            const briefHint = document.getElementById('leadsBriefSyncHint');
+            if (briefHint) {
+                if (
+                    isOutreachDashboardClient(currentClient) &&
+                    outreachBriefListPending &&
+                    recentLeadsAllRows.length > 0
+                ) {
+                    briefHint.hidden = false;
+                    const loaded = recentLeadsAllRows.length;
+                    briefHint.textContent = `Showing ${formatNumber(loaded)} rows (initial cap ${formatNumber(listCap)}). Full CRM list loads in the background…`;
+                } else {
+                    briefHint.hidden = true;
+                    briefHint.textContent = '';
+                }
+            }
 
             if (!recentLeadsAllRows.length) {
                 container.innerHTML = `
@@ -8474,6 +8594,10 @@ ${actionsRow}
                 if (hintEl) {
                     hintEl.textContent = '';
                     hintEl.hidden = true;
+                }
+                if (briefHint) {
+                    briefHint.hidden = true;
+                    briefHint.textContent = '';
                 }
                 currentLeads = [];
                 return;
@@ -10167,6 +10291,96 @@ ${actionsRow}
             });
         }
 
+        function initTomAbCollapsibleForOutreach() {
+            const btn = document.getElementById('tomAbMobileSectionToggle');
+            const shell = document.getElementById('tomAbCollapsibleShell');
+            if (!btn || !shell || btn.dataset.collapsibleBound === '1') return;
+            btn.dataset.collapsibleBound = '1';
+            const mq = window.matchMedia('(max-width: 768px)');
+            const syncForViewport = () => {
+                if (!document.body.classList.contains('tom-outreach-dashboard')) {
+                    shell.classList.remove('tom-ab-collapsed');
+                    btn.setAttribute('aria-expanded', 'true');
+                    btn.removeAttribute('data-user-toggled');
+                    return;
+                }
+                if (!mq.matches) {
+                    shell.classList.remove('tom-ab-collapsed');
+                    btn.setAttribute('aria-expanded', 'true');
+                    btn.removeAttribute('data-user-toggled');
+                    return;
+                }
+                if (btn.getAttribute('data-user-toggled') !== '1') {
+                    shell.classList.add('tom-ab-collapsed');
+                    btn.setAttribute('aria-expanded', 'false');
+                }
+            };
+            btn.addEventListener('click', () => {
+                if (!mq.matches || !document.body.classList.contains('tom-outreach-dashboard')) return;
+                const open = btn.getAttribute('aria-expanded') === 'true';
+                if (open) {
+                    btn.setAttribute('aria-expanded', 'false');
+                    shell.classList.add('tom-ab-collapsed');
+                } else {
+                    btn.setAttribute('aria-expanded', 'true');
+                    shell.classList.remove('tom-ab-collapsed');
+                }
+                btn.setAttribute('data-user-toggled', '1');
+            });
+            mq.addEventListener('change', syncForViewport);
+            window.addEventListener('resize', syncForViewport);
+            try {
+                const mo = new MutationObserver(() => syncForViewport());
+                mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+            } catch {}
+            syncForViewport();
+        }
+
+        function initScrollToMetricsForOutreach() {
+            const btn = document.getElementById('scrollToMetricsBtn');
+            const anchor = document.getElementById('dashboardMetricsAnchor');
+            if (!btn || !anchor || btn.dataset.scrollMetricsBound === '1') return;
+            btn.dataset.scrollMetricsBound = '1';
+            const metricsScrolledPast = () => anchor.getBoundingClientRect().bottom < 0;
+            const reduceMotion = () =>
+                window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            const sync = () => {
+                if (!document.body.classList.contains('tom-outreach-dashboard')) {
+                    btn.hidden = true;
+                    return;
+                }
+                btn.hidden = !metricsScrolledPast();
+            };
+            btn.addEventListener('click', () => {
+                anchor.scrollIntoView({ behavior: reduceMotion() ? 'auto' : 'smooth', block: 'start' });
+            });
+            window.addEventListener('scroll', sync, { passive: true });
+            window.addEventListener('resize', sync, { passive: true });
+            try {
+                const mo = new MutationObserver(() => sync());
+                mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+            } catch {}
+            sync();
+        }
+
+        function initTomAbUnloadDraftGuard() {
+            if (window.__tomAbUnloadDraftGuardBound) return;
+            window.__tomAbUnloadDraftGuardBound = true;
+            window.addEventListener('beforeunload', (e) => {
+                if (!document.body.classList.contains('tom-outreach-dashboard')) return;
+                try {
+                    flushTomAbVisibleFieldToDraft(getTomAbActiveUploadDimension());
+                } catch {}
+                const has =
+                    tomAbPerDimDraft.voice.trim() ||
+                    tomAbPerDimDraft.opening.trim() ||
+                    tomAbPerDimDraft.script.trim();
+                if (!has) return;
+                e.preventDefault();
+                e.returnValue = '';
+            });
+        }
+
         /** Apply server-returned A/B slot so the challenger appears even if /demo-dashboard lags or times out. */
         function tomAbMergeOutboundAbSlotFromServer(dim, data) {
             if (!dashboardData || typeof dashboardData !== 'object') return;
@@ -10234,6 +10448,7 @@ ${actionsRow}
             if (msg) msg.textContent = 'Uploading…';
             const btn = document.getElementById('tomAbCreativeUploadBtn');
             if (btn) btn.disabled = true;
+            let uploadSucceeded = false;
             try {
                 const res = await fetch(
                     `${BASE_URL}/api/clients/${encodeURIComponent(currentClient)}/outbound-ab-test-import`,
@@ -10280,10 +10495,14 @@ ${actionsRow}
                           ? `${dimLabel} uploaded — full dashboard sync is still catching up; refresh if KPIs look stale.`
                           : `${dimLabel} saved on server — dashboard refresh timed out; reload the page to confirm.`;
                 }
+                uploadSucceeded = true;
             } catch (err) {
                 if (msg) msg.textContent = err.message || 'Upload failed';
             } finally {
-                if (btn) btn.disabled = false;
+                if (btn) {
+                    if (uploadSucceeded) setTimeout(() => { btn.disabled = false; }, 900);
+                    else btn.disabled = false;
+                }
             }
         }
 
@@ -13094,6 +13313,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             applyTomOutreachDashboardMode(currentClient);
             initTomAbTestSetupPanel();
             initTomAbOutreachSectionDelegation();
+            initTomAbCollapsibleForOutreach();
+            initScrollToMetricsForOutreach();
+            initTomAbUnloadDraftGuard();
 
             // Fetch client config from API if not demo
             let clientConfig = null;
@@ -13254,6 +13476,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     // Use real data from API, don't merge with demo data
                     dashboardData = mergeData({}, livePayload, currentClient === DEMO_CLIENT_KEY);
                     outreachBriefHydrate = livePayload.briefInitialLoad === true;
+                    outreachBriefListPending = outreachBriefHydrate;
                 } else if (currentClient === DEMO_CLIENT_KEY) {
                     // Only use demo data if it's the demo client and no API data
                     dashboardData = { ...DEMO_DATA };
@@ -13279,6 +13502,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 fetchLiveData(currentClient, { brief: false })
                     .then((full) => {
                         if (!full || full.ok !== true) return;
+                        outreachBriefListPending = false;
                         dashboardData = mergeData(dashboardData, full, false);
                         lastDashboardPollFingerprint = dashboardPollFingerprint(dashboardData);
                         updateStatusBar(dashboardData);
@@ -13297,6 +13521,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         renderCalls(callsToRender);
                         renderTomAbTestSection(dashboardData);
                         syncDashboardFreshnessUi();
+                        showToast(
+                            'Full list loaded',
+                            'Recent leads and calls now include the full synced dataset.',
+                            'success',
+                            2600
+                        );
                     })
                     .catch((e) => console.warn('[DASHBOARD] full outreach hydrate failed', e));
             }
