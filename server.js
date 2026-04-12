@@ -8761,8 +8761,17 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
   const { clientKey } = req.params;
   /** Max rows returned for Recent Leads card (full list for typical tenants; keep in sync with client-dashboard RECENT_LEADS_DASHBOARD_CAP). */
   const RECENT_LEADS_DASHBOARD_CAP = 5000;
+  /** Lighter first paint when `?brief=1` (client outreach dash); keep in sync with client-dashboard DASHBOARD_BRIEF_LEADS_CAP. */
+  const DASHBOARD_BRIEF_LEADS_CAP = 120;
+  const DASHBOARD_BRIEF_CALLS_CAP = 12;
   /** Live Activity Feed rows (keep in sync with client-dashboard ACTIVITY_FEED_DISPLAY_CAP). */
   const RECENT_CALLS_FEED_CAP = 40;
+  const briefRequested =
+    req.query.brief === '1' ||
+    req.query.brief === 'true' ||
+    String(req.query.brief || '').toLowerCase() === 'yes';
+  const leadsDashboardCap = briefRequested ? DASHBOARD_BRIEF_LEADS_CAP : RECENT_LEADS_DASHBOARD_CAP;
+  const recentCallsFeedCap = briefRequested ? DASHBOARD_BRIEF_CALLS_CAP : RECENT_CALLS_FEED_CAP;
   /**
    * One scan of `calls` grouped by phone match key (tail-10 when length≥10, else full digits).
    * Run once per dashboard request; pass rows into lead + source queries via unnest (see second batch).
@@ -8975,6 +8984,90 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       : `strftime('%Y-%m-%d', created_at)`;
     const touchpointDayKeyFromD = touchpointDayKeySql.replace(/\bcreated_at\b/g, 'd.created_at');
 
+    /** Rolling 7d/30d dial + reach counts and last dial time (Postgres); aligns with demo-dashboard call_row “reached” semantics. */
+    const demoDashboardOutreachPulseSql = `
+      WITH raw AS (
+        SELECT
+          lead_phone,
+          outcome,
+          duration,
+          status,
+          LEFT(COALESCE(transcript, ''), 512) AS transcript_snip,
+          recording_url,
+          created_at
+        FROM calls
+        WHERE client_key = $1
+          AND created_at >= NOW() - INTERVAL '40 days'
+      ),
+      call_row AS (
+        SELECT
+          lead_phone,
+          created_at,
+          (
+            (outcome IS NOT NULL AND outcome NOT IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected'))
+            OR (
+              outcome IS NULL
+              AND (
+                (COALESCE(duration, 0) >= 20 AND LOWER(TRIM(COALESCE(status, ''))) IN ('ended', 'completed', 'finished'))
+                OR (COALESCE(duration, 0) >= 40 AND LOWER(TRIM(COALESCE(status, ''))) NOT IN (
+                  'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
+                ))
+                OR (COALESCE(transcript_snip, '') <> '' AND LENGTH(TRIM(COALESCE(transcript_snip, ''))) > 40)
+                OR (COALESCE(recording_url, '') <> '')
+              )
+            )
+          ) AS is_answered
+        FROM raw
+      ),
+      last_dial AS (
+        SELECT MAX(created_at) AS last_dial_attempt_at FROM calls WHERE client_key = $1
+      ),
+      agg_windows AS (
+        SELECT
+          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')::int AS attempts_7d,
+          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days')::int AS attempts_30d,
+          COUNT(DISTINCT CASE
+            WHEN created_at >= NOW() - INTERVAL '7 days'
+              AND regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g') <> ''
+            THEN lead_phone
+          END)::int AS unique_called_7d,
+          COUNT(DISTINCT CASE
+            WHEN created_at >= NOW() - INTERVAL '30 days'
+              AND regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g') <> ''
+            THEN lead_phone
+          END)::int AS unique_called_30d
+        FROM call_row
+      ),
+      reach_7d AS (
+        SELECT COUNT(*)::int AS n FROM (
+          SELECT lead_phone FROM call_row
+          WHERE created_at >= NOW() - INTERVAL '7 days'
+          GROUP BY lead_phone
+          HAVING MAX(CASE WHEN is_answered THEN 1 ELSE 0 END) > 0
+        ) s
+      ),
+      reach_30d AS (
+        SELECT COUNT(*)::int AS n FROM (
+          SELECT lead_phone FROM call_row
+          WHERE created_at >= NOW() - INTERVAL '30 days'
+          GROUP BY lead_phone
+          HAVING MAX(CASE WHEN is_answered THEN 1 ELSE 0 END) > 0
+        ) s
+      )
+      SELECT
+        ld.last_dial_attempt_at,
+        aw.attempts_7d,
+        aw.attempts_30d,
+        aw.unique_called_7d,
+        aw.unique_called_30d,
+        r7.n AS unique_reached_7d,
+        r30.n AS unique_reached_30d
+      FROM last_dial ld
+      CROSS JOIN agg_windows aw
+      CROSS JOIN reach_7d r7
+      CROSS JOIN reach_30d r30
+    `;
+
     const loadDashboardCallMetricsBundle = async () => {
       if (isPostgres) {
         const merged = await query(demoDashboardCallsAndPhoneStatsSql, [clientKey, activityRollingSinceIso]);
@@ -9112,7 +9205,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       responseRows,
       touchpointRows,
       upcomingAppointmentRows,
-      callQueuePendingRow
+      callQueuePendingRow,
+      outreachPulseRows
     ] = await Promise.all([
       query(`
         SELECT COUNT(*) AS total,
@@ -9186,7 +9280,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
           FROM calls
           WHERE client_key = $1
           ORDER BY created_at DESC
-          LIMIT ${RECENT_CALLS_FEED_CAP}
+          LIMIT ${recentCallsFeedCap}
         ) c
         LEFT JOIN lead_lookup lm ON lm.phone_key = ${dashboardCallRowPhoneKeySql}
         ORDER BY c.created_at DESC
@@ -9292,7 +9386,30 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         FROM call_queue
         WHERE client_key = $1
           AND status IN ('pending', 'processing')
-      `, [clientKey])
+      `, [clientKey]),
+      isPostgres
+        ? query(demoDashboardOutreachPulseSql, [clientKey])
+        : query(
+            `
+            SELECT
+              (SELECT MAX(created_at) FROM calls WHERE client_key = $1) AS last_dial_attempt_at,
+              (SELECT CAST(COALESCE(SUM(CASE WHEN created_at >= datetime('now', '-7 days') THEN 1 ELSE 0 END), 0) AS INTEGER)
+                FROM calls WHERE client_key = $1) AS attempts_7d,
+              (SELECT CAST(COALESCE(SUM(CASE WHEN created_at >= datetime('now', '-30 days') THEN 1 ELSE 0 END), 0) AS INTEGER)
+                FROM calls WHERE client_key = $1) AS attempts_30d,
+              (SELECT CAST(COALESCE(COUNT(DISTINCT lead_phone), 0) AS INTEGER) FROM calls c2
+                WHERE c2.client_key = $1
+                  AND c2.created_at >= datetime('now', '-7 days')
+                  AND TRIM(COALESCE(c2.lead_phone, '')) <> '') AS unique_called_7d,
+              (SELECT CAST(COALESCE(COUNT(DISTINCT lead_phone), 0) AS INTEGER) FROM calls c2
+                WHERE c2.client_key = $1
+                  AND c2.created_at >= datetime('now', '-30 days')
+                  AND TRIM(COALESCE(c2.lead_phone, '')) <> '') AS unique_called_30d,
+              NULL AS unique_reached_7d,
+              NULL AS unique_reached_30d
+            `,
+            [clientKey]
+          )
     ]);
 
     const callCounts = callMetricsBundle.callCounts;
@@ -9327,7 +9444,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         LEFT JOIN call_phone_stats cs ON cs.phone_key = ${dashboardLeadPhoneKeyRef}
         WHERE l.client_key = $1
         ORDER BY l.created_at DESC
-        LIMIT ${RECENT_LEADS_DASHBOARD_CAP}
+        LIMIT ${leadsDashboardCap}
       `, [clientKey, phoneKeys, phoneCallsNs, phoneReachedMaxs]);
 
     const totalLeads = parseInt(leadCounts.rows?.[0]?.total || 0, 10);
@@ -9438,6 +9555,55 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         estimatedHoursToClearBacklog = Number(hrs.toFixed(1));
       }
     }
+
+    const pulseRow = outreachPulseRows.rows?.[0] || {};
+    const lastDialAttemptAt =
+      pulseRow.last_dial_attempt_at != null
+        ? new Date(pulseRow.last_dial_attempt_at).toISOString()
+        : null;
+    const attempts7d = parseInt(pulseRow.attempts_7d, 10) || 0;
+    const attempts30d = parseInt(pulseRow.attempts_30d, 10) || 0;
+    const uniqueCalled7d = parseInt(pulseRow.unique_called_7d, 10) || 0;
+    const uniqueCalled30d = parseInt(pulseRow.unique_called_30d, 10) || 0;
+    const uniqueReached7dRaw = pulseRow.unique_reached_7d;
+    const uniqueReached30dRaw = pulseRow.unique_reached_30d;
+    const uniqueReached7d =
+      uniqueReached7dRaw != null ? parseInt(uniqueReached7dRaw, 10) || 0 : null;
+    const uniqueReached30d =
+      uniqueReached30dRaw != null ? parseInt(uniqueReached30dRaw, 10) || 0 : null;
+
+    const { isBusinessHoursForTenant } = await import('./lib/business-hours.js');
+    const tenantTz = client?.timezone || client?.booking?.timezone || 'Europe/London';
+    const withinScheduledDialWindow = isBusinessHoursForTenant(client, new Date(), tenantTz, {
+      forOutboundDial: true
+    });
+
+    let outreachActivityState = 'unknown';
+    if (callsLast24h > 0) outreachActivityState = 'dialing';
+    else if (totalLeads <= 0) outreachActivityState = 'no_contacts';
+    else if (backlogWorkUnits > 0) {
+      outreachActivityState = withinScheduledDialWindow ? 'stale_backlog' : 'paused_hours_backlog';
+    } else if (displayCalls <= 0) outreachActivityState = 'not_started';
+    else outreachActivityState = 'caught_up_idle';
+
+    const trends7d = {
+      dialAttempts: attempts7d,
+      uniqueLeadsCalled: uniqueCalled7d,
+      uniqueLeadsReached: uniqueReached7d != null ? uniqueReached7d : 0,
+      answerRatePct:
+        uniqueReached7d != null && uniqueCalled7d > 0
+          ? Math.round((uniqueReached7d / uniqueCalled7d) * 100)
+          : null
+    };
+    const trends30d = {
+      dialAttempts: attempts30d,
+      uniqueLeadsCalled: uniqueCalled30d,
+      uniqueLeadsReached: uniqueReached30d != null ? uniqueReached30d : 0,
+      answerRatePct:
+        uniqueReached30d != null && uniqueCalled30d > 0
+          ? Math.round((uniqueReached30d / uniqueCalled30d) * 100)
+          : null
+    };
 
     let highPriorityLeads = 0;
     let mediumPriorityLeads = 0;
@@ -9972,7 +10138,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     const payload = {
       ok: true,
       source: 'live',
-      recentLeadsListCap: RECENT_LEADS_DASHBOARD_CAP,
+      briefInitialLoad: briefRequested,
+      recentLeadsListCap: leadsDashboardCap,
       outboundAbTest: {
         mode: dimensionalMode ? 'dimensional' : 'legacy',
         voice: {
@@ -10097,7 +10264,12 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         callQueuePending,
         dialAttemptsLast24h: callsLast24h,
         dialsPerHour: Number(dialsPerHour.toFixed(2)),
-        estimatedHoursToClearBacklog
+        estimatedHoursToClearBacklog,
+        lastDialAttemptAt,
+        activityState: outreachActivityState,
+        withinScheduledDialWindow,
+        trends7d,
+        trends30d
       }
     };
     res.set('Cache-Control', 'no-store, must-revalidate, max-age=0');

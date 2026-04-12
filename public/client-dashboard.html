@@ -1131,6 +1131,46 @@
             font-weight: 650;
         }
 
+        .outreach-capacity-strip .outreach-strip-status {
+            margin: 0 0 8px 0;
+        }
+
+        .outreach-capacity-strip .outreach-strip-last-dial {
+            margin: 0 0 10px 0;
+            font-size: 0.8125rem;
+            color: var(--muted, #5c6478);
+        }
+
+        .outreach-capacity-trends {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px 16px;
+            margin: 12px 0 0 0;
+            padding-top: 10px;
+            border-top: 1px solid var(--border, #e8eaf5);
+        }
+
+        @media (max-width: 640px) {
+            .outreach-capacity-trends {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .outreach-capacity-trend-col h4 {
+            margin: 0 0 6px 0;
+            font-size: 0.75rem;
+            font-weight: 650;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--muted, #5c6478);
+        }
+
+        .outreach-capacity-trend-col p {
+            margin: 0;
+            font-size: 0.8125rem;
+            line-height: 1.45;
+        }
+
         body.tom-outreach-dashboard .funnel-stage.funnel-stage--clickable {
             cursor: pointer;
             border-radius: 10px;
@@ -6414,7 +6454,7 @@
     
     <script>
         const DEMO_CLIENT_KEY = 'demo_client';
-        /** Sync with RECENT_LEADS_DASHBOARD_CAP in server.js (/api/demo-dashboard lead query LIMIT). */
+        /** Sync with RECENT_LEADS_DASHBOARD_CAP in server.js (/api/demo-dashboard lead query LIMIT). Brief initial outreach load uses server DASHBOARD_BRIEF_LEADS_CAP with ?brief=1. */
         const RECENT_LEADS_DASHBOARD_CAP = 5000;
         /** Must match server dashboard rolling window / touchpoint bucketing. */
         const DASHBOARD_ACTIVITY_TZ = 'Europe/London';
@@ -6593,26 +6633,84 @@
             const last24 = oc.dialAttemptsLast24h != null ? Number(oc.dialAttemptsLast24h) : 0;
             const perHr = oc.dialsPerHour != null ? Number(oc.dialsPerHour) : 0;
             const eta = oc.estimatedHoursToClearBacklog != null ? Number(oc.estimatedHoursToClearBacklog) : null;
+            const backlogUnits = never + q;
+            const state = oc.activityState || 'unknown';
+            const inHours = oc.withinScheduledDialWindow === true;
+            let statusLine = '';
+            if (state === 'dialing') {
+                statusLine = `Dialling is active — <strong>${formatNumber(last24)}</strong> dial attempts in the last 24h.`;
+            } else if (state === 'no_contacts') {
+                statusLine = 'No contacts in CRM yet. Upload a lead list to start outreach.';
+            } else if (state === 'stale_backlog') {
+                statusLine = `Work is waiting (<strong>${formatNumber(backlogUnits)}</strong> not-yet-dialled + queued rows) but there were <strong>no</strong> dial attempts in the last 24h. If you expected calls, check the queue and your integration.`;
+            } else if (state === 'paused_hours_backlog') {
+                statusLine = `Outside your scheduled outbound window right now, with <strong>${formatNumber(
+                    backlogUnits
+                )}</strong> rows still waiting (not-yet-dialled + queue). Dialling should resume when hours reopen.`;
+            } else if (state === 'not_started') {
+                statusLine =
+                    'Contacts are on file but there is no outbound dial history yet — the next batch should appear here once dialling starts.';
+            } else if (state === 'caught_up_idle') {
+                statusLine = inHours
+                    ? 'No CRM backlog or queue pressure right now, and no dial attempts in the last 24h — you may be caught up or between campaigns.'
+                    : 'Outside scheduled hours: no backlog is showing, and there were no dial attempts in the last 24h.';
+            } else {
+                statusLine =
+                    last24 > 0
+                        ? `Last 24h: <strong>${formatNumber(last24)}</strong> dial attempts.`
+                        : 'No dial attempts in the last 24h.';
+            }
+
+            let lastDialHtml = '';
+            if (oc.lastDialAttemptAt) {
+                const abs = formatActivitySnapshot(oc.lastDialAttemptAt, data.activityTimezone || DASHBOARD_ACTIVITY_TZ);
+                lastDialHtml = `<p class="outreach-strip-last-dial">Last dial attempt: <strong>${formatTimeAgo(
+                    oc.lastDialAttemptAt
+                )}</strong>${abs ? ` <span class="tom-ab-test-meta">(${abs})</span>` : ''}</p>`;
+            } else {
+                lastDialHtml =
+                    '<p class="outreach-strip-last-dial"><span class="tom-ab-test-meta">No dial attempts recorded yet.</span></p>';
+            }
+
             let etaHtml = '';
-            if (never + q <= 0) {
+            if (backlogUnits <= 0) {
                 etaHtml = '<span class="tom-ab-test-meta">No CRM backlog waiting for a first dial and nothing queued right now.</span>';
             } else if (eta != null && Number.isFinite(eta) && eta > 0 && last24 > 0) {
                 if (eta <= 72) {
                     etaHtml = `At the last-24h pace (~<strong>${formatNumber(perHr)}</strong> dial attempts/hr), clearing <strong>${formatNumber(
-                        never + q
+                        backlogUnits
                     )}</strong> queued + not-yet-dialed units is roughly <strong>${formatNumber(Math.round(eta))}</strong> hours <span class="tom-ab-test-meta">(rough — real pacing follows business hours and priorities).</span>`;
                 } else {
                     etaHtml = `At last-24h pace, backlog is on the order of <strong>${formatNumber(Math.round(eta / 24))}</strong> days <span class="tom-ab-test-meta">(rough estimate).</span>`;
                 }
+            } else if (state === 'stale_backlog' || state === 'paused_hours_backlog') {
+                etaHtml =
+                    '<span class="tom-ab-test-meta">Not enough recent dial volume to estimate how fast the backlog will clear from last-24h pace alone — use the 7d / 30d snapshot below for longer windows.</span>';
             } else {
                 etaHtml =
                     '<span class="tom-ab-test-meta">Not enough recent dial volume to estimate how fast the backlog will clear.</span>';
             }
-            el.innerHTML = `<p style="margin:0 0 8px 0;"><strong>Backlog &amp; pace</strong> · <strong>${formatNumber(
+
+            const fmtPct = (p) => (p == null || Number.isNaN(Number(p)) ? '—' : `${formatNumber(Number(p))}%`);
+            const t7 = oc.trends7d && typeof oc.trends7d === 'object' ? oc.trends7d : {};
+            const t30 = oc.trends30d && typeof oc.trends30d === 'object' ? oc.trends30d : {};
+            const trendBlock = (label, t) => {
+                const att = t.dialAttempts != null ? formatNumber(Number(t.dialAttempts) || 0) : '—';
+                const uc = t.uniqueLeadsCalled != null ? formatNumber(Number(t.uniqueLeadsCalled) || 0) : '—';
+                const ur = t.uniqueLeadsReached != null ? formatNumber(Number(t.uniqueLeadsReached) || 0) : '—';
+                const ar = fmtPct(t.answerRatePct);
+                return `<div class="outreach-capacity-trend-col"><h4>${label}</h4><p><strong>${att}</strong> dial attempts<br><strong>${uc}</strong> unique numbers dialled<br><strong>${ur}</strong> unique reached<br>Answer rate (unique): <strong>${ar}</strong></p></div>`;
+            };
+            const trendsHtml = `<div class="outreach-capacity-trends">${trendBlock('Last 7 days', t7)}${trendBlock(
+                'Last 30 days',
+                t30
+            )}</div>`;
+
+            el.innerHTML = `<p class="outreach-strip-status">${statusLine}</p>${lastDialHtml}<p style="margin:0 0 8px 0;"><strong>Backlog &amp; pace</strong> · <strong>${formatNumber(
                 never
             )}</strong> CRM leads not yet dialed · <strong>${formatNumber(q)}</strong> rows in the outbound queue (pending/processing) · <strong>${formatNumber(
                 last24
-            )}</strong> dial attempts in the last 24h.</p><p style="margin:0;">${etaHtml}</p>`;
+            )}</strong> dial attempts in the last 24h.</p><p style="margin:0;">${etaHtml}</p>${trendsHtml}`;
         }
 
         const BASE_URL = window.location.origin;
@@ -7160,12 +7258,16 @@ ${actionsRow}
         let lastDataUpdate = new Date();
         async function fetchLiveData(clientKey, options = {}) {
             const bustCache = options && options.bustCache === true;
+            const brief = options && options.brief === true;
             if (clientKey !== DEMO_CLIENT_KEY) {
                 try {
                     // Add timeout to prevent hanging
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), 115000); // align with server demo-dashboard budget (request-timeout demoDashboard tier)
-                    const q = bustCache ? `?t=${Date.now()}` : '';
+                    const params = new URLSearchParams();
+                    if (bustCache) params.set('t', String(Date.now()));
+                    if (brief) params.set('brief', '1');
+                    const q = params.toString() ? `?${params.toString()}` : '';
                     const res = await fetch(
                         `${BASE_URL}/api/demo-dashboard/${encodeURIComponent(clientKey)}${q}`,
                         { signal: controller.signal }
@@ -7246,7 +7348,15 @@ ${actionsRow}
             const leadSig = leads.slice(0, 12).map((l) => String(l.id || l.phone || '')).join(',');
             const oc = d.outreachCapacity;
             const ocSig = oc
-                ? `${oc.leadsNeverDialed || 0}|${oc.callQueuePending || 0}|${oc.dialAttemptsLast24h || 0}`
+                ? [
+                    oc.leadsNeverDialed || 0,
+                    oc.callQueuePending || 0,
+                    oc.dialAttemptsLast24h || 0,
+                    oc.activityState || '',
+                    oc.lastDialAttemptAt || '',
+                    oc.trends7d && oc.trends7d.dialAttempts != null ? oc.trends7d.dialAttempts : '',
+                    oc.trends30d && oc.trends30d.dialAttempts != null ? oc.trends30d.dialAttempts : ''
+                  ].join('|')
                 : '';
             const tp = d.touchpoints;
             const tpData = tp && Array.isArray(tp.data) ? tp.data.join(',') : '';
@@ -13116,11 +13226,15 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             // Always try to fetch real data from API
             dashboardLivePayloadFailed = false;
             setDashboardApiErrorVisible(false);
+            let outreachBriefHydrate = false;
             try {
-                const livePayload = await fetchLiveData(currentClient);
+                const useInitialBrief =
+                    currentClient !== DEMO_CLIENT_KEY && isOutreachDashboardClient(currentClient);
+                const livePayload = await fetchLiveData(currentClient, { brief: useInitialBrief });
                 if (livePayload) {
                     // Use real data from API, don't merge with demo data
                     dashboardData = mergeData({}, livePayload, currentClient === DEMO_CLIENT_KEY);
+                    outreachBriefHydrate = livePayload.briefInitialLoad === true;
                 } else if (currentClient === DEMO_CLIENT_KEY) {
                     // Only use demo data if it's the demo client and no API data
                     dashboardData = { ...DEMO_DATA };
@@ -13140,6 +13254,32 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         showError(leadsContainer, 'Unable to load dashboard data. Please refresh the page.', () => location.reload());
                     }
                 }
+            }
+
+            if (currentClient !== DEMO_CLIENT_KEY && outreachBriefHydrate) {
+                fetchLiveData(currentClient, { brief: false })
+                    .then((full) => {
+                        if (!full || full.ok !== true) return;
+                        dashboardData = mergeData(dashboardData, full, false);
+                        lastDashboardPollFingerprint = dashboardPollFingerprint(dashboardData);
+                        updateStatusBar(dashboardData);
+                        renderRecentActivity(dashboardData);
+                        renderLeadJourney(dashboardData);
+                        loadLeadsFunnelSegmentForClient(currentClient);
+                        syncLeadsFunnelChipUi();
+                        renderLeads(dashboardData.recentLeads || [], { preserveFilter: true });
+                        const chartCfg =
+                            currentDashboardChartConfig ||
+                            CLIENT_CONFIG[currentClient] ||
+                            CLIENT_CONFIG[DEMO_CLIENT_KEY] ||
+                            {};
+                        renderChart(chartCfg, dashboardData);
+                        const callsToRender = dashboardData.recentCalls || [];
+                        renderCalls(callsToRender);
+                        renderTomAbTestSection(dashboardData);
+                        syncDashboardFreshnessUi();
+                    })
+                    .catch((e) => console.warn('[DASHBOARD] full outreach hydrate failed', e));
             }
 
             syncDashboardFreshnessUi();
