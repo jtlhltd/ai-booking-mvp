@@ -1,0 +1,26 @@
+---
+description: Anchor client Tom — business model, product intent, and engineering bias
+alwaysApply: true
+---
+
+# Tom (anchor client)
+
+## Who Tom is
+
+- **Tom** is the first real client. In this repo his tenant key is **`d2d-xpress-tom`** (branding: D2D Xpress).
+- His business is **delivery / courier brokerage** (connecting shippers with capacity), not a generic “local services” shop.
+
+## What the product should do for him
+
+- The AI outbound caller’s job is **lead qualification and structured capture** (lanes, volumes, timelines, pain, authority, callback preference, etc.) so Tom’s **human follow-up calls** are short and high-close.
+- Do **not** assume the primary success metric is “calendar booked on first touch” unless that is explicitly the goal; **handoff quality** and **callback readiness** matter more for this use case.
+
+## Strategy (why this matters in code and copy)
+
+- The owner is **pivoting to serve clients like Tom** and may **sell rights / code** later (e.g. logistics / courier ecosystem). Prefer changes that **generalize** (multi-tenant, config-driven scripts, no accidental Tom-only assumptions) over one-off hacks tied only to `d2d-xpress-tom`.
+- Avoid leaking **internal tenant keys** into customer-facing surfaces, transcripts, or third-party payloads; use display names and neutral metadata where those systems are visible to prospects or clients.
+
+## Engineering bias when touching Tom-related flows
+
+- When improving results, prioritize: **reliable dial → answer → complete qual schema → visible handoff** (dashboard / export / CRM), plus **operational safety** (queue, dedupe, retries), not only prompt tweaks.
+- Prefer **explicit client flags / env** over new silent hardcodes of `d2d-xpress-tom` unless there is a documented demo-only exception.
