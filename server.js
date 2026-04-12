@@ -12329,7 +12329,7 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
           rq.retry_attempt,
           rq.max_retries,
           rq.status,
-          'retry_queue'::text AS source
+          'retry_queue' AS source
         FROM retry_queue rq
         WHERE rq.client_key = $1 AND rq.status = 'pending'
         UNION ALL
@@ -12337,12 +12337,12 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
           cq.id,
           cq.lead_phone,
           cq.call_type AS retry_type,
-          'call_queue'::text AS retry_reason,
+          'call_queue' AS retry_reason,
           cq.scheduled_for,
           0 AS retry_attempt,
           1 AS max_retries,
           cq.status,
-          'call_queue'::text AS source
+          'call_queue' AS source
         FROM call_queue cq
         WHERE cq.client_key = $1
           AND cq.status = 'pending'
@@ -12362,7 +12362,7 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
         rq.retry_attempt,
         rq.max_retries,
         rq.status,
-        'retry_queue'::text AS source
+        'retry_queue' AS source
       FROM retry_queue rq
       WHERE rq.client_key = $1 AND rq.status = 'pending'
       ORDER BY rq.scheduled_for ASC NULLS LAST
@@ -12373,9 +12373,9 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
       poolQuerySelect(
         `
         SELECT
-          (SELECT COUNT(*)::int FROM retry_queue rq
+          (SELECT COUNT(*) FROM retry_queue rq
             WHERE rq.client_key = $1 AND rq.status = 'pending') AS rq_pending,
-          (SELECT COUNT(*)::int FROM call_queue cq
+          (SELECT COUNT(*) FROM call_queue cq
             WHERE cq.client_key = $1
               AND cq.status = 'pending'
               AND cq.call_type = 'vapi_call') AS cq_pending
@@ -12906,16 +12906,23 @@ app.get('/api/voicemails/:clientKey', async (req, res) => {
     const limitRaw = parseInt(String(req.query.limit || ''), 10);
     const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 50, 1), 200);
 
-    const [countRes, result] = await Promise.all([
-      poolQuerySelect(`
+    let countRes;
+    let result;
+    if (isPostgres) {
+      [countRes, result] = await Promise.all([
+        poolQuerySelect(
+          `
         SELECT COUNT(*)::int AS n
         FROM calls c
         WHERE c.client_key = $1
           AND c.recording_url IS NOT NULL
           AND TRIM(c.recording_url) <> ''
           AND LOWER(COALESCE(c.outcome, '')) IN ('voicemail')
-      `, [clientKey]),
-      poolQuerySelect(`
+      `,
+          [clientKey]
+        ),
+        poolQuerySelect(
+          `
         SELECT
           c.id,
           c.call_id,
@@ -12963,8 +12970,81 @@ app.get('/api/voicemails/:clientKey', async (req, res) => {
           LIMIT 1
         ) lm ON true
         ORDER BY c.created_at DESC
-      `, [clientKey, limit])
-    ]);
+      `,
+          [clientKey, limit]
+        )
+      ]);
+    } else {
+      // SQLite: no :: casts, no LATERAL, no regexp_replace — keep phone / phone_match_key matching only.
+      [countRes, result] = await Promise.all([
+        poolQuerySelect(
+          `
+        SELECT COUNT(*) AS n
+        FROM calls c
+        WHERE c.client_key = $1
+          AND c.recording_url IS NOT NULL
+          AND TRIM(c.recording_url) <> ''
+          AND LOWER(COALESCE(c.outcome, '')) = 'voicemail'
+      `,
+          [clientKey]
+        ),
+        poolQuerySelect(
+          `
+        SELECT
+          c.id,
+          c.call_id,
+          c.lead_phone,
+          c.recording_url,
+          c.duration,
+          c.outcome,
+          c.created_at,
+          SUBSTR(COALESCE(c.transcript, ''), 1, 512) AS transcript,
+          (
+            SELECT l.id
+            FROM leads l
+            WHERE l.client_key = c.client_key
+              AND (
+                (c.lead_phone_match_key IS NOT NULL AND l.phone_match_key = c.lead_phone_match_key)
+                OR (l.phone = c.lead_phone)
+              )
+            ORDER BY
+              CASE
+                WHEN c.lead_phone_match_key IS NOT NULL AND l.phone_match_key = c.lead_phone_match_key THEN 0
+                WHEN l.phone = c.lead_phone THEN 1
+                ELSE 2
+              END,
+              l.created_at DESC
+            LIMIT 1
+          ) AS lead_id,
+          (
+            SELECT l.name
+            FROM leads l
+            WHERE l.client_key = c.client_key
+              AND (
+                (c.lead_phone_match_key IS NOT NULL AND l.phone_match_key = c.lead_phone_match_key)
+                OR (l.phone = c.lead_phone)
+              )
+            ORDER BY
+              CASE
+                WHEN c.lead_phone_match_key IS NOT NULL AND l.phone_match_key = c.lead_phone_match_key THEN 0
+                WHEN l.phone = c.lead_phone THEN 1
+                ELSE 2
+              END,
+              l.created_at DESC
+            LIMIT 1
+          ) AS name
+        FROM calls c
+        WHERE c.client_key = $1
+          AND c.recording_url IS NOT NULL
+          AND TRIM(c.recording_url) <> ''
+          AND LOWER(COALESCE(c.outcome, '')) = 'voicemail'
+        ORDER BY c.created_at DESC
+        LIMIT $2
+      `,
+          [clientKey, limit]
+        )
+      ]);
+    }
 
     const totalVoicemails = parseInt(countRes.rows?.[0]?.n || 0, 10) || 0;
     const rows = [...(result.rows || [])];
