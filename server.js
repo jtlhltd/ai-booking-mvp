@@ -9009,6 +9009,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     // After outbound A/B bundle infer we still refetch with bypassCache when config was written.
     let client = await getFullClient(clientKey, { bypassCache: false });
     const activityChannel = activityFeedChannelLabel(client);
+    /** Align with outbound dialer (`instant-calling` / `claimOutboundDialSlotForToday`). */
+    const tenantTz = client?.booking?.timezone || client?.timezone || 'Europe/London';
 
     const rollingSinceInstant = DateTime.now().setZone(DASHBOARD_ACTIVITY_TZ).minus({ hours: 24 });
     const activityRollingSinceIso = rollingSinceInstant.toUTC().toISO();
@@ -9025,6 +9027,36 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     const outreachPulseCutoff30Iso = outreachPulseAnchor.minus({ days: 30 }).toUTC().toISO();
     const outreachPulseCutoff7Iso = outreachPulseAnchor.minus({ days: 7 }).toUTC().toISO();
     const outreachPulseParams = [clientKey, outreachPulseCutoff40Iso, outreachPulseCutoff30Iso, outreachPulseCutoff7Iso];
+
+    /** One row: how “alive” the outbound runner is vs rows in `calls` (queue touches, due-now, next slot, dial-day claims). */
+    const demoOutreachQueuePulseSqlPostgres = `
+      SELECT
+        (SELECT COUNT(*)::int FROM call_queue cq
+         WHERE cq.client_key = $1
+           AND cq.updated_at >= $2::timestamptz) AS queue_touches_last24h,
+        (SELECT COUNT(*)::int FROM call_queue cq
+         WHERE cq.client_key = $1
+           AND cq.status = 'pending'
+           AND cq.scheduled_for <= NOW()) AS queue_pending_due_now,
+        (SELECT MIN(cq.scheduled_for) FROM call_queue cq
+         WHERE cq.client_key = $1 AND cq.status = 'pending') AS queue_next_scheduled_for,
+        (SELECT COUNT(*)::int FROM outbound_dial_daily_claim d
+         WHERE d.client_key = $1
+           AND d.dial_date = (NOW() AT TIME ZONE $3::text)::date) AS dial_slots_used_local_today
+    `;
+    const demoOutreachQueuePulseSqlite = `
+      SELECT
+        (SELECT COUNT(*) FROM call_queue cq
+         WHERE cq.client_key = $1
+           AND cq.updated_at >= $2) AS queue_touches_last24h,
+        (SELECT COUNT(*) FROM call_queue cq
+         WHERE cq.client_key = $1
+           AND cq.status = 'pending'
+           AND datetime(cq.scheduled_for) <= datetime('now')) AS queue_pending_due_now,
+        (SELECT MIN(cq.scheduled_for) FROM call_queue cq
+         WHERE cq.client_key = $1 AND cq.status = 'pending') AS queue_next_scheduled_for,
+        NULL AS dial_slots_used_local_today
+    `;
 
     /** Rolling 7d/30d dial + reach counts and last dial time (Postgres); SQLite uses `demoDashboardOutreachPulseSqlite` with the same “reached” rules. */
     const demoDashboardOutreachPulseSql = `
@@ -9366,6 +9398,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       upcomingAppointmentRows,
       callQueuePendingRow,
       outreachPulseRows,
+      outreachQueuePulseRow,
       usageMetersRow
     ] = await Promise.all([
       query(`
@@ -9567,6 +9600,9 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       isPostgres
         ? query(demoDashboardOutreachPulseSql, outreachPulseParams)
         : query(demoDashboardOutreachPulseSqlite, outreachPulseParams),
+      isPostgres
+        ? query(demoOutreachQueuePulseSqlPostgres, [clientKey, activityRollingSinceIso, tenantTz])
+        : query(demoOutreachQueuePulseSqlite, [clientKey, activityRollingSinceIso]),
       query(
         `
         SELECT
@@ -9720,6 +9756,15 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     });
 
     const callQueuePending = parseInt(callQueuePendingRow.rows?.[0]?.n || 0, 10);
+    const oqPulse = outreachQueuePulseRow.rows?.[0] || {};
+    const queueTouchesLast24h = parseInt(oqPulse.queue_touches_last24h, 10) || 0;
+    const queuePendingDueNow = parseInt(oqPulse.queue_pending_due_now, 10) || 0;
+    const queueNextScheduledRaw = oqPulse.queue_next_scheduled_for;
+    const queueNextScheduledFor =
+      queueNextScheduledRaw != null ? new Date(queueNextScheduledRaw).toISOString() : null;
+    const dialSlotsUsedLocalToday =
+      oqPulse.dial_slots_used_local_today != null ? parseInt(oqPulse.dial_slots_used_local_today, 10) || 0 : null;
+
     const leadsNeverDialed = Math.max(0, totalLeads - (displayCalls || 0));
     const dialsPerHour = callsLast24h / 24;
     const backlogWorkUnits = leadsNeverDialed + callQueuePending;
@@ -9748,16 +9793,30 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       uniqueReached30dRaw != null ? parseInt(uniqueReached30dRaw, 10) || 0 : null;
 
     const { isBusinessHoursForTenant } = await import('./lib/business-hours.js');
-    const tenantTz = client?.timezone || client?.booking?.timezone || 'Europe/London';
     const withinScheduledDialWindow = isBusinessHoursForTenant(client, new Date(), tenantTz, {
       forOutboundDial: true
     });
+
+    const nextSchedMs = queueNextScheduledFor ? Date.parse(queueNextScheduledFor) : NaN;
+    const queueNextIsFuture = Number.isFinite(nextSchedMs) && nextSchedMs > Date.now();
 
     let outreachActivityState = 'unknown';
     if (callsLast24h > 0) outreachActivityState = 'dialing';
     else if (totalLeads <= 0) outreachActivityState = 'no_contacts';
     else if (backlogWorkUnits > 0) {
-      outreachActivityState = withinScheduledDialWindow ? 'stale_backlog' : 'paused_hours_backlog';
+      if (!withinScheduledDialWindow) {
+        outreachActivityState = 'paused_hours_backlog';
+      } else if (
+        callQueuePending > 0 &&
+        queuePendingDueNow === 0 &&
+        queueNextIsFuture
+      ) {
+        outreachActivityState = 'queued_future_window';
+      } else if (queueTouchesLast24h >= 5) {
+        outreachActivityState = 'runner_backlog_no_logs';
+      } else {
+        outreachActivityState = 'stale_backlog';
+      }
     } else if (displayCalls <= 0) outreachActivityState = 'not_started';
     else outreachActivityState = 'caught_up_idle';
 
@@ -10473,6 +10532,10 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         leadsNeverDialed,
         callQueuePending,
         dialAttemptsLast24h: callsLast24h,
+        queueTouchesLast24h,
+        queuePendingDueNow,
+        queueNextScheduledFor,
+        dialSlotsUsedLocalToday,
         dialsPerHour: Number(dialsPerHour.toFixed(2)),
         estimatedHoursToClearBacklog,
         lastDialAttemptAt,
