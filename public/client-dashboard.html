@@ -1118,12 +1118,12 @@
 
         .outreach-capacity-strip {
             margin: 0 0 18px;
-            padding: 12px 16px;
+            padding: 14px 16px 16px;
             border-radius: 12px;
             background: rgba(92, 106, 196, 0.09);
             border: 1px solid var(--border, #e8eaf5);
             font-size: 0.875rem;
-            line-height: 1.5;
+            line-height: 1.45;
             color: var(--text, #1a1d2e);
         }
 
@@ -1131,12 +1131,128 @@
             font-weight: 650;
         }
 
+        .outreach-strip-head {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px 12px;
+            margin: 0 0 10px 0;
+        }
+
+        .outreach-strip-kicker {
+            margin: 0;
+            font-size: 0.6875rem;
+            font-weight: 650;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--muted, #5c6478);
+        }
+
+        .outreach-state-pill {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 650;
+            line-height: 1.25;
+            border: 1px solid transparent;
+            white-space: nowrap;
+        }
+
+        .outreach-state-pill--ok {
+            background: rgba(34, 139, 87, 0.12);
+            color: #1b5e3a;
+            border-color: rgba(34, 139, 87, 0.25);
+        }
+
+        .outreach-state-pill--info {
+            background: rgba(59, 91, 184, 0.14);
+            color: #2a3f8f;
+            border-color: rgba(59, 91, 184, 0.22);
+        }
+
+        .outreach-state-pill--warn {
+            background: rgba(196, 138, 0, 0.14);
+            color: #6b4e00;
+            border-color: rgba(196, 138, 0, 0.28);
+        }
+
+        .outreach-state-pill--muted {
+            background: rgba(92, 100, 120, 0.1);
+            color: var(--muted, #5c6478);
+            border-color: var(--border, #e8eaf5);
+        }
+
+        .outreach-strip-summary {
+            margin: 0 0 12px 0;
+            font-size: 0.9375rem;
+            line-height: 1.45;
+            color: var(--text, #1a1d2e);
+        }
+
+        .outreach-strip-facts {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px 14px;
+            margin: 0 0 12px 0;
+            padding: 10px 12px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.55);
+            border: 1px solid rgba(92, 106, 196, 0.12);
+        }
+
+        @media (max-width: 560px) {
+            .outreach-strip-facts {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .outreach-strip-fact {
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 0;
+        }
+
+        .outreach-strip-fact dt {
+            margin: 0;
+            font-size: 0.6875rem;
+            font-weight: 650;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            color: var(--muted, #5c6478);
+        }
+
+        .outreach-strip-fact dd {
+            margin: 0;
+            font-size: 0.8125rem;
+            font-weight: 600;
+            color: var(--text, #1a1d2e);
+            word-break: break-word;
+        }
+
+        .outreach-strip-hint {
+            margin: 0 0 10px 0;
+            font-size: 0.8125rem;
+            line-height: 1.45;
+            color: var(--muted, #5c6478);
+        }
+
+        .outreach-strip-hint code {
+            font-size: 0.75em;
+            padding: 1px 4px;
+            border-radius: 4px;
+            background: rgba(92, 100, 120, 0.08);
+        }
+
         .outreach-capacity-strip .outreach-strip-status {
             margin: 0 0 8px 0;
         }
 
         .outreach-capacity-strip .outreach-strip-last-dial {
-            margin: 0 0 10px 0;
+            margin: 0 0 8px 0;
             font-size: 0.8125rem;
             color: var(--muted, #5c6478);
         }
@@ -6902,77 +7018,100 @@
             const backlogUnits = never + q;
             const state = oc.activityState || 'unknown';
             const inHours = oc.withinScheduledDialWindow === true;
+            const actTz = data.activityTimezone || DASHBOARD_ACTIVITY_TZ;
             const nextSchedAbs =
                 oc.queueNextScheduledFor && typeof formatRelativeWithAbsolute === 'function'
-                    ? formatRelativeWithAbsolute(oc.queueNextScheduledFor, data.activityTimezone || DASHBOARD_ACTIVITY_TZ)
+                    ? formatRelativeWithAbsolute(oc.queueNextScheduledFor, actTz)
                     : oc.queueNextScheduledFor
                       ? escapeHtml(String(oc.queueNextScheduledFor))
                       : '';
-            let statusLine = '';
+
+            let pillText = 'Outbound status';
+            let pillClass = 'outreach-state-pill--muted';
+            let summary = '';
+
             if (state === 'dialing') {
-                statusLine = `Dialling is active — <strong>${formatNumber(last24)}</strong> calls logged in dial history in the last 24h.`;
+                pillText = 'Calls logging';
+                pillClass = 'outreach-state-pill--ok';
+                summary = `Outbound is placing calls. <strong>${formatNumber(last24)}</strong> call rows hit dial history in the last 24 hours.`;
             } else if (state === 'no_contacts') {
-                statusLine = 'No contacts in CRM yet. Upload a lead list to start outreach.';
+                pillText = 'No contacts';
+                pillClass = 'outreach-state-pill--muted';
+                summary = 'Add a lead list to CRM to start outbound dialling.';
             } else if (state === 'queued_future_window') {
-                statusLine = `You have <strong>${formatNumber(
-                    backlogUnits
-                )}</strong> units of work (not-yet-dialled + queue), but <strong>nothing is due yet</strong> — the earliest scheduled outbound slot is <strong>${nextSchedAbs || 'later'}</strong> (staggered timing, business hours, or per-number daily limits bump rows forward).`;
+                pillText = 'Scheduled ahead';
+                pillClass = 'outreach-state-pill--info';
+                summary = `You have <strong>${formatNumber(backlogUnits)}</strong> units of work (not yet dialled in CRM + queue), but <strong>nothing is due right now</strong>. Next slot: <strong>${escapeHtml(nextSchedAbs || '—')}</strong>.`;
             } else if (state === 'runner_backlog_no_logs') {
-                statusLine = `The outbound runner <strong>is</strong> touching the queue (<strong>${formatNumber(
-                    qt24
-                )}</strong> queue row updates in the last 24h), but <strong>no</strong> new rows landed in <strong>dial history</strong> in that window — common causes: one attempt per number per local day already used${
-                    slotsToday != null
-                        ? ` (<strong>${formatNumber(slotsToday)}</strong> per-day dial slots recorded today in your tenant timezone)`
-                        : ''
-                }; Vapi or start failures before a call id is saved; or retries that never reach dial history. Check host logs for <code>[QUEUE CALL]</code> / <code>[INSTANT CALL]</code>.`;
+                pillText = 'Runner on — no new logs';
+                pillClass = 'outreach-state-pill--warn';
+                summary = `The queue is being updated (<strong>${formatNumber(qt24)}</strong> row touches in 24h) but <strong>no new calls</strong> appeared in dial history. Often: one attempt per number per local day already used${
+                    slotsToday != null ? ` (<strong>${formatNumber(slotsToday)}</strong> slots today)` : ''
+                }, or Vapi/start failed before a call id was saved.`;
             } else if (state === 'stale_backlog') {
-                statusLine = `Work is waiting (<strong>${formatNumber(
-                    backlogUnits
-                )}</strong> not-yet-dialled + queued rows) and <strong>no</strong> calls were logged to dial history in the last 24h. Queue row touches in that window: <strong>${formatNumber(
-                    qt24
-                )}</strong> — ${
+                pillText = 'Backlog — quiet runner';
+                pillClass = 'outreach-state-pill--warn';
+                summary =
                     qt24 <= 2
-                        ? 'very low; check that the host cron is running or that rows are actually due (see Runner line).'
-                        : 'some movement but below the threshold for “runner active”; inspect logs if you still expect new call records.'
-                }`;
+                        ? `<strong>${formatNumber(backlogUnits)}</strong> units waiting, but almost no queue movement in 24h (<strong>${formatNumber(qt24)}</strong> touches). Check the host, cron, and that rows are due.`
+                        : `<strong>${formatNumber(backlogUnits)}</strong> units waiting; queue moved a bit (<strong>${formatNumber(qt24)}</strong> touches) but not enough to match expectations. Check logs if calls should be logging.`;
             } else if (state === 'paused_hours_backlog') {
-                statusLine = `Outside your scheduled outbound window right now, with <strong>${formatNumber(
-                    backlogUnits
-                )}</strong> rows still waiting (not-yet-dialled + queue). Dialling should resume when hours reopen.`;
+                pillText = 'Outside dialling hours';
+                pillClass = 'outreach-state-pill--muted';
+                summary = `Outbound is limited to your business hours. <strong>${formatNumber(backlogUnits)}</strong> units still waiting (CRM + queue).`;
             } else if (state === 'not_started') {
-                statusLine =
-                    'Contacts are on file but there is no outbound dial history yet — the next batch should appear here once dialling starts.';
+                pillText = 'Not started';
+                pillClass = 'outreach-state-pill--muted';
+                summary = 'Leads are on file; dial history will fill once outbound runs.';
             } else if (state === 'caught_up_idle') {
-                statusLine = inHours
-                    ? 'No CRM backlog or queue pressure right now, and no calls logged to dial history in the last 24h — you may be caught up or between campaigns.'
-                    : 'Outside scheduled hours: no backlog is showing, and no calls were logged to dial history in the last 24h.';
+                pillText = inHours ? 'Caught up' : 'Off hours';
+                pillClass = 'outreach-state-pill--ok';
+                summary = inHours
+                    ? 'No backlog right now — you may be between campaigns or fully caught up.'
+                    : 'Outside scheduled hours; no backlog showing.';
             } else {
-                statusLine =
+                pillText = last24 > 0 ? 'Outbound' : 'Check status';
+                pillClass = last24 > 0 ? 'outreach-state-pill--ok' : 'outreach-state-pill--muted';
+                summary =
                     last24 > 0
-                        ? `Last 24h: <strong>${formatNumber(last24)}</strong> calls in dial history.`
-                        : 'No calls logged to dial history in the last 24h.';
+                        ? `<strong>${formatNumber(last24)}</strong> calls in dial history (last 24h).`
+                        : 'No calls in dial history in the last 24h.';
             }
 
             let lastDialHtml = '';
             if (oc.lastDialAttemptAt) {
-                const tz = data.activityTimezone || DASHBOARD_ACTIVITY_TZ;
-                const relAbs = formatRelativeWithAbsolute(oc.lastDialAttemptAt, tz);
-                lastDialHtml = `<p class="outreach-strip-last-dial">Last dial attempt: <strong>${escapeHtml(relAbs)}</strong></p>`;
+                const relAbs = formatRelativeWithAbsolute(oc.lastDialAttemptAt, actTz);
+                lastDialHtml = `<p class="outreach-strip-last-dial">Last logged dial: <strong>${escapeHtml(relAbs)}</strong></p>`;
             } else {
                 lastDialHtml =
-                    '<p class="outreach-strip-last-dial"><span class="tom-ab-test-meta">No dial attempts recorded yet.</span></p>';
+                    '<p class="outreach-strip-last-dial"><span class="tom-ab-test-meta">No calls in dial history yet.</span></p>';
+            }
+
+            let hintHtml = '';
+            if (state === 'runner_backlog_no_logs') {
+                hintHtml =
+                    '<p class="outreach-strip-hint tom-ab-test-meta">Host logs: search <code>[QUEUE CALL]</code>, <code>[INSTANT CALL]</code>, <code>daily dial</code>, or <code>Vapi</code>. Rule of thumb: <strong>one outbound attempt per phone number per local calendar day</strong> (then the same number can run again the next day).</p>';
+            } else if (state === 'queued_future_window') {
+                hintHtml =
+                    '<p class="outreach-strip-hint tom-ab-test-meta">Rows can sit in the future when staggered timing, business hours, or the per-day-per-number rule bumps them to the next window.</p>';
+            } else if (state === 'dialing') {
+                hintHtml =
+                    '<p class="outreach-strip-hint tom-ab-test-meta">Dial history counts saved call rows; it can lag a few seconds right after a dial starts.</p>';
+            } else if (state === 'stale_backlog' && qt24 <= 2) {
+                hintHtml =
+                    '<p class="outreach-strip-hint tom-ab-test-meta">If you expect steady dialling, confirm the production server is up and the call-queue cron is firing (even minutes UTC).</p>';
             }
 
             let etaHtml = '';
             if (backlogUnits <= 0) {
-                etaHtml = '<span class="tom-ab-test-meta">No CRM backlog waiting for a first dial and nothing queued right now.</span>';
+                etaHtml = '<p class="outreach-strip-hint tom-ab-test-meta" style="margin-bottom:0">No CRM backlog and nothing in the outbound queue.</p>';
             } else if (eta != null && Number.isFinite(eta) && eta > 0 && last24 > 0) {
                 if (eta <= 72) {
-                    etaHtml = `At the last-24h pace (~<strong>${formatNumber(perHr)}</strong> dial attempts/hr), clearing <strong>${formatNumber(
+                    etaHtml = `<p class="outreach-strip-hint tom-ab-test-meta" style="margin-bottom:0">At recent pace (~<strong>${formatNumber(perHr)}</strong> calls/hr in history), clearing <strong>${formatNumber(
                         backlogUnits
-                    )}</strong> queued + not-yet-dialed units is roughly <strong>${formatNumber(Math.round(eta))}</strong> hours <span class="tom-ab-test-meta">(rough — real pacing follows business hours and priorities).</span>`;
+                    )}</strong> units is roughly <strong>${formatNumber(Math.round(eta))}</strong> hours <span class="tom-ab-test-meta">(rough; real pacing follows hours and priorities).</span></p>`;
                 } else {
-                    etaHtml = `At last-24h pace, backlog is on the order of <strong>${formatNumber(Math.round(eta / 24))}</strong> days <span class="tom-ab-test-meta">(rough estimate).</span>`;
+                    etaHtml = `<p class="outreach-strip-hint tom-ab-test-meta" style="margin-bottom:0">At recent pace, backlog is on the order of <strong>${formatNumber(Math.round(eta / 24))}</strong> days <span class="tom-ab-test-meta">(rough).</span></p>`;
                 }
             } else if (
                 state === 'stale_backlog' ||
@@ -6981,10 +7120,10 @@
                 state === 'queued_future_window'
             ) {
                 etaHtml =
-                    '<span class="tom-ab-test-meta">Not enough recent dial volume to estimate how fast the backlog will clear from last-24h pace alone — use the 7d / 30d snapshot below for longer windows.</span>';
+                    '<p class="outreach-strip-hint tom-ab-test-meta" style="margin-bottom:0">Cannot estimate clear time from the last 24h alone — use the 7d / 30d snapshot below.</p>';
             } else {
                 etaHtml =
-                    '<span class="tom-ab-test-meta">Not enough recent dial volume to estimate how fast the backlog will clear.</span>';
+                    '<p class="outreach-strip-hint tom-ab-test-meta" style="margin-bottom:0">Not enough recent call volume in history to estimate backlog time.</p>';
             }
 
             const t7 = oc.trends7d && typeof oc.trends7d === 'object' ? oc.trends7d : {};
@@ -6993,24 +7132,47 @@
                 const att = t.dialAttempts != null ? formatNumber(Number(t.dialAttempts) || 0) : '—';
                 const uc = t.uniqueLeadsCalled != null ? formatNumber(Number(t.uniqueLeadsCalled) || 0) : '—';
                 const ur = t.uniqueLeadsReached != null ? formatNumber(Number(t.uniqueLeadsReached) || 0) : '—';
-                return `<div class="outreach-capacity-trend-col"><h4>${label}</h4><p><strong>${att}</strong> dial attempts<br><strong>${uc}</strong> unique numbers dialled<br><strong>${ur}</strong> unique reached</p></div>`;
+                return `<div class="outreach-capacity-trend-col"><h4>${label}</h4><p><strong>${att}</strong> in dial history<br><strong>${uc}</strong> unique numbers dialled<br><strong>${ur}</strong> unique reached</p></div>`;
             };
             const trendsHtml = `<div class="outreach-capacity-trends">${trendBlock('Last 7 days', t7)}${trendBlock(
                 'Last 30 days',
                 t30
             )}</div>`;
 
-            const engineParts = [];
-            engineParts.push(`<strong>${formatNumber(qt24)}</strong> queue row touches (24h)`);
-            engineParts.push(`<strong>${formatNumber(qDue)}</strong> due now (pending &amp; scheduled ≤ now)`);
-            if (slotsToday != null) engineParts.push(`<strong>${formatNumber(slotsToday)}</strong> per-day dial slots used (today, tenant tz)`);
-            const engineLine = `<p class="outreach-strip-engine tom-ab-test-meta" style="margin:6px 0 10px 0;"><strong>Runner</strong> · ${engineParts.join(' · ')} · dial history (24h): <strong>${formatNumber(last24)}</strong></p>`;
+            const slotsDd =
+                slotsToday != null
+                    ? `<strong>${formatNumber(slotsToday)}</strong> <span class="tom-ab-test-meta">(per-number day)</span>`
+                    : '— <span class="tom-ab-test-meta">(not reported)</span>';
+            const nextDd =
+                q > 0 && nextSchedAbs
+                    ? `<strong>${escapeHtml(nextSchedAbs)}</strong>`
+                    : q > 0
+                      ? '—'
+                      : '—';
 
-            el.innerHTML = `<p class="outreach-strip-status">${statusLine}</p>${engineLine}${lastDialHtml}<p style="margin:0 0 8px 0;"><strong>Backlog &amp; pace</strong> · <strong>${formatNumber(
-                never
-            )}</strong> CRM leads not yet dialed · <strong>${formatNumber(q)}</strong> rows in the outbound queue (pending/processing) · <strong>${formatNumber(
-                last24
-            )}</strong> calls logged to dial history in the last 24h.</p><p style="margin:0;">${etaHtml}</p>${trendsHtml}`;
+            const factsHtml = `
+                <dl class="outreach-strip-facts" aria-label="Outbound snapshot">
+                    <div class="outreach-strip-fact"><dt>Backlog (CRM + queue)</dt><dd><strong>${formatNumber(backlogUnits)}</strong></dd></div>
+                    <div class="outreach-strip-fact"><dt>In outbound queue</dt><dd><strong>${formatNumber(q)}</strong> <span class="tom-ab-test-meta">pending / processing</span></dd></div>
+                    <div class="outreach-strip-fact"><dt>CRM not dialled yet</dt><dd><strong>${formatNumber(never)}</strong></dd></div>
+                    <div class="outreach-strip-fact"><dt>Due now (queue)</dt><dd><strong>${formatNumber(qDue)}</strong> <span class="tom-ab-test-meta">scheduled ≤ now</span></dd></div>
+                    <div class="outreach-strip-fact"><dt>Next queue slot</dt><dd>${nextDd}</dd></div>
+                    <div class="outreach-strip-fact"><dt>Call history (24h)</dt><dd><strong>${formatNumber(last24)}</strong> <span class="tom-ab-test-meta">saved rows</span></dd></div>
+                    <div class="outreach-strip-fact"><dt>Queue updates (24h)</dt><dd><strong>${formatNumber(qt24)}</strong> <span class="tom-ab-test-meta">row touches</span></dd></div>
+                    <div class="outreach-strip-fact"><dt>Slots used today</dt><dd>${slotsDd}</dd></div>
+                </dl>`;
+
+            el.innerHTML = `
+                <div class="outreach-strip-head">
+                    <p class="outreach-strip-kicker">Outbound</p>
+                    <span class="outreach-state-pill ${pillClass}">${escapeHtml(pillText)}</span>
+                </div>
+                <p class="outreach-strip-summary">${summary}</p>
+                ${factsHtml}
+                ${lastDialHtml}
+                ${hintHtml}
+                ${etaHtml}
+                ${trendsHtml}`;
         }
 
         function renderUsageMetersStrip(data) {
