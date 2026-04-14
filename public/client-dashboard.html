@@ -7023,7 +7023,7 @@
             const tenantBusinessHours = (data && data.config && data.config.businessHours) || null;
             const nextSchedAbs =
                 oc.queueNextScheduledFor && typeof formatRelativeWithAbsolute === 'function'
-                    ? formatRelativeWithAbsolute(oc.queueNextScheduledFor, actTz)
+                    ? formatRelativeWithAbsolute(oc.queueNextScheduledFor, tenantTz)
                     : oc.queueNextScheduledFor
                       ? escapeHtml(String(oc.queueNextScheduledFor))
                       : '';
