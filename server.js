@@ -8865,6 +8865,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
           )
       ) ts ON TRUE
       WHERE c.client_key = $1
+        AND c.created_at >= $3::timestamptz
     ),
     call_row AS (
       SELECT
@@ -9014,6 +9015,13 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
 
     const rollingSinceInstant = DateTime.now().setZone(DASHBOARD_ACTIVITY_TZ).minus({ hours: 24 });
     const activityRollingSinceIso = rollingSinceInstant.toUTC().toISO();
+    // Bound heavy dashboard aggregates to a rolling window to avoid full-table scans in large tenants.
+    // The UI is still “all-time-ish” for most early tenants, but this keeps prod safe as volume grows.
+    const dashboardCallsStatsCutoffIso = DateTime.now()
+      .setZone(DASHBOARD_ACTIVITY_TZ)
+      .minus({ days: 180 })
+      .toUTC()
+      .toISO();
     const activityAsOfLondon = DateTime.now().setZone(DASHBOARD_ACTIVITY_TZ);
 
     const touchpointDayKeySql = isPostgres
@@ -9253,7 +9261,11 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
 
     const loadDashboardCallMetricsBundle = async () => {
       if (isPostgres) {
-        const merged = await query(demoDashboardCallsAndPhoneStatsSql, [clientKey, activityRollingSinceIso]);
+        const merged = await query(demoDashboardCallsAndPhoneStatsSql, [
+          clientKey,
+          activityRollingSinceIso,
+          dashboardCallsStatsCutoffIso
+        ]);
         const row = merged.rows?.[0];
         if (!row) {
           return { callCounts: { rows: [{}] }, callPhoneStatsAgg: { rows: [] } };
