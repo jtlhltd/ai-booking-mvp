@@ -1,5 +1,23 @@
 import { describe, test, expect, afterEach, jest } from '@jest/globals';
-import { enforceAdminApiKeyIfConfigured } from '../../../middleware/admin-api-key.js';
+import {
+  enforceAdminApiKeyIfConfigured,
+  adminSurfaceRequiresApiKey
+} from '../../../middleware/admin-api-key.js';
+
+describe('adminSurfaceRequiresApiKey', () => {
+  test('covers /api/admin and legacy /admin JSON routes', () => {
+    expect(adminSurfaceRequiresApiKey('/api/admin/system-health')).toBe(true);
+    expect(adminSurfaceRequiresApiKey('/admin/tenants')).toBe(true);
+    expect(adminSurfaceRequiresApiKey('/admin/vapi/test-connection')).toBe(true);
+  });
+  test('excludes Admin Hub shell and JWT-backed /admin routes', () => {
+    expect(adminSurfaceRequiresApiKey('/admin-hub')).toBe(false);
+    expect(adminSurfaceRequiresApiKey('/admin-hub.html')).toBe(false);
+    expect(adminSurfaceRequiresApiKey('/admin/users/acme')).toBe(false);
+    expect(adminSurfaceRequiresApiKey('/admin/api-keys/acme')).toBe(false);
+    expect(adminSurfaceRequiresApiKey('/admin/security-events/acme')).toBe(false);
+  });
+});
 
 describe('enforceAdminApiKeyIfConfigured', () => {
   const prevEnforce = process.env.ENFORCE_ADMIN_API_KEY;
@@ -47,6 +65,27 @@ describe('enforceAdminApiKeyIfConfigured', () => {
     process.env.ENFORCE_ADMIN_API_KEY = '1';
     process.env.API_KEY = 'expected-key';
     const req = { path: '/api/admin/foo', get: (h) => (h === 'X-API-Key' ? 'expected-key' : null) };
+    const res = { status: jest.fn(), json: jest.fn() };
+    const next = jest.fn();
+    enforceAdminApiKeyIfConfigured(req, res, next);
+    expect(next).toHaveBeenCalled();
+  });
+
+  test('when enforce is on, protects /admin/tenants with X-API-Key', () => {
+    process.env.ENFORCE_ADMIN_API_KEY = '1';
+    process.env.API_KEY = 'expected-key';
+    const req = { path: '/admin/tenants', method: 'GET', get: () => null };
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    const next = jest.fn();
+    enforceAdminApiKeyIfConfigured(req, res, next);
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('when enforce is on, does not block /admin/users/:tenant (JWT routes)', () => {
+    process.env.ENFORCE_ADMIN_API_KEY = '1';
+    process.env.API_KEY = 'expected-key';
+    const req = { path: '/admin/users/acme', method: 'POST', get: () => null };
     const res = { status: jest.fn(), json: jest.fn() };
     const next = jest.fn();
     enforceAdminApiKeyIfConfigured(req, res, next);

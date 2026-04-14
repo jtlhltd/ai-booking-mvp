@@ -38,9 +38,15 @@ describe('SQLite: addToCallQueue merge + outbound weekday journey', () => {
     query = dbModule.query;
   });
 
-  afterAll(() => {
+  afterAll(async () => {
     try {
-      dbModule?.closeSqliteForTesting?.();
+      const cache = await import('../../lib/cache.js');
+      await cache.disconnectRedisClient();
+    } catch (_) {
+      /* ignore */
+    }
+    try {
+      await dbModule?.closeDatabaseConnectionsForTests?.();
     } catch (_) {
       /* ignore */
     }
@@ -58,6 +64,14 @@ describe('SQLite: addToCallQueue merge + outbound weekday journey', () => {
   test('request-queue handles only sms_send + lead_import', async () => {
     const rq = await import('../../lib/request-queue.js');
     expect(rq.REQUEST_QUEUE_HANDLED_CALL_TYPES).toEqual(['sms_send', 'lead_import']);
+  });
+
+  test('enqueueRequest rejects unknown and vapi_call types', async () => {
+    const rq = await import('../../lib/request-queue.js');
+    const unk = await rq.enqueueRequest({ clientKey: 't', requestType: 'unknown', payload: { phone: '1' } });
+    expect(unk.success).toBe(false);
+    const vapi = await rq.enqueueRequest({ clientKey: 't', requestType: 'vapi_call', payload: {} });
+    expect(vapi.success).toBe(false);
   });
 
   test('addToCallQueue merges vapi_call by digit key on SQLite', async () => {

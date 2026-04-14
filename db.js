@@ -1196,6 +1196,54 @@ async function initPostgres() {
 }
 
 // ---------------------- SQLite fallback ----------------------
+/** Older on-disk DBs may lack these tables; idempotent CREATE (also invoked at end of initSqlite). */
+function ensureSqliteCallQueueAndQualityAlertsTables() {
+  if (!sqlite) return;
+  try {
+    sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS call_queue (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_key TEXT NOT NULL,
+      lead_phone TEXT NOT NULL,
+      priority INTEGER DEFAULT 5,
+      scheduled_for TEXT NOT NULL,
+      call_type TEXT NOT NULL,
+      call_data TEXT,
+      status TEXT DEFAULT 'pending',
+      retry_attempt INTEGER DEFAULT 0,
+      initiated_call_id TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (client_key) REFERENCES tenants(client_key) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS call_queue_sqlite_pending_scheduled_priority_idx
+      ON call_queue (scheduled_for ASC, priority ASC)
+      WHERE status = 'pending';
+    CREATE TABLE IF NOT EXISTS quality_alerts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_key TEXT NOT NULL,
+      alert_type TEXT NOT NULL,
+      severity TEXT NOT NULL,
+      metric TEXT,
+      actual_value TEXT,
+      expected_value TEXT,
+      message TEXT NOT NULL,
+      action TEXT,
+      impact TEXT,
+      metadata TEXT,
+      resolved INTEGER DEFAULT 0,
+      resolved_at TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (client_key) REFERENCES tenants(client_key) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS quality_alerts_sqlite_client_created_idx
+      ON quality_alerts (client_key, created_at DESC);
+  `);
+  } catch (e) {
+    console.warn('[sqlite] ensure call_queue / quality_alerts:', e?.message || e);
+  }
+}
+
 function initSqlite() {
   const dataDir = process.env.DATA_DIR || path.join(process.cwd(), 'data');
   if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
@@ -1278,44 +1326,9 @@ function initSqlite() {
       id INTEGER PRIMARY KEY CHECK (id = 1),
       floor_at TEXT NOT NULL
     );
-    CREATE TABLE IF NOT EXISTS call_queue (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_key TEXT NOT NULL,
-      lead_phone TEXT NOT NULL,
-      priority INTEGER DEFAULT 5,
-      scheduled_for TEXT NOT NULL,
-      call_type TEXT NOT NULL,
-      call_data TEXT,
-      status TEXT DEFAULT 'pending',
-      retry_attempt INTEGER DEFAULT 0,
-      initiated_call_id TEXT,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (client_key) REFERENCES tenants(client_key) ON DELETE CASCADE
-    );
-    CREATE INDEX IF NOT EXISTS call_queue_sqlite_pending_scheduled_priority_idx
-      ON call_queue (scheduled_for ASC, priority ASC)
-      WHERE status = 'pending';
-    CREATE TABLE IF NOT EXISTS quality_alerts (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_key TEXT NOT NULL,
-      alert_type TEXT NOT NULL,
-      severity TEXT NOT NULL,
-      metric TEXT,
-      actual_value TEXT,
-      expected_value TEXT,
-      message TEXT NOT NULL,
-      action TEXT,
-      impact TEXT,
-      metadata TEXT,
-      resolved INTEGER DEFAULT 0,
-      resolved_at TEXT,
-      created_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (client_key) REFERENCES tenants(client_key) ON DELETE CASCADE
-    );
-    CREATE INDEX IF NOT EXISTS quality_alerts_sqlite_client_created_idx
-      ON quality_alerts (client_key, created_at DESC);
   `);
+
+  ensureSqliteCallQueueAndQualityAlertsTables();
 
   // avoid template literal parsing issues
   if (DB_PATH === 'json-file') {
@@ -1533,6 +1546,17 @@ export function closeSqliteForTesting() {
     /* ignore */
   }
   sqlite = null;
+}
+
+/** Tests: end Postgres pool and/or close SQLite. */
+export async function closeDatabaseConnectionsForTests() {
+  try {
+    if (pool) await pool.end();
+  } catch (_) {
+    /* ignore */
+  }
+  pool = null;
+  closeSqliteForTesting();
 }
 
 export { DB_PATH, query, pool, dbType };
@@ -1765,7 +1789,7 @@ export async function withTransaction(callback) {
 
 // Cleanup expired cache entries periodically
 if (typeof setInterval !== 'undefined') {
-  setInterval(() => {
+  const clientCacheSweep = setInterval(() => {
     const now = Date.now();
     for (const [key, value] of clientCache.entries()) {
       if (now >= value.expires) {
@@ -1773,6 +1797,7 @@ if (typeof setInterval !== 'undefined') {
       }
     }
   }, 10 * 60 * 1000); // Every 10 minutes
+  if (typeof clientCacheSweep?.unref === 'function') clientCacheSweep.unref();
 }
 
 export async function upsertFullClient(c) {

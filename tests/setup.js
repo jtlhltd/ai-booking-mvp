@@ -2,7 +2,7 @@
 
 process.env.NODE_ENV = 'test';
 
-// Optional Postgres for integration tests: set TEST_DATABASE_URL in the environment.
+// Optional Postgres for integration tests: set TEST_DATABASE_URL (also enables tests/integration/db-postgres-call-queue-merge.test.js).
 if (process.env.TEST_DATABASE_URL) {
   process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
   if (!process.env.DB_TYPE) {
