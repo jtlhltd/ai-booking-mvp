@@ -7326,20 +7326,38 @@
                 if (!dayKey || !currentClient || currentClient === DEMO_CLIENT_KEY) return;
                 const detailsEl = document.getElementById('outreachScheduleDetails');
                 if (!detailsEl) return;
-                detailsEl.textContent = 'Loading hour-by-hour breakdown…';
-                const payload = await fetchOutboundQueueDayDetails(currentClient, dayKey);
-                if (!payload) {
-                    detailsEl.textContent = 'Could not load breakdown for this day.';
-                    return;
-                }
-                const tz = payload.timezone || DASHBOARD_ACTIVITY_TZ;
-                const hours = Array.isArray(payload.hours) ? payload.hours : [];
-                if (hours.length === 0) {
-                    detailsEl.innerHTML = `<strong>${escapeHtml(dayKey)}</strong> (${escapeHtml(
-                        tz
-                    )}): no queued rows in this day.`;
-                    return;
-                }
+                try {
+                    detailsEl.textContent = 'Loading hour-by-hour breakdown…';
+                    const payload = await fetchOutboundQueueDayDetails(currentClient, dayKey);
+                    if (!payload) {
+                        detailsEl.textContent = 'Could not load breakdown for this day.';
+                        return;
+                    }
+                    const tz = payload.timezone || DASHBOARD_ACTIVITY_TZ;
+                    const todayKeyLocal = (() => {
+                        try {
+                            return new Intl.DateTimeFormat('en-CA', {
+                                timeZone: tz,
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit'
+                            }).format(new Date());
+                        } catch {
+                            return new Intl.DateTimeFormat('en-CA', {
+                                timeZone: DASHBOARD_ACTIVITY_TZ,
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit'
+                            }).format(new Date());
+                        }
+                    })();
+                    const hours = Array.isArray(payload.hours) ? payload.hours : [];
+                    if (hours.length === 0) {
+                        detailsEl.innerHTML = `<strong>${escapeHtml(dayKey)}</strong> (${escapeHtml(
+                            tz
+                        )}): no queued rows in this day.`;
+                        return;
+                    }
                 const totals = hours.reduce(
                     (acc, h) => {
                         acc.pending += Number(h.pendingN) || 0;
@@ -7373,7 +7391,7 @@
                 const ocNow = dashboardData && dashboardData.outreachCapacity ? dashboardData.outreachCapacity : {};
                 const inHoursNow = ocNow.withinScheduledDialWindow === true;
                 const whyNothing = (() => {
-                    if (String(dayKey) !== String(todayKey)) {
+                    if (String(dayKey) !== String(todayKeyLocal)) {
                         return 'This is a future day — nothing will happen until that day’s calling window.';
                     }
                     if (!inHoursNow) {
@@ -7466,6 +7484,9 @@
                       </div>
                       <ul style="margin:6px 0 0 0;padding-left:18px">${lines}</ul>
                     </div>`;
+                } catch (err) {
+                    detailsEl.textContent = `Could not render breakdown: ${String(err?.message || err).slice(0, 180)}`;
+                }
             });
         }
 
