@@ -7193,23 +7193,37 @@
                 </dl>`;
 
             const sched = oc.outboundDialSchedule && typeof oc.outboundDialSchedule === 'object' ? oc.outboundDialSchedule : null;
+            const queueSched = Array.isArray(oc.outboundQueueSchedule) ? oc.outboundQueueSchedule : [];
             let scheduleHtml = '';
             if (sched && Array.isArray(sched.windowsNext7) && sched.windowsNext7.length > 0) {
                 const tz = sched.timezone || tenantTz || actTz;
                 const nextOpen = sched.nextOpenAt ? formatRelativeWithAbsolute(sched.nextOpenAt, tz) : null;
+                const byDay = new Map(queueSched.map((r) => [String(r.dayKey || ''), r]));
                 const rows = sched.windowsNext7
                     .map((w) => {
+                        const qd = byDay.get(String(w.dayKey || '')) || null;
                         const label = `${escapeHtml(w.weekdayShort || '')} <span class="tom-ab-test-meta">${escapeHtml(
                             w.dayKey || ''
                         )}</span>`;
                         const windowTxt = `${escapeHtml(w.startLocal || '—')}–${escapeHtml(w.endLocal || '—')}`;
-                        return `<li><strong>${label}</strong> <span class="tom-ab-test-meta">•</span> ${windowTxt}</li>`;
+                        const pendingTxt = qd ? `<span class="tom-ab-test-meta">•</span> <strong>${formatNumber(Number(qd.pendingN) || 0)}</strong> queued` : '';
+                        const dueTxt = qd && Number(qd.dueNowN) > 0 ? ` <span class="tom-ab-test-meta">(</span><strong>${formatNumber(Number(qd.dueNowN) || 0)}</strong><span class="tom-ab-test-meta"> due now)</span>` : '';
+                        const firstTxt =
+                            qd && qd.firstScheduledFor
+                                ? ` <span class="tom-ab-test-meta">• first:</span> <span class="tom-ab-test-meta">${escapeHtml(
+                                      formatRelativeWithAbsolute(qd.firstScheduledFor, tz)
+                                  )}</span>`
+                                : '';
+                        return `<li><strong>${label}</strong> <span class="tom-ab-test-meta">•</span> ${windowTxt}${pendingTxt}${dueTxt}${firstTxt}</li>`;
                     })
                     .join('');
                 scheduleHtml = `
                     <div class="outreach-strip-schedule" aria-label="When outbound will place calls">
                         <p class="outreach-strip-hint tom-ab-test-meta" style="margin-top:10px;margin-bottom:6px">
                             When calls run${nextOpen ? ` (next window opens: <strong>${escapeHtml(nextOpen)}</strong>)` : ''}:
+                        </p>
+                        <p class="outreach-strip-hint tom-ab-test-meta" style="margin-top:0;margin-bottom:6px">
+                            “Next queue slot” is the earliest <code>scheduled_for</code> in the outbound queue; if it’s “just now”, you have rows due immediately but calls still respect the calling window.
                         </p>
                         <ul class="outreach-strip-schedule-list" style="margin:0;padding-left:18px">
                             ${rows}

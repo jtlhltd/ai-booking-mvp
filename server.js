@@ -9777,6 +9777,42 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     const dialSlotsUsedLocalToday =
       oqPulse.dial_slots_used_local_today != null ? parseInt(oqPulse.dial_slots_used_local_today, 10) || 0 : null;
 
+    // More informative "when calls run" breakdown: how many pending queue rows land in each upcoming dial day.
+    // Postgres only (timezone-safe grouping via AT TIME ZONE).
+    let outboundQueueSchedule = null;
+    if (isPostgres) {
+      try {
+        const scheduleRows = await query(
+          `
+          SELECT
+            to_char((cq.scheduled_for AT TIME ZONE $2::text), 'YYYY-MM-DD') AS day_key,
+            COUNT(*) FILTER (WHERE cq.status = 'pending')::int AS pending_n,
+            COUNT(*) FILTER (WHERE cq.status = 'pending' AND cq.scheduled_for <= NOW())::int AS due_now_n,
+            MIN(cq.scheduled_for) AS first_scheduled_for,
+            MAX(cq.scheduled_for) AS last_scheduled_for
+          FROM call_queue cq
+          WHERE cq.client_key = $1
+            AND cq.status IN ('pending', 'processing')
+            AND cq.scheduled_for >= (NOW() - INTERVAL '7 days')
+            AND cq.scheduled_for <= (NOW() + INTERVAL '30 days')
+          GROUP BY 1
+          ORDER BY 1 ASC
+          LIMIT 60
+        `,
+          [clientKey, tenantTz]
+        );
+        outboundQueueSchedule = (scheduleRows.rows || []).map(r => ({
+          dayKey: r.day_key,
+          pendingN: parseInt(r.pending_n, 10) || 0,
+          dueNowN: parseInt(r.due_now_n, 10) || 0,
+          firstScheduledFor: r.first_scheduled_for ? new Date(r.first_scheduled_for).toISOString() : null,
+          lastScheduledFor: r.last_scheduled_for ? new Date(r.last_scheduled_for).toISOString() : null
+        }));
+      } catch {
+        outboundQueueSchedule = null;
+      }
+    }
+
     const leadsNeverDialed = Math.max(0, totalLeads - (displayCalls || 0));
     const dialsPerHour = callsLast24h / 24;
     const backlogWorkUnits = leadsNeverDialed + callQueuePending;
@@ -10589,6 +10625,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         queueTouchesLast24h,
         queuePendingDueNow,
         queueNextScheduledFor,
+        outboundQueueSchedule,
         dialSlotsUsedLocalToday,
         dialsPerHour: Number(dialsPerHour.toFixed(2)),
         estimatedHoursToClearBacklog,
