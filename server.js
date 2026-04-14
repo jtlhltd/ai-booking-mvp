@@ -10694,7 +10694,8 @@ app.get('/api/outbound-queue-day/:clientKey', async (req, res) => {
       res.set('Cache-Control', 'no-store, must-revalidate, max-age=0');
       return res.json({ ok: true, day, timezone: tenantTz, hours: [] });
     }
-    const rows = await query(
+    const [rows, explainRows] = await Promise.all([
+      query(
       `
       WITH base AS (
         SELECT
@@ -10725,12 +10726,83 @@ app.get('/api/outbound-queue-day/:clientKey', async (req, res) => {
       ORDER BY 1 ASC
     `,
       [clientKey, tenantTz, day]
-    );
+    ),
+      query(
+        `
+        WITH base AS (
+          SELECT
+            cq.status,
+            cq.priority,
+            cq.scheduled_for,
+            cq.call_data,
+            (cq.scheduled_for AT TIME ZONE $2::text) AS local_ts
+          FROM call_queue cq
+          WHERE cq.client_key = $1
+            AND cq.status IN ('pending','processing')
+        ),
+        scoped AS (
+          SELECT *
+          FROM base
+          WHERE to_char(local_ts, 'YYYY-MM-DD') = $3
+        )
+        SELECT
+          -- totals
+          (SELECT COUNT(*)::int FROM scoped WHERE status = 'pending') AS total_pending,
+          (SELECT COUNT(*)::int FROM scoped WHERE status = 'pending' AND scheduled_for <= NOW()) AS total_due_now,
+          (SELECT COUNT(*)::int FROM scoped WHERE status = 'processing') AS total_processing,
+          -- scheduling tags (why a time was chosen)
+          COALESCE((
+            SELECT jsonb_agg(jsonb_build_object('tag', tag, 'n', n) ORDER BY n DESC, tag ASC)
+            FROM (
+              SELECT COALESCE(NULLIF(scoped.call_data->>'scheduling',''), 'unspecified') AS tag, COUNT(*)::int AS n
+              FROM scoped
+              GROUP BY 1
+            ) x
+          ), '[]'::jsonb) AS schedule_tags,
+          -- trigger types
+          COALESCE((
+            SELECT jsonb_agg(jsonb_build_object('trigger', trig, 'n', n) ORDER BY n DESC, trig ASC)
+            FROM (
+              SELECT COALESCE(NULLIF(scoped.call_data->>'triggerType',''), 'unspecified') AS trig, COUNT(*)::int AS n
+              FROM scoped
+              GROUP BY 1
+            ) y
+          ), '[]'::jsonb) AS trigger_types,
+          -- raw priority distribution
+          COALESCE((
+            SELECT jsonb_agg(jsonb_build_object('priority', p, 'n', n) ORDER BY p ASC)
+            FROM (
+              SELECT priority::int AS p, COUNT(*)::int AS n
+              FROM scoped
+              GROUP BY 1
+            ) z
+          ), '[]'::jsonb) AS priority_counts
+        `
+        ,
+        [clientKey, tenantTz, day]
+      )
+    ]);
+    const explain = explainRows.rows?.[0] || {};
     res.set('Cache-Control', 'no-store, must-revalidate, max-age=0');
     return res.json({
       ok: true,
       day,
       timezone: tenantTz,
+      explain: {
+        totals: {
+          pending: parseInt(explain.total_pending, 10) || 0,
+          dueNow: parseInt(explain.total_due_now, 10) || 0,
+          processing: parseInt(explain.total_processing, 10) || 0
+        },
+        scheduleTags: explain.schedule_tags || [],
+        triggerTypes: explain.trigger_types || [],
+        priorityCounts: explain.priority_counts || [],
+        notes: [
+          'queued time is the row’s scheduled_for (in tenant timezone)',
+          'distribution shows how queued calls are spread across business hours',
+          'priority is used when multiple calls are due at once (smaller number runs sooner)'
+        ]
+      },
       hours: (rows.rows || []).map((r) => ({
         hourKey: r.hour_key,
         pendingN: parseInt(r.pending_n, 10) || 0,

@@ -7365,6 +7365,54 @@
                                 nextTxt || 'later'
                             )}</strong>.`
                           : 'Nothing queued for this day.';
+
+                const explain = payload.explain && typeof payload.explain === 'object' ? payload.explain : {};
+                const scheduleTags = Array.isArray(explain.scheduleTags) ? explain.scheduleTags : [];
+                const triggerTypes = Array.isArray(explain.triggerTypes) ? explain.triggerTypes : [];
+                const priorityCounts = Array.isArray(explain.priorityCounts) ? explain.priorityCounts : [];
+                const ocNow = dashboardData && dashboardData.outreachCapacity ? dashboardData.outreachCapacity : {};
+                const inHoursNow = ocNow.withinScheduledDialWindow === true;
+                const whyNothing = (() => {
+                    if (String(dayKey) !== String(todayKey)) {
+                        return 'This is a future day — nothing will happen until that day’s calling window.';
+                    }
+                    if (!inHoursNow) {
+                        return 'You’re currently outside calling hours, so queued calls won’t start yet.';
+                    }
+                    if (totals.due > 0 && totals.processing === 0) {
+                        return 'Calls are due, but none are processing right now — the runner may be idle or rate-limited.';
+                    }
+                    if (totals.due === 0) {
+                        return 'Nothing is due yet — the queue is waiting for the scheduled times.';
+                    }
+                    return 'Calls should be progressing; if dial history stays flat, check runner logs.';
+                })();
+                const tagExplain = (tag) => {
+                    if (tag === 'immediate') return 'scheduled “soon” because we’re inside calling hours (small jitter to avoid spikes)';
+                    if (tag === 'optimal') return 'scheduled into the next allowed/optimal calling window (outside hours or spacing rules)';
+                    if (tag === 'tomorrow_buffer') return 'queued ahead for tomorrow so work is visible and ready at day start';
+                    if (tag === 'unspecified') return 'queued without an explicit scheduling tag';
+                    return `scheduled (${escapeHtml(tag)})`;
+                };
+                const scheduleWhyHtml = scheduleTags.length
+                    ? `<div style="margin-top:6px"><span class="tom-ab-test-meta"><strong>Why these times?</strong> ${scheduleTags
+                          .map((x) => {
+                              const t = String(x.tag || '');
+                              const n = Number(x.n) || 0;
+                              return `${formatNumber(n)} ${escapeHtml(t)} (${tagExplain(t)})`;
+                          })
+                          .join(' · ')}</span></div>`
+                    : '';
+                const triggersHtml = triggerTypes.length
+                    ? `<div style="margin-top:4px"><span class="tom-ab-test-meta"><strong>Why are they queued?</strong> ${triggerTypes
+                          .map((x) => `${formatNumber(Number(x.n) || 0)} ${escapeHtml(String(x.trigger || ''))}`)
+                          .join(' · ')}</span></div>`
+                    : '';
+                const prioHtml = priorityCounts.length
+                    ? `<div style="margin-top:4px"><span class="tom-ab-test-meta"><strong>Priority mix</strong> (smaller runs sooner): ${priorityCounts
+                          .map((x) => `${escapeHtml(String(x.priority))}→${formatNumber(Number(x.n) || 0)}`)
+                          .join(' · ')}</span></div>`
+                    : '';
                 const lines = hours
                     .map((h) => {
                         const first = h.firstScheduledFor ? formatRelativeWithAbsolute(h.firstScheduledFor, tz) : '';
@@ -7400,6 +7448,12 @@
                           <span class="tom-ab-test-meta">·</span>
                           <span class="tom-ab-test-meta"><strong>${formatNumber(totals.processing)}</strong> processing</span>
                         </div>
+                        <div style="margin-top:6px"><span class="tom-ab-test-meta"><strong>Why nothing is happening:</strong> ${escapeHtml(
+                            whyNothing
+                        )}</span></div>
+                        ${scheduleWhyHtml}
+                        ${triggersHtml}
+                        ${prioHtml}
                         <div style="margin-top:4px">
                           <span class="tom-ab-test-meta"><strong>pending</strong> = waiting</span>
                           <span class="tom-ab-test-meta">·</span>
