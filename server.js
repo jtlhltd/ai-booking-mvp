@@ -126,12 +126,14 @@ import {
   listFullClients,
   deleteClient,
   DB_PATH,
+  dbType,
   query,
   pool,
   poolQuerySelect,
   invalidateClientCache,
   smearCallQueueScheduledFor
 } from './db.js'; // SQLite-backed tenants
+import { enforceAdminApiKeyIfConfigured } from './middleware/admin-api-key.js';
 import { 
   authenticateApiKey, 
   rateLimitMiddleware, 
@@ -516,17 +518,6 @@ app.use(compression()); // Compress responses for better performance
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// When ENFORCE_ADMIN_API_KEY=1 and API_KEY is set, require X-API-Key for all /api/admin/* (opt-in). Admin Hub stores key in localStorage as adminHubApiKey.
-function enforceAdminApiKeyIfConfigured(req, res, next) {
-  if (!req.path.startsWith('/api/admin/')) return next();
-  const enforce = /^(1|true|yes)$/i.test(String(process.env.ENFORCE_ADMIN_API_KEY || '').trim());
-  if (!enforce) return next();
-  const expected = String(process.env.API_KEY || '').trim();
-  if (!expected) return next();
-  const key = req.get('X-API-Key');
-  if (key && key === expected) return next();
-  return res.status(401).json({ error: 'Unauthorized' });
-}
 app.use(enforceAdminApiKeyIfConfigured);
 
 // Initialize Booking System
@@ -990,19 +981,29 @@ app.get('/api/admin/system-health', async (req, res) => {
     // Get error count from recent logs (simplified)
     const errorCount = 0; // Would need proper error tracking
     
-    // Get recent errors from database
-    const recentErrors = await query(`
+    // Get recent errors from database (dialect-specific time window)
+    const recentErrorsSql =
+      dbType === 'postgres'
+        ? `
       SELECT * FROM quality_alerts 
       WHERE created_at >= NOW() - INTERVAL '24 hours'
       ORDER BY created_at DESC 
       LIMIT 10
-    `);
+    `
+        : `
+      SELECT * FROM quality_alerts 
+      WHERE datetime(created_at) >= datetime('now', '-24 hours')
+      ORDER BY created_at DESC 
+      LIMIT 10
+    `;
+    const recentErrors = await query(recentErrorsSql);
 
     let outboundQueues = null;
     let failedQCalls24h = null;
     let legacyDailyClaimRows = null;
     try {
-      const qRow = await query(`
+      if (dbType === 'postgres') {
+        const qRow = await query(`
         SELECT
           (SELECT COUNT(*)::int FROM call_queue WHERE call_type = 'vapi_call' AND status = 'pending') AS pending_vapi,
           (SELECT COUNT(*)::int FROM call_queue
@@ -1011,14 +1012,33 @@ app.get('/api/admin/system-health', async (req, res) => {
             WHERE call_id LIKE 'failed_q%' AND created_at >= NOW() - INTERVAL '24 hours') AS failed_q_24h,
           (SELECT COUNT(*)::int FROM outbound_dial_daily_claim WHERE dial_date >= (CURRENT_DATE - 30)) AS legacy_daily_claim_rows_30d
       `);
-      const r = qRow.rows?.[0];
-      if (r) {
-        outboundQueues = {
-          pendingVapi: Number(r.pending_vapi) || 0,
-          overdueVapi: Number(r.overdue_vapi) || 0
-        };
-        failedQCalls24h = Number(r.failed_q_24h) || 0;
-        legacyDailyClaimRows = Number(r.legacy_daily_claim_rows_30d) || 0;
+        const r = qRow.rows?.[0];
+        if (r) {
+          outboundQueues = {
+            pendingVapi: Number(r.pending_vapi) || 0,
+            overdueVapi: Number(r.overdue_vapi) || 0
+          };
+          failedQCalls24h = Number(r.failed_q_24h) || 0;
+          legacyDailyClaimRows = Number(r.legacy_daily_claim_rows_30d) || 0;
+        }
+      } else {
+        const qRow = await query(`
+        SELECT
+          (SELECT COUNT(*) FROM call_queue WHERE call_type = 'vapi_call' AND status = 'pending') AS pending_vapi,
+          (SELECT COUNT(*) FROM call_queue
+            WHERE call_type = 'vapi_call' AND status = 'pending' AND scheduled_for <= datetime('now')) AS overdue_vapi,
+          (SELECT COUNT(*) FROM calls
+            WHERE call_id LIKE 'failed_q%' AND datetime(created_at) >= datetime('now', '-24 hours')) AS failed_q_24h
+      `);
+        const r = qRow.rows?.[0];
+        if (r) {
+          outboundQueues = {
+            pendingVapi: Number(r.pending_vapi) || 0,
+            overdueVapi: Number(r.overdue_vapi) || 0
+          };
+          failedQCalls24h = Number(r.failed_q_24h) || 0;
+        }
+        legacyDailyClaimRows = null;
       }
     } catch (qErr) {
       console.warn('[system-health] queue / failed_q metrics skipped:', qErr?.message || qErr);

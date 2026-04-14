@@ -11,7 +11,7 @@ import {
 } from './lib/outbound-ab-live-pickup.js';
 import { getCallAnalyticsEnvOverrideIso } from './lib/call-analytics-cutoff.js';
 import { activeRowsMatchOutboundAbStopSlice } from './lib/outbound-ab-stop-slice.js';
-import { phoneMatchKey, pgQueueLeadPhoneKeyExpr } from './lib/lead-phone-key.js';
+import { phoneMatchKey, pgQueueLeadPhoneKeyExpr, outboundDialClaimKeyFromRaw } from './lib/lead-phone-key.js';
 
 const dbType = (process.env.DB_TYPE || '').toLowerCase();
 let pool = null;
@@ -1479,7 +1479,7 @@ async function safeQuery(text, params = []) {
   }
 }
 
-export { DB_PATH, query, pool };
+export { DB_PATH, query, pool, dbType };
 
 // ---------------------- Helpers used by server/libs ----------------------
 function toJson(val) {
@@ -1918,11 +1918,6 @@ export async function upsertCall({
     callId, clientKey, leadPhone, leadPhoneMatchKey, status, outcome, duration, cost, metadataJson, retryAttempt,
     transcript, recordingUrl, sentiment, qualityScore, objectionsJson, keyPhrasesJson, metricsJson, analyzedAt
   ]);
-}
-
-/** Key for outbound weekday journey; must match lead-queuer COALESCE expression. */
-function outboundDialClaimKeyFromRaw(raw) {
-  return phoneMatchKey(raw) ?? '__nodigits__';
 }
 
 /**
@@ -3079,7 +3074,9 @@ export async function getPendingCalls(limit = 100) {
   // Priority-first ordering would scan huge "future high-priority" prefixes before due low-priority work (multi-second).
   const { rows } = await query(`
     SELECT * FROM call_queue 
-    WHERE status = 'pending' AND scheduled_for <= now()
+    WHERE status = 'pending'
+      AND call_type = 'vapi_call'
+      AND scheduled_for <= now()
     ORDER BY scheduled_for ASC, priority ASC
     LIMIT $1
   `, [limit]);
