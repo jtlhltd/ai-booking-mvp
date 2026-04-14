@@ -13039,7 +13039,7 @@ function effectiveDialScheduledForApiDisplay(row, tenant) {
     row.source === 'call_queue' ||
     (row.source === 'retry_queue' && (t === 'vapi_call' || t === 'call'));
   if (!isOutboundDial) return raw;
-  return clampOutboundDialToAllowedWindow(tenant, raw, TIMEZONE);
+  return clampOutboundDialToAllowedWindow(tenant, raw, pickTimezone(tenant));
 }
 
 app.get('/api/retry-queue/:clientKey', async (req, res) => {
@@ -16528,7 +16528,9 @@ async function getClientFromHeader(req) {
   if (!key) return null;
   return await getFullClient(key);
 }
-function pickTimezone(client) { return client?.booking?.timezone || TIMEZONE; }
+// Single source of truth for tenant timezone on the server.
+// Use this everywhere instead of process.env.TZ / TIMEZONE directly.
+function pickTimezone(client) { return client?.booking?.timezone || client?.timezone || TIMEZONE; }
 function pickCalendarId(client) { return client?.calendarId || GOOGLE_CALENDAR_ID; }
 function smsConfig(client) {
   const messagingServiceSid = client?.sms?.messagingServiceSid || TWILIO_MESSAGING_SERVICE_SID || null;
@@ -22993,7 +22995,7 @@ app.post('/api/clients', async (req, res) => {
     const c = req.body || {};
     const key = (c.clientKey || '').toString().trim();
     if (!key) return res.status(400).json({ ok:false, error: 'clientKey is required' });
-    const tz = c.booking?.timezone || TIMEZONE;
+      const tz = pickTimezone(c);
     if (typeof tz !== 'string' || !tz.length) return res.status(400).json({ ok:false, error: 'booking.timezone is required' });
     if (c.sms && !(c.sms.messagingServiceSid || c.sms.fromNumber)) {
       return res.status(400).json({ ok:false, error: 'sms.messagingServiceSid or sms.fromNumber required when sms block present' });
@@ -23387,7 +23389,7 @@ async function processRetryQueue() {
               const nextOpen = getNextBusinessOpenForTenant(
                 rClient || { booking: { timezone: rTz }, timezone: rTz },
                 nextLocalDayStart,
-                TIMEZONE,
+                rTz,
                 { forOutboundDial: true }
               );
               await query(
@@ -24018,7 +24020,7 @@ async function processVapiCallFromQueue(call) {
     if (vapiResult?.error === 'daily_dial_limit') {
       const tzQ = client?.booking?.timezone || client?.timezone || TIMEZONE;
       const nextLocalDayStart = DateTime.now().setZone(tzQ).plus({ days: 1 }).startOf('day').toJSDate();
-      const nextOpen = getNextBusinessOpenForTenant(client, nextLocalDayStart, TIMEZONE, {
+      const nextOpen = getNextBusinessOpenForTenant(client, nextLocalDayStart, tzQ, {
         forOutboundDial: true
       });
       const nextSmear = smearCallQueueScheduledFor(nextOpen, clientKey, leadPhone, call.id);
@@ -24248,7 +24250,7 @@ async function queueNewLeadsForCalling() {
             )
           ORDER BY l.created_at ASC
           LIMIT ${leadQueueBatchSize}
-        `, [client.clientKey, client.timezone || TIMEZONE]);
+        `, [client.clientKey, pickTimezone(client)]);
         
         if (newLeads.rows.length === 0) {
           continue;
@@ -24283,7 +24285,7 @@ async function queueNewLeadsForCalling() {
                 AND cq.scheduled_for >= b.day_start_utc
                 AND cq.scheduled_for < b.day_end_utc
               `,
-              [client.clientKey, client.timezone || TIMEZONE]
+              [client.clientKey, pickTimezone(client)]
             );
             const alreadyTomorrow = parseInt(tRows?.[0]?.n ?? 0, 10) || 0;
             tomorrowStillNeeded = Math.max(0, targetTomorrowPending - alreadyTomorrow);
@@ -24319,12 +24321,12 @@ async function queueNewLeadsForCalling() {
               tomorrowStillNeeded > 0 &&
               queuedTomorrowThisRun < maxTomorrowToQueuePerRun
             ) {
-              const tzQ = client.timezone || TIMEZONE;
+              const tzQ = pickTimezone(client);
               const tomorrowStart = DateTime.now().setZone(tzQ).plus({ days: 1 }).startOf('day').toJSDate();
               const tomorrowBaseline = getNextBusinessOpenForTenant(
                 client,
                 tomorrowStart,
-                TIMEZONE,
+                tzQ,
                 { forOutboundDial: true }
               );
               finalScheduledFor = await scheduleAtOptimalCallWindow(client, routing, tomorrowBaseline, {
