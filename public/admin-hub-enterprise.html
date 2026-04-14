@@ -7,6 +7,28 @@
     <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
+    <script>
+      (function () {
+        try {
+          var orig = window.fetch;
+          window.fetch = function (input, init) {
+            init = init || {};
+            var u = typeof input === 'string' ? input : (input && input.url) || '';
+            if (typeof u === 'string' && u.indexOf('/api/admin') === 0) {
+              var k = localStorage.getItem('adminHubApiKey');
+              if (k) {
+                var h = new Headers(init.headers || {});
+                if (!h.has('X-API-Key')) h.set('X-API-Key', k);
+                init.headers = h;
+              }
+            }
+            return orig.call(this, input, init);
+          };
+        } catch (e) {
+          console.warn('Admin fetch wrapper failed', e);
+        }
+      })();
+    </script>
     <style>
         * {
             margin: 0;
@@ -1006,6 +1028,22 @@
                 <button class="btn btn-warning notification-badge" onclick="showNotifications()" data-count="0" id="notificationBtn">
                     🔔 Notifications
                 </button>
+                <details style="font-size: 0.85rem; color: #4a5568; max-width: 320px;">
+                    <summary style="cursor: pointer; user-select: none;">API access</summary>
+                    <div style="margin-top: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <input
+                            type="password"
+                            id="adminHubApiKeyInput"
+                            placeholder="X-API-Key (stored in this browser)"
+                            autocomplete="off"
+                            style="min-width: 200px; padding: 6px 8px; border-radius: 8px; border: 1px solid #cbd5e0;"
+                        />
+                        <button type="button" class="btn btn-secondary" onclick="saveAdminHubApiKey()">Save</button>
+                    </div>
+                    <p style="margin-top: 6px; line-height: 1.35;">
+                        Use when the server sets <code>ENFORCE_ADMIN_API_KEY=1</code>. Never committed; localStorage only.
+                    </p>
+                </details>
             </div>
         </div>
 
@@ -4447,6 +4485,18 @@
         // Export functions
         function exportData(type, format) {
             window.open(`/api/admin/export/${type}?format=${format}`, '_blank');
+        }
+
+        function saveAdminHubApiKey() {
+            const inp = document.getElementById('adminHubApiKeyInput');
+            const v = inp && inp.value ? String(inp.value).trim() : '';
+            if (v) {
+                localStorage.setItem('adminHubApiKey', v);
+            } else {
+                localStorage.removeItem('adminHubApiKey');
+            }
+            if (inp) inp.value = '';
+            alert(v ? 'API key saved in this browser for Admin Hub requests.' : 'API key cleared from this browser.');
         }
 
         // Refresh all data

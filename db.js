@@ -2984,11 +2984,23 @@ export async function addToCallQueue({ clientKey, leadPhone, priority = 5, sched
   if (callType === 'vapi_call') {
     const raw = String(leadPhone ?? '').trim();
     const matchKey = outboundDialClaimKeyFromRaw(raw);
+    const weakDigits = matchKey === '__nodigits__';
 
     if (dbType === 'postgres' && pool) {
       const keySql = pgQueueLeadPhoneKeyExpr('lead_phone');
       const sel = await query(
+        weakDigits
+          ? `
+        SELECT id, scheduled_for, priority
+        FROM call_queue
+        WHERE client_key = $1
+          AND status IN ('pending', 'processing')
+          AND call_type = 'vapi_call'
+          AND lead_phone = $2
+        ORDER BY scheduled_for ASC, priority ASC, id ASC
+        LIMIT 1
         `
+          : `
         SELECT id, scheduled_for, priority
         FROM call_queue
         WHERE client_key = $1
@@ -2998,7 +3010,7 @@ export async function addToCallQueue({ clientKey, leadPhone, priority = 5, sched
         ORDER BY scheduled_for ASC, priority ASC, id ASC
         LIMIT 1
         `,
-        [clientKey, matchKey]
+        weakDigits ? [clientKey, raw] : [clientKey, matchKey]
       );
       const ex = sel.rows?.[0];
       if (ex) {
@@ -3026,7 +3038,9 @@ export async function addToCallQueue({ clientKey, leadPhone, priority = 5, sched
            WHERE client_key = ? AND call_type = 'vapi_call' AND status IN ('pending','processing')`
         )
         .all(clientKey);
-      const ex = (rowsSqlite || []).find((r) => outboundDialClaimKeyFromRaw(r.lead_phone) === matchKey);
+      const ex = (rowsSqlite || []).find((r) =>
+        weakDigits ? String(r.lead_phone || '').trim() === raw : outboundDialClaimKeyFromRaw(r.lead_phone) === matchKey
+      );
       if (ex) {
         const exTime = new Date(ex.scheduled_for).getTime();
         const newTime = when instanceof Date ? when.getTime() : new Date(when).getTime();
@@ -3084,6 +3098,7 @@ export async function updateCallQueueStatus(id, status) {
 export async function cancelDuplicatePendingCalls(clientKey, leadPhone, excludeId) {
   const raw = leadPhone != null ? String(leadPhone).trim() : '';
   const matchKey = outboundDialClaimKeyFromRaw(raw);
+  const weakDigits = matchKey === '__nodigits__';
   if (sqlite) {
     const rows = sqlite
       .prepare(
@@ -3093,7 +3108,10 @@ export async function cancelDuplicatePendingCalls(clientKey, leadPhone, excludeI
       .all(clientKey, excludeId);
     let n = 0;
     for (const r of rows || []) {
-      if (outboundDialClaimKeyFromRaw(r.lead_phone) === matchKey) {
+      const same = weakDigits
+        ? String(r.lead_phone || '').trim() === raw
+        : outboundDialClaimKeyFromRaw(r.lead_phone) === matchKey;
+      if (same) {
         sqlite.prepare(`UPDATE call_queue SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?`).run(r.id);
         n++;
       }
@@ -3102,7 +3120,17 @@ export async function cancelDuplicatePendingCalls(clientKey, leadPhone, excludeI
   }
   const keySql = pgQueueLeadPhoneKeyExpr('lead_phone');
   const result = await query(
+    weakDigits
+      ? `
+    UPDATE call_queue
+    SET status = 'cancelled', updated_at = now()
+    WHERE client_key = $1
+      AND status = 'pending'
+      AND id != $2
+      AND call_type = 'vapi_call'
+      AND lead_phone = $3
     `
+      : `
     UPDATE call_queue
     SET status = 'cancelled', updated_at = now()
     WHERE client_key = $1
@@ -3111,7 +3139,7 @@ export async function cancelDuplicatePendingCalls(clientKey, leadPhone, excludeI
       AND call_type = 'vapi_call'
       AND (${keySql}) = $3
     `,
-    [clientKey, excludeId, matchKey]
+    weakDigits ? [clientKey, excludeId, raw] : [clientKey, excludeId, matchKey]
   );
   return result?.rowCount ?? result?.changes ?? 0;
 }
@@ -3183,7 +3211,10 @@ export async function dedupePendingVapiCallQueueRows() {
     WITH keyed AS (
       SELECT cq.id,
         cq.client_key,
-        (${keyExpr}) AS phone_key,
+        CASE
+          WHEN (${keyExpr}) = '__nodigits__' THEN '__raw__:' || COALESCE(cq.lead_phone, '')
+          ELSE (${keyExpr})
+        END AS phone_key,
         cq.scheduled_for,
         cq.priority
       FROM call_queue cq

@@ -499,7 +499,10 @@ function requireApiKey(req, res, next) {
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header(
+    'Access-Control-Allow-Headers',
+    'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-API-Key'
+  );
   
   if (req.method === 'OPTIONS') {
     res.sendStatus(200);
@@ -512,6 +515,19 @@ app.use((req, res, next) => {
 app.use(compression()); // Compress responses for better performance
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// When ENFORCE_ADMIN_API_KEY=1 and API_KEY is set, require X-API-Key for all /api/admin/* (opt-in). Admin Hub stores key in localStorage as adminHubApiKey.
+function enforceAdminApiKeyIfConfigured(req, res, next) {
+  if (!req.path.startsWith('/api/admin/')) return next();
+  const enforce = /^(1|true|yes)$/i.test(String(process.env.ENFORCE_ADMIN_API_KEY || '').trim());
+  if (!enforce) return next();
+  const expected = String(process.env.API_KEY || '').trim();
+  if (!expected) return next();
+  const key = req.get('X-API-Key');
+  if (key && key === expected) return next();
+  return res.status(401).json({ error: 'Unauthorized' });
+}
+app.use(enforceAdminApiKeyIfConfigured);
 
 // Initialize Booking System
 let bookingSystem = null;
@@ -981,9 +997,40 @@ app.get('/api/admin/system-health', async (req, res) => {
       ORDER BY created_at DESC 
       LIMIT 10
     `);
+
+    let outboundQueues = null;
+    let failedQCalls24h = null;
+    let legacyDailyClaimRows = null;
+    try {
+      const qRow = await query(`
+        SELECT
+          (SELECT COUNT(*)::int FROM call_queue WHERE call_type = 'vapi_call' AND status = 'pending') AS pending_vapi,
+          (SELECT COUNT(*)::int FROM call_queue
+            WHERE call_type = 'vapi_call' AND status = 'pending' AND scheduled_for <= NOW()) AS overdue_vapi,
+          (SELECT COUNT(*)::int FROM calls
+            WHERE call_id LIKE 'failed_q%' AND created_at >= NOW() - INTERVAL '24 hours') AS failed_q_24h,
+          (SELECT COUNT(*)::int FROM outbound_dial_daily_claim WHERE dial_date >= (CURRENT_DATE - 30)) AS legacy_daily_claim_rows_30d
+      `);
+      const r = qRow.rows?.[0];
+      if (r) {
+        outboundQueues = {
+          pendingVapi: Number(r.pending_vapi) || 0,
+          overdueVapi: Number(r.overdue_vapi) || 0
+        };
+        failedQCalls24h = Number(r.failed_q_24h) || 0;
+        legacyDailyClaimRows = Number(r.legacy_daily_claim_rows_30d) || 0;
+      }
+    } catch (qErr) {
+      console.warn('[system-health] queue / failed_q metrics skipped:', qErr?.message || qErr);
+    }
     
     // Calculate system status
-    const status = recentErrors?.rows?.length > 5 ? 'warning' : 'healthy';
+    const status =
+      (failedQCalls24h != null && failedQCalls24h > 50) ||
+      (outboundQueues?.overdueVapi != null && outboundQueues.overdueVapi > 200) ||
+      recentErrors?.rows?.length > 5
+        ? 'warning'
+        : 'healthy';
     
     // Get response time (simplified)
     const responseTime = 120; // Return as number, not string
@@ -991,8 +1038,12 @@ app.get('/api/admin/system-health', async (req, res) => {
     res.json({
       status: status || 'healthy',
       uptime: uptimePercentage,
+      uptimeHuman: uptimeString,
       errorCount: errorCount || 0,
       responseTime: responseTime || 120,
+      outboundQueues,
+      failedQCalls24h,
+      legacyDailyClaimRows,
       recentErrors: recentErrors?.rows?.map(error => ({
         type: error.alert_type,
         severity: error.severity,
@@ -1007,6 +1058,9 @@ app.get('/api/admin/system-health', async (req, res) => {
       uptime: 99.9,
       errorCount: 0,
       responseTime: 120,
+      outboundQueues: null,
+      failedQCalls24h: null,
+      legacyDailyClaimRows: null,
       recentErrors: []
     });
   }
