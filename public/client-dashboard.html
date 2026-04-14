@@ -7455,6 +7455,7 @@
                 })();
                 const tagExplain = (tag) => {
                     if (tag === 'immediate') return 'scheduled “soon” because we’re inside calling hours (small jitter to avoid spikes)';
+                    if (tag === 'optimal_today') return 'scheduled using insights/routing across today’s calling window';
                     if (tag === 'optimal') return 'scheduled into the next allowed/optimal calling window (outside hours or spacing rules)';
                     if (tag === 'tomorrow_buffer') return 'queued ahead for tomorrow so work is visible and ready at day start';
                     if (tag === 'unspecified') return 'queued without an explicit scheduling tag';

@@ -24261,14 +24261,21 @@ async function queueNewLeadsForCalling() {
   try {
     console.log('[LEAD QUEUER] Checking for new leads to queue...');
     const leadQueueBatchSize = Math.max(1, Math.min(300, parseInt(process.env.LEAD_QUEUE_BATCH_SIZE || '120', 10) || 120));
-    const targetTomorrowPending = Math.max(
-      0,
-      Math.min(2000, parseInt(process.env.LEAD_QUEUE_TARGET_TOMORROW_PENDING || '150', 10) || 150)
-    );
-    const maxTomorrowToQueuePerRun = Math.max(
-      0,
-      Math.min(500, parseInt(process.env.LEAD_QUEUE_MAX_TOMORROW_PER_RUN || '80', 10) || 80)
-    );
+    // Tomorrow buffer is an ops convenience, not a dialing strategy. Keep it OFF by default.
+    // Enable explicitly with ENABLE_TOMORROW_BUFFER=1.
+    const tomorrowBufferEnabled = ['1', 'true', 'yes'].includes(String(process.env.ENABLE_TOMORROW_BUFFER || '').toLowerCase());
+    const targetTomorrowPending = tomorrowBufferEnabled
+      ? Math.max(
+          0,
+          Math.min(2000, parseInt(process.env.LEAD_QUEUE_TARGET_TOMORROW_PENDING || '150', 10) || 150)
+        )
+      : 0;
+    const maxTomorrowToQueuePerRun = tomorrowBufferEnabled
+      ? Math.max(
+          0,
+          Math.min(500, parseInt(process.env.LEAD_QUEUE_MAX_TOMORROW_PER_RUN || '80', 10) || 80)
+        )
+      : 0;
     
     // Get all clients
     const clients = await listFullClients();
@@ -24357,9 +24364,7 @@ async function queueNewLeadsForCalling() {
         const insightsRow = await getLatestCallInsights(client.clientKey).catch(() => null);
         const routing = insightsRow?.routing;
 
-        // If we're currently within business hours, we still want some work queued for tomorrow
-        // so the dashboard reflects upcoming workload and the dialer doesn't start from empty.
-        // (Otherwise we queue "just in time", and tomorrow can show as 0 queued even with a huge backlog.)
+        // Optional: keep some work queued for tomorrow (ops convenience).
         let tomorrowStillNeeded = 0;
         if (targetTomorrowPending > 0) {
           try {
@@ -24396,20 +24401,18 @@ async function queueNewLeadsForCalling() {
             const scheduledBaseline = shouldCallNow
               ? new Date()
               : getNextBusinessHour(client);
-            // If we're within business hours, schedule immediately (with small jitter) rather than pushing
-            // everything to a single "optimal window" later in the day.
-            const scheduledFor = shouldCallNow
-              ? new Date(Date.now() + Math.floor(Math.random() * 120_000)) // 0-120s jitter
-              : await scheduleAtOptimalCallWindow(client, routing, scheduledBaseline, {
-                  fallbackTz: TIMEZONE,
-                  clientKey: client.clientKey,
-                  jitterKey: lead.phone
-                });
+            // Inside business hours, we still schedule via insights/routing so dials are spread across the day.
+            // Outside hours, schedule into the next allowed/optimal window.
+            const scheduledFor = await scheduleAtOptimalCallWindow(client, routing, scheduledBaseline, {
+              fallbackTz: pickTimezone(client),
+              clientKey: client.clientKey,
+              jitterKey: lead.phone
+            });
 
             // If we're in business hours, also top-up a buffer for tomorrow (up to caps) so the system
             // has visible upcoming work and doesn't depend on a cron tick at the start of the day.
             let finalScheduledFor = scheduledFor;
-            let scheduleTag = shouldCallNow ? 'immediate' : 'optimal';
+            let scheduleTag = shouldCallNow ? 'optimal_today' : 'optimal';
             if (
               shouldCallNow &&
               tomorrowStillNeeded > 0 &&
@@ -24424,7 +24427,7 @@ async function queueNewLeadsForCalling() {
                 { forOutboundDial: true }
               );
               finalScheduledFor = await scheduleAtOptimalCallWindow(client, routing, tomorrowBaseline, {
-                fallbackTz: TIMEZONE,
+                fallbackTz: tzQ,
                 clientKey: client.clientKey,
                 jitterKey: `tomorrow:${lead.phone}`
               });
