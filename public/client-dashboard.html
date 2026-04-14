@@ -7019,12 +7019,35 @@
             const state = oc.activityState || 'unknown';
             const inHours = oc.withinScheduledDialWindow === true;
             const actTz = data.activityTimezone || DASHBOARD_ACTIVITY_TZ;
+            const tenantTz = (data && data.config && data.config.timezone) || actTz;
+            const tenantBusinessHours = (data && data.config && data.config.businessHours) || null;
             const nextSchedAbs =
                 oc.queueNextScheduledFor && typeof formatRelativeWithAbsolute === 'function'
                     ? formatRelativeWithAbsolute(oc.queueNextScheduledFor, actTz)
                     : oc.queueNextScheduledFor
                       ? escapeHtml(String(oc.queueNextScheduledFor))
                       : '';
+
+            const pad2 = (n) => String(n).padStart(2, '0');
+            const dayLabel = (d) => {
+                const map = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                return map[d] || String(d);
+            };
+            const businessHoursSummary = (() => {
+                const raw = tenantBusinessHours && typeof tenantBusinessHours === 'object' ? tenantBusinessHours : null;
+                const start = raw && raw.start != null ? Number(raw.start) : 9;
+                const end = raw && raw.end != null ? Number(raw.end) : 17;
+                let days = raw && Array.isArray(raw.days) ? raw.days.map((x) => Number(x)).filter((x) => Number.isFinite(x)) : [1, 2, 3, 4, 5];
+                if (!days.length) days = [1, 2, 3, 4, 5];
+                days = Array.from(new Set(days)).sort((a, b) => a - b);
+                const daysTxt = days.length === 7
+                    ? 'Daily'
+                    : days.join(',') === '1,2,3,4,5'
+                      ? 'Mon–Fri'
+                      : days.map(dayLabel).join(', ');
+                const hoursTxt = `${pad2(start)}:00–${pad2(end)}:00`;
+                return `${daysTxt} ${hoursTxt} (${tenantTz})`;
+            })();
 
             let pillText = 'Outbound status';
             let pillClass = 'outreach-state-pill--muted';
@@ -7033,7 +7056,10 @@
             if (state === 'dialing') {
                 pillText = 'Calls logging';
                 pillClass = 'outreach-state-pill--ok';
-                summary = `Outbound is placing calls. <strong>${formatNumber(last24)}</strong> call rows hit dial history in the last 24 hours.`;
+                const nextTxt = q > 0 ? (nextSchedAbs || '—') : '—';
+                summary = `Outbound is placing calls. Next scheduled queue slot: <strong>${escapeHtml(nextTxt)}</strong>. Calling hours: <strong>${escapeHtml(
+                    businessHoursSummary
+                )}</strong>. <strong>${formatNumber(last24)}</strong> call rows hit dial history in the last 24 hours.`;
             } else if (state === 'no_contacts') {
                 pillText = 'No contacts';
                 pillClass = 'outreach-state-pill--muted';
@@ -7041,7 +7067,9 @@
             } else if (state === 'queued_future_window') {
                 pillText = 'Scheduled ahead';
                 pillClass = 'outreach-state-pill--info';
-                summary = `You have <strong>${formatNumber(backlogUnits)}</strong> units of work (not yet dialled in CRM + queue), but <strong>nothing is due right now</strong>. Next slot: <strong>${escapeHtml(nextSchedAbs || '—')}</strong>.`;
+                summary = `You have <strong>${formatNumber(backlogUnits)}</strong> units of work (not yet dialled in CRM + queue), but <strong>nothing is due right now</strong>. Next slot: <strong>${escapeHtml(
+                    nextSchedAbs || '—'
+                )}</strong>. Calling hours: <strong>${escapeHtml(businessHoursSummary)}</strong>.`;
             } else if (state === 'runner_backlog_no_logs') {
                 pillText = 'Runner on — no new logs';
                 pillClass = 'outreach-state-pill--warn';
@@ -7058,7 +7086,9 @@
             } else if (state === 'paused_hours_backlog') {
                 pillText = 'Outside dialling hours';
                 pillClass = 'outreach-state-pill--muted';
-                summary = `Outbound is limited to your business hours. <strong>${formatNumber(backlogUnits)}</strong> units still waiting (CRM + queue).`;
+                summary = `Outbound is limited to your business hours. Calling hours: <strong>${escapeHtml(
+                    businessHoursSummary
+                )}</strong>. <strong>${formatNumber(backlogUnits)}</strong> units still waiting (CRM + queue).`;
             } else if (state === 'not_started') {
                 pillText = 'Not started';
                 pillClass = 'outreach-state-pill--muted';
