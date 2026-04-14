@@ -1,0 +1,3 @@
+-- Optional ops cleanup: `outbound_dial_daily_claim` is legacy after outbound_weekday_journey.
+-- Uncomment only if you no longer need historical daily-claim rows for reporting.
+-- TRUNCATE outbound_dial_daily_claim;

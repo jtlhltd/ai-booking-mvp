@@ -11,7 +11,7 @@ import {
 } from './lib/outbound-ab-live-pickup.js';
 import { getCallAnalyticsEnvOverrideIso } from './lib/call-analytics-cutoff.js';
 import { activeRowsMatchOutboundAbStopSlice } from './lib/outbound-ab-stop-slice.js';
-import { phoneMatchKey } from './lib/lead-phone-key.js';
+import { phoneMatchKey, pgQueueLeadPhoneKeyExpr } from './lib/lead-phone-key.js';
 
 const dbType = (process.env.DB_TYPE || '').toLowerCase();
 let pool = null;
@@ -526,7 +526,7 @@ async function initPostgres() {
       ON calls (client_key, lead_phone, created_at DESC)
       WHERE call_id LIKE 'failed_q%';
 
-    -- One outbound dial "slot" per tenant + phone_match_key + local calendar day (race-safe with advisory lock + row).
+    -- Legacy: per-calendar-day dial claims. App no longer writes here (Mon–Fri journey uses outbound_weekday_journey). Kept for historical rows / optional TRUNCATE in ops.
     CREATE TABLE IF NOT EXISTS outbound_dial_daily_claim (
       id BIGSERIAL PRIMARY KEY,
       client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
@@ -1925,6 +1925,22 @@ function outboundDialClaimKeyFromRaw(raw) {
   return phoneMatchKey(raw) ?? '__nodigits__';
 }
 
+/**
+ * Remove outbound weekday journey row so automated dials can start a fresh Mon–Fri journey for this number.
+ * @returns {Promise<{ ok: boolean, deleted?: number, reason?: string }>}
+ */
+export async function clearOutboundWeekdayJourneyForReopen(clientKey, leadPhone) {
+  const raw = leadPhone != null ? String(leadPhone).trim() : '';
+  if (!clientKey || !raw) return { ok: false, reason: 'invalid' };
+  const claimKey = outboundDialClaimKeyFromRaw(raw);
+  const r = await query(
+    `DELETE FROM outbound_weekday_journey WHERE client_key = $1 AND phone_match_key = $2`,
+    [clientKey, claimKey]
+  );
+  const deleted = r?.rowCount ?? r?.changes ?? 0;
+  return { ok: true, deleted };
+}
+
 /** Mon=1 … Fri=16; all five weekday buckets used in one journey. */
 const OUTBOUND_WEEKDAY_FULL_MASK = 31;
 
@@ -2965,12 +2981,82 @@ export async function addToCallQueue({ clientKey, leadPhone, priority = 5, sched
         ? scheduledFor
         : scheduledFor;
 
-  const { rows } = await query(`
+  if (callType === 'vapi_call') {
+    const raw = String(leadPhone ?? '').trim();
+    const matchKey = outboundDialClaimKeyFromRaw(raw);
+
+    if (dbType === 'postgres' && pool) {
+      const keySql = pgQueueLeadPhoneKeyExpr('lead_phone');
+      const sel = await query(
+        `
+        SELECT id, scheduled_for, priority
+        FROM call_queue
+        WHERE client_key = $1
+          AND status IN ('pending', 'processing')
+          AND call_type = 'vapi_call'
+          AND (${keySql}) = $2
+        ORDER BY scheduled_for ASC, priority ASC, id ASC
+        LIMIT 1
+        `,
+        [clientKey, matchKey]
+      );
+      const ex = sel.rows?.[0];
+      if (ex) {
+        const exTime = new Date(ex.scheduled_for).getTime();
+        const newTime = when instanceof Date ? when.getTime() : new Date(when).getTime();
+        const earlier = newTime < exTime;
+        const betterPriority = priority < Number(ex.priority);
+        if (earlier || betterPriority) {
+          const nextWhen = earlier
+            ? smearCallQueueScheduledFor(when instanceof Date ? when : new Date(when), clientKey, raw, ex.id)
+            : ex.scheduled_for;
+          const nextPri = betterPriority ? priority : ex.priority;
+          await query(
+            `UPDATE call_queue SET scheduled_for = $1, priority = $2, updated_at = now() WHERE id = $3`,
+            [nextWhen, nextPri, ex.id]
+          );
+        }
+        const { rows: out } = await query(`SELECT * FROM call_queue WHERE id = $1`, [ex.id]);
+        return out[0];
+      }
+    } else if (sqlite) {
+      const rowsSqlite = sqlite
+        .prepare(
+          `SELECT id, scheduled_for, priority, lead_phone FROM call_queue
+           WHERE client_key = ? AND call_type = 'vapi_call' AND status IN ('pending','processing')`
+        )
+        .all(clientKey);
+      const ex = (rowsSqlite || []).find((r) => outboundDialClaimKeyFromRaw(r.lead_phone) === matchKey);
+      if (ex) {
+        const exTime = new Date(ex.scheduled_for).getTime();
+        const newTime = when instanceof Date ? when.getTime() : new Date(when).getTime();
+        const earlier = newTime < exTime;
+        const betterPriority = priority < Number(ex.priority);
+        if (earlier || betterPriority) {
+          const nextWhen = earlier
+            ? smearCallQueueScheduledFor(when instanceof Date ? when : new Date(when), clientKey, raw, ex.id)
+            : ex.scheduled_for;
+          const nextPri = betterPriority ? priority : ex.priority;
+          sqlite.prepare(`UPDATE call_queue SET scheduled_for = ?, priority = ?, updated_at = datetime('now') WHERE id = ?`).run(
+            nextWhen instanceof Date ? nextWhen.toISOString() : nextWhen,
+            nextPri,
+            ex.id
+          );
+        }
+        return sqlite.prepare(`SELECT * FROM call_queue WHERE id = ?`).get(ex.id);
+      }
+    }
+  }
+
+  const { rows } = await query(
+    `
     INSERT INTO call_queue (client_key, lead_phone, priority, scheduled_for, call_type, call_data, status)
     VALUES ($1, $2, $3, $4, $5, $6, 'pending')
     RETURNING *
-  `, [clientKey, leadPhone, priority, when, callType, callDataJson]);
-  
+    `,
+    [clientKey, leadPhone, priority, when, callType, callDataJson]
+  );
+
   return rows[0];
 }
 
@@ -2994,14 +3080,40 @@ export async function updateCallQueueStatus(id, status) {
   `, [id, status]);
 }
 
-/** Cancel all other pending queue rows for the same client+phone (e.g. after we just completed one). */
+/** Cancel all other pending queue rows for the same client + dialable phone identity (tail-10 / digit key). */
 export async function cancelDuplicatePendingCalls(clientKey, leadPhone, excludeId) {
-  const result = await query(`
+  const raw = leadPhone != null ? String(leadPhone).trim() : '';
+  const matchKey = outboundDialClaimKeyFromRaw(raw);
+  if (sqlite) {
+    const rows = sqlite
+      .prepare(
+        `SELECT id, lead_phone FROM call_queue
+         WHERE client_key = ? AND status = 'pending' AND id != ? AND call_type = 'vapi_call'`
+      )
+      .all(clientKey, excludeId);
+    let n = 0;
+    for (const r of rows || []) {
+      if (outboundDialClaimKeyFromRaw(r.lead_phone) === matchKey) {
+        sqlite.prepare(`UPDATE call_queue SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?`).run(r.id);
+        n++;
+      }
+    }
+    return n;
+  }
+  const keySql = pgQueueLeadPhoneKeyExpr('lead_phone');
+  const result = await query(
+    `
     UPDATE call_queue
     SET status = 'cancelled', updated_at = now()
-    WHERE client_key = $1 AND lead_phone = $2 AND status = 'pending' AND id != $3
-  `, [clientKey, leadPhone, excludeId]);
-  return result?.rowCount ?? 0;
+    WHERE client_key = $1
+      AND status = 'pending'
+      AND id != $2
+      AND call_type = 'vapi_call'
+      AND (${keySql}) = $3
+    `,
+    [clientKey, excludeId, matchKey]
+  );
+  return result?.rowCount ?? result?.changes ?? 0;
 }
 
 export async function getCallQueueByTenant(clientKey, limit = 100) {
@@ -3055,6 +3167,43 @@ export async function cleanupOldCallQueue(daysOld = 7) {
     WHERE created_at < now() - interval '${daysOld} days'
     AND status IN ('completed', 'failed', 'cancelled')
   `);
+}
+
+/**
+ * Cancel extra pending `vapi_call` rows that share the same tenant + digit phone key (keeps earliest schedule).
+ * Postgres only (queue dedupe for ops backfills).
+ */
+export async function dedupePendingVapiCallQueueRows() {
+  if (dbType !== 'postgres' || !pool) {
+    return { cancelled: 0, skipped: true };
+  }
+  const keyExpr = pgQueueLeadPhoneKeyExpr('cq.lead_phone');
+  const result = await query(
+    `
+    WITH keyed AS (
+      SELECT cq.id,
+        cq.client_key,
+        (${keyExpr}) AS phone_key,
+        cq.scheduled_for,
+        cq.priority
+      FROM call_queue cq
+      WHERE cq.status = 'pending' AND cq.call_type = 'vapi_call'
+    ),
+    ranked AS (
+      SELECT id,
+        ROW_NUMBER() OVER (
+          PARTITION BY client_key, phone_key
+          ORDER BY scheduled_for ASC, priority ASC, id ASC
+        ) AS rn
+      FROM keyed
+    )
+    UPDATE call_queue q
+    SET status = 'cancelled', updated_at = now()
+    FROM ranked r
+    WHERE q.id = r.id AND r.rn > 1
+    `
+  );
+  return { cancelled: result?.rowCount ?? 0, skipped: false };
 }
 
 // Cost tracking functions

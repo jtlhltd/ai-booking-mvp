@@ -114,7 +114,7 @@ import twilio from 'twilio';
 import { createHash } from 'crypto';
 import { performanceMiddleware, getPerformanceMonitor } from './lib/performance-monitor.js';
 import { cacheMiddleware, getCache } from './lib/cache.js';
-import { phoneMatchKey } from './lib/lead-phone-key.js';
+import { phoneMatchKey, pgQueueLeadPhoneKeyExpr } from './lib/lead-phone-key.js';
 import { isOptedOut } from './lib/lead-deduplication.js';
 
 import { makeJwtAuth, insertEvent, freeBusy } from './gcal.js';
@@ -20548,6 +20548,48 @@ app.post('/admin/purge-leads', async (req, res) => {
   }
 });
 
+// Dedupe pending outbound queue rows (same tenant + digit phone key); keeps earliest scheduled row per key.
+app.post('/api/admin/call-queue/dedupe-pending-vapi', async (req, res) => {
+  try {
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    }
+    const { dedupePendingVapiCallQueueRows } = await import('./db.js');
+    const r = await dedupePendingVapiCallQueueRows();
+    console.log('[ADMIN] call-queue dedupe pending vapi', r);
+    return res.json({ ok: true, ...r });
+  } catch (e) {
+    console.error('[ADMIN DEDUPE CALL QUEUE]', e?.message || e);
+    return res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
+// Clear outbound weekday journey for a number so auto dials can start a fresh Mon–Fri journey (ops).
+app.post('/api/admin/outbound-weekday-journey/clear', async (req, res) => {
+  try {
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    }
+    const clientKey = req.body?.clientKey != null ? String(req.body.clientKey).trim() : '';
+    const leadPhone = req.body?.leadPhone != null ? String(req.body.leadPhone).trim() : '';
+    if (!clientKey || !leadPhone) {
+      return res.status(400).json({ ok: false, error: 'clientKey and leadPhone are required' });
+    }
+    const { clearOutboundWeekdayJourneyForReopen } = await import('./db.js');
+    const r = await clearOutboundWeekdayJourneyForReopen(clientKey, leadPhone);
+    if (!r.ok) {
+      return res.status(400).json(r);
+    }
+    console.log('[ADMIN] outbound weekday journey cleared', { clientKey, deleted: r.deleted });
+    return res.json({ ok: true, deleted: r.deleted });
+  } catch (e) {
+    console.error('[ADMIN CLEAR OUTBOUND JOURNEY]', e?.message || e);
+    return res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
 // Admin endpoint to get cost optimization metrics
 app.get('/admin/cost-optimization/:tenantKey', async (req, res) => {
   try {
@@ -23864,7 +23906,7 @@ async function processCallQueue() {
                     SELECT 1
                     FROM calls ok
                     WHERE ok.client_key = c.client_key
-                      AND ok.lead_phone = c.lead_phone
+                      AND ${pgQueueLeadPhoneKeyExpr('ok.lead_phone')} = ${pgQueueLeadPhoneKeyExpr('c.lead_phone')}
                       AND ok.call_id NOT LIKE 'failed_q%'
                       AND ok.created_at >= now() - ($2::int || ' days')::interval
                   )
@@ -23872,8 +23914,9 @@ async function processCallQueue() {
                     SELECT 1
                     FROM call_queue cq
                     WHERE cq.client_key = c.client_key
-                      AND cq.lead_phone = c.lead_phone
+                      AND cq.call_type = 'vapi_call'
                       AND cq.status IN ('pending', 'processing')
+                      AND ${pgQueueLeadPhoneKeyExpr('cq.lead_phone')} = ${pgQueueLeadPhoneKeyExpr('c.lead_phone')}
                   )
                 GROUP BY c.lead_phone
                 ORDER BY last_failed DESC
@@ -24023,6 +24066,30 @@ async function processCallQueue() {
   }
 }
 
+function isTransientInstantCallThrow(err) {
+  const msg = String(err?.message || err || '');
+  return /fetch failed|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket|network|502|503|504|429|Timeout|timed out|ENOTFOUND|certificate|SSL|Bad gateway|ECONNREFUSED/i.test(
+    msg
+  );
+}
+
+function isTransientVapiQueueResult(vapiResult) {
+  if (!vapiResult) return true;
+  const err = String(vapiResult.error || '');
+  if (err === 'circuit_breaker_open') return true;
+  if (err === 'vapi_client_error') {
+    const sc = Number(vapiResult.statusCode);
+    if (sc === 429 || sc === 502 || sc === 503 || sc === 504) return true;
+    const d = String(vapiResult.details || '').toLowerCase();
+    if (/timeout|temporarily|unavailable|overload|rate|too many|429|502|503|504/.test(d)) return true;
+  }
+  if (err === 'call_failed') {
+    const d = String(vapiResult.details || '').toLowerCase();
+    if (/timeout|timed out|502|503|504|429|ECONNRESET|fetch|network|socket/i.test(d)) return true;
+  }
+  return false;
+}
+
 // Process VAPI call from queue
 async function processVapiCallFromQueue(call) {
   try {
@@ -24104,11 +24171,34 @@ async function processVapiCallFromQueue(call) {
       leadName: leadForCall.name
     });
     
-    const vapiResult = await callLeadInstantly({
-      clientKey,
-      lead: leadForCall,
-      client
-    });
+    let vapiResult;
+    try {
+      vapiResult = await callLeadInstantly({
+        clientKey,
+        lead: leadForCall,
+        client
+      });
+    } catch (e) {
+      if (isTransientInstantCallThrow(e)) {
+        const next = smearCallQueueScheduledFor(
+          new Date(Date.now() + 2 * 60 * 1000),
+          clientKey,
+          leadPhone,
+          call.id
+        );
+        await query(
+          `UPDATE call_queue SET status = 'pending', scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
+          [next, call.id]
+        );
+        console.warn('[QUEUE CALL] Deferred — transient error before Vapi response', {
+          queueId: call.id,
+          scheduledFor: next.toISOString(),
+          message: String(e?.message || e).slice(0, 240)
+        });
+        return {};
+      }
+      throw e;
+    }
 
     if (vapiResult?.error === 'outside_business_hours') {
       const next = smearCallQueueScheduledFor(
@@ -24155,6 +24245,26 @@ async function processVapiCallFromQueue(call) {
     }
     
     if (!vapiResult || !vapiResult.ok || vapiResult.error) {
+      if (isTransientVapiQueueResult(vapiResult)) {
+        const delayMin = vapiResult?.error === 'circuit_breaker_open' ? 5 : 2;
+        const next = smearCallQueueScheduledFor(
+          new Date(Date.now() + delayMin * 60 * 1000),
+          clientKey,
+          leadPhone,
+          call.id
+        );
+        await query(
+          `UPDATE call_queue SET status = 'pending', scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
+          [next, call.id]
+        );
+        console.warn('[QUEUE CALL] Deferred — transient Vapi failure (no failed_q marker)', {
+          queueId: call.id,
+          error: vapiResult?.error,
+          scheduledFor: next.toISOString()
+        });
+        return {};
+      }
+
       const detailsStr = typeof vapiResult?.details === 'string' ? vapiResult.details : '';
       const isNoCredits =
         vapiResult?.error === 'vapi_client_error' &&
@@ -24320,10 +24430,18 @@ async function queueNewLeadsForCalling() {
             AND l.status = 'new'
             AND l.created_at >= NOW() - INTERVAL '30 days'
             AND NOT EXISTS (
-              SELECT 1 FROM call_queue cq 
-              WHERE cq.client_key = l.client_key 
-              AND cq.lead_phone = l.phone 
-              AND cq.status = 'pending'
+              SELECT 1 FROM call_queue cq
+              WHERE cq.client_key = l.client_key
+                AND cq.call_type = 'vapi_call'
+                AND cq.status IN ('pending', 'processing')
+                AND ${pgQueueLeadPhoneKeyExpr('cq.lead_phone')} = COALESCE(
+                  l.phone_match_key,
+                  (CASE WHEN LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
+                    THEN RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
+                    ELSE NULLIF(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), '')
+                  END),
+                  '__nodigits__'
+                )
             )
             AND NOT EXISTS (
               SELECT 1 FROM calls c
