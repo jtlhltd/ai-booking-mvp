@@ -7215,6 +7215,9 @@
                 const tz = sched.timezone || tenantTz || actTz;
                 const nextOpen = sched.nextOpenAt ? formatRelativeWithAbsolute(sched.nextOpenAt, tz) : null;
                 const byDay = new Map(queueSched.map((r) => [String(r.dayKey || ''), r]));
+                const detailsHostId = 'outreachScheduleDetails';
+                const mkDayBtnAttrs = (dayKey) =>
+                    `data-outreach-day="${escapeHtml(String(dayKey || ''))}" style="cursor:pointer"`;
                 const todayKey = (() => {
                     try {
                         return new Intl.DateTimeFormat('en-CA', {
@@ -7238,7 +7241,7 @@
                 const todayDue = todayQd ? Number(todayQd.dueNowN) || 0 : 0;
                 const todayFirst =
                     todayQd && todayQd.firstScheduledFor ? formatRelativeWithAbsolute(todayQd.firstScheduledFor, tz) : null;
-                const todayLine = `<li><strong>Today</strong> <span class="tom-ab-test-meta">${escapeHtml(
+                const todayLine = `<li ${mkDayBtnAttrs(todayKey)}><strong>Today</strong> <span class="tom-ab-test-meta">${escapeHtml(
                     todayKey
                 )}</span> <span class="tom-ab-test-meta">•</span> <strong>${formatNumber(todayQueued)}</strong> queued${
                     todayDue > 0
@@ -7264,7 +7267,7 @@
                                       formatRelativeWithAbsolute(qd.firstScheduledFor, tz)
                                   )}</span>`
                                 : '';
-                        return `<li><strong>${label}</strong> <span class="tom-ab-test-meta">•</span> ${windowTxt}${pendingTxt}${dueTxt}${firstTxt}</li>`;
+                        return `<li ${mkDayBtnAttrs(w.dayKey)}><strong>${label}</strong> <span class="tom-ab-test-meta">•</span> ${windowTxt}${pendingTxt}${dueTxt}${firstTxt}</li>`;
                     })
                     .join('');
                 scheduleHtml = `
@@ -7279,6 +7282,7 @@
                             ${todayLine}
                             ${rows}
                         </ul>
+                        <div id="${detailsHostId}" class="outreach-strip-hint tom-ab-test-meta" style="margin-top:8px"></div>
                     </div>`;
             }
 
@@ -7294,6 +7298,77 @@
                 ${hintHtml}
                 ${etaHtml}
                 ${trendsHtml}`;
+        }
+
+        async function fetchOutboundQueueDayDetails(clientKey, dayKey) {
+            if (!clientKey || !dayKey) return null;
+            try {
+                const url = `${BASE_URL}/api/outbound-queue-day/${encodeURIComponent(clientKey)}?day=${encodeURIComponent(
+                    String(dayKey)
+                )}`;
+                const res = await fetch(url);
+                if (!res.ok) return null;
+                const payload = await res.json();
+                return payload && payload.ok ? payload : null;
+            } catch {
+                return null;
+            }
+        }
+
+        function bindOutreachScheduleDayClicks() {
+            const host = document.getElementById('outreachCapacityStrip');
+            if (!host || host.dataset.scheduleClicksBound === '1') return;
+            host.dataset.scheduleClicksBound = '1';
+            host.addEventListener('click', async (e) => {
+                const li = e.target && e.target.closest ? e.target.closest('[data-outreach-day]') : null;
+                if (!li || !host.contains(li)) return;
+                const dayKey = li.getAttribute('data-outreach-day') || '';
+                if (!dayKey || !currentClient || currentClient === DEMO_CLIENT_KEY) return;
+                const detailsEl = document.getElementById('outreachScheduleDetails');
+                if (!detailsEl) return;
+                detailsEl.textContent = 'Loading hour-by-hour breakdown…';
+                const payload = await fetchOutboundQueueDayDetails(currentClient, dayKey);
+                if (!payload) {
+                    detailsEl.textContent = 'Could not load breakdown for this day.';
+                    return;
+                }
+                const tz = payload.timezone || DASHBOARD_ACTIVITY_TZ;
+                const hours = Array.isArray(payload.hours) ? payload.hours : [];
+                if (hours.length === 0) {
+                    detailsEl.innerHTML = `<strong>${escapeHtml(dayKey)}</strong> (${escapeHtml(
+                        tz
+                    )}): no queued rows in this day.`;
+                    return;
+                }
+                const lines = hours
+                    .map((h) => {
+                        const first = h.firstScheduledFor ? formatRelativeWithAbsolute(h.firstScheduledFor, tz) : '';
+                        const last = h.lastScheduledFor ? formatRelativeWithAbsolute(h.lastScheduledFor, tz) : '';
+                        const pr =
+                            h.bestPriority != null || h.worstPriority != null
+                                ? ` <span class="tom-ab-test-meta">· priority ${escapeHtml(
+                                      String(h.bestPriority ?? '—')
+                                  )}–${escapeHtml(String(h.worstPriority ?? '—'))}</span>`
+                                : '';
+                        return `<li><strong>${escapeHtml(h.hourKey || '')}</strong> <span class="tom-ab-test-meta">•</span> <strong>${formatNumber(
+                            Number(h.pendingN) || 0
+                        )}</strong> pending <span class="tom-ab-test-meta">•</span> <strong>${formatNumber(
+                            Number(h.dueNowN) || 0
+                        )}</strong> due <span class="tom-ab-test-meta">•</span> <strong>${formatNumber(
+                            Number(h.processingN) || 0
+                        )}</strong> processing${first ? ` <span class="tom-ab-test-meta">· first:</span> ${escapeHtml(first)}` : ''}${
+                            last ? ` <span class="tom-ab-test-meta">· last:</span> ${escapeHtml(last)}` : ''
+                        }${pr}</li>`;
+                    })
+                    .join('');
+                detailsEl.innerHTML = `
+                    <div style="margin-top:6px">
+                      <div><strong>${escapeHtml(dayKey)}</strong> <span class="tom-ab-test-meta">(${escapeHtml(
+                    tz
+                )})</span></div>
+                      <ul style="margin:6px 0 0 0;padding-left:18px">${lines}</ul>
+                    </div>`;
+            });
         }
 
         function renderUsageMetersStrip(data) {
@@ -8923,6 +8998,7 @@ ${actionsRow}
             renderUsageMetersStrip(data);
             renderDashboardExperiencePanel(data);
             applyDashboardReadOnly(data);
+            bindOutreachScheduleDayClicks();
         }
 
         function formatActivitySnapshot(iso, timeZone = DASHBOARD_ACTIVITY_TZ) {
