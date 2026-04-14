@@ -8991,7 +8991,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     // After outbound A/B bundle infer we still refetch with bypassCache when config was written.
     let client = await getFullClient(clientKey, { bypassCache: false });
     const activityChannel = activityFeedChannelLabel(client);
-    /** Align with outbound dialer (`instant-calling` / `claimOutboundDialSlotForToday`). */
+    /** Align with outbound dialer (`instant-calling` / `claimOutboundWeekdayJourneySlot`). */
     const tenantTz = client?.booking?.timezone || client?.timezone || 'Europe/London';
 
     const rollingSinceInstant = DateTime.now().setZone(DASHBOARD_ACTIVITY_TZ).minus({ hours: 24 });
@@ -9036,9 +9036,11 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
            AND cq.status = 'processing') AS queue_processing_now,
         (SELECT MIN(cq.scheduled_for) FROM call_queue cq
          WHERE cq.client_key = $1 AND cq.status = 'pending') AS queue_next_scheduled_for,
-        (SELECT COUNT(*)::int FROM outbound_dial_daily_claim d
-         WHERE d.client_key = $1
-           AND d.dial_date = (NOW() AT TIME ZONE $3::text)::date) AS dial_slots_used_local_today
+        (SELECT COUNT(*)::int FROM outbound_weekday_journey j
+         WHERE j.client_key = $1
+           AND EXTRACT(ISODOW FROM NOW() AT TIME ZONE $3::text) BETWEEN 1 AND 5
+           AND (j.weekday_mask & (1 << (EXTRACT(ISODOW FROM NOW() AT TIME ZONE $3::text)::int - 1))::int) <> 0
+        ) AS dial_slots_used_local_today
     `;
     const demoOutreachQueuePulseSqlite = `
       SELECT
@@ -9609,10 +9611,9 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
                 AND l.status = 'new'
                 AND l.created_at >= NOW() - INTERVAL '30 days'
                 AND NOT EXISTS (
-                  SELECT 1 FROM outbound_dial_daily_claim d
-                  WHERE d.client_key = l.client_key
-                    AND d.dial_date = b.local_day
-                    AND d.phone_match_key = COALESCE(
+                  SELECT 1 FROM outbound_weekday_journey j
+                  WHERE j.client_key = l.client_key
+                    AND j.phone_match_key = COALESCE(
                       l.phone_match_key,
                       (CASE WHEN LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
                         THEN RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
@@ -9620,19 +9621,16 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
                       END),
                       '__nodigits__'
                     )
-                )
-                AND NOT EXISTS (
-                  SELECT 1 FROM calls c
-                  WHERE c.client_key = l.client_key
                     AND (
-                      c.lead_phone = l.phone
+                      j.closed_at IS NOT NULL
                       OR (
-                        l.phone_match_key IS NOT NULL
-                        AND c.lead_phone_match_key IS NOT NULL
-                        AND c.lead_phone_match_key = l.phone_match_key
+                        EXTRACT(ISODOW FROM NOW() AT TIME ZONE (SELECT tz FROM tz)) BETWEEN 1 AND 5
+                        AND (
+                          j.weekday_mask
+                          & (1 << (EXTRACT(ISODOW FROM NOW() AT TIME ZONE (SELECT tz FROM tz))::int - 1))::int
+                        ) <> 0
                       )
                     )
-                    AND ((c.created_at AT TIME ZONE (SELECT tz FROM tz))::date = b.local_day)
                 )
                 AND NOT EXISTS (
                   SELECT 1 FROM call_queue cq
@@ -9645,7 +9643,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
                     AND cq.scheduled_for < bb.day_end_utc
                 )
             ) AS callable_leads_today,
-            -- how many are blocked by the "one per local day" claim right now
+            -- how many are blocked because today’s Mon–Fri bucket is already used for this journey
             (
               SELECT COUNT(*)::int
               FROM leads l
@@ -9654,10 +9652,9 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
                 AND l.status = 'new'
                 AND l.created_at >= NOW() - INTERVAL '30 days'
                 AND EXISTS (
-                  SELECT 1 FROM outbound_dial_daily_claim d
-                  WHERE d.client_key = l.client_key
-                    AND d.dial_date = b.local_day
-                    AND d.phone_match_key = COALESCE(
+                  SELECT 1 FROM outbound_weekday_journey j
+                  WHERE j.client_key = l.client_key
+                    AND j.phone_match_key = COALESCE(
                       l.phone_match_key,
                       (CASE WHEN LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
                         THEN RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
@@ -9665,6 +9662,11 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
                       END),
                       '__nodigits__'
                     )
+                    AND EXTRACT(ISODOW FROM NOW() AT TIME ZONE (SELECT tz FROM tz)) BETWEEN 1 AND 5
+                    AND (
+                      j.weekday_mask
+                      & (1 << (EXTRACT(ISODOW FROM NOW() AT TIME ZONE (SELECT tz FROM tz))::int - 1))::int
+                    ) <> 0
                 )
             ) AS blocked_daily_limit_today
           `,
@@ -23472,13 +23474,24 @@ async function processRetryQueue() {
               continue;
             }
             const rTz = rClient?.booking?.timezone || rClient?.timezone || TIMEZONE;
-            const { claimOutboundDialSlotForToday } = await import('./db.js');
-            const retryDialClaim = await claimOutboundDialSlotForToday(
+            const { claimOutboundWeekdayJourneySlot } = await import('./db.js');
+            const retryDialClaim = await claimOutboundWeekdayJourneySlot(
               retry.client_key,
               retry.lead_phone,
               rTz
             );
             if (!retryDialClaim.ok) {
+              if (retryDialClaim.reason === 'journey_terminal') {
+                await query(
+                  `UPDATE retry_queue SET status = 'cancelled', updated_at = NOW() WHERE id = $1`,
+                  [retry.id]
+                );
+                console.log('[RETRY PROCESSOR] Cancelled — outbound weekday journey complete', {
+                  id: retry.id,
+                  reason: retryDialClaim.reason
+                });
+                continue;
+              }
               const nextLocalDayStart = DateTime.now().setZone(rTz).plus({ days: 1 }).startOf('day').toJSDate();
               const nextOpen = getNextBusinessOpenForTenant(
                 rClient || { booking: { timezone: rTz }, timezone: rTz },
@@ -23490,7 +23503,7 @@ async function processRetryQueue() {
                 `UPDATE retry_queue SET scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
                 [nextOpen, retry.id]
               );
-              console.log('[RETRY PROCESSOR] Deferred — daily dial limit (one per number per local day)', {
+              console.log('[RETRY PROCESSOR] Deferred — weekday journey slot not available (try next dial day)', {
                 id: retry.id,
                 scheduledFor: nextOpen,
                 reason: retryDialClaim.reason
@@ -24111,6 +24124,17 @@ async function processVapiCallFromQueue(call) {
       return;
     }
 
+    if (vapiResult?.error === 'outbound_journey_complete') {
+      await query(
+        `UPDATE call_queue SET status = 'cancelled', updated_at = NOW() WHERE id = $1`,
+        [call.id]
+      );
+      console.log('[QUEUE CALL] Cancelled — outbound weekday journey complete (no further auto dials)', {
+        queueId: call.id
+      });
+      return;
+    }
+
     if (vapiResult?.error === 'daily_dial_limit') {
       const tzQ = client?.booking?.timezone || client?.timezone || TIMEZONE;
       const nextLocalDayStart = DateTime.now().setZone(tzQ).plus({ days: 1 }).startOf('day').toJSDate();
@@ -24122,7 +24146,7 @@ async function processVapiCallFromQueue(call) {
         `UPDATE call_queue SET status = 'pending', scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
         [nextSmear, call.id]
       );
-      console.log('[QUEUE CALL] Deferred — daily dial limit (one attempt per number per local day)', {
+      console.log('[QUEUE CALL] Deferred — weekday journey slot already used for today’s bucket (try next dial day)', {
         queueId: call.id,
         scheduledFor: nextSmear
       });
@@ -24287,8 +24311,7 @@ async function queueNewLeadsForCalling() {
       
       try {
         // Get new leads that haven't been called yet
-        // Check both call_queue (pending calls) AND calls table (completed calls)
-        // One outbound attempt per phone per local calendar day (tenant timezone); 3-day cooldown for re-dial after a real attempt
+        // Check call_queue (pending) and in-flight calls; Mon–Fri outbound journey (per number) blocks until terminal or next bucket day
         const newLeads = await poolQuerySelect(`
           SELECT l.id, l.name, l.phone, l.service, l.source, l.status, l.created_at
           FROM leads l
@@ -24309,29 +24332,9 @@ async function queueNewLeadsForCalling() {
               AND c.status IN ('initiated', 'in_progress')
             )
             AND NOT EXISTS (
-              SELECT 1 FROM calls c
-              WHERE c.client_key = l.client_key
-              AND (
-                c.lead_phone = l.phone
-                OR (
-                  l.phone_match_key IS NOT NULL
-                  AND c.lead_phone_match_key IS NOT NULL
-                  AND c.lead_phone_match_key = l.phone_match_key
-                )
-                OR (
-                  l.phone_match_key IS NOT NULL
-                  AND c.lead_phone_match_key IS NULL
-                  AND LENGTH(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g')) >= 10
-                  AND RIGHT(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), 10) = l.phone_match_key
-                )
-              )
-              AND ((c.created_at AT TIME ZONE $2)::date = (NOW() AT TIME ZONE $2)::date)
-            )
-            AND NOT EXISTS (
-              SELECT 1 FROM outbound_dial_daily_claim d
-              WHERE d.client_key = l.client_key
-                AND d.dial_date = (NOW() AT TIME ZONE $2)::date
-                AND d.phone_match_key = COALESCE(
+              SELECT 1 FROM outbound_weekday_journey j
+              WHERE j.client_key = l.client_key
+                AND j.phone_match_key = COALESCE(
                   l.phone_match_key,
                   (CASE WHEN LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
                     THEN RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
@@ -24339,15 +24342,16 @@ async function queueNewLeadsForCalling() {
                   END),
                   '__nodigits__'
                 )
-            )
-            AND NOT EXISTS (
-              SELECT 1 FROM calls c
-              WHERE c.client_key = l.client_key
-              AND c.lead_phone = l.phone
-              -- Cooldown: allow re-calling after 3 days
-              AND c.created_at >= NOW() - INTERVAL '3 days'
-              -- Ignore synthetic failed queue call markers; they should not block catch-up
-              AND (c.call_id IS NULL OR c.call_id NOT LIKE 'failed_q%')
+                AND (
+                  j.closed_at IS NOT NULL
+                  OR (
+                    EXTRACT(ISODOW FROM NOW() AT TIME ZONE $2) BETWEEN 1 AND 5
+                    AND (
+                      j.weekday_mask
+                      & (1 << (EXTRACT(ISODOW FROM NOW() AT TIME ZONE $2)::int - 1))::int
+                    ) <> 0
+                  )
+                )
             )
           ORDER BY l.created_at ASC
           LIMIT ${leadQueueBatchSize}

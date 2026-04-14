@@ -7076,9 +7076,9 @@
             } else if (state === 'runner_backlog_no_logs') {
                 pillText = 'Runner on — no new logs';
                 pillClass = 'outreach-state-pill--warn';
-                summary = `The queue is being updated (<strong>${formatNumber(qt24)}</strong> row touches in 24h) but <strong>no new calls</strong> appeared in dial history. Often: one attempt per number per local day already used${
-                    slotsToday != null ? ` (<strong>${formatNumber(slotsToday)}</strong> slots today)` : ''
-                }, or Vapi/start failed before a call id was saved.`;
+                summary = `The queue is being updated (<strong>${formatNumber(qt24)}</strong> row touches in 24h) but <strong>no new calls</strong> appeared in dial history. Often: today’s Mon–Fri weekday bucket already used for some numbers${
+                    slotsToday != null ? ` (<strong>${formatNumber(slotsToday)}</strong> numbers in that state)` : ''
+                }, journeys are complete, or Vapi/start failed before a call id was saved.`;
             } else if (state === 'stale_backlog') {
                 pillText = 'Backlog — quiet runner';
                 pillClass = 'outreach-state-pill--warn';
@@ -7123,7 +7123,7 @@
             let hintHtml = '';
             if (state === 'runner_backlog_no_logs') {
                 hintHtml =
-                    '<p class="outreach-strip-hint tom-ab-test-meta">Host logs: search <code>[QUEUE CALL]</code>, <code>[INSTANT CALL]</code>, <code>daily dial</code>, or <code>Vapi</code>. Rule of thumb: <strong>one outbound attempt per phone number per local calendar day</strong> (then the same number can run again the next day).</p>';
+                    '<p class="outreach-strip-hint tom-ab-test-meta">Host logs: search <code>[QUEUE CALL]</code>, <code>[INSTANT CALL]</code>, <code>weekday journey</code>, or <code>Vapi</code>. Rule of thumb: <strong>up to one outbound attempt per phone per Mon–Fri bucket</strong> (five buckets per journey; voicemail does not end the journey; live pickup or exhausting all five stops auto dials until the journey is cleared in the database).</p>';
             } else if (state === 'queued_future_window') {
                 hintHtml =
                     '<p class="outreach-strip-hint tom-ab-test-meta">Rows can sit in the future when staggered timing, business hours, or the per-day-per-number rule bumps them to the next window.</p>';
@@ -7174,7 +7174,7 @@
 
             const slotsDd =
                 slotsToday != null
-                    ? `<strong>${formatNumber(slotsToday)}</strong> <span class="tom-ab-test-meta">(per-number day)</span>`
+                    ? `<strong>${formatNumber(slotsToday)}</strong> <span class="tom-ab-test-meta">(per-number weekday bucket)</span>`
                     : '— <span class="tom-ab-test-meta">(not reported)</span>';
             const nextDd =
                 q > 0 && nextSchedAbs
@@ -7205,12 +7205,12 @@
                     <div class="outreach-strip-fact"><dt>Callable today (est.)</dt><dd>${
                         callableToday == null
                             ? '—'
-                            : `<strong>${formatNumber(callableToday)}</strong> <span class="tom-ab-test-meta">not yet attempted today</span>`
+                            : `<strong>${formatNumber(callableToday)}</strong> <span class="tom-ab-test-meta">callable on today’s weekday bucket</span>`
                     }</dd></div>
                     <div class="outreach-strip-fact"><dt>Blocked by daily limit</dt><dd>${
                         blockedDaily == null
                             ? '—'
-                            : `<strong>${formatNumber(blockedDaily)}</strong> <span class="tom-ab-test-meta">already had today’s attempt</span>`
+                            : `<strong>${formatNumber(blockedDaily)}</strong> <span class="tom-ab-test-meta">already used today’s weekday bucket</span>`
                     }</dd></div>
                     <div class="outreach-strip-fact"><dt>Due now (queue)</dt><dd>${dueDd}</dd></div>
                     <div class="outreach-strip-fact"><dt>Processing now</dt><dd>${procDd}</dd></div>

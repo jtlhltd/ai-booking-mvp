@@ -579,6 +579,7 @@ async function processWebhookPayload(body, correlationId) {
       leadPhone,
       status,
       outcome,
+      endedReason,
       duration,
       cost,
       metadata: metadataForStore,
@@ -1474,7 +1475,8 @@ async function updateCallTracking({
   tenantKey, 
   leadPhone, 
   status, 
-  outcome, 
+  outcome,
+  endedReason,
   duration, 
   cost, 
   metadata, 
@@ -1513,6 +1515,22 @@ async function updateCallTracking({
       metrics,
       analyzedAt
     });
+
+    if (tenantKey && leadPhone && String(status || '').toLowerCase() === 'ended') {
+      try {
+        const meta = metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? metadata : {};
+        const cp = String(meta.callPurpose || meta.CallPurpose || '').toLowerCase();
+        if (!cp.startsWith('inbound')) {
+          const { isOutboundAbLivePickupOutcome } = await import('../lib/outbound-ab-live-pickup.js');
+          if (isOutboundAbLivePickupOutcome(outcome, endedReason)) {
+            const { closeOutboundWeekdayJourneyOnLivePickup } = await import('../db.js');
+            await closeOutboundWeekdayJourneyOnLivePickup(tenantKey, leadPhone);
+          }
+        }
+      } catch (journeyErr) {
+        console.warn('[OUTBOUND WEEKDAY JOURNEY] close on live pickup skipped:', journeyErr?.message || journeyErr);
+      }
+    }
 
     try {
       const { recordCallTimeBanditAfterCallComplete } = await import('../db.js');

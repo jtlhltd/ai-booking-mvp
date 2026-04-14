@@ -538,6 +538,23 @@ async function initPostgres() {
     CREATE INDEX IF NOT EXISTS outbound_dial_daily_claim_lookup_idx
       ON outbound_dial_daily_claim (client_key, dial_date);
 
+    -- Mon–Fri outbound journey: at most one attempt per weekday bucket per number; terminal when live pickup or all five buckets used.
+    CREATE TABLE IF NOT EXISTS outbound_weekday_journey (
+      client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
+      phone_match_key TEXT NOT NULL,
+      weekday_mask SMALLINT NOT NULL DEFAULT 0,
+      closed_at TIMESTAMPTZ,
+      closed_reason TEXT,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      updated_at TIMESTAMPTZ DEFAULT now(),
+      PRIMARY KEY (client_key, phone_match_key)
+    );
+    CREATE INDEX IF NOT EXISTS outbound_weekday_journey_client_idx
+      ON outbound_weekday_journey (client_key);
+    CREATE INDEX IF NOT EXISTS outbound_weekday_journey_closed_idx
+      ON outbound_weekday_journey (client_key)
+      WHERE closed_at IS NOT NULL;
+
     -- Aggregated transcript insights + routing recommendations (per tenant)
     CREATE TABLE IF NOT EXISTS call_insights (
       id BIGSERIAL PRIMARY KEY,
@@ -1241,6 +1258,16 @@ function initSqlite() {
       created_at TEXT DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS msg_tenant_time_idx ON messages(client_key, created_at);
+    CREATE TABLE IF NOT EXISTS outbound_weekday_journey (
+      client_key TEXT NOT NULL,
+      phone_match_key TEXT NOT NULL,
+      weekday_mask INTEGER NOT NULL DEFAULT 0,
+      closed_at TEXT,
+      closed_reason TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (client_key, phone_match_key)
+    );
     CREATE TABLE IF NOT EXISTS idempotency (
       client_key TEXT NOT NULL,
       key TEXT NOT NULL,
@@ -1893,170 +1920,239 @@ export async function upsertCall({
   ]);
 }
 
-/** Key stored in outbound_dial_daily_claim; must match lead-queuer COALESCE expression. */
+/** Key for outbound weekday journey; must match lead-queuer COALESCE expression. */
 function outboundDialClaimKeyFromRaw(raw) {
   return phoneMatchKey(raw) ?? '__nodigits__';
 }
 
-/**
- * True if this tenant already has any `calls` row for this number on the tenant's local calendar day
- * (outbound attempts, failed_q markers, webhooks, etc. all count as "dialed today"),
- * or an active daily dial claim row (race guard before a `calls` row exists).
- * Opt out: ALLOW_MULTIPLE_OUTBOUND_CALLS_PER_DAY=1|true|yes
- */
-export async function hasOutboundCallAttemptToday(clientKey, leadPhone, timezone = 'Europe/London') {
-  if (/^(1|true|yes)$/i.test(String(process.env.ALLOW_MULTIPLE_OUTBOUND_CALLS_PER_DAY || '').trim())) {
-    return false;
-  }
-  const raw = leadPhone != null ? String(leadPhone).trim() : '';
-  if (!clientKey || !raw) return false;
-  const qk = phoneMatchKey(raw);
-  const claimKey = outboundDialClaimKeyFromRaw(raw);
+/** Mon=1 … Fri=16; all five weekday buckets used in one journey. */
+const OUTBOUND_WEEKDAY_FULL_MASK = 31;
 
-  if (dbType === 'postgres' && pool) {
-    // Bypass SELECT query cache — result must be fresh for every dial decision.
-    const exec = () =>
-      pool.query(
-        `
-      SELECT (
-        EXISTS (
-        SELECT 1
-        FROM calls c
-        WHERE c.client_key = $1
-          AND (
-            c.lead_phone = $2
-            OR (
-              $3::text IS NOT NULL
-              AND c.lead_phone_match_key IS NOT NULL
-              AND c.lead_phone_match_key = $3
-            )
-            OR (
-              $3::text IS NOT NULL
-              AND c.lead_phone_match_key IS NULL
-              AND LENGTH(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g')) >= 10
-              AND RIGHT(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), 10) = $3
-            )
-          )
-          AND ((c.created_at AT TIME ZONE $4)::date = (NOW() AT TIME ZONE $4)::date)
-        )
-        OR EXISTS (
-          SELECT 1
-          FROM outbound_dial_daily_claim d
-          WHERE d.client_key = $1
-            AND d.phone_match_key = $5
-            AND d.dial_date = (NOW() AT TIME ZONE $4)::date
-        )
-      ) AS y
-      `,
-        [clientKey, raw, qk, timezone, claimKey]
-      );
-    const { rows } = pgQueryLimiter ? await pgQueryLimiter.run(exec) : await exec();
-    return !!rows[0]?.y;
-  }
+function tenantLocalWeekdayBitLuxon(weekday) {
+  if (weekday < 1 || weekday > 5) return 0;
+  return 1 << (weekday - 1);
+}
 
-  const { DateTime } = await import('luxon');
-  const todayStr = DateTime.now().setZone(timezone).toISODate();
-  const { rows } = await query(
-    `
-    SELECT created_at FROM calls
-    WHERE client_key = $1
-      AND created_at >= datetime('now', '-2 days')
-      AND (
-        lead_phone = $2
-        OR (
-          $3 IS NOT NULL AND lead_phone_match_key IS NOT NULL AND lead_phone_match_key = $3
-        )
-      )
-    `,
-    [clientKey, raw, qk]
-  );
-  for (const r of rows || []) {
-    const t = r.created_at;
-    const js = t instanceof Date ? t : new Date(t);
-    if (Number.isNaN(js.getTime())) continue;
-    const d = DateTime.fromJSDate(js, { zone: 'utc' }).setZone(timezone).toISODate();
-    if (d === todayStr) return true;
-  }
-  return false;
+function outboundBypassMultiplePerDay() {
+  return /^(1|true|yes)$/i.test(String(process.env.ALLOW_MULTIPLE_OUTBOUND_CALLS_PER_DAY || '').trim());
 }
 
 /**
- * Reserve one outbound dial slot for this tenant + phone for the tenant's local calendar day (Postgres).
- * Serializes concurrent workers via pg_advisory_xact_lock; pairs with hasOutboundCallAttemptToday (claims count).
- * Non-Postgres: best-effort check only (no cross-process race safety).
+ * Whether an automated outbound dial should be skipped for this number right now:
+ * journey already terminal (live pickup or five weekday buckets used), or today's weekday bucket already claimed.
+ * Opt out: ALLOW_MULTIPLE_OUTBOUND_CALLS_PER_DAY=1|true|yes
+ * @returns {{ blocked: boolean, reason?: string, terminal?: boolean }}
  */
-export async function claimOutboundDialSlotForToday(clientKey, leadPhone, timezone = 'Europe/London') {
-  if (/^(1|true|yes)$/i.test(String(process.env.ALLOW_MULTIPLE_OUTBOUND_CALLS_PER_DAY || '').trim())) {
+export async function hasOutboundWeekdayJourneyDialBlocked(clientKey, leadPhone, timezone = 'Europe/London') {
+  if (outboundBypassMultiplePerDay()) {
+    return { blocked: false };
+  }
+  const raw = leadPhone != null ? String(leadPhone).trim() : '';
+  if (!clientKey || !raw) return { blocked: false };
+  const claimKey = outboundDialClaimKeyFromRaw(raw);
+  const { DateTime } = await import('luxon');
+  const local = DateTime.now().setZone(timezone || 'Europe/London');
+  const dayBit = tenantLocalWeekdayBitLuxon(local.weekday);
+
+  if (dbType === 'postgres' && pool) {
+    const exec = () =>
+      pool.query(
+        `
+      SELECT weekday_mask, closed_at, closed_reason
+      FROM outbound_weekday_journey
+      WHERE client_key = $1 AND phone_match_key = $2
+      LIMIT 1
+      `,
+        [clientKey, claimKey]
+      );
+    const { rows } = pgQueryLimiter ? await pgQueryLimiter.run(exec) : await exec();
+    const row = rows[0];
+    if (!row) return { blocked: false };
+    if (row.closed_at) {
+      return { blocked: true, reason: 'journey_terminal', terminal: true };
+    }
+    const mask = Number(row.weekday_mask || 0);
+    if (dayBit && (mask & dayBit) !== 0) {
+      return { blocked: true, reason: 'weekday_slot_used', terminal: false };
+    }
+    return { blocked: false };
+  }
+
+  if (sqlite) {
+    const row = sqlite
+      .prepare(
+        `SELECT weekday_mask, closed_at FROM outbound_weekday_journey WHERE client_key = ? AND phone_match_key = ?`
+      )
+      .get(clientKey, claimKey);
+    if (!row) return { blocked: false };
+    if (row.closed_at) return { blocked: true, reason: 'journey_terminal', terminal: true };
+    const mask = Number(row.weekday_mask || 0);
+    if (dayBit && (mask & dayBit) !== 0) {
+      return { blocked: true, reason: 'weekday_slot_used', terminal: false };
+    }
+    return { blocked: false };
+  }
+
+  const { rows } = await query(
+    `SELECT weekday_mask, closed_at FROM outbound_weekday_journey WHERE client_key = $1 AND phone_match_key = $2 LIMIT 1`,
+    [clientKey, claimKey]
+  );
+  const row = rows[0];
+  if (!row) return { blocked: false };
+  if (row.closed_at) return { blocked: true, reason: 'journey_terminal', terminal: true };
+  const mask = Number(row.weekday_mask || 0);
+  if (dayBit && (mask & dayBit) !== 0) return { blocked: true, reason: 'weekday_slot_used', terminal: false };
+  return { blocked: false };
+}
+
+/**
+ * Reserve one outbound attempt for this tenant's local weekday bucket (Mon–Fri, tenant timezone).
+ * Terminal journeys (live pickup or all five buckets used without pickup) reject further claims.
+ * @returns {Promise<{ ok: boolean, reason?: string, closedReason?: string }>}
+ */
+export async function claimOutboundWeekdayJourneySlot(clientKey, leadPhone, timezone = 'Europe/London') {
+  if (outboundBypassMultiplePerDay()) {
     return { ok: true, reason: 'bypass_env' };
   }
   const raw = leadPhone != null ? String(leadPhone).trim() : '';
   if (!clientKey || !raw) return { ok: false, reason: 'invalid' };
 
-  const qk = phoneMatchKey(raw);
   const claimKey = outboundDialClaimKeyFromRaw(raw);
+  const { DateTime } = await import('luxon');
+  const local = DateTime.now().setZone(timezone || 'Europe/London');
+  const dayBit = tenantLocalWeekdayBitLuxon(local.weekday);
+  if (!dayBit) {
+    return { ok: false, reason: 'not_weekday' };
+  }
 
   if (dbType !== 'postgres' || !pool) {
-    const blocked = await hasOutboundCallAttemptToday(clientKey, raw, timezone);
-    return { ok: !blocked, reason: blocked ? 'nonpg_or_calls' : 'ok_nonpg' };
+    const blocked = await hasOutboundWeekdayJourneyDialBlocked(clientKey, raw, timezone);
+    if (blocked.blocked) {
+      return {
+        ok: false,
+        reason: blocked.reason || 'blocked',
+        closedReason: blocked.terminal ? blocked.reason : undefined
+      };
+    }
+    if (sqlite) {
+      const trans = sqlite.transaction(() => {
+        const row = sqlite
+          .prepare(
+            `SELECT weekday_mask, closed_at, closed_reason FROM outbound_weekday_journey WHERE client_key = ? AND phone_match_key = ?`
+          )
+          .get(clientKey, claimKey);
+        if (row?.closed_at) {
+          throw Object.assign(new Error('journey_terminal'), { code: 'journey_terminal', closedReason: row.closed_reason });
+        }
+        const mask = Number(row?.weekday_mask || 0);
+        if (mask & dayBit) {
+          throw Object.assign(new Error('weekday_slot_used'), { code: 'weekday_slot_used' });
+        }
+        const newMask = mask | dayBit;
+        const nowIso = new Date().toISOString();
+        if (row) {
+          const closed = newMask === OUTBOUND_WEEKDAY_FULL_MASK;
+          sqlite
+            .prepare(
+              `UPDATE outbound_weekday_journey SET weekday_mask = ?, closed_at = ?, closed_reason = ?, updated_at = ?
+               WHERE client_key = ? AND phone_match_key = ?`
+            )
+            .run(
+              newMask,
+              closed ? nowIso : row.closed_at,
+              closed ? 'weekdays_exhausted' : row.closed_reason,
+              nowIso,
+              clientKey,
+              claimKey
+            );
+        } else {
+          const closed = newMask === OUTBOUND_WEEKDAY_FULL_MASK;
+          sqlite
+            .prepare(
+              `INSERT INTO outbound_weekday_journey (client_key, phone_match_key, weekday_mask, closed_at, closed_reason, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)`
+            )
+            .run(
+              clientKey,
+              claimKey,
+              newMask,
+              closed ? nowIso : null,
+              closed ? 'weekdays_exhausted' : null,
+              nowIso,
+              nowIso
+            );
+        }
+      });
+      try {
+        trans();
+      } catch (e) {
+        if (e?.code === 'journey_terminal') {
+          return { ok: false, reason: 'journey_terminal', closedReason: e.closedReason };
+        }
+        if (e?.code === 'weekday_slot_used') {
+          return { ok: false, reason: 'weekday_slot_used' };
+        }
+        throw e;
+      }
+      return { ok: true, reason: 'claimed_sqlite' };
+    }
+    return { ok: false, reason: 'nonpg_no_sqlite' };
   }
 
   const c = await pool.connect();
   try {
     await c.query('BEGIN');
-    const dateRow = await c.query(`SELECT (NOW() AT TIME ZONE $1)::date::text AS d`, [timezone]);
-    const dialDateStr = dateRow.rows[0]?.d;
-    if (!dialDateStr) {
-      await c.query('ROLLBACK');
-      return { ok: false, reason: 'date' };
-    }
-
-    const h = createHash('sha256').update(`${clientKey}\0${claimKey}\0${dialDateStr}`).digest();
+    const h = createHash('sha256').update(`${clientKey}\0${claimKey}\0outbound_weekday_journey\0`).digest();
     const k1 = (h.readUInt32BE(0) & 0x7fffffff) || 1;
     const k2 = (h.readUInt32BE(4) & 0x7fffffff) || 1;
     await c.query('SELECT pg_advisory_xact_lock($1, $2)', [k1, k2]);
 
-    const existsCalls = await c.query(
-      `
-      SELECT EXISTS (
-        SELECT 1 FROM calls c
-        WHERE c.client_key = $1
-          AND (
-            c.lead_phone = $2
-            OR (
-              $3::text IS NOT NULL
-              AND c.lead_phone_match_key IS NOT NULL
-              AND c.lead_phone_match_key = $3
-            )
-            OR (
-              $3::text IS NOT NULL
-              AND c.lead_phone_match_key IS NULL
-              AND LENGTH(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g')) >= 10
-              AND RIGHT(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), 10) = $3
-            )
-          )
-          AND ((c.created_at AT TIME ZONE $4)::date = $5::date)
-      ) AS y
-      `,
-      [clientKey, raw, qk, timezone, dialDateStr]
+    const sel = await c.query(
+      `SELECT weekday_mask, closed_at, closed_reason
+       FROM outbound_weekday_journey
+       WHERE client_key = $1 AND phone_match_key = $2
+       FOR UPDATE`,
+      [clientKey, claimKey]
     );
-    if (existsCalls.rows[0]?.y) {
+    const row0 = sel.rows[0];
+    if (row0?.closed_at) {
       await c.query('ROLLBACK');
-      return { ok: false, reason: 'calls_today' };
+      return { ok: false, reason: 'journey_terminal', closedReason: row0.closed_reason };
     }
-
-    const ins = await c.query(
-      `
-      INSERT INTO outbound_dial_daily_claim (client_key, phone_match_key, dial_date)
-      VALUES ($1, $2, $3::date)
-      ON CONFLICT (client_key, phone_match_key, dial_date) DO NOTHING
-      RETURNING id
-      `,
-      [clientKey, claimKey, dialDateStr]
-    );
-
-    if (!ins.rows?.length) {
+    const mask = Number(row0?.weekday_mask || 0);
+    if (mask & dayBit) {
       await c.query('ROLLBACK');
-      return { ok: false, reason: 'claim_held' };
+      return { ok: false, reason: 'weekday_slot_used' };
+    }
+    const newMask = mask | dayBit;
+    if (row0) {
+      await c.query(
+        `
+        UPDATE outbound_weekday_journey SET
+          weekday_mask = $3::smallint,
+          closed_at = CASE WHEN $3::smallint = $4::smallint THEN COALESCE(closed_at, now()) ELSE closed_at END,
+          closed_reason = CASE
+            WHEN $3::smallint = $4::smallint THEN COALESCE(closed_reason, 'weekdays_exhausted')
+            ELSE closed_reason
+          END,
+          updated_at = now()
+        WHERE client_key = $1 AND phone_match_key = $2
+        `,
+        [clientKey, claimKey, newMask, OUTBOUND_WEEKDAY_FULL_MASK]
+      );
+    } else {
+      await c.query(
+        `
+        INSERT INTO outbound_weekday_journey (client_key, phone_match_key, weekday_mask, closed_at, closed_reason, updated_at)
+        VALUES (
+          $1, $2, $3::smallint,
+          CASE WHEN $3::smallint = $4::smallint THEN now() ELSE NULL END,
+          CASE WHEN $3::smallint = $4::smallint THEN 'weekdays_exhausted' ELSE NULL END,
+          now()
+        )
+        `,
+        [clientKey, claimKey, newMask, OUTBOUND_WEEKDAY_FULL_MASK]
+      );
     }
 
     await c.query('COMMIT');
@@ -2071,6 +2167,67 @@ export async function claimOutboundDialSlotForToday(clientKey, leadPhone, timezo
   } finally {
     c.release();
   }
+}
+
+/** After a live human answers an outbound call, stop further automated dials for this journey until manually cleared. */
+export async function closeOutboundWeekdayJourneyOnLivePickup(clientKey, leadPhone) {
+  const raw = leadPhone != null ? String(leadPhone).trim() : '';
+  if (!clientKey || !raw) return;
+  const claimKey = outboundDialClaimKeyFromRaw(raw);
+
+  if (dbType === 'postgres' && pool) {
+    await pool.query(
+      `
+      INSERT INTO outbound_weekday_journey (client_key, phone_match_key, weekday_mask, closed_at, closed_reason, updated_at)
+      VALUES ($1, $2, 0, now(), 'live_pickup', now())
+      ON CONFLICT (client_key, phone_match_key) DO UPDATE SET
+        closed_at = COALESCE(outbound_weekday_journey.closed_at, now()),
+        closed_reason = CASE
+          WHEN outbound_weekday_journey.closed_reason IS NOT NULL THEN outbound_weekday_journey.closed_reason
+          ELSE 'live_pickup'
+        END,
+        updated_at = now()
+      `,
+      [clientKey, claimKey]
+    );
+    return;
+  }
+
+  if (sqlite) {
+    const nowIso = new Date().toISOString();
+    const row = sqlite
+      .prepare(`SELECT closed_at, closed_reason FROM outbound_weekday_journey WHERE client_key = ? AND phone_match_key = ?`)
+      .get(clientKey, claimKey);
+    if (row) {
+      sqlite
+        .prepare(
+          `UPDATE outbound_weekday_journey SET
+            closed_at = COALESCE(closed_at, ?),
+            closed_reason = COALESCE(closed_reason, 'live_pickup'),
+            updated_at = ?
+          WHERE client_key = ? AND phone_match_key = ?`
+        )
+        .run(nowIso, nowIso, clientKey, claimKey);
+    } else {
+      sqlite
+        .prepare(
+          `INSERT INTO outbound_weekday_journey (client_key, phone_match_key, weekday_mask, closed_at, closed_reason, created_at, updated_at)
+           VALUES (?, ?, 0, ?, 'live_pickup', ?, ?)`
+        )
+        .run(clientKey, claimKey, nowIso, nowIso, nowIso);
+    }
+  }
+}
+
+/** Legacy name: true when weekday journey blocks another dial right now (terminal or today's bucket used). */
+export async function hasOutboundCallAttemptToday(clientKey, leadPhone, timezone = 'Europe/London') {
+  const r = await hasOutboundWeekdayJourneyDialBlocked(clientKey, leadPhone, timezone);
+  return r.blocked;
+}
+
+/** Legacy name: reserve Mon–Fri weekday bucket (see claimOutboundWeekdayJourneySlot). */
+export async function claimOutboundDialSlotForToday(clientKey, leadPhone, timezone = 'Europe/London') {
+  return claimOutboundWeekdayJourneySlot(clientKey, leadPhone, timezone);
 }
 
 export async function getCallsByTenant(clientKey, limit = 100) {
