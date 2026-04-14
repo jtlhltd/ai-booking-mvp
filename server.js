@@ -9069,27 +9069,10 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
           c.outcome,
           c.duration,
           c.status,
-          COALESCE(ts.transcript_snip, '') AS transcript_snip,
+          ''::text AS transcript_snip,
           c.recording_url,
           c.created_at
         FROM calls c
-        LEFT JOIN LATERAL (
-          SELECT LEFT(COALESCE(c.transcript, ''), 512) AS transcript_snip
-          WHERE c.outcome IS NULL
-            AND COALESCE(c.recording_url, '') = ''
-            AND NOT (
-              (
-                COALESCE(c.duration, 0) >= 20
-                AND LOWER(TRIM(COALESCE(c.status, ''))) IN ('ended', 'completed', 'finished')
-              )
-              OR (
-                COALESCE(c.duration, 0) >= 40
-                AND LOWER(TRIM(COALESCE(c.status, ''))) NOT IN (
-                  'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
-                )
-              )
-            )
-        ) ts ON TRUE
         WHERE c.client_key = $1
           AND c.created_at >= $2::timestamptz
       ),
@@ -9106,7 +9089,6 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
                 OR (COALESCE(duration, 0) >= 40 AND LOWER(TRIM(COALESCE(status, ''))) NOT IN (
                   'failed', 'busy', 'no-answer', 'canceled', 'cancelled', 'declined', 'rejected', 'voicemail'
                 ))
-                OR (COALESCE(transcript_snip, '') <> '' AND LENGTH(TRIM(COALESCE(transcript_snip, ''))) > 40)
                 OR (COALESCE(recording_url, '') <> '')
               )
             )
