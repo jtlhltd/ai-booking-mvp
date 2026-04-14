@@ -1278,6 +1278,43 @@ function initSqlite() {
       id INTEGER PRIMARY KEY CHECK (id = 1),
       floor_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS call_queue (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_key TEXT NOT NULL,
+      lead_phone TEXT NOT NULL,
+      priority INTEGER DEFAULT 5,
+      scheduled_for TEXT NOT NULL,
+      call_type TEXT NOT NULL,
+      call_data TEXT,
+      status TEXT DEFAULT 'pending',
+      retry_attempt INTEGER DEFAULT 0,
+      initiated_call_id TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (client_key) REFERENCES tenants(client_key) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS call_queue_sqlite_pending_scheduled_priority_idx
+      ON call_queue (scheduled_for ASC, priority ASC)
+      WHERE status = 'pending';
+    CREATE TABLE IF NOT EXISTS quality_alerts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_key TEXT NOT NULL,
+      alert_type TEXT NOT NULL,
+      severity TEXT NOT NULL,
+      metric TEXT,
+      actual_value TEXT,
+      expected_value TEXT,
+      message TEXT NOT NULL,
+      action TEXT,
+      impact TEXT,
+      metadata TEXT,
+      resolved INTEGER DEFAULT 0,
+      resolved_at TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (client_key) REFERENCES tenants(client_key) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS quality_alerts_sqlite_client_created_idx
+      ON quality_alerts (client_key, created_at DESC);
   `);
 
   // avoid template literal parsing issues
@@ -1376,11 +1413,20 @@ async function query(text, params = []) {
         // Replace $1, $2, etc. with ?
         sqliteText = text.replace(/\$\d+/g, '?');
       }
+      const sqliteParams = params.map((p) => (p instanceof Date ? p.toISOString() : p));
       const stmt = sqlite.prepare(sqliteText);
-      if (upper.startsWith('SELECT')) {
-        result = { rows: stmt.all(...params) };
+      const hasReturning = /\bRETURNING\b/i.test(text);
+      const isSelectShape = upper.startsWith('SELECT') || upper.startsWith('WITH');
+      if (isSelectShape) {
+        result = { rows: stmt.all(...sqliteParams) };
+      } else if (
+        hasReturning &&
+        (upper.startsWith('INSERT') || upper.startsWith('UPDATE') || upper.startsWith('DELETE'))
+      ) {
+        // INSERT/UPDATE/DELETE … RETURNING must use .all(); .run() drops returned rows on SQLite.
+        result = { rows: stmt.all(...sqliteParams) };
       } else {
-        result = stmt.run(...params);
+        result = stmt.run(...sqliteParams);
       }
     } else {
       // JSON fallback
@@ -1477,6 +1523,16 @@ async function safeQuery(text, params = []) {
     // Convert database errors to application errors
     throw ErrorFactory.fromDatabaseError(error, 'query');
   }
+}
+
+/** Release the SQLite connection (e.g. :memory: tests so Jest can exit cleanly). No-op on Postgres. */
+export function closeSqliteForTesting() {
+  try {
+    if (sqlite) sqlite.close();
+  } catch (_) {
+    /* ignore */
+  }
+  sqlite = null;
 }
 
 export { DB_PATH, query, pool, dbType };
@@ -1952,9 +2008,10 @@ function outboundBypassMultiplePerDay() {
  * Whether an automated outbound dial should be skipped for this number right now:
  * journey already terminal (live pickup or five weekday buckets used), or today's weekday bucket already claimed.
  * Opt out: ALLOW_MULTIPLE_OUTBOUND_CALLS_PER_DAY=1|true|yes
+ * @param {{ asOf?: Date }} [opts] Optional clock for tests (`asOf` must fall on a Mon–Fri local day to exercise weekday_mask).
  * @returns {{ blocked: boolean, reason?: string, terminal?: boolean }}
  */
-export async function hasOutboundWeekdayJourneyDialBlocked(clientKey, leadPhone, timezone = 'Europe/London') {
+export async function hasOutboundWeekdayJourneyDialBlocked(clientKey, leadPhone, timezone = 'Europe/London', opts = {}) {
   if (outboundBypassMultiplePerDay()) {
     return { blocked: false };
   }
@@ -1962,7 +2019,11 @@ export async function hasOutboundWeekdayJourneyDialBlocked(clientKey, leadPhone,
   if (!clientKey || !raw) return { blocked: false };
   const claimKey = outboundDialClaimKeyFromRaw(raw);
   const { DateTime } = await import('luxon');
-  const local = DateTime.now().setZone(timezone || 'Europe/London');
+  const tz = timezone || 'Europe/London';
+  const local =
+    opts?.asOf instanceof Date && Number.isFinite(opts.asOf.getTime())
+      ? DateTime.fromJSDate(opts.asOf, { zone: tz })
+      : DateTime.now().setZone(tz);
   const dayBit = tenantLocalWeekdayBitLuxon(local.weekday);
 
   if (dbType === 'postgres' && pool) {
@@ -2019,9 +2080,10 @@ export async function hasOutboundWeekdayJourneyDialBlocked(clientKey, leadPhone,
 /**
  * Reserve one outbound attempt for this tenant's local weekday bucket (Mon–Fri, tenant timezone).
  * Terminal journeys (live pickup or all five buckets used without pickup) reject further claims.
+ * @param {{ asOf?: Date }} [opts] Optional clock for tests (Mon–Fri in `timezone`).
  * @returns {Promise<{ ok: boolean, reason?: string, closedReason?: string }>}
  */
-export async function claimOutboundWeekdayJourneySlot(clientKey, leadPhone, timezone = 'Europe/London') {
+export async function claimOutboundWeekdayJourneySlot(clientKey, leadPhone, timezone = 'Europe/London', opts = {}) {
   if (outboundBypassMultiplePerDay()) {
     return { ok: true, reason: 'bypass_env' };
   }
@@ -2030,14 +2092,18 @@ export async function claimOutboundWeekdayJourneySlot(clientKey, leadPhone, time
 
   const claimKey = outboundDialClaimKeyFromRaw(raw);
   const { DateTime } = await import('luxon');
-  const local = DateTime.now().setZone(timezone || 'Europe/London');
+  const tz = timezone || 'Europe/London';
+  const local =
+    opts?.asOf instanceof Date && Number.isFinite(opts.asOf.getTime())
+      ? DateTime.fromJSDate(opts.asOf, { zone: tz })
+      : DateTime.now().setZone(tz);
   const dayBit = tenantLocalWeekdayBitLuxon(local.weekday);
   if (!dayBit) {
     return { ok: false, reason: 'not_weekday' };
   }
 
   if (dbType !== 'postgres' || !pool) {
-    const blocked = await hasOutboundWeekdayJourneyDialBlocked(clientKey, raw, timezone);
+    const blocked = await hasOutboundWeekdayJourneyDialBlocked(clientKey, raw, timezone, opts);
     if (blocked.blocked) {
       return {
         ok: false,
@@ -2231,14 +2297,14 @@ export async function closeOutboundWeekdayJourneyOnLivePickup(clientKey, leadPho
 }
 
 /** Legacy name: true when weekday journey blocks another dial right now (terminal or today's bucket used). */
-export async function hasOutboundCallAttemptToday(clientKey, leadPhone, timezone = 'Europe/London') {
-  const r = await hasOutboundWeekdayJourneyDialBlocked(clientKey, leadPhone, timezone);
+export async function hasOutboundCallAttemptToday(clientKey, leadPhone, timezone = 'Europe/London', opts = {}) {
+  const r = await hasOutboundWeekdayJourneyDialBlocked(clientKey, leadPhone, timezone, opts);
   return r.blocked;
 }
 
 /** Legacy name: reserve Mon–Fri weekday bucket (see claimOutboundWeekdayJourneySlot). */
-export async function claimOutboundDialSlotForToday(clientKey, leadPhone, timezone = 'Europe/London') {
-  return claimOutboundWeekdayJourneySlot(clientKey, leadPhone, timezone);
+export async function claimOutboundDialSlotForToday(clientKey, leadPhone, timezone = 'Europe/London', opts = {}) {
+  return claimOutboundWeekdayJourneySlot(clientKey, leadPhone, timezone, opts);
 }
 
 export async function getCallsByTenant(clientKey, limit = 100) {
