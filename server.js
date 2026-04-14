@@ -9654,6 +9654,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
                 AND EXISTS (
                   SELECT 1 FROM outbound_weekday_journey j
                   WHERE j.client_key = l.client_key
+                    AND j.closed_at IS NULL
                     AND j.phone_match_key = COALESCE(
                       l.phone_match_key,
                       (CASE WHEN LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
