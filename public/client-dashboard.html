@@ -7192,6 +7192,31 @@
                     <div class="outreach-strip-fact"><dt>Slots used today</dt><dd>${slotsDd}</dd></div>
                 </dl>`;
 
+            const sched = oc.outboundDialSchedule && typeof oc.outboundDialSchedule === 'object' ? oc.outboundDialSchedule : null;
+            let scheduleHtml = '';
+            if (sched && Array.isArray(sched.windowsNext7) && sched.windowsNext7.length > 0) {
+                const tz = sched.timezone || tenantTz || actTz;
+                const nextOpen = sched.nextOpenAt ? formatRelativeWithAbsolute(sched.nextOpenAt, tz) : null;
+                const rows = sched.windowsNext7
+                    .map((w) => {
+                        const label = `${escapeHtml(w.weekdayShort || '')} <span class="tom-ab-test-meta">${escapeHtml(
+                            w.dayKey || ''
+                        )}</span>`;
+                        const windowTxt = `${escapeHtml(w.startLocal || '—')}–${escapeHtml(w.endLocal || '—')}`;
+                        return `<li><strong>${label}</strong> <span class="tom-ab-test-meta">•</span> ${windowTxt}</li>`;
+                    })
+                    .join('');
+                scheduleHtml = `
+                    <div class="outreach-strip-schedule" aria-label="When outbound will place calls">
+                        <p class="outreach-strip-hint tom-ab-test-meta" style="margin-top:10px;margin-bottom:6px">
+                            When calls run${nextOpen ? ` (next window opens: <strong>${escapeHtml(nextOpen)}</strong>)` : ''}:
+                        </p>
+                        <ul class="outreach-strip-schedule-list" style="margin:0;padding-left:18px">
+                            ${rows}
+                        </ul>
+                    </div>`;
+            }
+
             el.innerHTML = `
                 <div class="outreach-strip-head">
                     <p class="outreach-strip-kicker">Outbound</p>
@@ -7199,6 +7224,7 @@
                 </div>
                 <p class="outreach-strip-summary">${summary}</p>
                 ${factsHtml}
+                ${scheduleHtml}
                 ${lastDialHtml}
                 ${hintHtml}
                 ${etaHtml}

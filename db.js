@@ -1432,9 +1432,11 @@ async function safeQuery(text, params = []) {
     baseDelay: 1000,
     retryCondition: (error) => {
       // Retry on connection errors and timeouts
+      const msg = String(error?.message || '');
       return error.code === 'ECONNREFUSED' || 
              error.code === 'ETIMEDOUT' ||
              error.code === 'ENOTFOUND' ||
+             msg.includes('Timeout exceeded when trying to connect') ||
              (error.status >= 500 && error.status < 600);
     }
   });
