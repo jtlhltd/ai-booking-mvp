@@ -7340,6 +7340,31 @@
                     )}): no queued rows in this day.`;
                     return;
                 }
+                const totals = hours.reduce(
+                    (acc, h) => {
+                        acc.pending += Number(h.pendingN) || 0;
+                        acc.due += Number(h.dueNowN) || 0;
+                        acc.processing += Number(h.processingN) || 0;
+                        if (h.firstScheduledFor) {
+                            const t = Date.parse(h.firstScheduledFor);
+                            if (Number.isFinite(t) && (acc.firstTs == null || t < acc.firstTs)) {
+                                acc.firstTs = t;
+                                acc.firstIso = h.firstScheduledFor;
+                            }
+                        }
+                        return acc;
+                    },
+                    { pending: 0, due: 0, processing: 0, firstTs: null, firstIso: null }
+                );
+                const nextTxt = totals.firstIso ? formatRelativeWithAbsolute(totals.firstIso, tz) : '';
+                const layman =
+                    totals.due > 0
+                        ? `There are <strong>${formatNumber(totals.due)}</strong> calls ready to go <span class="tom-ab-test-meta">(due now)</span>. If you’re inside calling hours, the runner should start working through them.`
+                        : totals.pending > 0
+                          ? `Nothing is due right now. <strong>${formatNumber(totals.pending)}</strong> calls are queued for this day; the next one is scheduled <strong>${escapeHtml(
+                                nextTxt || 'later'
+                            )}</strong>.`
+                          : 'Nothing queued for this day.';
                 const lines = hours
                     .map((h) => {
                         const first = h.firstScheduledFor ? formatRelativeWithAbsolute(h.firstScheduledFor, tz) : '';
@@ -7366,6 +7391,25 @@
                       <div><strong>${escapeHtml(dayKey)}</strong> <span class="tom-ab-test-meta">(${escapeHtml(
                     tz
                 )})</span></div>
+                      <div class="outreach-strip-hint tom-ab-test-meta" style="margin-top:6px">
+                        ${layman}
+                        <div style="margin-top:4px">
+                          <span class="tom-ab-test-meta"><strong>${formatNumber(totals.pending)}</strong> pending</span>
+                          <span class="tom-ab-test-meta">·</span>
+                          <span class="tom-ab-test-meta"><strong>${formatNumber(totals.due)}</strong> due now</span>
+                          <span class="tom-ab-test-meta">·</span>
+                          <span class="tom-ab-test-meta"><strong>${formatNumber(totals.processing)}</strong> processing</span>
+                        </div>
+                        <div style="margin-top:4px">
+                          <span class="tom-ab-test-meta"><strong>pending</strong> = waiting</span>
+                          <span class="tom-ab-test-meta">·</span>
+                          <span class="tom-ab-test-meta"><strong>due</strong> = should be worked now</span>
+                          <span class="tom-ab-test-meta">·</span>
+                          <span class="tom-ab-test-meta"><strong>processing</strong> = being worked</span>
+                          <span class="tom-ab-test-meta">·</span>
+                          <span class="tom-ab-test-meta"><strong>priority</strong>: lower number = sooner</span>
+                        </div>
+                      </div>
                       <ul style="margin:6px 0 0 0;padding-left:18px">${lines}</ul>
                     </div>`;
             });
