@@ -7390,13 +7390,17 @@
                 );
                 const nextTxt = totals.firstIso ? formatRelativeWithAbsolute(totals.firstIso, tz) : '';
                 const layman =
-                    totals.due > 0
-                        ? `There are <strong>${formatNumber(totals.due)}</strong> calls ready to go <span class="tom-ab-test-meta">(due now)</span>. If you’re inside calling hours, the runner should start working through them.`
-                        : totals.pending > 0
-                          ? `Nothing is due right now. <strong>${formatNumber(totals.pending)}</strong> calls are queued for this day; the next one is scheduled <strong>${escapeHtml(
-                                nextTxt || 'later'
-                            )}</strong>.`
-                          : 'Nothing queued for this day.';
+                    totals.processing > 0
+                        ? `Calls are actively being worked right now: <strong>${formatNumber(
+                              totals.processing
+                          )}</strong> in progress <span class="tom-ab-test-meta">(processing)</span>.`
+                        : totals.due > 0
+                          ? `There are <strong>${formatNumber(totals.due)}</strong> calls ready to go <span class="tom-ab-test-meta">(due now)</span>. If you’re inside calling hours, the runner should start working through them.`
+                          : totals.pending > 0
+                            ? `Nothing is due right now. <strong>${formatNumber(totals.pending)}</strong> calls are queued for this day; the next one is scheduled <strong>${escapeHtml(
+                                  nextTxt || 'later'
+                              )}</strong>.`
+                            : 'Nothing queued for this day.';
 
                 const explain = payload.explain && typeof payload.explain === 'object' ? payload.explain : {};
                 const scheduleTags = Array.isArray(explain.scheduleTags) ? explain.scheduleTags : [];
@@ -7410,6 +7414,9 @@
                     }
                     if (!inHoursNow) {
                         return 'You’re currently outside calling hours, so queued calls won’t start yet.';
+                    }
+                    if (totals.processing > 0) {
+                        return 'Calls are processing right now; dial history can lag a bit before new rows appear.';
                     }
                     if (totals.due > 0 && totals.processing === 0) {
                         return 'Calls are due, but none are processing right now — the runner may be idle or rate-limited.';
@@ -7425,6 +7432,9 @@
                     }
                     if (!inHoursNow) {
                         return { yes: false, reason: 'Outside calling hours.' };
+                    }
+                    if (totals.processing > 0) {
+                        return { yes: true, reason: `${formatNumber(totals.processing)} processing now.` };
                     }
                     if (totals.due > 0) {
                         return { yes: true, reason: `${formatNumber(totals.due)} due now.` };
