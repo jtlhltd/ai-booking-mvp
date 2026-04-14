@@ -9386,6 +9386,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       touchpointRows,
       upcomingAppointmentRows,
       callQueuePendingRow,
+      callableTodayRow,
       outreachPulseRows,
       outreachQueuePulseRow,
       usageMetersRow
@@ -9587,6 +9588,90 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
           AND status IN ('pending', 'processing')
       `, [clientKey]),
       isPostgres
+        ? query(
+          `
+          WITH tz AS (
+            SELECT $2::text AS tz
+          ),
+          bounds AS (
+            SELECT
+              (date_trunc('day', NOW() AT TIME ZONE (SELECT tz FROM tz)) AT TIME ZONE (SELECT tz FROM tz)) AS day_start_utc,
+              ((date_trunc('day', NOW() AT TIME ZONE (SELECT tz FROM tz)) + INTERVAL '1 day') AT TIME ZONE (SELECT tz FROM tz)) AS day_end_utc,
+              (NOW() AT TIME ZONE (SELECT tz FROM tz))::date AS local_day
+          )
+          SELECT
+            -- leads that look eligible to be dialed today (ignoring tomorrow buffer)
+            (
+              SELECT COUNT(*)::int
+              FROM leads l
+              CROSS JOIN bounds b
+              WHERE l.client_key = $1
+                AND l.status = 'new'
+                AND l.created_at >= NOW() - INTERVAL '30 days'
+                AND NOT EXISTS (
+                  SELECT 1 FROM outbound_dial_daily_claim d
+                  WHERE d.client_key = l.client_key
+                    AND d.dial_date = b.local_day
+                    AND d.phone_match_key = COALESCE(
+                      l.phone_match_key,
+                      (CASE WHEN LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
+                        THEN RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
+                        ELSE NULLIF(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), '')
+                      END),
+                      '__nodigits__'
+                    )
+                )
+                AND NOT EXISTS (
+                  SELECT 1 FROM calls c
+                  WHERE c.client_key = l.client_key
+                    AND (
+                      c.lead_phone = l.phone
+                      OR (
+                        l.phone_match_key IS NOT NULL
+                        AND c.lead_phone_match_key IS NOT NULL
+                        AND c.lead_phone_match_key = l.phone_match_key
+                      )
+                    )
+                    AND ((c.created_at AT TIME ZONE (SELECT tz FROM tz))::date = b.local_day)
+                )
+                AND NOT EXISTS (
+                  SELECT 1 FROM call_queue cq
+                  CROSS JOIN bounds bb
+                  WHERE cq.client_key = l.client_key
+                    AND cq.call_type = 'vapi_call'
+                    AND cq.status IN ('pending','processing')
+                    AND cq.lead_phone = l.phone
+                    AND cq.scheduled_for >= bb.day_start_utc
+                    AND cq.scheduled_for < bb.day_end_utc
+                )
+            ) AS callable_leads_today,
+            -- how many are blocked by the "one per local day" claim right now
+            (
+              SELECT COUNT(*)::int
+              FROM leads l
+              CROSS JOIN bounds b
+              WHERE l.client_key = $1
+                AND l.status = 'new'
+                AND l.created_at >= NOW() - INTERVAL '30 days'
+                AND EXISTS (
+                  SELECT 1 FROM outbound_dial_daily_claim d
+                  WHERE d.client_key = l.client_key
+                    AND d.dial_date = b.local_day
+                    AND d.phone_match_key = COALESCE(
+                      l.phone_match_key,
+                      (CASE WHEN LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
+                        THEN RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
+                        ELSE NULLIF(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), '')
+                      END),
+                      '__nodigits__'
+                    )
+                )
+            ) AS blocked_daily_limit_today
+          `,
+          [clientKey, tenantTz]
+        )
+        : Promise.resolve({ rows: [{ callable_leads_today: null, blocked_daily_limit_today: null }] }),
+      isPostgres
         ? query(demoDashboardOutreachPulseSql, outreachPulseParams)
         : query(demoDashboardOutreachPulseSqlite, outreachPulseParams),
       isPostgres
@@ -9745,6 +9830,13 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     });
 
     const callQueuePending = parseInt(callQueuePendingRow.rows?.[0]?.n || 0, 10);
+    const callableToday = callableTodayRow?.rows?.[0] || {};
+    const callableLeadsTodayRaw = callableToday.callable_leads_today;
+    const blockedDailyLimitTodayRaw = callableToday.blocked_daily_limit_today;
+    const callableLeadsToday =
+      callableLeadsTodayRaw != null ? parseInt(callableLeadsTodayRaw, 10) || 0 : null;
+    const blockedDailyLimitToday =
+      blockedDailyLimitTodayRaw != null ? parseInt(blockedDailyLimitTodayRaw, 10) || 0 : null;
     const oqPulse = outreachQueuePulseRow.rows?.[0] || {};
     const queueTouchesLast24h = parseInt(oqPulse.queue_touches_last24h, 10) || 0;
     const queuePendingDueNow = parseInt(oqPulse.queue_pending_due_now, 10) || 0;
@@ -10602,6 +10694,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         uniqueLeadsDialed: displayCalls,
         leadsNeverDialed,
         callQueuePending,
+        callableLeadsToday,
+        blockedDailyLimitToday,
         dialAttemptsLast24h: callsLast24h,
         queueTouchesLast24h,
         queuePendingDueNow,

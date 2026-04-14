@@ -7014,6 +7014,8 @@
                 oc.dialSlotsUsedLocalToday != null && Number.isFinite(Number(oc.dialSlotsUsedLocalToday))
                     ? Number(oc.dialSlotsUsedLocalToday)
                     : null;
+            const callableToday = oc.callableLeadsToday != null ? Number(oc.callableLeadsToday) : null;
+            const blockedDaily = oc.blockedDailyLimitToday != null ? Number(oc.blockedDailyLimitToday) : null;
             const perHr = oc.dialsPerHour != null ? Number(oc.dialsPerHour) : 0;
             const eta = oc.estimatedHoursToClearBacklog != null ? Number(oc.estimatedHoursToClearBacklog) : null;
             const backlogUnits = never + q;
@@ -7200,6 +7202,16 @@
                     <div class="outreach-strip-fact"><dt>Backlog (CRM + queue)</dt><dd><strong>${formatNumber(backlogUnits)}</strong></dd></div>
                     <div class="outreach-strip-fact"><dt>In outbound queue</dt><dd><strong>${formatNumber(q)}</strong> <span class="tom-ab-test-meta">pending / processing</span></dd></div>
                     <div class="outreach-strip-fact"><dt>CRM not dialled yet</dt><dd><strong>${formatNumber(never)}</strong></dd></div>
+                    <div class="outreach-strip-fact"><dt>Callable today (est.)</dt><dd>${
+                        callableToday == null
+                            ? '—'
+                            : `<strong>${formatNumber(callableToday)}</strong> <span class="tom-ab-test-meta">not yet attempted today</span>`
+                    }</dd></div>
+                    <div class="outreach-strip-fact"><dt>Blocked by daily limit</dt><dd>${
+                        blockedDaily == null
+                            ? '—'
+                            : `<strong>${formatNumber(blockedDaily)}</strong> <span class="tom-ab-test-meta">already had today’s attempt</span>`
+                    }</dd></div>
                     <div class="outreach-strip-fact"><dt>Due now (queue)</dt><dd>${dueDd}</dd></div>
                     <div class="outreach-strip-fact"><dt>Processing now</dt><dd>${procDd}</dd></div>
                     <div class="outreach-strip-fact"><dt>Next queue slot</dt><dd>${nextDd}</dd></div>
