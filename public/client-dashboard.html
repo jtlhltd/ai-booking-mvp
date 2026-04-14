@@ -7405,6 +7405,18 @@
                     }
                     return 'Calls should be progressing; if dial history stays flat, check runner logs.';
                 })();
+                const expectedDialNow = (() => {
+                    if (String(dayKey) !== String(todayKeyLocal)) {
+                        return { yes: false, reason: 'This is not today.' };
+                    }
+                    if (!inHoursNow) {
+                        return { yes: false, reason: 'Outside calling hours.' };
+                    }
+                    if (totals.due > 0) {
+                        return { yes: true, reason: `${formatNumber(totals.due)} due now.` };
+                    }
+                    return { yes: false, reason: 'Nothing due yet.' };
+                })();
                 const tagExplain = (tag) => {
                     if (tag === 'immediate') return 'scheduled “soon” because we’re inside calling hours (small jitter to avoid spikes)';
                     if (tag === 'optimal') return 'scheduled into the next allowed/optimal calling window (outside hours or spacing rules)';
@@ -7465,6 +7477,11 @@
                           <span class="tom-ab-test-meta"><strong>${formatNumber(totals.due)}</strong> due now</span>
                           <span class="tom-ab-test-meta">·</span>
                           <span class="tom-ab-test-meta"><strong>${formatNumber(totals.processing)}</strong> processing</span>
+                        </div>
+                        <div style="margin-top:6px">
+                          <span class="tom-ab-test-meta"><strong>Expected dialing right now:</strong> <strong>${
+                              expectedDialNow.yes ? 'YES' : 'NO'
+                          }</strong> <span class="tom-ab-test-meta">(${escapeHtml(expectedDialNow.reason)})</span></span>
                         </div>
                         <div style="margin-top:6px"><span class="tom-ab-test-meta"><strong>Why nothing is happening:</strong> ${escapeHtml(
                             whyNothing
