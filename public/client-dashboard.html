@@ -7241,13 +7241,27 @@
                 const todayDue = todayQd ? Number(todayQd.dueNowN) || 0 : 0;
                 const todayFirst =
                     todayQd && todayQd.firstScheduledFor ? formatRelativeWithAbsolute(todayQd.firstScheduledFor, tz) : null;
+                const todayWin = sched.windowsNext7.find((w) => String(w?.dayKey || '') === String(todayKey)) || null;
+                const todayWindowTxt = todayWin ? `${escapeHtml(todayWin.startLocal)}–${escapeHtml(todayWin.endLocal)}` : '—';
+                const inHoursBadge =
+                    inHours
+                        ? `<span class="tom-ab-test-meta">·</span> <span class="tom-ab-test-meta">inside hours</span>`
+                        : `<span class="tom-ab-test-meta">·</span> <span class="tom-ab-test-meta">outside hours</span>`;
+                const nextQueuedTxt =
+                    todayQueued <= 0 && nextSchedAbs
+                        ? ` <span class="tom-ab-test-meta">· next queued:</span> <span class="tom-ab-test-meta"><strong>${escapeHtml(
+                              nextSchedAbs
+                          )}</strong></span>`
+                        : '';
                 const todayLine = `<li ${mkDayBtnAttrs(todayKey)}><strong>Today</strong> <span class="tom-ab-test-meta">${escapeHtml(
                     todayKey
-                )}</span> <span class="tom-ab-test-meta">•</span> <strong>${formatNumber(todayQueued)}</strong> queued${
+                )}</span> <span class="tom-ab-test-meta">•</span> ${todayWindowTxt}${inHoursBadge} <span class="tom-ab-test-meta">•</span> <strong>${formatNumber(
+                    todayQueued
+                )}</strong> queued${
                     todayDue > 0
                         ? ` <span class="tom-ab-test-meta">(</span><strong>${formatNumber(todayDue)}</strong><span class="tom-ab-test-meta"> due now)</span>`
                         : ''
-                }${todayFirst ? ` <span class="tom-ab-test-meta">• first:</span> <span class="tom-ab-test-meta">${escapeHtml(todayFirst)}</span>` : ''}</li>`;
+                }${todayFirst ? ` <span class="tom-ab-test-meta">• first:</span> <span class="tom-ab-test-meta">${escapeHtml(todayFirst)}</span>` : ''}${nextQueuedTxt}</li>`;
                 const rows = sched.windowsNext7
                     // Avoid duplicate lines when the first window is the same calendar day as "Today".
                     .filter((w) => String(w?.dayKey || '') !== String(todayKey))
