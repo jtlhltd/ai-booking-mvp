@@ -7230,6 +7230,8 @@
                         : ''
                 }${todayFirst ? ` <span class="tom-ab-test-meta">• first:</span> <span class="tom-ab-test-meta">${escapeHtml(todayFirst)}</span>` : ''}</li>`;
                 const rows = sched.windowsNext7
+                    // Avoid duplicate lines when the first window is the same calendar day as "Today".
+                    .filter((w) => String(w?.dayKey || '') !== String(todayKey))
                     .map((w) => {
                         const qd = byDay.get(String(w.dayKey || '')) || null;
                         const label = `${escapeHtml(w.weekdayShort || '')} <span class="tom-ab-test-meta">${escapeHtml(
