@@ -15962,11 +15962,13 @@ function safeAsync(handler) {
 // Business hours for outbound dialing (Luxon + tenant timezone; see lib/business-hours.js).
 // Weekends are excluded unless ALLOW_OUTBOUND_WEEKEND_CALLS is set.
 function isBusinessHours(tenant = null) {
-  return isBusinessHoursForTenant(tenant, new Date(), TIMEZONE, { forOutboundDial: true });
+  const tz = tenant?.booking?.timezone || tenant?.timezone || TIMEZONE;
+  return isBusinessHoursForTenant(tenant, new Date(), tz, { forOutboundDial: true });
 }
 
 function getNextBusinessHour(tenant = null) {
-  return getNextBusinessOpenForTenant(tenant, new Date(), TIMEZONE, { forOutboundDial: true });
+  const tz = tenant?.booking?.timezone || tenant?.timezone || TIMEZONE;
+  return getNextBusinessOpenForTenant(tenant, new Date(), tz, { forOutboundDial: true });
 }
 
 // Intelligent call scheduling
