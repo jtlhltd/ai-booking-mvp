@@ -7009,6 +7009,7 @@
             const last24 = oc.dialAttemptsLast24h != null ? Number(oc.dialAttemptsLast24h) : 0;
             const qt24 = oc.queueTouchesLast24h != null ? Number(oc.queueTouchesLast24h) : 0;
             const qDue = oc.queuePendingDueNow != null ? Number(oc.queuePendingDueNow) : 0;
+            const qProc = oc.queueProcessingNow != null ? Number(oc.queueProcessingNow) : 0;
             const slotsToday =
                 oc.dialSlotsUsedLocalToday != null && Number.isFinite(Number(oc.dialSlotsUsedLocalToday))
                     ? Number(oc.dialSlotsUsedLocalToday)
@@ -7179,13 +7180,28 @@
                     : q > 0
                       ? '—'
                       : '—';
+            const oldestDueAbs =
+                oc.queueOldestDueFor && typeof formatRelativeWithAbsolute === 'function'
+                    ? formatRelativeWithAbsolute(oc.queueOldestDueFor, tenantTz)
+                    : oc.queueOldestDueFor
+                      ? escapeHtml(String(oc.queueOldestDueFor))
+                      : '';
+            const dueDd =
+                qDue > 0
+                    ? `<strong>${formatNumber(qDue)}</strong> <span class="tom-ab-test-meta">due</span>${oldestDueAbs ? ` <span class="tom-ab-test-meta">· oldest:</span> <strong>${escapeHtml(oldestDueAbs)}</strong>` : ''}`
+                    : `<strong>0</strong> <span class="tom-ab-test-meta">due</span>`;
+            const procDd =
+                qProc > 0
+                    ? `<strong>${formatNumber(qProc)}</strong> <span class="tom-ab-test-meta">processing</span>`
+                    : `<strong>0</strong> <span class="tom-ab-test-meta">processing</span>`;
 
             const factsHtml = `
                 <dl class="outreach-strip-facts" aria-label="Outbound snapshot">
                     <div class="outreach-strip-fact"><dt>Backlog (CRM + queue)</dt><dd><strong>${formatNumber(backlogUnits)}</strong></dd></div>
                     <div class="outreach-strip-fact"><dt>In outbound queue</dt><dd><strong>${formatNumber(q)}</strong> <span class="tom-ab-test-meta">pending / processing</span></dd></div>
                     <div class="outreach-strip-fact"><dt>CRM not dialled yet</dt><dd><strong>${formatNumber(never)}</strong></dd></div>
-                    <div class="outreach-strip-fact"><dt>Due now (queue)</dt><dd><strong>${formatNumber(qDue)}</strong> <span class="tom-ab-test-meta">scheduled ≤ now</span></dd></div>
+                    <div class="outreach-strip-fact"><dt>Due now (queue)</dt><dd>${dueDd}</dd></div>
+                    <div class="outreach-strip-fact"><dt>Processing now</dt><dd>${procDd}</dd></div>
                     <div class="outreach-strip-fact"><dt>Next queue slot</dt><dd>${nextDd}</dd></div>
                     <div class="outreach-strip-fact"><dt>Call history (24h)</dt><dd><strong>${formatNumber(last24)}</strong> <span class="tom-ab-test-meta">saved rows</span></dd></div>
                     <div class="outreach-strip-fact"><dt>Queue updates (24h)</dt><dd><strong>${formatNumber(qt24)}</strong> <span class="tom-ab-test-meta">row touches</span></dd></div>

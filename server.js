@@ -9047,6 +9047,13 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
            AND cq.status = 'pending'
            AND cq.scheduled_for <= NOW()) AS queue_pending_due_now,
         (SELECT MIN(cq.scheduled_for) FROM call_queue cq
+         WHERE cq.client_key = $1
+           AND cq.status = 'pending'
+           AND cq.scheduled_for <= NOW()) AS queue_oldest_due_for,
+        (SELECT COUNT(*)::int FROM call_queue cq
+         WHERE cq.client_key = $1
+           AND cq.status = 'processing') AS queue_processing_now,
+        (SELECT MIN(cq.scheduled_for) FROM call_queue cq
          WHERE cq.client_key = $1 AND cq.status = 'pending') AS queue_next_scheduled_for,
         (SELECT COUNT(*)::int FROM outbound_dial_daily_claim d
          WHERE d.client_key = $1
@@ -9061,6 +9068,13 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
          WHERE cq.client_key = $1
            AND cq.status = 'pending'
            AND datetime(cq.scheduled_for) <= datetime('now')) AS queue_pending_due_now,
+        (SELECT MIN(cq.scheduled_for) FROM call_queue cq
+         WHERE cq.client_key = $1
+           AND cq.status = 'pending'
+           AND datetime(cq.scheduled_for) <= datetime('now')) AS queue_oldest_due_for,
+        (SELECT COUNT(*) FROM call_queue cq
+         WHERE cq.client_key = $1
+           AND cq.status = 'processing') AS queue_processing_now,
         (SELECT MIN(cq.scheduled_for) FROM call_queue cq
          WHERE cq.client_key = $1 AND cq.status = 'pending') AS queue_next_scheduled_for,
         NULL AS dial_slots_used_local_today
@@ -9771,9 +9785,13 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     const oqPulse = outreachQueuePulseRow.rows?.[0] || {};
     const queueTouchesLast24h = parseInt(oqPulse.queue_touches_last24h, 10) || 0;
     const queuePendingDueNow = parseInt(oqPulse.queue_pending_due_now, 10) || 0;
+    const queueProcessingNow = parseInt(oqPulse.queue_processing_now, 10) || 0;
     const queueNextScheduledRaw = oqPulse.queue_next_scheduled_for;
     const queueNextScheduledFor =
       queueNextScheduledRaw != null ? new Date(queueNextScheduledRaw).toISOString() : null;
+    const queueOldestDueRaw = oqPulse.queue_oldest_due_for;
+    const queueOldestDueFor =
+      queueOldestDueRaw != null ? new Date(queueOldestDueRaw).toISOString() : null;
     const dialSlotsUsedLocalToday =
       oqPulse.dial_slots_used_local_today != null ? parseInt(oqPulse.dial_slots_used_local_today, 10) || 0 : null;
 
@@ -10624,6 +10642,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         dialAttemptsLast24h: callsLast24h,
         queueTouchesLast24h,
         queuePendingDueNow,
+        queueProcessingNow,
+        queueOldestDueFor,
         queueNextScheduledFor,
         outboundQueueSchedule,
         dialSlotsUsedLocalToday,
