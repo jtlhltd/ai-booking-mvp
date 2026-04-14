@@ -7366,12 +7366,6 @@
                         }
                     })();
                     const hours = Array.isArray(payload.hours) ? payload.hours : [];
-                    if (hours.length === 0) {
-                        detailsEl.innerHTML = `<strong>${escapeHtml(dayKey)}</strong> (${escapeHtml(
-                            tz
-                        )}): no queued rows in this day.`;
-                        return;
-                    }
                 const totals = hours.reduce(
                     (acc, h) => {
                         acc.pending += Number(h.pendingN) || 0;
@@ -7408,6 +7402,12 @@
                 const priorityCounts = Array.isArray(explain.priorityCounts) ? explain.priorityCounts : [];
                 const ocNow = dashboardData && dashboardData.outreachCapacity ? dashboardData.outreachCapacity : {};
                 const inHoursNow = ocNow.withinScheduledDialWindow === true;
+                // When there are no hour rows (0 queued), fall back to current queue state.
+                if (hours.length === 0) {
+                    totals.pending = Number(ocNow.callQueuePending) || 0;
+                    totals.due = Number(ocNow.queuePendingDueNow) || 0;
+                    totals.processing = Number(ocNow.queueProcessingNow) || 0;
+                }
                 const whyNothing = (() => {
                     if (String(dayKey) !== String(todayKeyLocal)) {
                         return 'This is a future day — nothing will happen until that day’s calling window.';
@@ -7488,6 +7488,10 @@
                         }${pr}</li>`;
                     })
                     .join('');
+                const hourListHtml =
+                    hours.length > 0
+                        ? `<ul style="margin:6px 0 0 0;padding-left:18px">${lines}</ul>`
+                        : `<div class="outreach-strip-hint tom-ab-test-meta" style="margin-top:6px">No hour-by-hour rows for this day (0 queued).</div>`;
                 detailsEl.innerHTML = `
                     <div style="margin-top:6px">
                       <div><strong>${escapeHtml(dayKey)}</strong> <span class="tom-ab-test-meta">(${escapeHtml(
@@ -7523,7 +7527,7 @@
                           <span class="tom-ab-test-meta"><strong>priority</strong>: lower number = sooner</span>
                         </div>
                       </div>
-                      <ul style="margin:6px 0 0 0;padding-left:18px">${lines}</ul>
+                      ${hourListHtml}
                     </div>`;
                 } catch (err) {
                     detailsEl.textContent = `Could not render breakdown: ${String(err?.message || err).slice(0, 180)}`;
