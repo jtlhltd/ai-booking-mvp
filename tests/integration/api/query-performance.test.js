@@ -1,77 +1,82 @@
 // tests/integration/api/query-performance.test.js
-// Integration tests for query performance endpoints
+// Integration tests for query performance endpoints (in-process app + SQLite :memory:)
 
-import { describe, test, expect } from '@jest/globals';
+import { describe, test, expect, beforeAll, afterAll, jest } from '@jest/globals';
+import request from 'supertest';
+import { createOpsIntegrationApp } from '../../helpers/http-integration-app.js';
 
 describe('Query Performance API', () => {
-  const API_KEY = process.env.API_KEY || 'test-key';
-  const BASE_URL = process.env.PUBLIC_BASE_URL || 'http://localhost:10000';
+  let app;
+  let dbModule;
 
-  // Helper to check if server is available
-  async function isServerAvailable() {
+  const prevDbType = process.env.DB_TYPE;
+  const prevDatabaseUrl = process.env.DATABASE_URL;
+  const prevDbPath = process.env.DB_PATH;
+
+  beforeAll(async () => {
+    jest.resetModules();
+    process.env.DB_TYPE = '';
+    process.env.DB_PATH = ':memory:';
+    delete process.env.DATABASE_URL;
+
+    dbModule = await import('../../../db.js');
+    await dbModule.init();
+    app = await createOpsIntegrationApp();
+  });
+
+  afterAll(async () => {
     try {
-      const response = await fetch(`${BASE_URL}/health/lb`, { signal: AbortSignal.timeout(2000) });
-      return response.ok;
-    } catch {
-      return false;
+      const cache = await import('../../../lib/cache.js');
+      await cache.disconnectRedisClient();
+    } catch (_) {
+      /* ignore */
     }
-  }
+    try {
+      await dbModule?.closeDatabaseConnectionsForTests?.();
+    } catch (_) {
+      /* ignore */
+    }
+    if (prevDbType === undefined) delete process.env.DB_TYPE;
+    else process.env.DB_TYPE = prevDbType;
+    if (prevDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = prevDatabaseUrl;
+    if (prevDbPath === undefined) delete process.env.DB_PATH;
+    else process.env.DB_PATH = prevDbPath;
+    jest.resetModules();
+  });
+
+  const API_KEY = process.env.API_KEY || 'test-key';
 
   test('GET /api/performance/queries/slow returns slow queries', async () => {
-    if (!(await isServerAvailable())) {
-      console.warn('Server not available, skipping integration test');
-      return;
-    }
-
-    const response = await fetch(`${BASE_URL}/api/performance/queries/slow?limit=10`, {
-      headers: {
-        'X-API-Key': API_KEY
-      }
-    });
+    const response = await request(app)
+      .get('/api/performance/queries/slow?limit=10')
+      .set('X-API-Key', API_KEY);
 
     expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(data).toHaveProperty('ok', true);
-    expect(data).toHaveProperty('slowQueries');
-    expect(Array.isArray(data.slowQueries)).toBe(true);
+    expect(response.body).toHaveProperty('ok', true);
+    expect(response.body).toHaveProperty('slowQueries');
+    expect(Array.isArray(response.body.slowQueries)).toBe(true);
   });
 
   test('GET /api/performance/queries/stats returns statistics', async () => {
-    if (!(await isServerAvailable())) {
-      console.warn('Server not available, skipping integration test');
-      return;
-    }
-
-    const response = await fetch(`${BASE_URL}/api/performance/queries/stats`, {
-      headers: {
-        'X-API-Key': API_KEY
-      }
-    });
+    const response = await request(app)
+      .get('/api/performance/queries/stats')
+      .set('X-API-Key', API_KEY);
 
     expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(data).toHaveProperty('ok', true);
-    expect(data).toHaveProperty('stats');
-    expect(data.stats).toHaveProperty('totalQueries');
+    expect(response.body).toHaveProperty('ok', true);
+    expect(response.body).toHaveProperty('stats');
+    expect(response.body.stats).toHaveProperty('totalQueries');
   });
 
   test('GET /api/performance/queries/recommendations returns recommendations', async () => {
-    if (!(await isServerAvailable())) {
-      console.warn('Server not available, skipping integration test');
-      return;
-    }
-
-    const response = await fetch(`${BASE_URL}/api/performance/queries/recommendations`, {
-      headers: {
-        'X-API-Key': API_KEY
-      }
-    });
+    const response = await request(app)
+      .get('/api/performance/queries/recommendations')
+      .set('X-API-Key', API_KEY);
 
     expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(data).toHaveProperty('ok', true);
-    expect(data).toHaveProperty('recommendations');
-    expect(Array.isArray(data.recommendations)).toBe(true);
+    expect(response.body).toHaveProperty('ok', true);
+    expect(response.body).toHaveProperty('recommendations');
+    expect(Array.isArray(response.body.recommendations)).toBe(true);
   });
 });
-

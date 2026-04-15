@@ -1,57 +1,73 @@
 // tests/integration/api/rate-limiting.test.js
-// Integration tests for rate limiting
+// Integration tests for rate limiting (in-process app + SQLite :memory:)
 
-import { describe, test, expect } from '@jest/globals';
+import { describe, test, expect, beforeAll, afterAll, jest } from '@jest/globals';
+import request from 'supertest';
+import {
+  createOpsIntegrationApp,
+  expectRateLimitStyleHeaders
+} from '../../helpers/http-integration-app.js';
 
 describe('Rate Limiting API', () => {
-  const API_KEY = process.env.API_KEY || 'test-key';
-  const BASE_URL = process.env.PUBLIC_BASE_URL || 'http://localhost:10000';
+  let app;
+  let dbModule;
 
-  // Helper to check if server is available
-  async function isServerAvailable() {
+  const prevDbType = process.env.DB_TYPE;
+  const prevDatabaseUrl = process.env.DATABASE_URL;
+  const prevDbPath = process.env.DB_PATH;
+
+  beforeAll(async () => {
+    jest.resetModules();
+    process.env.DB_TYPE = '';
+    process.env.DB_PATH = ':memory:';
+    delete process.env.DATABASE_URL;
+
+    dbModule = await import('../../../db.js');
+    await dbModule.init();
+    app = await createOpsIntegrationApp();
+  });
+
+  afterAll(async () => {
     try {
-      const response = await fetch(`${BASE_URL}/health/lb`, { signal: AbortSignal.timeout(2000) });
-      return response.ok;
-    } catch {
-      return false;
+      const cache = await import('../../../lib/cache.js');
+      await cache.disconnectRedisClient();
+    } catch (_) {
+      /* ignore */
     }
-  }
+    try {
+      await dbModule?.closeDatabaseConnectionsForTests?.();
+    } catch (_) {
+      /* ignore */
+    }
+    if (prevDbType === undefined) delete process.env.DB_TYPE;
+    else process.env.DB_TYPE = prevDbType;
+    if (prevDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = prevDatabaseUrl;
+    if (prevDbPath === undefined) delete process.env.DB_PATH;
+    else process.env.DB_PATH = prevDbPath;
+    jest.resetModules();
+  });
+
+  const API_KEY = process.env.API_KEY || 'test-key';
 
   test('GET /api/rate-limit/status returns rate limit status', async () => {
-    if (!(await isServerAvailable())) {
-      console.warn('Server not available, skipping integration test');
-      return;
-    }
-
-    const response = await fetch(`${BASE_URL}/api/rate-limit/status`, {
-      headers: {
-        'X-API-Key': API_KEY
-      }
-    });
+    const response = await request(app)
+      .get('/api/rate-limit/status')
+      .set('X-API-Key', API_KEY);
 
     expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(data).toHaveProperty('ok', true);
-    expect(data).toHaveProperty('identifier');
-    expect(data).toHaveProperty('limits');
-    expect(data).toHaveProperty('systemStats');
+    expect(response.body).toHaveProperty('ok', true);
+    expect(response.body).toHaveProperty('identifier');
+    expect(response.body).toHaveProperty('limits');
+    expect(response.body).toHaveProperty('systemStats');
   });
 
   test('Rate limit headers are present in responses', async () => {
-    if (!(await isServerAvailable())) {
-      console.warn('Server not available, skipping integration test');
-      return;
-    }
+    const response = await request(app)
+      .get('/api/stats?clientKey=test')
+      .set('X-API-Key', API_KEY);
 
-    const response = await fetch(`${BASE_URL}/api/stats?clientKey=test`, {
-      headers: {
-        'X-API-Key': API_KEY
-      }
-    });
-
-    expect(response.headers.has('X-RateLimit-Limit')).toBe(true);
-    expect(response.headers.has('X-RateLimit-Remaining')).toBe(true);
-    expect(response.headers.has('X-RateLimit-Reset')).toBe(true);
+    expect(response.status).toBe(200);
+    expectRateLimitStyleHeaders(response);
   });
 });
-

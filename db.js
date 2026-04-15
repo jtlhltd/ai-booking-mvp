@@ -329,9 +329,23 @@ async function initPostgres() {
     const maxConnections =
       Number.isFinite(rawMax) && rawMax >= 2 ? Math.min(rawMax, 80) : defaultPoolMax;
     
+    // Local/Testcontainers Postgres often has no TLS; remote hosts (e.g. Render) need SSL.
+    let pgSsl = { rejectUnauthorized: false };
+    if (process.env.PG_FORCE_SSL !== '1') {
+      try {
+        const normalized = dbUrl.replace(/^postgres(ql)?:/i, 'http:');
+        const u = new URL(normalized);
+        if (u.hostname === 'localhost' || u.hostname === '127.0.0.1' || u.hostname === '::1') {
+          pgSsl = false;
+        }
+      } catch {
+        /* keep default ssl */
+      }
+    }
+
     pool = new Pool({
       connectionString: dbUrl,
-      ssl: { rejectUnauthorized: false },
+      ssl: pgSsl,
       max: maxConnections,
       idleTimeoutMillis: 10000, // Close idle connections after 10 seconds (more aggressive)
       connectionTimeoutMillis: 5000, // Reduced to 5 seconds for faster failure detection
@@ -1239,6 +1253,20 @@ function ensureSqliteCallQueueAndQualityAlertsTables() {
     );
     CREATE INDEX IF NOT EXISTS quality_alerts_sqlite_client_created_idx
       ON quality_alerts (client_key, created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS query_performance (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      query_hash TEXT NOT NULL UNIQUE,
+      query_preview TEXT,
+      avg_duration REAL,
+      max_duration REAL,
+      call_count INTEGER DEFAULT 1,
+      last_executed_at TEXT DEFAULT (datetime('now')),
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS query_perf_hash_unique_idx ON query_performance(query_hash);
+    CREATE INDEX IF NOT EXISTS query_perf_hash_idx ON query_performance(query_hash);
+    CREATE INDEX IF NOT EXISTS query_perf_duration_idx ON query_performance(avg_duration DESC);
   `);
   } catch (e) {
     console.warn('[sqlite] ensure call_queue / quality_alerts:', e?.message || e);
