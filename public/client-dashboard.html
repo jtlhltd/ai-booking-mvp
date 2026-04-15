@@ -314,6 +314,13 @@
             grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
         }
 
+        /* Daily Operations: prefer 2 rows of 3 on desktop */
+        @media (min-width: 1200px) {
+            .dashboard-section--operations-row .dashboard-grid {
+                grid-template-columns: repeat(3, minmax(320px, 1fr));
+            }
+        }
+
         .dashboard-grid > .card {
             display: flex;
             flex-direction: column;
@@ -15638,7 +15645,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const retryShowFailed = document.getElementById('retryQueueShowFailed');
             if (retryShowFailed && !retryShowFailed.dataset.bound) {
                 retryShowFailed.dataset.bound = '1';
-                retryShowFailed.addEventListener('change', () => renderRetryQueue({}).catch(() => repaintRetryQueueList()));
+                retryShowFailed.addEventListener('change', () => {
+                    retryQueueShowFailed = !!retryShowFailed.checked;
+                    renderRetryQueue({}).catch(() => repaintRetryQueueList());
+                });
             }
             const crInput = document.getElementById('callRecordingsSearchInput');
             if (crInput && !crInput.dataset.searchBound) {
