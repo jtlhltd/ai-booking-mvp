@@ -7837,6 +7837,7 @@
             const isQueuedCall = src === 'call_queue';
             const displayName = lead.name || 'Prospect';
             const phone = (lead.phone && String(lead.phone).trim()) || '';
+            const retryType = String(lead.retryType || '').toLowerCase().trim();
             const scheduledIso = lead.scheduledFor || null;
             const overdue = !isDemo && isRetryScheduledOverdue(scheduledIso);
             const relative = !isDemo && scheduledIso ? formatRetryRelative(scheduledIso) : '';
@@ -7888,10 +7889,18 @@
             const copyBtn = phone
                 ? `<button type="button" class="retry-action-btn" data-retry-copy="${escapeHtml(phone)}" aria-label="Copy phone number">Copy #</button>`
                 : '';
-            const actionsRow = (journeyBtn || copyBtn)
+            const opsRetryNowBtn = (!isDemo && !isQueuedCall && retryType === 'sheet_patch')
+                ? `<button type="button" class="retry-action-btn" data-retry-run="1" data-retry-id="${escapeHtml(String(lead.dbId || ''))}" aria-label="Retry sheet write now">Retry now</button>`
+                : '';
+            const opsCancelBtn = (!isDemo && !isQueuedCall && retryType === 'sheet_patch')
+                ? `<button type="button" class="retry-action-btn" data-retry-cancel="1" data-retry-id="${escapeHtml(String(lead.dbId || ''))}" aria-label="Cancel this retry">Drop</button>`
+                : '';
+            const actionsRow = (journeyBtn || copyBtn || opsRetryNowBtn || opsCancelBtn)
                 ? `                                <div class="retry-item-actions">
                                     ${journeyBtn}
                                     ${copyBtn}
+                                    ${opsRetryNowBtn}
+                                    ${opsCancelBtn}
                                 </div>`
                 : '';
             return `
@@ -15810,6 +15819,47 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             if (retryQueueRoot && retryQueueRoot.dataset.retryDelegation !== '1') {
                 retryQueueRoot.dataset.retryDelegation = '1';
                 retryQueueRoot.addEventListener('click', (e) => {
+                    const runBtn = e.target.closest('[data-retry-run]');
+                    if (runBtn) {
+                        e.preventDefault();
+                        const id = runBtn.getAttribute('data-retry-id');
+                        if (!id || !currentClient) return;
+                        fetch(`${BASE_URL}/api/retry-queue/${encodeURIComponent(currentClient)}/run`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ id: Number(id) })
+                        }).then(async (res) => {
+                            const out = await res.json().catch(() => ({}));
+                            if (!res.ok || !out?.ok) throw new Error(out?.message || out?.error || `HTTP ${res.status}`);
+                            showToast('Retried', 'Retry executed.', 'success', 2200);
+                            // refresh retry queue + ops health
+                            renderRetryQueue({}).catch(() => {});
+                            renderOpsHealth().catch(() => {});
+                        }).catch(() => {
+                            showToast('Failed', 'Could not run retry.', 'error', 3200);
+                        });
+                        return;
+                    }
+                    const cancelBtn = e.target.closest('[data-retry-cancel]');
+                    if (cancelBtn) {
+                        e.preventDefault();
+                        const id = cancelBtn.getAttribute('data-retry-id');
+                        if (!id || !currentClient) return;
+                        fetch(`${BASE_URL}/api/retry-queue/${encodeURIComponent(currentClient)}/cancel`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ id: Number(id) })
+                        }).then(async (res) => {
+                            const out = await res.json().catch(() => ({}));
+                            if (!res.ok || !out?.ok) throw new Error(out?.message || out?.error || `HTTP ${res.status}`);
+                            showToast('Dropped', 'Retry cancelled.', 'success', 2200);
+                            renderRetryQueue({}).catch(() => {});
+                            renderOpsHealth().catch(() => {});
+                        }).catch(() => {
+                            showToast('Failed', 'Could not cancel retry.', 'error', 3200);
+                        });
+                        return;
+                    }
                     const journeyBtn = e.target.closest('[data-retry-journey]');
                     if (journeyBtn) {
                         e.preventDefault();

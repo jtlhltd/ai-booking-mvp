@@ -13315,6 +13315,7 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
       if (isCallQueue) return 'Outbound call';
       const t = String(retryType || '').toLowerCase().trim();
       if (t === 'vapi_call' || t === 'call') return 'Voice retry';
+      if (t === 'sheet_patch') return 'Sheet write';
       if (t === 'sms') return 'SMS follow-up';
       if (t === 'email') return 'Email follow-up';
       if (!t) return 'Follow-up';
@@ -13392,6 +13393,64 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
   } catch (error) {
     console.error('[RETRY QUEUE ERROR]', error);
     res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// Manual ops actions for retry_queue rows (e.g. sheet write retries)
+app.post('/api/retry-queue/:clientKey/run', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const { id } = req.body || {};
+    const dbId = parseInt(id, 10);
+    if (!Number.isFinite(dbId)) return res.status(400).json({ ok: false, error: 'invalid_id' });
+
+    const { updateRetryStatus } = await import('./db.js');
+    const rowRes = await query(`SELECT * FROM retry_queue WHERE client_key = $1 AND id = $2`, [clientKey, dbId]);
+    const retry = rowRes.rows?.[0];
+    if (!retry) return res.status(404).json({ ok: false, error: 'not_found' });
+
+    await updateRetryStatus(dbId, 'processing');
+    if (String(retry.retry_type || '').toLowerCase() === 'sheet_patch') {
+      const retryData = (() => {
+        const raw = retry.retry_data;
+        if (!raw) return {};
+        if (typeof raw === 'object') return raw;
+        try { return JSON.parse(raw); } catch { return {}; }
+      })();
+      const client = await getFullClient(clientKey);
+      const spreadsheetId = resolveLogisticsSpreadsheetId(client);
+      if (!spreadsheetId) throw new Error('sheet_not_configured');
+      const rowNumber = parseInt(retryData.rowNumber, 10);
+      const patch = retryData.patch;
+      if (!Number.isFinite(rowNumber) || !patch || typeof patch !== 'object') throw new Error('invalid_retry_data');
+      const ok = await sheets.patchLogisticsRowByNumber(spreadsheetId, rowNumber, patch);
+      if (!ok) throw new Error('sheet_patch_failed');
+    } else {
+      throw new Error('unsupported_retry_type');
+    }
+
+    await updateRetryStatus(dbId, 'completed');
+    res.json({ ok: true });
+  } catch (error) {
+    try {
+      const { updateRetryStatus } = await import('./db.js');
+      const dbId = parseInt(req.body?.id, 10);
+      if (Number.isFinite(dbId)) await updateRetryStatus(dbId, 'failed');
+    } catch {}
+    res.status(500).json({ ok: false, error: 'retry_run_failed', message: error?.message || String(error) });
+  }
+});
+
+app.post('/api/retry-queue/:clientKey/cancel', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const { id } = req.body || {};
+    const dbId = parseInt(id, 10);
+    if (!Number.isFinite(dbId)) return res.status(400).json({ ok: false, error: 'invalid_id' });
+    await query(`UPDATE retry_queue SET status = 'cancelled', updated_at = NOW() WHERE client_key = $1 AND id = $2`, [clientKey, dbId]);
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: 'retry_cancel_failed', message: error?.message || String(error) });
   }
 });
 
@@ -13956,12 +14015,40 @@ app.post('/api/follow-up-queue/:clientKey/patch', async (req, res) => {
 
     const ok = await sheets.patchLogisticsRowByNumber(spreadsheetId, rowNumber, patch);
     if (!ok) {
+      try {
+        const { addToRetryQueue } = await import('./db.js');
+        await addToRetryQueue({
+          clientKey,
+          leadPhone: '__sheet__',
+          retryType: 'sheet_patch',
+          retryReason: 'follow_up_patch',
+          retryData: { rowNumber, patch },
+          scheduledFor: new Date(),
+          retryAttempt: 1,
+          maxRetries: 5
+        });
+      } catch (e) {
+        console.warn('[FOLLOW-UP PATCH] failed to enqueue retry:', e?.message || e);
+      }
       return res.status(502).json({ ok: false, error: 'update_failed' });
     }
     res.json({ ok: true });
   } catch (error) {
     globalThis.__opsLastFollowUpPatchError = { at: new Date().toISOString(), message: error?.message || String(error) };
     console.error('[FOLLOW-UP PATCH ERROR]', error);
+    try {
+      const { addToRetryQueue } = await import('./db.js');
+      await addToRetryQueue({
+        clientKey: req.params?.clientKey,
+        leadPhone: '__sheet__',
+        retryType: 'sheet_patch',
+        retryReason: 'follow_up_patch_exception',
+        retryData: { rowNumber: parseInt(req.body?.row, 10), patch: req.body?.patch || null, error: String(error?.message || error) },
+        scheduledFor: new Date(Date.now() + 60_000),
+        retryAttempt: 1,
+        maxRetries: 5
+      });
+    } catch {}
     res.status(500).json({ ok: false, error: error.message || String(error) });
   }
 });
@@ -13996,6 +14083,23 @@ app.post('/api/follow-up-queue/:clientKey/batchPatch', async (req, res) => {
       const ok = await sheets.patchLogisticsRowByNumber(spreadsheetId, rowNumber, patch);
       results.push({ ok: !!ok, row: rowNumber });
       if (ok) okCount += 1;
+      if (!ok) {
+        try {
+          const { addToRetryQueue } = await import('./db.js');
+          await addToRetryQueue({
+            clientKey,
+            leadPhone: '__sheet__',
+            retryType: 'sheet_patch',
+            retryReason: 'follow_up_batch_patch',
+            retryData: { rowNumber, patch },
+            scheduledFor: new Date(Date.now() + 60_000),
+            retryAttempt: 1,
+            maxRetries: 5
+          });
+        } catch (e) {
+          console.warn('[FOLLOW-UP BATCH PATCH] failed to enqueue retry:', e?.message || e);
+        }
+      }
     }
 
     res.json({ ok: true, updated: okCount, total: patches.length, results });
@@ -23996,7 +24100,7 @@ async function processRetryQueue() {
     const maxRetriesPerRun = Math.max(1, Math.min(500, parseInt(process.env.RETRY_QUEUE_MAX_PER_RUN || '120', 10) || 120));
     const maxConcurrentRetries = Math.max(1, Math.min(25, parseInt(process.env.RETRY_QUEUE_MAX_CONCURRENT || '3', 10) || 3));
 
-    const pendingRetries = await getPendingRetries(maxRetriesPerRun);
+    const pendingRetries = await getPendingRetries(maxRetriesPerRun, ['vapi_call', 'sheet_patch']);
     
     if (pendingRetries.length === 0) {
       return;
@@ -24072,6 +24176,8 @@ async function processRetryQueue() {
           // Process the retry based on type
           if (retry.retry_type === 'vapi_call') {
             await processVapiRetry(retry);
+          } else if (retry.retry_type === 'sheet_patch') {
+            await processSheetPatchRetry(retry);
           }
 
           // Mark as completed
@@ -24153,6 +24259,26 @@ async function processVapiRetry(retry) {
     });
     throw error;
   }
+}
+
+async function processSheetPatchRetry(retry) {
+  const retryData = (() => {
+    const raw = retry.retry_data;
+    if (!raw) return {};
+    if (typeof raw === 'object') return raw;
+    try { return JSON.parse(raw); } catch { return {}; }
+  })();
+  const { client_key: clientKey } = retry;
+  const client = await getFullClient(clientKey);
+  const spreadsheetId = resolveLogisticsSpreadsheetId(client);
+  if (!spreadsheetId) throw new Error('sheet_not_configured');
+  const rowNumber = parseInt(retryData.rowNumber, 10);
+  const patch = retryData.patch;
+  if (!Number.isFinite(rowNumber) || rowNumber < 2 || !patch || typeof patch !== 'object') {
+    throw new Error('invalid_retry_data');
+  }
+  const ok = await sheets.patchLogisticsRowByNumber(spreadsheetId, rowNumber, patch);
+  if (!ok) throw new Error('sheet_patch_failed');
 }
 
 // Call queue processor - runs every 2 minutes to process pending calls

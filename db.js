@@ -2977,14 +2977,20 @@ export async function addToRetryQueue({ clientKey, leadPhone, retryType, retryRe
   return rows[0];
 }
 
-export async function getPendingRetries(limit = 100) {
-  const { rows } = await query(`
-    SELECT * FROM retry_queue 
+export async function getPendingRetries(limit = 100, retryTypes = ['vapi_call']) {
+  const safeLimit = Math.max(1, Math.min(1000, parseInt(limit, 10) || 100));
+  const types = Array.isArray(retryTypes) && retryTypes.length ? retryTypes.map((t) => String(t || '').trim()).filter(Boolean) : ['vapi_call'];
+  const placeholders = types.map((_, i) => `$${i + 1}`).join(', ');
+  const { rows } = await query(
+    `
+    SELECT * FROM retry_queue
     WHERE status = 'pending' AND scheduled_for <= now()
-      AND retry_type = 'vapi_call'
+      AND retry_type IN (${placeholders})
     ORDER BY scheduled_for ASC
-    LIMIT $1
-  `, [limit]);
+    LIMIT $${types.length + 1}
+  `,
+    [...types, safeLimit]
+  );
   return rows;
 }
 
