@@ -13064,6 +13064,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             limit: 100
         };
 
+        let followUpStats = null;
+
         let followUpQueuePage = 1;
         let followUpStatusFilter = 'todo'; // todo | called | dnc | disqualified | all
         let followUpSearchTerm = '';
@@ -13531,6 +13533,28 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     hint.hidden = false;
                 }
                 followUpUpdatePagerUi();
+
+                // V1: show full-queue throughput stats (not just current page)
+                fetch(`${BASE_URL}/api/follow-up-queue/${encodeURIComponent(clientKey)}/stats`, { cache: 'no-store' })
+                    .then((r) => r.json())
+                    .then((payload) => {
+                        if (myGen !== followUpQueueLoadGen) return;
+                        if (!payload || payload.ok === false) return;
+                        followUpStats = payload.stats || null;
+                        if (!hint || !followUpStats) return;
+                        const s = followUpStats;
+                        const today = s.today || {};
+                        const extra = [
+                            `Queue: ${formatNumber(s.todo || 0)} to call`,
+                            `${formatNumber(s.called || 0)} called`,
+                            `${formatNumber(s.dnc || 0)} DNC`,
+                            `${formatNumber(s.disqualified || 0)} disq`,
+                            `Today: ${formatNumber(today.called || 0)} called / ${formatNumber(today.total || 0)} new`
+                        ];
+                        hint.textContent = `${hint.textContent} · ${extra.join(' · ')}`;
+                        hint.hidden = false;
+                    })
+                    .catch(() => {});
             } catch (e) {
                 if (myGen !== followUpQueueLoadGen) return;
                 console.warn('follow-up queue', e);

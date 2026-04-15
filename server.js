@@ -13585,6 +13585,97 @@ app.get('/api/follow-up-queue/:clientKey', async (req, res) => {
   }
 });
 
+/** V1: fast stats for follow-up queue (counts + today throughput) */
+app.get('/api/follow-up-queue/:clientKey/stats', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    res.set('Cache-Control', 'no-store');
+
+    function classifyRowStatus(row) {
+      const statusRaw = String(row?.Status || row?.['Status'] || '').trim();
+      const dispRaw = String(row?.Disposition || row?.['Disposition'] || '').trim();
+      const status = (statusRaw || dispRaw || 'To call').toLowerCase();
+      if (status === 'called') return 'called';
+      if (status.includes('do not call') || status === 'dnc') return 'dnc';
+      if (status.includes('disqual')) return 'disqualified';
+      return 'todo';
+    }
+
+    function parseUkTimestampToMs(s) {
+      const m = String(s || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}),\s*(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+      if (!m) return NaN;
+      const d = Number(m[1]);
+      const mo = Number(m[2]);
+      const y = Number(m[3]);
+      const h = Number(m[4]);
+      const mi = Number(m[5]);
+      const se = m[6] != null ? Number(m[6]) : 0;
+      const t = new Date(y, mo - 1, d, h, mi, se).getTime();
+      return Number.isFinite(t) ? t : NaN;
+    }
+
+    function computeStats(rows) {
+      const now = Date.now();
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const startMs = todayStart.getTime();
+
+      const out = {
+        total: 0,
+        todo: 0,
+        called: 0,
+        dnc: 0,
+        disqualified: 0,
+        today: { total: 0, todo: 0, called: 0, dnc: 0, disqualified: 0 }
+      };
+      for (const row of rows || []) {
+        const kind = classifyRowStatus(row);
+        out.total += 1;
+        out[kind] += 1;
+        const tsMs = parseUkTimestampToMs(row?.Timestamp);
+        if (Number.isFinite(tsMs) && tsMs >= startMs && tsMs <= now) {
+          out.today.total += 1;
+          out.today[kind] += 1;
+        }
+      }
+      return out;
+    }
+
+    if (isFollowUpQueueDemoClient(clientKey)) {
+      const demoRows = [
+        {
+          Timestamp: new Date(Date.now() - 2 * 3600000).toLocaleString('en-GB', { timeZone: 'Europe/London' }),
+          Status: 'To call'
+        },
+        {
+          Timestamp: new Date(Date.now() - 26 * 3600000).toLocaleString('en-GB', { timeZone: 'Europe/London' }),
+          Status: 'Called'
+        }
+      ];
+      return res.json({ ok: true, demo: true, configured: true, source: 'demo', stats: computeStats(demoRows) });
+    }
+
+    const client = await getFullClient(clientKey);
+    const spreadsheetId = resolveLogisticsSpreadsheetId(client);
+    if (!spreadsheetId) {
+      return res.json({
+        ok: true,
+        configured: false,
+        source: 'sheet',
+        stats: computeStats([])
+      });
+    }
+
+    await sheets.ensureLogisticsHeader(spreadsheetId);
+    const { rows: rawRows } = await sheets.readSheet(spreadsheetId, 'Sheet1!A:Z');
+    const records = sheets.logisticsSheetRowsToRecords(rawRows);
+    res.json({ ok: true, demo: false, configured: true, source: 'sheet', stats: computeStats(records) });
+  } catch (error) {
+    console.error('[FOLLOW-UP QUEUE STATS ERROR]', error);
+    res.status(502).json({ ok: false, error: 'stats_failed', message: error?.message || String(error) });
+  }
+});
+
 // Update status / called flag for a specific follow-up row in the logistics sheet
 app.post('/api/follow-up-queue/:clientKey/status', async (req, res) => {
   try {
