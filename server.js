@@ -81,6 +81,7 @@ import monitoringRouter from './routes/monitoring.js';
 import backendStatusRouter from './routes/backend-status.js';
 import demoSetupRouter from './routes/demo-setup.js';
 import opsRouter from './routes/ops.js';
+import staticPagesRouter from './routes/static-pages.js';
 import * as store from './store.js';
 import * as sheets from './sheets.js';
 import messagingService from './lib/messaging-service.js';
@@ -473,76 +474,7 @@ app.use(auditLog);
 // Serve static files from public directory
 app.use(express.static('public'));
 
-// Dashboard routes
-app.get('/', (req, res) => {
-  res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
-});
-
-app.get('/tenant-dashboard', (req, res) => {
-  res.sendFile(path.join(process.cwd(), 'public', 'tenant-dashboard.html'));
-});
-
-app.get('/client-dashboard', (req, res) => {
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-  res.setHeader('Pragma', 'no-cache');
-  res.sendFile(path.join(process.cwd(), 'public', 'client-dashboard.html'));
-});
-
-app.get('/client-setup', (req, res) => {
-  res.sendFile(path.join(process.cwd(), 'public', 'client-setup.html'));
-});
-
-app.get('/client-template', (req, res) => {
-  res.sendFile(path.join(process.cwd(), 'public', 'client-dashboard-template.html'));
-});
-
-app.get('/setup-guide', (req, res) => {
-  res.sendFile(path.join(process.cwd(), 'public', 'client-setup-guide.html'));
-});
-
-app.get('/onboarding', (req, res) => {
-  res.sendFile(path.join(process.cwd(), 'public', 'onboarding-dashboard.html'));
-});
-
-app.get('/onboarding-templates', (req, res) => {
-  res.sendFile(path.join(process.cwd(), 'public', 'onboarding-templates.html'));
-});
-
-app.get('/onboarding-wizard', (req, res) => {
-  res.sendFile(path.join(process.cwd(), 'public', 'client-onboarding-wizard.html'));
-});
-
-app.get('/uk-business-search', (req, res) => {
-  res.sendFile(path.join(process.cwd(), 'public', 'uk-business-search.html'));
-});
-
-// Serve Decision Maker Finder page (finds owner mobile numbers)
-app.get('/decision-maker-finder', (req, res) => {
-  res.sendFile(path.join(process.cwd(), 'public', 'decision-maker-finder.html'));
-});
-
-// Serve Cold Call Dashboard page
-app.get('/cold-call-dashboard', (req, res) => {
-  res.sendFile(path.join(process.cwd(), 'public', 'cold-call-dashboard.html'));
-});
-
-// VAPI Test Dashboard Route
-app.get('/vapi-test-dashboard', (req, res) => {
-  res.sendFile(path.join(process.cwd(), 'public', 'vapi-test-dashboard.html'));
-});
-
-// Admin Hub routes
-app.get('/admin-hub.html', (req, res) => {
-  res.sendFile(path.join(process.cwd(), 'public', 'admin-hub-enterprise.html'));
-});
-
-app.get('/admin-hub', (req, res) => {
-  res.sendFile(path.join(process.cwd(), 'public', 'admin-hub-enterprise.html'));
-});
-
-app.get('/pipeline', (req, res) => {
-  res.sendFile(path.join(process.cwd(), 'public', 'pipeline-kanban.html'));
-});
+app.use(staticPagesRouter);
 
 // Admin API endpoints
 app.get('/api/admin/business-stats', async (req, res) => {
