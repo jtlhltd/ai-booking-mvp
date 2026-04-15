@@ -98,6 +98,7 @@ import { createAdminAnalyticsAdvancedRouter } from './routes/admin-analytics-adv
 import { createAdminOperationsRouter } from './routes/admin-operations.js';
 import { createAdminSalesPipelineRouter } from './routes/admin-sales-pipeline.js';
 import { createAdminEmailTasksDealsRouter } from './routes/admin-email-tasks-deals.js';
+import { createAdminCalendarRouter } from './routes/admin-calendar.js';
 import * as store from './store.js';
 import * as sheets from './sheets.js';
 import messagingService from './lib/messaging-service.js';
@@ -273,112 +274,7 @@ app.use('/api/admin', createAdminAnalyticsAdvancedRouter());
 app.use('/api/admin', createAdminOperationsRouter({ io }));
 app.use('/api/admin', createAdminSalesPipelineRouter({ io }));
 app.use('/api/admin', createAdminEmailTasksDealsRouter());
-
-// Enhanced Calendar Integration Endpoints
-app.get('/api/admin/calendar/events', async (req, res) => {
-  try {
-    const { clientKey, startDate, endDate } = req.query;
-    
-    let query = `
-      SELECT 
-        a.*,
-        c.display_name as client_name,
-        l.name as lead_name,
-        l.phone as lead_phone
-      FROM appointments a
-      LEFT JOIN tenants c ON a.client_key = c.client_key
-      LEFT JOIN leads l ON a.lead_phone = l.phone
-      WHERE 1=1
-    `;
-    
-    const params = [];
-    let paramCount = 1;
-    
-    if (clientKey) {
-      query += ` AND a.client_key = $${paramCount++}`;
-      params.push(clientKey);
-    }
-    
-    if (startDate) {
-      query += ` AND a.scheduled_for >= $${paramCount++}`;
-      params.push(startDate);
-    }
-    
-    if (endDate) {
-      query += ` AND a.scheduled_for <= $${paramCount++}`;
-      params.push(endDate);
-    }
-    
-    query += ` ORDER BY a.scheduled_for ASC`;
-    
-    const events = await query(query, params);
-    
-    res.json(events.rows || []);
-  } catch (error) {
-    console.error('Error getting calendar events:', error);
-    res.json([]);
-  }
-});
-
-app.post('/api/admin/calendar/sync', async (req, res) => {
-  try {
-    const { clientKey, calendarId } = req.body;
-    
-    // This would integrate with Google Calendar or Outlook
-    // For now, return a success message
-    console.log('Syncing calendar for client:', clientKey, 'with calendar:', calendarId);
-    
-    res.json({
-      success: true,
-      message: 'Calendar sync initiated',
-      calendarId
-    });
-  } catch (error) {
-    console.error('Error syncing calendar:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.get('/api/admin/calendar/availability', async (req, res) => {
-  try {
-    const { clientKey, date, duration } = req.query;
-    
-    // Get client timezone
-    const client = await getFullClient(clientKey);
-    const timezone = client?.timezone || 'Europe/London';
-    
-    // Generate available time slots
-    const availableSlots = generateAvailableSlots(date, duration, timezone);
-    
-    res.json({
-      clientKey,
-      date,
-      timezone,
-      availableSlots
-    });
-  } catch (error) {
-    console.error('Error getting availability:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Helper function to generate available time slots
-function generateAvailableSlots(date, duration = 30, timezone = 'Europe/London') {
-  const slots = [];
-  const startHour = 9; // 9 AM
-  const endHour = 17; // 5 PM
-  
-  for (let hour = startHour; hour < endHour; hour++) {
-    for (let minute = 0; minute < 60; minute += duration) {
-      slots.push({
-        time: `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`,
-        available: true
-      });
-    }
-  }
-  
-  return slots;
-}
+app.use('/api/admin', createAdminCalendarRouter());
 
 // Document Management Endpoints
 app.get('/api/admin/documents', async (req, res) => {
