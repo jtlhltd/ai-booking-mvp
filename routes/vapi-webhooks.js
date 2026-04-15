@@ -10,6 +10,110 @@ import { storeCallContext } from '../lib/call-context-cache.js';
 import { verifyVapiSignature } from '../middleware/vapi-webhook-verification.js';
 import { mapVapiEndedReasonToOutcome } from '../lib/vapi-call-outcome-map.js';
 import { vapiWebhookVerboseLog } from '../lib/vapi-webhook-verbose-log.js';
+import { query, dbType } from '../db.js';
+
+function isPostgres() {
+  return dbType === 'postgres';
+}
+
+function pickVapiCallId(body) {
+  return body?.call?.id || body?.id || body?.callId || body?.message?.call?.id || body?.message?.callId || null;
+}
+
+function pickVapiEventType(body) {
+  return body?.message?.type || body?.type || null;
+}
+
+/**
+ * DB-backed idempotency key. Must be stable across retries and unique per webhook delivery.
+ * VAPI doesn't always provide a top-level event id, so we derive one from callId + message type.
+ * For conversation-update we include message count to avoid collapsing distinct updates.
+ */
+function deriveVapiEventId(body) {
+  const callId = pickVapiCallId(body) || 'no_call_id';
+  const type = pickVapiEventType(body) || 'unknown';
+  if (type === 'conversation-update') {
+    const n = Array.isArray(body?.message?.messages)
+      ? body.message.messages.length
+      : Array.isArray(body?.message?.conversation)
+        ? body.message.conversation.length
+        : 0;
+    return `${callId}:${type}:${n}`;
+  }
+  return `${callId}:${type}`;
+}
+
+async function tryInsertWebhookEvent({ provider, eventId, callId, eventType, correlationId, payload, headers }) {
+  if (!isPostgres()) {
+    // Only Postgres has durable idempotency guarantees today.
+    return { inserted: true };
+  }
+  try {
+    const r = await query(
+      `
+      INSERT INTO webhook_events (
+        provider, event_id, call_id, event_type, correlation_id, payload_json, headers_json
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      ON CONFLICT (provider, event_id) DO NOTHING
+      RETURNING id
+    `,
+      [
+        provider,
+        eventId,
+        callId,
+        eventType,
+        correlationId,
+        JSON.stringify(payload || {}),
+        JSON.stringify(headers || {})
+      ]
+    );
+    return { inserted: Array.isArray(r?.rows) && r.rows.length > 0 };
+  } catch (e) {
+    // If the table doesn't exist yet (migration not applied), don't break webhooks.
+    const msg = String(e?.message || '');
+    if (msg.toLowerCase().includes('webhook_events') || msg.toLowerCase().includes('relation')) {
+      console.warn('[VAPI WEBHOOK] webhook_events table not available yet; proceeding without DB idempotency');
+      return { inserted: true, degraded: true };
+    }
+    throw e;
+  }
+}
+
+async function markWebhookEventProcessingStarted({ provider, eventId }) {
+  if (!isPostgres()) return;
+  await query(
+    `
+    UPDATE webhook_events
+    SET processing_started_at = NOW()
+    WHERE provider = $1 AND event_id = $2 AND processing_started_at IS NULL
+  `,
+    [provider, eventId]
+  );
+}
+
+async function markWebhookEventProcessed({ provider, eventId }) {
+  if (!isPostgres()) return;
+  await query(
+    `
+    UPDATE webhook_events
+    SET processed_at = NOW(), processing_error = NULL
+    WHERE provider = $1 AND event_id = $2
+  `,
+    [provider, eventId]
+  );
+}
+
+async function markWebhookEventFailed({ provider, eventId, error }) {
+  if (!isPostgres()) return;
+  await query(
+    `
+    UPDATE webhook_events
+    SET processing_error = $3
+    WHERE provider = $1 AND event_id = $2
+  `,
+    [provider, eventId, String(error?.message || error || 'unknown_error').slice(0, 10000)]
+  );
+}
 
 /**
  * Logistics sheet "Business Name" = company we dialed (callee), never the tenant `client_key` slug.
@@ -132,6 +236,27 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
   console.log(`[${correlationId}] [VAPI WEBHOOK] received type=${body?.message?.type || body?.type || 'unknown'}`);
   
   try {
+    // Durable ingest + DB-backed idempotency (Postgres).
+    // We insert the event before returning 200 so that retries/multi-instance won't duplicate side-effects.
+    const provider = 'vapi';
+    const callIdForEvent = pickVapiCallId(body);
+    const eventType = pickVapiEventType(body);
+    const eventId = deriveVapiEventId(body);
+    const ins = await tryInsertWebhookEvent({
+      provider,
+      eventId,
+      callId: callIdForEvent,
+      eventType,
+      correlationId,
+      payload: body,
+      headers: req.headers
+    });
+    if (!ins.inserted) {
+      // Already ingested/processed (or in-flight). Always ack to stop provider retries.
+      res.status(200).json({ ok: true, received: true, deduped: true });
+      return;
+    }
+
     // RAW envelope debug (before any normalization) - per VAPI troubleshooting
     vapiWebhookVerboseLog('RAW TYPE:', body?.message?.type || body?.type);
     if (body?.message?.type === 'end-of-call-report') {
@@ -221,6 +346,8 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
         }
         console.log(`[${correlationId}] [CONVERSATION-UPDATE] Accumulated ${messages.length} msgs for ${cid}, total: ${callStore.get(cid).length}`);
       }
+      // Mark durable record as processed (we don't run heavy downstream work for conversation-update).
+      await markWebhookEventProcessed({ provider: 'vapi', eventId });
       res.status(200).json({ ok: true, received: true });
       return;
     }
@@ -231,10 +358,17 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
     // Run all downstream processing in try/catch so failures are logged and don't cause unhandled rejection
     (async () => {
       try {
+        await markWebhookEventProcessingStarted({ provider: 'vapi', eventId });
         await processWebhookPayload(body, correlationId);
+        await markWebhookEventProcessed({ provider: 'vapi', eventId });
       } catch (err) {
         console.error(`[${correlationId}] [VAPI WEBHOOK] Post-200 processing error:`, err);
         console.error(`[${correlationId}] [VAPI WEBHOOK] Stack:`, err.stack);
+        try {
+          await markWebhookEventFailed({ provider: 'vapi', eventId, error: err });
+        } catch (_) {
+          // best effort
+        }
       }
     })();
   } catch (err) {

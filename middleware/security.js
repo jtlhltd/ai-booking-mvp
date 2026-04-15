@@ -47,7 +47,7 @@ export async function authenticateApiKey(req, res, next) {
       // Log failed authentication attempt (with error handling)
       try {
         await logSecurityEvent({
-          clientKey: 'victory_dental',
+          clientKey: 'unknown',
           eventType: 'api_auth_failed',
           eventSeverity: 'warning',
           eventData: { reason: 'invalid_api_key', providedKey: apiKey.substring(0, 8) + '...' },
@@ -87,10 +87,16 @@ export async function rateLimitMiddleware(req, res, next) {
   try {
     const { checkRateLimit, recordRateLimitRequest, logSecurityEvent } = await import('../db.js');
     
-    const clientKey = req.clientKey || 'victory_dental';
+    const clientKey = req.clientKey || null;
     const apiKeyId = req.apiKey?.id || null;
     const endpoint = req.path;
     const ipAddress = req.ip;
+
+    // If we don't know the tenant yet (unauthenticated/public routes), avoid attributing
+    // rate limiting to an arbitrary tenant key. This keeps tenant isolation correct.
+    if (!clientKey) {
+      return next();
+    }
     
     // Get rate limits from API key or use defaults
     const limitPerMinute = req.apiKey?.rate_limit_per_minute || 100;

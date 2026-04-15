@@ -14,10 +14,20 @@ export function adminSurfaceRequiresApiKey(reqPath) {
 export function enforceAdminApiKeyIfConfigured(req, res, next) {
   if (req.method === 'OPTIONS') return next();
   if (!adminSurfaceRequiresApiKey(req.path)) return next();
-  const enforce = /^(1|true|yes)$/i.test(String(process.env.ENFORCE_ADMIN_API_KEY || '').trim());
+  const isProd = String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
+  const enforce =
+    isProd || /^(1|true|yes)$/i.test(String(process.env.ENFORCE_ADMIN_API_KEY || '').trim());
   if (!enforce) return next();
   const expected = String(process.env.API_KEY || '').trim();
-  if (!expected) return next();
+  if (!expected) {
+    if (isProd) {
+      return res.status(500).json({
+        error: 'Admin auth misconfigured',
+        message: 'API_KEY must be set in production to protect admin surfaces'
+      });
+    }
+    return next();
+  }
   const key = req.get('X-API-Key');
   if (key && key === expected) return next();
   return res.status(401).json({ error: 'Unauthorized' });

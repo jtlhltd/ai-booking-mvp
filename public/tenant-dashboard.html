@@ -312,14 +312,23 @@
                 throw error;
             }
         }
+
+        function isDemoMode() {
+            const params = new URLSearchParams(window.location.search || '');
+            return params.get('demo') === '1' || params.get('demo') === 'true';
+        }
         
         async function loadTenants() {
             try {
                 // Try to load from public health endpoint first
                 const health = await fetchPublic(`${BASE_URL}/health`);
-                
-                // Use hardcoded tenant data for demo
-                tenants = ['victory_dental', 'northside_vet'];
+
+                if (isDemoMode()) {
+                    tenants = ['victory_dental', 'northside_vet'];
+                } else {
+                    // Optional: if /health exposes tenant keys, use them; otherwise keep empty.
+                    tenants = Array.isArray(health?.tenants) ? health.tenants : [];
+                }
                 
                 const select = document.getElementById('tenantSelect');
                 select.innerHTML = '<option value="">Select a tenant...</option>';
@@ -332,8 +341,7 @@
                 });
             } catch (error) {
                 console.error('Failed to load tenants:', error);
-                // Fallback to hardcoded tenants
-                tenants = ['victory_dental', 'northside_vet'];
+                tenants = isDemoMode() ? ['victory_dental', 'northside_vet'] : [];
                 const select = document.getElementById('tenantSelect');
                 select.innerHTML = '<option value="">Select a tenant...</option>';
                 
@@ -370,8 +378,12 @@
             if (!currentTenant) return;
             
             try {
-                // Use demo data for now (no authentication required)
-                const tenantData = getDemoTenantData(currentTenant);
+                // Demo-only data (no authentication required).
+                // In non-demo mode we do not assume tenant keys or values.
+                const tenantData = isDemoMode() ? getDemoTenantData(currentTenant) : null;
+                if (!tenantData) {
+                    throw new Error('Tenant data is not available (enable demo mode with ?demo=1)');
+                }
                 
                 // Update tenant info
                 document.getElementById('tenantInfo').style.display = 'block';
@@ -518,7 +530,7 @@
                     leads: []
                 }
             };
-            return data[tenantKey] || data['victory_dental'];
+            return data[tenantKey] || null;
         }
         
         function getTenantPhone(tenantKey) {

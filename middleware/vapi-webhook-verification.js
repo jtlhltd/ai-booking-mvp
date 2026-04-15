@@ -12,6 +12,7 @@ import crypto from 'crypto';
  * @param {Function} next - Express next middleware
  */
 export function verifyVapiSignature(req, res, next) {
+  const isProd = String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
   const secret = process.env.VAPI_WEBHOOK_SECRET;
   const requireExplicit =
     String(process.env.VAPI_WEBHOOK_REQUIRE_SIGNATURE || '').trim() !== ''
@@ -21,8 +22,17 @@ export function verifyVapiSignature(req, res, next) {
   // or when the operator explicitly requires it via env.
   const requireSignature = requireExplicit || !!secret;
   
-  // If no secret is configured, skip verification (for development/testing)
+  // If no secret is configured, skip verification (for development/testing).
+  // In production, fail closed to avoid accepting spoofed webhooks.
   if (!secret) {
+    if (isProd) {
+      console.error('[VAPI WEBHOOK] Missing VAPI_WEBHOOK_SECRET in production; refusing to accept unsigned webhooks');
+      return res.status(500).json({
+        ok: false,
+        error: 'Webhook verification misconfigured',
+        message: 'Set VAPI_WEBHOOK_SECRET to accept VAPI webhooks'
+      });
+    }
     if (requireExplicit) {
       console.error('[VAPI WEBHOOK] Missing VAPI_WEBHOOK_SECRET but signature verification is explicitly required');
       return res.status(500).json({
