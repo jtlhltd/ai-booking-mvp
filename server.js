@@ -131,7 +131,10 @@ import {
   pool,
   poolQuerySelect,
   invalidateClientCache,
-  smearCallQueueScheduledFor
+  smearCallQueueScheduledFor,
+  listOptOutList,
+  upsertOptOut,
+  deactivateOptOut
 } from './db.js'; // SQLite-backed tenants
 import { enforceAdminApiKeyIfConfigured } from './middleware/admin-api-key.js';
 import { 
@@ -13957,6 +13960,7 @@ app.post('/api/follow-up-queue/:clientKey/patch', async (req, res) => {
     }
     res.json({ ok: true });
   } catch (error) {
+    globalThis.__opsLastFollowUpPatchError = { at: new Date().toISOString(), message: error?.message || String(error) };
     console.error('[FOLLOW-UP PATCH ERROR]', error);
     res.status(500).json({ ok: false, error: error.message || String(error) });
   }
@@ -13996,8 +14000,83 @@ app.post('/api/follow-up-queue/:clientKey/batchPatch', async (req, res) => {
 
     res.json({ ok: true, updated: okCount, total: patches.length, results });
   } catch (error) {
+    globalThis.__opsLastFollowUpPatchError = { at: new Date().toISOString(), message: error?.message || String(error) };
     console.error('[FOLLOW-UP BATCH PATCH ERROR]', error);
     res.status(500).json({ ok: false, error: error.message || String(error) });
+  }
+});
+
+// Ops: quick health view for operators (dashboard card)
+app.get('/api/ops/health/:clientKey', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    res.set('Cache-Control', 'no-store');
+    const client = await getFullClient(clientKey);
+    const spreadsheetId = resolveLogisticsSpreadsheetId(client);
+    const dncRows = await listOptOutList({ activeOnly: true, limit: 1 }).catch(() => []);
+    const dncCountResult = await (async () => {
+      try {
+        const r = await query(
+          dbType === 'sqlite'
+            ? `SELECT COUNT(*) AS n FROM opt_out_list WHERE active = 1`
+            : `SELECT COUNT(*) AS n FROM opt_out_list WHERE active = TRUE`
+        );
+        const n = parseInt(r.rows?.[0]?.n ?? r.rows?.[0]?.count ?? '0', 10);
+        return Number.isFinite(n) ? n : 0;
+      } catch {
+        return dncRows.length ? 1 : 0;
+      }
+    })();
+
+    res.json({
+      ok: true,
+      db: { type: dbType || 'sqlite', path: DB_PATH },
+      sheet: { configured: !!spreadsheetId },
+      dnc: { activeCount: dncCountResult },
+      lastErrors: {
+        followUpPatch: globalThis.__opsLastFollowUpPatchError || null
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: 'ops_health_failed', message: error?.message || String(error) });
+  }
+});
+
+// DNC (opt-out) management for operators
+app.get('/api/dnc/list', async (req, res) => {
+  try {
+    const { q = '', active = '1', limit = '100', offset = '0' } = req.query || {};
+    const rows = await listOptOutList({
+      q: String(q || ''),
+      activeOnly: String(active) !== '0',
+      limit: parseInt(limit, 10) || 100,
+      offset: parseInt(offset, 10) || 0
+    });
+    res.json({ ok: true, rows });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: 'dnc_list_failed', message: error?.message || String(error) });
+  }
+});
+
+app.post('/api/dnc/add', async (req, res) => {
+  try {
+    const { phone, reason, notes } = req.body || {};
+    const out = await upsertOptOut({ phone, reason, notes });
+    res.json({ ok: true, phone: out.phone });
+  } catch (error) {
+    const code = error?.code || 'dnc_add_failed';
+    res.status(code === 'invalid_phone' ? 400 : 500).json({ ok: false, error: code, message: error?.message || String(error) });
+  }
+});
+
+app.post('/api/dnc/remove', async (req, res) => {
+  try {
+    const { phone } = req.body || {};
+    const out = await deactivateOptOut({ phone });
+    res.json({ ok: true, phone: out.phone });
+  } catch (error) {
+    const code = error?.code || 'dnc_remove_failed';
+    res.status(code === 'invalid_phone' ? 400 : 500).json({ ok: false, error: code, message: error?.message || String(error) });
   }
 });
 

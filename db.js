@@ -12,6 +12,7 @@ import {
 import { getCallAnalyticsEnvOverrideIso } from './lib/call-analytics-cutoff.js';
 import { activeRowsMatchOutboundAbStopSlice } from './lib/outbound-ab-stop-slice.js';
 import { phoneMatchKey, pgQueueLeadPhoneKeyExpr, outboundDialClaimKeyFromRaw } from './lib/lead-phone-key.js';
+import { normalizePhoneE164 } from './lib/utils.js';
 
 const dbType = (process.env.DB_TYPE || '').toLowerCase();
 let pool = null;
@@ -3077,6 +3078,82 @@ async function isOptedOutForDial(leadPhone) {
   if (!mk) return false;
   const set = await loadOptedOutDialCache();
   return set.has(mk);
+}
+
+export function invalidateOptOutDialCache() {
+  optedOutDialCache = null;
+  optedOutDialCacheLoadedAt = 0;
+}
+
+export async function listOptOutList({ q = '', activeOnly = true, limit = 100, offset = 0 } = {}) {
+  const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 100, 1), 500);
+  const safeOffset = Math.max(parseInt(offset, 10) || 0, 0);
+  const qq = String(q || '').trim();
+  const where = [];
+  const params = [];
+
+  if (activeOnly) where.push(dbType === 'sqlite' ? `active = 1` : `active = TRUE`);
+  if (qq) {
+    params.push(`%${qq}%`);
+    where.push(dbType === 'postgres' ? `phone ILIKE $${params.length}` : `phone LIKE $${params.length}`);
+  }
+
+  params.push(safeLimit);
+  params.push(safeOffset);
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const sql = `
+    SELECT id, phone, reason, notes, active, opted_out_at, updated_at
+    FROM opt_out_list
+    ${whereSql}
+    ORDER BY updated_at DESC
+    LIMIT $${params.length - 1} OFFSET $${params.length}
+  `;
+  const result = await query(sql, params);
+  return result.rows || [];
+}
+
+export async function upsertOptOut({ phone, reason = 'user_request', notes = null } = {}) {
+  const raw = String(phone || '').trim();
+  const normalized = normalizePhoneE164(raw, 'GB') || raw;
+  if (!normalized || !/^\+\d{7,15}$/.test(normalized)) {
+    const err = new Error('invalid_phone');
+    err.code = 'invalid_phone';
+    throw err;
+  }
+  const r = String(reason || '').trim() || 'user_request';
+  const n = notes == null ? null : String(notes).trim();
+
+  await query(
+    `
+    INSERT INTO opt_out_list (phone, reason, notes, opted_out_at, active, updated_at)
+    VALUES ($1, $2, $3, NOW(), ${dbType === 'sqlite' ? 1 : 'TRUE'}, NOW())
+    ON CONFLICT (phone)
+    DO UPDATE SET active = ${dbType === 'sqlite' ? 1 : 'TRUE'}, reason = $2, notes = $3, opted_out_at = NOW(), updated_at = NOW()
+    `,
+    [normalized, r, n]
+  );
+  invalidateOptOutDialCache();
+  return { phone: normalized };
+}
+
+export async function deactivateOptOut({ phone } = {}) {
+  const raw = String(phone || '').trim();
+  const normalized = normalizePhoneE164(raw, 'GB') || raw;
+  if (!normalized || !/^\+\d{7,15}$/.test(normalized)) {
+    const err = new Error('invalid_phone');
+    err.code = 'invalid_phone';
+    throw err;
+  }
+  await query(
+    `
+    UPDATE opt_out_list
+    SET active = ${dbType === 'sqlite' ? 0 : 'FALSE'}, updated_at = NOW()
+    WHERE phone = $1
+    `,
+    [normalized]
+  );
+  invalidateOptOutDialCache();
+  return { phone: normalized };
 }
 
 /** Break exact .000s timestamps so many rows never share the same instant (ops top-of-hour + dial spread). */

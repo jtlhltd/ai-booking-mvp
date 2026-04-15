@@ -6791,6 +6791,28 @@
                     <div id="daily-summary" class="thin-scroll"></div>
                 </article>
 
+                <article class="card card-list">
+                    <h3>🛡️ DNC List</h3>
+                    <p class="card-subtitle">Add/remove numbers that must never be auto-dialed.</p>
+                    <div class="dashboard-list-toolbar" style="gap:8px;flex-wrap:wrap;">
+                        <input type="search" id="dncSearchInput" class="dashboard-list-search" placeholder="Search phone…" autocomplete="off" enterkeyhint="search">
+                        <input type="text" id="dncAddPhoneInput" class="dashboard-list-search" placeholder="+44… (or 07…)" autocomplete="off" inputmode="tel">
+                        <select id="dncAddReasonSelect" class="dashboard-list-search" style="max-width:220px;">
+                            <option value="user_request" selected>User request</option>
+                            <option value="compliance">Compliance</option>
+                            <option value="wrong_number">Wrong number</option>
+                        </select>
+                        <button type="button" class="export-btn secondary" id="dncAddBtn">Add DNC</button>
+                    </div>
+                    <div id="dnc-list" class="thin-scroll"></div>
+                </article>
+
+                <article class="card card-metrics">
+                    <h3>🧯 Ops Health</h3>
+                    <p class="card-subtitle">Config + recent errors that block daily ops.</p>
+                    <div id="ops-health" class="thin-scroll"></div>
+                </article>
+
                 <article class="card card-list tom-hide-for-outreach">
                     <h3>📅 Upcoming Appointments</h3>
                     <p class="card-subtitle" id="appointmentsSubtitle">Appointments we booked for you.</p>
@@ -14228,6 +14250,136 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
         }
 
+        async function renderOpsHealth() {
+            const host = document.getElementById('ops-health');
+            if (!host || !currentClient) return;
+            host.innerHTML = '<div class="empty-state-message" style="padding:16px;">Loading…</div>';
+            try {
+                const res = await fetch(`${BASE_URL}/api/ops/health/${encodeURIComponent(currentClient)}`, { cache: 'no-store' });
+                const payload = await res.json().catch(() => ({}));
+                if (!res.ok || !payload?.ok) throw new Error(payload?.message || payload?.error || `HTTP ${res.status}`);
+                const sheetOk = !!payload?.sheet?.configured;
+                const dncCount = Number(payload?.dnc?.activeCount || 0);
+                const lastPatch = payload?.lastErrors?.followUpPatch;
+                const rows = [
+                    { label: 'Sheet configured', value: sheetOk ? 'Yes' : 'No' },
+                    { label: 'DNC active', value: formatNumber(dncCount) },
+                    { label: 'DB', value: `${payload?.db?.type || 'unknown'} (${payload?.db?.path || ''})` }
+                ];
+                const list = rows
+                    .map((r) => `<div class="metric-row"><span class="metric-label">${escapeHtml(r.label)}</span><span class="metric-value">${escapeHtml(r.value)}</span></div>`)
+                    .join('');
+                const errHtml = lastPatch
+                    ? `<div class="empty-state-message" style="padding:12px;margin-top:10px;border:1px solid rgba(255,0,0,.25);border-radius:10px;">
+                        <strong>Last follow-up save error</strong><br>
+                        <span style="opacity:.85;">${escapeHtml(String(lastPatch.at || ''))}</span><br>
+                        <span>${escapeHtml(String(lastPatch.message || ''))}</span>
+                      </div>`
+                    : `<div class="empty-state-message" style="padding:12px;margin-top:10px;">No recent follow-up save errors.</div>`;
+                host.innerHTML = `<div class="metric-grid">${list}</div>${errHtml}`;
+            } catch (e) {
+                host.innerHTML = '<div class="empty-state-message" style="padding:16px;">Failed to load ops health.</div>';
+            }
+        }
+
+        async function renderDncList() {
+            const host = document.getElementById('dnc-list');
+            if (!host) return;
+            host.innerHTML = '<div class="empty-state-message" style="padding:16px;">Loading…</div>';
+            const q = (document.getElementById('dncSearchInput')?.value || '').trim();
+            try {
+                const res = await fetch(`${BASE_URL}/api/dnc/list?q=${encodeURIComponent(q)}&active=1&limit=100`, { cache: 'no-store' });
+                const payload = await res.json().catch(() => ({}));
+                if (!res.ok || !payload?.ok) throw new Error(payload?.message || payload?.error || `HTTP ${res.status}`);
+                const rows = payload.rows || [];
+                if (!rows.length) {
+                    host.innerHTML = '<div class="empty-state-message" style="padding:16px;">No DNC numbers found.</div>';
+                    return;
+                }
+                host.innerHTML = `<div class="dashboard-table-wrap"><table class="dashboard-table"><thead><tr>
+                    <th>Phone</th><th>Reason</th><th>Updated</th><th></th>
+                </tr></thead><tbody>${
+                    rows.map(r => {
+                        const phone = String(r.phone || '').trim();
+                        const reason = String(r.reason || '').trim();
+                        const updated = String(r.updated_at || '').trim();
+                        return `<tr>
+                            <td>${escapeHtml(phone)}</td>
+                            <td>${escapeHtml(reason || '-')}</td>
+                            <td>${escapeHtml(updated ? formatTimeAgo(updated) : '-')}</td>
+                            <td style="text-align:right;">
+                                <button type="button" class="export-btn secondary" data-dnc-remove="${escapeHtml(phone)}">Remove</button>
+                            </td>
+                        </tr>`;
+                    }).join('')
+                }</tbody></table></div>`;
+            } catch (e) {
+                host.innerHTML = '<div class="empty-state-message" style="padding:16px;">Failed to load DNC list.</div>';
+            }
+        }
+
+        function initDncUi() {
+            const search = document.getElementById('dncSearchInput');
+            const addBtn = document.getElementById('dncAddBtn');
+            const addPhone = document.getElementById('dncAddPhoneInput');
+            const addReason = document.getElementById('dncAddReasonSelect');
+            const host = document.getElementById('dnc-list');
+            if (search && !search.dataset.bound) {
+                search.dataset.bound = '1';
+                let t = null;
+                search.addEventListener('input', () => {
+                    clearTimeout(t);
+                    t = setTimeout(() => renderDncList(), 250);
+                });
+            }
+            if (addBtn && !addBtn.dataset.bound) {
+                addBtn.dataset.bound = '1';
+                addBtn.addEventListener('click', async () => {
+                    const phone = String(addPhone?.value || '').trim();
+                    const reason = String(addReason?.value || 'user_request').trim();
+                    if (!phone) { showToast('Missing phone', 'Enter a phone number first.', 'error', 2500); return; }
+                    try {
+                        const res = await fetch(`${BASE_URL}/api/dnc/add`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ phone, reason })
+                        });
+                        const out = await res.json().catch(() => ({}));
+                        if (!res.ok || !out?.ok) throw new Error(out?.message || out?.error || `HTTP ${res.status}`);
+                        if (addPhone) addPhone.value = '';
+                        showToast('Added', 'Number added to DNC.', 'success', 2200);
+                        await renderDncList();
+                        await renderOpsHealth();
+                    } catch (e) {
+                        showToast('Failed', 'Could not add to DNC (check format).', 'error', 3200);
+                    }
+                });
+            }
+            if (host && !host.dataset.bound) {
+                host.dataset.bound = '1';
+                host.addEventListener('click', async (e) => {
+                    const btn = e.target.closest('[data-dnc-remove]');
+                    if (!btn) return;
+                    const phone = btn.getAttribute('data-dnc-remove');
+                    if (!phone) return;
+                    try {
+                        const res = await fetch(`${BASE_URL}/api/dnc/remove`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ phone })
+                        });
+                        const out = await res.json().catch(() => ({}));
+                        if (!res.ok || !out?.ok) throw new Error(out?.message || out?.error || `HTTP ${res.status}`);
+                        showToast('Removed', 'Number removed from DNC.', 'success', 2200);
+                        await renderDncList();
+                        await renderOpsHealth();
+                    } catch (e2) {
+                        showToast('Failed', 'Could not remove from DNC.', 'error', 3200);
+                    }
+                });
+            }
+        }
+
 
         function recordingMatchesOutcomeChip(outcome, chip) {
             if (!chip || chip === 'all') return true;
@@ -15146,6 +15298,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 renderCallInsights(dashboardData).catch(err => console.warn('Call insights failed', err)),
                 renderRetryQueue(dashboardData).catch(err => console.warn('Retry queue failed', err)),
                 renderDailySummary().catch(err => console.warn('Daily summary failed', err)),
+                renderOpsHealth().catch(err => console.warn('Ops health failed', err)),
+                (async () => { initDncUi(); await renderDncList(); })().catch(err => console.warn('DNC list failed', err)),
                 loadFollowUpQueue(currentClient).catch(err => console.warn('Follow-up list failed', err)),
                 renderCalendarDetails(dashboardData).catch(err => console.warn('Calendar details failed', err)),
                 renderCallRecordings(callsToRender).catch(err => console.warn('Call recordings failed', err)),
@@ -15203,6 +15357,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         await renderCallInsights(dashboardData);
                         await renderRetryQueue(dashboardData);
                         await renderDailySummary();
+                        await renderOpsHealth();
                         await renderCalendarDetails(dashboardData);
                         renderChart(config, dashboardData);
                         syncDashboardFreshnessUi();
