@@ -1341,6 +1341,117 @@ function initSqlite() {
   }
 }
 
+async function migrateOptOutListTenantScope() {
+  // Tenant-scoped DNC: opt_out_list(client_key, phone)
+  // Back-compat: existing rows are assigned to client_key='__global__'
+  try {
+    if (dbType === 'postgres' && pool) {
+      const col = await query(
+        `
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'opt_out_list'
+          AND column_name = 'client_key'
+        LIMIT 1
+        `
+      );
+      if (!((col.rows || []).length)) {
+        await query(`ALTER TABLE opt_out_list ADD COLUMN client_key TEXT`);
+      }
+      await query(`UPDATE opt_out_list SET client_key = '__global__' WHERE client_key IS NULL OR client_key = ''`);
+      // Remove legacy uniqueness on phone (global), if present
+      await query(`ALTER TABLE opt_out_list DROP CONSTRAINT IF EXISTS opt_out_list_phone_key`);
+      // Ensure composite uniqueness
+      await query(
+        `ALTER TABLE opt_out_list ADD CONSTRAINT opt_out_list_client_phone_key UNIQUE (client_key, phone)`
+      ).catch(() => {
+        /* constraint likely exists */
+      });
+      await query(
+        `CREATE INDEX IF NOT EXISTS opt_out_client_phone_active_idx ON opt_out_list(client_key, phone) WHERE active = TRUE`
+      ).catch(() => {});
+      return;
+    }
+
+    if (sqlite) {
+      // If table doesn't exist, create the new shape.
+      const hasTable = sqlite
+        .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='opt_out_list'`)
+        .get();
+      if (!hasTable) {
+        sqlite.exec(`
+          CREATE TABLE IF NOT EXISTS opt_out_list (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_key TEXT NOT NULL,
+            phone TEXT NOT NULL,
+            reason TEXT,
+            opted_out_at TEXT DEFAULT (datetime('now')),
+            active INTEGER DEFAULT 1,
+            updated_at TEXT DEFAULT (datetime('now')),
+            notes TEXT,
+            UNIQUE (client_key, phone)
+          );
+          CREATE INDEX IF NOT EXISTS opt_out_client_phone_active_idx
+            ON opt_out_list(client_key, phone)
+            WHERE active = 1;
+          CREATE INDEX IF NOT EXISTS opt_out_active_idx ON opt_out_list(active);
+        `);
+        return;
+      }
+
+      const cols = sqlite.prepare(`PRAGMA table_info(opt_out_list)`).all();
+      const hasClientKey = Array.isArray(cols) && cols.some((c) => String(c?.name || '') === 'client_key');
+      if (hasClientKey) return;
+
+      // Rebuild table to remove legacy UNIQUE(phone) and add client_key + composite UNIQUE.
+      sqlite.exec('BEGIN');
+      try {
+        sqlite.exec(`
+          CREATE TABLE IF NOT EXISTS opt_out_list__v2 (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_key TEXT NOT NULL,
+            phone TEXT NOT NULL,
+            reason TEXT,
+            opted_out_at TEXT,
+            active INTEGER DEFAULT 1,
+            updated_at TEXT,
+            notes TEXT,
+            UNIQUE (client_key, phone)
+          );
+        `);
+        sqlite.exec(`
+          INSERT INTO opt_out_list__v2 (id, client_key, phone, reason, opted_out_at, active, updated_at, notes)
+          SELECT
+            id,
+            '__global__' AS client_key,
+            phone,
+            reason,
+            opted_out_at,
+            COALESCE(active, 1) AS active,
+            updated_at,
+            notes
+          FROM opt_out_list;
+        `);
+        sqlite.exec(`DROP TABLE opt_out_list;`);
+        sqlite.exec(`ALTER TABLE opt_out_list__v2 RENAME TO opt_out_list;`);
+        sqlite.exec(`
+          CREATE INDEX IF NOT EXISTS opt_out_client_phone_active_idx
+            ON opt_out_list(client_key, phone)
+            WHERE active = 1;
+          CREATE INDEX IF NOT EXISTS opt_out_active_idx ON opt_out_list(active);
+        `);
+        sqlite.exec('COMMIT');
+      } catch (e) {
+        sqlite.exec('ROLLBACK');
+        throw e;
+      }
+    }
+  } catch (e) {
+    console.warn('⚠️  opt_out_list tenant-scope migration (non-fatal):', e?.message || e);
+  }
+}
+
 // ---------------------- Core API ----------------------
 export async function init() {
   // Use PostgreSQL if explicitly configured
@@ -1352,6 +1463,7 @@ export async function init() {
     console.log('🔄 Initializing PostgreSQL...');
     try {
       const r = await initPostgres();
+      await migrateOptOutListTenantScope();
       await getCallAnalyticsFloorIso().catch((e) =>
         console.warn('[call_analytics_floor] init:', e.message)
       );
@@ -1381,6 +1493,7 @@ export async function init() {
   await migrateSqliteCallsLeadPhoneMatchKey().catch((e) =>
     console.warn('⚠️  SQLite calls.lead_phone_match_key migration:', e.message)
   );
+  await migrateOptOutListTenantScope();
   await getCallAnalyticsFloorIso().catch((e) =>
     console.warn('[call_analytics_floor] init:', e.message)
   );
@@ -3050,18 +3163,25 @@ export async function cleanupOldRetries(daysOld = 7) {
 
 // Call queue functions
 // --- V1: hard block outbound calls to opted-out numbers (DNC)
-let optedOutDialCache = null;
-let optedOutDialCacheLoadedAt = 0;
+const optedOutDialCacheByClient = new Map(); // clientKey -> { loadedAt, set }
 const OPTED_OUT_DIAL_CACHE_TTL_MS = 5 * 60 * 1000;
 
-async function loadOptedOutDialCache() {
+function optedOutCacheKey(clientKey) {
+  const k = String(clientKey || '').trim();
+  return k || '__unknown__';
+}
+
+async function loadOptedOutDialCache(clientKey) {
   const now = Date.now();
-  if (optedOutDialCache && (now - optedOutDialCacheLoadedAt) < OPTED_OUT_DIAL_CACHE_TTL_MS) return optedOutDialCache;
+  const ck = optedOutCacheKey(clientKey);
+  const existing = optedOutDialCacheByClient.get(ck);
+  if (existing && (now - existing.loadedAt) < OPTED_OUT_DIAL_CACHE_TTL_MS) return existing.set;
   try {
     const activePhones = await query(
       dbType === 'sqlite'
-        ? `SELECT phone FROM opt_out_list WHERE active = 1`
-        : `SELECT phone FROM opt_out_list WHERE active = TRUE`
+        ? `SELECT phone FROM opt_out_list WHERE active = 1 AND (client_key = $1 OR client_key = '__global__')`
+        : `SELECT phone FROM opt_out_list WHERE active = TRUE AND (client_key = $1 OR client_key = '__global__')`,
+      [ck]
     );
     const set = new Set();
     for (const r of activePhones.rows || []) {
@@ -3069,35 +3189,41 @@ async function loadOptedOutDialCache() {
       const mk = phoneMatchKey(raw);
       if (mk) set.add(mk);
     }
-    optedOutDialCache = set;
-    optedOutDialCacheLoadedAt = now;
-    return optedOutDialCache;
+    optedOutDialCacheByClient.set(ck, { loadedAt: now, set });
+    return set;
   } catch (e) {
     // If opt_out_list doesn't exist (new env), fail open (don't block calls).
     // Lead import path still checks opted_out elsewhere.
-    return optedOutDialCache || new Set();
+    return existing?.set || new Set();
   }
 }
 
-async function isOptedOutForDial(leadPhone) {
+async function isOptedOutForDial(clientKey, leadPhone) {
   const mk = phoneMatchKey(leadPhone);
   if (!mk) return false;
-  const set = await loadOptedOutDialCache();
+  const set = await loadOptedOutDialCache(clientKey);
   return set.has(mk);
 }
 
 export function invalidateOptOutDialCache() {
-  optedOutDialCache = null;
-  optedOutDialCacheLoadedAt = 0;
+  optedOutDialCacheByClient.clear();
 }
 
-export async function listOptOutList({ q = '', activeOnly = true, limit = 100, offset = 0 } = {}) {
+export async function listOptOutList({ clientKey, q = '', activeOnly = true, limit = 100, offset = 0 } = {}) {
+  const ck = String(clientKey || '').trim();
+  if (!ck) {
+    const err = new Error('client_key_required');
+    err.code = 'client_key_required';
+    throw err;
+  }
   const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 100, 1), 500);
   const safeOffset = Math.max(parseInt(offset, 10) || 0, 0);
   const qq = String(q || '').trim();
   const where = [];
   const params = [];
 
+  params.push(ck);
+  where.push(`client_key = $${params.length}`);
   if (activeOnly) where.push(dbType === 'sqlite' ? `active = 1` : `active = TRUE`);
   if (qq) {
     params.push(`%${qq}%`);
@@ -3118,7 +3244,13 @@ export async function listOptOutList({ q = '', activeOnly = true, limit = 100, o
   return result.rows || [];
 }
 
-export async function upsertOptOut({ phone, reason = 'user_request', notes = null } = {}) {
+export async function upsertOptOut({ clientKey, phone, reason = 'user_request', notes = null } = {}) {
+  const ck = String(clientKey || '').trim();
+  if (!ck) {
+    const err = new Error('client_key_required');
+    err.code = 'client_key_required';
+    throw err;
+  }
   const raw = String(phone || '').trim();
   const normalized = normalizePhoneE164(raw, 'GB') || raw;
   if (!normalized || !/^\+\d{7,15}$/.test(normalized)) {
@@ -3131,18 +3263,24 @@ export async function upsertOptOut({ phone, reason = 'user_request', notes = nul
 
   await query(
     `
-    INSERT INTO opt_out_list (phone, reason, notes, opted_out_at, active, updated_at)
-    VALUES ($1, $2, $3, NOW(), ${dbType === 'sqlite' ? 1 : 'TRUE'}, NOW())
-    ON CONFLICT (phone)
-    DO UPDATE SET active = ${dbType === 'sqlite' ? 1 : 'TRUE'}, reason = $2, notes = $3, opted_out_at = NOW(), updated_at = NOW()
+    INSERT INTO opt_out_list (client_key, phone, reason, notes, opted_out_at, active, updated_at)
+    VALUES ($1, $2, $3, $4, ${dbType === 'sqlite' ? "datetime('now')" : 'NOW()'}, ${dbType === 'sqlite' ? 1 : 'TRUE'}, ${dbType === 'sqlite' ? "datetime('now')" : 'NOW()'})
+    ON CONFLICT (client_key, phone)
+    DO UPDATE SET active = ${dbType === 'sqlite' ? 1 : 'TRUE'}, reason = $3, notes = $4, opted_out_at = ${dbType === 'sqlite' ? "datetime('now')" : 'NOW()'}, updated_at = ${dbType === 'sqlite' ? "datetime('now')" : 'NOW()'}
     `,
-    [normalized, r, n]
+    [ck, normalized, r, n]
   );
   invalidateOptOutDialCache();
   return { phone: normalized };
 }
 
-export async function deactivateOptOut({ phone } = {}) {
+export async function deactivateOptOut({ clientKey, phone } = {}) {
+  const ck = String(clientKey || '').trim();
+  if (!ck) {
+    const err = new Error('client_key_required');
+    err.code = 'client_key_required';
+    throw err;
+  }
   const raw = String(phone || '').trim();
   const normalized = normalizePhoneE164(raw, 'GB') || raw;
   if (!normalized || !/^\+\d{7,15}$/.test(normalized)) {
@@ -3153,10 +3291,10 @@ export async function deactivateOptOut({ phone } = {}) {
   await query(
     `
     UPDATE opt_out_list
-    SET active = ${dbType === 'sqlite' ? 0 : 'FALSE'}, updated_at = NOW()
-    WHERE phone = $1
+    SET active = ${dbType === 'sqlite' ? 0 : 'FALSE'}, updated_at = ${dbType === 'sqlite' ? "datetime('now')" : 'NOW()'}
+    WHERE client_key = $1 AND phone = $2
     `,
-    [normalized]
+    [ck, normalized]
   );
   invalidateOptOutDialCache();
   return { phone: normalized };
@@ -3189,7 +3327,7 @@ export async function addToCallQueue({ clientKey, leadPhone, priority = 5, sched
 
   if (callType === 'vapi_call') {
     // V1 compliance: never enqueue outbound dials for opted-out numbers.
-    if (await isOptedOutForDial(leadPhone)) {
+    if (await isOptedOutForDial(clientKey, leadPhone)) {
       const err = new Error('opted_out');
       err.code = 'opted_out';
       err.clientKey = clientKey;

@@ -6997,8 +6997,6 @@
             const k = key.trim().toLowerCase();
             return k === DEMO_CLIENT_KEY || DEMO_URL_ALIASES.has(k);
         }
-        /** Fallback until GET /api/clients/:key returns (must match server default for DASHBOARD_SELF_SERVICE_CLIENT_KEYS). */
-        const OUTREACH_DASHBOARD_CLIENT_KEYS_FALLBACK = ['d2d-xpress-tom'];
         /** Outreach-only UI: no appointments/ROI/conversion tiles; copy avoids booking/calendar framing */
         const OUTREACH_DASHBOARD_WORKFLOW_STEPS = [
             { icon: '📥', title: 'Leads received', desc: 'Contacts arrive from your lists, uploads, and integrations.' },
@@ -7006,14 +7004,14 @@
             { icon: '📊', title: 'Outcomes tracked', desc: 'Reach, no pickup, and conversation signals stay visible here.' },
             { icon: '🔄', title: 'Follow-ups scheduled', desc: 'Retries queue after voicemail, busy, or no-answer when configured.' }
         ];
-        /** True when server sent dashboardOutreachMode or key is in fallback list (before config loads). */
+        /** True when server sent dashboardOutreachMode for this client. */
         function isOutreachDashboardClient(clientKey) {
             const k = clientKey != null ? String(clientKey).trim() : '';
             if (!k) return false;
             if (typeof window.__dashboardOutreachMode === 'boolean' && k === currentClient) {
                 return window.__dashboardOutreachMode;
             }
-            return OUTREACH_DASHBOARD_CLIENT_KEYS_FALLBACK.includes(k);
+            return false;
         }
         function shouldShowRoiPanel(clientKey) {
             return !isOutreachDashboardClient(clientKey);
@@ -14200,7 +14198,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             host.innerHTML = '<div class="empty-state-message" style="padding:16px;">Loading…</div>';
             const q = (document.getElementById('dncSearchInput')?.value || '').trim();
             try {
-                const res = await fetch(`${BASE_URL}/api/dnc/list?q=${encodeURIComponent(q)}&active=1&limit=100`, { cache: 'no-store' });
+                const res = await fetch(`${BASE_URL}/api/dnc/list?clientKey=${encodeURIComponent(currentClient)}&q=${encodeURIComponent(q)}&active=1&limit=100`, { cache: 'no-store' });
                 const payload = await res.json().catch(() => ({}));
                 if (!res.ok || !payload?.ok) throw new Error(payload?.message || payload?.error || `HTTP ${res.status}`);
                 const rows = payload.rows || [];
@@ -14254,7 +14252,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         const res = await fetch(`${BASE_URL}/api/dnc/add`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ phone, reason })
+                            body: JSON.stringify({ clientKey: currentClient, phone, reason })
                         });
                         const out = await res.json().catch(() => ({}));
                         if (!res.ok || !out?.ok) throw new Error(out?.message || out?.error || `HTTP ${res.status}`);
@@ -14278,7 +14276,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         const res = await fetch(`${BASE_URL}/api/dnc/remove`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ phone })
+                            body: JSON.stringify({ clientKey: currentClient, phone })
                         });
                         const out = await res.json().catch(() => ({}));
                         if (!res.ok || !out?.ok) throw new Error(out?.message || out?.error || `HTTP ${res.status}`);

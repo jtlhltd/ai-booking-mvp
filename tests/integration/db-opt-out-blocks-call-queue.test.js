@@ -5,17 +5,6 @@ describe('Call queue blocks opted-out numbers (V1)', () => {
     process.env.DB_TYPE = 'sqlite';
     process.env.DATABASE_URL = '';
     await init();
-    await query(`
-      CREATE TABLE IF NOT EXISTS opt_out_list (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        phone TEXT NOT NULL UNIQUE,
-        reason TEXT,
-        opted_out_at TEXT,
-        active INTEGER DEFAULT 1,
-        updated_at TEXT,
-        notes TEXT
-      )
-    `);
   });
 
   afterAll(async () => {
@@ -24,7 +13,7 @@ describe('Call queue blocks opted-out numbers (V1)', () => {
 
   test('addToCallQueue throws opted_out for vapi_call to opted-out phone', async () => {
     await query(`DELETE FROM opt_out_list`);
-    await query(`INSERT INTO opt_out_list (phone, reason, active) VALUES ($1, $2, 1)`, ['+447700900111', 'user_request']);
+    await query(`INSERT INTO opt_out_list (client_key, phone, reason, active) VALUES ($1, $2, $3, 1)`, ['d2d-xpress-tom', '+447700900111', 'user_request']);
 
     await expect(
       addToCallQueue({
