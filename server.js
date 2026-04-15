@@ -14004,6 +14004,84 @@ app.get('/api/daily-summary/:clientKey', async (req, res) => {
     await sheets.ensureLogisticsHeader(spreadsheetId);
     const { rows: rawRows } = await sheets.readSheet(spreadsheetId, 'Sheet1!A:Z');
     const records = sheets.logisticsSheetRowsToRecords(rawRows);
+
+    // --- Extra diagnostics: when are pending calls actually scheduled for?
+    // This helps explain "pending but never dialing" scenarios (e.g. constantly deferred / scheduled in future windows).
+    let callQueueSchedule = null;
+    try {
+      const tz = pickTimezone(client);
+      if (isPostgres) {
+        const { rows } = await query(
+          `
+          WITH bounds AS (
+            SELECT
+              NOW() AS now_utc,
+              ((date_trunc('day', NOW() AT TIME ZONE $2)) AT TIME ZONE $2) AS today_start_utc,
+              ((date_trunc('day', NOW() AT TIME ZONE $2) + INTERVAL '1 day') AT TIME ZONE $2) AS tomorrow_start_utc,
+              ((date_trunc('day', NOW() AT TIME ZONE $2) + INTERVAL '2 day') AT TIME ZONE $2) AS day_after_start_utc
+          )
+          SELECT
+            COUNT(*)::int AS pending_total,
+            MIN(cq.scheduled_for) AS next_scheduled_for,
+            MAX(cq.scheduled_for) AS last_scheduled_for,
+            SUM(CASE WHEN cq.scheduled_for <= b.now_utc THEN 1 ELSE 0 END)::int AS due_now,
+            SUM(CASE WHEN cq.scheduled_for > b.now_utc AND cq.scheduled_for <= b.now_utc + INTERVAL '60 minutes' THEN 1 ELSE 0 END)::int AS due_next_hour,
+            SUM(CASE WHEN cq.scheduled_for >= b.today_start_utc AND cq.scheduled_for < b.tomorrow_start_utc THEN 1 ELSE 0 END)::int AS scheduled_today,
+            SUM(CASE WHEN cq.scheduled_for >= b.tomorrow_start_utc AND cq.scheduled_for < b.day_after_start_utc THEN 1 ELSE 0 END)::int AS scheduled_tomorrow
+          FROM call_queue cq
+          CROSS JOIN bounds b
+          WHERE cq.client_key = $1
+            AND cq.call_type = 'vapi_call'
+            AND cq.status = 'pending'
+          `,
+          [clientKey, tz]
+        );
+        const r = rows?.[0];
+        if (r) {
+          callQueueSchedule = {
+            timezone: tz,
+            pendingTotal: Number(r.pending_total) || 0,
+            nextScheduledFor: r.next_scheduled_for,
+            lastScheduledFor: r.last_scheduled_for,
+            dueNow: Number(r.due_now) || 0,
+            dueNextHour: Number(r.due_next_hour) || 0,
+            scheduledToday: Number(r.scheduled_today) || 0,
+            scheduledTomorrow: Number(r.scheduled_tomorrow) || 0
+          };
+        }
+      } else {
+        // SQLite fallback: fewer buckets (timezone math is approximate in sqlite)
+        const { rows } = await query(
+          `
+          SELECT
+            COUNT(*) AS pending_total,
+            MIN(scheduled_for) AS next_scheduled_for,
+            MAX(scheduled_for) AS last_scheduled_for,
+            SUM(CASE WHEN datetime(scheduled_for) <= datetime('now') THEN 1 ELSE 0 END) AS due_now,
+            SUM(CASE WHEN datetime(scheduled_for) > datetime('now') AND datetime(scheduled_for) <= datetime('now', '+60 minutes') THEN 1 ELSE 0 END) AS due_next_hour
+          FROM call_queue
+          WHERE client_key = ?
+            AND call_type = 'vapi_call'
+            AND status = 'pending'
+          `,
+          [clientKey]
+        );
+        const r = rows?.[0];
+        if (r) {
+          callQueueSchedule = {
+            timezone: tz,
+            pendingTotal: Number(r.pending_total) || 0,
+            nextScheduledFor: r.next_scheduled_for,
+            lastScheduledFor: r.last_scheduled_for,
+            dueNow: Number(r.due_now) || 0,
+            dueNextHour: Number(r.due_next_hour) || 0
+          };
+        }
+      }
+    } catch (e) {
+      callQueueSchedule = null;
+    }
+
     res.json({
       ok: true,
       demo: false,
@@ -14011,6 +14089,7 @@ app.get('/api/daily-summary/:clientKey', async (req, res) => {
       followUp: computeFollowUpStats(records),
       dispositions: computeDispositionBreakdown(records),
       queue: { callQueuePending, callQueueDueNow, retryPending, retryDueNow },
+      callQueueSchedule,
       topToCall: topToCallFromRows(records, 10)
     });
   } catch (error) {
