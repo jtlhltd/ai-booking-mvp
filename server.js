@@ -13731,6 +13731,35 @@ app.get('/api/daily-summary/:clientKey', async (req, res) => {
       return out;
     }
 
+    function dispositionKey(raw) {
+      const v = String(raw || '').trim().toLowerCase();
+      if (!v) return '';
+      if (v.includes('voicemail') || v === 'vm') return 'voicemail';
+      if (v.includes('spoke')) return 'spoke';
+      if (v.includes('call back') || v.includes('callback')) return 'callback';
+      if (v.includes('not interested') || v.includes('no interest')) return 'not_interested';
+      return 'other';
+    }
+
+    function computeDispositionBreakdown(rows) {
+      const now = Date.now();
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const startMs = todayStart.getTime();
+      const base = { voicemail: 0, spoke: 0, callback: 0, not_interested: 0, other: 0, none: 0 };
+      const out = { total: { ...base }, today: { ...base } };
+      for (const row of rows || []) {
+        const disp = String(row?.Disposition || row?.['Disposition'] || '').trim();
+        const k = disp ? dispositionKey(disp) : 'none';
+        out.total[k] += 1;
+        const tsMs = parseUkTimestampToMs(row?.Timestamp);
+        if (Number.isFinite(tsMs) && tsMs >= startMs && tsMs <= now) {
+          out.today[k] += 1;
+        }
+      }
+      return out;
+    }
+
     function topToCallFromRows(rows, limit = 10) {
       const items = (rows || [])
         .map((r) => {
@@ -13806,10 +13835,12 @@ app.get('/api/daily-summary/:clientKey', async (req, res) => {
         { Timestamp: new Date(Date.now() - 26 * 3600000).toLocaleString('en-GB', { timeZone: 'Europe/London' }), Status: 'Called', 'Business Name': 'Coastal Packaging Co', Phone: '+447700900222', 'Transcript Snippet': 'Not ready until Q3.' }
       ];
       const fu = computeFollowUpStats(demoRows);
+      const dispositions = computeDispositionBreakdown(demoRows);
       return res.json({
         ok: true,
         demo: true,
         followUp: fu,
+        dispositions,
         queue: { callQueuePending, callQueueDueNow, retryPending, retryDueNow },
         topToCall: topToCallFromRows(demoRows, 8)
       });
@@ -13823,6 +13854,7 @@ app.get('/api/daily-summary/:clientKey', async (req, res) => {
         demo: false,
         configured: false,
         followUp: computeFollowUpStats([]),
+        dispositions: computeDispositionBreakdown([]),
         queue: { callQueuePending, callQueueDueNow, retryPending, retryDueNow },
         topToCall: []
       });
@@ -13836,6 +13868,7 @@ app.get('/api/daily-summary/:clientKey', async (req, res) => {
       demo: false,
       configured: true,
       followUp: computeFollowUpStats(records),
+      dispositions: computeDispositionBreakdown(records),
       queue: { callQueuePending, callQueueDueNow, retryPending, retryDueNow },
       topToCall: topToCallFromRows(records, 10)
     });

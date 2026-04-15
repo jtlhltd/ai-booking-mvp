@@ -6729,6 +6729,18 @@
                         <button type="button" class="follow-up-status-chip" data-fu-status-filter="disqualified">Disqualified</button>
                         <button type="button" class="follow-up-status-chip" data-fu-status-filter="all">All</button>
                     </div>
+                    <label class="follow-up-page-size" title="Disposition filter" style="display:inline-flex;gap:6px;align-items:center;">
+                        <span class="sr-only">Disposition filter</span>
+                        <select id="followUpDispositionSelect">
+                            <option value="all" selected>All outcomes</option>
+                            <option value="none">No outcome</option>
+                            <option value="voicemail">Voicemail</option>
+                            <option value="spoke">Spoke</option>
+                            <option value="callback">Call back</option>
+                            <option value="not_interested">Not interested</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </label>
                     <input type="search" id="followUpSearchInput" class="dashboard-list-search" placeholder="Search business, name, phone, notes…" autocomplete="off" enterkeyhint="search" style="max-width:260px;">
                     <div class="follow-up-pager" id="followUpQueuePager" aria-label="Follow-up list pagination">
                         <button type="button" class="export-btn secondary follow-up-page-btn" id="followUpPrevPage" disabled>Prev</button>
@@ -13076,6 +13088,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         let followUpQueuePage = 1;
         let followUpStatusFilter = 'todo'; // todo | called | dnc | disqualified | all
         let followUpSearchTerm = '';
+        let followUpDispositionFilter = 'all'; // all | voicemail | spoke | callback | not_interested | none | other
 
         function followUpLoadPrefs() {
             try {
@@ -13084,6 +13097,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const sf = localStorage.getItem('dash.fu.statusFilter') || '';
                 if (['todo', 'called', 'dnc', 'disqualified', 'all'].includes(sf)) followUpStatusFilter = sf;
                 followUpSearchTerm = localStorage.getItem('dash.fu.search') || '';
+                const df = localStorage.getItem('dash.fu.dispositionFilter') || '';
+                if (['all','voicemail','spoke','callback','not_interested','none','other'].includes(df)) followUpDispositionFilter = df;
             } catch {}
         }
 
@@ -13092,6 +13107,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 localStorage.setItem('dash.fu.pageSize', String(followUpQueueState.limit || 100));
                 localStorage.setItem('dash.fu.statusFilter', String(followUpStatusFilter || 'todo'));
                 localStorage.setItem('dash.fu.search', String(followUpSearchTerm || ''));
+                localStorage.setItem('dash.fu.dispositionFilter', String(followUpDispositionFilter || 'all'));
             } catch {}
         }
 
@@ -13225,7 +13241,28 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 if (followUpStatusFilter === 'disqualified') return isDisqualified;
                 if (followUpStatusFilter === 'all') return true;
                 // todo: everything else that isn't "called" or terminal
-                return !isCalled && !isDnc && !isDisqualified;
+                const statusOk = (!isCalled && !isDnc && !isDisqualified);
+                if (!statusOk) return false;
+
+                // Disposition filter (applies after status filter)
+                const disp = dispRaw;
+                if (followUpDispositionFilter === 'all') return true;
+                if (followUpDispositionFilter === 'none') return !disp;
+                if (followUpDispositionFilter === 'voicemail') return disp.includes('voicemail') || disp === 'vm';
+                if (followUpDispositionFilter === 'spoke') return disp.includes('spoke');
+                if (followUpDispositionFilter === 'callback') return disp.includes('call back') || disp.includes('callback');
+                if (followUpDispositionFilter === 'not_interested') return disp.includes('not interested') || disp.includes('no interest');
+                // other: anything set but not matching the known buckets
+                if (followUpDispositionFilter === 'other') {
+                    if (!disp) return false;
+                    const known =
+                        disp.includes('voicemail') || disp === 'vm' ||
+                        disp.includes('spoke') ||
+                        disp.includes('call back') || disp.includes('callback') ||
+                        disp.includes('not interested') || disp.includes('no interest');
+                    return !known;
+                }
+                return true;
             });
             const displayRows = sortKey ? followUpSortRows(filtered, sortKey, sortDir) : filtered.slice();
             const thead = `<thead><tr>${cols.map((c, i) => {
@@ -13616,6 +13653,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const size = document.getElementById('followUpPageSize');
             const statusFilters = document.getElementById('followUpStatusFilters');
             const searchInput = document.getElementById('followUpSearchInput');
+            const dispSelect = document.getElementById('followUpDispositionSelect');
             followUpLoadPrefs();
             if (btn && !btn.dataset.bound) {
                 btn.dataset.bound = '1';
@@ -13665,6 +13703,16 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 searchInput.value = followUpSearchTerm || '';
                 searchInput.addEventListener('input', () => {
                     followUpSearchTerm = searchInput.value || '';
+                    followUpSavePrefs();
+                    const wrapEl = document.getElementById('follow-up-queue');
+                    if (wrapEl) followUpPaintTable(wrapEl);
+                });
+            }
+            if (dispSelect && !dispSelect.dataset.bound) {
+                dispSelect.dataset.bound = '1';
+                dispSelect.value = followUpDispositionFilter || 'all';
+                dispSelect.addEventListener('change', () => {
+                    followUpDispositionFilter = dispSelect.value || 'all';
                     followUpSavePrefs();
                     const wrapEl = document.getElementById('follow-up-queue');
                     if (wrapEl) followUpPaintTable(wrapEl);
@@ -13982,6 +14030,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const today = fu.today || {};
                 const q = payload.queue || {};
                 const top = Array.isArray(payload.topToCall) ? payload.topToCall : [];
+                const disp = payload.dispositions || {};
+                const dispToday = disp.today || {};
+                const dispTotal = disp.total || {};
 
                 const metrics = [
                     { label: 'New today (sheet)', value: `${formatNumber(today.total || 0)}` },
@@ -14004,6 +14055,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     }</ol>`
                     : `<div class="empty-state-message" style="padding:10px 0;">No “to call” rows found yet.</div>`;
 
+                const dispRow = (label, todayN, totalN) =>
+                    `<div style="display:flex;justify-content:space-between;gap:10px;font-size:0.85rem;color:var(--text-secondary,#5a5d72);">
+                        <span>${escapeHtml(label)}</span>
+                        <span style="font-variant-numeric:tabular-nums;"><strong>${formatNumber(todayN || 0)}</strong> today · ${formatNumber(totalN || 0)} total</span>
+                    </div>`;
+
                 host.innerHTML = `
                     <div class="activity-grid" style="padding:6px 0 2px;">
                         ${metrics.map((m) => `
@@ -14012,6 +14069,15 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                                 <div class="activity-metric-value">${escapeHtml(m.value)}</div>
                             </div>
                         `).join('')}
+                    </div>
+                    <div style="margin-top:10px;">
+                        <div class="meta-label" style="margin-bottom:6px;">Outcome breakdown</div>
+                        <div style="display:flex;flex-direction:column;gap:6px;">
+                            ${dispRow('Voicemail', dispToday.voicemail, dispTotal.voicemail)}
+                            ${dispRow('Spoke', dispToday.spoke, dispTotal.spoke)}
+                            ${dispRow('Call back', dispToday.callback, dispTotal.callback)}
+                            ${dispRow('Not interested', dispToday.not_interested, dispTotal.not_interested)}
+                        </div>
                     </div>
                     <div style="margin-top:10px;">
                         <div class="meta-label" style="margin-bottom:6px;">Top to call next</div>
