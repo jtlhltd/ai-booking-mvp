@@ -6744,7 +6744,6 @@
                         <button type="button" class="export-btn secondary" data-fu-bulk="spoke">Bulk Spoke</button>
                         <button type="button" class="export-btn secondary" data-fu-bulk="callback">Bulk Call back</button>
                         <button type="button" class="export-btn secondary" data-fu-bulk="not_interested">Bulk Not int.</button>
-                        <button type="button" class="export-btn secondary" data-fu-bulk="dnc">Bulk DNC</button>
                     </div>
                     <label class="follow-up-page-size" title="Disposition filter" style="display:inline-flex;gap:6px;align-items:center;">
                         <span class="sr-only">Disposition filter</span>
@@ -13385,7 +13384,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 if (k === 'spoke') return { Status: 'Called', Disposition: 'Spoke', 'Callback Needed': 'TRUE', 'Last Outcome At': nowIso };
                 if (k === 'callback') return { Status: 'To call', Disposition: 'Call back', 'Callback Needed': 'FALSE', 'Last Outcome At': nowIso };
                 if (k === 'not_interested') return { Status: 'Disqualified', Disposition: 'Not interested', 'Callback Needed': 'FALSE', 'Last Outcome At': nowIso };
-                if (k === 'dnc') return { Status: 'Do not call', Disposition: 'Do not call', 'Callback Needed': 'FALSE', 'Last Outcome At': nowIso };
                 return null;
             };
             const patch = mapAction(kind);
@@ -13469,7 +13467,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             return `<span class="fu-inline-actions">` +
                 `<button type="button" class="fu-mini-btn" data-fu-action="setStatus" data-fu-value="To call" title="Move back to To call">To call</button>` +
                 `<button type="button" class="fu-mini-btn" data-fu-action="setStatus" data-fu-value="Called" title="Mark as Called">Called</button>` +
-                `<button type="button" class="fu-mini-btn fu-mini-btn--warn" data-fu-action="setStatus" data-fu-value="Do not call" title="Do not call again">DNC</button>` +
                 `<button type="button" class="fu-mini-btn fu-mini-btn--muted" data-fu-action="setStatus" data-fu-value="Disqualified" title="Not a fit / no need">Disqualify</button>` +
             `</span>`;
         }
