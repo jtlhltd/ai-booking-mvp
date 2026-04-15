@@ -13553,7 +13553,9 @@ app.get('/api/follow-up-queue/:clientKey', async (req, res) => {
       });
     }
 
-  const { rows: rawRows } = await sheets.readSheet(spreadsheetId, 'Sheet1!A:V');
+  // Ensure header includes ops fields (Status/Disposition/Callback Window) so the dashboard can persist dispositions.
+  await sheets.ensureLogisticsHeader(spreadsheetId);
+  const { rows: rawRows } = await sheets.readSheet(spreadsheetId, 'Sheet1!A:Z');
   let records = sheets.logisticsSheetRowsToRecords(rawRows).map((r, idx) => ({
     ...r,
     _row: idx + 2 // header is row 1

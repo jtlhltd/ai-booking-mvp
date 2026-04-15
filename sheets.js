@@ -38,8 +38,32 @@ export const LOGISTICS_HEADERS = [
   'Timestamp','Business Name','Decision Maker','Phone','Email','International (Y/N)',
   'Main Couriers','International Shipments per Week','Main Countries','Example Shipment (weight x dims)','Example Shipment Cost',
   'UK Shipments per Week','UK Courier','Std Rate up to KG','Excl Fuel & VAT?','Single vs Multi-parcel',
-  'Receptionist Name','Callback Needed','Call ID','Recording URI','Transcript Snippet','Called Number'
+  'Receptionist Name','Callback Needed','Call ID','Recording URI','Transcript Snippet','Called Number',
+  // V1 follow-up ops fields (persisted by dashboard)
+  'Status','Disposition','Callback Window'
 ];
+
+function sheetColLetterFromIndex(idx1Based) {
+  let n = Number(idx1Based) || 0;
+  if (!Number.isFinite(n) || n <= 0) return 'A';
+  let s = '';
+  while (n > 0) {
+    n -= 1;
+    s = String.fromCharCode(65 + (n % 26)) + s;
+    n = Math.floor(n / 26);
+  }
+  return s;
+}
+
+function logisticsSheetRangeA1() {
+  const end = sheetColLetterFromIndex(LOGISTICS_HEADERS.length);
+  return `Sheet1!A:${end}`;
+}
+
+function logisticsRowRangeA1(rowNumber) {
+  const end = sheetColLetterFromIndex(LOGISTICS_HEADERS.length);
+  return `Sheet1!A${rowNumber}:${end}${rowNumber}`;
+}
 
 export async function ensureHeader(spreadsheetId) {
   const s = await getClient();
@@ -55,7 +79,7 @@ export async function ensureLogisticsHeader(spreadsheetId) {
   const s = await getClient();
   await s.spreadsheets.values.update({
     spreadsheetId,
-    range: 'Sheet1!A1:V1',
+    range: `Sheet1!A1:${sheetColLetterFromIndex(LOGISTICS_HEADERS.length)}1`,
     valueInputOption: 'RAW',
     requestBody: { values: [LOGISTICS_HEADERS] }
   });
@@ -368,7 +392,7 @@ export async function updateLogisticsStatusByRow(spreadsheetId, rowNumber, { cal
     return false;
   }
   try {
-    const range = `Sheet1!A${rowNumber}:V${rowNumber}`;
+    const range = logisticsRowRangeA1(rowNumber);
     const current = await s.spreadsheets.values.get({
       spreadsheetId,
       range
@@ -379,6 +403,9 @@ export async function updateLogisticsStatusByRow(spreadsheetId, rowNumber, { cal
     // Re-use the existing "Callback Needed" logistics column to persist our Called? flag.
     if (headerMap['Callback Needed'] !== undefined) {
       row[headerMap['Callback Needed']] = called ? 'TRUE' : 'FALSE';
+    }
+    if (headerMap['Status'] !== undefined) {
+      row[headerMap['Status']] = called ? 'Called' : 'To call';
     }
     await s.spreadsheets.values.update({
       spreadsheetId,
@@ -405,7 +432,7 @@ export async function patchLogisticsRowByNumber(spreadsheetId, rowNumber, patch 
   if (!entries.length) return true;
 
   try {
-    const range = `Sheet1!A${rowNumber}:V${rowNumber}`;
+    const range = logisticsRowRangeA1(rowNumber);
     const current = await s.spreadsheets.values.get({ spreadsheetId, range });
     const row = (current.data.values && current.data.values[0]) ? [...current.data.values[0]] : [];
     while (row.length < LOGISTICS_HEADERS.length) row.push('');
@@ -442,7 +469,7 @@ export async function updateLogisticsCalledFlag(spreadsheetId, { callId = '', ph
   try {
     const response = await s.spreadsheets.values.get({
       spreadsheetId,
-      range: 'Sheet1!A:V'
+      range: logisticsSheetRangeA1()
     });
     const rows = response.data.values || [];
     if (rows.length < 2) return false;

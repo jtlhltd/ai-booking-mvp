@@ -4878,6 +4878,101 @@
             max-width: none;
         }
 
+        .fu-status-cell {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .status-tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            line-height: 1.2;
+            border: 1px solid rgba(92, 106, 196, 0.22);
+            background: rgba(92, 106, 196, 0.06);
+            color: var(--primary);
+            white-space: nowrap;
+        }
+
+        .status-tag--called {
+            background: rgba(27, 94, 32, 0.10);
+            border-color: rgba(27, 94, 32, 0.25);
+            color: #1b5e20;
+        }
+
+        .status-tag--todo {
+            background: rgba(245, 166, 35, 0.10);
+            border-color: rgba(245, 166, 35, 0.30);
+            color: #8a4b00;
+        }
+
+        .status-tag--dnc {
+            background: rgba(198, 40, 40, 0.10);
+            border-color: rgba(198, 40, 40, 0.28);
+            color: #9b1c1c;
+        }
+
+        .status-tag--disq {
+            background: rgba(107, 114, 128, 0.12);
+            border-color: rgba(107, 114, 128, 0.24);
+            color: #374151;
+        }
+
+        body[data-theme="dark"] .status-tag--called { color: #86efac; border-color: rgba(134, 239, 172, 0.35); background: rgba(22, 163, 74, 0.18); }
+        body[data-theme="dark"] .status-tag--todo { color: #fde68a; border-color: rgba(253, 230, 138, 0.35); background: rgba(245, 158, 11, 0.18); }
+        body[data-theme="dark"] .status-tag--dnc { color: #fecaca; border-color: rgba(254, 202, 202, 0.35); background: rgba(220, 38, 38, 0.18); }
+        body[data-theme="dark"] .status-tag--disq { color: #e5e7eb; border-color: rgba(229, 231, 235, 0.25); background: rgba(148, 163, 184, 0.12); }
+
+        .fu-inline-actions {
+            display: inline-flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .fu-mini-btn {
+            padding: 4px 8px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            border-radius: 8px;
+            border: 1px solid rgba(17, 24, 39, 0.12);
+            background: rgba(255, 255, 255, 0.82);
+            color: rgba(17, 24, 39, 0.86);
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .fu-mini-btn:hover {
+            background: rgba(255, 255, 255, 1);
+            border-color: rgba(17, 24, 39, 0.22);
+        }
+
+        .fu-mini-btn--warn {
+            border-color: rgba(198, 40, 40, 0.22);
+            background: rgba(198, 40, 40, 0.06);
+            color: #9b1c1c;
+        }
+
+        .fu-mini-btn--muted {
+            border-color: rgba(107, 114, 128, 0.18);
+            background: rgba(107, 114, 128, 0.08);
+            color: #374151;
+        }
+
+        body[data-theme="dark"] .fu-mini-btn {
+            background: rgba(15, 23, 42, 0.65);
+            border-color: rgba(148, 163, 184, 0.24);
+            color: rgba(226, 232, 240, 0.92);
+        }
+        body[data-theme="dark"] .fu-mini-btn:hover { background: rgba(15, 23, 42, 0.92); border-color: rgba(148, 163, 184, 0.4); }
+        body[data-theme="dark"] .fu-mini-btn--warn { color: #fecaca; border-color: rgba(254, 202, 202, 0.28); background: rgba(220, 38, 38, 0.14); }
+        body[data-theme="dark"] .fu-mini-btn--muted { color: #e5e7eb; border-color: rgba(229, 231, 235, 0.22); background: rgba(148, 163, 184, 0.12); }
+
         .follow-up-copy-btn {
             flex-shrink: 0;
             margin: 0;
@@ -6630,6 +6725,9 @@
                     <div class="follow-up-status-filters" id="followUpStatusFilters" role="group" aria-label="Filter follow-up rows by status">
                         <button type="button" class="follow-up-status-chip follow-up-status-chip--active" data-fu-status-filter="todo">Need Calling</button>
                         <button type="button" class="follow-up-status-chip" data-fu-status-filter="called">Called</button>
+                        <button type="button" class="follow-up-status-chip" data-fu-status-filter="dnc">DNC</button>
+                        <button type="button" class="follow-up-status-chip" data-fu-status-filter="disqualified">Disqualified</button>
+                        <button type="button" class="follow-up-status-chip" data-fu-status-filter="all">All</button>
                     </div>
                     <input type="search" id="followUpSearchInput" class="dashboard-list-search" placeholder="Search business, name, phone, notes…" autocomplete="off" enterkeyhint="search" style="max-width:260px;">
                     <div class="follow-up-pager" id="followUpQueuePager" aria-label="Follow-up list pagination">
@@ -12934,6 +13032,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             'Decision Maker',
             'Phone',
             'Email',
+            'Status',
+            'Disposition',
+            'Callback Window',
             'Called?',
             'International (Y/N)',
             'Main Couriers',
@@ -12964,7 +13065,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         };
 
         let followUpQueuePage = 1;
-        let followUpStatusFilter = 'todo'; // todo | called
+        let followUpStatusFilter = 'todo'; // todo | called | dnc | disqualified | all
         let followUpSearchTerm = '';
 
         function followUpLoadPrefs() {
@@ -12972,7 +13073,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const ps = parseInt(localStorage.getItem('dash.fu.pageSize') || '', 10);
                 if (Number.isFinite(ps)) followUpQueueState.limit = Math.min(200, Math.max(1, ps));
                 const sf = localStorage.getItem('dash.fu.statusFilter') || '';
-                if (sf === 'todo' || sf === 'called') followUpStatusFilter = sf;
+                if (['todo', 'called', 'dnc', 'disqualified', 'all'].includes(sf)) followUpStatusFilter = sf;
                 followUpSearchTerm = localStorage.getItem('dash.fu.search') || '';
             } catch {}
         }
@@ -13100,9 +13201,17 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     if (!haystack.includes(term)) return false;
                 }
                 const statusRaw = String(row.Status || row['Status'] || '').trim().toLowerCase();
-                const status = statusRaw || 'to call';
-                if (followUpStatusFilter === 'called') return status === 'called';
-                if (followUpStatusFilter === 'todo') return status !== 'called';
+                const dispRaw = String(row.Disposition || row['Disposition'] || '').trim().toLowerCase();
+                const status = statusRaw || (dispRaw ? dispRaw : 'to call');
+                const isCalled = status === 'called';
+                const isDnc = status.includes('do not call') || status === 'dnc' || dispRaw.includes('do not call') || dispRaw === 'dnc';
+                const isDisqualified = status.includes('disqual') || dispRaw.includes('disqual');
+                if (followUpStatusFilter === 'called') return isCalled;
+                if (followUpStatusFilter === 'dnc') return isDnc;
+                if (followUpStatusFilter === 'disqualified') return isDisqualified;
+                if (followUpStatusFilter === 'all') return true;
+                // todo: everything else that isn't "called" or terminal
+                return !isCalled && !isDnc && !isDisqualified;
             });
             const displayRows = sortKey ? followUpSortRows(filtered, sortKey, sortDir) : filtered.slice();
             const thead = `<thead><tr>${cols.map((c, i) => {
@@ -13157,11 +13266,43 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             return `<button type="button" class="fu-pencil-btn" data-fu-edit="1" data-fu-edit-col="${escapeHtml(col)}" aria-label="${escapeHtml(aria)}" ${disabled ? 'disabled style="opacity:0.55;cursor:not-allowed"' : ''}>✎</button>`;
         }
 
+        function followUpStatusBadgeHtml(statusRaw) {
+            const s = String(statusRaw || '').trim();
+            const sl = s.toLowerCase();
+            if (!s) return '<span class="status-tag status-tag--todo">To call</span>';
+            if (sl === 'called') return '<span class="status-tag status-tag--called">Called</span>';
+            if (sl.includes('do not call') || sl === 'dnc') return '<span class="status-tag status-tag--dnc">DNC</span>';
+            if (sl.includes('disqual')) return '<span class="status-tag status-tag--disq">Disqualified</span>';
+            return `<span class="status-tag status-tag--other" title="${escapeHtml(s)}">${escapeHtml(s)}</span>`;
+        }
+
+        function followUpInlineActionsHtml() {
+            return `<span class="fu-inline-actions">` +
+                `<button type="button" class="fu-mini-btn" data-fu-action="setStatus" data-fu-value="To call" title="Move back to To call">To call</button>` +
+                `<button type="button" class="fu-mini-btn" data-fu-action="setStatus" data-fu-value="Called" title="Mark as Called">Called</button>` +
+                `<button type="button" class="fu-mini-btn fu-mini-btn--warn" data-fu-action="setStatus" data-fu-value="Do not call" title="Do not call again">DNC</button>` +
+                `<button type="button" class="fu-mini-btn fu-mini-btn--muted" data-fu-action="setStatus" data-fu-value="Disqualified" title="Not a fit / no need">Disqualify</button>` +
+            `</span>`;
+        }
+
         function formatFollowUpCell(col, val, row = null, extra = null) {
             const v = String(val || '').trim();
             const canEdit = row && typeof row._row === 'number';
             if (col === 'Recording URI' && /^https?:\/\//i.test(v)) {
                 return `<span class="fu-cell-actions"><a href="${escapeHtml(v)}" target="_blank" rel="noopener noreferrer">Open</a>${followUpPencilBtn(col, !canEdit)}</span>`;
+            }
+            if (col === 'Status') {
+                const badge = followUpStatusBadgeHtml(v);
+                const actions = canEdit ? followUpInlineActionsHtml() : '';
+                return `<div class="fu-status-cell">${badge}${actions}${followUpPencilBtn(col, !canEdit)}</div>`;
+            }
+            if (col === 'Disposition') {
+                const label = v || '—';
+                return `<span class="fu-cell-actions"><span title="${escapeHtml(label)}">${escapeHtml(label)}</span>${followUpPencilBtn(col, !canEdit)}</span>`;
+            }
+            if (col === 'Callback Window') {
+                const label = v || '—';
+                return `<span class="fu-cell-actions"><span title="${escapeHtml(label)}">${escapeHtml(label)}</span>${followUpPencilBtn(col, !canEdit)}</span>`;
             }
             if (col === 'Called?') {
                 const booly = String(v || '').trim().toLowerCase();
@@ -13494,6 +13635,59 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         const tr = editBtn.closest('tr');
                         const key = tr && tr.getAttribute('data-fu-key');
                         if (td && colName && key) followUpBeginEditCell(td, colName, key);
+                        return;
+                    }
+                    const miniActionBtn = e.target.closest('[data-fu-action]');
+                    if (miniActionBtn) {
+                        const tr = miniActionBtn.closest('tr');
+                        const key = tr && tr.getAttribute('data-fu-key');
+                        const action = miniActionBtn.getAttribute('data-fu-action') || '';
+                        const value = miniActionBtn.getAttribute('data-fu-value') || '';
+                        if (!key || !action) return;
+
+                        const row = followUpQueueState.rawRows.find((r) => followUpRowKey(r) === key);
+                        if (!row || typeof row._row !== 'number') return;
+
+                        if (action === 'setStatus') {
+                            const nextStatus = String(value || '').trim() || 'To call';
+                            const nextStatusLower = nextStatus.toLowerCase();
+                            const called = nextStatusLower === 'called';
+                            const nextDisp = (nextStatusLower.includes('do not call') || nextStatusLower === 'dnc' || nextStatusLower.includes('disqual'))
+                                ? nextStatus
+                                : (String(row.Disposition || '').trim());
+
+                            // Optimistic update (Status + Called?)
+                            followUpQueueState.rawRows = followUpQueueState.rawRows.map((r) => {
+                                if (followUpRowKey(r) !== key) return r;
+                                return {
+                                    ...r,
+                                    Status: nextStatus,
+                                    'Called?': called ? 'TRUE' : 'FALSE',
+                                    ...(nextDisp ? { Disposition: nextDisp } : {})
+                                };
+                            });
+                            followUpPaintTable(wrap);
+
+                            // Persist to sheet
+                            fetch(`${BASE_URL}/api/follow-up-queue/${encodeURIComponent(currentClient)}/patch`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    row: row._row,
+                                    patch: {
+                                        Status: nextStatus,
+                                        ...(nextDisp ? { Disposition: nextDisp } : {}),
+                                        'Callback Needed': called ? 'TRUE' : 'FALSE'
+                                    }
+                                })
+                            }).then(async (res) => {
+                                const payload = await res.json().catch(() => ({}));
+                                if (!res.ok || !payload?.ok) throw new Error(payload?.error || `HTTP ${res.status}`);
+                            }).catch((err) => {
+                                console.warn('Failed to persist follow-up status action', err);
+                                showToast('Save failed', 'Could not save status to sheet. Please try again.', 'error', 3500);
+                            });
+                        }
                         return;
                     }
                     const calledCb = e.target.closest('[data-fu-called]');
