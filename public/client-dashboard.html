@@ -13299,6 +13299,15 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             `</span>`;
         }
 
+        function followUpDispositionActionsHtml() {
+            return `<span class="fu-inline-actions">` +
+                `<button type="button" class="fu-mini-btn" data-fu-action="setDisposition" data-fu-value="Voicemail" title="Left voicemail (follow-up later)">VM</button>` +
+                `<button type="button" class="fu-mini-btn" data-fu-action="setDisposition" data-fu-value="Spoke" title="Spoke to them (human answered)">Spoke</button>` +
+                `<button type="button" class="fu-mini-btn fu-mini-btn--muted" data-fu-action="setDisposition" data-fu-value="Call back" title="Asked for a call back (set callback window)">Call back</button>` +
+                `<button type="button" class="fu-mini-btn fu-mini-btn--warn" data-fu-action="setDisposition" data-fu-value="Not interested" title="Not interested / no need">Not int.</button>` +
+            `</span>`;
+        }
+
         function formatFollowUpCell(col, val, row = null, extra = null) {
             const v = String(val || '').trim();
             const canEdit = row && typeof row._row === 'number';
@@ -13321,7 +13330,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
             if (col === 'Disposition') {
                 const label = v || '—';
-                return `<span class="fu-cell-actions"><span title="${escapeHtml(label)}">${escapeHtml(label)}</span>${followUpPencilBtn(col, !canEdit)}</span>`;
+                const actions = canEdit ? followUpDispositionActionsHtml() : '';
+                const badge = v ? `<span class="status-tag status-tag--other" title="${escapeHtml(label)}">${escapeHtml(label)}</span>` : '';
+                return `<div class="fu-status-cell">${badge}${actions}${followUpPencilBtn(col, !canEdit)}</div>`;
             }
             if (col === 'Callback Window') {
                 const label = v || '—';
@@ -13744,6 +13755,52 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                                 console.warn('Failed to persist follow-up status action', err);
                                 showToast('Save failed', 'Could not save status to sheet. Please try again.', 'error', 3500);
                             });
+                        }
+                        if (action === 'setDisposition') {
+                            const nextDisp = String(value || '').trim() || '';
+                            const dispLower = nextDisp.toLowerCase();
+                            let nextStatus = String(row.Status || '').trim() || 'To call';
+                            if (dispLower.includes('not interested')) nextStatus = 'Disqualified';
+                            else if (dispLower === 'spoke') nextStatus = 'Called';
+                            else nextStatus = 'To call';
+                            const called = String(nextStatus).toLowerCase() === 'called';
+
+                            // Optimistic update
+                            followUpQueueState.rawRows = followUpQueueState.rawRows.map((r) => {
+                                if (followUpRowKey(r) !== key) return r;
+                                return {
+                                    ...r,
+                                    Disposition: nextDisp,
+                                    Status: nextStatus,
+                                    'Called?': called ? 'TRUE' : 'FALSE'
+                                };
+                            });
+                            followUpPaintTable(wrap);
+
+                            // Persist to sheet
+                            fetch(`${BASE_URL}/api/follow-up-queue/${encodeURIComponent(currentClient)}/patch`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    row: row._row,
+                                    patch: {
+                                        Disposition: nextDisp,
+                                        Status: nextStatus,
+                                        'Callback Needed': called ? 'TRUE' : 'FALSE'
+                                    }
+                                })
+                            }).then(async (res) => {
+                                const payload = await res.json().catch(() => ({}));
+                                if (!res.ok || !payload?.ok) throw new Error(payload?.error || `HTTP ${res.status}`);
+                            }).catch((err) => {
+                                console.warn('Failed to persist follow-up disposition action', err);
+                                showToast('Save failed', 'Could not save disposition to sheet. Please try again.', 'error', 3500);
+                            });
+
+                            if (dispLower === 'call back') {
+                                // Nudge the operator to fill callback window (keeps it lightweight; still editable inline).
+                                showToast('Callback', 'Set a callback window (edit “Callback Window”).', 'success', 3200);
+                            }
                         }
                         return;
                     }
