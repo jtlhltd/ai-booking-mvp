@@ -13038,6 +13038,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             'Decision Maker',
             'Phone',
             'Email',
+            'Priority',
             'Status',
             'Disposition',
             'Callback Window',
@@ -13144,6 +13145,11 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
         function followUpCellSortValue(col, val) {
             const v = String(val ?? '').trim();
+            if (col === 'Priority') {
+                const n = Number(v);
+                if (Number.isFinite(n)) return { kind: 'num', v: n };
+                return { kind: 'str', v: v.toLowerCase() };
+            }
             if (col === 'Timestamp') {
                 const t = followUpParseUkTimestamp(v);
                 if (Number.isFinite(t)) return { kind: 'num', v: t };
@@ -13298,6 +13304,15 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const canEdit = row && typeof row._row === 'number';
             if (col === 'Recording URI' && /^https?:\/\//i.test(v)) {
                 return `<span class="fu-cell-actions"><a href="${escapeHtml(v)}" target="_blank" rel="noopener noreferrer">Open</a>${followUpPencilBtn(col, !canEdit)}</span>`;
+            }
+            if (col === 'Priority') {
+                const n = Number(v);
+                const lvl = Number.isFinite(n)
+                    ? (n >= 110 ? 'high' : n >= 100 ? 'med' : n >= 10 ? 'low' : 'low')
+                    : 'low';
+                const label = lvl === 'high' ? 'High' : lvl === 'med' ? 'Med' : 'Low';
+                const cls = lvl === 'high' ? 'status-tag--called' : lvl === 'med' ? 'status-tag--todo' : 'status-tag--disq';
+                return `<span class="status-tag ${cls}" title="Best-next-call score: ${escapeHtml(String(v || '0'))}">${label}</span>`;
             }
             if (col === 'Status') {
                 const badge = followUpStatusBadgeHtml(v);
@@ -13509,6 +13524,14 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     if (!copy.Status) {
                         copy.Status = isCalled ? 'Called' : 'To call';
                     }
+                    // V1: derived "best next call" score for sorting (does not persist to sheet)
+                    const cb = String(copy['Callback Window'] || '').trim();
+                    const hasCb = cb ? 1 : 0;
+                    const hasDm = String(copy['Decision Maker'] || '').trim() ? 1 : 0;
+                    const hasEmail = String(copy.Email || '').trim() ? 1 : 0;
+                    const tsMs = followUpParseUkTimestamp(copy.Timestamp);
+                    const recency = Number.isFinite(tsMs) ? Math.floor(tsMs / 1000) : 0;
+                    copy.Priority = String(hasCb * 100 + hasDm * 10 + hasEmail * 5 + recency);
                     return copy;
                 });
                 const cols = followUpVisibleColumns(rows);
@@ -13516,8 +13539,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 followUpQueueState = {
                     rawRows: rows.slice(),
                     cols,
-                    sortKey: cols.includes(priorSortKey) ? priorSortKey : null,
-                    sortDir: cols.includes(priorSortKey) ? (priorSortDir || 'desc') : 'desc',
+                    sortKey: cols.includes(priorSortKey)
+                        ? priorSortKey
+                        : (isOutreachDashboardClient(clientKey) ? 'Priority' : null),
+                    sortDir: cols.includes(priorSortKey)
+                        ? (priorSortDir || 'desc')
+                        : (isOutreachDashboardClient(clientKey) ? 'desc' : 'desc'),
                     total: data.total != null ? data.total : rows.length,
                     offset: data.offset != null ? data.offset : offset,
                     limit: data.limit != null ? data.limit : limit
