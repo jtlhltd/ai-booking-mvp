@@ -13962,6 +13962,45 @@ app.post('/api/follow-up-queue/:clientKey/patch', async (req, res) => {
   }
 });
 
+// Batch patch follow-up rows (reduce N HTTP calls for bulk actions)
+app.post('/api/follow-up-queue/:clientKey/batchPatch', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const { patches } = req.body || {};
+    if (!Array.isArray(patches) || patches.length < 1) {
+      return res.status(400).json({ ok: false, error: 'invalid_patches' });
+    }
+    if (patches.length > 200) {
+      return res.status(400).json({ ok: false, error: 'too_many', message: 'Max 200 patches per request' });
+    }
+
+    const client = await getFullClient(clientKey);
+    const spreadsheetId = resolveLogisticsSpreadsheetId(client);
+    if (!spreadsheetId) {
+      return res.status(400).json({ ok: false, error: 'sheet_not_configured' });
+    }
+
+    const results = [];
+    let okCount = 0;
+    for (const item of patches) {
+      const rowNumber = parseInt(item?.row, 10);
+      const patch = item?.patch;
+      if (!Number.isFinite(rowNumber) || rowNumber < 2 || !patch || typeof patch !== 'object' || Array.isArray(patch)) {
+        results.push({ ok: false, row: item?.row, error: 'invalid_item' });
+        continue;
+      }
+      const ok = await sheets.patchLogisticsRowByNumber(spreadsheetId, rowNumber, patch);
+      results.push({ ok: !!ok, row: rowNumber });
+      if (ok) okCount += 1;
+    }
+
+    res.json({ ok: true, updated: okCount, total: patches.length, results });
+  } catch (error) {
+    console.error('[FOLLOW-UP BATCH PATCH ERROR]', error);
+    res.status(500).json({ ok: false, error: error.message || String(error) });
+  }
+});
+
 // API endpoint for next actions queue
 app.get('/api/next-actions/:clientKey', cacheMiddleware({ ttl: 60000, keyPrefix: 'next-actions:' }), async (req, res) => {
   try {

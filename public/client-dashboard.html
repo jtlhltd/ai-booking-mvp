@@ -6722,12 +6722,25 @@
                 <p class="card-subtitle" id="followUpQueueSubtitle">Contacts and details captured from AI call transcripts into your linked Google Sheet — use this for human follow-up dials.</p>
                 <div class="dashboard-list-toolbar follow-up-queue-toolbar">
                     <button type="button" id="followUpQueueRefresh" class="export-btn secondary">Refresh</button>
+                    <div class="follow-up-status-filters" style="gap:6px;">
+                        <button type="button" class="export-btn secondary" id="followUpSelectAllBtn" title="Select all rows on this page">Select page</button>
+                        <button type="button" class="export-btn secondary" id="followUpClearSelectionBtn" title="Clear selection">Clear</button>
+                        <span id="followUpSelectedCount" class="dashboard-search-hint" style="margin-left:4px;" hidden></span>
+                    </div>
                     <div class="follow-up-status-filters" id="followUpStatusFilters" role="group" aria-label="Filter follow-up rows by status">
                         <button type="button" class="follow-up-status-chip follow-up-status-chip--active" data-fu-status-filter="todo">Need Calling</button>
                         <button type="button" class="follow-up-status-chip" data-fu-status-filter="called">Called</button>
                         <button type="button" class="follow-up-status-chip" data-fu-status-filter="dnc">DNC</button>
                         <button type="button" class="follow-up-status-chip" data-fu-status-filter="disqualified">Disqualified</button>
                         <button type="button" class="follow-up-status-chip" data-fu-status-filter="all">All</button>
+                    </div>
+                    <div class="follow-up-status-filters" id="followUpBulkActions" role="group" aria-label="Bulk actions for selected follow-up rows">
+                        <button type="button" class="export-btn secondary" data-fu-bulk="called">Bulk Called</button>
+                        <button type="button" class="export-btn secondary" data-fu-bulk="vm">Bulk VM</button>
+                        <button type="button" class="export-btn secondary" data-fu-bulk="spoke">Bulk Spoke</button>
+                        <button type="button" class="export-btn secondary" data-fu-bulk="callback">Bulk Call back</button>
+                        <button type="button" class="export-btn secondary" data-fu-bulk="not_interested">Bulk Not int.</button>
+                        <button type="button" class="export-btn secondary" data-fu-bulk="dnc">Bulk DNC</button>
                     </div>
                     <label class="follow-up-page-size" title="Disposition filter" style="display:inline-flex;gap:6px;align-items:center;">
                         <span class="sr-only">Disposition filter</span>
@@ -13089,6 +13102,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         let followUpStatusFilter = 'todo'; // todo | called | dnc | disqualified | all
         let followUpSearchTerm = '';
         let followUpDispositionFilter = 'all'; // all | voicemail | spoke | callback | not_interested | none | other
+        const followUpSelectedKeys = new Set();
 
         function followUpLoadPrefs() {
             try {
@@ -13265,7 +13279,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 return true;
             });
             const displayRows = sortKey ? followUpSortRows(filtered, sortKey, sortDir) : filtered.slice();
-            const thead = `<thead><tr>${cols.map((c, i) => {
+            const thead = `<thead><tr>${
+                `<th scope="col" data-col="select"><span class="sr-only">Select</span></th>` +
+                cols.map((c, i) => {
                 const slug = followUpDataColSlug(c);
                 const isActive = sortKey === c;
                 const ariaSort = isActive ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none';
@@ -13278,6 +13294,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     `<span class="follow-up-th-sort" aria-hidden="true">${ind}</span></button></th>`;
             }).join('')}</tr></thead>`;
             const tbody = displayRows.map((row) => {
+                const key = followUpRowKey(row);
+                const selected = followUpSelectedKeys.has(key);
+                const selTd = `<td data-col="select"><input type="checkbox" data-fu-select="1" ${selected ? 'checked' : ''} aria-label="Select row"></td>`;
                 const tds = cols.map((c) => {
                     const slug = followUpDataColSlug(c);
                     const extra = c === 'Phone'
@@ -13285,10 +13304,80 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         : null;
                     return `<td data-col="${escapeHtml(slug)}">${formatFollowUpCell(c, row[c], row, extra)}</td>`;
                 }).join('');
-                const key = followUpRowKey(row);
-                return `<tr data-fu-key="${escapeHtml(key)}">${tds}</tr>`;
+                return `<tr data-fu-key="${escapeHtml(key)}">${selTd}${tds}</tr>`;
             }).join('');
             wrap.innerHTML = `<table class="follow-up-queue-table">${thead}<tbody>${tbody}</tbody></table>`;
+            followUpUpdateSelectionUi();
+        }
+
+        function followUpUpdateSelectionUi() {
+            const el = document.getElementById('followUpSelectedCount');
+            if (!el) return;
+            const n = followUpSelectedKeys.size;
+            if (!n) {
+                el.hidden = true;
+                el.textContent = '';
+                return;
+            }
+            el.hidden = false;
+            el.textContent = `${formatNumber(n)} selected`;
+        }
+
+        function followUpApplyBulkAction(kind) {
+            const selected = [...followUpSelectedKeys];
+            if (!selected.length) {
+                showToast('No selection', 'Select rows first.', 'error', 2500);
+                return;
+            }
+            const nowIso = new Date().toISOString();
+            const mapAction = (k) => {
+                if (k === 'called') return { Status: 'Called', Disposition: 'Spoke', 'Callback Needed': 'TRUE', 'Last Outcome At': nowIso };
+                if (k === 'vm') return { Status: 'To call', Disposition: 'Voicemail', 'Callback Needed': 'FALSE', 'Last Outcome At': nowIso };
+                if (k === 'spoke') return { Status: 'Called', Disposition: 'Spoke', 'Callback Needed': 'TRUE', 'Last Outcome At': nowIso };
+                if (k === 'callback') return { Status: 'To call', Disposition: 'Call back', 'Callback Needed': 'FALSE', 'Last Outcome At': nowIso };
+                if (k === 'not_interested') return { Status: 'Disqualified', Disposition: 'Not interested', 'Callback Needed': 'FALSE', 'Last Outcome At': nowIso };
+                if (k === 'dnc') return { Status: 'Do not call', Disposition: 'Do not call', 'Callback Needed': 'FALSE', 'Last Outcome At': nowIso };
+                return null;
+            };
+            const patch = mapAction(kind);
+            if (!patch) return;
+
+            // Optimistic update
+            const keySet = new Set(selected);
+            const rows = [];
+            followUpQueueState.rawRows = followUpQueueState.rawRows.map((r) => {
+                const rk = followUpRowKey(r);
+                if (!keySet.has(rk)) return r;
+                if (typeof r._row === 'number') rows.push(r._row);
+                return {
+                    ...r,
+                    Status: patch.Status,
+                    Disposition: patch.Disposition,
+                    'Called?': String(patch['Callback Needed'] || '').toUpperCase() === 'TRUE' ? 'TRUE' : 'FALSE',
+                    'Last Outcome At': nowIso
+                };
+            });
+            const wrapEl = document.getElementById('follow-up-queue');
+            if (wrapEl) followUpPaintTable(wrapEl);
+
+            // Persist in one request
+            const payload = {
+                patches: followUpQueueState.rawRows
+                    .filter((r) => keySet.has(followUpRowKey(r)) && typeof r._row === 'number')
+                    .map((r) => ({ row: r._row, patch }))
+            };
+            fetch(`${BASE_URL}/api/follow-up-queue/${encodeURIComponent(currentClient)}/batchPatch`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).then(async (res) => {
+                const out = await res.json().catch(() => ({}));
+                if (!res.ok || !out?.ok) throw new Error(out?.error || `HTTP ${res.status}`);
+                showToast('Saved', `Updated ${formatNumber(out.updated || 0)} row(s).`, 'success', 2500);
+            }).catch((err) => {
+                console.warn('Bulk patch failed', err);
+                showToast('Save failed', 'Bulk update failed. Please try again.', 'error', 3500);
+            });
         }
 
         function followUpVisibleColumns(rows) {
@@ -13648,13 +13737,42 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
         function initFollowUpQueueUi() {
             const btn = document.getElementById('followUpQueueRefresh');
+            const selectAll = document.getElementById('followUpSelectAllBtn');
+            const clearSel = document.getElementById('followUpClearSelectionBtn');
             const prev = document.getElementById('followUpPrevPage');
             const next = document.getElementById('followUpNextPage');
             const size = document.getElementById('followUpPageSize');
             const statusFilters = document.getElementById('followUpStatusFilters');
             const searchInput = document.getElementById('followUpSearchInput');
             const dispSelect = document.getElementById('followUpDispositionSelect');
+            const bulkBar = document.getElementById('followUpBulkActions');
             followUpLoadPrefs();
+            if (selectAll && !selectAll.dataset.bound) {
+                selectAll.dataset.bound = '1';
+                selectAll.addEventListener('click', () => {
+                    followUpQueueState.rawRows.forEach((r) => followUpSelectedKeys.add(followUpRowKey(r)));
+                    const wrapEl = document.getElementById('follow-up-queue');
+                    if (wrapEl) followUpPaintTable(wrapEl);
+                });
+            }
+            if (clearSel && !clearSel.dataset.bound) {
+                clearSel.dataset.bound = '1';
+                clearSel.addEventListener('click', () => {
+                    followUpSelectedKeys.clear();
+                    followUpUpdateSelectionUi();
+                    const wrapEl = document.getElementById('follow-up-queue');
+                    if (wrapEl) followUpPaintTable(wrapEl);
+                });
+            }
+            if (bulkBar && !bulkBar.dataset.bound) {
+                bulkBar.dataset.bound = '1';
+                bulkBar.addEventListener('click', (e) => {
+                    const b = e.target.closest('[data-fu-bulk]');
+                    if (!b) return;
+                    const kind = b.getAttribute('data-fu-bulk');
+                    if (kind) followUpApplyBulkAction(kind);
+                });
+            }
             if (btn && !btn.dataset.bound) {
                 btn.dataset.bound = '1';
                 btn.addEventListener('click', () => loadFollowUpQueue(currentClient, { page: followUpQueuePage }));
@@ -13910,6 +14028,16 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                                 });
                             });
                         }
+                        return;
+                    }
+                    const sel = e.target.closest('[data-fu-select]');
+                    if (sel) {
+                        const tr = sel.closest('tr');
+                        const key = tr && tr.getAttribute('data-fu-key');
+                        if (!key) return;
+                        if (sel.checked) followUpSelectedKeys.add(key);
+                        else followUpSelectedKeys.delete(key);
+                        followUpUpdateSelectionUi();
                         return;
                     }
                     const btn = e.target.closest('.follow-up-th-btn');
