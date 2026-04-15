@@ -13335,6 +13335,18 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
       const sched = effectiveDialScheduledForApiDisplay(row, tenant);
       const schedOk = sched && !Number.isNaN(sched.getTime());
       const isCallQueue = row.source === 'call_queue';
+      const retryTypeLower = String(row.retry_type || '').toLowerCase().trim();
+      const status = String(row.status || '').toLowerCase().trim();
+      const retryDataObj = (() => {
+        const raw = row.retry_data;
+        if (!raw) return null;
+        if (typeof raw === 'object') return raw;
+        try { return JSON.parse(raw); } catch { return null; }
+      })();
+      const errorMsg =
+        retryDataObj && typeof retryDataObj.error === 'string' && retryDataObj.error.trim()
+          ? retryDataObj.error.trim()
+          : '';
       const nextRetryShort = schedOk
         ? sched.toLocaleString('en-GB', {
           weekday: 'short',
@@ -13356,6 +13368,7 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
         id: isCallQueue ? `cq-${row.id}` : `rq-${row.id}`,
         dbId: row.id,
         source: row.source,
+        status,
         sourceLabel: isCallQueue ? 'Call queue' : 'Retry queue',
         retryType: row.retry_type || null,
         kindLabel: retryKindLabel(row.source, row.retry_type),
@@ -13368,9 +13381,11 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
         maxAttempts: isCallQueue ? 1 : row.max_retries,
         reason: isCallQueue
           ? 'Outbound call queued'
-          : (typeof row.retry_reason === 'string' && row.retry_reason.startsWith('follow_up_')
-            ? 'Follow-up call scheduled'
-            : (row.retry_reason || 'Scheduled follow-up')),
+          : (retryTypeLower === 'sheet_patch'
+            ? `Sheet write ${status || 'pending'}${row.retry_reason ? ` · ${row.retry_reason}` : ''}${errorMsg ? ` · ${errorMsg}` : ''}`
+            : (typeof row.retry_reason === 'string' && row.retry_reason.startsWith('follow_up_')
+              ? 'Follow-up call scheduled'
+              : (row.retry_reason || 'Scheduled follow-up'))),
         scheduledFor: schedOk ? sched.toISOString() : null,
         nextRetry: nextRetryShort,
         nextRetryLong
@@ -14062,7 +14077,7 @@ app.post('/api/follow-up-queue/:clientKey/patch', async (req, res) => {
           leadPhone: '__sheet__',
           retryType: 'sheet_patch',
           retryReason: 'follow_up_patch',
-          retryData: { rowNumber, patch },
+          retryData: { rowNumber, patch, error: 'sheet_patch_failed' },
           scheduledFor: new Date(),
           retryAttempt: 1,
           maxRetries: 5
@@ -14131,7 +14146,7 @@ app.post('/api/follow-up-queue/:clientKey/batchPatch', async (req, res) => {
             leadPhone: '__sheet__',
             retryType: 'sheet_patch',
             retryReason: 'follow_up_batch_patch',
-            retryData: { rowNumber, patch },
+            retryData: { rowNumber, patch, error: 'sheet_patch_failed' },
             scheduledFor: new Date(Date.now() + 60_000),
             retryAttempt: 1,
             maxRetries: 5

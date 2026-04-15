@@ -7848,6 +7848,7 @@
             const sourceLabel = lead.sourceLabel || (isQueuedCall ? 'Call queue' : 'Retry queue');
             const kindLabel = lead.kindLabel || (isQueuedCall ? 'Outbound call' : 'Follow-up');
             const metaParts = [];
+            const statusLower = String(lead.status || '').toLowerCase().trim();
             if (isDemo) {
                 metaParts.push(`Attempt ${Number(lead.attempts) || 0}`);
             } else if (isQueuedCall) {
@@ -7872,6 +7873,9 @@
                 const m = Number(lead.maxAttempts) || 0;
                 attemptBadge = m > 0 ? `Retry ${a} / ${m}` : `Retry ${a}`;
             }
+            const statusBadge = (!isDemo && !isQueuedCall && statusLower && statusLower !== 'pending')
+                ? `<span class="retry-badge">${escapeHtml(statusLower)}</span>`
+                : '';
             const chipLabel = isDemo ? 'Due' : (isQueuedCall ? 'Due' : 'Retry');
             const chipValue = escapeHtml(lead.nextRetry || '—');
             const chipExtra = relative ? `<span class="retry-due-relative">${escapeHtml(relative)}</span>` : '';
@@ -7927,6 +7931,7 @@
                                             <span class="retry-badge retry-badge--queue">${escapeHtml(sourceLabel)}</span>
                                             <span class="retry-badge retry-badge--kind">${escapeHtml(kindLabel)}</span>
                                             <span class="retry-badge">${escapeHtml(attemptBadge)}</span>
+                                            ${statusBadge}
                                         </div>
                                     </div>
                                     <div class="${chipClass}">${chipLabel}<span>${chipValue}</span>${chipExtra}</div>
