@@ -6760,6 +6760,12 @@
                     <div id="recent-activity" class="activity-grid activity-grid--rhythm thin-scroll"></div>
                 </article>
 
+                <article class="card card-list">
+                    <h3>🧾 Daily Summary</h3>
+                    <p class="card-subtitle" id="dailySummarySubtitle">Quick brief: what came in today, what’s due, and who to call next.</p>
+                    <div id="daily-summary" class="thin-scroll"></div>
+                </article>
+
                 <article class="card card-list tom-hide-for-outreach">
                     <h3>📅 Upcoming Appointments</h3>
                     <p class="card-subtitle" id="appointmentsSubtitle">Appointments we booked for you.</p>
@@ -13879,6 +13885,66 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             if (modal) modal.classList.remove('open');
         }
 
+        async function renderDailySummary() {
+            const host = document.getElementById('daily-summary');
+            if (!host || !currentClient) return;
+            host.innerHTML = '<div class="empty-state-message" style="padding:16px;">Loading…</div>';
+            try {
+                const res = await fetch(`${BASE_URL}/api/daily-summary/${encodeURIComponent(currentClient)}`, { cache: 'no-store' });
+                const payload = await res.json().catch(() => ({}));
+                if (!res.ok || !payload?.ok) throw new Error(payload?.message || payload?.error || `HTTP ${res.status}`);
+
+                const fu = payload.followUp || {};
+                const today = fu.today || {};
+                const q = payload.queue || {};
+                const top = Array.isArray(payload.topToCall) ? payload.topToCall : [];
+
+                const metrics = [
+                    { label: 'New today (sheet)', value: `${formatNumber(today.total || 0)}` },
+                    { label: 'Called today', value: `${formatNumber(today.called || 0)}` },
+                    { label: 'To call (queue)', value: `${formatNumber(fu.todo || 0)}` },
+                    { label: 'DNC / Disq', value: `${formatNumber((fu.dnc || 0) + (fu.disqualified || 0))}` },
+                    { label: 'Outbound due now', value: `${formatNumber(q.callQueueDueNow || 0)}` },
+                    { label: 'Retries due now', value: `${formatNumber(q.retryDueNow || 0)}` }
+                ];
+
+                const topHtml = top.length
+                    ? `<ol style="margin:10px 0 0 18px;padding:0;display:flex;flex-direction:column;gap:8px;">${
+                        top.slice(0, 8).map((t) => {
+                            const nm = t.businessName || t.decisionMaker || 'Prospect';
+                            const cb = t.callbackWindow ? ` · <strong>Callback:</strong> ${escapeHtml(t.callbackWindow)}` : '';
+                            const snip = t.transcriptSnippet ? `<div style="color:var(--text-secondary,#5a5d72);font-size:0.82rem;margin-top:2px;">${escapeHtml(t.transcriptSnippet).slice(0, 180)}</div>` : '';
+                            const phone = t.phone ? `<span style="font-variant-numeric:tabular-nums;">${escapeHtml(t.phone)}</span>` : '—';
+                            return `<li><div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;"><strong>${escapeHtml(nm)}</strong><span>${phone}</span>${cb}</div>${snip}</li>`;
+                        }).join('')
+                    }</ol>`
+                    : `<div class="empty-state-message" style="padding:10px 0;">No “to call” rows found yet.</div>`;
+
+                host.innerHTML = `
+                    <div class="activity-grid" style="padding:6px 0 2px;">
+                        ${metrics.map((m) => `
+                            <div class="activity-metric" style="min-height:unset;">
+                                <div class="activity-metric-label">${escapeHtml(m.label)}</div>
+                                <div class="activity-metric-value">${escapeHtml(m.value)}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div style="margin-top:10px;">
+                        <div class="meta-label" style="margin-bottom:6px;">Top to call next</div>
+                        ${topHtml}
+                    </div>
+                `;
+            } catch (e) {
+                host.innerHTML = `<div class="error-message" role="alert" style="margin:10px;">
+                    <span class="error-message-icon">⚠️</span>
+                    <div>
+                        <div style="font-weight:700;">Daily summary failed</div>
+                        <div style="font-size:0.9rem;margin-top:4px;">${escapeHtml(e?.message || 'Please try again later.')}</div>
+                    </div>
+                </div>`;
+            }
+        }
+
 
         function recordingMatchesOutcomeChip(outcome, chip) {
             if (!chip || chip === 'all') return true;
@@ -14796,6 +14862,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 renderCallQuality(dashboardData).catch(err => console.warn('Call quality failed', err)),
                 renderCallInsights(dashboardData).catch(err => console.warn('Call insights failed', err)),
                 renderRetryQueue(dashboardData).catch(err => console.warn('Retry queue failed', err)),
+                renderDailySummary().catch(err => console.warn('Daily summary failed', err)),
                 loadFollowUpQueue(currentClient).catch(err => console.warn('Follow-up list failed', err)),
                 renderCalendarDetails(dashboardData).catch(err => console.warn('Calendar details failed', err)),
                 renderCallRecordings(callsToRender).catch(err => console.warn('Call recordings failed', err)),
@@ -14852,6 +14919,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         await renderCallQuality(dashboardData);
                         await renderCallInsights(dashboardData);
                         await renderRetryQueue(dashboardData);
+                        await renderDailySummary();
                         await renderCalendarDetails(dashboardData);
                         renderChart(config, dashboardData);
                         syncDashboardFreshnessUi();
