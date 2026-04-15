@@ -304,9 +304,14 @@
 
         .dashboard-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(252px, 1fr));
-            gap: 10px;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 16px;
             align-items: stretch;
+        }
+
+        /* Daily Operations: keep cards readable (wrap sooner, don’t cram) */
+        .dashboard-section--operations-row .dashboard-grid {
+            grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
         }
 
         .dashboard-grid > .card {
@@ -4433,19 +4438,7 @@
             white-space: nowrap;
         }
 
-        .fu-called-cell {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 2px 6px;
-        }
-
-        .fu-called-checkbox {
-            width: 16px;
-            height: 16px;
-            accent-color: var(--primary, #5c6ac4);
-            cursor: pointer;
-        }
+        /* Called? checkbox removed from follow-up queue UI */
 
         .fu-dup-chip {
             display: inline-flex;
@@ -13122,7 +13115,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             'Status',
             'Disposition',
             'Callback Window',
-            'Called?',
             'International (Y/N)',
             'Main Couriers',
             'UK Courier',
@@ -13242,12 +13234,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 if (Number.isFinite(iso)) return { kind: 'num', v: iso };
                 return { kind: 'str', v: v.toLowerCase() };
             }
-            if (col === 'Called?') {
-                const u = v.toLowerCase();
-                if (u === 'true' || u === 'yes' || u === 'called') return { kind: 'num', v: 1 };
-                if (u === 'false' || u === 'no' || u === 'to call' || u === 'todo' || u === '') return { kind: 'num', v: 0 };
-                return { kind: 'num', v: 0 };
-            }
+            // Called? column removed from visible table (legacy sheet field)
             if (v === '' || v === '—') return { kind: 'empty', v: 0 };
             const numLoose = Number(v.replace(/,/g, ''));
             if (v !== '' && Number.isFinite(numLoose) && /^[\d.,\s]+$/.test(v)) return { kind: 'num', v: numLoose };
@@ -13519,12 +13506,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const label = v || '—';
                 return `<span class="fu-cell-actions"><span title="${escapeHtml(label)}">${escapeHtml(label)}</span>${followUpPencilBtn(col, !canEdit)}</span>`;
             }
-            if (col === 'Called?') {
-                const booly = String(v || '').trim().toLowerCase();
-                const isChecked = booly === 'true' || booly === 'yes' || booly === 'called';
-                const aria = isChecked ? 'Mark as not called' : 'Mark as called';
-                return `<div class="fu-called-cell"><input type="checkbox" class="fu-called-checkbox" data-fu-called aria-label="${escapeHtml(aria)}" ${isChecked ? 'checked' : ''}></div>`;
-            }
+            // Called? checkbox removed (use Status/Disposition pills)
             if (col === 'Email') {
                 const label = v || '—';
                 const copyBtn = v
@@ -13558,7 +13540,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             return escapeHtml(v || '—');
         }
 
-        const FOLLOW_UP_EDITABLE_COLUMNS = new Set(FOLLOW_UP_TABLE_COLUMNS.filter((c) => c !== 'Called?'));
+        const FOLLOW_UP_EDITABLE_COLUMNS = new Set(FOLLOW_UP_TABLE_COLUMNS);
         let followUpEditing = false;
 
         function followUpBeginEditCell(td, colName, rowKey) {
@@ -14030,61 +14012,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         }
                         return;
                     }
-                    const calledCb = e.target.closest('[data-fu-called]');
-                    if (calledCb) {
-                        const tr = calledCb.closest('tr');
-                        const key = tr && tr.getAttribute('data-fu-key');
-                        if (key) {
-                            const isChecked = !!calledCb.checked;
-                            const nextStatus = isChecked ? 'Called' : 'To call';
-                            let targetRow = null;
-                            let targetPhoneKey = '';
-                            followUpQueueState.rawRows = followUpQueueState.rawRows.map((row) => {
-                                const rk = followUpRowKey(row);
-                                if (rk !== key) return row;
-                                const next = { ...row, Status: nextStatus, 'Called?': isChecked ? 'TRUE' : 'FALSE' };
-                                targetRow = next;
-                                targetPhoneKey = followUpNormalizePhoneKey(next.Phone);
-                                return next;
-                            });
-                            if (targetRow && targetPhoneKey) {
-                                // Prevent double calls: if the same phone appears multiple times on this page, keep them in sync.
-                                followUpQueueState.rawRows = followUpQueueState.rawRows.map((row) => {
-                                    const pk = followUpNormalizePhoneKey(row.Phone);
-                                    if (pk && pk === targetPhoneKey) {
-                                        return { ...row, Status: nextStatus, 'Called?': isChecked ? 'TRUE' : 'FALSE' };
-                                    }
-                                    return row;
-                                });
-                            }
-                            followUpPaintTable(wrap);
-                            const targets = targetPhoneKey
-                                ? followUpQueueState.rawRows.filter((r) => followUpNormalizePhoneKey(r.Phone) === targetPhoneKey)
-                                : (targetRow ? [targetRow] : []);
-                            targets.forEach((r) => {
-                                if (!r || typeof r._row !== 'number') return;
-                                fetch(`${BASE_URL}/api/follow-up-queue/${encodeURIComponent(currentClient)}/status`, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                        row: r._row,
-                                        called: isChecked,
-                                        callId: r['Call ID'] || '',
-                                        phone: r.Phone || ''
-                                    })
-                                }).then(async (res) => {
-                                    const payload = await res.json().catch(() => ({}));
-                                    if (!res.ok || !payload?.ok) {
-                                        throw new Error(payload?.error || `HTTP ${res.status}`);
-                                    }
-                                }).catch((err) => {
-                                    console.warn('Failed to persist follow-up status', err);
-                                    showToast('Save failed', 'Could not save Called? to sheet. Please try again.', 'error', 3500);
-                                });
-                            });
-                        }
-                        return;
-                    }
+                    // Called? checkbox removed
                     const sel = e.target.closest('[data-fu-select]');
                     if (sel) {
                         const tr = sel.closest('tr');
@@ -15710,7 +15638,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const retryShowFailed = document.getElementById('retryQueueShowFailed');
             if (retryShowFailed && !retryShowFailed.dataset.bound) {
                 retryShowFailed.dataset.bound = '1';
-                retryShowFailed.addEventListener('change', () => repaintRetryQueueList());
+                retryShowFailed.addEventListener('change', () => renderRetryQueue({}).catch(() => repaintRetryQueueList()));
             }
             const crInput = document.getElementById('callRecordingsSearchInput');
             if (crInput && !crInput.dataset.searchBound) {
