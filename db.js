@@ -3042,6 +3042,43 @@ export async function cleanupOldRetries(daysOld = 7) {
 }
 
 // Call queue functions
+// --- V1: hard block outbound calls to opted-out numbers (DNC)
+let optedOutDialCache = null;
+let optedOutDialCacheLoadedAt = 0;
+const OPTED_OUT_DIAL_CACHE_TTL_MS = 5 * 60 * 1000;
+
+async function loadOptedOutDialCache() {
+  const now = Date.now();
+  if (optedOutDialCache && (now - optedOutDialCacheLoadedAt) < OPTED_OUT_DIAL_CACHE_TTL_MS) return optedOutDialCache;
+  try {
+    const activePhones = await query(
+      dbType === 'sqlite'
+        ? `SELECT phone FROM opt_out_list WHERE active = 1`
+        : `SELECT phone FROM opt_out_list WHERE active = TRUE`
+    );
+    const set = new Set();
+    for (const r of activePhones.rows || []) {
+      const raw = String(r.phone || '').trim();
+      const mk = phoneMatchKey(raw);
+      if (mk) set.add(mk);
+    }
+    optedOutDialCache = set;
+    optedOutDialCacheLoadedAt = now;
+    return optedOutDialCache;
+  } catch (e) {
+    // If opt_out_list doesn't exist (new env), fail open (don't block calls).
+    // Lead import path still checks opted_out elsewhere.
+    return optedOutDialCache || new Set();
+  }
+}
+
+async function isOptedOutForDial(leadPhone) {
+  const mk = phoneMatchKey(leadPhone);
+  if (!mk) return false;
+  const set = await loadOptedOutDialCache();
+  return set.has(mk);
+}
+
 /** Break exact .000s timestamps so many rows never share the same instant (ops top-of-hour + dial spread). */
 export function smearCallQueueScheduledFor(scheduledFor, clientKey, leadPhone, queueRowId = null) {
   const t = scheduledFor instanceof Date ? new Date(scheduledFor.getTime()) : new Date(scheduledFor);
@@ -3068,6 +3105,14 @@ export async function addToCallQueue({ clientKey, leadPhone, priority = 5, sched
         : scheduledFor;
 
   if (callType === 'vapi_call') {
+    // V1 compliance: never enqueue outbound dials for opted-out numbers.
+    if (await isOptedOutForDial(leadPhone)) {
+      const err = new Error('opted_out');
+      err.code = 'opted_out';
+      err.clientKey = clientKey;
+      err.leadPhone = leadPhone;
+      throw err;
+    }
     const raw = String(leadPhone ?? '').trim();
     const matchKey = outboundDialClaimKeyFromRaw(raw);
     const weakDigits = matchKey === '__nodigits__';

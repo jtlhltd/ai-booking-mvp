@@ -1,0 +1,41 @@
+import { init, query, addToCallQueue, closeDatabaseConnectionsForTests } from '../../db.js';
+
+describe('Call queue blocks opted-out numbers (V1)', () => {
+  beforeAll(async () => {
+    process.env.DB_TYPE = 'sqlite';
+    process.env.DATABASE_URL = '';
+    await init();
+    await query(`
+      CREATE TABLE IF NOT EXISTS opt_out_list (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        phone TEXT NOT NULL UNIQUE,
+        reason TEXT,
+        opted_out_at TEXT,
+        active INTEGER DEFAULT 1,
+        updated_at TEXT,
+        notes TEXT
+      )
+    `);
+  });
+
+  afterAll(async () => {
+    await closeDatabaseConnectionsForTests();
+  });
+
+  test('addToCallQueue throws opted_out for vapi_call to opted-out phone', async () => {
+    await query(`DELETE FROM opt_out_list`);
+    await query(`INSERT INTO opt_out_list (phone, reason, active) VALUES ($1, $2, 1)`, ['+447700900111', 'user_request']);
+
+    await expect(
+      addToCallQueue({
+        clientKey: 'd2d-xpress-tom',
+        leadPhone: '+44 7700 900111',
+        priority: 5,
+        scheduledFor: new Date(),
+        callType: 'vapi_call',
+        callData: { triggerType: 'test' }
+      })
+    ).rejects.toMatchObject({ code: 'opted_out' });
+  });
+});
+
