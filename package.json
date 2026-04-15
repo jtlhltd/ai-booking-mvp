@@ -9,6 +9,7 @@
     "render-start": "node run-migration.js && node server.js",
     "render-build": "echo \"no build step\"",
     "migrate": "node run-migration.js",
+    "env:test": "node scripts/write-test-database-url.mjs",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",

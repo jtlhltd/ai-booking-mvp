@@ -7,6 +7,7 @@ import path from 'path';
 process.env.NODE_ENV = 'test';
 
 // Optional local overrides (gitignored): e.g. TEST_DATABASE_URL for Postgres integration tests.
+// Regenerate: npm run env:test (copies DATABASE_URL from .env → TEST_DATABASE_URL in .env.test).
 const envTest = path.join(process.cwd(), '.env.test');
 if (fs.existsSync(envTest)) {
   dotenv.config({ path: envTest, override: false });
