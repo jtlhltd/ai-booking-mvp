@@ -21222,6 +21222,56 @@ app.post('/admin/clear-call-queue', async (req, res) => {
   }
 });
 
+// Admin endpoint to pull pending call_queue items forward to "due now" (optional: by clientKey).
+// Useful when backlog was scheduled into future windows due to earlier config bugs or downtime.
+app.post('/admin/pull-forward-call-queue', async (req, res) => {
+  try {
+    const apiKey = req.get('X-API-Key');
+    if (!apiKey || apiKey !== process.env.API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    if (dbType !== 'postgres') {
+      return res.status(400).json({ ok: false, error: 'unsupported_db', message: 'pull-forward requires Postgres' });
+    }
+    const clientKey = String(req.body?.clientKey || '').trim();
+    const limitRaw = parseInt(req.body?.limit, 10);
+    const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(5000, limitRaw)) : 500;
+
+    const params = [];
+    let idx = 1;
+    let where = `cq.call_type = 'vapi_call' AND cq.status = 'pending'`;
+    if (clientKey) {
+      where += ` AND cq.client_key = $${idx++}`;
+      params.push(clientKey);
+    }
+    where += ` AND cq.scheduled_for > NOW() AND cq.scheduled_for <= NOW() + INTERVAL '48 hours'`;
+    params.push(limit);
+
+    const { rowCount } = await query(
+      `
+      WITH picked AS (
+        SELECT id, ROW_NUMBER() OVER (ORDER BY scheduled_for ASC, id ASC) AS rn
+        FROM call_queue cq
+        WHERE ${where}
+        LIMIT $${idx}
+      )
+      UPDATE call_queue cq
+      SET scheduled_for = NOW() - INTERVAL '1 second' + picked.rn * INTERVAL '1 millisecond',
+          updated_at = NOW()
+      FROM picked
+      WHERE cq.id = picked.id
+      `,
+      params
+    );
+
+    console.log('[CALL QUEUE PULL FORWARD]', { clientKey: clientKey || 'all', limit, pulled: rowCount || 0 });
+    res.json({ ok: true, pulled: rowCount || 0 });
+  } catch (e) {
+    console.error('[CALL QUEUE PULL FORWARD ERROR]', e?.message || String(e));
+    res.status(500).json({ ok: false, error: String(e?.message || e) });
+  }
+});
+
 // Admin endpoint to delete leads by filter (safety valve for bad imports).
 // NOTE: This is intentionally admin-only (X-API-Key) and requires a createdAfter timestamp.
 app.post('/admin/purge-leads', async (req, res) => {
