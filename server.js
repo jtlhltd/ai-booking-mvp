@@ -24620,7 +24620,9 @@ async function processCallQueue() {
           FROM picked
         )
         UPDATE call_queue cq
-        SET scheduled_for = NOW() + to_pull.rn * INTERVAL '1 millisecond',
+        -- Make items unambiguously due for this same processor tick.
+        -- (Using NOW() + a few ms can still be "in the future" when getPendingCalls runs immediately after.)
+        SET scheduled_for = NOW() - INTERVAL '1 second' + to_pull.rn * INTERVAL '1 millisecond',
             updated_at = NOW()
         FROM to_pull
         WHERE cq.id = to_pull.id
