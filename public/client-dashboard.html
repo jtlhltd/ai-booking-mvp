@@ -6742,19 +6742,13 @@
                         <button type="button" class="export-btn secondary" data-fu-bulk="called">Bulk Called</button>
                         <button type="button" class="export-btn secondary" data-fu-bulk="vm">Bulk VM</button>
                         <button type="button" class="export-btn secondary" data-fu-bulk="spoke">Bulk Spoke</button>
-                        <button type="button" class="export-btn secondary" data-fu-bulk="callback">Bulk Call back</button>
-                        <button type="button" class="export-btn secondary" data-fu-bulk="not_interested">Bulk Not int.</button>
                     </div>
                     <label class="follow-up-page-size" title="Disposition filter" style="display:inline-flex;gap:6px;align-items:center;">
                         <span class="sr-only">Disposition filter</span>
                         <select id="followUpDispositionSelect">
                             <option value="all" selected>All outcomes</option>
-                            <option value="none">No outcome</option>
                             <option value="voicemail">Voicemail</option>
                             <option value="spoke">Spoke</option>
-                            <option value="callback">Call back</option>
-                            <option value="not_interested">Not interested</option>
-                            <option value="other">Other</option>
                         </select>
                     </label>
                     <input type="search" id="followUpSearchInput" class="dashboard-list-search" placeholder="Search business, name, phone, notes…" autocomplete="off" enterkeyhint="search" style="max-width:260px;">
@@ -13117,7 +13111,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             'Decision Maker',
             'Phone',
             'Email',
-            'Priority',
             'Status',
             'Disposition',
             'Callback Window',
@@ -13154,7 +13147,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         let followUpQueuePage = 1;
         let followUpStatusFilter = 'todo'; // todo | called | dnc | disqualified | all
         let followUpSearchTerm = '';
-        let followUpDispositionFilter = 'all'; // all | voicemail | spoke | callback | not_interested | none | other
+        let followUpDispositionFilter = 'all'; // all | voicemail | spoke
         const followUpSelectedKeys = new Set();
 
         function followUpLoadPrefs() {
@@ -13165,7 +13158,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 if (['todo', 'called', 'dnc', 'disqualified', 'all'].includes(sf)) followUpStatusFilter = sf;
                 followUpSearchTerm = localStorage.getItem('dash.fu.search') || '';
                 const df = localStorage.getItem('dash.fu.dispositionFilter') || '';
-                if (['all','voicemail','spoke','callback','not_interested','none','other'].includes(df)) followUpDispositionFilter = df;
+                if (['all','voicemail','spoke'].includes(df)) followUpDispositionFilter = df;
             } catch {}
         }
 
@@ -13228,11 +13221,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
         function followUpCellSortValue(col, val) {
             const v = String(val ?? '').trim();
-            if (col === 'Priority') {
-                const n = Number(v);
-                if (Number.isFinite(n)) return { kind: 'num', v: n };
-                return { kind: 'str', v: v.toLowerCase() };
-            }
             if (col === 'Timestamp') {
                 const t = followUpParseUkTimestamp(v);
                 if (Number.isFinite(t)) return { kind: 'num', v: t };
@@ -13309,21 +13297,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 // Disposition filter (applies after status filter)
                 const disp = dispRaw;
                 if (followUpDispositionFilter === 'all') return true;
-                if (followUpDispositionFilter === 'none') return !disp;
                 if (followUpDispositionFilter === 'voicemail') return disp.includes('voicemail') || disp === 'vm';
                 if (followUpDispositionFilter === 'spoke') return disp.includes('spoke');
-                if (followUpDispositionFilter === 'callback') return disp.includes('call back') || disp.includes('callback');
-                if (followUpDispositionFilter === 'not_interested') return disp.includes('not interested') || disp.includes('no interest');
-                // other: anything set but not matching the known buckets
-                if (followUpDispositionFilter === 'other') {
-                    if (!disp) return false;
-                    const known =
-                        disp.includes('voicemail') || disp === 'vm' ||
-                        disp.includes('spoke') ||
-                        disp.includes('call back') || disp.includes('callback') ||
-                        disp.includes('not interested') || disp.includes('no interest');
-                    return !known;
-                }
                 return true;
             });
             const displayRows = sortKey ? followUpSortRows(filtered, sortKey, sortDir) : filtered.slice();
@@ -13382,8 +13357,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 if (k === 'called') return { Status: 'Called', Disposition: 'Spoke', 'Callback Needed': 'TRUE', 'Last Outcome At': nowIso };
                 if (k === 'vm') return { Status: 'To call', Disposition: 'Voicemail', 'Callback Needed': 'FALSE', 'Last Outcome At': nowIso };
                 if (k === 'spoke') return { Status: 'Called', Disposition: 'Spoke', 'Callback Needed': 'TRUE', 'Last Outcome At': nowIso };
-                if (k === 'callback') return { Status: 'To call', Disposition: 'Call back', 'Callback Needed': 'FALSE', 'Last Outcome At': nowIso };
-                if (k === 'not_interested') return { Status: 'Disqualified', Disposition: 'Not interested', 'Callback Needed': 'FALSE', 'Last Outcome At': nowIso };
                 return null;
             };
             const patch = mapAction(kind);
@@ -13475,8 +13448,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             return `<span class="fu-inline-actions">` +
                 `<button type="button" class="fu-mini-btn" data-fu-action="setDisposition" data-fu-value="Voicemail" title="Left voicemail (follow-up later)">VM</button>` +
                 `<button type="button" class="fu-mini-btn" data-fu-action="setDisposition" data-fu-value="Spoke" title="Spoke to them (human answered)">Spoke</button>` +
-                `<button type="button" class="fu-mini-btn fu-mini-btn--muted" data-fu-action="setDisposition" data-fu-value="Call back" title="Asked for a call back (set callback window)">Call back</button>` +
-                `<button type="button" class="fu-mini-btn fu-mini-btn--warn" data-fu-action="setDisposition" data-fu-value="Not interested" title="Not interested / no need">Not int.</button>` +
             `</span>`;
         }
 
@@ -13485,15 +13456,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const canEdit = row && typeof row._row === 'number';
             if (col === 'Recording URI' && /^https?:\/\//i.test(v)) {
                 return `<span class="fu-cell-actions"><a href="${escapeHtml(v)}" target="_blank" rel="noopener noreferrer">Open</a>${followUpPencilBtn(col, !canEdit)}</span>`;
-            }
-            if (col === 'Priority') {
-                const n = Number(v);
-                const lvl = Number.isFinite(n)
-                    ? (n >= 110 ? 'high' : n >= 100 ? 'med' : n >= 10 ? 'low' : 'low')
-                    : 'low';
-                const label = lvl === 'high' ? 'High' : lvl === 'med' ? 'Med' : 'Low';
-                const cls = lvl === 'high' ? 'status-tag--called' : lvl === 'med' ? 'status-tag--todo' : 'status-tag--disq';
-                return `<span class="status-tag ${cls}" title="Best-next-call score: ${escapeHtml(String(v || '0'))}">${label}</span>`;
             }
             if (col === 'Status') {
                 const badge = followUpStatusBadgeHtml(v);
@@ -13702,14 +13664,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     if (!copy.Status) {
                         copy.Status = isCalled ? 'Called' : 'To call';
                     }
-                    // V1: derived "best next call" score for sorting (does not persist to sheet)
-                    const cb = String(copy['Callback Window'] || '').trim();
-                    const hasCb = cb ? 1 : 0;
-                    const hasDm = String(copy['Decision Maker'] || '').trim() ? 1 : 0;
-                    const hasEmail = String(copy.Email || '').trim() ? 1 : 0;
-                    const tsMs = followUpParseUkTimestamp(copy.Timestamp);
-                    const recency = Number.isFinite(tsMs) ? Math.floor(tsMs / 1000) : 0;
-                    copy.Priority = String(hasCb * 100 + hasDm * 10 + hasEmail * 5 + recency);
                     return copy;
                 });
                 const cols = followUpVisibleColumns(rows);
@@ -13719,10 +13673,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     cols,
                     sortKey: cols.includes(priorSortKey)
                         ? priorSortKey
-                        : (isOutreachDashboardClient(clientKey) ? 'Priority' : null),
+                        : null,
                     sortDir: cols.includes(priorSortKey)
                         ? (priorSortDir || 'desc')
-                        : (isOutreachDashboardClient(clientKey) ? 'desc' : 'desc'),
+                        : 'desc',
                     total: data.total != null ? data.total : rows.length,
                     offset: data.offset != null ? data.offset : offset,
                     limit: data.limit != null ? data.limit : limit
@@ -13970,8 +13924,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             const nextDisp = String(value || '').trim() || '';
                             const dispLower = nextDisp.toLowerCase();
                             let nextStatus = String(row.Status || '').trim() || 'To call';
-                            if (dispLower.includes('not interested')) nextStatus = 'Disqualified';
-                            else if (dispLower === 'spoke') nextStatus = 'Called';
+                            if (dispLower === 'spoke') nextStatus = 'Called';
                             else nextStatus = 'To call';
                             const called = String(nextStatus).toLowerCase() === 'called';
                             const nowIso = new Date().toISOString();
@@ -14009,10 +13962,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                                 showToast('Save failed', 'Could not save disposition to sheet. Please try again.', 'error', 3500);
                             });
 
-                            if (dispLower === 'call back') {
-                                // Nudge the operator to fill callback window (keeps it lightweight; still editable inline).
-                                showToast('Callback', 'Set a callback window (edit “Callback Window”).', 'success', 3200);
-                            }
                         }
                         return;
                     }
@@ -14195,8 +14144,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         <div style="display:flex;flex-direction:column;gap:6px;">
                             ${dispRow('Voicemail', dispToday.voicemail, dispTotal.voicemail)}
                             ${dispRow('Spoke', dispToday.spoke, dispTotal.spoke)}
-                            ${dispRow('Call back', dispToday.callback, dispTotal.callback)}
-                            ${dispRow('Not interested', dispToday.not_interested, dispTotal.not_interested)}
                         </div>
                     </div>
                     <div style="margin-top:10px;">
