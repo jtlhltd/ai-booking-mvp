@@ -79,6 +79,30 @@ async function tryInsertWebhookEvent({ provider, eventId, callId, eventType, cor
   }
 }
 
+async function tryClaimExistingWebhookEvent({ provider, eventId }) {
+  if (!isPostgres()) return { claimed: false };
+  // If a previous processing attempt crashed or errored, allow a later delivery to re-claim.
+  // Keep the window small so simultaneous deliveries don't both "win".
+  const leaseMinutes = Math.max(1, Math.min(60, parseInt(String(process.env.WEBHOOK_EVENT_LEASE_MINUTES || '10'), 10) || 10));
+  const r = await query(
+    `
+    UPDATE webhook_events
+    SET processing_started_at = NOW(),
+        processing_error = NULL
+    WHERE provider = $1
+      AND event_id = $2
+      AND processed_at IS NULL
+      AND (
+        processing_started_at IS NULL OR
+        processing_started_at < NOW() - ($3::int * INTERVAL '1 minute')
+      )
+    RETURNING id
+  `,
+    [provider, eventId, leaseMinutes]
+  );
+  return { claimed: Array.isArray(r?.rows) && r.rows.length > 0, leaseMinutes };
+}
+
 async function markWebhookEventProcessingStarted({ provider, eventId }) {
   if (!isPostgres()) return;
   await query(
@@ -252,9 +276,13 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
       headers: req.headers
     });
     if (!ins.inserted) {
-      // Already ingested/processed (or in-flight). Always ack to stop provider retries.
-      res.status(200).json({ ok: true, received: true, deduped: true });
-      return;
+      // Already ingested. If it's not processed and not currently leased, let this delivery re-claim work.
+      // This prevents a single crash from permanently suppressing processing due to idempotency.
+      const claim = await tryClaimExistingWebhookEvent({ provider: 'vapi', eventId });
+      if (!claim.claimed) {
+        res.status(200).json({ ok: true, received: true, deduped: true });
+        return;
+      }
     }
 
     // RAW envelope debug (before any normalization) - per VAPI troubleshooting
