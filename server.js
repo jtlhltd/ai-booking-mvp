@@ -1064,6 +1064,10 @@ app.get('/api/admin/system-health', async (req, res) => {
       uptimeHuman: uptimeString,
       errorCount: errorCount || 0,
       responseTime: responseTime || 120,
+      lastCrons: {
+        processCallQueueAt: globalThis.__opsLastProcessCallQueueAt || null,
+        queueNewLeadsForCallingAt: globalThis.__opsLastQueueNewLeadsAt || null
+      },
       outboundQueues,
       failedQCalls24h,
       legacyDailyClaimRows,
@@ -24418,6 +24422,7 @@ async function processSheetPatchRetry(retry) {
 // Call queue processor - runs every 2 minutes to process pending calls
 async function processCallQueue() {
   try {
+    globalThis.__opsLastProcessCallQueueAt = new Date().toISOString();
     const { getPendingCalls, updateCallQueueStatus, cancelDuplicatePendingCalls, addToCallQueue } = await import('./db.js');
 
     // Hard safety: never let a huge overdue backlog trigger "call everything now".
@@ -25165,6 +25170,7 @@ async function processVapiCallFromQueue(call) {
 // Queue new leads for calling - runs every 5 minutes
 async function queueNewLeadsForCalling() {
   try {
+    globalThis.__opsLastQueueNewLeadsAt = new Date().toISOString();
     console.log('[LEAD QUEUER] Checking for new leads to queue...');
     const leadQueueBatchSize = Math.max(1, Math.min(300, parseInt(process.env.LEAD_QUEUE_BATCH_SIZE || '120', 10) || 120));
     // Tomorrow buffer is an ops convenience, not a dialing strategy. Keep it OFF by default.
