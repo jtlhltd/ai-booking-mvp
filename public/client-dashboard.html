@@ -6707,6 +6707,10 @@
                     <div id="retryQueueBarHost" style="display:none"></div>
                     <div id="retryQueueSearchToolbar" class="dashboard-list-toolbar" style="display:none">
                         <input type="search" id="retryQueueSearchInput" class="dashboard-list-search" placeholder="Search name, phone, queue, due time…" autocomplete="off" enterkeyhint="search">
+                        <label style="display:inline-flex;gap:6px;align-items:center;font-size:0.85rem;color:var(--text-secondary,#5a5d72);">
+                            <input type="checkbox" id="retryQueueShowFailed" />
+                            Show failed/cancelled
+                        </label>
                         <span id="retryQueueSearchHint" class="dashboard-search-hint" hidden></span>
                     </div>
                     <div id="retry-queue" class="retry-queue thin-scroll"></div>
@@ -7895,12 +7899,20 @@
             const opsCancelBtn = (!isDemo && !isQueuedCall && retryType === 'sheet_patch')
                 ? `<button type="button" class="retry-action-btn" data-retry-cancel="1" data-retry-id="${escapeHtml(String(lead.dbId || ''))}" aria-label="Cancel this retry">Drop</button>`
                 : '';
-            const actionsRow = (journeyBtn || copyBtn || opsRetryNowBtn || opsCancelBtn)
+            const opsRequeueBtn = (!isDemo && !isQueuedCall && retryType === 'sheet_patch' && String(lead.status || '').toLowerCase() !== 'pending')
+                ? `<button type="button" class="retry-action-btn" data-retry-requeue="1" data-retry-id="${escapeHtml(String(lead.dbId || ''))}" aria-label="Move this retry back to pending">Requeue</button>`
+                : '';
+            const opsDeleteBtn = (!isDemo && !isQueuedCall && retryType === 'sheet_patch')
+                ? `<button type="button" class="retry-action-btn" data-retry-delete="1" data-retry-id="${escapeHtml(String(lead.dbId || ''))}" aria-label="Delete this retry row">Delete</button>`
+                : '';
+            const actionsRow = (journeyBtn || copyBtn || opsRetryNowBtn || opsCancelBtn || opsRequeueBtn || opsDeleteBtn)
                 ? `                                <div class="retry-item-actions">
                                     ${journeyBtn}
                                     ${copyBtn}
                                     ${opsRetryNowBtn}
                                     ${opsCancelBtn}
+                                    ${opsRequeueBtn}
+                                    ${opsDeleteBtn}
                                 </div>`
                 : '';
             return `
@@ -8306,6 +8318,7 @@ ${actionsRow}
         let leadsFunnelSegment = 'all';
         let retryQueueRowsAll = [];
         let retryQueueBarState = { shown: 0, isDemo: false, opts: {} };
+        let retryQueueShowFailed = false;
         let callRecordingsAll = [];
         let callRecordingsMeta = { totalWithRecordings: 0, limit: 50, isDemo: false };
         let callRecordingsOutcomeFilter = 'all';
@@ -9864,6 +9877,7 @@ ${actionsRow}
             const listEl = document.getElementById('retry-queue');
             if (!listEl) return;
             const searchEl = document.getElementById('retryQueueSearchInput');
+            const showFailedEl = document.getElementById('retryQueueShowFailed');
             const hint = document.getElementById('retryQueueSearchHint');
             const barHost = document.getElementById('retryQueueBarHost');
             if (!retryQueueRowsAll.length) {
@@ -9873,8 +9887,12 @@ ${actionsRow}
                 }
                 return;
             }
+            retryQueueShowFailed = !!(showFailedEl && showFailedEl.checked);
             const q = (searchEl && searchEl.value) ? searchEl.value.trim().toLowerCase() : '';
-            const filtered = !q ? retryQueueRowsAll.slice() : retryQueueRowsAll.filter((l) => retryMatchesSearch(l, q));
+            const base = retryQueueShowFailed
+                ? retryQueueRowsAll.slice()
+                : retryQueueRowsAll.filter((l) => String(l.status || '').toLowerCase().trim() === 'pending' || String(l.source || '') === 'call_queue');
+            const filtered = !q ? base : base.filter((l) => retryMatchesSearch(l, q));
             const { shown, isDemo, opts } = retryQueueBarState;
             if (barHost && shown > 0) {
                 barHost.innerHTML = renderRetryQueueBar(shown, isDemo, opts);
@@ -13007,7 +13025,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
 
             try {
-                const response = await fetch(`${BASE_URL}/api/retry-queue/${encodeURIComponent(currentClient)}`, { cache: 'no-store' });
+                const includeAll = retryQueueShowFailed ? '&includeAllStatuses=1' : '';
+                const response = await fetch(`${BASE_URL}/api/retry-queue/${encodeURIComponent(currentClient)}?${includeAll.replace(/^&/, '')}`, { cache: 'no-store' });
                 const payload = await response.json().catch(() => ({}));
                 if (!response.ok || !payload?.ok) {
                     retryQueueRowsAll = [];
@@ -15683,6 +15702,11 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 retryInput.dataset.searchBound = '1';
                 retryInput.addEventListener('input', () => repaintRetryQueueList());
             }
+            const retryShowFailed = document.getElementById('retryQueueShowFailed');
+            if (retryShowFailed && !retryShowFailed.dataset.bound) {
+                retryShowFailed.dataset.bound = '1';
+                retryShowFailed.addEventListener('change', () => repaintRetryQueueList());
+            }
             const crInput = document.getElementById('callRecordingsSearchInput');
             if (crInput && !crInput.dataset.searchBound) {
                 crInput.dataset.searchBound = '1';
@@ -15858,6 +15882,42 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         }).catch(() => {
                             showToast('Failed', 'Could not cancel retry.', 'error', 3200);
                         });
+                        return;
+                    }
+                    const requeueBtn = e.target.closest('[data-retry-requeue]');
+                    if (requeueBtn) {
+                        e.preventDefault();
+                        const id = requeueBtn.getAttribute('data-retry-id');
+                        if (!id || !currentClient) return;
+                        fetch(`${BASE_URL}/api/retry-queue/${encodeURIComponent(currentClient)}/requeue`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ id: Number(id) })
+                        }).then(async (res) => {
+                            const out = await res.json().catch(() => ({}));
+                            if (!res.ok || !out?.ok) throw new Error(out?.message || out?.error || `HTTP ${res.status}`);
+                            showToast('Requeued', 'Retry moved back to pending.', 'success', 2200);
+                            renderRetryQueue({}).catch(() => {});
+                            renderOpsHealth().catch(() => {});
+                        }).catch(() => showToast('Failed', 'Could not requeue retry.', 'error', 3200));
+                        return;
+                    }
+                    const delBtn = e.target.closest('[data-retry-delete]');
+                    if (delBtn) {
+                        e.preventDefault();
+                        const id = delBtn.getAttribute('data-retry-id');
+                        if (!id || !currentClient) return;
+                        fetch(`${BASE_URL}/api/retry-queue/${encodeURIComponent(currentClient)}/delete`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ id: Number(id) })
+                        }).then(async (res) => {
+                            const out = await res.json().catch(() => ({}));
+                            if (!res.ok || !out?.ok) throw new Error(out?.message || out?.error || `HTTP ${res.status}`);
+                            showToast('Deleted', 'Retry row deleted.', 'success', 2200);
+                            renderRetryQueue({}).catch(() => {});
+                            renderOpsHealth().catch(() => {});
+                        }).catch(() => showToast('Failed', 'Could not delete retry.', 'error', 3200));
                         return;
                     }
                     const journeyBtn = e.target.closest('[data-retry-journey]');

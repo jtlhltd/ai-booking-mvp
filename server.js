@@ -13224,6 +13224,9 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
     // Full pending queue (no date window). List is capped for dashboard payload size.
     const RETRY_QUEUE_LIST_CAP = 500;
 
+    const includeAllStatuses = String(req.query?.includeAllStatuses || '').trim() === '1';
+    const retryStatusWhere = includeAllStatuses ? `rq.status IN ('pending','failed','cancelled')` : `rq.status = 'pending'`;
+
     const listUnionSql = `
       SELECT * FROM (
         SELECT
@@ -13237,7 +13240,7 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
           rq.status,
           'retry_queue' AS source
         FROM retry_queue rq
-        WHERE rq.client_key = $1 AND rq.status = 'pending'
+        WHERE rq.client_key = $1 AND ${retryStatusWhere}
         UNION ALL
         SELECT
           cq.id,
@@ -13270,7 +13273,7 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
         rq.status,
         'retry_queue' AS source
       FROM retry_queue rq
-      WHERE rq.client_key = $1 AND rq.status = 'pending'
+      WHERE rq.client_key = $1 AND ${retryStatusWhere}
       ORDER BY rq.scheduled_for ASC NULLS LAST
       LIMIT $2
     `;
@@ -13281,6 +13284,10 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
         SELECT
           (SELECT COUNT(*) FROM retry_queue rq
             WHERE rq.client_key = $1 AND rq.status = 'pending') AS rq_pending,
+          (SELECT COUNT(*) FROM retry_queue rq
+            WHERE rq.client_key = $1 AND rq.status = 'failed') AS rq_failed,
+          (SELECT COUNT(*) FROM retry_queue rq
+            WHERE rq.client_key = $1 AND rq.status = 'cancelled') AS rq_cancelled,
           (SELECT COUNT(*) FROM call_queue cq
             WHERE cq.client_key = $1
               AND cq.status = 'pending'
@@ -13295,6 +13302,8 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
     ]);
 
     const rqTotal = parseInt(countRes.rows?.[0]?.rq_pending || 0, 10);
+    const rqFailed = parseInt(countRes.rows?.[0]?.rq_failed || 0, 10);
+    const rqCancelled = parseInt(countRes.rows?.[0]?.rq_cancelled || 0, 10);
     const cqTotal = parseInt(countRes.rows?.[0]?.cq_pending || 0, 10);
     const totalPending = rqTotal + cqTotal;
     const rawRows = listRes.rows || [];
@@ -13386,6 +13395,8 @@ app.get('/api/retry-queue/:clientKey', async (req, res) => {
       totalInWindow: totalPending,
       truncated,
       retryQueuePending: rqTotal,
+      retryQueueFailed: rqFailed,
+      retryQueueCancelled: rqCancelled,
       callQueuePending: cqTotal,
       retryQueuePending7d: rqTotal,
       callQueuePending7d: cqTotal
@@ -13451,6 +13462,35 @@ app.post('/api/retry-queue/:clientKey/cancel', async (req, res) => {
     res.json({ ok: true });
   } catch (error) {
     res.status(500).json({ ok: false, error: 'retry_cancel_failed', message: error?.message || String(error) });
+  }
+});
+
+app.post('/api/retry-queue/:clientKey/requeue', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const { id } = req.body || {};
+    const dbId = parseInt(id, 10);
+    if (!Number.isFinite(dbId)) return res.status(400).json({ ok: false, error: 'invalid_id' });
+    await query(
+      `UPDATE retry_queue SET status = 'pending', scheduled_for = NOW(), updated_at = NOW() WHERE client_key = $1 AND id = $2`,
+      [clientKey, dbId]
+    );
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: 'retry_requeue_failed', message: error?.message || String(error) });
+  }
+});
+
+app.post('/api/retry-queue/:clientKey/delete', async (req, res) => {
+  try {
+    const { clientKey } = req.params;
+    const { id } = req.body || {};
+    const dbId = parseInt(id, 10);
+    if (!Number.isFinite(dbId)) return res.status(400).json({ ok: false, error: 'invalid_id' });
+    await query(`DELETE FROM retry_queue WHERE client_key = $1 AND id = $2`, [clientKey, dbId]);
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: 'retry_delete_failed', message: error?.message || String(error) });
   }
 });
 
