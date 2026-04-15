@@ -40,7 +40,7 @@ export const LOGISTICS_HEADERS = [
   'UK Shipments per Week','UK Courier','Std Rate up to KG','Excl Fuel & VAT?','Single vs Multi-parcel',
   'Receptionist Name','Callback Needed','Call ID','Recording URI','Transcript Snippet','Called Number',
   // V1 follow-up ops fields (persisted by dashboard)
-  'Status','Disposition','Callback Window'
+  'Status','Disposition','Callback Window','Last Outcome At'
 ];
 
 function sheetColLetterFromIndex(idx1Based) {
@@ -406,6 +406,9 @@ export async function updateLogisticsStatusByRow(spreadsheetId, rowNumber, { cal
     }
     if (headerMap['Status'] !== undefined) {
       row[headerMap['Status']] = called ? 'Called' : 'To call';
+    }
+    if (headerMap['Last Outcome At'] !== undefined) {
+      row[headerMap['Last Outcome At']] = new Date().toISOString();
     }
     await s.spreadsheets.values.update({
       spreadsheetId,

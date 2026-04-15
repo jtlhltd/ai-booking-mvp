@@ -13614,6 +13614,13 @@ app.get('/api/follow-up-queue/:clientKey/stats', async (req, res) => {
       return Number.isFinite(t) ? t : NaN;
     }
 
+    function parseAnyTimestampToMs(s) {
+      const uk = parseUkTimestampToMs(s);
+      if (Number.isFinite(uk)) return uk;
+      const iso = Date.parse(String(s || '').trim());
+      return Number.isFinite(iso) ? iso : NaN;
+    }
+
     function computeStats(rows) {
       const now = Date.now();
       const todayStart = new Date();
@@ -13632,10 +13639,14 @@ app.get('/api/follow-up-queue/:clientKey/stats', async (req, res) => {
         const kind = classifyRowStatus(row);
         out.total += 1;
         out[kind] += 1;
-        const tsMs = parseUkTimestampToMs(row?.Timestamp);
-        if (Number.isFinite(tsMs) && tsMs >= startMs && tsMs <= now) {
-          out.today.total += 1;
-          out.today[kind] += 1;
+        const createdMs = parseAnyTimestampToMs(row?.Timestamp);
+        if (Number.isFinite(createdMs) && createdMs >= startMs && createdMs <= now) {
+          out.today.total += 1; // "new today" is based on when the row was created from the call
+        }
+        const outcomeMs = parseAnyTimestampToMs(row?.['Last Outcome At'] || row?.['Last Outcome'] || '');
+        const effectiveMs = Number.isFinite(outcomeMs) ? outcomeMs : createdMs;
+        if (Number.isFinite(effectiveMs) && effectiveMs >= startMs && effectiveMs <= now) {
+          out.today[kind] += 1; // outcomes today use Last Outcome At when available
         }
       }
       return out;
@@ -13695,6 +13706,13 @@ app.get('/api/daily-summary/:clientKey', async (req, res) => {
       return Number.isFinite(t) ? t : NaN;
     }
 
+    function parseAnyTimestampToMs(s) {
+      const uk = parseUkTimestampToMs(s);
+      if (Number.isFinite(uk)) return uk;
+      const iso = Date.parse(String(s || '').trim());
+      return Number.isFinite(iso) ? iso : NaN;
+    }
+
     function classifyRowStatus(row) {
       const statusRaw = String(row?.Status || row?.['Status'] || '').trim();
       const dispRaw = String(row?.Disposition || row?.['Disposition'] || '').trim();
@@ -13722,10 +13740,14 @@ app.get('/api/daily-summary/:clientKey', async (req, res) => {
         const kind = classifyRowStatus(row);
         out.total += 1;
         out[kind] += 1;
-        const tsMs = parseUkTimestampToMs(row?.Timestamp);
-        if (Number.isFinite(tsMs) && tsMs >= startMs && tsMs <= now) {
-          out.today.total += 1;
-          out.today[kind] += 1;
+        const createdMs = parseAnyTimestampToMs(row?.Timestamp);
+        if (Number.isFinite(createdMs) && createdMs >= startMs && createdMs <= now) {
+          out.today.total += 1; // "new today" = rows created today
+        }
+        const outcomeMs = parseAnyTimestampToMs(row?.['Last Outcome At'] || row?.['Last Outcome'] || '');
+        const effectiveMs = Number.isFinite(outcomeMs) ? outcomeMs : createdMs;
+        if (Number.isFinite(effectiveMs) && effectiveMs >= startMs && effectiveMs <= now) {
+          out.today[kind] += 1; // outcomes today use Last Outcome At when available
         }
       }
       return out;
@@ -13752,8 +13774,10 @@ app.get('/api/daily-summary/:clientKey', async (req, res) => {
         const disp = String(row?.Disposition || row?.['Disposition'] || '').trim();
         const k = disp ? dispositionKey(disp) : 'none';
         out.total[k] += 1;
-        const tsMs = parseUkTimestampToMs(row?.Timestamp);
-        if (Number.isFinite(tsMs) && tsMs >= startMs && tsMs <= now) {
+        const createdMs = parseAnyTimestampToMs(row?.Timestamp);
+        const outcomeMs = parseAnyTimestampToMs(row?.['Last Outcome At'] || row?.['Last Outcome'] || '');
+        const effectiveMs = Number.isFinite(outcomeMs) ? outcomeMs : createdMs;
+        if (Number.isFinite(effectiveMs) && effectiveMs >= startMs && effectiveMs <= now) {
           out.today[k] += 1;
         }
       }

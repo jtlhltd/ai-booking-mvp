@@ -13771,6 +13771,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             const nextDisp = (nextStatusLower.includes('do not call') || nextStatusLower === 'dnc' || nextStatusLower.includes('disqual'))
                                 ? nextStatus
                                 : (String(row.Disposition || '').trim());
+                            const shouldStamp = nextStatusLower !== 'to call';
+                            const nowIso = new Date().toISOString();
 
                             // Optimistic update (Status + Called?)
                             followUpQueueState.rawRows = followUpQueueState.rawRows.map((r) => {
@@ -13793,7 +13795,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                                     patch: {
                                         Status: nextStatus,
                                         ...(nextDisp ? { Disposition: nextDisp } : {}),
-                                        'Callback Needed': called ? 'TRUE' : 'FALSE'
+                                        'Callback Needed': called ? 'TRUE' : 'FALSE',
+                                        ...(shouldStamp ? { 'Last Outcome At': nowIso } : {})
                                     }
                                 })
                             }).then(async (res) => {
@@ -13812,6 +13815,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             else if (dispLower === 'spoke') nextStatus = 'Called';
                             else nextStatus = 'To call';
                             const called = String(nextStatus).toLowerCase() === 'called';
+                            const nowIso = new Date().toISOString();
 
                             // Optimistic update
                             followUpQueueState.rawRows = followUpQueueState.rawRows.map((r) => {
@@ -13834,7 +13838,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                                     patch: {
                                         Disposition: nextDisp,
                                         Status: nextStatus,
-                                        'Callback Needed': called ? 'TRUE' : 'FALSE'
+                                        'Callback Needed': called ? 'TRUE' : 'FALSE',
+                                        'Last Outcome At': nowIso
                                     }
                                 })
                             }).then(async (res) => {
