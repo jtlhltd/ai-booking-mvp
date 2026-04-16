@@ -22462,6 +22462,13 @@ async function processVapiCallFromQueue(call) {
     });
     
     let vapiResult;
+    let dialPromise = null;
+    let dialAbort = null;
+    let handlerTimer = null;
+    const timeoutMs = Math.max(
+      10_000,
+      Math.min(180_000, parseInt(String(process.env.CALL_QUEUE_VAPI_TIMEOUT_MS || '60000'), 10) || 60_000)
+    );
     try {
       await query(
         `
@@ -22477,23 +22484,31 @@ async function processVapiCallFromQueue(call) {
         `,
         [call.id]
       );
-      const timeoutMs = Math.max(
-        10_000,
-        Math.min(180_000, parseInt(String(process.env.CALL_QUEUE_VAPI_TIMEOUT_MS || '60000'), 10) || 60_000)
-      );
+      dialAbort = new AbortController();
+      dialPromise = callLeadInstantly({
+        clientKey,
+        lead: leadForCall,
+        client,
+        callQueueId: call.id,
+        signal: dialAbort.signal
+      });
       vapiResult = await Promise.race([
-        callLeadInstantly({
-          clientKey,
-          lead: leadForCall,
-          client,
-          callQueueId: call.id
-        }),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(Object.assign(new Error('queue_handler_timeout'), { code: 'queue_handler_timeout' })), timeoutMs)
-        )
+        dialPromise,
+        new Promise((_, reject) => {
+          handlerTimer = setTimeout(() => {
+            try {
+              dialAbort.abort();
+            } catch (_) {
+              /* ignore */
+            }
+            reject(Object.assign(new Error('queue_handler_timeout'), { code: 'queue_handler_timeout' }));
+          }, timeoutMs);
+        })
       ]);
     } catch (e) {
       if (String(e?.code || '') === 'queue_handler_timeout') {
+        if (handlerTimer) clearTimeout(handlerTimer);
+        await (dialPromise || Promise.resolve()).catch(() => {});
         const next = smearCallQueueScheduledFor(
           new Date(Date.now() + 2 * 60 * 1000),
           clientKey,
@@ -22562,6 +22577,8 @@ async function processVapiCallFromQueue(call) {
         return {};
       }
       throw e;
+    } finally {
+      if (handlerTimer) clearTimeout(handlerTimer);
     }
 
     if (vapiResult?.error === 'outside_business_hours') {
@@ -22812,7 +22829,7 @@ async function processVapiCallFromQueue(call) {
       }
       // Stamp the queue row with the initiated call id so DB-level constraints can enforce correctness.
       await query(
-        `UPDATE call_queue SET initiated_call_id = $1, updated_at = NOW() WHERE id = $2`,
+        `UPDATE call_queue SET initiated_call_id = $1, updated_at = NOW() WHERE id = $2 AND status = 'processing'`,
         [vapiCallId, call.id]
       );
     } catch (e) {
