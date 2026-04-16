@@ -22295,12 +22295,52 @@ async function processVapiCallFromQueue(call) {
     
     let vapiResult;
     try {
-      vapiResult = await callLeadInstantly({
-        clientKey,
-        lead: leadForCall,
-        client
-      });
+      const timeoutMs = Math.max(
+        10_000,
+        Math.min(180_000, parseInt(String(process.env.CALL_QUEUE_VAPI_TIMEOUT_MS || '60000'), 10) || 60_000)
+      );
+      vapiResult = await Promise.race([
+        callLeadInstantly({
+          clientKey,
+          lead: leadForCall,
+          client
+        }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(Object.assign(new Error('queue_handler_timeout'), { code: 'queue_handler_timeout' })), timeoutMs)
+        )
+      ]);
     } catch (e) {
+      if (String(e?.code || '') === 'queue_handler_timeout') {
+        const next = smearCallQueueScheduledFor(
+          new Date(Date.now() + 2 * 60 * 1000),
+          clientKey,
+          leadPhone,
+          call.id
+        );
+        await query(
+          `
+            UPDATE call_queue
+            SET status = 'pending',
+                scheduled_for = $1,
+                call_data = jsonb_set(
+                  COALESCE(call_data, '{}'::jsonb),
+                  '{lastDefer}',
+                  jsonb_build_object(
+                    'at', NOW(),
+                    'kind', 'internal',
+                    'error', 'queue_handler_timeout',
+                    'step', 'callLeadInstantly'
+                  ),
+                  true
+                ),
+                updated_at = NOW()
+            WHERE id = $2
+          `,
+          [next, call.id]
+        );
+        console.warn('[QUEUE CALL] Deferred — handler timeout', { queueId: call.id, scheduledFor: next.toISOString(), timeoutMs });
+        return {};
+      }
       if (isTransientInstantCallThrow(e)) {
         const next = smearCallQueueScheduledFor(
           new Date(Date.now() + 2 * 60 * 1000),
