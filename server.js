@@ -433,6 +433,69 @@ app.post('/api/admin/call-queue/pull-forward/:clientKey', async (req, res) => {
 });
 
 /**
+ * Admin ops: peek at the next outbound queue rows for a client, including defer diagnostics.
+ *
+ * GET /api/admin/call-queue/peek/:clientKey?limit=20&dueOnly=1
+ */
+app.get('/api/admin/call-queue/peek/:clientKey', async (req, res) => {
+  const { clientKey } = req.params;
+  const limit = Math.max(1, Math.min(200, parseInt(String(req.query.limit ?? '20'), 10) || 20));
+  const dueOnly = /^(1|true|yes)$/i.test(String(req.query.dueOnly ?? '').trim());
+
+  try {
+    if (!isPostgres) return res.status(400).json({ ok: false, error: 'postgres_required' });
+    const client = await getFullClient(clientKey, { bypassCache: false });
+    if (!client || !client.clientKey) {
+      return res.status(404).json({ ok: false, error: 'client_not_found' });
+    }
+
+    const { rows } = await query(
+      `
+        SELECT
+          id,
+          client_key,
+          lead_phone,
+          status,
+          call_type,
+          priority,
+          scheduled_for,
+          initiated_call_id,
+          call_data->'lastDefer' AS last_defer
+        FROM call_queue
+        WHERE client_key = $1
+          AND call_type = 'vapi_call'
+          AND status IN ('pending','processing')
+          AND ($2::boolean = false OR scheduled_for <= NOW())
+        ORDER BY scheduled_for ASC, priority ASC, id ASC
+        LIMIT $3
+      `,
+      [clientKey, dueOnly, limit]
+    );
+
+    res.set('Cache-Control', 'no-store, must-revalidate, max-age=0');
+    return res.json({
+      ok: true,
+      clientKey,
+      dueOnly,
+      limit,
+      now: new Date().toISOString(),
+      rows: (rows || []).map(r => ({
+        id: String(r.id),
+        leadPhone: r.lead_phone,
+        status: r.status,
+        priority: r.priority,
+        scheduledFor: r.scheduled_for ? new Date(r.scheduled_for).toISOString() : null,
+        initiatedCallId: r.initiated_call_id || null,
+        lastDefer: r.last_defer || null
+      }))
+    });
+  } catch (e) {
+    console.error('[ADMIN PEEK QUEUE] Error:', e);
+    return res.status(500).json({ ok: false, error: String(e?.message || e).slice(0, 240) });
+  }
+});
+
+/**
  * Admin ops: clear today's weekday-journey slot claims for a client.
  *
  * This unblocks `weekday_slot_used` deferrals for the current local weekday only,
