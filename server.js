@@ -496,6 +496,66 @@ app.get('/api/admin/call-queue/peek/:clientKey', async (req, res) => {
 });
 
 /**
+ * Admin ops: force-reset stuck `processing` outbound queue rows back to `pending`.
+ *
+ * POST /api/admin/call-queue/reset-processing/:clientKey?minAgeSec=90&limit=500
+ */
+app.post('/api/admin/call-queue/reset-processing/:clientKey', async (req, res) => {
+  const { clientKey } = req.params;
+  const minAgeSec = Math.max(5, Math.min(3600, parseInt(String(req.query.minAgeSec ?? req.body?.minAgeSec ?? '90'), 10) || 90));
+  const limit = Math.max(1, Math.min(5000, parseInt(String(req.query.limit ?? req.body?.limit ?? '500'), 10) || 500));
+
+  try {
+    if (!isPostgres) return res.status(400).json({ ok: false, error: 'postgres_required' });
+    const client = await getFullClient(clientKey, { bypassCache: false });
+    if (!client || !client.clientKey) {
+      return res.status(404).json({ ok: false, error: 'client_not_found' });
+    }
+
+    const { rows } = await query(
+      `
+        WITH picked AS (
+          SELECT id
+          FROM call_queue
+          WHERE client_key = $1
+            AND call_type = 'vapi_call'
+            AND status = 'processing'
+            AND initiated_call_id IS NULL
+            AND updated_at < NOW() - ($2::int || ' seconds')::interval
+          ORDER BY updated_at ASC, id ASC
+          LIMIT $3
+        )
+        UPDATE call_queue cq
+        SET status = 'pending',
+            scheduled_for = NOW() - INTERVAL '1 second' + ((abs(cq.id) % 997) + 1) * INTERVAL '1 millisecond',
+            call_data = jsonb_set(
+              COALESCE(cq.call_data, '{}'::jsonb),
+              '{lastDefer}',
+              jsonb_build_object(
+                'at', NOW(),
+                'kind', 'internal',
+                'error', 'force_reset_processing',
+                'minAgeSec', $2
+              ),
+              true
+            ),
+            updated_at = NOW()
+        FROM picked p
+        WHERE cq.id = p.id
+        RETURNING cq.id
+      `,
+      [clientKey, minAgeSec, limit]
+    );
+
+    res.set('Cache-Control', 'no-store, must-revalidate, max-age=0');
+    return res.json({ ok: true, clientKey, minAgeSec, limit, reset: rows?.length || 0 });
+  } catch (e) {
+    console.error('[ADMIN RESET PROCESSING] Error:', e);
+    return res.status(500).json({ ok: false, error: String(e?.message || e).slice(0, 240) });
+  }
+});
+
+/**
  * Admin ops: clear today's weekday-journey slot claims for a client.
  *
  * This unblocks `weekday_slot_used` deferrals for the current local weekday only,
@@ -22094,7 +22154,49 @@ async function processCallQueue() {
 
       // Process the call based on type
       if (call.call_type === 'vapi_call') {
-        const v = await processVapiCallFromQueue(call);
+        const timeoutMs = Math.max(
+          10_000,
+          Math.min(300_000, parseInt(String(process.env.CALL_QUEUE_ITEM_TIMEOUT_MS || '120000'), 10) || 120_000)
+        );
+        const v = await Promise.race([
+          processVapiCallFromQueue(call),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(Object.assign(new Error('queue_item_timeout'), { code: 'queue_item_timeout' })), timeoutMs)
+          )
+        ]).catch(async (e) => {
+          if (String(e?.code || '') === 'queue_item_timeout') {
+            const next = smearCallQueueScheduledFor(
+              new Date(Date.now() + 2 * 60 * 1000),
+              call.client_key,
+              call.lead_phone,
+              call.id
+            );
+            await query(
+              `
+                UPDATE call_queue
+                SET status = 'pending',
+                    scheduled_for = $1,
+                    call_data = jsonb_set(
+                      COALESCE(call_data, '{}'::jsonb),
+                      '{lastDefer}',
+                      jsonb_build_object(
+                        'at', NOW(),
+                        'kind', 'internal',
+                        'error', 'queue_item_timeout',
+                        'timeoutMs', $3
+                      ),
+                      true
+                    ),
+                    updated_at = NOW()
+                WHERE id = $2
+              `,
+              [next, call.id, timeoutMs]
+            );
+            console.warn('[CALL QUEUE PROCESSOR] Item timed out; rescheduled', { id: call.id, timeoutMs });
+            return {};
+          }
+          throw e;
+        });
         const { rows: stRows } = await query(`SELECT status FROM call_queue WHERE id = $1`, [call.id]);
         if (stRows?.[0]?.status === 'pending') {
           console.log('[CALL QUEUE PROCESSOR] Item rescheduled during handler; skipping complete.', { id: call.id });
