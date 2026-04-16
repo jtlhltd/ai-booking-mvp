@@ -532,6 +532,7 @@ app.get('/api/admin/call-queue/blockers/:clientKey', async (req, res) => {
       { rows: bucketRows },
       { rows: deferPendingRows },
       { rows: deferDueRows },
+      { rows: deferFutureRows },
       { rows: procStepRows },
       { rows: journeyRows },
       { rows: leadRows },
@@ -577,6 +578,22 @@ app.get('/api/admin/call-queue/blockers/:clientKey', async (req, res) => {
           AND call_type = 'vapi_call'
           AND status = 'pending'
           AND scheduled_for <= NOW()
+        GROUP BY 1, 2
+        ORDER BY n DESC, defer_kind, defer_error
+        `,
+        [clientKey]
+      ),
+      query(
+        `
+        SELECT
+          COALESCE(call_data->'lastDefer'->>'kind', '(none)') AS defer_kind,
+          COALESCE(call_data->'lastDefer'->>'error', '(none)') AS defer_error,
+          COUNT(*)::int AS n
+        FROM call_queue
+        WHERE client_key = $1
+          AND call_type = 'vapi_call'
+          AND status = 'pending'
+          AND scheduled_for > NOW()
         GROUP BY 1, 2
         ORDER BY n DESC, defer_kind, defer_error
         `,
@@ -649,6 +666,7 @@ app.get('/api/admin/call-queue/blockers/:clientKey', async (req, res) => {
         '`pendingByLastDefer` / `duePendingByLastDefer` group rows by the *last recorded deferral* on the queue row (JSON `lastDefer`).',
         'A row can be `pending` with `lastDefer` from an earlier attempt; `(none)/(none)` means no defer metadata was stored yet.',
         '`duePendingByLastDefer` is the subset that is due right now (`scheduled_for <= now()`), i.e. what the processor can pick next.',
+        '`futurePendingByLastDefer` is the same grouping but only rows with `scheduled_for > now()` (usually backlog / smeared scheduling — not “blocked by rule” in the same sense as journey limits).',
         '`newLeadsNotOnQueue` counts `leads.status=new` (30d) with no `pending`/`processing` `vapi_call` queue row for the same phone key — it does not, by itself, prove the lead is dial-eligible (journey / active calls / business hours are enforced when queuing/dialing).'
       ],
       runtime: {
@@ -677,6 +695,7 @@ app.get('/api/admin/call-queue/blockers/:clientKey', async (req, res) => {
       },
       pendingByLastDefer: deferPendingRows || [],
       duePendingByLastDefer: deferDueRows || [],
+      futurePendingByLastDefer: deferFutureRows || [],
       processingByLastStep: procStepRows || [],
       outboundWeekdayJourney: {
         journeyRows: parseInt(j.journey_rows, 10) || 0,
