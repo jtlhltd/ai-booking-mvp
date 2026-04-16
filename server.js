@@ -460,7 +460,8 @@ app.get('/api/admin/call-queue/peek/:clientKey', async (req, res) => {
           priority,
           scheduled_for,
           initiated_call_id,
-          call_data->'lastDefer' AS last_defer
+          call_data->'lastDefer' AS last_defer,
+          call_data->'lastStep' AS last_step
         FROM call_queue
         WHERE client_key = $1
           AND call_type = 'vapi_call'
@@ -486,7 +487,8 @@ app.get('/api/admin/call-queue/peek/:clientKey', async (req, res) => {
         priority: r.priority,
         scheduledFor: r.scheduled_for ? new Date(r.scheduled_for).toISOString() : null,
         initiatedCallId: r.initiated_call_id || null,
-        lastDefer: r.last_defer || null
+        lastDefer: r.last_defer || null,
+        lastStep: r.last_step || null
       }))
     });
   } catch (e) {
@@ -7178,6 +7180,10 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
             r.call_data && typeof r.call_data === 'object' && r.call_data.lastDefer && typeof r.call_data.lastDefer === 'object'
               ? r.call_data.lastDefer
               : null;
+          const lastStep =
+            r.call_data && typeof r.call_data === 'object' && r.call_data.lastStep && typeof r.call_data.lastStep === 'object'
+              ? r.call_data.lastStep
+              : null;
           let journey = null;
           if (sched && r.lead_phone) {
             journey = await hasOutboundWeekdayJourneyDialBlocked(clientKey, r.lead_phone, tenantTz, { asOf: sched });
@@ -7205,7 +7211,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
             withinWindowAtScheduledFor: withinAt,
             action,
             reason,
-            lastDefer
+            lastDefer,
+            lastStep
           });
         }
         // Determine earliest expected dial time by scanning preview: first row that is predicted to dial
