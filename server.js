@@ -22183,7 +22183,8 @@ async function processCallQueue() {
                         'at', NOW(),
                         'kind', 'internal',
                         'error', 'queue_item_timeout',
-                        'timeoutMs', $3
+                        'timeoutMs', $3,
+                        'lastStep', COALESCE(call_data->'lastStep', NULL)
                       ),
                       true
                     ),
@@ -22334,12 +22335,40 @@ async function processVapiCallFromQueue(call) {
     const { client_key: clientKey, lead_phone: leadPhone } = call;
     
     // Get client configuration
+    await query(
+      `
+        UPDATE call_queue
+        SET call_data = jsonb_set(
+          COALESCE(call_data, '{}'::jsonb),
+          '{lastStep}',
+          jsonb_build_object('at', NOW(), 'step', 'load_client'),
+          true
+        ),
+        updated_at = NOW()
+        WHERE id = $1
+      `,
+      [call.id]
+    );
     const client = await getFullClient(clientKey);
     if (!client) {
       throw new Error('Client not found');
     }
     
     // Get existing lead for context (DB-backed; avoids loading all tenants)
+    await query(
+      `
+        UPDATE call_queue
+        SET call_data = jsonb_set(
+          COALESCE(call_data, '{}'::jsonb),
+          '{lastStep}',
+          jsonb_build_object('at', NOW(), 'step', 'lead_lookup'),
+          true
+        ),
+        updated_at = NOW()
+        WHERE id = $1
+      `,
+      [call.id]
+    );
     const leadRes = await query(
       `
         SELECT id, name, phone, service, source, notes, status, created_at
@@ -22353,6 +22382,20 @@ async function processVapiCallFromQueue(call) {
     const existingLead = leadRes?.rows?.[0] || null;
     
     // Select optimal assistant
+    await query(
+      `
+        UPDATE call_queue
+        SET call_data = jsonb_set(
+          COALESCE(call_data, '{}'::jsonb),
+          '{lastStep}',
+          jsonb_build_object('at', NOW(), 'step', 'select_assistant'),
+          true
+        ),
+        updated_at = NOW()
+        WHERE id = $1
+      `,
+      [call.id]
+    );
     const assistantConfig = await selectOptimalAssistant({ 
       client, 
       existingLead, 
@@ -22361,6 +22404,20 @@ async function processVapiCallFromQueue(call) {
     });
     
     // Generate assistant variables
+    await query(
+      `
+        UPDATE call_queue
+        SET call_data = jsonb_set(
+          COALESCE(call_data, '{}'::jsonb),
+          '{lastStep}',
+          jsonb_build_object('at', NOW(), 'step', 'generate_variables'),
+          true
+        ),
+        updated_at = NOW()
+        WHERE id = $1
+      `,
+      [call.id]
+    );
     const assistantVariables = await generateAssistantVariables({
       client,
       existingLead,
@@ -22397,6 +22454,20 @@ async function processVapiCallFromQueue(call) {
     
     let vapiResult;
     try {
+      await query(
+        `
+          UPDATE call_queue
+          SET call_data = jsonb_set(
+            COALESCE(call_data, '{}'::jsonb),
+            '{lastStep}',
+            jsonb_build_object('at', NOW(), 'step', 'callLeadInstantly'),
+            true
+          ),
+          updated_at = NOW()
+          WHERE id = $1
+        `,
+        [call.id]
+      );
       const timeoutMs = Math.max(
         10_000,
         Math.min(180_000, parseInt(String(process.env.CALL_QUEUE_VAPI_TIMEOUT_MS || '60000'), 10) || 60_000)
@@ -22431,7 +22502,8 @@ async function processVapiCallFromQueue(call) {
                     'at', NOW(),
                     'kind', 'internal',
                     'error', 'queue_handler_timeout',
-                    'step', 'callLeadInstantly'
+                    'step', 'callLeadInstantly',
+                    'lastStep', COALESCE(call_data->'lastStep', NULL)
                   ),
                   true
                 ),
