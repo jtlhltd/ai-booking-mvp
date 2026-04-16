@@ -326,6 +326,112 @@ app.get('/api/admin/call-recordings', async (req, res) => {
   }
 });
 
+/**
+ * Admin ops: pull a batch of pending outbound calls forward into "today" (current business window),
+ * spacing them out so they become due gradually rather than all at once.
+ *
+ * POST /api/admin/call-queue/pull-forward/:clientKey?limit=80
+ */
+app.post('/api/admin/call-queue/pull-forward/:clientKey', async (req, res) => {
+  const { clientKey } = req.params;
+  const limitRaw = req.query.limit ?? req.body?.limit;
+  const limit = Math.max(1, Math.min(500, parseInt(String(limitRaw ?? '80'), 10) || 80));
+
+  try {
+    if (!isPostgres) {
+      return res.status(400).json({ ok: false, error: 'postgres_required' });
+    }
+    const client = await getFullClient(clientKey, { bypassCache: false });
+    if (!client || !client.clientKey) {
+      return res.status(404).json({ ok: false, error: 'client_not_found' });
+    }
+
+    const { isBusinessHoursForTenant, getBusinessHoursConfig, getNextBusinessOpenForTenant } = await import('./lib/business-hours.js');
+    const tz = pickTimezone(client);
+    const now = new Date();
+    const within = isBusinessHoursForTenant(client, now, tz, { forOutboundDial: true });
+    if (!within) {
+      const nextOpen = getNextBusinessOpenForTenant(client, now, tz, { forOutboundDial: true });
+      return res.status(400).json({
+        ok: false,
+        error: 'outside_business_hours',
+        timezone: tz,
+        nextOpenAt: nextOpen ? nextOpen.toISOString() : null
+      });
+    }
+
+    const cfg = getBusinessHoursConfig(client);
+    const endHour = Math.max(0, Math.min(24, Number(cfg.end ?? 17)));
+    const endLocal = DateTime.fromJSDate(now).setZone(tz).set({ hour: endHour, minute: 0, second: 0, millisecond: 0 });
+    const endUtcMs = endLocal.toUTC().toMillis();
+    const remainingSec = Math.floor((endUtcMs - Date.now()) / 1000);
+    if (!Number.isFinite(remainingSec) || remainingSec <= 60) {
+      return res.status(400).json({
+        ok: false,
+        error: 'window_ending_soon',
+        timezone: tz,
+        windowEndsAt: endLocal.isValid ? endLocal.toISO() : null
+      });
+    }
+
+    const spacingSeconds = Math.max(15, Math.min(600, Math.floor(remainingSec / Math.max(1, limit))));
+    const { rows } = await query(
+      `
+        WITH picked AS (
+          SELECT id, ROW_NUMBER() OVER (ORDER BY scheduled_for ASC, id ASC) AS rn
+          FROM call_queue
+          WHERE client_key = $1
+            AND call_type = 'vapi_call'
+            AND status = 'pending'
+            AND scheduled_for > NOW()
+            AND scheduled_for <= NOW() + INTERVAL '48 hours'
+          LIMIT $2
+        )
+        UPDATE call_queue cq
+        SET scheduled_for =
+              NOW() - INTERVAL '1 second'
+              + ((picked.rn - 1) * $3::bigint) * INTERVAL '1 second'
+              + ((abs(picked.id) % 997) + 1) * INTERVAL '1 millisecond',
+            call_data =
+              jsonb_set(
+                COALESCE(cq.call_data, '{}'::jsonb),
+                '{scheduling}',
+                to_jsonb('manual_pull_forward'::text),
+                true
+              ),
+            updated_at = NOW()
+        FROM picked
+        WHERE cq.id = picked.id
+        RETURNING cq.id, cq.scheduled_for
+      `,
+      [clientKey, limit, spacingSeconds]
+    );
+
+    const moved = rows?.length || 0;
+    const times = (rows || [])
+      .map(r => (r.scheduled_for ? new Date(r.scheduled_for).getTime() : NaN))
+      .filter(Number.isFinite)
+      .sort((a, b) => a - b);
+
+    res.set('Cache-Control', 'no-store, must-revalidate, max-age=0');
+    return res.json({
+      ok: true,
+      clientKey,
+      timezone: tz,
+      withinBusinessHours: true,
+      moved,
+      limit,
+      spacingSeconds,
+      windowEndsAt: endLocal.isValid ? endLocal.toISO() : null,
+      firstScheduledFor: times.length ? new Date(times[0]).toISOString() : null,
+      lastScheduledFor: times.length ? new Date(times[times.length - 1]).toISOString() : null
+    });
+  } catch (e) {
+    console.error('[ADMIN PULL QUEUE FORWARD] Error:', e);
+    return res.status(500).json({ ok: false, error: String(e?.message || e).slice(0, 240) });
+  }
+});
+
 app.post('/api/admin/call-recordings', async (req, res) => {
   try {
     const { callId, clientKey, leadPhone, recordingUrl, transcript, duration, metadata } = req.body;
