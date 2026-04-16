@@ -19248,31 +19248,52 @@ app.get('/admin/system-health', async (req, res) => {
 
     // Test external services
     try {
-      if (VAPI_PRIVATE_KEY) {
+      const vapiKeyProbe =
+        (process.env.VAPI_PRIVATE_KEY || process.env.VAPI_PUBLIC_KEY || process.env.VAPI_API_KEY || '').trim();
+      if (vapiKeyProbe) {
         // Prefer real GETs to stable resources. Some APIs don't support HEAD on /call.
         const vapiBase = (process.env.VAPI_ORIGIN && String(process.env.VAPI_ORIGIN).trim())
           ? String(process.env.VAPI_ORIGIN).trim().replace(/\/+$/, '')
           : VAPI_URL;
-        const headers = { 'Authorization': `Bearer ${VAPI_PRIVATE_KEY}` };
+        const headers = { 'Authorization': `Bearer ${vapiKeyProbe}` };
         const assistantId = String(process.env.VAPI_ASSISTANT_ID || '').trim();
         const phoneNumberId = String(process.env.VAPI_PHONE_NUMBER_ID || '').trim();
 
+        health.external.vapiProbe = {
+          base: vapiBase,
+          assistantIdPresent: !!assistantId,
+          phoneNumberIdPresent: !!phoneNumberId,
+          attempted: null,
+          status: null
+        };
+
         let ok = false;
         if (assistantId) {
-          const r = await fetch(`${vapiBase}/assistant/${encodeURIComponent(assistantId)}`, { method: 'GET', headers });
+          const url = `${vapiBase}/assistant/${encodeURIComponent(assistantId)}`;
+          health.external.vapiProbe.attempted = url;
+          const r = await fetch(url, { method: 'GET', headers });
+          health.external.vapiProbe.status = r.status;
           ok = r.ok;
         } else if (phoneNumberId) {
-          const r = await fetch(`${vapiBase}/phone-number/${encodeURIComponent(phoneNumberId)}`, { method: 'GET', headers });
+          const url = `${vapiBase}/phone-number/${encodeURIComponent(phoneNumberId)}`;
+          health.external.vapiProbe.attempted = url;
+          const r = await fetch(url, { method: 'GET', headers });
+          health.external.vapiProbe.status = r.status;
           ok = r.ok;
         } else {
           // Last-resort liveness probe: list assistants (works on most configs)
-          const r = await fetch(`${vapiBase}/assistant`, { method: 'GET', headers });
+          const url = `${vapiBase}/assistant`;
+          health.external.vapiProbe.attempted = url;
+          const r = await fetch(url, { method: 'GET', headers });
+          health.external.vapiProbe.status = r.status;
           ok = r.ok;
         }
         health.external.vapi = ok ? 'connected' : 'error';
       }
     } catch (e) {
       health.external.vapi = 'error';
+      health.external.vapiProbe = health.external.vapiProbe || {};
+      health.external.vapiProbe.error = String(e?.message || e).slice(0, 240);
     }
 
     // Dialing diagnostics (non-fatal)
