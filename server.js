@@ -22002,7 +22002,23 @@ async function processCallQueue() {
             call.id
           );
           await query(
-            `UPDATE call_queue SET scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
+            `
+              UPDATE call_queue
+              SET scheduled_for = $1,
+                  call_data = jsonb_set(
+                    COALESCE(call_data, '{}'::jsonb),
+                    '{lastDefer}',
+                    jsonb_build_object(
+                      'at', NOW(),
+                      'kind', 'gate',
+                      'error', 'outside_business_hours',
+                      'details', 'deferred_in_process_one'
+                    ),
+                    true
+                  ),
+                  updated_at = NOW()
+              WHERE id = $2
+            `,
             [next, call.id]
           );
           console.log('[CALL QUEUE PROCESSOR] Deferred — outside business hours', { id: call.id, scheduledFor: next });
@@ -22031,7 +22047,24 @@ async function processCallQueue() {
             call.id
           );
           await query(
-            `UPDATE call_queue SET status = 'pending', scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
+            `
+              UPDATE call_queue
+              SET status = 'pending',
+                  scheduled_for = $1,
+                  call_data = jsonb_set(
+                    COALESCE(call_data, '{}'::jsonb),
+                    '{lastDefer}',
+                    jsonb_build_object(
+                      'at', NOW(),
+                      'kind', 'internal',
+                      'error', 'missing_vapi_call_id',
+                      'details', 'handler_returned_no_call_id'
+                    ),
+                    true
+                  ),
+                  updated_at = NOW()
+              WHERE id = $2
+            `,
             [next, call.id]
           );
           console.warn('[CALL QUEUE PROCESSOR] No Vapi call id from handler; rescheduled', { id: call.id, scheduledFor: next.toISOString() });
@@ -22251,7 +22284,24 @@ async function processVapiCallFromQueue(call) {
         call.id
       );
       await query(
-        `UPDATE call_queue SET status = 'pending', scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
+        `
+          UPDATE call_queue
+          SET status = 'pending',
+              scheduled_for = $1,
+              call_data = jsonb_set(
+                COALESCE(call_data, '{}'::jsonb),
+                '{lastDefer}',
+                jsonb_build_object(
+                  'at', NOW(),
+                  'kind', 'gate',
+                  'error', 'outside_business_hours',
+                  'details', 'vapi_helper_returned_outside_hours'
+                ),
+                true
+              ),
+              updated_at = NOW()
+          WHERE id = $2
+        `,
         [next, call.id]
       );
       console.log('[QUEUE CALL] Deferred to business hours', { queueId: call.id, scheduledFor: next });
@@ -22277,7 +22327,24 @@ async function processVapiCallFromQueue(call) {
       });
       const nextSmear = smearCallQueueScheduledFor(nextOpen, clientKey, leadPhone, call.id);
       await query(
-        `UPDATE call_queue SET status = 'pending', scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
+        `
+          UPDATE call_queue
+          SET status = 'pending',
+              scheduled_for = $1,
+              call_data = jsonb_set(
+                COALESCE(call_data, '{}'::jsonb),
+                '{lastDefer}',
+                jsonb_build_object(
+                  'at', NOW(),
+                  'kind', 'journey',
+                  'error', 'daily_dial_limit',
+                  'details', 'weekday_slot_used'
+                ),
+                true
+              ),
+              updated_at = NOW()
+          WHERE id = $2
+        `,
         [nextSmear, call.id]
       );
       console.log('[QUEUE CALL] Deferred — weekday journey slot already used for today’s bucket (try next dial day)', {
@@ -22402,7 +22469,24 @@ async function processVapiCallFromQueue(call) {
         call.id
       );
       await query(
-        `UPDATE call_queue SET status = 'pending', scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
+        `
+          UPDATE call_queue
+          SET status = 'pending',
+              scheduled_for = $1,
+              call_data = jsonb_set(
+                COALESCE(call_data, '{}'::jsonb),
+                '{lastDefer}',
+                jsonb_build_object(
+                  'at', NOW(),
+                  'kind', 'internal',
+                  'error', 'missing_vapi_call_id',
+                  'details', 'vapi_ok_but_missing_id'
+                ),
+                true
+              ),
+              updated_at = NOW()
+          WHERE id = $2
+        `,
         [next, call.id]
       );
       console.warn('[QUEUE CALL] Missing VAPI call id; rescheduled', { queueId: call.id, scheduledFor: next.toISOString() });
@@ -22451,8 +22535,25 @@ async function processVapiCallFromQueue(call) {
         call.id
       );
       await query(
-        `UPDATE call_queue SET status = 'pending', scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
-        [next, call.id]
+        `
+          UPDATE call_queue
+          SET status = 'pending',
+              scheduled_for = $1,
+              call_data = jsonb_set(
+                COALESCE(call_data, '{}'::jsonb),
+                '{lastDefer}',
+                jsonb_build_object(
+                  'at', NOW(),
+                  'kind', 'internal',
+                  'error', 'call_persist_failure',
+                  'message', $3
+                ),
+                true
+              ),
+              updated_at = NOW()
+          WHERE id = $2
+        `,
+        [next, call.id, String(e?.message || e).slice(0, 220)]
       );
       console.warn('[QUEUE CALL] Rescheduled due to call persist failure', { queueId: call.id, scheduledFor: next.toISOString() });
       return;
