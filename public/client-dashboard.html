@@ -7176,6 +7176,32 @@
                     : oc.queueNextScheduledFor
                       ? escapeHtml(String(oc.queueNextScheduledFor))
                       : '';
+            const nextDialAbsRaw = oc.nextDialExpectedAt || oc.nextCallWillRunAt || oc.queueNextScheduledFor || null;
+            const nextDialAbs =
+                nextDialAbsRaw && typeof formatRelativeWithAbsolute === 'function'
+                    ? formatRelativeWithAbsolute(nextDialAbsRaw, tenantTz)
+                    : nextDialAbsRaw
+                      ? escapeHtml(String(nextDialAbsRaw))
+                      : '';
+            const nextPreview = Array.isArray(oc.nextQueuePreview) ? oc.nextQueuePreview : [];
+            const nextPreview0 = nextPreview.length > 0 ? nextPreview[0] : null;
+            const nextPreviewNote = (() => {
+                if (!nextPreview0 || !nextPreview0.action) return '';
+                const action = String(nextPreview0.action);
+                const reason = String(nextPreview0.reason || '');
+                if (action !== 'defer') return '';
+                const label =
+                    reason === 'outside_business_hours'
+                        ? 'outside business hours'
+                        : reason === 'weekday_slot_used' || reason === 'daily_dial_limit'
+                          ? 'weekday slot already used'
+                          : reason === 'journey_terminal'
+                            ? 'journey complete'
+                            : reason
+                              ? reason.replace(/_/g, ' ')
+                              : 'will reschedule';
+                return `Next queued item will defer (${escapeHtml(label)}).`;
+            })();
 
             const pad2 = (n) => String(n).padStart(2, '0');
             const dayLabel = (d) => {
@@ -7206,7 +7232,7 @@
                 pillText = 'Calls logging';
                 pillClass = 'outreach-state-pill--ok';
                 const nextTxt = q > 0 ? (nextSchedAbs || '—') : '—';
-                summary = `Outbound is placing calls. Next scheduled queue slot: <strong>${escapeHtml(nextTxt)}</strong>. Calling hours: <strong>${escapeHtml(
+                summary = `Outbound is placing calls. Next expected dial: <strong>${escapeHtml(nextDialAbs || nextTxt || '—')}</strong>. Calling hours: <strong>${escapeHtml(
                     businessHoursSummary
                 )}</strong>. <strong>${formatNumber(last24)}</strong> call rows hit dial history in the last 24 hours.`;
             } else if (state === 'no_contacts') {
@@ -7216,9 +7242,9 @@
             } else if (state === 'queued_future_window') {
                 pillText = 'Scheduled ahead';
                 pillClass = 'outreach-state-pill--info';
-                summary = `You have <strong>${formatNumber(backlogUnits)}</strong> units of work (not yet dialled in CRM + queue), but <strong>nothing is due right now</strong>. Next slot: <strong>${escapeHtml(
-                    nextSchedAbs || '—'
-                )}</strong>. Calling hours: <strong>${escapeHtml(businessHoursSummary)}</strong>.`;
+                summary = `You have <strong>${formatNumber(backlogUnits)}</strong> units of work (not yet dialled in CRM + queue), but <strong>nothing is due right now</strong>. Next expected dial: <strong>${escapeHtml(
+                    nextDialAbs || nextSchedAbs || '—'
+                )}</strong>. ${nextPreviewNote ? `<span class="tom-ab-test-meta">${nextPreviewNote}</span>` : ''} Calling hours: <strong>${escapeHtml(businessHoursSummary)}</strong>.`;
             } else if (state === 'runner_backlog_no_logs') {
                 pillText = 'Runner on — no new logs';
                 pillClass = 'outreach-state-pill--warn';
@@ -7235,7 +7261,9 @@
             } else if (state === 'paused_hours_backlog') {
                 pillText = 'Outside dialling hours';
                 pillClass = 'outreach-state-pill--muted';
-                summary = `Outbound is limited to your business hours. Calling hours: <strong>${escapeHtml(
+                summary = `Outbound is limited to your business hours. Next expected dial: <strong>${escapeHtml(
+                    nextDialAbs || nextSchedAbs || '—'
+                )}</strong>. Calling hours: <strong>${escapeHtml(
                     businessHoursSummary
                 )}</strong>. <strong>${formatNumber(backlogUnits)}</strong> units still waiting (CRM + queue).`;
             } else if (state === 'not_started') {
@@ -7348,19 +7376,19 @@
                     <div class="outreach-strip-fact"><dt>Backlog (CRM + queue)</dt><dd><strong>${formatNumber(backlogUnits)}</strong></dd></div>
                     <div class="outreach-strip-fact"><dt>In outbound queue</dt><dd><strong>${formatNumber(q)}</strong> <span class="tom-ab-test-meta">pending / processing</span></dd></div>
                     <div class="outreach-strip-fact"><dt>CRM not dialled yet</dt><dd><strong>${formatNumber(never)}</strong></dd></div>
-                    <div class="outreach-strip-fact"><dt>Callable today (est.)</dt><dd>${
+                    <div class="outreach-strip-fact"><dt>Callable now</dt><dd>${
                         callableToday == null
                             ? '—'
-                            : `<strong>${formatNumber(callableToday)}</strong> <span class="tom-ab-test-meta">callable on today’s weekday bucket</span>`
+                            : `<strong>${formatNumber(callableToday)}</strong> <span class="tom-ab-test-meta">eligible right now</span>`
                     }</dd></div>
-                    <div class="outreach-strip-fact"><dt>Blocked by daily limit</dt><dd>${
-                        blockedDaily == null
+                    <div class="outreach-strip-fact"><dt>Callable next slot</dt><dd>${
+                        oc.callableLeadsNextSlot == null
                             ? '—'
-                            : `<strong>${formatNumber(blockedDaily)}</strong> <span class="tom-ab-test-meta">already used today’s weekday bucket</span>`
+                            : `<strong>${formatNumber(Number(oc.callableLeadsNextSlot) || 0)}</strong> <span class="tom-ab-test-meta">eligible at next window</span>`
                     }</dd></div>
                     <div class="outreach-strip-fact"><dt>Due now (queue)</dt><dd>${dueDd}</dd></div>
                     <div class="outreach-strip-fact"><dt>Processing now</dt><dd>${procDd}</dd></div>
-                    <div class="outreach-strip-fact"><dt>Next queue slot</dt><dd>${nextDd}</dd></div>
+                    <div class="outreach-strip-fact"><dt>Next expected dial</dt><dd>${nextDialAbs ? `<strong>${escapeHtml(nextDialAbs)}</strong>` : nextDd}</dd></div>
                     <div class="outreach-strip-fact"><dt>Call history (24h)</dt><dd><strong>${formatNumber(last24)}</strong> <span class="tom-ab-test-meta">saved rows</span></dd></div>
                     <div class="outreach-strip-fact"><dt>Queue updates (24h)</dt><dd><strong>${formatNumber(qt24)}</strong> <span class="tom-ab-test-meta">row touches</span></dd></div>
                     <div class="outreach-strip-fact"><dt>Slots used today</dt><dd>${slotsDd}</dd></div>
