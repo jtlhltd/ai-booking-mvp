@@ -19227,6 +19227,7 @@ app.get('/admin/system-health', async (req, res) => {
         vapiEnv,
         lastProcessCallQueueAt: globalThis.__opsLastProcessCallQueueAt || null,
         lastQueueNewLeadsAt: globalThis.__opsLastQueueNewLeadsAt || null,
+        lastQueueNewLeadsCronAt: globalThis.__opsLastQueueNewLeadsCronAt || null,
         vapiConcurrency: null,
         callQueue: null
       },
@@ -19331,13 +19332,20 @@ app.get('/admin/system-health', async (req, res) => {
 
     try {
       if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN) {
-        const twilioTest = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}.json`, {
-          headers: { 'Authorization': `Basic ${Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString('base64')}` }
+        const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}.json`;
+        const twilioTest = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Basic ${Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString('base64')}`
+          }
         });
+        health.external.twilioProbe = { attempted: url, status: twilioTest.status };
         health.external.twilio = twilioTest.ok ? 'connected' : 'error';
       }
     } catch (e) {
       health.external.twilio = 'error';
+      health.external.twilioProbe = health.external.twilioProbe || {};
+      health.external.twilioProbe.error = String(e?.message || e).slice(0, 240);
     }
 
     console.log('[SYSTEM HEALTH]', { 
@@ -22120,14 +22128,7 @@ async function queueNewLeadsForCalling() {
               WHERE cq.client_key = l.client_key
                 AND cq.call_type = 'vapi_call'
                 AND cq.status IN ('pending', 'processing')
-                AND ${pgQueueLeadPhoneKeyExpr('cq.lead_phone')} = COALESCE(
-                  l.phone_match_key,
-                  (CASE WHEN LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
-                    THEN RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
-                    ELSE NULLIF(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), '')
-                  END),
-                  '__nodigits__'
-                )
+                AND ${pgQueueLeadPhoneKeyExpr('cq.lead_phone')} = COALESCE(l.phone_match_key, '__nodigits__')
             )
             AND NOT EXISTS (
               SELECT 1 FROM calls c
@@ -22139,14 +22140,7 @@ async function queueNewLeadsForCalling() {
             AND NOT EXISTS (
               SELECT 1 FROM outbound_weekday_journey j
               WHERE j.client_key = l.client_key
-                AND j.phone_match_key = COALESCE(
-                  l.phone_match_key,
-                  (CASE WHEN LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
-                    THEN RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
-                    ELSE NULLIF(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), '')
-                  END),
-                  '__nodigits__'
-                )
+                AND j.phone_match_key = COALESCE(l.phone_match_key, '__nodigits__')
                 AND (
                   j.closed_at IS NOT NULL
                   OR (
