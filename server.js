@@ -6805,6 +6805,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     let nextQueuePreview = null;
     let nextDialExpectedAt = null;
     let nextDialExpectedReason = null;
+    let nextQueuePreviewError = null;
     try {
       if (isPostgres) {
         const { hasOutboundWeekdayJourneyDialBlocked } = await import('./db.js');
@@ -6868,10 +6869,17 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
           }
         }
       }
-    } catch {
+    } catch (e) {
       nextQueuePreview = null;
       nextDialExpectedAt = null;
       nextDialExpectedReason = null;
+      nextQueuePreviewError = String(e?.message || e).slice(0, 240);
+    }
+
+    // Fallback: if preview isn't available, use the deterministic gate we already compute.
+    if (!nextDialExpectedAt && nextCallWillRunAt) {
+      nextDialExpectedAt = nextCallWillRunAt;
+      nextDialExpectedReason = nextDialExpectedReason || 'fallback_next_call_will_run_at';
     }
 
     const outboundDialSchedule = (() => {
@@ -7683,6 +7691,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         nextDialExpectedAt,
         nextDialExpectedReason,
         nextQueuePreview,
+        nextQueuePreviewError,
         outboundQueueSchedule,
         dialSlotsUsedLocalToday,
         dialsPerHour: Number(dialsPerHour.toFixed(2)),
