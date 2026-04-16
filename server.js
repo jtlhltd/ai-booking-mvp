@@ -22106,7 +22106,7 @@ async function processCallQueue() {
     }
 
     const maxCallsPerRun = Math.max(1, Math.min(500, parseInt(process.env.CALL_QUEUE_MAX_PER_RUN || '40', 10) || 40));
-    const maxConcurrentCalls = Math.max(1, Math.min(25, parseInt(process.env.CALL_QUEUE_MAX_CONCURRENT || '3', 10) || 3));
+    const maxConcurrentCalls = Math.max(1, Math.min(25, parseInt(process.env.CALL_QUEUE_MAX_CONCURRENT || '1', 10) || 1));
 
     const pendingCalls = await getPendingCalls(maxCallsPerRun);
     
@@ -22485,7 +22485,8 @@ async function processVapiCallFromQueue(call) {
         callLeadInstantly({
           clientKey,
           lead: leadForCall,
-          client
+          client,
+          callQueueId: call.id
         }),
         new Promise((_, reject) =>
           setTimeout(() => reject(Object.assign(new Error('queue_handler_timeout'), { code: 'queue_handler_timeout' })), timeoutMs)
