@@ -6796,6 +6796,80 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         ? (withinScheduledDialWindow ? blockedDailyLimitToday : 0)
         : null;
 
+    // Preview the next few queue rows to predict whether the next scheduled call will actually dial or be deferred.
+    // This makes the "next call" label truthful even when the first queued row is expected to reschedule.
+    let nextQueuePreview = null;
+    let nextDialExpectedAt = null;
+    let nextDialExpectedReason = null;
+    try {
+      if (isPostgres) {
+        const { hasOutboundWeekdayJourneyDialBlocked } = await import('./db.js');
+        const qRows = await query(
+          `
+          SELECT id, lead_phone, scheduled_for, priority
+          FROM call_queue
+          WHERE client_key = $1
+            AND status = 'pending'
+            AND call_type = 'vapi_call'
+          ORDER BY scheduled_for ASC, priority ASC, id ASC
+          LIMIT 5
+          `,
+          [clientKey]
+        );
+        const rows = qRows.rows || [];
+        nextQueuePreview = [];
+        for (const r of rows) {
+          const sched = r.scheduled_for ? new Date(r.scheduled_for) : null;
+          const schedIso = sched && !Number.isNaN(sched.getTime()) ? sched.toISOString() : null;
+          const withinAt = sched ? isBusinessHoursForTenant(client, sched, tenantTz, { forOutboundDial: true }) : false;
+          let journey = null;
+          if (sched && r.lead_phone) {
+            journey = await hasOutboundWeekdayJourneyDialBlocked(clientKey, r.lead_phone, tenantTz, { asOf: sched });
+          }
+          let action = 'unknown';
+          let reason = null;
+          if (!schedIso) {
+            action = 'skip';
+            reason = 'missing_scheduled_for';
+          } else if (!withinAt) {
+            action = 'defer';
+            reason = 'outside_business_hours';
+          } else if (journey?.blocked) {
+            action = 'defer';
+            reason = journey.reason || 'weekday_blocked';
+          } else {
+            action = 'dial';
+            reason = 'eligible';
+          }
+          nextQueuePreview.push({
+            id: r.id,
+            leadPhone: r.lead_phone,
+            scheduledFor: schedIso,
+            priority: r.priority,
+            withinWindowAtScheduledFor: withinAt,
+            action,
+            reason
+          });
+        }
+        // Determine earliest expected dial time by scanning preview: first row that is predicted to dial
+        // and then applying the global "window open" + "scheduled_for" gates.
+        const firstDial = nextQueuePreview.find((x) => x.action === 'dial' && x.scheduledFor);
+        if (firstDial) {
+          const openMs = outboundDialSchedule?.nextOpenAt ? Date.parse(outboundDialSchedule.nextOpenAt) : NaN;
+          const schedMs = Date.parse(firstDial.scheduledFor);
+          const ms = [openMs, schedMs].filter(Number.isFinite);
+          if (ms.length > 0) {
+            nextDialExpectedAt = new Date(Math.max(...ms)).toISOString();
+            nextDialExpectedReason = 'first_eligible_queue_row';
+          }
+        }
+      }
+    } catch {
+      nextQueuePreview = null;
+      nextDialExpectedAt = null;
+      nextDialExpectedReason = null;
+    }
+
     const outboundDialSchedule = (() => {
       const cfg = getBusinessHoursConfig(client);
       const startHour = cfg.start ?? 9;
@@ -7602,6 +7676,9 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         queueNextScheduledFor,
         nextCallWillRunAt,
         nextCallWillRunReason,
+        nextDialExpectedAt,
+        nextDialExpectedReason,
+        nextQueuePreview,
         outboundQueueSchedule,
         dialSlotsUsedLocalToday,
         dialsPerHour: Number(dialsPerHour.toFixed(2)),
