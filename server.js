@@ -6876,10 +6876,11 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       nextQueuePreviewError = String(e?.message || e).slice(0, 240);
     }
 
-    // Fallback: if preview isn't available, use the deterministic gate we already compute.
-    if (!nextDialExpectedAt && nextCallWillRunAt) {
-      nextDialExpectedAt = nextCallWillRunAt;
-      nextDialExpectedReason = nextDialExpectedReason || 'fallback_next_call_will_run_at';
+    // Fallback: if preview isn't available, fall back to the next queued schedule instant (deterministic).
+    // NOTE: don't reference nextCallWillRunAt here (declared later) to avoid TDZ crashes.
+    if (!nextDialExpectedAt && queueNextScheduledFor) {
+      nextDialExpectedAt = queueNextScheduledFor;
+      nextDialExpectedReason = nextDialExpectedReason || 'fallback_queue_next_scheduled_for';
     }
 
     const outboundDialSchedule = (() => {
