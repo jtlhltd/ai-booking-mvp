@@ -22011,15 +22011,25 @@ async function processCallQueue() {
     globalThis.__opsLastProcessCallQueueAt = new Date().toISOString();
     const { getPendingCalls, updateCallQueueStatus, cancelDuplicatePendingCalls, addToCallQueue } = await import('./db.js');
 
-    // Hard safety: never let a huge overdue backlog trigger "call everything now".
-    // We cap how many calls can be due "today" per client and push overflow to the next business window.
-    const dailyCapDefault = 150;
-    const dailyCap = Math.max(0, Math.min(5000, parseInt(process.env.CALL_QUEUE_DAILY_CAP || String(dailyCapDefault), 10) || dailyCapDefault));
-    const overdueKeepDue = Math.max(0, Math.min(500, parseInt(process.env.CALL_QUEUE_OVERDUE_KEEP_DUE || '50', 10) || 50));
-    const rescheduleBatchLimit = Math.max(100, Math.min(10000, parseInt(process.env.CALL_QUEUE_RESCHEDULE_BATCH_LIMIT || '3000', 10) || 3000));
-    const spacingSeconds = Math.max(15, Math.min(600, parseInt(process.env.CALL_QUEUE_RESCHEDULE_SPACING_SECONDS || '120', 10) || 120)); // default 2m
+    // Optional safety valve (OFF by default): when a tenant has a huge overdue `pending` backlog, cap how many
+    // stay "due now" today and push overflow to a future anchor (tomorrow 9:00 tenant-local) with row spacing.
+    // Most deployments already pace via Mon–Fri weekday journey + queue ordering; this reschedule can fight that
+    // by moving many rows to arbitrary future instants. Enable only if you explicitly want this guardrail:
+    //   CALL_QUEUE_OVERDUE_CAP_RESCHEDULE_ENABLED=1|true|yes
+    const overdueCapRescheduleEnabled = /^(1|true|yes)$/i.test(
+      String(process.env.CALL_QUEUE_OVERDUE_CAP_RESCHEDULE_ENABLED || '').trim()
+    );
 
     try {
+      if (!overdueCapRescheduleEnabled) {
+        // Skip: rely on weekday journey, per-run limits, and normal deferrals for pacing.
+      } else {
+      const dailyCapDefault = 150;
+      const dailyCap = Math.max(0, Math.min(5000, parseInt(process.env.CALL_QUEUE_DAILY_CAP || String(dailyCapDefault), 10) || dailyCapDefault));
+      const overdueKeepDue = Math.max(0, Math.min(500, parseInt(process.env.CALL_QUEUE_OVERDUE_KEEP_DUE || '50', 10) || 50));
+      const rescheduleBatchLimit = Math.max(100, Math.min(10000, parseInt(process.env.CALL_QUEUE_RESCHEDULE_BATCH_LIMIT || '3000', 10) || 3000));
+      const spacingSeconds = Math.max(15, Math.min(600, parseInt(process.env.CALL_QUEUE_RESCHEDULE_SPACING_SECONDS || '120', 10) || 120)); // default 2m
+
       // Find clients with large overdue pending backlogs.
       const { rows: overdueClients } = await query(
         `
@@ -22136,6 +22146,7 @@ async function processCallQueue() {
             tz
           });
         }
+      }
       }
     } catch (e) {
       console.warn('[CALL QUEUE PROCESSOR] Overdue reschedule guard failed:', e?.message || e);
