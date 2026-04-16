@@ -6789,6 +6789,13 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         ? (withinScheduledDialWindow ? callableLeadsToday : 0)
         : null;
 
+    const blockedDailyLimitNextSlot =
+      blockedDailyLimitToday != null ? blockedDailyLimitToday : null;
+    const blockedDailyLimitTodayWindowed =
+      blockedDailyLimitToday != null
+        ? (withinScheduledDialWindow ? blockedDailyLimitToday : 0)
+        : null;
+
     const outboundDialSchedule = (() => {
       const cfg = getBusinessHoursConfig(client);
       const startHour = cfg.start ?? 9;
@@ -7567,7 +7574,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         callQueuePending,
         callableLeadsToday: callableLeadsTodayWindowed,
         callableLeadsNextSlot,
-        blockedDailyLimitToday,
+        blockedDailyLimitToday: blockedDailyLimitTodayWindowed,
+        blockedDailyLimitNextSlot,
         dialAttemptsLast24h: callsLast24h,
         queueTouchesLast24h,
         queuePendingDueNow,
@@ -7582,6 +7590,12 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         activityState: outreachActivityState,
         withinScheduledDialWindow,
         outboundDialSchedule,
+        semantics: {
+          callableLeadsToday: 'Count of leads eligible to dial right now (0 when outside calling window).',
+          callableLeadsNextSlot: 'Count of leads eligible to dial when the next calling window opens.',
+          blockedDailyLimitToday: 'Count of leads blocked right now by weekday slot usage (0 when outside calling window).',
+          blockedDailyLimitNextSlot: 'Count of leads that will be blocked at the next calling window by weekday slot usage.'
+        },
         trends7d,
         trends30d
       },
