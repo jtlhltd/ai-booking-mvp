@@ -19252,9 +19252,10 @@ app.get('/admin/system-health', async (req, res) => {
         (process.env.VAPI_PRIVATE_KEY || process.env.VAPI_PUBLIC_KEY || process.env.VAPI_API_KEY || '').trim();
       if (vapiKeyProbe) {
         // Prefer real GETs to stable resources. Some APIs don't support HEAD on /call.
+        const vapiDefaultBase = 'https://api.vapi.ai';
         const vapiBase = (process.env.VAPI_ORIGIN && String(process.env.VAPI_ORIGIN).trim())
           ? String(process.env.VAPI_ORIGIN).trim().replace(/\/+$/, '')
-          : VAPI_URL;
+          : vapiDefaultBase;
         const headers = { 'Authorization': `Bearer ${vapiKeyProbe}` };
         const assistantId = String(process.env.VAPI_ASSISTANT_ID || '').trim();
         const phoneNumberId = String(process.env.VAPI_PHONE_NUMBER_ID || '').trim();
