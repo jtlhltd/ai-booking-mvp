@@ -6841,6 +6841,24 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
     const nextSchedMs = queueNextScheduledFor ? Date.parse(queueNextScheduledFor) : NaN;
     const queueNextIsFuture = Number.isFinite(nextSchedMs) && nextSchedMs > Date.now();
 
+    // When will the next call *actually* run?
+    // Combine queue scheduling with the business-hours gate so dashboards don't imply "today" when the window is closed.
+    let nextCallWillRunAt = null;
+    let nextCallWillRunReason = null;
+    if (withinScheduledDialWindow && queuePendingDueNow > 0) {
+      nextCallWillRunAt = new Date().toISOString();
+      nextCallWillRunReason = 'due_now_within_window';
+    } else {
+      const nextOpenMs = outboundDialSchedule?.nextOpenAt ? Date.parse(outboundDialSchedule.nextOpenAt) : NaN;
+      const nextQueueMs = queueNextScheduledFor ? Date.parse(queueNextScheduledFor) : NaN;
+      const msCandidates = [nextOpenMs, nextQueueMs].filter((x) => Number.isFinite(x));
+      if (msCandidates.length > 0) {
+        const ms = Math.max(...msCandidates);
+        nextCallWillRunAt = new Date(ms).toISOString();
+        nextCallWillRunReason = !withinScheduledDialWindow ? 'outside_window' : 'next_queue_item';
+      }
+    }
+
     let outreachActivityState = 'unknown';
     if (callsLast24h > 0) outreachActivityState = 'dialing';
     else if (totalLeads <= 0) outreachActivityState = 'no_contacts';
@@ -7582,6 +7600,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         queueProcessingNow,
         queueOldestDueFor,
         queueNextScheduledFor,
+        nextCallWillRunAt,
+        nextCallWillRunReason,
         outboundQueueSchedule,
         dialSlotsUsedLocalToday,
         dialsPerHour: Number(dialsPerHour.toFixed(2)),
