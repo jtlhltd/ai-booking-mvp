@@ -6486,14 +6486,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
                 AND NOT EXISTS (
                   SELECT 1 FROM outbound_weekday_journey j
                   WHERE j.client_key = l.client_key
-                    AND j.phone_match_key = COALESCE(
-                      l.phone_match_key,
-                      (CASE WHEN LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
-                        THEN RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
-                        ELSE NULLIF(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), '')
-                      END),
-                      '__nodigits__'
-                    )
+                    AND j.phone_match_key = COALESCE(l.phone_match_key, '__nodigits__')
                     AND (
                       j.closed_at IS NOT NULL
                       OR (
@@ -6528,14 +6521,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
                   SELECT 1 FROM outbound_weekday_journey j
                   WHERE j.client_key = l.client_key
                     AND j.closed_at IS NULL
-                    AND j.phone_match_key = COALESCE(
-                      l.phone_match_key,
-                      (CASE WHEN LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
-                        THEN RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
-                        ELSE NULLIF(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), '')
-                      END),
-                      '__nodigits__'
-                    )
+                    AND j.phone_match_key = COALESCE(l.phone_match_key, '__nodigits__')
                     AND EXTRACT(ISODOW FROM NOW() AT TIME ZONE (SELECT tz FROM tz)) BETWEEN 1 AND 5
                     AND (
                       j.weekday_mask
@@ -11258,12 +11244,6 @@ app.get('/api/call-recordings/:clientKey', async (req, res) => {
             AND (
               (c.lead_phone_match_key IS NOT NULL AND l.phone_match_key = c.lead_phone_match_key)
               OR (l.phone = c.lead_phone)
-              OR (
-                c.lead_phone_match_key IS NULL
-                AND LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
-                AND RIGHT(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), 10)
-                  = RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
-              )
             )
           ORDER BY
             CASE
@@ -11410,12 +11390,6 @@ app.get('/api/voicemails/:clientKey', async (req, res) => {
             AND (
               (c.lead_phone_match_key IS NOT NULL AND l.phone_match_key = c.lead_phone_match_key)
               OR (l.phone = c.lead_phone)
-              OR (
-                c.lead_phone_match_key IS NULL
-                AND LENGTH(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g')) >= 10
-                AND RIGHT(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), 10)
-                  = RIGHT(regexp_replace(COALESCE(l.phone, ''), '[^0-9]', '', 'g'), 10)
-              )
             )
           ORDER BY
             CASE
@@ -19225,6 +19199,12 @@ app.get('/admin/system-health', async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
+    const vapiEnv = {
+      hasPrivateKey: !!process.env.VAPI_PRIVATE_KEY,
+      hasAssistantId: !!process.env.VAPI_ASSISTANT_ID,
+      hasPhoneNumberId: !!process.env.VAPI_PHONE_NUMBER_ID
+    };
+
     const health = {
       timestamp: new Date().toISOString(),
       system: {
@@ -19242,6 +19222,13 @@ app.get('/admin/system-health', async (req, res) => {
         vapi: 'unknown',
         twilio: 'unknown',
         google: 'unknown'
+      },
+      dialing: {
+        vapiEnv,
+        lastProcessCallQueueAt: globalThis.__opsLastProcessCallQueueAt || null,
+        lastQueueNewLeadsAt: globalThis.__opsLastQueueNewLeadsAt || null,
+        vapiConcurrency: null,
+        callQueue: null
       },
       performance: {
         avgResponseTime: 0,
@@ -19262,14 +19249,62 @@ app.get('/admin/system-health', async (req, res) => {
     // Test external services
     try {
       if (VAPI_PRIVATE_KEY) {
-        const vapiTest = await fetch(`${VAPI_URL}/call`, {
-          method: 'HEAD',
-          headers: { 'Authorization': `Bearer ${VAPI_PRIVATE_KEY}` }
-        });
-        health.external.vapi = vapiTest.ok ? 'connected' : 'error';
+        // Prefer real GETs to stable resources. Some APIs don't support HEAD on /call.
+        const vapiBase = (process.env.VAPI_ORIGIN && String(process.env.VAPI_ORIGIN).trim())
+          ? String(process.env.VAPI_ORIGIN).trim().replace(/\/+$/, '')
+          : VAPI_URL;
+        const headers = { 'Authorization': `Bearer ${VAPI_PRIVATE_KEY}` };
+        const assistantId = String(process.env.VAPI_ASSISTANT_ID || '').trim();
+        const phoneNumberId = String(process.env.VAPI_PHONE_NUMBER_ID || '').trim();
+
+        let ok = false;
+        if (assistantId) {
+          const r = await fetch(`${vapiBase}/assistant/${encodeURIComponent(assistantId)}`, { method: 'GET', headers });
+          ok = r.ok;
+        } else if (phoneNumberId) {
+          const r = await fetch(`${vapiBase}/phone-number/${encodeURIComponent(phoneNumberId)}`, { method: 'GET', headers });
+          ok = r.ok;
+        } else {
+          // Last-resort liveness probe: list assistants (works on most configs)
+          const r = await fetch(`${vapiBase}/assistant`, { method: 'GET', headers });
+          ok = r.ok;
+        }
+        health.external.vapi = ok ? 'connected' : 'error';
       }
     } catch (e) {
       health.external.vapi = 'error';
+    }
+
+    // Dialing diagnostics (non-fatal)
+    try {
+      const { getVapiConcurrencyState } = await import('./lib/instant-calling.js');
+      health.dialing.vapiConcurrency = getVapiConcurrencyState();
+    } catch {
+      health.dialing.vapiConcurrency = null;
+    }
+    try {
+      if (isPostgres) {
+        const { rows } = await query(
+          `
+          SELECT
+            (SELECT COUNT(*)::int FROM call_queue WHERE status = 'pending') AS pending_total,
+            (SELECT COUNT(*)::int FROM call_queue WHERE status = 'pending' AND scheduled_for <= NOW()) AS due_now_total,
+            (SELECT COUNT(*)::int FROM call_queue WHERE status = 'processing') AS processing_total,
+            (SELECT MIN(scheduled_for) FROM call_queue WHERE status = 'pending') AS next_scheduled_for
+          `
+        );
+        const r = rows?.[0] || {};
+        health.dialing.callQueue = {
+          pendingTotal: parseInt(r.pending_total, 10) || 0,
+          dueNowTotal: parseInt(r.due_now_total, 10) || 0,
+          processingTotal: parseInt(r.processing_total, 10) || 0,
+          nextScheduledFor: r.next_scheduled_for ? new Date(r.next_scheduled_for).toISOString() : null
+        };
+      } else {
+        health.dialing.callQueue = null;
+      }
+    } catch {
+      health.dialing.callQueue = null;
     }
 
     try {

@@ -799,6 +799,10 @@ async function initPostgres() {
     CREATE INDEX IF NOT EXISTS call_queue_client_pending_vapi_scheduled_idx
       ON call_queue (client_key, scheduled_for ASC NULLS LAST)
       WHERE status = 'pending' AND call_type = 'vapi_call';
+    -- Dashboard callable_leads_today: NOT EXISTS call_queue row for same tenant+phone in today's window
+    CREATE INDEX IF NOT EXISTS call_queue_client_phone_vapi_active_scheduled_idx
+      ON call_queue (client_key, lead_phone, scheduled_for)
+      WHERE call_type = 'vapi_call' AND status IN ('pending', 'processing');
 
     CREATE TABLE IF NOT EXISTS cost_tracking (
       id BIGSERIAL PRIMARY KEY,
@@ -2408,6 +2412,127 @@ export async function claimOutboundWeekdayJourneySlot(clientKey, leadPhone, time
       /* ignore */
     }
     throw e;
+  } finally {
+    c.release();
+  }
+}
+
+/**
+ * Roll back a same-day weekday slot claim when the outbound call failed to start.
+ *
+ * IMPORTANT: This is a best-effort safety valve to prevent "no calls for days" when Vapi start fails
+ * after we claimed the weekday bucket. It only unsets *today's* weekday bit and re-opens
+ * `weekdays_exhausted` closures if applicable.
+ *
+ * This is intentionally not called for `weekday_slot_used` / `journey_terminal` outcomes (those are real blocks).
+ *
+ * @param {{ asOf?: Date }} [opts] Optional clock for tests (Mon–Fri in `timezone`).
+ */
+export async function rollbackOutboundWeekdayJourneySlot(clientKey, leadPhone, timezone = 'Europe/London', opts = {}) {
+  if (outboundBypassMultiplePerDay()) return;
+  const raw = leadPhone != null ? String(leadPhone).trim() : '';
+  if (!clientKey || !raw) return;
+
+  const claimKey = outboundDialClaimKeyFromRaw(raw);
+  const { DateTime } = await import('luxon');
+  const tz = timezone || 'Europe/London';
+  const local =
+    opts?.asOf instanceof Date && Number.isFinite(opts.asOf.getTime())
+      ? DateTime.fromJSDate(opts.asOf, { zone: tz })
+      : DateTime.now().setZone(tz);
+  const dayBit = tenantLocalWeekdayBitLuxon(local.weekday);
+  if (!dayBit) return; // weekend: no bit to roll back
+
+  // SQLite path
+  if (dbType !== 'postgres' || !pool) {
+    if (!sqlite) return;
+    const nowIso = new Date().toISOString();
+    try {
+      const trans = sqlite.transaction(() => {
+        const row = sqlite
+          .prepare(
+            `SELECT weekday_mask, closed_at, closed_reason FROM outbound_weekday_journey WHERE client_key = ? AND phone_match_key = ?`
+          )
+          .get(clientKey, claimKey);
+        if (!row) return;
+        const mask = Number(row.weekday_mask || 0);
+        if ((mask & dayBit) === 0) return;
+        const newMask = mask & ~dayBit;
+        const willReopen =
+          row.closed_at != null && String(row.closed_reason || '') === 'weekdays_exhausted' && newMask !== OUTBOUND_WEEKDAY_FULL_MASK;
+        sqlite
+          .prepare(
+            `UPDATE outbound_weekday_journey
+             SET weekday_mask = ?,
+                 closed_at = ?,
+                 closed_reason = ?,
+                 updated_at = ?
+             WHERE client_key = ? AND phone_match_key = ?`
+          )
+          .run(
+            newMask,
+            willReopen ? null : row.closed_at,
+            willReopen ? null : row.closed_reason,
+            nowIso,
+            clientKey,
+            claimKey
+          );
+      });
+      trans();
+    } catch (e) {
+      console.warn('[OUTBOUND WEEKDAY JOURNEY] rollback failed (sqlite):', e?.message || e);
+    }
+    return;
+  }
+
+  // Postgres path
+  const c = await pool.connect();
+  try {
+    await c.query('BEGIN');
+    const h = createHash('sha256').update(`${clientKey}\0${claimKey}\0outbound_weekday_journey\0`).digest();
+    const k1 = (h.readUInt32BE(0) & 0x7fffffff) || 1;
+    const k2 = (h.readUInt32BE(4) & 0x7fffffff) || 1;
+    await c.query('SELECT pg_advisory_xact_lock($1, $2)', [k1, k2]);
+
+    const sel = await c.query(
+      `SELECT weekday_mask, closed_at, closed_reason
+       FROM outbound_weekday_journey
+       WHERE client_key = $1 AND phone_match_key = $2
+       FOR UPDATE`,
+      [clientKey, claimKey]
+    );
+    const row0 = sel.rows[0];
+    if (!row0) {
+      await c.query('ROLLBACK');
+      return;
+    }
+    const mask = Number(row0.weekday_mask || 0);
+    if ((mask & dayBit) === 0) {
+      await c.query('ROLLBACK');
+      return;
+    }
+    const newMask = mask & ~dayBit;
+    const willReopen =
+      row0.closed_at != null && String(row0.closed_reason || '') === 'weekdays_exhausted' && newMask !== OUTBOUND_WEEKDAY_FULL_MASK;
+    await c.query(
+      `
+      UPDATE outbound_weekday_journey SET
+        weekday_mask = $3::smallint,
+        closed_at = CASE WHEN $4::boolean THEN NULL ELSE closed_at END,
+        closed_reason = CASE WHEN $4::boolean THEN NULL ELSE closed_reason END,
+        updated_at = now()
+      WHERE client_key = $1 AND phone_match_key = $2
+      `,
+      [clientKey, claimKey, newMask, willReopen]
+    );
+    await c.query('COMMIT');
+  } catch (e) {
+    try {
+      await c.query('ROLLBACK');
+    } catch (_) {
+      /* ignore */
+    }
+    console.warn('[OUTBOUND WEEKDAY JOURNEY] rollback failed (pg):', e?.message || e);
   } finally {
     c.release();
   }
