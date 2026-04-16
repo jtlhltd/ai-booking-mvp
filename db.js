@@ -3580,16 +3580,45 @@ export async function addToCallQueue({ clientKey, leadPhone, priority = 5, sched
 }
 
 export async function getPendingCalls(limit = 100) {
-  // Order by time first so the planner can use (scheduled_for, priority) on pending rows and stop at LIMIT.
-  // Priority-first ordering would scan huge "future high-priority" prefixes before due low-priority work (multi-second).
-  const { rows } = await query(`
-    SELECT * FROM call_queue 
-    WHERE status = 'pending'
-      AND call_type = 'vapi_call'
-      AND scheduled_for <= now()
-    ORDER BY scheduled_for ASC, priority ASC
-    LIMIT $1
-  `, [limit]);
+  // IMPORTANT: do not purely global-order by scheduled_for.
+  // One tenant with a huge backlog of slightly-earlier timestamps can starve other tenants for long periods,
+  // even though their rows are technically "due now()".
+  //
+  // Strategy: pick the earliest due row per client_key (fairness), then take the earliest N of those "heads",
+  // then fill remaining capacity with the global earliest due rows excluding already-chosen ids.
+  const { rows } = await query(
+    `
+    WITH due AS (
+      SELECT *
+      FROM call_queue
+      WHERE status = 'pending'
+        AND call_type = 'vapi_call'
+        AND scheduled_for <= now()
+    ),
+    heads AS (
+      SELECT DISTINCT ON (client_key) *
+      FROM due
+      ORDER BY client_key, scheduled_for ASC, priority ASC, id ASC
+    ),
+    picked_heads AS (
+      SELECT *
+      FROM heads
+      ORDER BY scheduled_for ASC, priority ASC, id ASC
+      LIMIT LEAST($1::int, 50)
+    ),
+    rest AS (
+      SELECT d.*
+      FROM due d
+      WHERE NOT EXISTS (SELECT 1 FROM picked_heads ph WHERE ph.id = d.id)
+      ORDER BY d.scheduled_for ASC, d.priority ASC, d.id ASC
+      LIMIT GREATEST(0, $1::int - (SELECT COUNT(*)::int FROM picked_heads))
+    )
+    SELECT * FROM picked_heads
+    UNION ALL
+    SELECT * FROM rest
+    `,
+    [limit]
+  );
   return rows;
 }
 
