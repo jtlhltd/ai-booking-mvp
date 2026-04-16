@@ -5941,6 +5941,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       WITH raw AS (
         SELECT
           c.lead_phone,
+          c.lead_phone_match_key,
           c.outcome,
           c.duration,
           c.status,
@@ -5954,6 +5955,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       call_row AS (
         SELECT
           lead_phone,
+          lead_phone_match_key,
           created_at,
           (
             (outcome IS NOT NULL AND outcome NOT IN ('no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected'))
@@ -5979,29 +5981,31 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
           COUNT(*) FILTER (WHERE created_at >= $3::timestamptz)::int AS attempts_30d,
           COUNT(DISTINCT CASE
             WHEN created_at >= $4::timestamptz
-              AND regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g') <> ''
-            THEN lead_phone
+              AND lead_phone_match_key IS NOT NULL
+            THEN lead_phone_match_key
           END)::int AS unique_called_7d,
           COUNT(DISTINCT CASE
             WHEN created_at >= $3::timestamptz
-              AND regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g') <> ''
-            THEN lead_phone
+              AND lead_phone_match_key IS NOT NULL
+            THEN lead_phone_match_key
           END)::int AS unique_called_30d
         FROM call_row
       ),
       reach_7d AS (
         SELECT COUNT(*)::int AS n FROM (
-          SELECT lead_phone FROM call_row
+          SELECT lead_phone_match_key FROM call_row
           WHERE created_at >= $4::timestamptz
-          GROUP BY lead_phone
+            AND lead_phone_match_key IS NOT NULL
+          GROUP BY lead_phone_match_key
           HAVING MAX(CASE WHEN is_answered THEN 1 ELSE 0 END) > 0
         ) s
       ),
       reach_30d AS (
         SELECT COUNT(*)::int AS n FROM (
-          SELECT lead_phone FROM call_row
+          SELECT lead_phone_match_key FROM call_row
           WHERE created_at >= $3::timestamptz
-          GROUP BY lead_phone
+            AND lead_phone_match_key IS NOT NULL
+          GROUP BY lead_phone_match_key
           HAVING MAX(CASE WHEN is_answered THEN 1 ELSE 0 END) > 0
         ) s
       )
