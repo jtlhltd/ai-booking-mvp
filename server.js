@@ -22183,6 +22183,7 @@ async function processCallQueue() {
                 UPDATE call_queue
                 SET status = 'pending',
                     scheduled_for = $1,
+                    initiated_call_id = NULL,
                     call_data = jsonb_set(
                       COALESCE(call_data, '{}'::jsonb),
                       '{lastDefer}',
@@ -22224,6 +22225,7 @@ async function processCallQueue() {
               UPDATE call_queue
               SET status = 'pending',
                   scheduled_for = $1,
+                  initiated_call_id = NULL,
                   call_data = jsonb_set(
                     COALESCE(call_data, '{}'::jsonb),
                     '{lastDefer}',
@@ -22502,6 +22504,7 @@ async function processVapiCallFromQueue(call) {
             UPDATE call_queue
             SET status = 'pending',
                 scheduled_for = $1,
+                initiated_call_id = NULL,
                 call_data = jsonb_set(
                   COALESCE(call_data, '{}'::jsonb),
                   '{lastDefer}',
@@ -22572,6 +22575,7 @@ async function processVapiCallFromQueue(call) {
           UPDATE call_queue
           SET status = 'pending',
               scheduled_for = $1,
+              initiated_call_id = NULL,
               call_data = jsonb_set(
                 COALESCE(call_data, '{}'::jsonb),
                 '{lastDefer}',
