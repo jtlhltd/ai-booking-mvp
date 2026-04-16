@@ -7035,7 +7035,7 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         const { hasOutboundWeekdayJourneyDialBlocked } = await import('./db.js');
         const qRows = await query(
           `
-          SELECT id, lead_phone, scheduled_for, priority
+          SELECT id, lead_phone, scheduled_for, priority, call_data
           FROM call_queue
           WHERE client_key = $1
             AND status = 'pending'
@@ -7051,6 +7051,10 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
           const sched = r.scheduled_for ? new Date(r.scheduled_for) : null;
           const schedIso = sched && !Number.isNaN(sched.getTime()) ? sched.toISOString() : null;
           const withinAt = sched ? isBusinessHoursForTenant(client, sched, tenantTz, { forOutboundDial: true }) : false;
+          const lastDefer =
+            r.call_data && typeof r.call_data === 'object' && r.call_data.lastDefer && typeof r.call_data.lastDefer === 'object'
+              ? r.call_data.lastDefer
+              : null;
           let journey = null;
           if (sched && r.lead_phone) {
             journey = await hasOutboundWeekdayJourneyDialBlocked(clientKey, r.lead_phone, tenantTz, { asOf: sched });
@@ -7077,7 +7081,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
             priority: r.priority,
             withinWindowAtScheduledFor: withinAt,
             action,
-            reason
+            reason,
+            lastDefer
           });
         }
         // Determine earliest expected dial time by scanning preview: first row that is predicted to dial
@@ -22208,8 +22213,25 @@ async function processVapiCallFromQueue(call) {
           call.id
         );
         await query(
-          `UPDATE call_queue SET status = 'pending', scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
-          [next, call.id]
+          `
+            UPDATE call_queue
+            SET status = 'pending',
+                scheduled_for = $1,
+                call_data = jsonb_set(
+                  COALESCE(call_data, '{}'::jsonb),
+                  '{lastDefer}',
+                  jsonb_build_object(
+                    'at', NOW(),
+                    'kind', 'throw',
+                    'error', 'transient_before_vapi_response',
+                    'message', $3
+                  ),
+                  true
+                ),
+                updated_at = NOW()
+            WHERE id = $2
+          `,
+          [next, call.id, String(e?.message || e).slice(0, 220)]
         );
         console.warn('[QUEUE CALL] Deferred — transient error before Vapi response', {
           queueId: call.id,
@@ -22275,8 +22297,32 @@ async function processVapiCallFromQueue(call) {
           call.id
         );
         await query(
-          `UPDATE call_queue SET status = 'pending', scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
-          [next, call.id]
+          `
+            UPDATE call_queue
+            SET status = 'pending',
+                scheduled_for = $1,
+                call_data = jsonb_set(
+                  COALESCE(call_data, '{}'::jsonb),
+                  '{lastDefer}',
+                  jsonb_build_object(
+                    'at', NOW(),
+                    'kind', 'vapi',
+                    'error', $3,
+                    'statusCode', $4,
+                    'details', $5
+                  ),
+                  true
+                ),
+                updated_at = NOW()
+            WHERE id = $2
+          `,
+          [
+            next,
+            call.id,
+            String(vapiResult?.error || 'unknown').slice(0, 120),
+            vapiResult?.statusCode != null ? Number(vapiResult.statusCode) : null,
+            typeof vapiResult?.details === 'string' ? String(vapiResult.details).slice(0, 220) : null
+          ]
         );
         console.warn('[QUEUE CALL] Deferred — transient Vapi failure (no failed_q marker)', {
           queueId: call.id,
@@ -22300,8 +22346,25 @@ async function processVapiCallFromQueue(call) {
           call.id
         );
         await query(
-          `UPDATE call_queue SET status = 'pending', scheduled_for = $1, updated_at = NOW() WHERE id = $2`,
-          [next, call.id]
+          `
+            UPDATE call_queue
+            SET status = 'pending',
+                scheduled_for = $1,
+                call_data = jsonb_set(
+                  COALESCE(call_data, '{}'::jsonb),
+                  '{lastDefer}',
+                  jsonb_build_object(
+                    'at', NOW(),
+                    'kind', 'vapi',
+                    'error', 'vapi_no_credits',
+                    'details', $3
+                  ),
+                  true
+                ),
+                updated_at = NOW()
+            WHERE id = $2
+          `,
+          [next, call.id, detailsStr.slice(0, 220)]
         );
         console.warn('[QUEUE CALL] Deferred due to VAPI credits', { queueId: call.id, scheduledFor: next.toISOString() });
         return;
