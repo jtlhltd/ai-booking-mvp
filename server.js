@@ -500,6 +500,203 @@ app.get('/api/admin/call-queue/peek/:clientKey', async (req, res) => {
 });
 
 /**
+ * Admin ops: aggregate outbound dial “blockers” / defer reasons for a tenant (counts, not phone lists).
+ *
+ * GET /api/admin/call-queue/blockers/:clientKey
+ */
+app.get('/api/admin/call-queue/blockers/:clientKey', async (req, res) => {
+  const { clientKey } = req.params;
+
+  try {
+    if (!isPostgres) return res.status(400).json({ ok: false, error: 'postgres_required' });
+    const client = await getFullClient(clientKey, { bypassCache: false });
+    if (!client || !client.clientKey) {
+      return res.status(404).json({ ok: false, error: 'client_not_found' });
+    }
+
+    const tenantTz = client?.booking?.timezone || client?.timezone || TIMEZONE;
+    const withinOutboundHours = isBusinessHours(client);
+    let vapiConcurrency = null;
+    try {
+      const { getVapiConcurrencyState } = await import('./lib/instant-calling.js');
+      vapiConcurrency = getVapiConcurrencyState();
+    } catch {
+      vapiConcurrency = null;
+    }
+
+    const bypassWeekdaySlots = /^(1|true|yes)$/i.test(
+      String(process.env.ALLOW_MULTIPLE_OUTBOUND_CALLS_PER_DAY || '').trim()
+    );
+
+    const [
+      { rows: bucketRows },
+      { rows: deferPendingRows },
+      { rows: deferDueRows },
+      { rows: procStepRows },
+      { rows: journeyRows },
+      { rows: leadRows },
+      { rows: callRows }
+    ] = await Promise.all([
+      query(
+        `
+        SELECT
+          COUNT(*) FILTER (WHERE status = 'pending' AND scheduled_for <= NOW())::int AS pending_due_now,
+          COUNT(*) FILTER (WHERE status = 'pending' AND scheduled_for > NOW())::int AS pending_scheduled_future,
+          COUNT(*) FILTER (WHERE status = 'processing')::int AS processing,
+          COUNT(*) FILTER (WHERE status = 'processing' AND initiated_call_id IS NULL)::int AS processing_without_call_id,
+          COUNT(*) FILTER (WHERE status = 'pending')::int AS pending_total,
+          COUNT(*) FILTER (WHERE status = 'cancelled')::int AS cancelled_total,
+          COUNT(*) FILTER (WHERE status = 'failed')::int AS failed_total,
+          COUNT(*) FILTER (WHERE status = 'completed')::int AS completed_total
+        FROM call_queue
+        WHERE client_key = $1 AND call_type = 'vapi_call'
+        `,
+        [clientKey]
+      ),
+      query(
+        `
+        SELECT
+          COALESCE(call_data->'lastDefer'->>'kind', '(none)') AS defer_kind,
+          COALESCE(call_data->'lastDefer'->>'error', '(none)') AS defer_error,
+          COUNT(*)::int AS n
+        FROM call_queue
+        WHERE client_key = $1 AND call_type = 'vapi_call' AND status = 'pending'
+        GROUP BY 1, 2
+        ORDER BY n DESC, defer_kind, defer_error
+        `,
+        [clientKey]
+      ),
+      query(
+        `
+        SELECT
+          COALESCE(call_data->'lastDefer'->>'kind', '(none)') AS defer_kind,
+          COALESCE(call_data->'lastDefer'->>'error', '(none)') AS defer_error,
+          COUNT(*)::int AS n
+        FROM call_queue
+        WHERE client_key = $1
+          AND call_type = 'vapi_call'
+          AND status = 'pending'
+          AND scheduled_for <= NOW()
+        GROUP BY 1, 2
+        ORDER BY n DESC, defer_kind, defer_error
+        `,
+        [clientKey]
+      ),
+      query(
+        `
+        SELECT
+          COALESCE(call_data->'lastStep'->>'step', '(none)') AS last_step,
+          COUNT(*)::int AS n
+        FROM call_queue
+        WHERE client_key = $1 AND call_type = 'vapi_call' AND status = 'processing'
+        GROUP BY 1
+        ORDER BY n DESC
+        `,
+        [clientKey]
+      ),
+      query(
+        `
+        SELECT
+          COUNT(*)::int AS journey_rows,
+          COUNT(*) FILTER (WHERE closed_at IS NULL)::int AS open_journeys,
+          COUNT(*) FILTER (WHERE closed_at IS NOT NULL)::int AS closed_journeys
+        FROM outbound_weekday_journey
+        WHERE client_key = $1
+        `,
+        [clientKey]
+      ),
+      query(
+        `
+        SELECT COUNT(*)::int AS new_leads_not_on_queue
+        FROM leads l
+        WHERE l.client_key = $1
+          AND l.status = 'new'
+          AND l.created_at >= NOW() - INTERVAL '30 days'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM call_queue cq
+            WHERE cq.client_key = l.client_key
+              AND cq.call_type = 'vapi_call'
+              AND cq.status IN ('pending', 'processing')
+              AND ${pgQueueLeadPhoneKeyExpr('cq.lead_phone')} = COALESCE(l.phone_match_key, '__nodigits__')
+          )
+        `,
+        [clientKey]
+      ),
+      query(
+        `
+        SELECT COUNT(*)::int AS in_flight_calls
+        FROM calls
+        WHERE client_key = $1
+          AND status IN ('initiated', 'in_progress')
+        `,
+        [clientKey]
+      )
+    ]);
+
+    const b = bucketRows?.[0] || {};
+    const j = journeyRows?.[0] || {};
+    const l = leadRows?.[0] || {};
+    const c = callRows?.[0] || {};
+
+    res.set('Cache-Control', 'no-store, must-revalidate, max-age=0');
+    return res.json({
+      ok: true,
+      clientKey,
+      now: new Date().toISOString(),
+      tenantTimezone: tenantTz,
+      semantics: [
+        '`pendingByLastDefer` / `duePendingByLastDefer` group rows by the *last recorded deferral* on the queue row (JSON `lastDefer`).',
+        'A row can be `pending` with `lastDefer` from an earlier attempt; `(none)/(none)` means no defer metadata was stored yet.',
+        '`duePendingByLastDefer` is the subset that is due right now (`scheduled_for <= now()`), i.e. what the processor can pick next.',
+        '`newLeadsNotOnQueue` counts `leads.status=new` (30d) with no `pending`/`processing` `vapi_call` queue row for the same phone key — it does not, by itself, prove the lead is dial-eligible (journey / active calls / business hours are enforced when queuing/dialing).'
+      ],
+      runtime: {
+        clientEnabled: client.isEnabled !== false,
+        hasVapiAssistant: !!(client.vapi && client.vapi.assistantId),
+        withinOutboundBusinessHours: withinOutboundHours,
+        allowMultipleOutboundCallsPerDay: bypassWeekdaySlots,
+        callQueueMaxConcurrent: Math.max(1, Math.min(25, parseInt(process.env.CALL_QUEUE_MAX_CONCURRENT || '1', 10) || 1)),
+        callQueueMaxPerRun: Math.max(1, Math.min(500, parseInt(process.env.CALL_QUEUE_MAX_PER_RUN || '40', 10) || 40)),
+        vapiEnvConfigured: {
+          hasPrivateKey: !!process.env.VAPI_PRIVATE_KEY,
+          hasAssistantId: !!process.env.VAPI_ASSISTANT_ID,
+          hasPhoneNumberId: !!process.env.VAPI_PHONE_NUMBER_ID
+        },
+        vapiConcurrency
+      },
+      callQueue: {
+        pendingTotal: parseInt(b.pending_total, 10) || 0,
+        pendingDueNow: parseInt(b.pending_due_now, 10) || 0,
+        pendingScheduledFuture: parseInt(b.pending_scheduled_future, 10) || 0,
+        processing: parseInt(b.processing, 10) || 0,
+        processingWithoutCallId: parseInt(b.processing_without_call_id, 10) || 0,
+        cancelledTotal: parseInt(b.cancelled_total, 10) || 0,
+        failedTotal: parseInt(b.failed_total, 10) || 0,
+        completedTotal: parseInt(b.completed_total, 10) || 0
+      },
+      pendingByLastDefer: deferPendingRows || [],
+      duePendingByLastDefer: deferDueRows || [],
+      processingByLastStep: procStepRows || [],
+      outboundWeekdayJourney: {
+        journeyRows: parseInt(j.journey_rows, 10) || 0,
+        openJourneys: parseInt(j.open_journeys, 10) || 0,
+        closedJourneys: parseInt(j.closed_journeys, 10) || 0
+      },
+      leads: {
+        newLeadsNotOnQueue30d: parseInt(l.new_leads_not_on_queue, 10) || 0
+      },
+      calls: {
+        inFlightInitiatedOrInProgress: parseInt(c.in_flight_calls, 10) || 0
+      }
+    });
+  } catch (e) {
+    console.error('[ADMIN QUEUE BLOCKERS] Error:', e);
+    return res.status(500).json({ ok: false, error: String(e?.message || e).slice(0, 240) });
+  }
+});
+
+/**
  * Admin ops: force-reset stuck `processing` outbound queue rows back to `pending`.
  *
  * POST /api/admin/call-queue/reset-processing/:clientKey?minAgeSec=90&limit=500
