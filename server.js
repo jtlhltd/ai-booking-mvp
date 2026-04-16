@@ -6800,6 +6800,48 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         ? (withinScheduledDialWindow ? blockedDailyLimitToday : 0)
         : null;
 
+    const outboundDialSchedule = (() => {
+      const cfg = getBusinessHoursConfig(client);
+      const startHour = cfg.start ?? 9;
+      const endHour = cfg.end ?? 17;
+      let days = Array.isArray(cfg.days) ? cfg.days : [1, 2, 3, 4, 5];
+      if (!allowOutboundWeekendCalls()) {
+        // Keep consistent with isBusinessHoursForTenant(..., { forOutboundDial:true }) default.
+        days = days.filter((d) => [1, 2, 3, 4, 5].includes(d));
+        if (days.length === 0) days = [1, 2, 3, 4, 5];
+      }
+      const now = new Date();
+      const nextOpenAt = getNextBusinessOpenForTenant(client, now, tenantTz, { forOutboundDial: true });
+      const windowsNext7 = [];
+      // Find next 7 allowed dial windows (skips closed days + bank holidays via isBusinessHoursForTenant).
+      for (let i = 0; i < 30 && windowsNext7.length < 7; i++) {
+        const d = DateTime.fromJSDate(now).setZone(tenantTz).startOf('day').plus({ days: i });
+        if (!d.isValid) continue;
+        const jsDay = d.weekday === 7 ? 0 : d.weekday;
+        if (!days.includes(jsDay)) continue;
+        const start = d.set({ hour: startHour, minute: 0, second: 0, millisecond: 0 });
+        if (!start.isValid) continue;
+        if (!isBusinessHoursForTenant(client, start.toJSDate(), tenantTz, { forOutboundDial: true })) continue;
+        const end = d.set({ hour: endHour, minute: 0, second: 0, millisecond: 0 });
+        windowsNext7.push({
+          dayKey: start.toFormat('yyyy-LL-dd'),
+          weekdayShort: start.toFormat('ccc'),
+          startLocal: start.toFormat('HH:mm'),
+          endLocal: end.toFormat('HH:mm'),
+          startIso: start.toUTC().toISO(),
+          endIso: end.toUTC().toISO()
+        });
+      }
+      return {
+        timezone: tenantTz,
+        startHour,
+        endHour,
+        days,
+        nextOpenAt: nextOpenAt ? nextOpenAt.toISOString() : null,
+        windowsNext7
+      };
+    })();
+
     // Preview the next few queue rows to predict whether the next scheduled call will actually dial or be deferred.
     // This makes the "next call" label truthful even when the first queued row is expected to reschedule.
     let nextQueuePreview = null;
@@ -6882,48 +6924,6 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       nextDialExpectedAt = queueNextScheduledFor;
       nextDialExpectedReason = nextDialExpectedReason || 'fallback_queue_next_scheduled_for';
     }
-
-    const outboundDialSchedule = (() => {
-      const cfg = getBusinessHoursConfig(client);
-      const startHour = cfg.start ?? 9;
-      const endHour = cfg.end ?? 17;
-      let days = Array.isArray(cfg.days) ? cfg.days : [1, 2, 3, 4, 5];
-      if (!allowOutboundWeekendCalls()) {
-        // Keep consistent with isBusinessHoursForTenant(..., { forOutboundDial:true }) default.
-        days = days.filter((d) => [1, 2, 3, 4, 5].includes(d));
-        if (days.length === 0) days = [1, 2, 3, 4, 5];
-      }
-      const now = new Date();
-      const nextOpenAt = getNextBusinessOpenForTenant(client, now, tenantTz, { forOutboundDial: true });
-      const windowsNext7 = [];
-      // Find next 7 allowed dial windows (skips closed days + bank holidays via isBusinessHoursForTenant).
-      for (let i = 0; i < 30 && windowsNext7.length < 7; i++) {
-        const d = DateTime.fromJSDate(now).setZone(tenantTz).startOf('day').plus({ days: i });
-        if (!d.isValid) continue;
-        const jsDay = d.weekday === 7 ? 0 : d.weekday;
-        if (!days.includes(jsDay)) continue;
-        const start = d.set({ hour: startHour, minute: 0, second: 0, millisecond: 0 });
-        if (!start.isValid) continue;
-        if (!isBusinessHoursForTenant(client, start.toJSDate(), tenantTz, { forOutboundDial: true })) continue;
-        const end = d.set({ hour: endHour, minute: 0, second: 0, millisecond: 0 });
-        windowsNext7.push({
-          dayKey: start.toFormat('yyyy-LL-dd'),
-          weekdayShort: start.toFormat('ccc'),
-          startLocal: start.toFormat('HH:mm'),
-          endLocal: end.toFormat('HH:mm'),
-          startIso: start.toUTC().toISO(),
-          endIso: end.toUTC().toISO()
-        });
-      }
-      return {
-        timezone: tenantTz,
-        startHour,
-        endHour,
-        days,
-        nextOpenAt: nextOpenAt ? nextOpenAt.toISOString() : null,
-        windowsNext7
-      };
-    })();
 
     const nextSchedMs = queueNextScheduledFor ? Date.parse(queueNextScheduledFor) : NaN;
     const queueNextIsFuture = Number.isFinite(nextSchedMs) && nextSchedMs > Date.now();
