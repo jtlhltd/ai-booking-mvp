@@ -22236,21 +22236,6 @@ async function queueNewLeadsForCalling() {
     globalThis.__opsLastQueueNewLeadsAt = new Date().toISOString();
     console.log('[LEAD QUEUER] Checking for new leads to queue...');
     const leadQueueBatchSize = Math.max(1, Math.min(300, parseInt(process.env.LEAD_QUEUE_BATCH_SIZE || '120', 10) || 120));
-    // Tomorrow buffer is an ops convenience, not a dialing strategy. Keep it OFF by default.
-    // Enable explicitly with ENABLE_TOMORROW_BUFFER=1.
-    const tomorrowBufferEnabled = ['1', 'true', 'yes'].includes(String(process.env.ENABLE_TOMORROW_BUFFER || '').toLowerCase());
-    const targetTomorrowPending = tomorrowBufferEnabled
-      ? Math.max(
-          0,
-          Math.min(2000, parseInt(process.env.LEAD_QUEUE_TARGET_TOMORROW_PENDING || '150', 10) || 150)
-        )
-      : 0;
-    const maxTomorrowToQueuePerRun = tomorrowBufferEnabled
-      ? Math.max(
-          0,
-          Math.min(500, parseInt(process.env.LEAD_QUEUE_MAX_TOMORROW_PER_RUN || '80', 10) || 80)
-        )
-      : 0;
     
     // Get all clients
     const clients = await listFullClients();
@@ -22312,37 +22297,6 @@ async function queueNewLeadsForCalling() {
         const { scheduleAtOptimalCallWindow } = await import('./lib/optimal-call-window.js');
         const insightsRow = await getLatestCallInsights(client.clientKey).catch(() => null);
         const routing = insightsRow?.routing;
-
-        // Optional: keep some work queued for tomorrow (ops convenience).
-        let tomorrowStillNeeded = 0;
-        if (targetTomorrowPending > 0) {
-          try {
-            const { rows: tRows } = await query(
-              `
-              WITH bounds AS (
-                SELECT
-                  ((date_trunc('day', NOW() AT TIME ZONE $2) + INTERVAL '1 day') AT TIME ZONE $2) AS day_start_utc,
-                  ((date_trunc('day', NOW() AT TIME ZONE $2) + INTERVAL '2 day') AT TIME ZONE $2) AS day_end_utc
-              )
-              SELECT COUNT(*)::int AS n
-              FROM call_queue cq
-              CROSS JOIN bounds b
-              WHERE cq.client_key = $1
-                AND cq.call_type = 'vapi_call'
-                AND cq.status IN ('pending', 'processing')
-                AND cq.scheduled_for >= b.day_start_utc
-                AND cq.scheduled_for < b.day_end_utc
-              `,
-              [client.clientKey, pickTimezone(client)]
-            );
-            const alreadyTomorrow = parseInt(tRows?.[0]?.n ?? 0, 10) || 0;
-            tomorrowStillNeeded = Math.max(0, targetTomorrowPending - alreadyTomorrow);
-          } catch (e) {
-            tomorrowStillNeeded = 0;
-          }
-        }
-
-        let queuedTomorrowThisRun = 0;
         for (const lead of newLeads.rows) {
           try {
             // Check if we should call now or schedule for later
@@ -22358,32 +22312,8 @@ async function queueNewLeadsForCalling() {
               jitterKey: lead.phone
             });
 
-            // If we're in business hours, also top-up a buffer for tomorrow (up to caps) so the system
-            // has visible upcoming work and doesn't depend on a cron tick at the start of the day.
-            let finalScheduledFor = scheduledFor;
-            let scheduleTag = shouldCallNow ? 'optimal_today' : 'optimal';
-            if (
-              shouldCallNow &&
-              tomorrowStillNeeded > 0 &&
-              queuedTomorrowThisRun < maxTomorrowToQueuePerRun
-            ) {
-              const tzQ = pickTimezone(client);
-              const tomorrowStart = DateTime.now().setZone(tzQ).plus({ days: 1 }).startOf('day').toJSDate();
-              const tomorrowBaseline = getNextBusinessOpenForTenant(
-                client,
-                tomorrowStart,
-                tzQ,
-                { forOutboundDial: true }
-              );
-              finalScheduledFor = await scheduleAtOptimalCallWindow(client, routing, tomorrowBaseline, {
-                fallbackTz: tzQ,
-                clientKey: client.clientKey,
-                jitterKey: `tomorrow:${lead.phone}`
-              });
-              scheduleTag = 'tomorrow_buffer';
-              tomorrowStillNeeded -= 1;
-              queuedTomorrowThisRun += 1;
-            }
+            const finalScheduledFor = scheduledFor;
+            const scheduleTag = shouldCallNow ? 'optimal_today' : 'optimal';
 
             // Calculate priority based on lead age and source
             const leadAge = Math.floor((Date.now() - new Date(lead.created_at).getTime()) / (1000 * 60 * 60)); // hours
@@ -22415,7 +22345,7 @@ async function queueNewLeadsForCalling() {
             const timeUntilCall = scheduledTime - now;
             const minutesUntilCall = Math.floor(timeUntilCall / (1000 * 60));
             
-            console.log(`[LEAD QUEUER] Queued lead ${lead.phone} for ${client.clientKey} (priority: ${priority}, scheduled: ${scheduledTime.toISOString()}, ${scheduleTag === 'tomorrow_buffer' ? 'tomorrow buffer' : (shouldCallNow ? 'immediate' : `${minutesUntilCall} minutes from now`)})`);
+            console.log(`[LEAD QUEUER] Queued lead ${lead.phone} for ${client.clientKey} (priority: ${priority}, scheduled: ${scheduledTime.toISOString()}, ${shouldCallNow ? 'immediate' : `${minutesUntilCall} minutes from now`})`);
           } catch (queueError) {
             console.error(`[LEAD QUEUER] Error queueing lead ${lead.phone}:`, queueError);
           }
