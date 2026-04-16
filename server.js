@@ -19363,6 +19363,7 @@ app.get('/admin/system-health', async (req, res) => {
         lastProcessCallQueueAt: globalThis.__opsLastProcessCallQueueAt || null,
         lastQueueNewLeadsAt: globalThis.__opsLastQueueNewLeadsAt || null,
         lastQueueNewLeadsCronAt: globalThis.__opsLastQueueNewLeadsCronAt || null,
+        lastOverdueReschedule: globalThis.__opsLastOverdueReschedule || null,
         vapiConcurrency: null,
         callQueue: null
       },
@@ -21580,6 +21581,16 @@ async function processCallQueue() {
           [clientKey, moveLimit, tomorrow9Utc, spacingSeconds]
         );
         if ((rowCount || 0) > 0) {
+          globalThis.__opsLastOverdueReschedule = {
+            at: new Date().toISOString(),
+            clientKey,
+            moved: rowCount,
+            overduePending,
+            keepDue,
+            remainingToday,
+            dailyCap,
+            tz
+          };
           console.warn('[CALL QUEUE PROCESSOR] Pushed overdue backlog to tomorrow window:', {
             clientKey,
             moved: rowCount,
