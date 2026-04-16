@@ -6780,6 +6780,15 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
       forOutboundDial: true
     });
 
+    // Avoid misleading "callable today" when we're outside the call window and the next slot is tomorrow.
+    // Keep the original raw value as "callable at next slot" so the UI can still explain backlog capacity.
+    const callableLeadsNextSlot =
+      callableLeadsToday != null ? callableLeadsToday : null;
+    const callableLeadsTodayWindowed =
+      callableLeadsToday != null
+        ? (withinScheduledDialWindow ? callableLeadsToday : 0)
+        : null;
+
     const outboundDialSchedule = (() => {
       const cfg = getBusinessHoursConfig(client);
       const startHour = cfg.start ?? 9;
@@ -7556,7 +7565,8 @@ app.get('/api/demo-dashboard/:clientKey', async (req, res) => {
         uniqueLeadsDialed: displayCalls,
         leadsNeverDialed,
         callQueuePending,
-        callableLeadsToday,
+        callableLeadsToday: callableLeadsTodayWindowed,
+        callableLeadsNextSlot,
         blockedDailyLimitToday,
         dialAttemptsLast24h: callsLast24h,
         queueTouchesLast24h,
