@@ -459,6 +459,7 @@ app.get('/api/admin/call-queue/peek/:clientKey', async (req, res) => {
           call_type,
           priority,
           scheduled_for,
+          updated_at,
           initiated_call_id,
           call_data->'lastDefer' AS last_defer,
           call_data->'lastStep' AS last_step
@@ -486,6 +487,7 @@ app.get('/api/admin/call-queue/peek/:clientKey', async (req, res) => {
         status: r.status,
         priority: r.priority,
         scheduledFor: r.scheduled_for ? new Date(r.scheduled_for).toISOString() : null,
+        updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : null,
         initiatedCallId: r.initiated_call_id || null,
         lastDefer: r.last_defer || null,
         lastStep: r.last_step || null
@@ -523,7 +525,7 @@ app.post('/api/admin/call-queue/reset-processing/:clientKey', async (req, res) =
             AND call_type = 'vapi_call'
             AND status = 'processing'
             AND initiated_call_id IS NULL
-            AND updated_at < NOW() - ($2::int || ' seconds')::interval
+            AND updated_at < NOW() - ($2::int * INTERVAL '1 second')
           ORDER BY updated_at ASC, id ASC
           LIMIT $3
         )
@@ -22037,7 +22039,7 @@ async function processCallQueue() {
             SELECT client_key, COUNT(DISTINCT lead_phone)::int AS n
             FROM calls
             WHERE call_id LIKE 'failed_q%'
-              AND created_at >= now() - ($1::int || ' days')::interval
+              AND created_at >= now() - ($1::int * INTERVAL '1 day')
             GROUP BY client_key
             ORDER BY n DESC
             LIMIT $2
@@ -22057,14 +22059,14 @@ async function processCallQueue() {
                 FROM calls c
                 WHERE c.client_key = $1
                   AND c.call_id LIKE 'failed_q%'
-                  AND c.created_at >= now() - ($2::int || ' days')::interval
+                  AND c.created_at >= now() - ($2::int * INTERVAL '1 day')
                   AND NOT EXISTS (
                     SELECT 1
                     FROM calls ok
                     WHERE ok.client_key = c.client_key
                       AND ${pgQueueLeadPhoneKeyExpr('ok.lead_phone')} = ${pgQueueLeadPhoneKeyExpr('c.lead_phone')}
                       AND ok.call_id NOT LIKE 'failed_q%'
-                      AND ok.created_at >= now() - ($2::int || ' days')::interval
+                      AND ok.created_at >= now() - ($2::int * INTERVAL '1 day')
                   )
                   AND NOT EXISTS (
                     SELECT 1
@@ -22103,6 +22105,55 @@ async function processCallQueue() {
       }
     } catch (e) {
       console.warn('[CALL QUEUE PROCESSOR] Failed_q catch-up failed:', e?.message || e);
+    }
+
+    // Self-heal: if a worker crashes, a deploy rolls traffic, or timers never complete, `processing` rows
+    // (especially with NULL initiated_call_id) can wedge the dialer. Requeue them after a conservative age.
+    try {
+      const staleSec = Math.max(
+        120,
+        Math.min(7200, parseInt(String(process.env.CALL_QUEUE_STALE_PROCESSING_SEC || '210'), 10) || 210)
+      );
+      const staleBatch = Math.max(1, Math.min(2000, parseInt(String(process.env.CALL_QUEUE_STALE_PROCESSING_LIMIT || '250'), 10) || 250));
+      const r = await query(
+        `
+        WITH picked AS (
+          SELECT id
+          FROM call_queue
+          WHERE call_type = 'vapi_call'
+            AND status = 'processing'
+            AND initiated_call_id IS NULL
+            AND updated_at < NOW() - ($1::int * INTERVAL '1 second')
+          ORDER BY updated_at ASC, id ASC
+          LIMIT $2
+        )
+        UPDATE call_queue cq
+        SET status = 'pending',
+            scheduled_for = LEAST(cq.scheduled_for, NOW() - INTERVAL '1 second'),
+            initiated_call_id = NULL,
+            call_data = jsonb_set(
+              COALESCE(cq.call_data, '{}'::jsonb),
+              '{lastDefer}',
+              jsonb_build_object(
+                'at', NOW(),
+                'kind', 'internal',
+                'error', 'stale_processing_requeue',
+                'thresholdSec', $1
+              ),
+              true
+            ),
+            updated_at = NOW()
+        FROM picked p
+        WHERE cq.id = p.id
+        `,
+        [staleSec, staleBatch]
+      );
+      const n = r?.rowCount ?? r?.changes ?? 0;
+      if (n > 0) {
+        console.warn('[CALL QUEUE PROCESSOR] Requeued stale outbound processing rows', { n, staleSec, staleBatch });
+      }
+    } catch (e) {
+      console.warn('[CALL QUEUE PROCESSOR] Stale processing reclaim failed:', e?.message || e);
     }
 
     const maxCallsPerRun = Math.max(1, Math.min(500, parseInt(process.env.CALL_QUEUE_MAX_PER_RUN || '40', 10) || 40));
