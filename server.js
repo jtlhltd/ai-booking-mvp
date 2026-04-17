@@ -109,6 +109,7 @@ import { createPipelineRetryRouter } from './routes/pipeline-retry.js';
 import { createZapierWebhookRouter } from './routes/zapier-webhook.js';
 import { createImportLeadsCsvRouter } from './routes/import-leads-csv.js';
 import { createGooglePlacesTestRouter } from './routes/google-places-test.js';
+import { createBookDemoRouter } from './routes/book-demo.js';
 import { createAdminOverviewRouter } from './routes/admin-overview.js';
 import { createAdminRemindersRouter } from './routes/admin-reminders.js';
 import { createAdminClientsRouter } from './routes/admin-clients.js';
@@ -335,6 +336,7 @@ app.use('/api', createPipelineRetryRouter({ smsEmailPipeline }));
 app.use('/api/webhooks', createZapierWebhookRouter({ requireApiKey, getClientFromHeader }));
 app.use('/api', createImportLeadsCsvRouter({ requireApiKey }));
 app.use('/api', createGooglePlacesTestRouter());
+app.use('/api', createBookDemoRouter({ bookingSystem, smsEmailPipeline }));
 app.use(
   '/api/clients',
   createClientsApiRouter({
@@ -1723,93 +1725,7 @@ function generateEmail(businessName) {
   return `contact@${cleanName}.${domain}`;
 }
 
-app.post('/api/book-demo', async (req, res) => {
-  try {
-    if (!bookingSystem) {
-      return res.status(503).json({ 
-        success: false, 
-        message: 'Booking system not available' 
-      });
-    }
-
-    console.log('[BOOKING DEMO] Request body:', req.body);
-    
-    // Handle both old format (name, email, company, phone, slotId) and new format (leadData)
-    let leadData, preferredTimes;
-    
-    if (req.body.leadData) {
-      // New format
-      leadData = req.body.leadData;
-      preferredTimes = req.body.preferredTimes;
-    } else {
-      // Old format - convert to new format
-      const { name, email, company, phone, slotId } = req.body;
-      
-      if (!name || !email) {
-        return res.status(400).json({
-          success: false,
-          message: 'Missing required fields: name and email are required'
-        });
-      }
-      
-      leadData = {
-        businessName: company || 'Unknown Company',
-        decisionMaker: name,
-        email: email,
-        phone: phone || null
-      };
-      
-      // If slotId provided, create preferredTimes array
-      if (slotId) {
-        preferredTimes = [{
-          startDateTime: slotId,
-          endDateTime: new Date(new Date(slotId).getTime() + 60 * 60 * 1000).toISOString() // +1 hour
-        }];
-      }
-    }
-    
-    if (!leadData || !leadData.businessName || !leadData.decisionMaker || !leadData.email) {
-      return res.status(400).json({
-        success: false,
-        message: 'Missing required lead data: businessName, decisionMaker, and email are required'
-      });
-    }
-
-    // Use preferredTimes if provided, otherwise generate default slots
-    let slotsToUse;
-    
-    if (preferredTimes && Array.isArray(preferredTimes) && preferredTimes.length > 0) {
-      slotsToUse = preferredTimes;
-    } else if (preferredTimes && typeof preferredTimes === 'object') {
-      // Handle case where preferredTimes is an object with numeric keys instead of array
-      const values = [];
-      for (const key in preferredTimes) {
-        if (preferredTimes.hasOwnProperty(key)) {
-          values.push(preferredTimes[key]);
-        }
-      }
-      slotsToUse = values.length > 0 ? values : bookingSystem.generateTimeSlots(7);
-    } else {
-      slotsToUse = bookingSystem.generateTimeSlots(7);
-    }
-    
-    console.log('[BOOKING DEMO] leadData:', leadData);
-    console.log('[BOOKING DEMO] preferredTimes:', preferredTimes);
-    console.log('[BOOKING DEMO] slotsToUse:', slotsToUse);
-    
-    const result = await bookingSystem.bookDemo(leadData, slotsToUse, smsEmailPipeline);
-    
-    res.json(result);
-    
-  } catch (error) {
-    console.error('[BOOKING ERROR]', error);
-    res.status(500).json({
-      success: false,
-      message: 'Booking failed',
-      error: error.message
-    });
-  }
-});
+// moved: POST /api/book-demo → routes/book-demo.js
 
 // Get Available Time Slots
 app.get('/api/available-slots', async (req, res) => {
