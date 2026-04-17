@@ -115,6 +115,7 @@ import { createCreateClientRouter } from './routes/create-client.js';
 import { createQualityAlertsRouter } from './routes/quality-alerts.js';
 import { createImportLeadsRouter } from './routes/import-leads.js';
 import { createImportLeadEmailRouter } from './routes/import-lead-email.js';
+import { createRoiRouter } from './routes/roi.js';
 import { createAdminOverviewRouter } from './routes/admin-overview.js';
 import { createAdminRemindersRouter } from './routes/admin-reminders.js';
 import { createAdminClientsRouter } from './routes/admin-clients.js';
@@ -347,6 +348,7 @@ app.use('/api', createCreateClientRouter({ upsertFullClient, adjustColorBrightne
 app.use('/api', createQualityAlertsRouter());
 app.use('/api', createImportLeadsRouter({ getFullClient, isBusinessHours }));
 app.use('/api', createImportLeadEmailRouter());
+app.use('/api', createRoiRouter());
 app.use(
   '/api/clients',
   createClientsApiRouter({
@@ -1747,28 +1749,7 @@ function generateEmail(businessName) {
 
 // moved: POST /api/import-lead-email/:clientKey → routes/import-lead-email.js
 
-// API endpoint to calculate ROI
-app.get('/api/roi/:clientKey', async (req, res) => {
-  try {
-    const { clientKey } = req.params;
-    const days = parseInt(req.query.days) || 30;
-    const avgDealValue = parseFloat(req.query.avgDealValue) || 150;
-    
-    const { calculateROI, projectROI } = await import('./lib/roi-calculator.js');
-    
-    const roi = await calculateROI(clientKey, days, { avgDealValue });
-    const projection = projectROI(roi, 30);
-    
-    res.json({
-      ok: true,
-      ...roi,
-      projection
-    });
-  } catch (error) {
-    console.error('[ROI ERROR]', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
+// moved: GET /api/roi/:clientKey → routes/roi.js
 
 // API endpoint to get industry benchmarks and comparison
 app.get('/api/industry-comparison/:clientKey', async (req, res) => {
