@@ -93,6 +93,7 @@ import opsRouter from './routes/ops.js';
 import staticPagesRouter from './routes/static-pages.js';
 import { createOutreachRouter } from './routes/outreach.js';
 import { createCrmRouter } from './routes/crm.js';
+import { createBrandingRouter } from './routes/branding.js';
 import { createAdminOverviewRouter } from './routes/admin-overview.js';
 import { createAdminRemindersRouter } from './routes/admin-reminders.js';
 import { createAdminClientsRouter } from './routes/admin-clients.js';
@@ -285,6 +286,7 @@ app.use(express.static('public'));
 app.use(staticPagesRouter);
 app.use('/api/outreach', createOutreachRouter());
 app.use('/api/crm', createCrmRouter({ getFullClient }));
+app.use('/api/branding', createBrandingRouter({ getFullClient, upsertFullClient }));
 
 app.use('/api/admin', createAdminOverviewRouter({ broadcast: broadcastUpdate }));
 app.use('/api/admin', createAdminRemindersRouter({ sendReminderSMS }));
@@ -18568,74 +18570,7 @@ app.post('/api/roi-calculator/save', async (req, res) => {
 
 // moved: /api/crm/* → routes/crm.js
 
-// White-label branding endpoints
-app.get('/api/branding/:clientKey', async (req, res) => {
-  try {
-    const { clientKey } = req.params;
-    const client = await getFullClient(clientKey);
-    
-    if (!client) {
-      return res.status(404).json({ ok: false, error: 'Client not found' });
-    }
-    
-    const { getClientBranding } = await import('./lib/whitelabel.js');
-    const branding = getClientBranding(client);
-    
-    res.json({ ok: true, branding });
-  } catch (error) {
-    console.error('[BRANDING GET ERROR]', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-
-app.put('/api/branding/:clientKey', async (req, res) => {
-  try {
-    const { clientKey } = req.params;
-    const brandingData = req.body;
-    
-    // Validate branding
-    const { validateBranding } = await import('./lib/whitelabel.js');
-    const validation = validateBranding(brandingData);
-    
-    if (!validation.valid) {
-      return res.status(400).json({ 
-        ok: false, 
-        error: 'Invalid branding configuration',
-        details: validation.errors 
-      });
-    }
-    
-    // Get client and update
-    const client = await getFullClient(clientKey);
-    
-    if (!client) {
-      return res.status(404).json({ ok: false, error: 'Client not found' });
-    }
-    
-    // Merge branding with existing
-    const updatedClient = {
-      ...client,
-      branding: {
-        ...(client.branding || {}),
-        ...brandingData
-      },
-      updatedAt: new Date().toISOString()
-    };
-    
-    await upsertFullClient(updatedClient);
-    
-    console.log(`[BRANDING] Updated branding for ${clientKey}`);
-    
-    res.json({ 
-      ok: true, 
-      branding: updatedClient.branding,
-      warnings: validation.warnings
-    });
-  } catch (error) {
-    console.error('[BRANDING UPDATE ERROR]', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
+// moved: /api/branding/* → routes/branding.js
 
 // Lead scoring endpoint
 app.post('/api/analytics/score-leads', async (req, res) => {
