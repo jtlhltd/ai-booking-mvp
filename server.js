@@ -112,6 +112,7 @@ import { createGooglePlacesTestRouter } from './routes/google-places-test.js';
 import { createBookDemoRouter } from './routes/book-demo.js';
 import { createAvailableSlotsRouter } from './routes/available-slots.js';
 import { createCreateClientRouter } from './routes/create-client.js';
+import { createQualityAlertsRouter } from './routes/quality-alerts.js';
 import { createAdminOverviewRouter } from './routes/admin-overview.js';
 import { createAdminRemindersRouter } from './routes/admin-reminders.js';
 import { createAdminClientsRouter } from './routes/admin-clients.js';
@@ -341,6 +342,7 @@ app.use('/api', createGooglePlacesTestRouter());
 app.use('/api', createBookDemoRouter({ bookingSystem, smsEmailPipeline }));
 app.use('/api', createAvailableSlotsRouter({ bookingSystem }));
 app.use('/api', createCreateClientRouter({ upsertFullClient, adjustColorBrightness }));
+app.use('/api', createQualityAlertsRouter({ getQualityAlerts, resolveQualityAlert }));
 app.use(
   '/api/clients',
   createClientsApiRouter({
@@ -1735,49 +1737,7 @@ function generateEmail(businessName) {
 
 // moved: POST /api/create-client → routes/create-client.js
 
-// API endpoint to get quality alerts
-app.get('/api/quality-alerts/:clientKey', async (req, res) => {
-  try {
-    const { clientKey } = req.params;
-    const resolved = req.query.resolved === 'true';
-    
-    const alerts = await getQualityAlerts(clientKey, { resolved });
-    
-    res.json({
-      ok: true,
-      alerts: alerts.map(alert => ({
-        id: alert.id,
-        type: alert.alert_type,
-        severity: alert.severity,
-        message: alert.message,
-        action: alert.action,
-        impact: alert.impact,
-        actual: alert.actual_value,
-        expected: alert.expected_value,
-        createdAt: alert.created_at,
-        resolved: alert.resolved,
-        resolvedAt: alert.resolved_at
-      }))
-    });
-  } catch (error) {
-    console.error('[QUALITY ALERTS ERROR]', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-
-// API endpoint to resolve a quality alert
-app.post('/api/quality-alerts/:alertId/resolve', async (req, res) => {
-  try {
-    const { alertId } = req.params;
-    
-    await resolveQualityAlert(alertId);
-    
-    res.json({ ok: true, message: 'Alert resolved' });
-  } catch (error) {
-    console.error('[RESOLVE ALERT ERROR]', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
+// moved: /api/quality-alerts/* → routes/quality-alerts.js
 
 // API endpoint to import leads from CSV
 app.post('/api/import-leads/:clientKey', async (req, res) => {
