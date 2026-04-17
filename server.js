@@ -95,6 +95,7 @@ import { createOutreachRouter } from './routes/outreach.js';
 import { createCrmRouter } from './routes/crm.js';
 import { createBrandingRouter } from './routes/branding.js';
 import { createAnalyticsRouter } from './routes/analytics.js';
+import { createClientsApiRouter } from './routes/clients-api.js';
 import { createAdminOverviewRouter } from './routes/admin-overview.js';
 import { createAdminRemindersRouter } from './routes/admin-reminders.js';
 import { createAdminClientsRouter } from './routes/admin-clients.js';
@@ -289,6 +290,17 @@ app.use('/api/outreach', createOutreachRouter());
 app.use('/api/crm', createCrmRouter({ getFullClient }));
 app.use('/api/branding', createBrandingRouter({ getFullClient, upsertFullClient }));
 app.use('/api/analytics', createAnalyticsRouter());
+app.use(
+  '/api/clients',
+  createClientsApiRouter({
+    listFullClients,
+    getFullClient,
+    upsertFullClient,
+    deleteClient,
+    pickTimezone,
+    isDashboardSelfServiceClient
+  })
+);
 
 app.use('/api/admin', createAdminOverviewRouter({ broadcast: broadcastUpdate }));
 app.use('/api/admin', createAdminRemindersRouter({ sendReminderSMS }));
@@ -18576,101 +18588,7 @@ app.post('/api/roi-calculator/save', async (req, res) => {
 
 // moved: /api/analytics/* → routes/analytics.js
 
-// Clients API (DB-backed)
-app.get('/api/clients', async (_req, res) => {
-  try {
-    const rows = await listFullClients();
-    res.json({ ok: true, count: rows.length, clients: rows });
-  } catch (e) {
-    res.status(500).json({ ok:false, error: String(e) });
-  }
-});
-
-app.get('/api/clients/:key', async (req, res) => {
-  try {
-    const clientKey = req.params.key;
-    console.log(`[API] GET /api/clients/${clientKey} - Fetching client...`);
-    
-    let c = await getFullClient(clientKey);
-    console.log(`[API] getFullClient returned:`, c ? 'client found' : 'null');
-    
-    // Fallback: check local client files if not in database
-    if (!c) {
-      try {
-        const fs = await import('fs');
-        const path = await import('path');
-        const clientFile = path.join(process.cwd(), 'demos', `.client-${clientKey}.json`);
-        if (fs.existsSync(clientFile)) {
-          const fileContent = fs.readFileSync(clientFile, 'utf8');
-          c = JSON.parse(fileContent);
-          console.log(`[API] Loaded client from file:`, clientFile);
-        }
-      } catch (fileError) {
-        console.warn(`[API] File fallback error:`, fileError.message);
-      }
-    }
-    
-    if (!c) {
-      console.log(`[API] Client not found: ${clientKey}`);
-      return res.status(404).json({ ok:false, error: 'not found' });
-    }
-    
-    console.log(`[API] Returning client data for ${clientKey}:`, {
-      hasDisplayName: !!c.displayName,
-      hasWhiteLabel: !!c.whiteLabel,
-      hasBranding: !!c.whiteLabel?.branding,
-      clientKeys: Object.keys(c || {}).slice(0, 10)
-    });
-    
-    // Same list as outbound A/B self-service (comma-separated DASHBOARD_SELF_SERVICE_CLIENT_KEYS); drives outreach-only dashboard layout.
-    const dashboardOutreachMode = isDashboardSelfServiceClient(clientKey);
-    const response = { ok: true, client: { ...c, dashboardOutreachMode } };
-    console.log(`[API] Sending response for ${clientKey}, response keys:`, Object.keys(response));
-    
-    // Check if response was already sent
-    if (res.headersSent) {
-      console.error(`[API] Response already sent for ${clientKey}!`);
-      return;
-    }
-    
-    res.json(response);
-  } catch (e) {
-    console.error(`[API] Error in /api/clients/:key:`, e);
-    console.error(`[API] Error stack:`, e.stack);
-    
-    // Ensure error response is properly formatted
-    if (!res.headersSent) {
-      res.status(500).json({ ok: false, error: String(e) });
-    }
-  }
-});
-
-app.post('/api/clients', async (req, res) => {
-  try {
-    const c = req.body || {};
-    const key = (c.clientKey || '').toString().trim();
-    if (!key) return res.status(400).json({ ok:false, error: 'clientKey is required' });
-      const tz = pickTimezone(c);
-    if (typeof tz !== 'string' || !tz.length) return res.status(400).json({ ok:false, error: 'booking.timezone is required' });
-    if (c.sms && !(c.sms.messagingServiceSid || c.sms.fromNumber)) {
-      return res.status(400).json({ ok:false, error: 'sms.messagingServiceSid or sms.fromNumber required when sms block present' });
-    }
-    await upsertFullClient(c);
-    const saved = await getFullClient(key);
-    return res.json({ ok: true, client: saved });
-  } catch (e) {
-    return res.status(500).json({ ok:false, error: String(e) });
-  }
-});
-
-app.delete('/api/clients/:key', async (req, res) => {
-  try {
-    const out = await deleteClient(req.params.key);
-    res.json({ ok: true, deleted: out.changes });
-  } catch (e) {
-    res.status(500).json({ ok:false, error: String(e) });
-  }
-});
+// moved: /api/clients (DB-backed) → routes/clients-api.js
 
 
 
