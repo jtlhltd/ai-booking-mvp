@@ -99,6 +99,7 @@ import { createClientsApiRouter } from './routes/clients-api.js';
 import { createCalendarApiRouter } from './routes/calendar-api.js';
 import { createLeadsFollowupsRouter } from './routes/leads-followups.js';
 import { createSmsEmailPipelineRouter } from './routes/sms-email-pipeline.js';
+import { createBookingTestRouter } from './routes/booking-test.js';
 import { createAdminOverviewRouter } from './routes/admin-overview.js';
 import { createAdminRemindersRouter } from './routes/admin-reminders.js';
 import { createAdminClientsRouter } from './routes/admin-clients.js';
@@ -315,6 +316,7 @@ app.use('/api/crm', createCrmRouter({ getFullClient }));
 app.use('/api/branding', createBrandingRouter({ getFullClient, upsertFullClient }));
 app.use('/api/analytics', createAnalyticsRouter());
 app.use(createSmsEmailPipelineRouter({ smsEmailPipeline }));
+app.use(createBookingTestRouter({ bookingSystem }));
 app.use(
   '/api/clients',
   createClientsApiRouter({
@@ -565,40 +567,7 @@ app.get('/mock-call', async (req, res) => {
   }
 });
 
-// Booking System Endpoints
-// Booking System Endpoints - MOVED AFTER JSON MIDDLEWARE
-
-// Test Booking System
-app.get('/test-booking', async (req, res) => {
-  try {
-    const testLead = {
-      businessName: "Test Business",
-      decisionMaker: "John Smith",
-      email: "john@testbusiness.co.uk",
-      phoneNumber: "+447491683261",
-      industry: "retail",
-      location: "London"
-    };
-
-    const timeSlots = bookingSystem.generateTimeSlots(3);
-    const result = await bookingSystem.bookDemo(testLead, timeSlots.slice(0, 3));
-    
-    res.json({
-      success: true,
-      message: 'Booking system test completed',
-      result: result,
-      availableSlots: timeSlots.length
-    });
-    
-  } catch (error) {
-    console.error('[BOOKING TEST ERROR]', error);
-    res.status(500).json({
-      success: false,
-      message: 'Booking system test failed',
-      error: error.message
-    });
-  }
-});
+// moved: /test-booking → routes/booking-test.js
 
 // moved: SMS-Email Pipeline endpoints → routes/sms-email-pipeline.js
 
