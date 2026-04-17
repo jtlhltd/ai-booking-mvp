@@ -18693,9 +18693,9 @@ app.use(
     getFullClient,
     isBusinessHours,
     TIMEZONE,
-    VAPI_ASSISTANT_ID,
-    VAPI_PHONE_NUMBER_ID,
-    VAPI_PRIVATE_KEY,
+    VAPI_ASSISTANT_ID: process.env.VAPI_ASSISTANT_ID,
+    VAPI_PHONE_NUMBER_ID: process.env.VAPI_PHONE_NUMBER_ID,
+    VAPI_PRIVATE_KEY: process.env.VAPI_PRIVATE_KEY,
     smsConfig
   })
 );
