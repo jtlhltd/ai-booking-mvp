@@ -126,6 +126,7 @@ import { createVoicemailsRouter } from './routes/voicemails.js';
 import { createCallRecordingsStreamRouter } from './routes/call-recordings-stream.js';
 import { createRecordingsQualityCheckRouter } from './routes/recordings-quality-check.js';
 import { createReportsRouter } from './routes/reports.js';
+import { createSmsTemplatesRouter } from './routes/sms-templates.js';
 import { createAdminOverviewRouter } from './routes/admin-overview.js';
 import { createAdminRemindersRouter } from './routes/admin-reminders.js';
 import { createAdminClientsRouter } from './routes/admin-clients.js';
@@ -380,6 +381,7 @@ app.use('/api', createVoicemailsRouter({ isPostgres, poolQuerySelect, formatTime
 app.use('/api', createCallRecordingsStreamRouter({ poolQuerySelect }));
 app.use('/api', createRecordingsQualityCheckRouter({ query }));
 app.use('/api', createReportsRouter({ authenticateApiKey }));
+app.use('/api', createSmsTemplatesRouter({ authenticateApiKey }));
 app.use(
   '/api/clients',
   createClientsApiRouter({
@@ -7426,61 +7428,7 @@ app.use(opsRouter);
 
 // moved: /api/reports/* → routes/reports.js
 
-// SMS template library endpoints
-app.get('/api/sms/templates', authenticateApiKey, async (req, res) => {
-  try {
-    const { listTemplates } = await import('./lib/sms-template-library.js');
-    const templates = listTemplates();
-    
-    res.json({
-      ok: true,
-      templates,
-      count: templates.length,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('[SMS TEMPLATES ERROR]', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-console.log('🟢🟢🟢 [SMS] REGISTERED: GET /api/sms/templates');
-
-app.post('/api/sms/templates/render', authenticateApiKey, async (req, res) => {
-  try {
-    const { templateKey, variables } = req.body;
-    
-    if (!templateKey) {
-      return res.status(400).json({ ok: false, error: 'templateKey is required' });
-    }
-    
-    const { renderSMSTemplate, validateTemplateVariables } = await import('./lib/sms-template-library.js');
-    
-    // Validate variables
-    const validation = validateTemplateVariables(templateKey, variables || {});
-    if (!validation.valid) {
-      return res.status(400).json({
-        ok: false,
-        error: 'Invalid template variables',
-        missing: validation.missing,
-        required: validation.required
-      });
-    }
-    
-    const message = renderSMSTemplate(templateKey, variables);
-    
-    res.json({
-      ok: true,
-      templateKey,
-      message,
-      variables,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('[SMS TEMPLATE RENDER ERROR]', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-console.log('🟢🟢🟢 [SMS] REGISTERED: POST /api/sms/templates/render');
+// moved: /api/sms/templates* → routes/sms-templates.js
 
 // Monitoring dashboard endpoints
 app.get('/api/monitoring/dashboard', authenticateApiKey, async (req, res) => {
