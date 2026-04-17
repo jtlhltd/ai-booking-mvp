@@ -104,6 +104,7 @@ import { createVapiDevRouter } from './routes/vapi-dev.js';
 import { createAdminTestLeadDataRouter } from './routes/admin-test-lead-data.js';
 import { createAdminTestScriptRouter } from './routes/admin-test-script.js';
 import { createAdminValidateCallDurationRouter } from './routes/admin-validate-call-duration.js';
+import { createPipelineTrackingRouter } from './routes/pipeline-tracking.js';
 import { createAdminOverviewRouter } from './routes/admin-overview.js';
 import { createAdminRemindersRouter } from './routes/admin-reminders.js';
 import { createAdminClientsRouter } from './routes/admin-clients.js';
@@ -325,6 +326,7 @@ app.use(createVapiDevRouter());
 app.use('/admin', createAdminTestLeadDataRouter());
 app.use('/admin', createAdminTestScriptRouter());
 app.use('/admin', createAdminValidateCallDurationRouter());
+app.use('/api', createPipelineTrackingRouter({ smsEmailPipeline }));
 app.use(
   '/api/clients',
   createClientsApiRouter({
@@ -592,102 +594,7 @@ app.get('/mock-call', async (req, res) => {
 // Middleware for parsing JSON bodies (must be before routes that need it)
 // Moved to top of file to ensure all routes have access to JSON parsing
 
-// Lead tracking endpoints
-app.get('/api/pipeline-stats', async (req, res) => {
-  try {
-    console.log('[PIPELINE STATS REQUEST]', { 
-      ip: req.ip, 
-      userAgent: req.get('User-Agent'),
-      timestamp: new Date().toISOString()
-    });
-    
-    if (!smsEmailPipeline) {
-      console.log('[PIPELINE STATS] SMS pipeline not available');
-      return res.json({
-        totalLeads: 0,
-        waitingForEmail: 0,
-        emailReceived: 0,
-        booked: 0,
-        conversionRate: 0
-      });
-    }
-    
-    const stats = smsEmailPipeline.getStats();
-    
-    // Add timestamp for cache busting
-    stats.lastUpdated = new Date().toISOString();
-    
-    console.log('[PIPELINE STATS RESPONSE]', stats);
-    res.json(stats);
-  } catch (error) {
-    console.error('[PIPELINE STATS ERROR]', error);
-    res.status(500).json({ error: 'Failed to get pipeline stats' });
-  }
-});
-
-app.get('/api/recent-leads', async (req, res) => {
-  try {
-    console.log('[RECENT LEADS REQUEST]', { 
-      ip: req.ip, 
-      userAgent: req.get('User-Agent'),
-      timestamp: new Date().toISOString()
-    });
-    
-    if (!smsEmailPipeline) {
-      console.log('[RECENT LEADS] SMS pipeline not available');
-      return res.json([]);
-    }
-    
-    // Get all leads from the pipeline
-    const allLeads = Array.from(smsEmailPipeline.pendingLeads.values());
-    
-    // Sort by creation date (newest first)
-    allLeads.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    
-    // Limit to 50 most recent
-    const recentLeads = allLeads.slice(0, 50);
-    
-    console.log('[RECENT LEADS RESPONSE]', { 
-      totalLeads: allLeads.length,
-      returnedLeads: recentLeads.length,
-      leadStatuses: recentLeads.reduce((acc, lead) => {
-        acc[lead.status] = (acc[lead.status] || 0) + 1;
-        return acc;
-      }, {})
-    });
-    
-    res.json(recentLeads);
-  } catch (error) {
-    console.error('[RECENT LEADS ERROR]', error);
-    res.status(500).json({ error: 'Failed to get recent leads' });
-  }
-});
-
-// Get leads needing attention (retry info)
-app.get('/api/leads-needing-attention', async (req, res) => {
-  try {
-    if (!smsEmailPipeline) {
-      return res.json({
-        stuckLeads: [],
-        expiredLeads: [],
-        retryScheduled: []
-      });
-    }
-
-    const attentionData = smsEmailPipeline.getLeadsNeedingAttention();
-    
-    console.log('[LEADS NEEDING ATTENTION]', {
-      stuckLeads: attentionData.stuckLeads.length,
-      expiredLeads: attentionData.expiredLeads.length,
-      retryScheduled: attentionData.retryScheduled.length
-    });
-
-    res.json(attentionData);
-  } catch (error) {
-    console.error('[LEADS NEEDING ATTENTION ERROR]', error);
-    res.status(500).json({ error: 'Failed to get leads needing attention' });
-  }
-});
+// moved: /api pipeline tracking endpoints → routes/pipeline-tracking.js
 
 // Manually trigger retry for a specific lead
 app.post('/api/trigger-retry/:leadId', async (req, res) => {
