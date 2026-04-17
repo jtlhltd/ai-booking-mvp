@@ -22402,7 +22402,7 @@ async function processVapiCallFromQueue(call) {
                   'at', NOW(),
                   'kind', 'internal',
                   'error', 'call_persist_failure',
-                  'message', $3
+                  'message', $3::text
                 ),
                 true
               ),
