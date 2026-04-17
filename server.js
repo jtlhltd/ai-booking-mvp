@@ -127,6 +127,7 @@ import { createCallRecordingsStreamRouter } from './routes/call-recordings-strea
 import { createRecordingsQualityCheckRouter } from './routes/recordings-quality-check.js';
 import { createReportsRouter } from './routes/reports.js';
 import { createSmsTemplatesRouter } from './routes/sms-templates.js';
+import { createMonitoringDashboardRouter } from './routes/monitoring-dashboard.js';
 import { createAdminOverviewRouter } from './routes/admin-overview.js';
 import { createAdminRemindersRouter } from './routes/admin-reminders.js';
 import { createAdminClientsRouter } from './routes/admin-clients.js';
@@ -382,6 +383,7 @@ app.use('/api', createCallRecordingsStreamRouter({ poolQuerySelect }));
 app.use('/api', createRecordingsQualityCheckRouter({ query }));
 app.use('/api', createReportsRouter({ authenticateApiKey }));
 app.use('/api', createSmsTemplatesRouter({ authenticateApiKey }));
+app.use('/api', createMonitoringDashboardRouter({ authenticateApiKey }));
 app.use(
   '/api/clients',
   createClientsApiRouter({
@@ -7430,63 +7432,7 @@ app.use(opsRouter);
 
 // moved: /api/sms/templates* → routes/sms-templates.js
 
-// Monitoring dashboard endpoints
-app.get('/api/monitoring/dashboard', authenticateApiKey, async (req, res) => {
-  try {
-    const { getSystemMonitoringData } = await import('./lib/monitoring-dashboard.js');
-    const data = await getSystemMonitoringData();
-    
-    res.json({
-      ok: true,
-      data,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('[MONITORING DASHBOARD ERROR]', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-console.log('🟢🟢🟢 [MONITORING] REGISTERED: GET /api/monitoring/dashboard');
-
-app.get('/api/monitoring/client-usage', authenticateApiKey, async (req, res) => {
-  try {
-    const days = parseInt(req.query.days) || 30;
-    const { getClientUsageAnalytics } = await import('./lib/monitoring-dashboard.js');
-    const analytics = await getClientUsageAnalytics(days);
-    
-    res.json({
-      ok: true,
-      analytics,
-      count: analytics.length,
-      period: `${days} days`,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('[CLIENT USAGE ANALYTICS ERROR]', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-console.log('🟢🟢🟢 [MONITORING] REGISTERED: GET /api/monitoring/client-usage');
-
-app.get('/api/monitoring/performance-trends', authenticateApiKey, async (req, res) => {
-  try {
-    const days = parseInt(req.query.days) || 30;
-    const { getPerformanceTrends } = await import('./lib/monitoring-dashboard.js');
-    const trends = await getPerformanceTrends(days);
-    
-    res.json({
-      ok: true,
-      trends,
-      count: trends.length,
-      period: `${days} days`,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('[PERFORMANCE TRENDS ERROR]', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-console.log('🟢🟢🟢 [MONITORING] REGISTERED: GET /api/monitoring/performance-trends');
+// moved: /api/monitoring/(dashboard|client-usage|performance-trends) → routes/monitoring-dashboard.js
 
 // API Documentation endpoint (OpenAPI/Swagger)
 app.get('/api-docs', async (req, res) => {
