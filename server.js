@@ -129,6 +129,8 @@ import { createReportsRouter } from './routes/reports.js';
 import { createSmsTemplatesRouter } from './routes/sms-templates.js';
 import { createMonitoringDashboardRouter } from './routes/monitoring-dashboard.js';
 import { createApiDocsRouter } from './routes/api-docs.js';
+import { createQuickWinMetricsRouter } from './routes/quick-win-metrics.js';
+import { createHealthAndDiagnosticsRouter } from './routes/health-and-diagnostics.js';
 import { createAdminOverviewRouter } from './routes/admin-overview.js';
 import { createAdminRemindersRouter } from './routes/admin-reminders.js';
 import { createAdminClientsRouter } from './routes/admin-clients.js';
@@ -386,6 +388,8 @@ app.use('/api', createReportsRouter({ authenticateApiKey }));
 app.use('/api', createSmsTemplatesRouter({ authenticateApiKey }));
 app.use('/api', createMonitoringDashboardRouter({ authenticateApiKey }));
 app.use(createApiDocsRouter());
+app.use('/api', createQuickWinMetricsRouter({ query, cacheMiddleware }));
+app.use(createHealthAndDiagnosticsRouter({ query }));
 app.use(
   '/api/clients',
   createClientsApiRouter({
@@ -7438,203 +7442,7 @@ app.use(opsRouter);
 
 // moved: /api-docs → routes/api-docs.js
 
-// Quick Win #4: SMS delivery rate tracking
-app.get('/api/sms-delivery-rate/:clientKey', async (req, res) => {
-  try {
-    const { clientKey } = req.params;
-    const days = parseInt(req.query.days) || 7;
-    
-    const stats = await query(`
-      SELECT 
-        COUNT(*) as total,
-        COUNT(*) FILTER (WHERE status = 'delivered') as delivered,
-        COUNT(*) FILTER (WHERE status = 'failed') as failed,
-        COUNT(*) FILTER (WHERE status = 'sent') as sent,
-        COUNT(*) FILTER (WHERE status = 'queued') as queued
-      FROM messages
-      WHERE client_key = $1
-        AND channel = 'sms'
-        AND direction = 'outbound'
-        AND created_at >= NOW() - INTERVAL '${days} days'
-    `, [clientKey]);
-    
-    const row = stats.rows[0];
-    const total = parseInt(row.total || 0);
-    const delivered = parseInt(row.delivered || 0);
-    const failed = parseInt(row.failed || 0);
-    const deliveryRate = total > 0 ? ((delivered / total) * 100).toFixed(1) : 0;
-    
-    // Alert if delivery rate drops below 95%
-    if (parseFloat(deliveryRate) < 95 && process.env.YOUR_EMAIL && total >= 10) {
-      try {
-        const messagingService = (await import('./lib/messaging-service.js')).default;
-        await messagingService.sendEmail({
-          to: process.env.YOUR_EMAIL,
-          subject: `⚠️ SMS Delivery Rate Low: ${deliveryRate}%`,
-          body: `SMS delivery rate is below 95% for ${clientKey}\n\nDelivery Rate: ${deliveryRate}%\nTotal: ${total}\nDelivered: ${delivered}\nFailed: ${failed}\n\nTime: ${new Date().toISOString()}`
-        });
-      } catch (emailError) {
-        console.error('[SMS DELIVERY RATE] Failed to send alert:', emailError.message);
-      }
-    }
-    
-    res.json({
-      ok: true,
-      clientKey,
-      period: `${days} days`,
-      total,
-      delivered,
-      failed,
-      sent: parseInt(row.sent || 0),
-      queued: parseInt(row.queued || 0),
-      deliveryRate: `${deliveryRate}%`,
-      isHealthy: parseFloat(deliveryRate) >= 95
-    });
-  } catch (error) {
-    console.error('[SMS DELIVERY RATE ERROR]', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-
-// API endpoint for calendar sync details (Quick Win #5: Enhanced with status monitoring)
-app.get('/api/calendar-sync/:clientKey', cacheMiddleware({ ttl: 300000, keyPrefix: 'calendar-sync:' }), async (req, res) => {
-  try {
-    const { clientKey } = req.params;
-    
-    const tenantResult = await query(`
-      SELECT calendar_json
-      FROM tenants
-      WHERE client_key = $1
-    `, [clientKey]);
-
-    const calendarConfig = tenantResult.rows?.[0]?.calendar_json || {};
-    const isConnected = !!(calendarConfig.service_account_email || calendarConfig.access_token);
-
-    // Get last successful sync time
-    const lastSync = await query(`
-      SELECT MAX(created_at) AS last_sync
-      FROM appointments
-      WHERE client_key = $1
-        AND gcal_event_id IS NOT NULL
-    `, [clientKey]);
-    
-    const lastSyncTime = lastSync.rows[0]?.last_sync;
-    const hoursSinceSync = lastSyncTime 
-      ? Math.floor((Date.now() - new Date(lastSyncTime).getTime()) / (1000 * 60 * 60))
-      : null;
-    
-    const recentAppointments = await query(`
-      SELECT COUNT(*) AS count
-      FROM appointments
-      WHERE client_key = $1
-        AND created_at >= NOW() - INTERVAL '7 days'
-    `, [clientKey]);
-
-    const conflicts = await query(`
-      SELECT COUNT(*) AS count
-      FROM appointments
-      WHERE client_key = $1
-        AND status = 'conflict'
-        AND created_at >= NOW() - INTERVAL '7 days'
-    `, [clientKey]);
-
-    // Alert if no sync in 24 hours (Quick Win #5)
-    if (isConnected && hoursSinceSync !== null && hoursSinceSync > 24 && process.env.YOUR_EMAIL) {
-      try {
-        const messagingService = (await import('./lib/messaging-service.js')).default;
-        await messagingService.sendEmail({
-          to: process.env.YOUR_EMAIL,
-          subject: `⚠️ Calendar Sync Stale - ${hoursSinceSync}h Since Last Sync`,
-          body: `Calendar sync hasn't happened in ${hoursSinceSync} hours for ${clientKey}\n\nLast sync: ${lastSyncTime}\nTime: ${new Date().toISOString()}`
-        });
-      } catch (emailError) {
-        console.error('[CALENDAR SYNC] Failed to send alert:', emailError.message);
-      }
-    }
-
-    res.json({
-      ok: true,
-      connected: isConnected,
-      lastSyncTime: lastSyncTime || null,
-      hoursSinceSync: hoursSinceSync || null,
-      lastSync: lastSync.rows?.[0]?.last_sync || new Date().toISOString(),
-      appointmentsBooked: parseInt(recentAppointments.rows?.[0]?.count || 0, 10),
-      conflictsResolved: parseInt(conflicts.rows?.[0]?.count || 0, 10),
-      status: isConnected ? 'synced' : 'disconnected',
-      calendarType: calendarConfig.type || 'google'
-    });
-  } catch (error) {
-    console.error('[CALENDAR SYNC ERROR]', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-
-// API endpoint to get call quality metrics
-app.get('/api/quality-metrics/:clientKey', async (req, res) => {
-  try {
-    const { clientKey } = req.params;
-    const days = parseInt(req.query.days) || 30;
-    
-    const metrics = await getCallQualityMetrics(clientKey, days);
-    
-    if (!metrics || metrics.total_calls === 0) {
-      return res.json({
-        ok: true,
-        period: `Last ${days} days`,
-        metrics: {
-          total_calls: 0,
-          successful_calls: 0,
-          bookings: 0,
-          success_rate: '0.0%',
-          booking_rate: '0.0%',
-          avg_quality_score: '0.0',
-          avg_duration: '0s',
-          sentiment: {
-            positive: 0,
-            negative: 0,
-            neutral: 0,
-            positive_rate: '0.0%'
-          }
-        },
-        message: 'No call data available yet'
-      });
-    }
-    
-    // Calculate rates
-    const successRate = metrics.total_calls > 0 
-      ? (metrics.successful_calls / metrics.total_calls) 
-      : 0;
-    const bookingRate = metrics.total_calls > 0 
-      ? (metrics.bookings / metrics.total_calls) 
-      : 0;
-    const positiveRate = metrics.total_calls > 0 
-      ? (metrics.positive_sentiment_count / metrics.total_calls) 
-      : 0;
-    
-    res.json({
-      ok: true,
-      period: `Last ${days} days`,
-      metrics: {
-        total_calls: parseInt(metrics.total_calls) || 0,
-        successful_calls: parseInt(metrics.successful_calls) || 0,
-        bookings: parseInt(metrics.bookings) || 0,
-        success_rate: (successRate * 100).toFixed(1) + '%',
-        booking_rate: (bookingRate * 100).toFixed(1) + '%',
-        avg_quality_score: parseFloat(metrics.avg_quality_score || 0).toFixed(1),
-        avg_duration: Math.round(metrics.avg_duration || 0) + 's',
-        sentiment: {
-          positive: parseInt(metrics.positive_sentiment_count) || 0,
-          negative: parseInt(metrics.negative_sentiment_count) || 0,
-          neutral: parseInt(metrics.neutral_sentiment_count) || 0,
-          positive_rate: (positiveRate * 100).toFixed(1) + '%'
-        }
-      }
-    });
-  } catch (error) {
-    console.error('[QUALITY METRICS ERROR]', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
+// moved: /api/(sms-delivery-rate|calendar-sync|quality-metrics) → routes/quick-win-metrics.js
 
 // Helper function to adjust color brightness
 function adjustColorBrightness(hex, percent) {
@@ -7648,91 +7456,7 @@ function adjustColorBrightness(hex, percent) {
       (B < 255 ? B < 1 ? 0 : B : 255)).toString(16).slice(1);
 }
 
-// --- healthz: report which integrations are configured (without leaking secrets)
-// Comprehensive health check endpoint
-app.get('/api/health/comprehensive', async (req, res) => {
-  try {
-    const { getComprehensiveHealth } = await import('./lib/health-monitor.js');
-    const health = await getComprehensiveHealth(req.query.clientKey || null);
-    res.json(health);
-  } catch (error) {
-    console.error('[HEALTH CHECK ERROR]', error);
-    res.status(500).json({
-      status: 'error',
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-// Call-path diagnostics: why outbound calls might not reach Vapi (no secrets)
-app.get('/api/call-status', async (req, res) => {
-  const missing = [];
-  if (!process.env.VAPI_PRIVATE_KEY) missing.push('VAPI_PRIVATE_KEY');
-  if (!process.env.VAPI_ASSISTANT_ID) missing.push('VAPI_ASSISTANT_ID');
-  if (!process.env.VAPI_PHONE_NUMBER_ID) missing.push('VAPI_PHONE_NUMBER_ID');
-  let circuitBreakerOpen = false;
-  try {
-    const { isCircuitBreakerOpen } = await import('./lib/circuit-breaker.js');
-    circuitBreakerOpen = isCircuitBreakerOpen('vapi_call');
-  } catch (_) { /* ignore */ }
-  res.json({
-    vapiConfigured: missing.length === 0,
-    missingVars: missing,
-    circuitBreakerOpen,
-    hint: missing.length ? `Set ${missing.join(', ')} so outbound calls can reach Vapi.` : (circuitBreakerOpen ? 'Circuit breaker is open; check logs for Vapi errors.' : 'Vapi env and circuit OK.')
-  });
-});
-
-app.get('/healthz', (req, res) => {
-  const flags = {
-    apiKey: !!process.env.API_KEY,
-    sms: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && (process.env.TWILIO_MESSAGING_SERVICE_SID || process.env.TWILIO_FROM_NUMBER)),
-    gcal: !!(process.env.GOOGLE_CLIENT_EMAIL && (process.env.GOOGLE_PRIVATE_KEY || process.env.GOOGLE_PRIVATE_KEY_B64)),
-    vapi: !!(process.env.VAPI_PRIVATE_KEY && (process.env.VAPI_ASSISTANT_ID || true) && (process.env.VAPI_PHONE_NUMBER_ID || true)),
-    tz: process.env.TZ || 'unset'
-  };
-  res.json({ ok: true, integrations: flags });
-});
-
-// Load balancer health check endpoint
-// Lightweight endpoint for load balancers to check server health
-// Returns 200 if server is healthy, 503 if unhealthy
-app.get('/health/lb', async (req, res) => {
-  try {
-    // Quick database connectivity check
-    const dbHealthy = await Promise.race([
-      query('SELECT 1').then(() => true),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('DB timeout')), 2000))
-    ]).catch(() => false);
-    
-    // Check if server is shutting down
-    const isShuttingDown = global.isShuttingDown || false;
-    
-    // Determine health status
-    const healthy = dbHealthy && !isShuttingDown;
-    
-    if (healthy) {
-      res.status(200).json({
-        status: 'healthy',
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime()
-      });
-    } else {
-      res.status(503).json({
-        status: 'unhealthy',
-        reason: !dbHealthy ? 'database_unavailable' : 'shutting_down',
-        timestamp: new Date().toISOString()
-      });
-    }
-  } catch (error) {
-    res.status(503).json({
-      status: 'unhealthy',
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
+// moved: /api/health/comprehensive, /api/call-status, /health/lb → routes/health-and-diagnostics.js
 
 // --- Tenant header normalizer ---
 app.use((req, _res, next) => {
