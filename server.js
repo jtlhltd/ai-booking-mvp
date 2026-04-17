@@ -111,6 +111,7 @@ import { createAdminFollowUpsRouter } from './routes/admin-follow-ups.js';
 import { createAdminReportsRouter } from './routes/admin-reports.js';
 import { createAdminSocialRouter } from './routes/admin-social.js';
 import { createAdminMultiClientRouter } from './routes/admin-multi-client.js';
+import { createAdminCallQueueOpsRouter } from './routes/admin-call-queue-ops.js';
 import * as store from './store.js';
 import * as sheets from './sheets.js';
 import messagingService from './lib/messaging-service.js';
@@ -321,6 +322,7 @@ app.use('/api/admin', createAdminFollowUpsRouter({ query }));
 app.use('/api/admin', createAdminReportsRouter({ query }));
 app.use('/api/admin', createAdminSocialRouter({ query }));
 app.use('/api/admin', createAdminMultiClientRouter({ authenticateApiKey }));
+app.use('/api/admin', createAdminCallQueueOpsRouter());
 
 // moved: /api/admin/call-recordings → routes/admin-call-recordings.js
 
@@ -16645,47 +16647,8 @@ app.post('/admin/purge-leads', async (req, res) => {
   }
 });
 
-// Dedupe pending outbound queue rows (same tenant + digit phone key); keeps earliest scheduled row per key.
-app.post('/api/admin/call-queue/dedupe-pending-vapi', async (req, res) => {
-  try {
-    const apiKey = req.get('X-API-Key');
-    if (!apiKey || apiKey !== process.env.API_KEY) {
-      return res.status(401).json({ ok: false, error: 'Unauthorized' });
-    }
-    const { dedupePendingVapiCallQueueRows } = await import('./db.js');
-    const r = await dedupePendingVapiCallQueueRows();
-    console.log('[ADMIN] call-queue dedupe pending vapi', r);
-    return res.json({ ok: true, ...r });
-  } catch (e) {
-    console.error('[ADMIN DEDUPE CALL QUEUE]', e?.message || e);
-    return res.status(500).json({ ok: false, error: String(e?.message || e) });
-  }
-});
-
-// Clear outbound weekday journey for a number so auto dials can start a fresh Mon–Fri journey (ops).
-app.post('/api/admin/outbound-weekday-journey/clear', async (req, res) => {
-  try {
-    const apiKey = req.get('X-API-Key');
-    if (!apiKey || apiKey !== process.env.API_KEY) {
-      return res.status(401).json({ ok: false, error: 'Unauthorized' });
-    }
-    const clientKey = req.body?.clientKey != null ? String(req.body.clientKey).trim() : '';
-    const leadPhone = req.body?.leadPhone != null ? String(req.body.leadPhone).trim() : '';
-    if (!clientKey || !leadPhone) {
-      return res.status(400).json({ ok: false, error: 'clientKey and leadPhone are required' });
-    }
-    const { clearOutboundWeekdayJourneyForReopen } = await import('./db.js');
-    const r = await clearOutboundWeekdayJourneyForReopen(clientKey, leadPhone);
-    if (!r.ok) {
-      return res.status(400).json(r);
-    }
-    console.log('[ADMIN] outbound weekday journey cleared', { clientKey, deleted: r.deleted });
-    return res.json({ ok: true, deleted: r.deleted });
-  } catch (e) {
-    console.error('[ADMIN CLEAR OUTBOUND JOURNEY]', e?.message || e);
-    return res.status(500).json({ ok: false, error: String(e?.message || e) });
-  }
-});
+// moved: /api/admin/call-queue/dedupe-pending-vapi → routes/admin-call-queue-ops.js
+// moved: /api/admin/outbound-weekday-journey/clear → routes/admin-call-queue-ops.js
 
 // Admin endpoint to get cost optimization metrics
 app.get('/admin/cost-optimization/:tenantKey', async (req, res) => {
