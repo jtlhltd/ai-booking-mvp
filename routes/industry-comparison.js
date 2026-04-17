@@ -1,7 +1,8 @@
 import express from 'express';
+import { getCallQualityMetrics } from '../db.js';
 
 export function createIndustryComparisonRouter(deps) {
-  const { getFullClient, getCallQualityMetrics } = deps || {};
+  const { getFullClient } = deps || {};
   const router = express.Router();
 
   router.get('/industry-comparison/:clientKey', async (req, res) => {

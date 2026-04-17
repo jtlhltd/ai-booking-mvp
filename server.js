@@ -350,7 +350,7 @@ app.use('/api', createQualityAlertsRouter());
 app.use('/api', createImportLeadsRouter({ getFullClient, isBusinessHours }));
 app.use('/api', createImportLeadEmailRouter());
 app.use('/api', createRoiRouter());
-app.use('/api', createIndustryComparisonRouter({ getFullClient, getCallQualityMetrics }));
+app.use('/api', createIndustryComparisonRouter({ getFullClient }));
 app.use(
   '/api/clients',
   createClientsApiRouter({
