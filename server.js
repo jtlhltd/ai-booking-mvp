@@ -105,6 +105,7 @@ import { createAdminTestLeadDataRouter } from './routes/admin-test-lead-data.js'
 import { createAdminTestScriptRouter } from './routes/admin-test-script.js';
 import { createAdminValidateCallDurationRouter } from './routes/admin-validate-call-duration.js';
 import { createPipelineTrackingRouter } from './routes/pipeline-tracking.js';
+import { createPipelineRetryRouter } from './routes/pipeline-retry.js';
 import { createAdminOverviewRouter } from './routes/admin-overview.js';
 import { createAdminRemindersRouter } from './routes/admin-reminders.js';
 import { createAdminClientsRouter } from './routes/admin-clients.js';
@@ -327,6 +328,7 @@ app.use('/admin', createAdminTestLeadDataRouter());
 app.use('/admin', createAdminTestScriptRouter());
 app.use('/admin', createAdminValidateCallDurationRouter());
 app.use('/api', createPipelineTrackingRouter({ smsEmailPipeline }));
+app.use('/api', createPipelineRetryRouter({ smsEmailPipeline }));
 app.use(
   '/api/clients',
   createClientsApiRouter({
@@ -596,44 +598,7 @@ app.get('/mock-call', async (req, res) => {
 
 // moved: /api pipeline tracking endpoints → routes/pipeline-tracking.js
 
-// Manually trigger retry for a specific lead
-app.post('/api/trigger-retry/:leadId', async (req, res) => {
-  try {
-    const { leadId } = req.params;
-    
-    if (!smsEmailPipeline) {
-      return res.status(500).json({ error: 'SMS pipeline not available' });
-    }
-
-    const lead = smsEmailPipeline.pendingLeads.get(leadId);
-    if (!lead) {
-      return res.status(404).json({ error: 'Lead not found' });
-    }
-
-    if (lead.status !== 'waiting_for_email') {
-      return res.status(400).json({ error: 'Lead is not in waiting_for_email status' });
-    }
-
-    // Force retry by setting nextRetryAt to now
-    lead.nextRetryAt = new Date();
-    smsEmailPipeline.pendingLeads.set(leadId, lead);
-
-    // Process retries immediately
-    await smsEmailPipeline.processRetries();
-
-    console.log(`[MANUAL RETRY TRIGGERED] Lead ${leadId} - ${lead.phoneNumber}`);
-
-    res.json({
-      success: true,
-      message: `Retry triggered for lead ${leadId}`,
-      leadId: leadId,
-      phoneNumber: lead.phoneNumber
-    });
-  } catch (error) {
-    console.error('[MANUAL RETRY ERROR]', error);
-    res.status(500).json({ error: 'Failed to trigger retry' });
-  }
-});
+// moved: POST /api/trigger-retry/:leadId → routes/pipeline-retry.js
 
 // Zapier webhook endpoint (accepts single lead from Zapier)
 app.post('/api/webhooks/zapier', requireApiKey, async (req, res) => {
