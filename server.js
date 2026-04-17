@@ -127,6 +127,7 @@ const io = new SocketIOServer(server, {
 const performanceMonitor = getPerformanceMonitor();
 const cache = getCache();
 const isPostgres = (process.env.DB_TYPE || '').toLowerCase() === 'postgres';
+const TIMEZONE = process.env.TZ || process.env.TIMEZONE || 'Europe/London';
 
 // Dashboard stats cache (separate from main cache for stats-specific TTL)
 const DASHBOARD_CACHE_TTL = 60000; // 60 seconds
@@ -12286,7 +12287,6 @@ if (process.env.GOOGLE_SA_JSON_BASE64 && !GOOGLE_CLIENT_EMAIL) {
 }
 
 const GOOGLE_CALENDAR_ID     = process.env.GOOGLE_CALENDAR_ID     || 'primary';
-const TIMEZONE               = process.env.TZ || process.env.TIMEZONE || 'Europe/London';
 
 // Enhanced retry logic with exponential backoff and circuit breaker
 async function retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000, context = {}) {
