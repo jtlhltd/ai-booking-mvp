@@ -104,6 +104,7 @@ import { createAdminTemplatesRouter } from './routes/admin-templates.js';
 import { createAdminCallRecordingsRouter } from './routes/admin-call-recordings.js';
 import { createAdminCallQueueRouter } from './routes/admin-call-queue.js';
 import { createAdminOutboundWeekdayJourneyRouter } from './routes/admin-outbound-weekday-journey.js';
+import { createAdminCallsInsightsRouter } from './routes/admin-calls-insights.js';
 import * as store from './store.js';
 import * as sheets from './sheets.js';
 import messagingService from './lib/messaging-service.js';
@@ -307,6 +308,7 @@ app.use(
     isPostgres
   })
 );
+app.use('/api/admin', createAdminCallsInsightsRouter({ query }));
 
 // moved: /api/admin/call-recordings → routes/admin-call-recordings.js
 
@@ -351,59 +353,7 @@ app.use(
 
 // moved: /api/admin/call-recordings (POST/play/transcript/delete) → routes/admin-call-recordings.js
 
-// Call Analytics & Insights
-app.get('/api/admin/calls/insights', async (req, res) => {
-  try {
-    const { clientKey, days = 30 } = req.query;
-    
-    let query = `
-      SELECT 
-        cl.*,
-        cr.transcript,
-        cr.recording_url,
-        l.name as lead_name,
-        c.display_name as client_name
-      FROM calls cl
-      LEFT JOIN call_recordings cr ON cl.call_id = cr.call_id
-      LEFT JOIN leads l ON cl.lead_phone = l.phone
-      LEFT JOIN tenants c ON cl.client_key = c.client_key
-      WHERE cl.created_at >= NOW() - INTERVAL '${parseInt(days)} days'
-    `;
-    
-    const params = [];
-    if (clientKey) {
-      query += ` AND cl.client_key = $1`;
-      params.push(clientKey);
-    }
-    
-    query += ` ORDER BY cl.created_at DESC`;
-    
-    const calls = await query(query, params);
-    
-    // Analyze calls for insights
-    const insights = {
-      totalCalls: calls.rows.length,
-      totalDuration: calls.rows.reduce((sum, c) => sum + (c.duration || 0), 0),
-      avgDuration: calls.rows.length > 0 
-        ? Math.round(calls.rows.reduce((sum, c) => sum + (c.duration || 0), 0) / calls.rows.length)
-        : 0,
-      outcomes: calls.rows.reduce((acc, c) => {
-        acc[c.outcome] = (acc[c.outcome] || 0) + 1;
-        return acc;
-      }, {}),
-      recordings: calls.rows.filter(c => c.recording_url).length,
-      transcripts: calls.rows.filter(c => c.transcript).length
-    };
-    
-    res.json({
-      calls: calls.rows,
-      insights
-    });
-  } catch (error) {
-    console.error('Error getting call insights:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+// moved: /api/admin/calls/insights → routes/admin-calls-insights.js
 
 // Lead Scoring Automation Endpoints (GET /api/admin/leads/scoring is the heuristic handler in routes/admin-sales-pipeline.js)
 
