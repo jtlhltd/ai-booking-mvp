@@ -112,6 +112,7 @@ import { createAdminReportsRouter } from './routes/admin-reports.js';
 import { createAdminSocialRouter } from './routes/admin-social.js';
 import { createAdminMultiClientRouter } from './routes/admin-multi-client.js';
 import { createAdminCallQueueOpsRouter } from './routes/admin-call-queue-ops.js';
+import { createAdminRoiCalculatorRouter } from './routes/admin-roi-calculator.js';
 import * as store from './store.js';
 import * as sheets from './sheets.js';
 import messagingService from './lib/messaging-service.js';
@@ -323,6 +324,7 @@ app.use('/api/admin', createAdminReportsRouter({ query }));
 app.use('/api/admin', createAdminSocialRouter({ query }));
 app.use('/api/admin', createAdminMultiClientRouter({ authenticateApiKey }));
 app.use('/api/admin', createAdminCallQueueOpsRouter());
+app.use('/api/admin', createAdminRoiCalculatorRouter());
 
 // moved: /api/admin/call-recordings → routes/admin-call-recordings.js
 
@@ -18556,27 +18558,7 @@ app.post('/api/roi-calculator/save', async (req, res) => {
   }
 });
 
-// Get ROI calculator leads (admin endpoint)
-app.get('/api/admin/roi-calculator/leads', async (req, res) => {
-  try {
-    const { query } = await import('./db.js');
-    const { limit = 100 } = req.query;
-    
-    const result = await query(`
-      SELECT * FROM roi_calculator_leads
-      ORDER BY created_at DESC
-      LIMIT $1
-    `, [limit]);
-    
-    res.json({
-      ok: true,
-      leads: result.rows
-    });
-  } catch (error) {
-    console.error('[ROI CALCULATOR LEADS ERROR]', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
+// moved: /api/admin/roi-calculator/leads → routes/admin-roi-calculator.js
 
 // Outreach Prospects API
 app.get('/api/outreach/prospects', async (req, res) => {
