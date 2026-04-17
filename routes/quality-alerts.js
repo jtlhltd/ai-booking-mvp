@@ -1,7 +1,7 @@
 import express from 'express';
+import { getQualityAlerts, resolveQualityAlert } from '../db.js';
 
-export function createQualityAlertsRouter(deps) {
-  const { getQualityAlerts, resolveQualityAlert } = deps || {};
+export function createQualityAlertsRouter() {
   const router = express.Router();
 
   router.get('/quality-alerts/:clientKey', async (req, res) => {

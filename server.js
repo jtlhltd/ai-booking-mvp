@@ -342,7 +342,7 @@ app.use('/api', createGooglePlacesTestRouter());
 app.use('/api', createBookDemoRouter({ bookingSystem, smsEmailPipeline }));
 app.use('/api', createAvailableSlotsRouter({ bookingSystem }));
 app.use('/api', createCreateClientRouter({ upsertFullClient, adjustColorBrightness }));
-app.use('/api', createQualityAlertsRouter({ getQualityAlerts, resolveQualityAlert }));
+app.use('/api', createQualityAlertsRouter());
 app.use(
   '/api/clients',
   createClientsApiRouter({
