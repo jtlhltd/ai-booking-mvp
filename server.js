@@ -110,6 +110,7 @@ import { createZapierWebhookRouter } from './routes/zapier-webhook.js';
 import { createImportLeadsCsvRouter } from './routes/import-leads-csv.js';
 import { createGooglePlacesTestRouter } from './routes/google-places-test.js';
 import { createBookDemoRouter } from './routes/book-demo.js';
+import { createAvailableSlotsRouter } from './routes/available-slots.js';
 import { createAdminOverviewRouter } from './routes/admin-overview.js';
 import { createAdminRemindersRouter } from './routes/admin-reminders.js';
 import { createAdminClientsRouter } from './routes/admin-clients.js';
@@ -337,6 +338,7 @@ app.use('/api/webhooks', createZapierWebhookRouter({ requireApiKey, getClientFro
 app.use('/api', createImportLeadsCsvRouter({ requireApiKey }));
 app.use('/api', createGooglePlacesTestRouter());
 app.use('/api', createBookDemoRouter({ bookingSystem, smsEmailPipeline }));
+app.use('/api', createAvailableSlotsRouter({ bookingSystem }));
 app.use(
   '/api/clients',
   createClientsApiRouter({
@@ -1727,34 +1729,7 @@ function generateEmail(businessName) {
 
 // moved: POST /api/book-demo → routes/book-demo.js
 
-// Get Available Time Slots
-app.get('/api/available-slots', async (req, res) => {
-  try {
-    if (!bookingSystem) {
-      return res.status(503).json({ 
-        success: false, 
-        message: 'Booking system not available' 
-      });
-    }
-
-    const { days = 7 } = req.query;
-    const slots = bookingSystem.generateTimeSlots(parseInt(days));
-    
-    res.json({
-      success: true,
-      slots: slots,
-      totalSlots: slots.length
-    });
-    
-  } catch (error) {
-    console.error('[SLOTS ERROR]', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to get available slots',
-      error: error.message
-    });
-  }
-});
+// moved: GET /api/available-slots → routes/available-slots.js
 
 // API endpoint to create new client
 app.post('/api/create-client', async (req, res) => {
