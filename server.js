@@ -125,6 +125,7 @@ import { createCallRecordingsRouter } from './routes/call-recordings.js';
 import { createVoicemailsRouter } from './routes/voicemails.js';
 import { createCallRecordingsStreamRouter } from './routes/call-recordings-stream.js';
 import { createRecordingsQualityCheckRouter } from './routes/recordings-quality-check.js';
+import { createReportsRouter } from './routes/reports.js';
 import { createAdminOverviewRouter } from './routes/admin-overview.js';
 import { createAdminRemindersRouter } from './routes/admin-reminders.js';
 import { createAdminClientsRouter } from './routes/admin-clients.js';
@@ -378,6 +379,7 @@ app.use('/api', createCallRecordingsRouter({ query, formatTimeAgoLabel }));
 app.use('/api', createVoicemailsRouter({ isPostgres, poolQuerySelect, formatTimeAgoLabel, truncateActivityFeedText }));
 app.use('/api', createCallRecordingsStreamRouter({ poolQuerySelect }));
 app.use('/api', createRecordingsQualityCheckRouter({ query }));
+app.use('/api', createReportsRouter({ authenticateApiKey }));
 app.use(
   '/api/clients',
   createClientsApiRouter({
@@ -7422,54 +7424,7 @@ app.use(opsRouter);
 
 // moved: /api/admin/clients/* → routes/admin-multi-client.js
 
-// Automated reporting endpoints
-app.get('/api/reports/:clientKey', authenticateApiKey, async (req, res) => {
-  try {
-    const { clientKey } = req.params;
-    const period = req.query.period || 'weekly';
-    
-    const { generateClientReport } = await import('./lib/automated-reporting.js');
-    const report = await generateClientReport(clientKey, period);
-    
-    if (report.error) {
-      return res.status(404).json({ ok: false, error: report.error });
-    }
-    
-    res.json({
-      ok: true,
-      report,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('[REPORT GENERATION ERROR]', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-console.log('🟢🟢🟢 [REPORTS] REGISTERED: GET /api/reports/:clientKey');
-
-app.post('/api/reports/:clientKey/send', authenticateApiKey, async (req, res) => {
-  try {
-    const { clientKey } = req.params;
-    const { period = 'weekly', email = null } = req.body;
-    
-    const { sendClientReport } = await import('./lib/automated-reporting.js');
-    const result = await sendClientReport(clientKey, period, email);
-    
-    if (!result.success) {
-      return res.status(400).json({ ok: false, error: result.error });
-    }
-    
-    res.json({
-      ok: true,
-      result,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('[SEND REPORT ERROR]', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-console.log('🟢🟢🟢 [REPORTS] REGISTERED: POST /api/reports/:clientKey/send');
+// moved: /api/reports/* → routes/reports.js
 
 // SMS template library endpoints
 app.get('/api/sms/templates', authenticateApiKey, async (req, res) => {
