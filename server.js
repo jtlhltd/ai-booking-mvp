@@ -92,6 +92,7 @@ import demoSetupRouter from './routes/demo-setup.js';
 import opsRouter from './routes/ops.js';
 import staticPagesRouter from './routes/static-pages.js';
 import { createOutreachRouter } from './routes/outreach.js';
+import { createCrmRouter } from './routes/crm.js';
 import { createAdminOverviewRouter } from './routes/admin-overview.js';
 import { createAdminRemindersRouter } from './routes/admin-reminders.js';
 import { createAdminClientsRouter } from './routes/admin-clients.js';
@@ -283,6 +284,7 @@ app.use(express.static('public'));
 
 app.use(staticPagesRouter);
 app.use('/api/outreach', createOutreachRouter());
+app.use('/api/crm', createCrmRouter({ getFullClient }));
 
 app.use('/api/admin', createAdminOverviewRouter({ broadcast: broadcastUpdate }));
 app.use('/api/admin', createAdminRemindersRouter({ sendReminderSMS }));
@@ -18564,137 +18566,7 @@ app.post('/api/roi-calculator/save', async (req, res) => {
 
 // moved: /api/outreach/* → routes/outreach.js
 
-// CRM Integration endpoints
-app.post('/api/crm/hubspot/sync', async (req, res) => {
-  try {
-    const { clientKey, hubspotApiKey, syncOptions } = req.body;
-    
-    if (!clientKey || !hubspotApiKey) {
-      return res.status(400).json({ ok: false, error: 'clientKey and hubspotApiKey are required' });
-    }
-
-    // Verify client exists
-    const client = await getFullClient(clientKey);
-    if (!client) {
-      return res.status(404).json({ ok: false, error: 'Client not found' });
-    }
-
-    // Import CRM integration library
-    const { HubSpotIntegration, saveCrmSettings, updateLastSync } = await import('./lib/crm-integrations.js');
-    
-    // Save API key to database
-    await saveCrmSettings(clientKey, 'hubspot', { apiKey: hubspotApiKey });
-    
-    // Initialize HubSpot integration
-    const hubspot = new HubSpotIntegration(hubspotApiKey);
-    
-    // Perform sync
-    const syncResults = await hubspot.syncAll(clientKey, {
-      syncLeads: syncOptions?.syncLeads !== false,
-      syncCalls: syncOptions?.syncCalls !== false,
-      syncAppointments: syncOptions?.syncAppointments !== false,
-      limit: syncOptions?.limit || 100
-    });
-
-    // Update last sync timestamp
-    await updateLastSync(clientKey, 'hubspot');
-    
-    res.json({
-      ok: true,
-      message: 'HubSpot sync completed',
-      status: 'completed',
-      results: syncResults
-    });
-  } catch (error) {
-    console.error('[HUBSPOT SYNC ERROR]', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-
-app.post('/api/crm/salesforce/sync', async (req, res) => {
-  try {
-    const { clientKey, salesforceCredentials, syncOptions } = req.body;
-    
-    if (!clientKey || !salesforceCredentials) {
-      return res.status(400).json({ ok: false, error: 'clientKey and salesforceCredentials are required' });
-    }
-
-    // Verify client exists
-    const client = await getFullClient(clientKey);
-    if (!client) {
-      return res.status(404).json({ ok: false, error: 'Client not found' });
-    }
-
-    // Import CRM integration library
-    const { SalesforceIntegration, saveCrmSettings, updateLastSync } = await import('./lib/crm-integrations.js');
-    
-    // Initialize Salesforce integration
-    const salesforce = new SalesforceIntegration(salesforceCredentials);
-    
-    // If credentials include auth info, authenticate first
-    if (salesforceCredentials.clientId && salesforceCredentials.clientSecret) {
-      await salesforce.authenticate(
-        salesforceCredentials.clientId,
-        salesforceCredentials.clientSecret,
-        salesforceCredentials.username,
-        salesforceCredentials.password,
-        salesforceCredentials.securityToken || ''
-      );
-      
-      // Save authenticated credentials
-      await saveCrmSettings(clientKey, 'salesforce', {
-        instanceUrl: salesforce.instanceUrl,
-        accessToken: salesforce.accessToken,
-        apiVersion: salesforce.apiVersion
-      });
-    }
-    
-    // Perform sync
-    const syncResults = await salesforce.syncAll(clientKey, {
-      syncLeads: syncOptions?.syncLeads !== false,
-      syncAppointments: syncOptions?.syncAppointments !== false,
-      limit: syncOptions?.limit || 100
-    });
-
-    // Update last sync timestamp
-    await updateLastSync(clientKey, 'salesforce');
-    
-    res.json({
-      ok: true,
-      message: 'Salesforce sync completed',
-      status: 'completed',
-      results: syncResults
-    });
-  } catch (error) {
-    console.error('[SALESFORCE SYNC ERROR]', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-
-app.get('/api/crm/integrations/:clientKey', async (req, res) => {
-  try {
-    const { clientKey } = req.params;
-    
-    // Get client CRM integration settings
-    const client = await getFullClient(clientKey);
-    if (!client) {
-      return res.status(404).json({ ok: false, error: 'Client not found' });
-    }
-    
-    // Get CRM settings from database
-    const { getCrmSettings } = await import('./lib/crm-integrations.js');
-    const integrations = await getCrmSettings(clientKey);
-    
-    res.json({
-      ok: true,
-      clientKey,
-      integrations
-    });
-  } catch (error) {
-    console.error('[CRM INTEGRATIONS ERROR]', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
+// moved: /api/crm/* → routes/crm.js
 
 // White-label branding endpoints
 app.get('/api/branding/:clientKey', async (req, res) => {
