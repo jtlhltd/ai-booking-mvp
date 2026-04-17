@@ -117,6 +117,7 @@ import { createImportLeadsRouter } from './routes/import-leads.js';
 import { createImportLeadEmailRouter } from './routes/import-lead-email.js';
 import { createRoiRouter } from './routes/roi.js';
 import { createIndustryComparisonRouter } from './routes/industry-comparison.js';
+import { createCallTimeBanditRouter } from './routes/call-time-bandit.js';
 import { createAdminOverviewRouter } from './routes/admin-overview.js';
 import { createAdminRemindersRouter } from './routes/admin-reminders.js';
 import { createAdminClientsRouter } from './routes/admin-clients.js';
@@ -351,6 +352,7 @@ app.use('/api', createImportLeadsRouter({ getFullClient, isBusinessHours }));
 app.use('/api', createImportLeadEmailRouter());
 app.use('/api', createRoiRouter());
 app.use('/api', createIndustryComparisonRouter({ getFullClient }));
+app.use('/api', createCallTimeBanditRouter());
 app.use(
   '/api/clients',
   createClientsApiRouter({
@@ -6842,33 +6844,7 @@ app.post('/api/call-insights/:clientKey/recompute', async (req, res) => {
   }
 });
 
-// Dial-time Thompson bandit state (no-store: changes as calls complete)
-app.get('/api/call-time-bandit/:clientKey', async (req, res) => {
-  res.set('Cache-Control', 'no-store');
-  try {
-    const { clientKey } = req.params;
-    const { getCallTimeBanditForDashboard, backfillCallTimeBanditObservations } = await import('./db.js');
-    let data = await getCallTimeBanditForDashboard(clientKey);
-    if (data.ok && data.observationCount === 0) {
-      await backfillCallTimeBanditObservations(clientKey, { days: 90, limit: 6000 }).catch(() => {});
-      data = await getCallTimeBanditForDashboard(clientKey);
-    }
-    const thompsonOff = ['0', 'false'].includes(
-      String(process.env.CALL_TIME_THOMPSON || '').trim().toLowerCase()
-    );
-    const schedulingOff = ['0', 'false'].includes(
-      String(process.env.OPTIMAL_CALL_SCHEDULING || '').trim().toLowerCase()
-    );
-    return res.json({
-      ...data,
-      thompsonActive: !thompsonOff,
-      optimalSchedulingActive: !schedulingOff
-    });
-  } catch (error) {
-    console.error('[CALL TIME BANDIT API]', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
+// moved: GET /api/call-time-bandit/:clientKey → routes/call-time-bandit.js
 
 // API endpoint for retry queue (pending follow-up rows + outbound calls waiting in call_queue)
 // No response cache: queue changes often; cached empty responses made the dashboard look "broken".
