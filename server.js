@@ -113,6 +113,7 @@ import { createBookDemoRouter } from './routes/book-demo.js';
 import { createAvailableSlotsRouter } from './routes/available-slots.js';
 import { createCreateClientRouter } from './routes/create-client.js';
 import { createQualityAlertsRouter } from './routes/quality-alerts.js';
+import { createImportLeadsRouter } from './routes/import-leads.js';
 import { createAdminOverviewRouter } from './routes/admin-overview.js';
 import { createAdminRemindersRouter } from './routes/admin-reminders.js';
 import { createAdminClientsRouter } from './routes/admin-clients.js';
@@ -343,6 +344,7 @@ app.use('/api', createBookDemoRouter({ bookingSystem, smsEmailPipeline }));
 app.use('/api', createAvailableSlotsRouter({ bookingSystem }));
 app.use('/api', createCreateClientRouter({ upsertFullClient, adjustColorBrightness }));
 app.use('/api', createQualityAlertsRouter());
+app.use('/api', createImportLeadsRouter({ getFullClient, isBusinessHours }));
 app.use(
   '/api/clients',
   createClientsApiRouter({
@@ -1739,120 +1741,7 @@ function generateEmail(businessName) {
 
 // moved: /api/quality-alerts/* → routes/quality-alerts.js
 
-// API endpoint to import leads from CSV
-app.post('/api/import-leads/:clientKey', async (req, res) => {
-  try {
-    const { clientKey } = req.params;
-    const { csvData, columnMapping, validatePhones, autoStartCampaign } = req.body;
-    
-    if (!csvData) {
-      return res.status(400).json({ ok: false, error: 'No CSV data provided' });
-    }
-    
-    const { parseCSV, importLeads } = await import('./lib/lead-import.js');
-    const { notifyLeadUpload } = await import('./lib/notifications.js');
-    const { calculateLeadScore } = await import('./lib/lead-intelligence.js');
-    const { bulkProcessLeads } = await import('./lib/lead-deduplication.js');
-    
-    // Parse CSV
-    const leads = parseCSV(csvData, columnMapping || {});
-    
-    // === NEW: Apply lead deduplication and validation ===
-    console.log(`[LEAD DEDUP] Processing ${leads.length} leads for validation and deduplication...`);
-    const dedupResults = await bulkProcessLeads(leads, clientKey);
-    
-    console.log(`[LEAD DEDUP] Results: ${dedupResults.valid} valid, ${dedupResults.invalid} invalid, ${dedupResults.duplicates} duplicates, ${dedupResults.optedOut} opted-out`);
-    
-    // Use only valid leads for import
-    const validLeads = dedupResults.validLeads;
-    
-    // Calculate lead scores for prioritization
-    validLeads.forEach(lead => {
-      lead.leadScore = calculateLeadScore(lead);
-    });
-    
-    // Sort by score (call highest quality leads first)
-    validLeads.sort((a, b) => b.leadScore - a.leadScore);
-    
-    console.log(`[LEAD IMPORT] Top lead score: ${validLeads[0]?.leadScore}, Lowest: ${validLeads[validLeads.length - 1]?.leadScore}`);
-    
-    // Import leads
-    const results = await importLeads(clientKey, validLeads, {
-      validatePhones: false, // Already validated by dedup
-      skipDuplicates: false, // Already deduplicated
-      autoStartCampaign: autoStartCampaign === true
-    });
-    
-    // Add deduplication stats to results
-    results.validation = {
-      totalProcessed: leads.length,
-      valid: dedupResults.valid,
-      invalid: dedupResults.invalid,
-      duplicates: dedupResults.duplicates,
-      optedOut: dedupResults.optedOut,
-      invalidReasons: dedupResults.invalidLeads.slice(0, 5).map(l => ({ phone: l.phone, issues: l.issues }))
-    };
-    
-    // Get client data
-    const client = await getFullClient(clientKey);
-    
-    // Notify admin of lead upload
-    await notifyLeadUpload({
-      clientKey,
-      clientName: client?.business_name || clientKey,
-      leadCount: results.imported,
-      importMethod: 'csv_upload'
-    });
-    
-    // AUTO-START INSTANT CALLING (if enabled or by default)
-    let callResults = null;
-    if (autoStartCampaign !== false && results.imported > 0 && client && isBusinessHours(client)) {
-      console.log(`[INSTANT CALLING] Starting immediate calls for ${results.imported} leads...`);
-      
-      const { processCallQueue, estimateCallTime } = await import('./lib/instant-calling.js');
-      
-      // Get imported leads (sorted by score already)
-      const leadsToCall = validLeads.filter(l => {
-        // Only call leads that were successfully imported (not duplicates/invalid)
-        return l.phone && l.leadScore > 0;
-      }).slice(0, results.imported);
-      
-      const estimate = estimateCallTime(leadsToCall.length, 2000);
-      console.log(`[INSTANT CALLING] ETA: ${estimate.formatted} (complete by ${estimate.completionTime})`);
-      
-      // Start calling in background (don't block response)
-      processCallQueue(leadsToCall, client, {
-        maxConcurrent: 1,
-        delayBetweenCalls: 2000,
-        maxCallsPerBatch: 50
-      }).then(callResults => {
-        console.log(`[INSTANT CALLING] ✅ Campaign complete: ${callResults.initiated} calls made`);
-      }).catch(error => {
-        console.error(`[INSTANT CALLING] ❌ Campaign failed:`, error);
-      });
-      
-      callResults = {
-        status: 'started',
-        totalLeads: leadsToCall.length,
-        estimatedTime: estimate.formatted,
-        completionTime: estimate.completionTime,
-        message: `Campaign started! Calling ${leadsToCall.length} leads now...`
-      };
-    }
-    
-    res.json({
-      ok: true,
-      message: `Imported ${results.imported} leads${callResults ? ' - Campaign started!' : ''}`,
-      results,
-      avgLeadScore: validLeads.length > 0 ? Math.round(validLeads.reduce((sum, l) => sum + l.leadScore, 0) / validLeads.length) : 0,
-      calling: callResults
-    });
-    
-  } catch (error) {
-    console.error('[LEAD IMPORT ERROR]', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
+// moved: POST /api/import-leads/:clientKey → routes/import-leads.js
 
 // API endpoint to import lead from email forward
 app.post('/api/import-lead-email/:clientKey', async (req, res) => {
