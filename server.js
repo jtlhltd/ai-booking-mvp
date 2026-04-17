@@ -114,6 +114,7 @@ import { createAvailableSlotsRouter } from './routes/available-slots.js';
 import { createCreateClientRouter } from './routes/create-client.js';
 import { createQualityAlertsRouter } from './routes/quality-alerts.js';
 import { createImportLeadsRouter } from './routes/import-leads.js';
+import { createImportLeadEmailRouter } from './routes/import-lead-email.js';
 import { createAdminOverviewRouter } from './routes/admin-overview.js';
 import { createAdminRemindersRouter } from './routes/admin-reminders.js';
 import { createAdminClientsRouter } from './routes/admin-clients.js';
@@ -345,6 +346,7 @@ app.use('/api', createAvailableSlotsRouter({ bookingSystem }));
 app.use('/api', createCreateClientRouter({ upsertFullClient, adjustColorBrightness }));
 app.use('/api', createQualityAlertsRouter());
 app.use('/api', createImportLeadsRouter({ getFullClient, isBusinessHours }));
+app.use('/api', createImportLeadEmailRouter());
 app.use(
   '/api/clients',
   createClientsApiRouter({
@@ -1743,73 +1745,7 @@ function generateEmail(businessName) {
 
 // moved: POST /api/import-leads/:clientKey → routes/import-leads.js
 
-// API endpoint to import lead from email forward
-app.post('/api/import-lead-email/:clientKey', async (req, res) => {
-  try {
-    const { clientKey } = req.params;
-    const { emailBody, emailSubject, emailFrom } = req.body;
-    
-    if (!emailBody) {
-      return res.status(400).json({ ok: false, error: 'No email body provided' });
-    }
-    
-    const { parseEmailForLead } = await import('./lib/lead-import.js');
-    
-    // Parse email to extract lead
-    const lead = parseEmailForLead(emailBody, emailSubject);
-    
-    // If no phone found, try to extract from sender
-    if (!lead.email && emailFrom) {
-      lead.email = emailFrom;
-    }
-    
-    if (!lead.phone && !lead.email) {
-      return res.status(400).json({ 
-        ok: false, 
-        error: 'Could not extract phone or email from forwarded message' 
-      });
-    }
-    
-    // Apply deduplication before importing
-    const { processBulkLeads } = await import('./lib/lead-deduplication.js');
-    const dedupResult = await processBulkLeads([{
-      name: lead.name,
-      phone: lead.phone,
-      email: lead.email,
-      service: lead.service,
-      source: 'email_forward',
-      status: 'new',
-      created_at: new Date().toISOString()
-    }], clientKey);
-    
-    if (dedupResult.valid === 0) {
-      return res.status(400).json({
-        ok: false,
-        error: 'Lead is duplicate or invalid',
-        details: dedupResult.duplicates > 0 ? 'Duplicate phone number' : 'Invalid lead data'
-      });
-    }
-    
-    // Import single lead (deduplication already checked)
-    await findOrCreateLead({
-      tenantKey: clientKey,
-      phone: lead.phone,
-      name: lead.name,
-      service: lead.service,
-      source: 'email_forward'
-    });
-    
-    res.json({
-      ok: true,
-      message: 'Lead imported from email',
-      lead
-    });
-    
-  } catch (error) {
-    console.error('[EMAIL IMPORT ERROR]', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
+// moved: POST /api/import-lead-email/:clientKey → routes/import-lead-email.js
 
 // API endpoint to calculate ROI
 app.get('/api/roi/:clientKey', async (req, res) => {
