@@ -110,6 +110,7 @@ import { createAdminAppointmentsRouter } from './routes/admin-appointments.js';
 import { createAdminFollowUpsRouter } from './routes/admin-follow-ups.js';
 import { createAdminReportsRouter } from './routes/admin-reports.js';
 import { createAdminSocialRouter } from './routes/admin-social.js';
+import { createAdminMultiClientRouter } from './routes/admin-multi-client.js';
 import * as store from './store.js';
 import * as sheets from './sheets.js';
 import messagingService from './lib/messaging-service.js';
@@ -319,6 +320,7 @@ app.use('/api/admin', createAdminAppointmentsRouter({ query }));
 app.use('/api/admin', createAdminFollowUpsRouter({ query }));
 app.use('/api/admin', createAdminReportsRouter({ query }));
 app.use('/api/admin', createAdminSocialRouter({ query }));
+app.use('/api/admin', createAdminMultiClientRouter({ authenticateApiKey }));
 
 // moved: /api/admin/call-recordings → routes/admin-call-recordings.js
 
@@ -10236,63 +10238,7 @@ app.use(backendStatusRouter);
 // Query perf, rate-limit, analytics, active-indicator, performance/stats, cache → routes/ops.js
 app.use(opsRouter);
 
-// Multi-client management endpoints
-app.get('/api/admin/clients/overview', authenticateApiKey, async (req, res) => {
-  try {
-    const { getAllClientsOverview } = await import('./lib/multi-client-manager.js');
-    const overview = await getAllClientsOverview();
-    
-    res.json({
-      ok: true,
-      overview,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('[CLIENTS OVERVIEW ERROR]', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-console.log('🟢🟢🟢 [ADMIN] REGISTERED: GET /api/admin/clients/overview');
-
-app.get('/api/admin/clients/needing-attention', authenticateApiKey, async (req, res) => {
-  try {
-    const { getClientsNeedingAttention } = await import('./lib/multi-client-manager.js');
-    const attention = await getClientsNeedingAttention();
-    
-    res.json({
-      ok: true,
-      attention,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('[CLIENTS ATTENTION ERROR]', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-console.log('🟢🟢🟢 [ADMIN] REGISTERED: GET /api/admin/clients/needing-attention');
-
-app.post('/api/admin/clients/bulk-update', authenticateApiKey, async (req, res) => {
-  try {
-    const { clientKeys, enabled } = req.body;
-    
-    if (!Array.isArray(clientKeys) || typeof enabled !== 'boolean') {
-      return res.status(400).json({ ok: false, error: 'Invalid request body' });
-    }
-    
-    const { bulkUpdateClientStatus } = await import('./lib/multi-client-manager.js');
-    const result = await bulkUpdateClientStatus(clientKeys, enabled);
-    
-    res.json({
-      ok: true,
-      result,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('[BULK UPDATE ERROR]', error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-console.log('🟢🟢🟢 [ADMIN] REGISTERED: POST /api/admin/clients/bulk-update');
+// moved: /api/admin/clients/* → routes/admin-multi-client.js
 
 // Automated reporting endpoints
 app.get('/api/reports/:clientKey', authenticateApiKey, async (req, res) => {
