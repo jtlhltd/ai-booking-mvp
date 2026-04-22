@@ -116,5 +116,43 @@ describe('business-hours invariants', () => {
     const failDay = fail.toFormat('yyyy-LL-dd');
     expect(first).not.toBe(failDay);
   });
+
+  test('closedDatesSetForTenant parses closedDatesJson and computeSameWeekWeekdayFollowUpSlots skips closed dates', async () => {
+    const { closedDatesSetForTenant, computeSameWeekWeekdayFollowUpSlots } = await import(
+      '../../../lib/business-hours.js'
+    );
+    const tenant = {
+      booking: { timezone: 'Europe/London' },
+      businessHours: { start: 9, end: 17, days: [1, 2, 3, 4, 5] },
+      closedDatesJson: JSON.stringify(['2026-04-21'])
+    };
+
+    const set = closedDatesSetForTenant(tenant);
+    expect(set.has('2026-04-21')).toBe(true);
+
+    const fail = DateTime.fromISO('2026-04-20T10:00:00', { zone: 'Europe/London' }); // Monday
+    const slots = computeSameWeekWeekdayFollowUpSlots(tenant, fail.toJSDate(), 'Europe/London', { maxSteps: 5 });
+    const ym = slots.map((d) => DateTime.fromJSDate(d, { zone: 'Europe/London' }).toFormat('yyyy-LL-dd'));
+    expect(ym).not.toContain('2026-04-21');
+  });
+
+  test('computeSameWeekWeekdayFollowUpSlots skips UK bank holidays', async () => {
+    const { computeSameWeekWeekdayFollowUpSlots } = await import('../../../lib/business-hours.js');
+    const tenant = {
+      booking: { timezone: 'Europe/London' },
+      businessHours: { start: 9, end: 17, days: [1, 2, 3, 4, 5] }
+    };
+
+    // Treat Tuesday 2026-04-21 as a bank holiday for this test.
+    isUkBankHolidayPublic.mockImplementation((_tenant, when) => {
+      const d = DateTime.fromJSDate(when, { zone: 'Europe/London' }).toFormat('yyyy-LL-dd');
+      return d === '2026-04-21';
+    });
+
+    const fail = DateTime.fromISO('2026-04-20T10:00:00', { zone: 'Europe/London' }); // Monday
+    const slots = computeSameWeekWeekdayFollowUpSlots(tenant, fail.toJSDate(), 'Europe/London', { maxSteps: 5 });
+    const ym = slots.map((d) => DateTime.fromJSDate(d, { zone: 'Europe/London' }).toFormat('yyyy-LL-dd'));
+    expect(ym).not.toContain('2026-04-21');
+  });
 });
 
