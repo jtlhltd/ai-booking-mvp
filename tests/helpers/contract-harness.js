@@ -6,7 +6,7 @@
  */
 import express from 'express';
 
-export function withEnv(env, fn) {
+export async function withEnv(env, fn) {
   const prev = {};
   for (const k of Object.keys(env)) {
     prev[k] = process.env[k];
@@ -15,7 +15,7 @@ export function withEnv(env, fn) {
     else process.env[k] = String(v);
   }
   try {
-    return fn();
+    return await fn();
   } finally {
     for (const k of Object.keys(env)) {
       const v = prev[k];
