@@ -17,3 +17,15 @@ if (fs.existsSync(envTest)) {
 // Postgres integration tests set DATABASE_URL inside their own beforeAll.
 
 global.sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+afterAll(async () => {
+  // Best-effort cleanup to avoid leaked handles between suites.
+  try {
+    const { pool } = await import('../db.js');
+    if (pool && typeof pool.end === 'function') {
+      await pool.end();
+    }
+  } catch {
+    // ignore
+  }
+});
