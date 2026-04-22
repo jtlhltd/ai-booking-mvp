@@ -1602,7 +1602,9 @@ async function query(text, params = []) {
     
     // Track query performance (async, fire-and-forget, don't wait)
     // Use setImmediate to ensure tracking doesn't block query completion
-    if (dbType === 'postgres' && duration >= 100) {
+    // In Jest, avoid scheduling async module imports that can run after teardown
+    // and produce "import after environment torn down" warnings.
+    if (dbType === 'postgres' && duration >= 100 && !process.env.JEST_WORKER_ID) {
       setImmediate(() => {
         // Import and track asynchronously to avoid blocking
         import('./lib/query-performance-tracker.js').then(module => {
@@ -1637,7 +1639,7 @@ async function query(text, params = []) {
   } catch (error) {
     const duration = Date.now() - startTime;
     // Still track failed queries for analysis
-    if (dbType === 'postgres' && duration >= 100) {
+    if (dbType === 'postgres' && duration >= 100 && !process.env.JEST_WORKER_ID) {
       import('./lib/query-performance-tracker.js').then(module => {
         module.trackQueryPerformance(text, duration, params).catch(() => {});
       });
