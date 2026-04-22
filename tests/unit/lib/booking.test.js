@@ -8,9 +8,11 @@ jest.unstable_mockModule('../../../gcal.js', () => ({
 }));
 
 const getTenant = jest.fn(async () => ({ calendarId: 'cal_1' }));
+const findExistingBooking = jest.fn(async () => null);
 const markBooked = jest.fn(async () => {});
 jest.unstable_mockModule('../../../db.js', () => ({
   getTenant,
+  findExistingBooking,
   markBooked
 }));
 
@@ -25,6 +27,7 @@ describe('booking invariants', () => {
     assertFree.mockClear();
     createEvent.mockClear();
     getTenant.mockClear();
+    findExistingBooking.mockClear();
     markBooked.mockClear();
     confirmations.mockClear();
   });
@@ -49,6 +52,11 @@ describe('booking invariants', () => {
     expect(res).toEqual({ ok: true, eventId: 'evt_1' });
 
     expect(getTenant).toHaveBeenCalledWith('tenant_1');
+    expect(findExistingBooking).toHaveBeenCalledWith({
+      tenantKey: 'tenant_1',
+      leadId: 99,
+      slot: payload.booking.slot
+    });
     expect(assertFree).toHaveBeenCalledWith({
       calendarId: 'cal_1',
       slot: payload.booking.slot
@@ -66,6 +74,32 @@ describe('booking invariants', () => {
       slot: payload.booking.slot
     });
     expect(confirmations).toHaveBeenCalled();
+  });
+
+  test('handleVapiBooking is idempotent for same lead+slot: returns existing booking without side effects', async () => {
+    findExistingBooking.mockResolvedValueOnce({
+      id: 1,
+      client_key: 'tenant_1',
+      lead_id: 99,
+      gcal_event_id: 'evt_existing',
+      start_iso: '2026-04-22T10:00:00.000Z',
+      end_iso: '2026-04-22T10:30:00.000Z',
+      status: 'booked'
+    });
+
+    const booking = await import('../../../lib/booking.js');
+    const payload = {
+      metadata: { clientKey: 'tenant_1', service: 'haircut', lead: { id: 99, phone: '+447700900000' } },
+      booking: { slot: { start: '2026-04-22T10:00:00.000Z', end: '2026-04-22T10:30:00.000Z' } }
+    };
+
+    const res = await booking.handleVapiBooking(payload);
+    expect(res).toEqual({ ok: true, eventId: 'evt_existing', deduped: true });
+
+    expect(assertFree).not.toHaveBeenCalled();
+    expect(createEvent).not.toHaveBeenCalled();
+    expect(markBooked).not.toHaveBeenCalled();
+    expect(confirmations).not.toHaveBeenCalled();
   });
 });
 

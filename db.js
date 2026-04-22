@@ -2090,6 +2090,26 @@ export async function markBooked({ tenantKey, leadId = null, eventId, slot }) {
   );
 }
 
+/**
+ * Best-effort idempotency guard for booking retries.
+ * If we already booked the same lead into the same slot, return the existing appointment row.
+ */
+export async function findExistingBooking({ tenantKey, leadId = null, slot }) {
+  if (!tenantKey || !slot?.start || !slot?.end) return null;
+  const result = await query(
+    `SELECT * FROM appointments
+     WHERE client_key = $1
+       AND status = 'booked'
+       AND start_iso = $2
+       AND end_iso = $3
+       AND ($4 IS NULL OR lead_id = $4)
+     LIMIT 1`,
+    [tenantKey, slot.start, slot.end, leadId]
+  );
+  const rows = result?.rows || [];
+  return rows.length > 0 ? rows[0] : null;
+}
+
 // Call tracking functions
 export async function upsertCall({ 
   callId, 
