@@ -28,12 +28,12 @@ export default {
   ],
   coverageThreshold: {
     global: {
-      // Start low; we will ratchet this upward as we add route/job coverage.
-      // The initial goal is to make coverage visible in CI without blocking.
-      branches: 0,
-      functions: 0,
-      lines: 0,
-      statements: 0
+      // Ratchet baseline: keep coverage non-zero and trending upward.
+      // Update these upward over time as more route/job contracts are added.
+      branches: 4,
+      functions: 5,
+      lines: 5,
+      statements: 5
     }
   },
   verbose: true
