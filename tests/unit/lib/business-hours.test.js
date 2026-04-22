@@ -32,6 +32,45 @@ describe('business-hours invariants', () => {
     expect(isBusinessHoursForTenant(tenant, monday18)).toBe(false);
   });
 
+  test('boundary: exactly at opening is allowed; exactly at closing is not', async () => {
+    const { isBusinessHoursForTenant } = await import('../../../lib/business-hours.js');
+    const tenant = { booking: { timezone: 'Europe/London' }, businessHours: { start: 9, end: 17, days: [1] } }; // Monday only
+
+    const monday09 = DateTime.fromISO('2026-04-20T09:00:00', { zone: 'Europe/London' }).toJSDate();
+    const monday1659 = DateTime.fromISO('2026-04-20T16:59:59', { zone: 'Europe/London' }).toJSDate();
+    const monday17 = DateTime.fromISO('2026-04-20T17:00:00', { zone: 'Europe/London' }).toJSDate();
+
+    expect(isBusinessHoursForTenant(tenant, monday09)).toBe(true);
+    expect(isBusinessHoursForTenant(tenant, monday1659)).toBe(true);
+    expect(isBusinessHoursForTenant(tenant, monday17)).toBe(false);
+  });
+
+  test('DST start (Europe/London): business-hours check remains stable across the spring-forward gap', async () => {
+    const { isBusinessHoursForTenant } = await import('../../../lib/business-hours.js');
+    const tenant = { booking: { timezone: 'Europe/London' }, businessHours: { start: 9, end: 17, days: [0] } }; // Sunday only
+
+    // UK DST starts 2026-03-29: 01:00 -> 02:00 local time.
+    const beforeGap = DateTime.fromISO('2026-03-29T00:30:00', { zone: 'Europe/London' }).toJSDate();
+    const afterGap = DateTime.fromISO('2026-03-29T02:30:00', { zone: 'Europe/London' }).toJSDate();
+    const inHours = DateTime.fromISO('2026-03-29T10:00:00', { zone: 'Europe/London' }).toJSDate();
+
+    expect(isBusinessHoursForTenant(tenant, beforeGap, 'Europe/London', { forOutboundDial: false })).toBe(false);
+    expect(isBusinessHoursForTenant(tenant, afterGap, 'Europe/London', { forOutboundDial: false })).toBe(false);
+    expect(isBusinessHoursForTenant(tenant, inHours, 'Europe/London', { forOutboundDial: false })).toBe(true);
+  });
+
+  test('timezone: does not depend on machine local timezone (America/New_York example)', async () => {
+    const { isBusinessHoursForTenant } = await import('../../../lib/business-hours.js');
+    const tenant = { booking: { timezone: 'America/New_York' }, businessHours: { start: 9, end: 17, days: [1] } }; // Monday only
+
+    // 2026-04-20 is Monday. 9am NY should be business hours.
+    const nyMonday09 = DateTime.fromISO('2026-04-20T09:00:00', { zone: 'America/New_York' }).toJSDate();
+    const nyMonday18 = DateTime.fromISO('2026-04-20T18:00:00', { zone: 'America/New_York' }).toJSDate();
+
+    expect(isBusinessHoursForTenant(tenant, nyMonday09)).toBe(true);
+    expect(isBusinessHoursForTenant(tenant, nyMonday18)).toBe(false);
+  });
+
   test('outbound dial disallows weekends unless ALLOW_OUTBOUND_WEEKEND_CALLS set', async () => {
     const { isBusinessHoursForTenant } = await import('../../../lib/business-hours.js');
     const tenant = { booking: { timezone: 'Europe/London' }, businessHours: { start: 9, end: 17, days: [0, 6] } };
