@@ -20,6 +20,7 @@ export default {
     'db.js',
     // Focus coverage on high-signal modules first; expand this set over time.
     'lib/business-hours.js',
+    'lib/booking.js',
     'lib/webhook-retry.js',
     'lib/stuck-processing-reaper.js',
     'middleware/**/*.js',
@@ -39,10 +40,16 @@ export default {
     },
     // Module gates for the highest-risk surfaces (booking + admin).
     './lib/business-hours.js': {
-      branches: 50,
-      functions: 90,
-      lines: 70,
-      statements: 70
+      branches: 60,
+      functions: 100,
+      lines: 85,
+      statements: 80
+    },
+    './lib/booking.js': {
+      branches: 80,
+      functions: 100,
+      lines: 90,
+      statements: 90
     },
     './routes/appointments.js': {
       branches: 20,
