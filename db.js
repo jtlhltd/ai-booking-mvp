@@ -1707,7 +1707,7 @@ export async function closeDatabaseConnectionsForTests() {
   closeSqliteForTesting();
 }
 
-export { DB_PATH, query, pool, dbType };
+export { DB_PATH, query, safeQuery, pool, dbType };
 
 // ---------------------- Helpers used by server/libs ----------------------
 function toJson(val) {
