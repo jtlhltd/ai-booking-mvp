@@ -37,7 +37,10 @@ export function createContractApp({ mounts = [], json = true } = {}) {
 
   for (const m of mounts) {
     const path = m.path ?? '/';
-    const router = typeof m.router === 'function' ? m.router() : m.router;
+    // Express Router objects are callable functions with a `.stack` property.
+    // Only call `m.router()` when it looks like a factory, not an actual router.
+    const isExpressRouter = typeof m.router === 'function' && Array.isArray(m.router.stack);
+    const router = typeof m.router === 'function' && !isExpressRouter ? m.router() : m.router;
     app.use(path, router);
   }
 
