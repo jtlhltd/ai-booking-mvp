@@ -1,10 +1,18 @@
-import { describe, expect, test, jest, beforeEach } from '@jest/globals';
+import { describe, expect, test, jest, beforeEach, beforeAll, afterAll } from '@jest/globals';
 import request from 'supertest';
 
 import { createContractApp, withEnv } from '../helpers/contract-harness.js';
 
 beforeEach(() => {
   jest.resetModules();
+});
+
+let batch2ConsoleErrorSpy;
+beforeAll(() => {
+  batch2ConsoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+});
+afterAll(() => {
+  batch2ConsoleErrorSpy.mockRestore();
 });
 
 describe('Batch2: next 25 routes (happy + failure)', () => {

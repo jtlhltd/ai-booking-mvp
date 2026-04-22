@@ -24,6 +24,13 @@ Write-Host "OK /health status=$($health.status)" -ForegroundColor Green
 $healthz = Invoke-JsonGet "$BaseUrl/healthz"
 Write-Host "OK /healthz" -ForegroundColor Green
 
+try {
+  $readiness = Invoke-RestMethod -Method GET -Uri "$BaseUrl/health/readiness" -TimeoutSec 15
+  Write-Host ("OK /health/readiness ready={0}" -f $readiness.ready) -ForegroundColor Green
+} catch {
+  Write-Host ("WARN /health/readiness skipped: {0}" -f $_.Exception.Message) -ForegroundColor Yellow
+}
+
 # 2) Public pages should render (simple HEAD/GET)
 foreach ($path in @("/", "/onboarding-wizard", "/client-dashboard", "/tenant-dashboard")) {
   try {

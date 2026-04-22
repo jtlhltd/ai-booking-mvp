@@ -22,6 +22,7 @@ This checklist is designed for non-coders: it turns “does it work?” into a s
 Expected:
 - `/health` returns JSON with a `status`
 - `/healthz` returns OK
+- `/health/readiness` is requested when available (503 is acceptable if dependencies are down)
 - key pages load: `/`, `/onboarding-wizard`, `/client-dashboard`, `/tenant-dashboard`
 - if `API_KEY` is set in your environment, admin endpoints also respond:
   - `/admin/system-health`

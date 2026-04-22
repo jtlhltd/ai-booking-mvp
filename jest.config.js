@@ -24,11 +24,7 @@ export default {
     'lib/webhook-retry.js',
     'lib/stuck-processing-reaper.js',
     'middleware/**/*.js',
-    '!middleware/security.js',
-    '!middleware/validation.js',
     'routes/**/*.js',
-    // Exclude untested admin surfaces for now; keep the ones we gate.
-    '!routes/admin-!(overview|operations)*.js',
     '!**/node_modules/**',
     '!**/archive/**',
     '!**/docs/**'
@@ -37,7 +33,8 @@ export default {
     global: {
       // Ratchet baseline: keep coverage non-zero and trending upward.
       // Update these upward over time as more route/job contracts are added.
-      branches: 25,
+      // Slightly below 25% after re-including all admin routes in coverage denominator.
+      branches: 23,
       functions: 30,
       lines: 30,
       statements: 30
@@ -56,10 +53,10 @@ export default {
       statements: 90
     },
     './routes/appointments.js': {
-      branches: 20,
-      functions: 20,
-      lines: 25,
-      statements: 25
+      branches: 55,
+      functions: 40,
+      lines: 40,
+      statements: 40
     },
     './routes/admin-overview.js': {
       branches: 20,

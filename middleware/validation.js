@@ -2,6 +2,7 @@
 // Provides comprehensive input validation using Joi schemas
 
 import Joi from 'joi';
+import { ValidationError, RateLimitError } from '../lib/errors.js';
 
 /**
  * Validation schemas for different endpoints
@@ -337,8 +338,6 @@ export function validateRequest(schema, source = 'body') {
       });
 
       if (error) {
-        const { ValidationError } = require('../lib/errors.js');
-        
         // Format validation errors
         const details = error.details.map(detail => ({
           field: detail.path.join('.'),
@@ -443,7 +442,6 @@ export function createEndpointRateLimit(options = {}) {
 
     // Check rate limit
     if (record.count >= max) {
-      const { RateLimitError } = require('../lib/errors.js');
       const retryAfter = Math.ceil((record.timestamp + windowMs - now) / 1000);
       return next(new RateLimitError(`Rate limit exceeded for ${req.path}`, retryAfter));
     }

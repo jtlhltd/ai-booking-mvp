@@ -1,10 +1,18 @@
-import { describe, expect, test, jest, beforeEach } from '@jest/globals';
+import { describe, expect, test, jest, beforeEach, beforeAll, afterAll } from '@jest/globals';
 import request from 'supertest';
 
 import { createContractApp, withEnv } from '../helpers/contract-harness.js';
 
 beforeEach(() => {
   jest.resetModules();
+});
+
+let coverageBoostConsoleErrorSpy;
+beforeAll(() => {
+  coverageBoostConsoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+});
+afterAll(() => {
+  coverageBoostConsoleErrorSpy.mockRestore();
 });
 
 describe('Coverage boost: previously-0% routes', () => {
