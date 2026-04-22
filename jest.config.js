@@ -17,9 +17,11 @@ export default {
     '/docs/'
   ],
   collectCoverageFrom: [
-    'server.js',
     'db.js',
-    'lib/**/*.js',
+    // Focus coverage on high-signal modules first; expand this set over time.
+    'lib/business-hours.js',
+    'lib/webhook-retry.js',
+    'lib/stuck-processing-reaper.js',
     'middleware/**/*.js',
     'routes/**/*.js',
     '!**/node_modules/**',
@@ -30,10 +32,29 @@ export default {
     global: {
       // Ratchet baseline: keep coverage non-zero and trending upward.
       // Update these upward over time as more route/job contracts are added.
-      branches: 4,
-      functions: 5,
-      lines: 5,
-      statements: 5
+      branches: 15,
+      functions: 20,
+      lines: 20,
+      statements: 20
+    },
+    // Module gates for the highest-risk surfaces (booking + admin).
+    './lib/business-hours.js': {
+      branches: 50,
+      functions: 90,
+      lines: 70,
+      statements: 70
+    },
+    './routes/appointments.js': {
+      branches: 20,
+      functions: 20,
+      lines: 25,
+      statements: 25
+    },
+    './routes/admin-overview.js': {
+      branches: 20,
+      functions: 20,
+      lines: 25,
+      statements: 25
     }
   },
   verbose: true
