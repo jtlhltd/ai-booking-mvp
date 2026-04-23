@@ -54,7 +54,7 @@ const validateTwilioRequest = (req, res, next) => {
  * This is called when someone calls your Twilio phone number.
  * We route it to Vapi AI assistant.
  */
-router.post('/webhooks/twilio-voice-inbound', validateTwilioRequest, express.urlencoded({ extended: false }), async (req, res) => {
+router.post('/webhooks/twilio-voice-inbound', express.urlencoded({ extended: false }), validateTwilioRequest, async (req, res) => {
   console.log('[TWILIO VOICE INBOUND] ==================== NEW INBOUND CALL ====================');
   console.log('[TWILIO VOICE INBOUND] Received:', {
     CallSid: req.body.CallSid,
@@ -189,7 +189,7 @@ router.post('/webhooks/twilio-voice-inbound', validateTwilioRequest, express.url
  * POST /webhooks/twilio-voice-status
  * Handles call status updates from Twilio
  */
-router.post('/webhooks/twilio-voice-status', validateTwilioRequest, express.urlencoded({ extended: false }), async (req, res) => {
+router.post('/webhooks/twilio-voice-status', express.urlencoded({ extended: false }), validateTwilioRequest, async (req, res) => {
   const callSid = req.body.CallSid;
   const callStatus = req.body.CallStatus; // 'completed', 'no-answer', 'busy', 'failed', 'canceled'
   const duration = req.body.CallDuration; // seconds
@@ -236,7 +236,7 @@ router.post('/webhooks/twilio-voice-status', validateTwilioRequest, express.urle
  * POST /webhooks/twilio-voice-recording
  * Handles voicemail recordings
  */
-router.post('/webhooks/twilio-voice-recording', validateTwilioRequest, express.urlencoded({ extended: false }), async (req, res) => {
+router.post('/webhooks/twilio-voice-recording', express.urlencoded({ extended: false }), validateTwilioRequest, async (req, res) => {
   const callSid = req.body.CallSid;
   const recordingUrl = req.body.RecordingUrl;
   const recordingSid = req.body.RecordingSid;
@@ -524,7 +524,7 @@ View all messages: ${process.env.APP_URL || 'https://your-app.onrender.com'}/das
  * POST /webhooks/twilio-voice-callback
  * Handles callback requests
  */
-router.post('/webhooks/twilio-voice-callback', validateTwilioRequest, express.urlencoded({ extended: false }), async (req, res) => {
+router.post('/webhooks/twilio-voice-callback', express.urlencoded({ extended: false }), validateTwilioRequest, async (req, res) => {
   const callSid = req.body.CallSid;
   const digits = req.body.Digits;
   const fromPhone = req.body.From;
