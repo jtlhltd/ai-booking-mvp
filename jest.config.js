@@ -21,6 +21,7 @@ export default {
   ],
   collectCoverageFrom: [
     'db.js',
+    'db/**/*.js',
     // Focus coverage on high-signal modules first; expand this set over time.
     '*.js',
     '!server.js',

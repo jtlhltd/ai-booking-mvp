@@ -195,5 +195,44 @@ describe('routes/client-ops-mount', () => {
     const res = await request(app).post('/api/signup').send(payload).expect(500);
     expect(res.body.success).toBe(false);
   });
+
+  test('failure: POST /api/signup returns 500 on unexpected createClient error', async () => {
+    jest.resetModules();
+    jest.unstable_mockModule('../../lib/auto-onboarding.js', () => ({
+      createClient: jest.fn(async () => {
+        throw new Error('provision_failed');
+      }),
+      sendWelcomeEmail: jest.fn(async () => {}),
+    }));
+
+    const { createClientOpsRouter } = await import('../../routes/client-ops-mount.js');
+    const app = express();
+    app.use(express.json());
+    app.use(
+      createClientOpsRouter({
+        getFullClient: async () => null,
+        runOutboundAbTestSetup: async () => {},
+        runOutboundAbChallengerUpdate: async () => {},
+        runOutboundAbDimensionStop: async () => {},
+        isDashboardSelfServiceClient: () => false,
+        isVapiOutboundAbExperimentOnlyPatch: () => false,
+      }),
+    );
+
+    const payload = {
+      businessName: 'Acme',
+      industry: 'dental',
+      primaryService: 'checkup',
+      serviceArea: 'London',
+      ownerName: 'Owner',
+      email: 'owner@acme.test',
+      phone: '+15551234567',
+      monthlyLeads: 10,
+    };
+
+    const res = await request(app).post('/api/signup').send(payload).expect(500);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error).toMatch(/try again|support/i);
+  });
 });
 

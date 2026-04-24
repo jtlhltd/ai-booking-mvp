@@ -39,4 +39,19 @@ describe('routes/admin-diagnostics-mount', () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual(expect.objectContaining({ ok: true, tenantKey: 't1' }));
   });
+
+  test('happy: GET /admin/demo-script returns ok and script payload', async () => {
+    const app = express();
+    app.use(
+      createAdminDiagnosticsRouter({
+        ...deps(),
+        loadDemoScript: async () => ({ version: 1, steps: [] }),
+      }),
+    );
+    const res = await request(app).get('/admin/demo-script');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(
+      expect.objectContaining({ ok: true, script: { version: 1, steps: [] } }),
+    );
+  });
 });

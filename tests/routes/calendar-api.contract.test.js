@@ -1,10 +1,14 @@
-import { describe, test, expect, jest } from '@jest/globals';
+import { describe, test, expect, jest, beforeEach } from '@jest/globals';
 import express from 'express';
 import request from 'supertest';
 
 const freeBusy = jest.fn(async () => []);
 const makeJwtAuth = jest.fn(() => ({ authorize: jest.fn(async () => {}) }));
 const insertEvent = jest.fn(async () => ({ id: 'evt_insert', htmlLink: '', status: 'confirmed' }));
+
+const gcalEventsInsert = jest.fn(async () => ({
+  data: { id: 'evt1', htmlLink: 'https://example.test/e', status: 'confirmed' },
+}));
 
 jest.unstable_mockModule('../../gcal.js', () => ({
   freeBusy,
@@ -16,15 +20,20 @@ jest.unstable_mockModule('googleapis', () => ({
   google: {
     calendar: () => ({
       events: {
-        insert: jest.fn(async () => ({
-          data: { id: 'evt1', htmlLink: 'https://example.test/e', status: 'confirmed' },
-        })),
+        insert: (...args) => gcalEventsInsert(...args),
       },
     }),
   },
 }));
 
 describe('routes/calendar-api', () => {
+  beforeEach(() => {
+    freeBusy.mockReset().mockResolvedValue([]);
+    gcalEventsInsert.mockReset().mockResolvedValue({
+      data: { id: 'evt1', htmlLink: 'https://example.test/e', status: 'confirmed' },
+    });
+  });
+
   test('failure: POST /api/calendar/find-slots returns 400 when tenant missing', async () => {
     const { createCalendarApiRouter } = await import('../../routes/calendar-api.js');
     const app = express();
@@ -166,6 +175,72 @@ describe('routes/calendar-api', () => {
 
     const res = await request(app).post('/api/calendar/cancel').send({ eventId: 'evt1' }).expect(200);
     expect(res.body).toEqual({ ok: true });
+  });
+
+  test('failure: POST /api/calendar/book-slot returns 409 when slot is busy', async () => {
+    freeBusy.mockResolvedValueOnce([
+      { start: '2030-01-01T10:00:00.000Z', end: '2030-01-01T11:00:00.000Z' },
+    ]);
+    const { createCalendarApiRouter } = await import('../../routes/calendar-api.js');
+    const app = express();
+    app.use(express.json());
+    app.use(
+      '/api/calendar',
+      createCalendarApiRouter({
+        getClientFromHeader: async () => ({ clientKey: 'c1', displayName: 'Clinic', booking: { defaultDurationMin: 30 } }),
+        pickTimezone: () => 'Europe/London',
+        pickCalendarId: () => 'cal1',
+        getGoogleCredentials: () => ({ clientEmail: 'x', privateKey: 'y' }),
+        smsConfig: () => ({ configured: false }),
+        renderTemplate: (_t, _v) => '',
+        scheduleAppointmentReminders: async () => {},
+        appendToSheet: async () => {},
+      }),
+    );
+
+    const res = await request(app)
+      .post('/api/calendar/book-slot')
+      .send({
+        service: 'checkup',
+        lead: { name: 'A', phone: '+15551234567' },
+        start: '2030-01-01T10:00:00.000Z',
+        durationMin: 30,
+      })
+      .expect(409);
+    expect(res.body.ok).toBe(false);
+    expect(res.body.error).toMatch(/busy/i);
+    expect(gcalEventsInsert).not.toHaveBeenCalled();
+  });
+
+  test('failure: POST /api/calendar/book-slot returns 500 when Google insert fails', async () => {
+    gcalEventsInsert.mockRejectedValueOnce(new Error('Google Calendar unavailable'));
+    const { createCalendarApiRouter } = await import('../../routes/calendar-api.js');
+    const app = express();
+    app.use(express.json());
+    app.use(
+      '/api/calendar',
+      createCalendarApiRouter({
+        getClientFromHeader: async () => ({ clientKey: 'c1', displayName: 'Clinic', booking: { defaultDurationMin: 30 } }),
+        pickTimezone: () => 'Europe/London',
+        pickCalendarId: () => 'cal1',
+        getGoogleCredentials: () => ({ clientEmail: 'x', privateKey: 'y' }),
+        smsConfig: () => ({ configured: false }),
+        renderTemplate: (_t, _v) => '',
+        scheduleAppointmentReminders: async () => {},
+        appendToSheet: async () => {},
+      }),
+    );
+
+    const res = await request(app)
+      .post('/api/calendar/book-slot')
+      .send({
+        service: 'checkup',
+        lead: { name: 'A', phone: '+15551234567' },
+        start: '2030-01-01T14:00:00.000Z',
+        durationMin: 30,
+      })
+      .expect(500);
+    expect(res.body.ok).toBe(false);
   });
 });
 
