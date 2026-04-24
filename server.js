@@ -1,4 +1,4 @@
-// server.js — AI Booking System (SQLite tenants + env bootstrap + richer tenant awareness)
+﻿// server.js — AI Booking System (SQLite tenants + env bootstrap + richer tenant awareness)
 import 'dotenv/config';
 import { normalizePhoneE164 } from './lib/utils.js';
 import { parseStartPreference } from './lib/start-preference.js';
@@ -35,14 +35,12 @@ import { phoneMatchKey, pgQueueLeadPhoneKeyExpr } from './lib/lead-phone-key.js'
 import { handleCalendarCheckBook } from './lib/calendar-check-book.js';
 import { handleCalendarBookSlot } from './lib/calendar-book-slot.js';
 import { handleCalendarFindSlots } from './lib/calendar-find-slots.js';
-import { handleLeadsImport } from './lib/leads-import.js';
 import { scheduleAtOptimalCallWindow } from './lib/optimal-call-window.js';
+import { runOutboundCallsForImportedLeads } from './lib/lead-import-outbound.js';
 import { handleGcalPing } from './lib/gcal-ping.js';
 import { handleHealthz } from './lib/healthz.js';
 import { handleTwilioSmsInbound } from './lib/twilio-sms-inbound-webhook.js';
 import { handleSmsTestEndpoint } from './lib/sms-test-endpoint.js';
-import { handleWebhooksNewLead } from './lib/webhooks-new-lead.js';
-import { handleWebhooksFacebookLead } from './lib/webhooks-facebook-lead.js';
 import { handleNotifyTest, handleNotifySend } from './lib/notify-api.js';
 import { handleDashboardReset } from './lib/dashboard-reset.js';
 import { handleSmsStatusWebhook } from './lib/sms-status-webhook.js';
@@ -141,6 +139,7 @@ import { createAvailableSlotsRouter } from './routes/available-slots.js';
 import { createCreateClientRouter } from './routes/create-client.js';
 import { createQualityAlertsRouter } from './routes/quality-alerts.js';
 import { createImportLeadsRouter } from './routes/import-leads.js';
+import { createMetaIngestWebhooksRouter } from './routes/meta-ingest-webhooks-mount.js';
 import { createDevTestRouter } from './routes/dev-test-mount.js';
 import { createCallInsightsRouter } from './routes/call-insights-mount.js';
 import { createCompanyEnrichmentRouter } from './routes/company-enrichment-mount.js';
@@ -479,6 +478,7 @@ app.use(
     isOptedOut,
     sendOperatorAlert,
     sanitizeLead,
+    runOutboundCallsForImportedLeads,
     TIMEZONE
   })
 );
@@ -1651,439 +1651,7 @@ app['get']('/api/events/:clientKey', async (req, res) => {
 // moved: /api/leads/:leadId/(snooze|escalate) → routes/core-api.js
 
 // moved: /api/leads/import-test → routes/import-leads.js
-
-app['post']('/api/leads/import__legacy', async (req, res) => {
-  // CRITICAL: Log immediately to ensure we see this
-  console.error('[LEAD IMPORT API] ========== ENDPOINT HIT ==========');
-  console.error('[LEAD IMPORT API] Timestamp:', new Date().toISOString());
-  
-  try {
-    // Log raw request details
-    console.error('[LEAD IMPORT API] ========== REQUEST RECEIVED ==========');
-    console.error('[LEAD IMPORT API] Method:', req.method);
-    console.error('[LEAD IMPORT API] URL:', req.url);
-    console.error('[LEAD IMPORT API] Content-Type:', req.headers['content-type']);
-    console.error('[LEAD IMPORT API] Content-Length:', req.headers['content-length']);
-    console.error('[LEAD IMPORT API] Has body:', !!req.body);
-    console.error('[LEAD IMPORT API] Body type:', typeof req.body);
-    console.error('[LEAD IMPORT API] Body keys:', req.body ? Object.keys(req.body) : 'no body');
-    console.error('[LEAD IMPORT API] Full body:', JSON.stringify(req.body, null, 2));
-    console.error('[LEAD IMPORT API] body.leads direct:', req.body?.leads);
-    console.error('[LEAD IMPORT API] body.leads type:', typeof req.body?.leads);
-    console.error('[LEAD IMPORT API] body.leads isArray:', Array.isArray(req.body?.leads));
-    console.error('[LEAD IMPORT API] body.leads constructor:', req.body?.leads?.constructor?.name);
-    if (req.body?.leads && typeof req.body.leads === 'object' && !Array.isArray(req.body.leads)) {
-      console.error('[LEAD IMPORT API] body.leads keys (if object):', Object.keys(req.body.leads));
-      console.error('[LEAD IMPORT API] body.leads stringified:', JSON.stringify(req.body.leads).substring(0, 500));
-    }
-    
-    // Try to extract with case-insensitive matching
-    const body = req.body || {};
-    const clientKey = body.clientKey || body.clientkey || body.client_key || body.ClientKey;
-    let leads = body.leads || body.Leads || body.leadList || [];
-    
-    // Handle case where leads might be a stringified JSON string
-    if (typeof leads === 'string') {
-      console.error('[LEAD IMPORT API] leads is a string, attempting to parse:', leads.substring(0, 200));
-      try {
-        leads = JSON.parse(leads);
-        console.error('[LEAD IMPORT API] Successfully parsed leads from string');
-      } catch (parseError) {
-        console.error('[LEAD IMPORT API] Failed to parse leads string:', parseError);
-        leads = [];
-      }
-    }
-    
-    // Handle case where leads is an object with numeric keys (array converted to object)
-    // This can happen with certain JSON parsers or middleware
-    if (leads && typeof leads === 'object' && !Array.isArray(leads)) {
-      const keys = Object.keys(leads);
-      // Check if all keys are numeric strings (indicating it was an array)
-      const allNumericKeys = keys.length > 0 && keys.every(key => /^\d+$/.test(key));
-      if (allNumericKeys) {
-        console.error('[LEAD IMPORT API] leads is object with numeric keys, converting to array');
-        // Convert object to array by sorting keys numerically and mapping values
-        leads = keys.sort((a, b) => parseInt(a) - parseInt(b)).map(key => leads[key]);
-        console.error('[LEAD IMPORT API] Converted to array with', leads.length, 'items');
-      } else {
-        // Not a numeric-keyed object, treat as invalid
-        console.error('[LEAD IMPORT API] leads is object but not array-like, treating as invalid');
-        leads = [];
-      }
-    }
-    
-    console.error('[LEAD IMPORT API] Extracted values:', {
-      clientKey: clientKey,
-      clientKeyType: typeof clientKey,
-      leadsType: Array.isArray(leads) ? 'array' : typeof leads,
-      leadsLength: Array.isArray(leads) ? leads.length : 'not array',
-      leadsValue: typeof leads === 'string' ? leads.substring(0, 200) : (Array.isArray(leads) ? `Array with ${leads.length} items` : JSON.stringify(leads).substring(0, 200)),
-      leadsPreview: Array.isArray(leads) && leads.length > 0 ? leads[0] : 'no leads',
-      leadsConstructor: leads?.constructor?.name
-    });
-    
-    if (!clientKey || !Array.isArray(leads) || leads.length === 0) {
-      console.error('[LEAD IMPORT API] ========== VALIDATION FAILED ==========');
-      console.error('[LEAD IMPORT API] hasClientKey:', !!clientKey);
-      console.error('[LEAD IMPORT API] clientKeyValue:', clientKey);
-      console.error('[LEAD IMPORT API] clientKeyType:', typeof clientKey);
-      console.error('[LEAD IMPORT API] hasLeads:', !!leads);
-      console.error('[LEAD IMPORT API] leadsIsArray:', Array.isArray(leads));
-      console.error('[LEAD IMPORT API] leadsType:', typeof leads);
-      console.error('[LEAD IMPORT API] leadsValue:', typeof leads === 'string' ? leads.substring(0, 500) : JSON.stringify(leads).substring(0, 500));
-      console.error('[LEAD IMPORT API] leadsConstructor:', leads?.constructor?.name);
-      console.error('[LEAD IMPORT API] leadsLength:', Array.isArray(leads) ? leads.length : 'not array');
-      console.error('[LEAD IMPORT API] Full request body:', JSON.stringify(body, null, 2));
-      console.error('[LEAD IMPORT API] All body keys:', Object.keys(body));
-      return res.status(400).json({ ok: false, error: 'Missing clientKey or leads payload' });
-    }
-
-    let crmLeadCountBefore = null;
-    try {
-      const beforeCnt = await query(
-        'SELECT COUNT(*)::int AS n FROM leads WHERE client_key = $1',
-        [clientKey]
-      );
-      crmLeadCountBefore = parseInt(beforeCnt.rows?.[0]?.n ?? 0, 10);
-    } catch (beforeErr) {
-      console.error('[LEAD IMPORT] Could not count leads before import:', clientKey, beforeErr?.message);
-    }
-
-    const inserted = [];
-    let skippedInvalidPhone = 0;
-    let skippedOptedOut = 0;
-    const LEADS_IMPORT_MAX_PER_REQUEST = 200;
-    const leadsBatch = leads.slice(0, LEADS_IMPORT_MAX_PER_REQUEST);
-    const truncated = leads.length > LEADS_IMPORT_MAX_PER_REQUEST;
-    if (truncated) {
-      console.error('[LEAD IMPORT] Truncating import to first %s rows (received %s)', LEADS_IMPORT_MAX_PER_REQUEST, leads.length);
-    }
-    let failedWrites = 0;
-    const failedWriteSamples = [];
-    for (const payload of leadsBatch) {
-      const phone = validateAndSanitizePhone(payload.phone);
-      if (!phone) {
-        skippedInvalidPhone += 1;
-        console.error('[LEAD IMPORT] Skipping lead with invalid phone:', payload);
-        continue;
-      }
-      if (await isOptedOut(clientKey, phone)) {
-        skippedOptedOut += 1;
-        console.error('[LEAD IMPORT] Skipping opted-out phone:', phone);
-        continue;
-      }
-      const mk = phoneMatchKey(phone);
-      if (!mk) {
-        skippedInvalidPhone += 1;
-        console.error('[LEAD IMPORT] Skipping lead — no phone match key:', phone);
-        continue;
-      }
-      const name = sanitizeInput(payload.name || phone, 120);
-      const service = sanitizeInput(payload.service || 'Lead Follow-Up', 120);
-      const source = sanitizeInput(payload.source || 'Import', 120);
-      
-      console.error('[LEAD IMPORT] Inserting lead:', { clientKey, name, phone, service, source, phone_match_key: mk });
-      
-      try {
-        // Primary path: fast upsert based on UNIQUE(client_key, phone_match_key)
-        // If the unique index isn't present yet (race during migrations), Postgres throws:
-        // "there is no unique or exclusion constraint matching the ON CONFLICT specification".
-        // We catch that and fall back to a safe select-then-update/insert path.
-        let result;
-        try {
-          result = await query(
-            `
-              INSERT INTO leads (client_key, name, phone, phone_match_key, service, source, status)
-              VALUES ($1, $2, $3, $4, $5, $6, 'new')
-              ON CONFLICT (client_key, phone_match_key) DO UPDATE
-              SET name = EXCLUDED.name,
-                  phone = EXCLUDED.phone,
-                  service = COALESCE(EXCLUDED.service, leads.service),
-                  source = COALESCE(EXCLUDED.source, leads.source)
-              RETURNING id, name, phone, service, source, status, notes
-            `,
-            [clientKey, name, phone, mk, service, source]
-          );
-        } catch (conflictErr) {
-          const msg = String(conflictErr?.message || '');
-          const code = conflictErr?.code;
-          const isMissingConflictConstraint =
-            code === '42P10' ||
-            msg.includes('no unique or exclusion constraint matching the ON CONFLICT specification');
-
-          if (!isMissingConflictConstraint) throw conflictErr;
-
-          // Fallback: explicit upsert without relying on ON CONFLICT
-          // (keeps imports working during/after schema transitions).
-          const existing = await query(
-            `
-              SELECT id
-              FROM leads
-              WHERE client_key = $1 AND phone_match_key = $2
-              ORDER BY created_at DESC
-              LIMIT 1
-            `,
-            [clientKey, mk]
-          );
-          const existingId = existing?.rows?.[0]?.id;
-
-          if (existingId) {
-            result = await query(
-              `
-                UPDATE leads
-                SET name = $2,
-                    phone = $3,
-                    service = COALESCE($4, service),
-                    source = COALESCE($5, source)
-                WHERE id = $1
-                RETURNING id, name, phone, service, source, status, notes
-              `,
-              [existingId, name, phone, service, source]
-            );
-          } else {
-            result = await query(
-              `
-                INSERT INTO leads (client_key, name, phone, phone_match_key, service, source, status)
-                VALUES ($1, $2, $3, $4, $5, $6, 'new')
-                RETURNING id, name, phone, service, source, status, notes
-              `,
-              [clientKey, name, phone, mk, service, source]
-            );
-          }
-        }
-        
-        if (result.rows?.[0]) {
-          inserted.push(result.rows[0]);
-          console.error('[LEAD IMPORT] Successfully inserted/updated lead:', result.rows[0].id);
-        } else {
-          console.error('[LEAD IMPORT] No row returned from INSERT for:', { name, phone });
-        }
-      } catch (insertError) {
-        console.error('[LEAD IMPORT] Error inserting lead:', insertError);
-        console.error('[LEAD IMPORT] Error details:', { 
-          message: insertError.message, 
-          code: insertError.code,
-          detail: insertError.detail,
-          constraint: insertError.constraint
-        });
-        failedWrites += 1;
-        if (failedWriteSamples.length < 5) {
-          failedWriteSamples.push({
-            phone,
-            message: insertError?.message || 'insert failed',
-            code: insertError?.code || null
-          });
-        }
-        // Continue with other leads even if one fails
-      }
-    }
-
-    console.error('[LEAD IMPORT] Final result:', { 
-      totalLeads: leads.length, 
-      inserted: inserted.length,
-      skippedInvalidPhone,
-      clientKey 
-    });
-
-    let totalLeadsInCrm = null;
-    try {
-      const cnt = await query(
-        'SELECT COUNT(*)::int AS n FROM leads WHERE client_key = $1',
-        [clientKey]
-      );
-      totalLeadsInCrm = parseInt(cnt.rows?.[0]?.n ?? 0, 10);
-    } catch (cntErr) {
-      console.error('[LEAD IMPORT] Could not count leads for client:', clientKey, cntErr?.message);
-    }
-
-    const netNewLeadsInCrm =
-      crmLeadCountBefore != null && totalLeadsInCrm != null
-        ? totalLeadsInCrm - crmLeadCountBefore
-        : null;
-    console.error('[LEAD IMPORT] CRM lead count delta:', {
-      clientKey,
-      before: crmLeadCountBefore,
-      after: totalLeadsInCrm,
-      netNew: netNewLeadsInCrm
-    });
-
-    // Immediately call or queue new leads (call now = same request; else queue for cron)
-    let callSummary = { inBusinessHours: null, shouldCallNow: null, called: 0, queued: 0, reason: null };
-    if (inserted.length > 0) {
-      try {
-        const client = await getFullClient(clientKey);
-        const allowEnvVapiFallback =
-          String(process.env.IMPORT_ALLOW_ENV_VAPI_FALLBACK || '').trim() !== '' &&
-          !['0', 'false', 'no', 'off'].includes(String(process.env.IMPORT_ALLOW_ENV_VAPI_FALLBACK).trim().toLowerCase());
-        const hasVapi = !!(
-          client?.vapi?.assistantId ||
-          client?.vapiAssistantId ||
-          (allowEnvVapiFallback && process.env.VAPI_ASSISTANT_ID)
-        );
-        const isEnabled = !!client?.isEnabled || allowEnvVapiFallback;
-        if (!client) {
-          console.log('[LEAD IMPORT] No client found for', clientKey);
-          callSummary.reason = 'client_not_found';
-        } else if (!isEnabled && !allowEnvVapiFallback) {
-          console.log('[LEAD IMPORT] Client not enabled, skipping call/queue:', clientKey);
-          callSummary.reason = 'client_not_enabled';
-        } else if (!hasVapi) {
-          console.log('[LEAD IMPORT] Client missing VAPI assistantId (and no env fallback), skipping call/queue:', clientKey);
-          callSummary.reason = 'vapi_not_configured';
-        }
-        if (
-          client &&
-          (client.isEnabled || allowEnvVapiFallback) &&
-          (client.vapi?.assistantId || client?.vapiAssistantId || (allowEnvVapiFallback && process.env.VAPI_ASSISTANT_ID))
-        ) {
-          const { addToCallQueue, getLatestCallInsights, getCallTimeBanditState } = await import('./db.js');
-          const { scheduleAtOptimalCallWindow } = await import('./lib/optimal-call-window.js');
-          const insightsRow = await getLatestCallInsights(clientKey).catch(() => null);
-          const routing = insightsRow?.routing;
-
-          const inBusinessHours = isBusinessHours(client);
-          const shouldCallNow = inBusinessHours;
-          callSummary.inBusinessHours = inBusinessHours;
-          callSummary.shouldCallNow = shouldCallNow;
-          const scheduledBaseline = shouldCallNow ? new Date() : getNextBusinessHour(client);
-          const importBanditArms = await getCallTimeBanditState(clientKey).catch(() => ({}));
-          console.log('[LEAD IMPORT] Call decision:', {
-            clientKey,
-            allowEnvVapiFallback,
-            inBusinessHours,
-            shouldCallNow
-          });
-
-          if (shouldCallNow) {
-            // Do not await VAPI in this request — concurrency is 1 and slots are held until end-of-call-report,
-            // which made multi-lead imports hang for minutes per lead from the browser's perspective.
-            callSummary.reason = 'calls_background';
-            callSummary.called = 0;
-            callSummary.queued = 0;
-            callSummary.pendingOutbound = inserted.length;
-            console.log('[LEAD IMPORT] Starting outbound calls in background for', inserted.length, 'lead(s)');
-            setImmediate(() => {
-              processLeadImportOutboundCalls({ clientKey, client, inserted })
-                .catch((e) => console.error('[LEAD IMPORT][bg] Unhandled:', e?.message || e));
-            });
-          } else {
-            let queuedCount = 0;
-            for (const lead of inserted) {
-              try {
-                const scheduledFor = await scheduleAtOptimalCallWindow(client, routing, scheduledBaseline, {
-                  fallbackTz: TIMEZONE,
-                  clientKey,
-                  jitterKey: `import:${clientKey}:${lead.id}:${lead.phone}`,
-                  banditArms: importBanditArms
-                });
-                await addToCallQueue({
-                  clientKey, leadPhone: lead.phone, priority: 8, scheduledFor,
-                  callType: 'vapi_call',
-                  callData: { triggerType: 'new_lead_import', leadId: lead.id, leadName: lead.name, leadService: lead.service, leadSource: lead.source, leadStatus: lead.status, businessHours: 'outside' }
-                });
-                queuedCount++;
-                console.log('[LEAD IMPORT] Queued lead for next business hour:', lead.phone);
-              } catch (err) {
-                console.error('[LEAD IMPORT] Failed for lead:', lead.phone, err?.message);
-              }
-            }
-            callSummary.queued = queuedCount;
-            callSummary.called = 0;
-            callSummary.reason = queuedCount > 0 ? 'outside_business_hours' : null;
-            console.log('[LEAD IMPORT]', `${queuedCount} queued for next business hour`);
-          }
-        } else {
-          if (!callSummary.reason) callSummary.reason = 'client_not_enabled_or_no_vapi';
-          console.log('[LEAD IMPORT] Client not enabled or missing VAPI config, skipping');
-        }
-      } catch (queueError) {
-        console.error('[LEAD IMPORT] Error:', queueError);
-        callSummary.reason = 'error';
-        callSummary.error = queueError?.message || String(queueError);
-      }
-    }
-
-    if (failedWrites > 0 && leads.length > 0 && failedWrites >= Math.max(5, Math.ceil(leads.length * 0.5))) {
-      await sendOperatorAlert({
-        subject: `Lead import: many CRM writes failed (${clientKey})`,
-        html: `<p><strong>${failedWrites}</strong> of <strong>${leads.length}</strong> rows failed DB insert for <code>${String(
-          clientKey
-        )}</code>.</p><pre>${JSON.stringify({ failedWriteSamples }, null, 2)}</pre>`,
-        dedupeKey: `lead-import-bulk-fail:${String(clientKey)}`,
-        throttleMinutes: 45
-      }).catch(() => {});
-    }
-    if (inserted.length > 0 && callSummary?.reason === 'error' && callSummary?.error) {
-      await sendOperatorAlert({
-        subject: `Lead import post-insert sync error (${clientKey})`,
-        html: `<p>Inserted ${inserted.length} lead(s) but call/queue follow-up failed.</p><pre>${JSON.stringify(
-          callSummary,
-          null,
-          2
-        )}</pre>`,
-        dedupeKey: `lead-import-sync:${String(clientKey)}`,
-        throttleMinutes: 30
-      }).catch(() => {});
-    }
-
-    return res.json({
-      ok: true,
-      inserted: inserted.length,
-      requestedCount: leads.length,
-      receivedCount: leads.length,
-      processedCount: leadsBatch.length,
-      processedBatchCount: leadsBatch.length,
-      maxPerRequest: LEADS_IMPORT_MAX_PER_REQUEST,
-      truncated,
-      skippedInvalidPhone,
-      skippedOptedOut,
-      failedWrites,
-      failedWriteSamples: failedWriteSamples.length ? failedWriteSamples : undefined,
-      crmLeadCountBefore,
-      totalLeadsInCrm,
-      netNewLeadsInCrm,
-      leads: inserted.map(sanitizeLead),
-      callSummary: inserted.length > 0 ? callSummary : undefined
-    });
-  } catch (error) {
-    console.error('[LEAD IMPORT ERROR]', error);
-    const ck =
-      req.body?.clientKey ||
-      req.body?.client_key ||
-      req.body?.clientkey ||
-      req.body?.ClientKey ||
-      'unknown';
-    await sendOperatorAlert({
-      subject: `Lead import API failed (${ck})`,
-      html: `<p><code>/api/leads/import</code> returned 500.</p><pre>${JSON.stringify(
-        { clientKey: ck, message: error?.message, stack: error?.stack?.split('\n').slice(0, 12).join('\n') },
-        null,
-        2
-      )}</pre>`,
-      dedupeKey: `lead-import-500:${String(ck)}`,
-      throttleMinutes: 60
-    }).catch(() => {});
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-
-// Extracted handler (testable + covered)
-const leadsImportDeps = {
-  query,
-  getClientFromHeader,
-  isBusinessHours,
-  getNextBusinessHour,
-  scheduleAtOptimalCallWindow,
-  addToCallQueue,
-  validateAndSanitizePhone,
-  phoneMatchKey,
-  sanitizeInput,
-  isOptedOut,
-  sendOperatorAlert,
-  sanitizeLead,
-  TIMEZONE
-};
-app['post']('/api/leads/import', (req, res) => handleLeadsImport(req, res, leadsImportDeps));
+// POST /api/leads/import and /api/leads/import__legacy → routes/import-leads.js (createImportLeadsRouter)
 
 /**
  * Which of the given match keys already exist for this client (any lead row with same tail-10 / digit key).
@@ -4863,10 +4431,6 @@ const webhooksNewLeadDeps = {
   VAPI_URL,
 };
 
-app['post']('/webhooks/new-lead/:clientKey', (req, res) =>
-  handleWebhooksNewLead(req, res, webhooksNewLeadDeps)
-);
-
 const webhooksFacebookLeadDeps = {
   getBaseUrl: () =>
     process.env.PUBLIC_BASE_URL ||
@@ -4875,8 +4439,11 @@ const webhooksFacebookLeadDeps = {
   nodeEnv: process.env.NODE_ENV,
 };
 
-app['post']('/webhooks/facebook-lead/:clientKey', (req, res) =>
-  handleWebhooksFacebookLead(req, res, webhooksFacebookLeadDeps)
+app.use(
+  createMetaIngestWebhooksRouter({
+    webhooksNewLeadDeps,
+    webhooksFacebookLeadDeps
+  })
 );
 
 app['post']('/sms', (req, res) => handleSmsTestEndpoint(req, res, { getApiKey: () => process.env.API_KEY }));

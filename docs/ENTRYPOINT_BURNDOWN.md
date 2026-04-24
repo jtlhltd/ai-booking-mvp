@@ -34,6 +34,8 @@ These are **not** under `routes/`; they only appear in coverage if extracted or 
 | `POST /api/calendar/book-slot` | `lib/calendar-book-slot.js` (`handleCalendarBookSlot`); thin mount + `calendarBookSlotDeps` in `server.js` | `tests/lib/calendar-book-slot.test.js` |
 | `GET /healthz` | `lib/healthz.js` (`handleHealthz`); thin mount + `healthzDeps` in `server.js` | `tests/lib/healthz.test.js` |
 | `GET /gcal/ping` | `lib/gcal-ping.js` (`handleGcalPing`); thin mount + `gcalPingDeps` in `server.js` | `tests/lib/gcal-ping.test.js` |
+| `POST /api/leads/import` (+ `import__legacy`) | `routes/import-leads.js` + `lib/leads-import.js`; post-insert dial/queue in `lib/lead-import-outbound.js` | `tests/routes/import-leads.contract.test.js`, `tests/lib/leads-import.test.js` |
+| `POST /webhooks/new-lead/:clientKey`, `POST /webhooks/facebook-lead/:clientKey` | `routes/meta-ingest-webhooks-mount.js` + `lib/webhooks-new-lead.js` / `lib/webhooks-facebook-lead.js` | `tests/routes/meta-ingest-webhooks.contract.test.js`, `tests/lib/webhooks-new-lead.test.js`, `tests/lib/webhooks-facebook-lead.test.js` |
 
 Inline route inventory:
 
@@ -42,10 +44,8 @@ Inline route inventory:
 
 Next inline candidates to extract (high-signal mutations, not already routed through `routes/**`):
 
-- `POST /api/calendar/book-slot` (booking mutation)
-- `POST /api/calendar/find-slots` (availability core)
-- `POST /api/leads/import` (data ingestion)
-- `POST /webhooks/new-lead/:clientKey` and `POST /webhooks/facebook-lead/:clientKey` (external ingest)
+- `POST /api/calendar/book-slot` (booking mutation; may already be on `routes/calendar-api.js` — confirm via `npm run test:server-inline-inventory`)
+- `POST /api/calendar/find-slots` (availability core; same)
 - `POST /admin/*` and `POST /tools/*` (ops surfaces; extract selectively when changed)
 
 Other inline `app.get` / `app.post` handlers in `server.js` should be triaged the same way when changed: extract or add targeted tests.

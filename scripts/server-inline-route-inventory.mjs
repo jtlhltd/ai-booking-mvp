@@ -17,10 +17,12 @@ const src = fs.readFileSync(serverPath, 'utf8').split(/\n/);
 
 const routes = [];
 const re = /\bapp\.(get|post|put|patch|delete)\(\s*(['"`])([^'"`]+)\2\s*,/;
+const reBracket = /\bapp\['(get|post|put|patch|delete)'\]\(\s*(['"`])([^'"`]+)\2\s*,/;
 for (let i = 0; i < src.length; i += 1) {
   const line = src[i];
   if (/^\s*\/\//.test(line)) continue; // ignore single-line comments
-  const m = line.match(re);
+  let m = line.match(re);
+  if (!m) m = line.match(reBracket);
   if (!m) continue;
   routes.push({ method: m[1].toUpperCase(), path: m[3], line: i + 1 });
 }
