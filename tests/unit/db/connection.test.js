@@ -11,13 +11,17 @@ jest.unstable_mockModule('pg', () => ({
 
 describe('db/connection.js', () => {
   let resolvePgSsl;
+  let resolveStatementTimeoutMs;
   let createPostgresPoolAndLimiter;
   let testPostgresPoolConnection;
 
   beforeAll(async () => {
-    ({ resolvePgSsl, createPostgresPoolAndLimiter, testPostgresPoolConnection } = await import(
-      '../../../db/connection.js'
-    ));
+    ({
+      resolvePgSsl,
+      resolveStatementTimeoutMs,
+      createPostgresPoolAndLimiter,
+      testPostgresPoolConnection,
+    } = await import('../../../db/connection.js'));
   });
 
   test('resolvePgSsl disables SSL for localhost', () => {
@@ -29,6 +33,14 @@ describe('db/connection.js', () => {
     expect(ssl).toEqual(expect.objectContaining({ rejectUnauthorized: false }));
   });
 
+  test('resolveStatementTimeoutMs defaults and env override', () => {
+    expect(resolveStatementTimeoutMs({})).toBe(20000);
+    expect(resolveStatementTimeoutMs({ RENDER: 'true' })).toBe(60000);
+    expect(resolveStatementTimeoutMs({ DB_STATEMENT_TIMEOUT_MS: '45000' })).toBe(45000);
+    expect(resolveStatementTimeoutMs({ DB_STATEMENT_TIMEOUT_MS: '500' })).toBe(20000);
+    expect(resolveStatementTimeoutMs({ DB_STATEMENT_TIMEOUT_MS: '400000' })).toBe(20000);
+  });
+
   test('createPostgresPoolAndLimiter wires pool and optional limiter', async () => {
     PoolMock.mockClear();
     const { pool, pgQueryLimiter, maxConnections } = createPostgresPoolAndLimiter(
@@ -36,9 +48,19 @@ describe('db/connection.js', () => {
       { RENDER: 'true', DB_POOL_MAX: '4', DB_QUERY_CONCURRENCY: '2' },
     );
     expect(PoolMock).toHaveBeenCalled();
+    expect(PoolMock.mock.calls[0][0].statement_timeout).toBe(60000);
     expect(maxConnections).toBe(4);
     expect(pgQueryLimiter).not.toBeNull();
     await testPostgresPoolConnection(pool, 5000);
     expect(pool.query).toHaveBeenCalled();
+  });
+
+  test('createPostgresPoolAndLimiter passes DB_STATEMENT_TIMEOUT_MS to pool', () => {
+    PoolMock.mockClear();
+    createPostgresPoolAndLimiter('postgresql://u:p@db.example.com:5432/db', {
+      DB_STATEMENT_TIMEOUT_MS: '88000',
+      DB_POOL_MAX: '4',
+    });
+    expect(PoolMock.mock.calls[0][0].statement_timeout).toBe(88000);
   });
 });

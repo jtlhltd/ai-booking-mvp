@@ -27,6 +27,18 @@ export function resolvePgSsl(dbUrl, env = process.env) {
  * @param {string} dbUrl
  * @param {NodeJS.ProcessEnv} [env]
  */
+/**
+ * Postgres `statement_timeout` (ms) per session. Heavy routes (e.g. /api/demo-dashboard) can exceed 20s on real data.
+ * Render edge often returns HTML 502 if the origin is still busy — keep under proxy limits and tune this via env.
+ */
+export function resolveStatementTimeoutMs(env = process.env) {
+  const raw = parseInt(env.DB_STATEMENT_TIMEOUT_MS, 10);
+  if (Number.isFinite(raw) && raw >= 1000 && raw <= 300000) {
+    return raw;
+  }
+  return env.RENDER === 'true' ? 60000 : 20000;
+}
+
 export function createPostgresPoolAndLimiter(dbUrl, env = process.env) {
   const rawMax = parseInt(env.DB_POOL_MAX, 10);
   const defaultPoolMax = env.RENDER === 'true' ? 12 : 25;
@@ -34,6 +46,7 @@ export function createPostgresPoolAndLimiter(dbUrl, env = process.env) {
     Number.isFinite(rawMax) && rawMax >= 2 ? Math.min(rawMax, 80) : defaultPoolMax;
 
   const pgSsl = resolvePgSsl(dbUrl, env);
+  const statementTimeout = resolveStatementTimeoutMs(env);
 
   const pool = new Pool({
     connectionString: dbUrl,
@@ -41,7 +54,7 @@ export function createPostgresPoolAndLimiter(dbUrl, env = process.env) {
     max: maxConnections,
     idleTimeoutMillis: 10000,
     connectionTimeoutMillis: 5000,
-    statement_timeout: 20000,
+    statement_timeout: statementTimeout,
     allowExitOnIdle: true,
   });
 
@@ -67,13 +80,17 @@ export function createPostgresPoolAndLimiter(dbUrl, env = process.env) {
  * @param {number} [timeoutMs]
  */
 export async function testPostgresPoolConnection(pool, timeoutMs = 10000) {
-  await Promise.race([
-    pool.query('SELECT 1'),
-    new Promise((_, reject) =>
-      setTimeout(
-        () => reject(new Error(`Connection timeout after ${timeoutMs / 1000} seconds`)),
-        timeoutMs,
-      ),
-    ),
-  ]);
+  let timeoutId;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(
+      () => reject(new Error(`Connection timeout after ${timeoutMs / 1000} seconds`)),
+      timeoutMs,
+    );
+    if (typeof timeoutId?.unref === 'function') timeoutId.unref();
+  });
+  try {
+    await Promise.race([pool.query('SELECT 1'), timeoutPromise]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }

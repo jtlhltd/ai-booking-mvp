@@ -61,8 +61,13 @@ export const TIMEOUTS = {
   // Long-running operations
   bulkImport: 120000,  // 2 minutes
   analytics: 60000,    // 1 minute
-  /** Heavy DB + optional Vapi fan-out; must exceed client-dashboard fetch abort (see public/client-dashboard.html). */
-  demoDashboard: 120000,
+  /**
+   * Heavy DB + optional Vapi fan-out.
+   * Render (and similar) reverse proxies often cut inbound HTTP around ~100s and return HTML 502 if the origin
+   * is still working — stay slightly under so we can return JSON 504 from this middleware first.
+   * Client dashboard uses ~115s fetch abort; that still covers slow JSON 504 + read.
+   */
+  demoDashboard: 98000,
   reports: 90000,      // 1.5 minutes
   
   // Webhooks (should be fast)

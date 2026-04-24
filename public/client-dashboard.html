@@ -8510,7 +8510,7 @@ ${actionsRow}
                 try {
                     // Add timeout to prevent hanging
                     const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 115000); // align with server demo-dashboard budget (request-timeout demoDashboard tier)
+                    const timeoutId = setTimeout(() => controller.abort(), 115000); // server smartRequestTimeout demoDashboard tier is 98s (JSON 504 before Render ~100s HTML 502); client waits slightly longer for slow reads
                     const params = new URLSearchParams();
                     if (bustCache) params.set('t', String(Date.now()));
                     if (brief) params.set('brief', '1');
