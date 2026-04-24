@@ -385,7 +385,13 @@ export async function handleDemoDashboard(req, res, deps) {
     `;
 
     const loadDashboardCallMetricsBundle = async () => {
-      if (isPostgres) {
+      // Merged single-query path is optional (injected via deps). Production historically omitted it,
+      // which caused `query(undefined)` → crash in db/query.js. Fall back to the two-query path below.
+      if (
+        isPostgres &&
+        typeof demoDashboardCallsAndPhoneStatsSql === 'string' &&
+        demoDashboardCallsAndPhoneStatsSql.trim() !== ''
+      ) {
         const merged = await query(demoDashboardCallsAndPhoneStatsSql, [
           clientKey,
           activityRollingSinceIso,

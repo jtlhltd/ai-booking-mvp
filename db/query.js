@@ -13,8 +13,12 @@ export function createQueryRunner(getState) {
   async function query(text, params = []) {
     const { dbType, pool, sqlite, pgQueryLimiter } = getState();
     const cache = getCache();
-    const cacheKey = `query:${text}:${JSON.stringify(params)}`;
-    const upper = text.trim().toUpperCase();
+    const sqlText = text == null ? '' : String(text);
+    if (!sqlText.trim()) {
+      throw new Error('[db.query] SQL text is required (got empty or non-string)');
+    }
+    const cacheKey = `query:${sqlText}:${JSON.stringify(params)}`;
+    const upper = sqlText.trim().toUpperCase();
 
     if (upper.startsWith('SELECT')) {
       const cached = await cache.get(cacheKey);
@@ -29,16 +33,16 @@ export function createQueryRunner(getState) {
 
     try {
       if (dbType === 'postgres' && pool) {
-        const exec = () => pool.query(text, params);
+        const exec = () => pool.query(sqlText, params);
         result = pgQueryLimiter ? await pgQueryLimiter.run(exec) : await exec();
       } else if (sqlite) {
-        let sqliteText = text;
-        if (text.includes('$1')) {
-          sqliteText = text.replace(/\$\d+/g, '?');
+        let sqliteText = sqlText;
+        if (sqlText.includes('$1')) {
+          sqliteText = sqlText.replace(/\$\d+/g, '?');
         }
         const sqliteParams = params.map((p) => (p instanceof Date ? p.toISOString() : p));
         const stmt = sqlite.prepare(sqliteText);
-        const hasReturning = /\bRETURNING\b/i.test(text);
+        const hasReturning = /\bRETURNING\b/i.test(sqlText);
         const isSelectShape = upper.startsWith('SELECT') || upper.startsWith('WITH');
         if (isSelectShape) {
           result = { rows: stmt.all(...sqliteParams) };
@@ -52,7 +56,7 @@ export function createQueryRunner(getState) {
         }
       } else {
         const jsonDb = new JsonFileDatabase('./data');
-        const stmt = jsonDb.prepare(text);
+        const stmt = jsonDb.prepare(sqlText);
         if (upper.startsWith('SELECT')) {
           result = { rows: stmt.all(...params) };
         } else {
@@ -66,7 +70,7 @@ export function createQueryRunner(getState) {
         setImmediate(() => {
           import('../lib/query-performance-tracker.js')
             .then((module) => {
-              module.trackQueryPerformance(text, duration, params).catch(() => {});
+              module.trackQueryPerformance(sqlText, duration, params).catch(() => {});
             })
             .catch(() => {});
         });
@@ -96,7 +100,7 @@ export function createQueryRunner(getState) {
       const duration = Date.now() - startTime;
       if (dbType === 'postgres' && duration >= 100 && !process.env.JEST_WORKER_ID) {
         import('../lib/query-performance-tracker.js').then((module) => {
-          module.trackQueryPerformance(text, duration, params).catch(() => {});
+          module.trackQueryPerformance(sqlText, duration, params).catch(() => {});
         });
       }
       throw error;

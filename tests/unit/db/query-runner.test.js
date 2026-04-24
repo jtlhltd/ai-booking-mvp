@@ -21,6 +21,17 @@ describe('db/query.js createQueryRunner', () => {
     ({ createQueryRunner } = await import('../../../db/query.js'));
   });
 
+  test('query rejects undefined or empty SQL with a clear error', async () => {
+    const { query } = createQueryRunner(() => ({
+      dbType: 'postgres',
+      pool: { query: jest.fn() },
+      sqlite: null,
+      pgQueryLimiter: null,
+    }));
+    await expect(query(undefined, [])).rejects.toThrow(/SQL text is required/);
+    await expect(query('  \n', [])).rejects.toThrow(/SQL text is required/);
+  });
+
   test('postgres path calls pool.query with params', async () => {
     cache.get.mockResolvedValueOnce(null);
     const pool = { query: jest.fn().mockResolvedValue({ rows: [{ id: 1 }] }) };
