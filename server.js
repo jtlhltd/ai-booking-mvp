@@ -36,6 +36,7 @@ import { handleCalendarCheckBook } from './lib/calendar-check-book.js';
 import { handleCalendarBookSlot } from './lib/calendar-book-slot.js';
 import { handleCalendarFindSlots } from './lib/calendar-find-slots.js';
 import { handleLeadsImport } from './lib/leads-import.js';
+import { scheduleAtOptimalCallWindow } from './lib/optimal-call-window.js';
 import { handleGcalPing } from './lib/gcal-ping.js';
 import { handleHealthz } from './lib/healthz.js';
 import { handleTwilioSmsInbound } from './lib/twilio-sms-inbound-webhook.js';
@@ -78,7 +79,8 @@ import {
   upsertOptOut,
   deactivateOptOut,
   getLeadsByClient,
-  getCallsByTenant
+  getCallsByTenant,
+  addToCallQueue
 } from './db.js'; // SQLite-backed tenants
 import {
   getBusinessStats,
@@ -227,6 +229,20 @@ const performanceMonitor = getPerformanceMonitor();
 const cache = getCache();
 const isPostgres = (process.env.DB_TYPE || '').toLowerCase() === 'postgres';
 const TIMEZONE = process.env.TZ || process.env.TIMEZONE || 'Europe/London';
+
+/** API-safe lead row (matches routes/core-api.js). */
+function sanitizeLead(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    phone: row.phone,
+    service: row.service,
+    status: row.status,
+    source: row.source,
+    lastMessage: row.notes
+  };
+}
 
 // === Env: Google
 // Support both individual env vars AND full JSON base64
@@ -463,7 +479,6 @@ app.use(
     isOptedOut,
     sendOperatorAlert,
     sanitizeLead,
-    runOutboundCallsForImportedLeads,
     TIMEZONE
   })
 );
@@ -2066,7 +2081,6 @@ const leadsImportDeps = {
   isOptedOut,
   sendOperatorAlert,
   sanitizeLead,
-  runOutboundCallsForImportedLeads,
   TIMEZONE
 };
 app['post']('/api/leads/import', (req, res) => handleLeadsImport(req, res, leadsImportDeps));
