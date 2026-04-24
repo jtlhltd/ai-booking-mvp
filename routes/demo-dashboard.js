@@ -131,9 +131,29 @@ export async function handleDemoDashboard(req, res, deps) {
   `;
 
   const demoDashboardCallsAndPhoneStatsSql = deps?.demoDashboardCallsAndPhoneStatsSql;
-  const dashboardCallPhoneStatsFromArraysCte = deps?.dashboardCallPhoneStatsFromArraysCte;
+  /** Unnest parallel arrays from the lead query ($2..$4) into rows for `call_phone_stats`. */
+  const dashboardCallPhoneStatsFromArraysCte =
+    deps?.dashboardCallPhoneStatsFromArraysCte ??
+    `call_phone_stats AS (
+      SELECT
+        t.phone_key::text AS phone_key,
+        t.calls_n::int AS calls_n,
+        t.reached_max::int AS reached_max
+      FROM unnest(
+        COALESCE($2::text[], ARRAY[]::text[]),
+        COALESCE($3::int[], ARRAY[]::int[]),
+        COALESCE($4::int[], ARRAY[]::int[])
+      ) AS t(phone_key, calls_n, reached_max)
+    )`;
   const dashboardLeadPhoneKeyRef = deps?.dashboardLeadPhoneKeyRef || 'l.phone_match_key';
-  const dashboardCallRowPhoneKeySql = deps?.dashboardCallRowPhoneKeySql;
+  /** Join recent calls `c` to `lead_lookup.phone_key` using the same 10-digit key rule as dashboardCallPhoneAggSql. */
+  const dashboardCallRowPhoneKeySql =
+    deps?.dashboardCallRowPhoneKeySql ??
+    `(CASE
+      WHEN LENGTH(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g')) >= 10
+      THEN RIGHT(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), 10)
+      ELSE NULLIF(regexp_replace(COALESCE(c.lead_phone, ''), '[^0-9]', '', 'g'), '')
+    END)`;
 
   try {
     let client = await getFullClient(clientKey, { bypassCache: false });
@@ -152,7 +172,7 @@ export async function handleDemoDashboard(req, res, deps) {
     const touchpointDayKeySql = isPostgres
       ? `to_char(created_at AT TIME ZONE '${DASHBOARD_ACTIVITY_TZ}', 'YYYY-MM-DD')`
       : `strftime('%Y-%m-%d', created_at)`;
-    const touchpointDayKeyFromD = touchpointDayKeySql.replace(/\\bcreated_at\\b/g, 'd.created_at');
+    const touchpointDayKeyFromD = touchpointDayKeySql.replace(/\bcreated_at\b/g, 'd.created_at');
 
     const outreachPulseAnchor = DateTime.now().setZone(DASHBOARD_ACTIVITY_TZ);
     const outreachPulseCutoff40Iso = outreachPulseAnchor.minus({ days: 40 }).toUTC().toISO();
