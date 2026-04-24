@@ -224,6 +224,34 @@ describe('Batch1: high-risk route contracts (happy + failure)', () => {
       expect(res.body).toEqual(expect.objectContaining({ success: true, availableSlots: 4 }));
     });
 
+    test('happy: GET /test-booking-calendar returns result', async () => {
+      const bookingSystem = {
+        testCalendarConnection: jest.fn(async () => ({ ok: true }))
+      };
+      const { createBookingTestRouter } = await import('../../routes/booking-test.js');
+      const app = createContractApp({ mounts: [{ path: '/', router: () => createBookingTestRouter({ bookingSystem }) }] });
+      const res = await request(app).get('/test-booking-calendar').expect(200);
+      expect(res.body).toEqual(expect.objectContaining({ ok: true }));
+      expect(bookingSystem.testCalendarConnection).toHaveBeenCalled();
+    });
+
+    test('failure: POST /test-calendar-booking returns 401 without X-API-Key', async () => {
+      const { createBookingTestRouter } = await import('../../routes/booking-test.js');
+      const app = createContractApp({
+        mounts: [
+          {
+            path: '/',
+            router: () =>
+              createBookingTestRouter({
+                getApiKey: () => 'secret',
+                getFullClient: async () => ({ booking: {} })
+              })
+          }
+        ]
+      });
+      await request(app).post('/test-calendar-booking').send({ tenantKey: 't1', leadPhone: '+44', appointmentTime: 'x' }).expect(401);
+    });
+
     test('failure: returns 500 when bookingSystem throws', async () => {
       const bookingSystem = {
         generateTimeSlots: () => [{ start: 'x' }],

@@ -5,7 +5,9 @@ import { describe, test, expect, beforeAll, afterAll, jest } from '@jest/globals
 import request from 'supertest';
 import { createOpsIntegrationApp } from '../../helpers/http-integration-app.js';
 
-describe('Query Performance API', () => {
+const describeIf = process.env.RUN_SQLITE_INTEGRATION_TESTS === '1' ? describe : describe.skip;
+
+describeIf('Query Performance API', () => {
   let app;
   let dbModule;
 

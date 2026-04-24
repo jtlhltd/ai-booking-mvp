@@ -1,8 +1,85 @@
 import express from 'express';
+import { handleLeadsImport } from '../lib/leads-import.js';
 
 export function createImportLeadsRouter(deps) {
-  const { getFullClient, isBusinessHours } = deps || {};
+  const {
+    getFullClient,
+    isBusinessHours,
+    // /api/leads/import deps
+    query,
+    getClientFromHeader,
+    getNextBusinessHour,
+    scheduleAtOptimalCallWindow,
+    addToCallQueue,
+    validateAndSanitizePhone,
+    phoneMatchKey,
+    sanitizeInput,
+    isOptedOut,
+    sendOperatorAlert,
+    sanitizeLead,
+    runOutboundCallsForImportedLeads,
+    TIMEZONE
+  } = deps || {};
   const router = express.Router();
+
+  // Debug endpoint: verify JSON body parsing / headers (kept for backward compat)
+  router.post('/leads/import-test', async (req, res) => {
+    console.log('[TEST ENDPOINT] Request received');
+    console.log('[TEST ENDPOINT] Headers:', req.headers);
+    console.log('[TEST ENDPOINT] Body:', req.body);
+    console.log('[TEST ENDPOINT] Body type:', typeof req.body);
+    console.log('[TEST ENDPOINT] Body keys:', req.body ? Object.keys(req.body) : 'no body');
+    res.json({
+      ok: true,
+      received: true,
+      body: req.body,
+      bodyType: typeof req.body,
+      bodyKeys: req.body ? Object.keys(req.body) : [],
+      headers: {
+        'content-type': req.headers['content-type'],
+        'content-length': req.headers['content-length']
+      }
+    });
+  });
+
+  // Legacy import alias (same handler)
+  router.post('/leads/import__legacy', async (req, res) =>
+    handleLeadsImport(req, res, {
+      query,
+      getClientFromHeader,
+      isBusinessHours,
+      getNextBusinessHour,
+      scheduleAtOptimalCallWindow,
+      addToCallQueue,
+      validateAndSanitizePhone,
+      phoneMatchKey,
+      sanitizeInput,
+      isOptedOut,
+      sendOperatorAlert,
+      sanitizeLead,
+      runOutboundCallsForImportedLeads,
+      TIMEZONE
+    })
+  );
+
+  router.post('/leads/import', async (req, res) =>
+    handleLeadsImport(req, res, {
+      query,
+      getClientFromHeader,
+      isBusinessHours,
+      getNextBusinessHour,
+      scheduleAtOptimalCallWindow,
+      addToCallQueue,
+      validateAndSanitizePhone,
+      phoneMatchKey,
+      sanitizeInput,
+      isOptedOut,
+      sendOperatorAlert,
+      sanitizeLead,
+      runOutboundCallsForImportedLeads,
+      TIMEZONE
+    })
+  );
 
   router.post('/import-leads/:clientKey', async (req, res) => {
     try {

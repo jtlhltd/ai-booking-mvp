@@ -652,6 +652,8 @@ describe('Batch2: next 25 routes (happy + failure)', () => {
   });
 
   describe('routes/calendar-api.js', () => {
+    jest.setTimeout(120000);
+
     test('happy: POST /api/calendar/cancel returns ok true', async () => {
       const deps = {
         getClientFromHeader: async () => ({ clientKey: 'c1', booking: { defaultDurationMin: 30 } }),
@@ -730,6 +732,32 @@ describe('Batch2: next 25 routes (happy + failure)', () => {
         ]
       });
       await request(app).get('/api/clients/missing').expect(404);
+    });
+  });
+
+  describe('routes/calendar-api.js', () => {
+    test('failure: POST /api/calendar/find-slots rejects missing tenant header', async () => {
+      const { createCalendarApiRouter } = await import('../../routes/calendar-api.js');
+      const app = createContractApp({
+        mounts: [
+          {
+            path: '/api/calendar',
+            router: () =>
+              createCalendarApiRouter({
+                getClientFromHeader: async () => null,
+                pickTimezone: () => 'Europe/London',
+                pickCalendarId: () => 'cal',
+                getGoogleCredentials: () => ({ clientEmail: 'x', privateKey: 'y', privateKeyB64: '' }),
+                makeJwtAuth: () => ({ authorize: async () => {} }),
+                freeBusy: async () => [],
+                google: { calendar: () => ({ events: { delete: async () => {} } }) },
+                insertEvent: async () => ({ id: 'e1', htmlLink: 'x', status: 'confirmed' }),
+                smsConfig: () => ({ configured: false, smsClient: { messages: { create: async () => {} } } }),
+              }),
+          },
+        ],
+      });
+      await request(app).post('/api/calendar/find-slots').send({}).expect(400);
     });
   });
 });

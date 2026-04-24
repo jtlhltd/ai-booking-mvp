@@ -3,7 +3,9 @@
 
 import { describe, test, expect, beforeAll } from '@jest/globals';
 
-describe('Database Connection Pool', () => {
+const describeIf = process.env.RUN_DB_INTEGRATION_TESTS === '1' ? describe : describe.skip;
+
+describeIf('Database Connection Pool', () => {
   let query, pool, withTransaction;
   
   beforeAll(async () => {

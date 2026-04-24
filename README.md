@@ -122,7 +122,7 @@ Server runs on `http://localhost:3000`
 |------|---------|
 | **`docs/HOW-TO-RUN.md`** | **How to run: env vars, migrations, local, Render, verify production** |
 | `SECURITY.md` | How to report security issues (private repo) |
-| `.nvmrc` | Node 18 for local dev (matches Render `NODE_VERSION` in `render.yaml`) |
+| `.nvmrc` | Node 20 for local dev (recommended for Windows + native deps like `better-sqlite3`) |
 | `VAPI-FINAL-OPTIMIZED.txt` | Latest AI cold calling script (paste into Vapi dashboard) |
 | `.env.example` | Required environment variables |
 | `docs/archive/DEPLOYMENT-GUIDE.md` | Full deployment instructions |
@@ -175,6 +175,18 @@ POST http://localhost:3000/api/import-leads/:clientKey
   ]
 }
 ```
+
+## 🧪 Testing (local + CI)
+
+- **CI-equivalent**: `npm run test:ci` (runs full Jest suite + coverage)
+- **Default**: `npm test`
+- **Coverage only**: `npm run test:coverage`
+
+### Windows note (Node)
+
+This repo depends on `better-sqlite3` (native addon). **Node 20 is recommended** (see `.nvmrc` and `package.json` → `volta.node`).
+
+If you run tests from inside Cursor, be aware Cursor can ship its own Node runtime; if that runtime is Node 22+, it can cause `better-sqlite3` install/rebuild failures unless you also have Visual Studio C++ build tools installed. Prefer running commands in a terminal where **Node 20** is first on `PATH`.
 
 ---
 

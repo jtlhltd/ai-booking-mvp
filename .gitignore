@@ -6,12 +6,27 @@ data/*.log
 data/*.tmp
 data/*.db
 
+# Local exports / temp data (never commit)
+data/_tmp_*.csv
+data/_tmp_*.json
+data/_tmp_*.txt
+
+# Local databases
+data/database.json
+
+# Python cache artifacts
+__pycache__/
+*.pyc
+
 # Cloud / API credential JSON (prefer env vars; never commit keys)
 credentials.json
 client_secret*.json
 *credentials*.json
 *service-account*.json
 *-firebase-adminsdk*.json
+
+# GCP / agency keys (never commit)
+ai-agency-*.json
 
 # Call logs
 call-logs-*.csv
@@ -21,4 +36,7 @@ lib/call-logs-*.csv
 # Screenshots / one-off assets
 ChatGPT Image*.png
 public/ChatGPT*.png
+
+# Cursor workspace metadata (never commit)
+.cursor/
 

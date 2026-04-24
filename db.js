@@ -1,10 +1,8 @@
 // db.js (ESM) — Postgres first, SQLite fallback, and helpers expected by server/libs
 import { createHash } from 'crypto';
-import { Pool } from 'pg';
 import path from 'path';
 import fs from 'fs';
 import Database from 'better-sqlite3';
-import { getCache } from './lib/cache.js';
 import {
   collectOutboundAbExperimentNamesFromMetadata,
   isOutboundAbLivePickupOutcome
@@ -13,6 +11,9 @@ import { getCallAnalyticsEnvOverrideIso } from './lib/call-analytics-cutoff.js';
 import { activeRowsMatchOutboundAbStopSlice } from './lib/outbound-ab-stop-slice.js';
 import { phoneMatchKey, pgQueueLeadPhoneKeyExpr, outboundDialClaimKeyFromRaw } from './lib/lead-phone-key.js';
 import { normalizePhoneE164 } from './lib/utils.js';
+import { createPostgresPoolAndLimiter, testPostgresPoolConnection } from './db/connection.js';
+import { createQueryRunner } from './db/query.js';
+import * as callQueueReads from './db/call-queue-reads.js';
 
 const dbType = (process.env.DB_TYPE || '').toLowerCase();
 let pool = null;
@@ -21,30 +22,10 @@ let pgQueryLimiter = null;
 let sqlite = null;
 let DB_PATH = 'postgres';
 
-/**
- * Serialize excess load so small Postgres tiers are not hit by many parallel workers/webhooks at once.
- * @param {number} maxConcurrent
- */
-function createQueryConcurrencyLimiter(maxConcurrent) {
-  let active = 0;
-  const queue = [];
-  return {
-    maxConcurrent,
-    async run(fn) {
-      if (active >= maxConcurrent) {
-        await new Promise((resolve) => queue.push(resolve));
-      }
-      active++;
-      try {
-        return await fn();
-      } finally {
-        active--;
-        const next = queue.shift();
-        if (next) next();
-      }
-    }
-  };
-}
+const _dbQuery = createQueryRunner(() => ({ dbType, pool, sqlite, pgQueryLimiter }));
+export const query = _dbQuery.query;
+export const poolQuerySelect = _dbQuery.poolQuerySelect;
+export const safeQuery = _dbQuery.safeQuery;
 
 console.log('🔍 Database configuration:', {
   DB_TYPE: process.env.DB_TYPE,
@@ -52,72 +33,7 @@ console.log('🔍 Database configuration:', {
   DATABASE_URL: process.env.DATABASE_URL ? 'SET' : 'NOT SET'
 });
 
-// JSON File Database fallback for Render
-class JsonFileDatabase {
-  constructor(dataDir) {
-    this.dataDir = dataDir;
-    this.dataFile = path.join(dataDir, 'database.json');
-    this.data = this.loadData();
-  }
-
-  loadData() {
-    try {
-      if (fs.existsSync(this.dataFile)) {
-        const content = fs.readFileSync(this.dataFile, 'utf8');
-        return JSON.parse(content);
-      }
-    } catch (error) {
-      console.error('Error loading JSON database:', error.message);
-    }
-    return {
-      tenants: [],
-      leads: [],
-      bookings: [],
-      api_keys: [],
-      sms_conversations: [],
-      email_templates: [],
-      call_logs: []
-    };
-  }
-
-  saveData() {
-    try {
-      fs.writeFileSync(this.dataFile, JSON.stringify(this.data, null, 2));
-    } catch (error) {
-      console.error('Error saving JSON database:', error.message);
-    }
-  }
-
-  exec(sql) {
-    // Simple SQL execution for JSON database
-    // This is a basic implementation for Render compatibility
-    console.log('📝 Executing SQL on JSON database:', sql.substring(0, 100) + '...');
-  }
-
-  prepare(sql) {
-    return {
-      all: (...params) => {
-        const tableName = this.extractTableName(sql);
-        return this.data[tableName] || [];
-      },
-      run: (...params) => {
-        const tableName = this.extractTableName(sql);
-        if (sql.includes('INSERT')) {
-          const id = Date.now();
-          this.data[tableName].push({ id, ...params[0] });
-          this.saveData();
-          return { changes: 1, lastInsertRowid: id };
-        }
-        return { changes: 0 };
-      }
-    };
-  }
-
-  extractTableName(sql) {
-    const match = sql.match(/FROM\s+(\w+)/i) || sql.match(/INTO\s+(\w+)/i) || sql.match(/UPDATE\s+(\w+)/i);
-    return match ? match[1] : 'leads';
-  }
-}
+// (JsonFileDatabase moved to ./db/json-file-database.js)
 
 /**
  * Canonical tail-10 (etc.) key on leads — replaces UNIQUE(client_key, phone) after backfill + dedupe.
@@ -321,51 +237,11 @@ async function initPostgres() {
   }
   
   try {
-    // Render Postgres often allows ~100 max_connections; the app should use a modest slice per process.
-    // On Render, default 12 pool slots — basic tiers choke when the app opens many parallel queries.
-    // Override with DB_POOL_MAX; cap avoids accidental runaway values.
-    const rawMax = parseInt(process.env.DB_POOL_MAX, 10);
-    const defaultPoolMax = process.env.RENDER === 'true' ? 12 : 25;
-    const maxConnections =
-      Number.isFinite(rawMax) && rawMax >= 2 ? Math.min(rawMax, 80) : defaultPoolMax;
-    
-    // Local/Testcontainers Postgres often has no TLS; remote hosts (e.g. Render) need SSL.
-    let pgSsl = { rejectUnauthorized: false };
-    if (process.env.PG_FORCE_SSL !== '1') {
-      try {
-        const normalized = dbUrl.replace(/^postgres(ql)?:/i, 'http:');
-        const u = new URL(normalized);
-        if (u.hostname === 'localhost' || u.hostname === '127.0.0.1' || u.hostname === '::1') {
-          pgSsl = false;
-        }
-      } catch {
-        /* keep default ssl */
-      }
-    }
+    const { pool: newPool, pgQueryLimiter: newLimiter, maxConnections, queryConc } =
+      createPostgresPoolAndLimiter(dbUrl, process.env);
+    pool = newPool;
+    pgQueryLimiter = newLimiter;
 
-    pool = new Pool({
-      connectionString: dbUrl,
-      ssl: pgSsl,
-      max: maxConnections,
-      idleTimeoutMillis: 10000, // Close idle connections after 10 seconds (more aggressive)
-      connectionTimeoutMillis: 5000, // Reduced to 5 seconds for faster failure detection
-      statement_timeout: 20000, // 20 second query timeout to prevent hanging queries
-      allowExitOnIdle: true, // Allow pool to close when idle
-    });
-
-    // Smooth spikes: cron + webhooks + queue workers often align; tiny Render Postgres cannot serve 20+ parallel queries.
-    const rawQc = parseInt(process.env.DB_QUERY_CONCURRENCY, 10);
-    let queryConc;
-    if (rawQc === 0) {
-      queryConc = null; // explicit disable
-    } else if (Number.isFinite(rawQc) && rawQc > 0) {
-      queryConc = Math.min(rawQc, maxConnections);
-    } else if (process.env.RENDER === 'true') {
-      queryConc = Math.min(8, maxConnections);
-    } else {
-      queryConc = null;
-    }
-    pgQueryLimiter = queryConc ? createQueryConcurrencyLimiter(queryConc) : null;
     if (pgQueryLimiter) {
       console.log(
         `🔌 DB query concurrency cap: ${queryConc} simultaneous queries (DB_QUERY_CONCURRENCY=0 disables)`
@@ -374,14 +250,8 @@ async function initPostgres() {
 
     console.log(`🔌 Database pool configured: max=${maxConnections} connections`);
 
-    // Test connection first with timeout
     console.log('🔌 Testing Postgres connection...');
-    await Promise.race([
-      pool.query('SELECT 1'),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Connection timeout after 10 seconds')), 10000)
-      )
-    ]);
+    await testPostgresPoolConnection(pool, 10000);
     console.log('✅ Postgres connection successful');
   } catch (error) {
     console.error('❌ Postgres connection failed:', error.message);
@@ -393,6 +263,7 @@ async function initPostgres() {
       }
       pool = null;
     }
+    pgQueryLimiter = null;
     throw error;
   }
 
@@ -1532,160 +1403,6 @@ export async function init() {
   return r;
 }
 
-// Enhanced database operations with comprehensive error handling
-import { 
-  DatabaseError, 
-  ValidationError, 
-  ConflictError, 
-  NotFoundError,
-  ErrorFactory 
-} from './lib/errors.js';
-import { getRetryManager } from './lib/retry-logic.js';
-
-// Core query function with caching and performance tracking
-async function query(text, params = []) {
-  const cache = getCache();
-  const cacheKey = `query:${text}:${JSON.stringify(params)}`;
-  const upper = text.trim().toUpperCase();
-  
-  // For SELECT queries, check cache first
-  if (upper.startsWith('SELECT')) {
-    const cached = await cache.get(cacheKey);
-    if (cached) {
-      console.log('[DB CACHE] Serving cached query result');
-      return cached;
-    }
-  }
-  
-  // Track query performance
-  const startTime = Date.now();
-  let result;
-  
-  try {
-    if (dbType === 'postgres' && pool) {
-      const exec = () => pool.query(text, params);
-      result = pgQueryLimiter ? await pgQueryLimiter.run(exec) : await exec();
-    } else if (sqlite) {
-      // Convert PostgreSQL-style placeholders ($1, $2, etc.) to SQLite-style (?)
-      let sqliteText = text;
-      if (text.includes('$1')) {
-        // Replace $1, $2, etc. with ?
-        sqliteText = text.replace(/\$\d+/g, '?');
-      }
-      const sqliteParams = params.map((p) => (p instanceof Date ? p.toISOString() : p));
-      const stmt = sqlite.prepare(sqliteText);
-      const hasReturning = /\bRETURNING\b/i.test(text);
-      const isSelectShape = upper.startsWith('SELECT') || upper.startsWith('WITH');
-      if (isSelectShape) {
-        result = { rows: stmt.all(...sqliteParams) };
-      } else if (
-        hasReturning &&
-        (upper.startsWith('INSERT') || upper.startsWith('UPDATE') || upper.startsWith('DELETE'))
-      ) {
-        // INSERT/UPDATE/DELETE … RETURNING must use .all(); .run() drops returned rows on SQLite.
-        result = { rows: stmt.all(...sqliteParams) };
-      } else {
-        result = stmt.run(...sqliteParams);
-      }
-    } else {
-      // JSON fallback
-      const jsonDb = new JsonFileDatabase('./data');
-      const stmt = jsonDb.prepare(text);
-      if (upper.startsWith('SELECT')) {
-        result = { rows: stmt.all(...params) };
-      } else {
-        result = stmt.run(...params);
-      }
-    }
-    
-    const duration = Date.now() - startTime;
-    
-    // Track query performance (async, fire-and-forget, don't wait)
-    // Use setImmediate to ensure tracking doesn't block query completion
-    // In Jest, avoid scheduling async module imports that can run after teardown
-    // and produce "import after environment torn down" warnings.
-    if (dbType === 'postgres' && duration >= 100 && !process.env.JEST_WORKER_ID) {
-      setImmediate(() => {
-        // Import and track asynchronously to avoid blocking
-        import('./lib/query-performance-tracker.js').then(module => {
-          module.trackQueryPerformance(text, duration, params).catch(() => {
-            // Silently fail - don't log or break queries if tracking fails
-          });
-        }).catch(() => {
-          // Silently fail - don't break queries if import fails
-        });
-      });
-    }
-    
-    // Cache SELECT results for 5 minutes
-    if (upper.startsWith('SELECT') && result.rows) {
-      await cache.set(cacheKey, result, 300000); // 5 minutes
-      console.log('[DB CACHE] Cached query result');
-    }
-
-    // If we mutated data, cached SELECTs may now be stale. Clear query cache.
-    // This fixes endpoints (like lead import) that do "count before" -> write -> "count after"
-    // and were incorrectly returning the cached pre-write counts.
-    if (upper.startsWith('INSERT') || upper.startsWith('UPDATE') || upper.startsWith('DELETE') || upper.startsWith('UPSERT')) {
-      try {
-        await cache.clear();
-        console.log('[DB CACHE] Cleared after mutation');
-      } catch (e) {
-        // Cache is best-effort; never fail the write.
-      }
-    }
-    
-    return result;
-  } catch (error) {
-    const duration = Date.now() - startTime;
-    // Still track failed queries for analysis
-    if (dbType === 'postgres' && duration >= 100 && !process.env.JEST_WORKER_ID) {
-      import('./lib/query-performance-tracker.js').then(module => {
-        module.trackQueryPerformance(text, duration, params).catch(() => {});
-      });
-    }
-    throw error;
-  }
-}
-
-/**
- * Hot-path SELECT: uses pool.query directly (no pgQueryLimiter, no SELECT cache, no perf tracker).
- * For trivial indexed reads that must not queue behind heavy dashboard/worker traffic.
- */
-export async function poolQuerySelect(text, params = []) {
-  if (dbType === 'postgres' && pool) {
-    return pool.query(text, params);
-  }
-  return query(text, params);
-}
-
-// Wrap database operations with error handling
-async function safeQuery(text, params = []) {
-  const retryManager = getRetryManager({
-    maxRetries: 3,
-    baseDelay: 1000,
-    retryCondition: (error) => {
-      // Retry on connection errors and timeouts
-      const msg = String(error?.message || '');
-      return error.code === 'ECONNREFUSED' || 
-             error.code === 'ETIMEDOUT' ||
-             error.code === 'ENOTFOUND' ||
-             msg.includes('Timeout exceeded when trying to connect') ||
-             (error.status >= 500 && error.status < 600);
-    }
-  });
-
-  try {
-    return await retryManager.execute(
-      () => query(text, params),
-      { operation: 'database_query', query: text.substring(0, 100) }
-    );
-  } catch (error) {
-    // Convert database errors to application errors
-    throw ErrorFactory.fromDatabaseError(error, 'query');
-  }
-}
-
 /** Release the SQLite connection (e.g. :memory: tests so Jest can exit cleanly). No-op on Postgres. */
 export function closeSqliteForTesting() {
   try {
@@ -1707,7 +1424,7 @@ export async function closeDatabaseConnectionsForTests() {
   closeSqliteForTesting();
 }
 
-export { DB_PATH, query, safeQuery, pool, dbType };
+export { DB_PATH, pool, dbType };
 
 // ---------------------- Helpers used by server/libs ----------------------
 function toJson(val) {
@@ -3602,46 +3319,7 @@ export async function addToCallQueue({ clientKey, leadPhone, priority = 5, sched
 }
 
 export async function getPendingCalls(limit = 100) {
-  // IMPORTANT: do not purely global-order by scheduled_for.
-  // One tenant with a huge backlog of slightly-earlier timestamps can starve other tenants for long periods,
-  // even though their rows are technically "due now()".
-  //
-  // Strategy: pick the earliest due row per client_key (fairness), then take the earliest N of those "heads",
-  // then fill remaining capacity with the global earliest due rows excluding already-chosen ids.
-  const { rows } = await query(
-    `
-    WITH due AS (
-      SELECT *
-      FROM call_queue
-      WHERE status = 'pending'
-        AND call_type = 'vapi_call'
-        AND scheduled_for <= now()
-    ),
-    heads AS (
-      SELECT DISTINCT ON (client_key) *
-      FROM due
-      ORDER BY client_key, scheduled_for ASC, priority ASC, id ASC
-    ),
-    picked_heads AS (
-      SELECT *
-      FROM heads
-      ORDER BY scheduled_for ASC, priority ASC, id ASC
-      LIMIT LEAST($1::int, 50)
-    ),
-    rest AS (
-      SELECT d.*
-      FROM due d
-      WHERE NOT EXISTS (SELECT 1 FROM picked_heads ph WHERE ph.id = d.id)
-      ORDER BY d.scheduled_for ASC, d.priority ASC, d.id ASC
-      LIMIT GREATEST(0, $1::int - (SELECT COUNT(*)::int FROM picked_heads))
-    )
-    SELECT * FROM picked_heads
-    UNION ALL
-    SELECT * FROM rest
-    `,
-    [limit]
-  );
-  return rows;
+  return callQueueReads.getPendingCalls(query, limit);
 }
 
 export async function updateCallQueueStatus(id, status) {
@@ -3703,23 +3381,11 @@ export async function cancelDuplicatePendingCalls(clientKey, leadPhone, excludeI
 }
 
 export async function getCallQueueByTenant(clientKey, limit = 100) {
-  const { rows } = await query(`
-    SELECT * FROM call_queue 
-    WHERE client_key = $1 
-    ORDER BY scheduled_for ASC
-    LIMIT $2
-  `, [clientKey, limit]);
-  return rows;
+  return callQueueReads.getCallQueueByTenant(query, clientKey, limit);
 }
 
 export async function getCallQueueByPhone(clientKey, leadPhone, limit = 50) {
-  const { rows } = await query(`
-    SELECT * FROM call_queue 
-    WHERE client_key = $1 AND lead_phone = $2 
-    ORDER BY scheduled_for ASC
-    LIMIT $3
-  `, [clientKey, leadPhone, limit]);
-  return rows;
+  return callQueueReads.getCallQueueByPhone(query, clientKey, leadPhone, limit);
 }
 
 /** Clear pending call queue rows. Optionally filter by clientKey and/or leadPhone. */

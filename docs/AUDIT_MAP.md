@@ -12,6 +12,8 @@ This file is a **map of what to test** (and what “the system” is) so verific
 ### HTTP routes mounted in `server.js`
 The app uses a mix of routers (from `routes/*.js`) plus a number of legacy inline `app.get/app.post` handlers.
 
+**Booking:** `POST /api/calendar/check-book` is implemented in `lib/calendar-check-book.js` (tested in `tests/lib/calendar-check-book.test.js`) and mounted from `server.js` with an explicit dependency bag—so booking logic is covered without pulling the entire `server.js` into Jest coverage.
+
 #### Routers imported from `routes/`
 Imported in `server.js`:
 - `routes/leads.js`
