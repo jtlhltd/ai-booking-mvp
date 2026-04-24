@@ -1,0 +1,106 @@
+import { describe, expect, test, jest, beforeEach } from '@jest/globals';
+import request from 'supertest';
+
+import { createContractApp, withEnv } from '../helpers/contract-harness.js';
+
+beforeEach(() => {
+  jest.resetModules();
+  global.fetch = undefined;
+});
+
+describe('routes/leads-followups.js contracts', () => {
+  test('POST /api/leads/recall returns 400 when clientKey missing', async () => {
+    const { createLeadsFollowupsRouter } = await import('../../routes/leads-followups.js');
+    const router = createLeadsFollowupsRouter({
+      getClientFromHeader: jest.fn(),
+      readJson: jest.fn(),
+      writeJson: jest.fn(),
+      LEADS_PATH: 'x',
+      getFullClient: jest.fn(),
+      isBusinessHours: jest.fn(),
+      TIMEZONE: 'Europe/London',
+      smsConfig: jest.fn()
+    });
+    const app = createContractApp({ mounts: [{ path: '/api/leads', router }] });
+    const res = await request(app).post('/api/leads/recall').send({}).expect(400);
+    expect(res.body).toEqual({ ok: false, error: 'missing clientKey' });
+  });
+
+  test('POST /api/leads/recall returns 403 outside business hours', async () => {
+    const { createLeadsFollowupsRouter } = await import('../../routes/leads-followups.js');
+    const router = createLeadsFollowupsRouter({
+      getFullClient: jest.fn(async () => ({ clientKey: 'c1', displayName: 'Acme', booking: { timezone: 'Europe/London' } })),
+      isBusinessHours: jest.fn(() => false),
+      TIMEZONE: 'Europe/London',
+      VAPI_PRIVATE_KEY: 'k',
+      VAPI_ASSISTANT_ID: 'a1',
+      readJson: jest.fn(),
+      writeJson: jest.fn(),
+      LEADS_PATH: 'x',
+      getClientFromHeader: jest.fn(),
+      smsConfig: jest.fn()
+    });
+    const app = createContractApp({ mounts: [{ path: '/api/leads', router }] });
+    const res = await request(app)
+      .post('/api/leads/recall')
+      .send({ clientKey: 'c1', lead: { phone: '+441', name: 'L' } })
+      .expect(403);
+    expect(res.body).toEqual(expect.objectContaining({ ok: false, error: 'outside_business_hours' }));
+  });
+
+  test('POST /api/leads/recall returns 500 when Vapi not configured', async () => {
+    const { createLeadsFollowupsRouter } = await import('../../routes/leads-followups.js');
+    const router = createLeadsFollowupsRouter({
+      getFullClient: jest.fn(async () => ({ clientKey: 'c1', displayName: 'Acme' })),
+      isBusinessHours: jest.fn(() => true),
+      TIMEZONE: 'Europe/London',
+      VAPI_PRIVATE_KEY: '',
+      VAPI_ASSISTANT_ID: '',
+      readJson: jest.fn(),
+      writeJson: jest.fn(),
+      LEADS_PATH: 'x',
+      getClientFromHeader: jest.fn(),
+      smsConfig: jest.fn()
+    });
+    const app = createContractApp({ mounts: [{ path: '/api/leads', router }] });
+    const res = await request(app)
+      .post('/api/leads/recall')
+      .send({ clientKey: 'c1', lead: { phone: '+441' } })
+      .expect(500);
+    expect(res.body).toEqual(expect.objectContaining({ ok: false, error: 'Vapi not configured' }));
+  });
+
+  test('POST /api/leads/recall returns 502 when Vapi call start fails', async () => {
+    await withEnv({ }, async () => {
+      jest.unstable_mockModule('../../lib/instant-calling.js', () => ({
+        acquireVapiSlot: jest.fn(async () => {}),
+        releaseVapiSlot: jest.fn(async () => {}),
+        markVapiCallActive: jest.fn()
+      }));
+
+      global.fetch = jest.fn(async () => ({ ok: false, status: 429 }));
+
+      const { createLeadsFollowupsRouter } = await import('../../routes/leads-followups.js');
+      const router = createLeadsFollowupsRouter({
+        getFullClient: jest.fn(async () => ({ clientKey: 'c1', displayName: 'Acme' })),
+        isBusinessHours: jest.fn(() => true),
+        TIMEZONE: 'Europe/London',
+        VAPI_PRIVATE_KEY: 'k',
+        VAPI_ASSISTANT_ID: 'a1',
+        VAPI_PHONE_NUMBER_ID: 'p1',
+        readJson: jest.fn(),
+        writeJson: jest.fn(),
+        LEADS_PATH: 'x',
+        getClientFromHeader: jest.fn(),
+        smsConfig: jest.fn()
+      });
+      const app = createContractApp({ mounts: [{ path: '/api/leads', router }] });
+      const res = await request(app)
+        .post('/api/leads/recall')
+        .send({ clientKey: 'c1', lead: { phone: '+441' } })
+        .expect(502);
+      expect(res.body).toEqual({ ok: false, error: 'vapi 429' });
+    });
+  });
+});
+

@@ -13,6 +13,18 @@ const checkRateLimit = jest.fn(async () => ({
 const recordRateLimitRequest = jest.fn(async () => {});
 const cleanupOldRateLimitRecords = jest.fn(async () => {});
 
+const twilioWebhookFactory = jest.fn();
+const twilioValidator = jest.fn();
+twilioWebhookFactory.mockImplementation(() => twilioValidator);
+
+const formatErrorResponse = jest.fn((err, reqOrNull) => ({
+  ok: false,
+  message: err?.message || 'err',
+  exposed: !!reqOrNull,
+}));
+const logError = jest.fn(() => ({ logged: true }));
+class AppError extends Error {}
+
 jest.unstable_mockModule('../../../db.js', () => ({
   getApiKeyByHash,
   updateApiKeyLastUsed,
@@ -22,6 +34,16 @@ jest.unstable_mockModule('../../../db.js', () => ({
   cleanupOldRateLimitRecords
 }));
 
+jest.unstable_mockModule('twilio', () => ({
+  default: { webhook: twilioWebhookFactory }
+}));
+
+jest.unstable_mockModule('../../../lib/errors.js', () => ({
+  formatErrorResponse,
+  logError,
+  AppError
+}));
+
 let generateApiKey;
 let hashApiKey;
 let authenticateApiKey;
@@ -29,6 +51,8 @@ let requireTenantAccess;
 let requirePermission;
 let rateLimitMiddleware;
 let securityHeaders;
+let twilioWebhookVerification;
+let errorHandler;
 let validateAndSanitizeInput;
 let validateInput;
 
@@ -45,6 +69,8 @@ describe('middleware/security', () => {
     requirePermission = m.requirePermission;
     rateLimitMiddleware = m.rateLimitMiddleware;
     securityHeaders = m.securityHeaders;
+    twilioWebhookVerification = m.twilioWebhookVerification;
+    errorHandler = m.errorHandler;
     validateAndSanitizeInput = m.validateAndSanitizeInput;
     validateInput = m.validateInput;
   });
@@ -65,6 +91,10 @@ describe('middleware/security', () => {
       minuteCount: 1,
       hourCount: 1
     });
+    twilioValidator.mockReset();
+    twilioWebhookFactory.mockClear();
+    formatErrorResponse.mockClear();
+    logError.mockClear();
   });
 
   test('generateApiKey and hashApiKey are stable shape', () => {
@@ -222,6 +252,36 @@ describe('middleware/security', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
+  test('rateLimitMiddleware allows request when rate limiting throws', async () => {
+    checkRateLimit.mockRejectedValueOnce(new Error('db_down'));
+    const req = {
+      path: '/api/y',
+      ip: '1.1.1.1',
+      clientKey: 'c1',
+      apiKey: { id: 1 },
+      get: () => undefined
+    };
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn(), set: jest.fn() };
+    const next = jest.fn();
+    await rateLimitMiddleware(req, res, next);
+    expect(next).toHaveBeenCalledWith();
+  });
+
+  test('authenticateApiKey returns 500 when db helpers throw', async () => {
+    getApiKeyByHash.mockRejectedValueOnce(new Error('db_down'));
+    const apiKey = 'ak_' + 'a'.repeat(64);
+    const req = {
+      get: (h) => (h === 'X-API-Key' ? apiKey : undefined),
+      ip: '127.0.0.1'
+    };
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    const next = jest.fn();
+    await authenticateApiKey(req, res, next);
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json.mock.calls[0][0].code).toBe('AUTH_ERROR');
+    expect(next).not.toHaveBeenCalled();
+  });
+
   test('securityHeaders sets headers and calls next', () => {
     const req = {};
     const res = { set: jest.fn() };
@@ -241,6 +301,36 @@ describe('middleware/security', () => {
     expect(next).toHaveBeenCalledWith();
   });
 
+  test('validateAndSanitizeInput sanitizes nested objects and arrays', () => {
+    const mw = validateAndSanitizeInput({});
+    const req = {
+      body: { a: { b: ['ok', '<script>alert(1)</script>z'] } },
+      query: { q: '<script>bad()</script>fine' },
+      params: { id: '<script>1</script>2' }
+    };
+    const res = {};
+    const next = jest.fn();
+    mw(req, res, next);
+    // Note: current sanitizer treats arrays as plain objects (index keys).
+    expect(Object.values(req.body.a.b)).toEqual(['ok', 'z']);
+    expect(req.query.q).toBe('fine');
+    expect(req.params.id).toBe('2');
+    expect(next).toHaveBeenCalledWith();
+  });
+
+  test('validateAndSanitizeInput returns 400 on sanitizer failure', () => {
+    const mw = validateAndSanitizeInput({});
+    const circular = {};
+    circular.self = circular;
+    const req = { body: circular, query: {}, params: {} };
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    const next = jest.fn();
+    mw(req, res, next);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json.mock.calls[0][0].code).toBe('INVALID_INPUT');
+    expect(next).not.toHaveBeenCalled();
+  });
+
   test('validateInput returns 400 for unknown schema', () => {
     const mw = validateInput('no_such_schema');
     const req = { body: {} };
@@ -258,5 +348,148 @@ describe('middleware/security', () => {
     const next = jest.fn();
     mw(req, res, next);
     expect(next).toHaveBeenCalledWith();
+  });
+
+  test('requirePermission returns 500 on unexpected error', () => {
+    const mw = requirePermission('read');
+    const req = {};
+    Object.defineProperty(req, 'apiKey', {
+      get() {
+        throw new Error('boom');
+      }
+    });
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    const next = jest.fn();
+    mw(req, res, next);
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json.mock.calls[0][0].code).toBe('PERMISSION_ERROR');
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('twilioWebhookVerification skips verification when token missing', async () => {
+    const prev = process.env.TWILIO_AUTH_TOKEN;
+    delete process.env.TWILIO_AUTH_TOKEN;
+
+    const req = {
+      protocol: 'https',
+      originalUrl: '/webhooks/twilio/sms-inbound',
+      body: { a: 1 },
+      get: (h) => (h === 'host' ? 'example.test' : ''),
+    };
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    const next = jest.fn();
+
+    twilioWebhookVerification(req, res, next);
+    expect(next).toHaveBeenCalledWith();
+
+    process.env.TWILIO_AUTH_TOKEN = prev;
+  });
+
+  test('twilioWebhookVerification returns 403 on invalid signature', async () => {
+    const prev = process.env.TWILIO_AUTH_TOKEN;
+    process.env.TWILIO_AUTH_TOKEN = 'tok';
+    twilioValidator.mockReturnValue(false);
+
+    const req = {
+      protocol: 'https',
+      originalUrl: '/webhooks/twilio/sms-inbound',
+      body: { a: 1 },
+      get: (h) => {
+        if (h === 'host') return 'example.test';
+        if (h === 'X-Twilio-Signature') return 'sig';
+        return '';
+      },
+    };
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    const next = jest.fn();
+
+    twilioWebhookVerification(req, res, next);
+    await new Promise((r) => setImmediate(r));
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json.mock.calls[0][0].code).toBe('INVALID_SIGNATURE');
+    expect(next).not.toHaveBeenCalled();
+
+    process.env.TWILIO_AUTH_TOKEN = prev;
+  });
+
+  test('twilioWebhookVerification allows request when validator throws (graceful degradation)', async () => {
+    const prev = process.env.TWILIO_AUTH_TOKEN;
+    process.env.TWILIO_AUTH_TOKEN = 'tok';
+    twilioValidator.mockImplementation(() => {
+      throw new Error('validator_boom');
+    });
+
+    const req = {
+      protocol: 'https',
+      originalUrl: '/webhooks/twilio/sms-inbound',
+      body: { a: 1 },
+      get: (h) => {
+        if (h === 'host') return 'example.test';
+        if (h === 'X-Twilio-Signature') return 'sig';
+        return '';
+      },
+    };
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    const next = jest.fn();
+
+    twilioWebhookVerification(req, res, next);
+    await new Promise((r) => setImmediate(r));
+
+    expect(next).toHaveBeenCalledWith();
+    expect(res.status).not.toHaveBeenCalled();
+
+    process.env.TWILIO_AUTH_TOKEN = prev;
+  });
+
+  test('errorHandler hides internal errors in production for 5xx', async () => {
+    const prev = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+
+    const err = new Error('boom');
+    err.statusCode = 500;
+    const req = {
+      id: 'r1',
+      path: '/x',
+      method: 'GET',
+      url: '/x',
+      get: () => '',
+      ip: '1.1.1.1',
+      clientKey: 'c1',
+    };
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    const next = jest.fn();
+
+    await errorHandler(err, req, res, next);
+
+    expect(logError).toHaveBeenCalled();
+    expect(formatErrorResponse).toHaveBeenCalled();
+    expect(formatErrorResponse.mock.calls[0][1]).toBeNull();
+    expect(res.status).toHaveBeenCalledWith(500);
+
+    process.env.NODE_ENV = prev;
+  });
+
+  test('errorHandler exposes operational errors (4xx) even in production', async () => {
+    const prev = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+
+    const err = new Error('bad');
+    err.statusCode = 400;
+    const req = {
+      id: 'r1',
+      path: '/x',
+      method: 'GET',
+      url: '/x',
+      get: () => '',
+    };
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    const next = jest.fn();
+
+    await errorHandler(err, req, res, next);
+    expect(formatErrorResponse.mock.calls[0][1]).toBe(req);
+    expect(res.status).toHaveBeenCalledWith(400);
+
+    process.env.NODE_ENV = prev;
   });
 });

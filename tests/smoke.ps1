@@ -21,7 +21,7 @@ try {
 if (-not $health.status) { throw "Expected /health JSON with status" }
 Write-Host "OK /health status=$($health.status)" -ForegroundColor Green
 
-$healthz = Invoke-JsonGet "$BaseUrl/healthz"
+$null = Invoke-JsonGet "$BaseUrl/healthz"
 Write-Host "OK /healthz" -ForegroundColor Green
 
 try {
@@ -44,11 +44,20 @@ foreach ($path in @("/", "/onboarding-wizard", "/client-dashboard", "/tenant-das
 # 3) Admin/dashboard APIs (if API key provided)
 if ($ApiKey) {
   $headers = @{ "X-API-Key" = $ApiKey }
-  $sys = Invoke-JsonGet "$BaseUrl/admin/system-health" $headers
+  $null = Invoke-JsonGet "$BaseUrl/admin/system-health" $headers
   Write-Host "OK /admin/system-health" -ForegroundColor Green
 
-  $metrics = Invoke-JsonGet "$BaseUrl/admin/metrics" $headers
+  $null = Invoke-JsonGet "$BaseUrl/admin/metrics" $headers
   Write-Host "OK /admin/metrics" -ForegroundColor Green
+
+  # 4) Ops endpoints (read-only health signals)
+  $rate = Invoke-JsonGet "$BaseUrl/api/rate-limit/status" $headers
+  if (-not $rate.ok) { throw "Expected /api/rate-limit/status ok=true" }
+  Write-Host "OK /api/rate-limit/status" -ForegroundColor Green
+
+  $perf = Invoke-JsonGet "$BaseUrl/api/performance/queries/stats" $headers
+  if (-not $perf.ok) { throw "Expected /api/performance/queries/stats ok=true" }
+  Write-Host "OK /api/performance/queries/stats" -ForegroundColor Green
 } else {
   Write-Host "SKIP admin endpoints (API_KEY not set)" -ForegroundColor Yellow
 }

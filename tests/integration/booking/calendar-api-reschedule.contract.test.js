@@ -4,6 +4,8 @@ import request from 'supertest';
 import { createContractApp } from '../../helpers/contract-harness.js';
 
 describe('booking HTTP: calendar-api reschedule', () => {
+  jest.setTimeout(120000);
+
   test('POST /api/calendar/reschedule returns 201 when insertEvent succeeds (no external SMS)', async () => {
     const insertEvent = jest.fn(async () => ({
       id: 'evt_new',
@@ -68,5 +70,45 @@ describe('booking HTTP: calendar-api reschedule', () => {
     });
     const res = await request(app).post('/api/calendar/reschedule').send({ oldEventId: 'x' }).expect(400);
     expect(res.body.ok).toBe(false);
+  });
+
+  test('POST /api/calendar/reschedule returns error when insertEvent fails', async () => {
+    const insertEvent = jest.fn(async () => {
+      const e = new Error('quota');
+      e.response = { status: 502, data: 'quota' };
+      throw e;
+    });
+    const deps = {
+      getClientFromHeader: async () => ({
+        clientKey: 'c1',
+        booking: { defaultDurationMin: 30 },
+        locale: 'en-GB'
+      }),
+      makeJwtAuth: () => ({ authorize: async () => {} }),
+      GOOGLE_CLIENT_EMAIL: 'svc@example.com',
+      GOOGLE_PRIVATE_KEY: 'k',
+      GOOGLE_PRIVATE_KEY_B64: undefined,
+      google: { calendar: () => ({ events: { delete: async () => {} } }) },
+      pickCalendarId: () => 'cal_primary',
+      insertEvent,
+      pickTimezone: () => 'Europe/London',
+      smsConfig: () => ({ configured: false, smsClient: { messages: { create: async () => ({}) } } })
+    };
+    const { createCalendarApiRouter } = await import('../../../routes/calendar-api.js');
+    const app = createContractApp({
+      mounts: [{ path: '/api/calendar', router: () => createCalendarApiRouter(deps) }]
+    });
+
+    const res = await request(app)
+      .post('/api/calendar/reschedule')
+      .send({
+        oldEventId: 'old_evt',
+        newStartISO: '2026-06-01T14:00:00.000Z',
+        service: 'Haircut',
+        lead: { phone: '+441234567890', name: 'Alex' }
+      })
+      .expect(502);
+
+    expect(res.body).toEqual(expect.objectContaining({ ok: false, error: 'gcal_insert_failed' }));
   });
 });

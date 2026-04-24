@@ -1,113 +1,65 @@
 # Entrypoint burn-down (what must be tested)
 
-This is the systematic checklist for “test the whole codebase” in a meaningful way:
-we test **entrypoints** (HTTP/webhooks/jobs), not random utility files.
+We verify **production entrypoints** (HTTP routers, critical inline handlers, webhooks) with **happy + failure** contracts where it matters—not line-by-line coverage of the whole repo.
 
 ## Baseline (current)
-- `npm test`: passing
-- `npm run test:coverage`: passing, but overall coverage is very low (single digits). Most `routes/` and `lib/` remain untested.
 
-## A) HTTP routers (`routes/*.js`)
-Total route modules: **87**
+- **`npm test`**: full Jest suite (ESM + VM modules).
+- **`npm run test:coverage`**: enforces `jest.config.js` **global** thresholds and **per-module** gates on the riskiest surfaces.
+- **`npm run test:route-inventory`**: drift guard—every `routes/**/*.js` file must appear as the substring `routes/<relative-path>` in at least one file under `tests/` (string match; not a substitute for depth).
 
-Checklist (mark ✅ when a file has at least 1 happy-path contract test and 1 failure-path test):
-- [ ] `routes/admin-analytics-advanced.js`
-- [ ] `routes/admin-appointments.js`
-- [ ] `routes/admin-calendar.js`
-- [ ] `routes/admin-call-queue-ops.js`
-- [ ] `routes/admin-call-queue.js`
-- [ ] `routes/admin-call-recordings.js`
-- [ ] `routes/admin-calls-insights.js`
-- [ ] `routes/admin-clients.js`
-- [ ] `routes/admin-documents-comments-fields.js`
-- [ ] `routes/admin-email-tasks-deals.js`
-- [ ] `routes/admin-follow-ups.js`
-- [ ] `routes/admin-lead-scoring.js`
-- [ ] `routes/admin-multi-client.js`
-- [ ] `routes/admin-operations.js`
-- [ ] `routes/admin-outbound-weekday-journey.js`
-- [ ] `routes/admin-overview.js`
-- [ ] `routes/admin-reminders.js`
-- [ ] `routes/admin-reports.js`
-- [ ] `routes/admin-roi-calculator.js`
-- [ ] `routes/admin-sales-pipeline.js`
-- [ ] `routes/admin-social.js`
-- [ ] `routes/admin-templates.js`
-- [ ] `routes/admin-test-lead-data.js`
-- [ ] `routes/admin-test-script.js`
-- [ ] `routes/admin-validate-call-duration.js`
-- [ ] `routes/analytics.js`
-- [ ] `routes/api-docs.js`
-- [ ] `routes/appointments.js`
-- [ ] `routes/available-slots.js`
-- [ ] `routes/backend-status.js`
-- [ ] `routes/book-demo.js`
-- [ ] `routes/booking-test.js`
-- [ ] `routes/branding.js`
-- [ ] `routes/calendar-api.js`
-- [ ] `routes/call-recordings-stream.js`
-- [ ] `routes/call-recordings.js`
-- [ ] `routes/call-time-bandit.js`
-- [ ] `routes/clients-api.js`
-- [ ] `routes/clients.js`
-- [ ] `routes/core-api.js`
-- [ ] `routes/crm.js`
-- [ ] `routes/create-client.js`
-- [ ] `routes/daily-summary.js`
-- [ ] `routes/demo-setup.js`
-- [ ] `routes/follow-up-queue.js`
-- [ ] `routes/google-places-test.js`
-- [ ] `routes/health-and-diagnostics.js`
-- [ ] `routes/health.js`
-- [ ] `routes/import-lead-email.js`
-- [ ] `routes/import-leads-csv.js`
-- [ ] `routes/import-leads.js`
-- [ ] `routes/industry-comparison.js`
-- [ ] `routes/leads-followups.js`
-- [ ] `routes/leads.js`
-- [ ] `routes/monitoring-dashboard.js`
-- [ ] `routes/monitoring.js`
-- [ ] `routes/next-actions.js`
-- [ ] `routes/ops-health-and-dnc.js`
-- [ ] `routes/ops.js`
-- [ ] `routes/outreach.js`
-- [ ] `routes/pipeline-retry.js`
-- [ ] `routes/pipeline-tracking.js`
-- [ ] `routes/quality-alerts.js`
-- [ ] `routes/quick-win-metrics.js`
-- [ ] `routes/receptionist.js`
-- [ ] `routes/recordings-quality-check.js`
-- [ ] `routes/reports.js`
-- [ ] `routes/retry-queue.js`
-- [ ] `routes/roi.js`
-- [ ] `routes/sms-email-pipeline.js`
-- [ ] `routes/sms-templates.js`
-- [ ] `routes/static-pages.js`
-- [ ] `routes/twilio-voice-webhooks.js`
-- [ ] `routes/twilio-webhooks.js`
-- [ ] `routes/vapi-dev.js`
-- [ ] `routes/vapi-webhooks.js`
-- [ ] `routes/voicemails.js`
-- [ ] `routes/zapier-webhook.js`
+Route module count: **79** JavaScript files under `routes/` (including `routes/api/v1/index.js`).
 
-## B) Inline `server.js` routes
-There are **many** inline `app.get/app.post/...` handlers in `server.js` (counted via grep).
+## A) HTTP routers (`routes/**/*.js`)
 
-Approach:
-- Prefer migrating them into routers over time, but in the short term we’ll add contract tests for the most important ones first:
-  - health/build/time endpoints
-  - admin surfaces used for operations
-  - any endpoints that mutate booking/leads/queues
+**Status: satisfied for inventory** — `npm run test:route-inventory` exits `0`.
 
-## C) Webhooks (special rules)
-These must have extra tests for signature verification, idempotency, retry behavior:
-- `routes/twilio-webhooks.js`
-- `routes/twilio-voice-webhooks.js`
-- `routes/vapi-webhooks.js`
+Primary batch contract suites (happy + at least one failure each):
 
-## D) Scheduled jobs (`lib/scheduled-jobs.js`)
-Each schedule is an entrypoint. Tests should validate:
-- jobs register with the expected cron expressions
-- job bodies call the expected dependency functions
-- failures are caught and logged (no crash)
+- `tests/routes/batch1-highrisk.contract.test.js`
+- `tests/routes/batch2-routes.contract.test.js`
+- `tests/routes/batch3-missing-routes.contract.test.js` (fills prior gaps: `analytics`, `branding`, `clients`, `demo-setup`, `receptionist`, `static-pages`, `twilio-voice-webhooks`, `api/v1`)
+- `tests/routes/admin-excluded-batch.contract.test.js`
+- `tests/routes/coverage-boost.contract.test.js`
 
+Focused suites also cover high-churn routers (e.g. `appointments.contract.test.js`, `vapi-webhooks.idempotency.test.js`, `twilio-webhooks.contract.test.js`).
+
+## B) Inline `server.js` routes (high risk)
+
+These are **not** under `routes/`; they only appear in coverage if extracted or if `server.js` is added to `collectCoverageFrom`.
+
+| Method & path | Implementation | Tests |
+|---------------|----------------|-------|
+| `POST /api/calendar/check-book` | `lib/calendar-check-book.js` (`handleCalendarCheckBook`); thin mount + `calendarCheckBookDeps` in `server.js` | `tests/lib/calendar-check-book.test.js` |
+| `POST /api/calendar/book-slot` | `lib/calendar-book-slot.js` (`handleCalendarBookSlot`); thin mount + `calendarBookSlotDeps` in `server.js` | `tests/lib/calendar-book-slot.test.js` |
+| `GET /healthz` | `lib/healthz.js` (`handleHealthz`); thin mount + `healthzDeps` in `server.js` | `tests/lib/healthz.test.js` |
+| `GET /gcal/ping` | `lib/gcal-ping.js` (`handleGcalPing`); thin mount + `gcalPingDeps` in `server.js` | `tests/lib/gcal-ping.test.js` |
+
+Inline route inventory:
+
+- Run: `npm run test:server-inline-inventory`
+- Purpose: a drift guard + prioritization list (mutation/auth surfaces first).
+
+Next inline candidates to extract (high-signal mutations, not already routed through `routes/**`):
+
+- `POST /api/calendar/book-slot` (booking mutation)
+- `POST /api/calendar/find-slots` (availability core)
+- `POST /api/leads/import` (data ingestion)
+- `POST /webhooks/new-lead/:clientKey` and `POST /webhooks/facebook-lead/:clientKey` (external ingest)
+- `POST /admin/*` and `POST /tools/*` (ops surfaces; extract selectively when changed)
+
+Other inline `app.get` / `app.post` handlers in `server.js` should be triaged the same way when changed: extract or add targeted tests.
+
+## C) Webhooks (must-not-regress)
+
+- **Vapi** (`routes/vapi-webhooks.js`): durable ingest + idempotency (`tests/routes/vapi-webhooks.idempotency.test.js`); tool-call parse failures must not break ingest (`tests/routes/vapi-webhooks.tool-call-boundaries.contract.test.js`).
+- **Twilio SMS** (`routes/twilio-webhooks.js`): STOP path + unknown-tenant no-op (`tests/routes/twilio-webhooks.contract.test.js`).
+- **Twilio Voice** (`routes/twilio-voice-webhooks.js`): happy TwiML + routing failure fallback (`tests/routes/batch3-missing-routes.contract.test.js`).
+
+## D) Optional Postgres smoke
+
+- **`tests/integration/postgres-url-smoke.test.js`** runs only when **both** `TEST_DATABASE_URL` is set **and** `RUN_POSTGRES_SMOKE_TESTS=1` (avoids flaky CI/local URLs in the default `npm test` run).
+
+## E) Coverage ratchet
+
+Global thresholds live in `jest.config.js` (`coverageThreshold.global`). Module gates exist for e.g. `lib/booking.js`, `lib/business-hours.js`, `lib/calendar-check-book.js`, and selected `routes/*.js`. Raise globals only when the denominator includes newly tested surfaces.

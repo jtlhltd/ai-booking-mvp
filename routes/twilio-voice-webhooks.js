@@ -24,6 +24,10 @@ const validateTwilioRequest = (req, res, next) => {
   }
 
   const signature = req.get('X-Twilio-Signature');
+  if (!signature) {
+    console.warn('[TWILIO VOICE] Missing Twilio signature header');
+    return res.status(403).send('Invalid signature');
+  }
   const url = req.protocol + '://' + req.get('host') + req.originalUrl;
   const params = req.body;
 
@@ -43,7 +47,7 @@ const validateTwilioRequest = (req, res, next) => {
     next();
   } catch (error) {
     console.error('[TWILIO VOICE] Validation error:', error);
-    return res.status(500).send('Validation error');
+    return res.status(403).send('Invalid signature');
   }
 };
 

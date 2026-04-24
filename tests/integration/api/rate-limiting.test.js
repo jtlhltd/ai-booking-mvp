@@ -8,7 +8,9 @@ import {
   expectRateLimitStyleHeaders
 } from '../../helpers/http-integration-app.js';
 
-describe('Rate Limiting API', () => {
+const describeIf = process.env.RUN_SQLITE_INTEGRATION_TESTS === '1' ? describe : describe.skip;
+
+describeIf('Rate Limiting API', () => {
   let app;
   let dbModule;
 

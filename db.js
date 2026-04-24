@@ -13,6 +13,8 @@ import { getCallAnalyticsEnvOverrideIso } from './lib/call-analytics-cutoff.js';
 import { activeRowsMatchOutboundAbStopSlice } from './lib/outbound-ab-stop-slice.js';
 import { phoneMatchKey, pgQueueLeadPhoneKeyExpr, outboundDialClaimKeyFromRaw } from './lib/lead-phone-key.js';
 import { normalizePhoneE164 } from './lib/utils.js';
+import { createQueryConcurrencyLimiter } from './db/query-concurrency-limiter.js';
+import { JsonFileDatabase } from './db/json-file-database.js';
 
 const dbType = (process.env.DB_TYPE || '').toLowerCase();
 let pool = null;
@@ -21,103 +23,13 @@ let pgQueryLimiter = null;
 let sqlite = null;
 let DB_PATH = 'postgres';
 
-/**
- * Serialize excess load so small Postgres tiers are not hit by many parallel workers/webhooks at once.
- * @param {number} maxConcurrent
- */
-function createQueryConcurrencyLimiter(maxConcurrent) {
-  let active = 0;
-  const queue = [];
-  return {
-    maxConcurrent,
-    async run(fn) {
-      if (active >= maxConcurrent) {
-        await new Promise((resolve) => queue.push(resolve));
-      }
-      active++;
-      try {
-        return await fn();
-      } finally {
-        active--;
-        const next = queue.shift();
-        if (next) next();
-      }
-    }
-  };
-}
-
 console.log('🔍 Database configuration:', {
   DB_TYPE: process.env.DB_TYPE,
   dbType: dbType,
   DATABASE_URL: process.env.DATABASE_URL ? 'SET' : 'NOT SET'
 });
 
-// JSON File Database fallback for Render
-class JsonFileDatabase {
-  constructor(dataDir) {
-    this.dataDir = dataDir;
-    this.dataFile = path.join(dataDir, 'database.json');
-    this.data = this.loadData();
-  }
-
-  loadData() {
-    try {
-      if (fs.existsSync(this.dataFile)) {
-        const content = fs.readFileSync(this.dataFile, 'utf8');
-        return JSON.parse(content);
-      }
-    } catch (error) {
-      console.error('Error loading JSON database:', error.message);
-    }
-    return {
-      tenants: [],
-      leads: [],
-      bookings: [],
-      api_keys: [],
-      sms_conversations: [],
-      email_templates: [],
-      call_logs: []
-    };
-  }
-
-  saveData() {
-    try {
-      fs.writeFileSync(this.dataFile, JSON.stringify(this.data, null, 2));
-    } catch (error) {
-      console.error('Error saving JSON database:', error.message);
-    }
-  }
-
-  exec(sql) {
-    // Simple SQL execution for JSON database
-    // This is a basic implementation for Render compatibility
-    console.log('📝 Executing SQL on JSON database:', sql.substring(0, 100) + '...');
-  }
-
-  prepare(sql) {
-    return {
-      all: (...params) => {
-        const tableName = this.extractTableName(sql);
-        return this.data[tableName] || [];
-      },
-      run: (...params) => {
-        const tableName = this.extractTableName(sql);
-        if (sql.includes('INSERT')) {
-          const id = Date.now();
-          this.data[tableName].push({ id, ...params[0] });
-          this.saveData();
-          return { changes: 1, lastInsertRowid: id };
-        }
-        return { changes: 0 };
-      }
-    };
-  }
-
-  extractTableName(sql) {
-    const match = sql.match(/FROM\s+(\w+)/i) || sql.match(/INTO\s+(\w+)/i) || sql.match(/UPDATE\s+(\w+)/i);
-    return match ? match[1] : 'leads';
-  }
-}
+// (JsonFileDatabase moved to ./db/json-file-database.js)
 
 /**
  * Canonical tail-10 (etc.) key on leads — replaces UNIQUE(client_key, phone) after backfill + dedupe.

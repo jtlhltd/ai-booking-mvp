@@ -52,13 +52,14 @@ describe('registerScheduledJobs', () => {
   });
 
   afterEach(() => {
+    jest.clearAllTimers();
     jest.useRealTimers();
   });
 
   test('registers core cron schedules', async () => {
     const { registerScheduledJobs } = await import('../../lib/scheduled-jobs.js');
 
-    registerScheduledJobs({
+    const reg = registerScheduledJobs({
       processCallQueue: jest.fn(async () => {}),
       processRetryQueue: jest.fn(async () => {}),
       queueNewLeadsForCalling: jest.fn(async () => {}),
@@ -75,13 +76,15 @@ describe('registerScheduledJobs', () => {
       '*/5 * * * *',
       '0 9 * * 1'
     ]));
+
+    reg?.stop?.();
   });
 
   test('setInterval reminder processor calls deps and swallows errors', async () => {
     const sendScheduledReminders = jest.fn(async () => {});
     const { registerScheduledJobs } = await import('../../lib/scheduled-jobs.js');
 
-    registerScheduledJobs({ sendScheduledReminders });
+    const reg = registerScheduledJobs({ sendScheduledReminders });
     await jest.advanceTimersByTimeAsync(5 * 60 * 1000);
     expect(sendScheduledReminders).toHaveBeenCalledTimes(1);
 
@@ -90,13 +93,14 @@ describe('registerScheduledJobs', () => {
     });
 
     await expect(jest.advanceTimersByTimeAsync(5 * 60 * 1000)).resolves.toBeUndefined();
+    reg?.stop?.();
   });
 
   test('call queue cron invokes deps and does not throw when deps throw', async () => {
     const processCallQueue = jest.fn(async () => {});
     const { registerScheduledJobs } = await import('../../lib/scheduled-jobs.js');
 
-    registerScheduledJobs({ processCallQueue });
+    const reg = registerScheduledJobs({ processCallQueue });
     await flushPromises(5);
 
     const callQueueEntry = schedule.mock.calls.find((c) => c[0] === '0-58/2 * * * *');
@@ -110,5 +114,6 @@ describe('registerScheduledJobs', () => {
       throw new Error('nope');
     });
     await expect(handler()).resolves.toBeUndefined();
+    reg?.stop?.();
   });
 });

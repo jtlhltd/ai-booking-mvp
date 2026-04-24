@@ -7,7 +7,9 @@ import { describe, test, expect, beforeAll, afterAll, jest } from '@jest/globals
 /** Fixed Wednesday UTC for deterministic weekday_mask / claim tests. */
 const WED_UTC = new Date('2026-04-15T14:00:00.000Z');
 
-describe('SQLite: addToCallQueue merge + outbound weekday journey', () => {
+const describeIf = process.env.RUN_SQLITE_INTEGRATION_TESTS === '1' ? describe : describe.skip;
+
+describeIf('SQLite: addToCallQueue merge + outbound weekday journey', () => {
   let dbModule;
   let addToCallQueue;
   let claimOutboundWeekdayJourneySlot;

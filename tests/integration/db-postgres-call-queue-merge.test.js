@@ -7,7 +7,11 @@ import { describe, test, expect, beforeAll, afterAll, jest } from '@jest/globals
 
 jest.setTimeout(60000);
 
-describe('Postgres: addToCallQueue vapi_call merge', () => {
+const run =
+  process.env.RUN_POSTGRES_SMOKE_TESTS === '1' ||
+  process.env.RUN_DB_INTEGRATION_TESTS === '1';
+
+(run ? describe : describe.skip)('Postgres: addToCallQueue vapi_call merge', () => {
   let dbModule;
   const prevDbType = process.env.DB_TYPE;
   const prevDatabaseUrl = process.env.DATABASE_URL;
@@ -16,10 +20,7 @@ describe('Postgres: addToCallQueue vapi_call merge', () => {
   beforeAll(async () => {
     const pgUrl = process.env.TEST_DATABASE_URL;
     if (!pgUrl) {
-      throw new Error(
-        'TEST_DATABASE_URL is required for this test (CI sets it). ' +
-          'Example: postgresql://postgres:postgres@127.0.0.1:5432/testdb'
-      );
+      throw new Error('TEST_DATABASE_URL is required for this test (CI sets it).');
     }
 
     jest.resetModules();

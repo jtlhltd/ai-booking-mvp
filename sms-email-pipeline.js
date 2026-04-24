@@ -9,6 +9,7 @@ class SMSEmailPipeline {
     this.bookingSystem = bookingSystem; // Passed from outside to avoid circular dependency
     this.pendingLeads = new Map(); // Store leads waiting for email
     this.retrySchedules = new Map(); // Store retry schedules
+    this.retryInterval = null;
     this.initializeServices();
     this.startRetryScheduler(); // Start the retry scheduler
   }
@@ -267,11 +268,20 @@ class SMSEmailPipeline {
   // Retry scheduler methods
   startRetryScheduler() {
     // Check for leads that need retry every 30 minutes
-    setInterval(() => {
+    if (this.retryInterval) return;
+    this.retryInterval = setInterval(() => {
       this.processRetries();
     }, 30 * 60 * 1000); // 30 minutes
+    this.retryInterval?.unref?.();
 
     console.log('🔄 SMS Retry Scheduler started - checking every 30 minutes');
+  }
+
+  stopRetryScheduler() {
+    if (this.retryInterval) {
+      clearInterval(this.retryInterval);
+      this.retryInterval = null;
+    }
   }
 
   async processRetries() {

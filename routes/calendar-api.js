@@ -3,6 +3,9 @@
  * Mounted at /api/calendar.
  */
 import { Router } from 'express';
+import { handleCalendarFindSlots } from '../lib/calendar-find-slots.js';
+import { handleCalendarBookSlot } from '../lib/calendar-book-slot.js';
+import { handleCalendarCheckBook } from '../lib/calendar-check-book.js';
 
 /**
  * @param {{
@@ -33,6 +36,11 @@ export function createCalendarApiRouter(deps) {
   } = deps || {};
 
   const router = Router();
+
+  // Extracted endpoints that still live under /api/calendar/*
+  router.post('/find-slots', (req, res) => handleCalendarFindSlots(req, res, deps));
+  router.post('/book-slot', (req, res) => handleCalendarBookSlot(req, res, deps));
+  router.post('/check-book', (req, res) => handleCalendarCheckBook(req, res, deps));
 
   router.post('/cancel', async (req, res) => {
     try {

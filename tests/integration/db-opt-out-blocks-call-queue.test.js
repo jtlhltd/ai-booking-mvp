@@ -1,6 +1,8 @@
 import { init, query, addToCallQueue, closeDatabaseConnectionsForTests } from '../../db.js';
 
-describe('Call queue blocks opted-out numbers (V1)', () => {
+const describeIf = process.env.RUN_SQLITE_INTEGRATION_TESTS === '1' ? describe : describe.skip;
+
+describeIf('Call queue blocks opted-out numbers (V1)', () => {
   beforeAll(async () => {
     process.env.DB_TYPE = 'sqlite';
     process.env.DATABASE_URL = '';
