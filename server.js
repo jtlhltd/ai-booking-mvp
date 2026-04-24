@@ -205,6 +205,14 @@ import { getCallContext, storeCallContext, getMostRecentCallContext, getCallCont
 
 const app = express();
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const DATA_DIR = path.join(__dirname, 'data');
+const LEADS_PATH = path.join(DATA_DIR, 'leads.json');
+const CALLS_PATH = path.join(DATA_DIR, 'calls.json');
+const SMS_STATUS_PATH = path.join(DATA_DIR, 'sms-status.json');
+const JOBS_PATH = path.join(DATA_DIR, 'jobs.json');
+
 // Create HTTP server and Socket.IO server
 const server = createServer(app);
 const io = new SocketIOServer(server, {
@@ -2633,14 +2641,6 @@ function smsRateLimit(req, res, next) {
   rateLimitStore.set(`${ip}-${now}`, now);
   next();
 }
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname  = path.dirname(__filename);
-const DATA_DIR   = path.join(__dirname, 'data');
-const LEADS_PATH = path.join(DATA_DIR, 'leads.json');
-const CALLS_PATH = path.join(DATA_DIR, 'calls.json');
-const SMS_STATUS_PATH = path.join(DATA_DIR, 'sms-status.json');
-const JOBS_PATH  = path.join(DATA_DIR, 'jobs.json');
 
 // Enhanced retry logic with exponential backoff and circuit breaker
 async function retryWithBackoff(fn, maxRetries = 3, baseDelay = 1000, context = {}) {
