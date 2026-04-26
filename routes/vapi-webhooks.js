@@ -258,6 +258,15 @@ function formatMessagesToTranscript(messages) {
     .join('\n\n');
 }
 
+function redactHeaderValue(v) {
+  if (v == null) return null;
+  const s = Array.isArray(v) ? v.join(',') : String(v);
+  const t = s.trim();
+  if (!t) return null;
+  if (t.length <= 12) return `${t.slice(0, 3)}…(${t.length})`;
+  return `${t.slice(0, 6)}…${t.slice(-4)}(${t.length})`;
+}
+
 // Enhanced VAPI webhook handler with comprehensive call tracking
 router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
   // Extract correlation ID from webhook metadata
@@ -272,6 +281,20 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
   req.id = correlationId;
   
   console.log(`[${correlationId}] [VAPI WEBHOOK] received type=${body?.message?.type || body?.type || 'unknown'}`);
+  // TEMP: log auth-related headers for debugging (redacted; do not log full secrets).
+  // Remove after confirming provider header behavior.
+  try {
+    console.log(`[${correlationId}] [VAPI WEBHOOK] headers`, {
+      hasSignature: !!(req.get('x-vapi-signature') || req.get('X-Vapi-Signature')),
+      signature: redactHeaderValue(req.get('x-vapi-signature') || req.get('X-Vapi-Signature')),
+      hasSecretHeader: !!(req.get('x-vapi-secret') || req.get('X-Vapi-Secret')),
+      secretHeader: redactHeaderValue(req.get('x-vapi-secret') || req.get('X-Vapi-Secret')),
+      hasAuthorization: !!(req.get('authorization') || req.get('Authorization')),
+      authorization: redactHeaderValue(req.get('authorization') || req.get('Authorization')),
+      contentType: req.get('content-type') || req.get('Content-Type') || null,
+      userAgent: req.get('user-agent') || req.get('User-Agent') || null,
+    });
+  } catch {}
   
   try {
     // Durable ingest + DB-backed idempotency (Postgres).
