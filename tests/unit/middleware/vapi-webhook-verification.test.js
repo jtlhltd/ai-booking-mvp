@@ -100,6 +100,42 @@ describe('VAPI Webhook Signature Verification', () => {
     expect(next).not.toHaveBeenCalled();
   });
   
+  test('should accept request with valid X-Vapi-Secret header (no signature)', () => {
+    const req = {
+      get: (h) => (String(h).toLowerCase() === 'x-vapi-secret' ? secret : null),
+      body: { test: 'data' },
+      rawBody: Buffer.from(JSON.stringify({ test: 'data' })),
+      correlationId: 'test-123'
+    };
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn()
+    };
+    const next = jest.fn();
+
+    verifyVapiSignature(req, res, next);
+    expect(next).toHaveBeenCalled();
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  test('should reject request with invalid X-Vapi-Secret header (no signature)', () => {
+    const req = {
+      get: (h) => (String(h).toLowerCase() === 'x-vapi-secret' ? 'nope' : null),
+      body: { test: 'data' },
+      rawBody: Buffer.from(JSON.stringify({ test: 'data' })),
+      correlationId: 'test-123'
+    };
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn()
+    };
+    const next = jest.fn();
+
+    verifyVapiSignature(req, res, next);
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
   test('should reject request with invalid signature', () => {
     const body = { test: 'data' };
     const bodyString = JSON.stringify(body);

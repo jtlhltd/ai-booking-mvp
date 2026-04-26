@@ -14,13 +14,14 @@ import crypto from 'crypto';
 export function verifyVapiSignature(req, res, next) {
   const isProd = String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
   const secret = process.env.VAPI_WEBHOOK_SECRET;
+  const secretHeader = req.get('X-Vapi-Secret') || req.get('x-vapi-secret');
   const requireExplicit =
     String(process.env.VAPI_WEBHOOK_REQUIRE_SIGNATURE || '').trim() !== ''
       ? !['0', 'false', 'no'].includes(String(process.env.VAPI_WEBHOOK_REQUIRE_SIGNATURE).trim().toLowerCase())
       : false;
-  // Only enforce signature verification when we actually have a secret configured,
+  // Only enforce verification when we actually have a secret configured,
   // or when the operator explicitly requires it via env.
-  const requireSignature = requireExplicit || !!secret;
+  const requireVerification = requireExplicit || !!secret;
   
   // If no secret is configured, skip verification (for development/testing).
   // In production, fail closed to avoid accepting spoofed webhooks.
@@ -47,6 +48,37 @@ export function verifyVapiSignature(req, res, next) {
   
   const signature = req.get('X-Vapi-Signature') || req.get('x-vapi-signature');
   
+  // Mode 1: shared-secret header (credential-based). This is the easiest to enable in Vapi.
+  if (!signature && secretHeader) {
+    try {
+      const a = Buffer.from(String(secretHeader));
+      const b = Buffer.from(String(secret));
+      const ok = a.length === b.length && crypto.timingSafeEqual(a, b);
+      if (!ok) {
+        console.error('[VAPI WEBHOOK] Invalid X-Vapi-Secret header', {
+          correlationId: req.correlationId || req.id
+        });
+        return res.status(401).json({
+          ok: false,
+          error: 'Invalid webhook secret',
+          message: 'Webhook secret verification failed'
+        });
+      }
+      return next();
+    } catch (e) {
+      console.error('[VAPI WEBHOOK] Secret header verification error', {
+        message: e?.message || String(e),
+        correlationId: req.correlationId || req.id
+      });
+      return res.status(401).json({
+        ok: false,
+        error: 'Invalid webhook secret',
+        message: 'Webhook secret verification failed'
+      });
+    }
+  }
+
+  // Mode 2: HMAC signature (x-vapi-signature).
   if (!signature) {
     console.error('[VAPI WEBHOOK] Missing X-Vapi-Signature header');
     return res.status(401).json({
