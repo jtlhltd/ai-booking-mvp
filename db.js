@@ -14,6 +14,8 @@ import { normalizePhoneE164 } from './lib/utils.js';
 import { createPostgresPoolAndLimiter, testPostgresPoolConnection } from './db/connection.js';
 import { createQueryRunner } from './db/query.js';
 import * as callQueueReads from './db/call-queue-reads.js';
+import * as callQueueWrites from './db/call-queue-writes.js';
+import { smearCallQueueScheduledFor } from './db/call-queue-smear.js';
 
 const dbType = (process.env.DB_TYPE || '').toLowerCase();
 let pool = null;
@@ -3192,21 +3194,7 @@ export async function deactivateOptOut({ clientKey, phone } = {}) {
   return { phone: normalized };
 }
 
-/** Break exact .000s timestamps so many rows never share the same instant (ops top-of-hour + dial spread). */
-export function smearCallQueueScheduledFor(scheduledFor, clientKey, leadPhone, queueRowId = null) {
-  const t = scheduledFor instanceof Date ? new Date(scheduledFor.getTime()) : new Date(scheduledFor);
-  if (Number.isNaN(t.getTime())) return t;
-  const ms = t.getTime();
-  if (ms % 1000 !== 0) return t;
-  let h = 0x811c9dc5;
-  const s = `${clientKey}\0${leadPhone ?? ''}\0${queueRowId != null ? String(queueRowId) : ''}\0${ms}`;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  const extra = 1 + ((h >>> 0) % 998);
-  return new Date(ms + extra);
-}
+export { smearCallQueueScheduledFor };
 
 export async function addToCallQueue({ clientKey, leadPhone, priority = 5, scheduledFor, callType, callData }) {
   const callDataJson = callData ? JSON.stringify(callData) : null;
@@ -3323,11 +3311,7 @@ export async function getPendingCalls(limit = 100) {
 }
 
 export async function updateCallQueueStatus(id, status) {
-  await query(`
-    UPDATE call_queue 
-    SET status = $2, updated_at = now()
-    WHERE id = $1
-  `, [id, status]);
+  return callQueueWrites.updateCallQueueStatus(query, id, status);
 }
 
 /** Cancel all other pending queue rows for the same client + dialable phone identity (tail-10 / digit key). */
@@ -3389,28 +3373,8 @@ export async function getCallQueueByPhone(clientKey, leadPhone, limit = 50) {
 }
 
 /** Clear pending call queue rows. Optionally filter by clientKey and/or leadPhone. */
-export async function clearCallQueue({ clientKey, leadPhone } = {}) {
-  let result;
-  if (!clientKey && !leadPhone) {
-    result = await query(`DELETE FROM call_queue WHERE status = 'pending'`);
-  } else {
-    const conditions = ["status = 'pending'"];
-    const params = [];
-    let i = 1;
-    if (clientKey) {
-      conditions.push(`client_key = $${i++}`);
-      params.push(clientKey);
-    }
-    if (leadPhone) {
-      conditions.push(`lead_phone = $${i++}`);
-      params.push(leadPhone);
-    }
-    result = await query(
-      `DELETE FROM call_queue WHERE ${conditions.join(' AND ')}`,
-      params
-    );
-  }
-  return result?.rowCount ?? result?.changes ?? 0;
+export async function clearCallQueue(args) {
+  return callQueueWrites.clearCallQueue(query, args);
 }
 
 export async function cleanupOldCallQueue(daysOld = 7) {

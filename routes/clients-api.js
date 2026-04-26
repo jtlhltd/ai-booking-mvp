@@ -3,6 +3,7 @@
  * Mounted at /api/clients.
  */
 import { Router } from 'express';
+import { cacheMiddleware } from '../lib/cache.js';
 
 /**
  * @param {{
@@ -35,7 +36,7 @@ export function createClientsApiRouter(deps) {
     }
   });
 
-  router.get('/:key', async (req, res) => {
+  router.get('/:key', cacheMiddleware({ ttl: 180000 }), async (req, res) => {
     try {
       const clientKey = req.params.key;
       console.log(`[API] GET /api/clients/${clientKey} - Fetching client...`);

@@ -178,13 +178,15 @@ POST http://localhost:3000/api/import-leads/:clientKey
 
 ## 🧪 Testing (local + CI)
 
-- **CI-equivalent**: `npm run test:ci` (runs full Jest suite + coverage)
+- **Recommended Node**: **Node 20.16.0** (see `.nvmrc` / `.node-version` / `package.json` → `volta.node`)
 - **Default**: `npm test`
-- **Coverage only**: `npm run test:coverage`
+- **Coverage**: `npm run test:coverage`
+- **Integration-lite (always runnable on Windows/Node 22 in Cursor)**: `npm run test:integration-lite` (runs `tests/routes/**` + `tests/db/**`)
+- **CI-equivalent**: `npm run test:ci` (adds route inventories + runs Jest + coverage)
 
 ### Windows note (Node)
 
-This repo depends on `better-sqlite3` (native addon). **Node 20 is recommended** (see `.nvmrc` and `package.json` → `volta.node`).
+This repo depends on `better-sqlite3` (native addon). **Node 20 is recommended** (see `.nvmrc`, `.node-version`, and `package.json` → `volta.node`).
 
 If you run tests from inside Cursor, be aware Cursor can ship its own Node runtime; if that runtime is Node 22+, it can cause `better-sqlite3` install/rebuild failures unless you also have Visual Studio C++ build tools installed. Prefer running commands in a terminal where **Node 20** is first on `PATH`.
 

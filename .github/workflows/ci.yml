@@ -34,13 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: [18, 20]
-
-    env:
-      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/testdb
-      RUN_DB_INTEGRATION_TESTS: "1"
-      RUN_SQLITE_INTEGRATION_TESTS: "1"
-      RUN_POSTGRES_SMOKE_TESTS: "1"
+        node-version: [20]
 
     steps:
       - name: Checkout repository
@@ -55,8 +49,63 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run tests
-        run: npm run test:ci
+      - name: Run route inventories
+        run: npm run test:route-inventory && npm run test:server-inline-inventory
+
+      - name: Run unit tests
+        run: npm run test:unit
+
+      - name: Run integration-lite (routes + db contracts)
+        run: npm run test:integration-lite
+
+      - name: Run coverage
+        run: npm run test:coverage
+
+  integration-native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.event_name != 'pull_request'
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d testdb"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/testdb
+      RUN_DB_INTEGRATION_TESTS: "1"
+      RUN_SQLITE_INTEGRATION_TESTS: "1"
+      RUN_POSTGRES_SMOKE_TESTS: "1"
+      TZ: UTC
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Rebuild better-sqlite3
+        run: npm rebuild better-sqlite3
+
+      - name: Run integration tests (opt-in suite)
+        run: npm test -- tests/integration
 
   test-windows:
     runs-on: windows-latest
@@ -67,12 +116,6 @@ jobs:
       matrix:
         node-version: [20]
 
-    env:
-      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/testdb
-      RUN_DB_INTEGRATION_TESTS: "1"
-      RUN_SQLITE_INTEGRATION_TESTS: "1"
-      RUN_POSTGRES_SMOKE_TESTS: "1"
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -83,17 +126,21 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: npm
 
-      - name: Start Postgres (Docker)
-        run: |
-          docker run -d --name testdb -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=testdb -p 5432:5432 postgres:15-alpine
-          docker ps
-
       - name: Install dependencies
         run: npm ci
 
-      - name: Run tests
-        run: npm run test:ci
+      - name: Run route inventories
+        run: npm run test:route-inventory && npm run test:server-inline-inventory
 
-      - name: Dump Postgres logs (on failure)
-        if: failure()
-        run: docker logs testdb
+      - name: Run unit tests
+        run: npm run test:unit
+
+      - name: Run integration-lite (routes + db contracts)
+        run: npm run test:integration-lite
+
+      - name: Run coverage
+        run: npm run test:coverage
+
+      # NOTE: Windows job intentionally avoids native SQLite integration tests, since
+      # better-sqlite3 bindings can be toolchain-sensitive on Windows. The optional
+      # `integration-native` job covers those.

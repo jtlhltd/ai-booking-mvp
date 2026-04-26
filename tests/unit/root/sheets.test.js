@@ -57,6 +57,34 @@ describe('sheets.js', () => {
     expect(values.append).not.toHaveBeenCalled();
   });
 
+  test('appendLead appends a lead row', async () => {
+    const values = {
+      update: jest.fn(async () => ({})),
+      append: jest.fn(async () => ({ data: { updates: { updatedRange: 'Sheet1!A5:L5' } } })),
+    };
+    jest.unstable_mockModule('googleapis', () => ({
+      google: {
+        auth: { GoogleAuth: jest.fn(() => ({})) },
+        sheets: jest.fn(() => ({ spreadsheets: { values } })),
+      },
+    }));
+
+    setSaJsonEnv({ client_email: 'x@y', private_key: 'k' });
+    const { appendLead } = await import('../../../sheets.js');
+    const out = await appendLead('sheet123', {
+      id: 'L1',
+      name: 'N',
+      phone: '+1',
+      service: 'S',
+      source: 'web',
+      status: 'new',
+      attempts: 0,
+      booked: false,
+    });
+    expect(out.rowNumber).toBe(5);
+    expect(values.append).toHaveBeenCalled();
+  });
+
   test('appendLogistics writes a row when meaningful data exists', async () => {
     const values = {
       update: jest.fn(async () => ({})),
@@ -81,6 +109,42 @@ describe('sheets.js', () => {
         requestBody: expect.objectContaining({ values: [expect.any(Array)] })
       })
     );
+  });
+
+  test('readSheet returns rows from spreadsheets.values.get', async () => {
+    const values = {
+      get: jest.fn(async () => ({ data: { values: [['A'], ['1']] } }))
+    };
+    jest.unstable_mockModule('googleapis', () => ({
+      google: {
+        auth: { GoogleAuth: jest.fn(() => ({})) },
+        sheets: jest.fn(() => ({ spreadsheets: { values } }))
+      }
+    }));
+    setSaJsonEnv({ client_email: 'x@y', private_key: 'k' });
+    const { readSheet } = await import('../../../sheets.js');
+    const out = await readSheet('sheetZ', 'Sheet1!A1:A2');
+    expect(out.success).toBe(true);
+    expect(out.rowCount).toBe(2);
+    expect(values.get).toHaveBeenCalledWith(
+      expect.objectContaining({ spreadsheetId: 'sheetZ', range: 'Sheet1!A1:A2' })
+    );
+  });
+
+  test('logisticsSheetRowsToRecords maps rows using header row', async () => {
+    const { logisticsSheetRowsToRecords } = await import('../../../sheets.js');
+    expect(
+      logisticsSheetRowsToRecords([
+        ['Phone', 'Email'],
+        ['+441', 'a@b.com']
+      ])
+    ).toEqual([{ Phone: '+441', Email: 'a@b.com' }]);
+  });
+
+  test('logisticsSheetRowsToRecords returns empty for missing data rows', async () => {
+    const { logisticsSheetRowsToRecords } = await import('../../../sheets.js');
+    expect(logisticsSheetRowsToRecords([])).toEqual([]);
+    expect(logisticsSheetRowsToRecords([['only_header']])).toEqual([]);
   });
 });
 

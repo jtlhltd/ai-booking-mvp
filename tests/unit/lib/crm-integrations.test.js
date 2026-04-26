@@ -6,6 +6,7 @@ beforeEach(() => {
 
 afterEach(() => {
   jest.useRealTimers();
+  jest.clearAllTimers();
 });
 
 function mockFetchSequence(steps) {
@@ -45,18 +46,20 @@ describe('lib/crm-integrations', () => {
     const hs = new HubSpotIntegration('k');
     const p = hs.createContact({ phone: '+1' }, 'tenant1');
 
-    // allow retry delay to elapse
     await jest.advanceTimersByTimeAsync(1100);
     const out = await p;
 
     expect(out).toEqual({ id: 'c1', created: true });
     expect(fetchImpl).toHaveBeenCalledTimes(2);
-    expect(query).toHaveBeenCalled(); // trackSyncFailure attempt (table may not exist in prod; still called here)
+
+    // Clear any pending timeout timers created inside executeWithRetry.
+    await jest.advanceTimersByTimeAsync(60000);
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
   });
 
   test('HubSpotIntegration.createContact does not retry on 401', async () => {
-    const query = jest.fn(async () => ({ rows: [] }));
-    jest.unstable_mockModule('../../../db.js', () => ({ query }));
+    jest.unstable_mockModule('../../../db.js', () => ({ query: jest.fn(async () => ({ rows: [] })) }));
     jest.unstable_mockModule('../../../lib/error-monitoring.js', () => ({
       logError: jest.fn(async () => {}),
       sendCriticalAlert: jest.fn(async () => {})
@@ -122,6 +125,53 @@ describe('lib/crm-integrations', () => {
     }));
     const { updateLastSync } = await import('../../../lib/crm-integrations.js');
     await expect(updateLastSync('c1', 'hubspot')).resolves.toBeUndefined();
+  });
+
+  test('HubSpotIntegration.createContact logs + sends critical alert on 401 and tracks failure', async () => {
+    const query = jest.fn(async () => ({ rows: [] }));
+    jest.unstable_mockModule('../../../db.js', () => ({ query }));
+    const logError = jest.fn(async () => {});
+    const sendCriticalAlert = jest.fn(async () => {});
+    jest.unstable_mockModule('../../../lib/error-monitoring.js', () => ({ logError, sendCriticalAlert }));
+
+    global.fetch = mockFetchSequence([{ ok: false, status: 401, text: 'unauthorized' }]);
+
+    const { HubSpotIntegration } = await import('../../../lib/crm-integrations.js');
+    const hs = new HubSpotIntegration('k');
+    await expect(hs.createContact({ phone: '+1' }, 'c1')).rejects.toThrow(/HubSpot API error/i);
+    expect(sendCriticalAlert).toHaveBeenCalled();
+    // trackSyncFailure best-effort insert attempt (may noop depending on schema, but query call should be made)
+    expect(query).toHaveBeenCalled();
+  });
+
+  test('executeWithRetry enforces timeout and retries before failing', async () => {
+    jest.useFakeTimers();
+    jest.unstable_mockModule('../../../db.js', () => ({ query: jest.fn(async () => ({ rows: [] })) }));
+    jest.unstable_mockModule('../../../lib/error-monitoring.js', () => ({
+      logError: jest.fn(async () => {}),
+      sendCriticalAlert: jest.fn(async () => {}),
+    }));
+
+    // Fetch resolves after the timeout window so the timeout path wins, but no handles leak.
+    global.fetch = jest.fn(
+      async () =>
+        new Promise((resolve) => {
+          setTimeout(() => {
+            resolve({ ok: true, status: 200, json: async () => ({ id: 'late' }), text: async () => '' });
+          }, 60000);
+        })
+    );
+
+    const { HubSpotIntegration } = await import('../../../lib/crm-integrations.js');
+    const hs = new HubSpotIntegration('k');
+    const p = hs.createContact({ phone: '+1' }, 'c1');
+    const assertion = expect(p).rejects.toThrow(/Request timeout/i);
+
+    // 4 attempts * 30s timeout + backoff delays (1s + 2s + 4s)
+    await jest.advanceTimersByTimeAsync(130000);
+    await assertion;
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
   });
 });
 

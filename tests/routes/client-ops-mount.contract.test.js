@@ -3,6 +3,44 @@ import express from 'express';
 import request from 'supertest';
 
 describe('routes/client-ops-mount', () => {
+  test('happy: POST /api/onboard-client with api key returns onboard payload', async () => {
+    const prev = process.env.API_KEY;
+    process.env.API_KEY = 'secret';
+    try {
+      jest.resetModules();
+      const onboardClient = jest.fn(async () => ({ ok: true, clientKey: 'ck1' }));
+      jest.unstable_mockModule('../../lib/client-onboarding.js', () => ({
+        onboardClient,
+        updateClientConfig: jest.fn(),
+      }));
+
+      const { createClientOpsRouter } = await import('../../routes/client-ops-mount.js');
+      const app = express();
+      app.use(express.json());
+      app.use(
+        createClientOpsRouter({
+          getFullClient: async () => null,
+          runOutboundAbTestSetup: async () => {},
+          runOutboundAbChallengerUpdate: async () => {},
+          runOutboundAbDimensionStop: async () => {},
+          isDashboardSelfServiceClient: () => false,
+          isVapiOutboundAbExperimentOnlyPatch: () => false,
+        }),
+      );
+
+      const res = await request(app)
+        .post('/api/onboard-client')
+        .set('X-API-Key', 'secret')
+        .send({ businessName: 'Acme' })
+        .expect(200);
+      expect(res.body).toEqual({ ok: true, clientKey: 'ck1' });
+      expect(onboardClient).toHaveBeenCalledWith({ businessName: 'Acme' });
+    } finally {
+      if (prev === undefined) delete process.env.API_KEY;
+      else process.env.API_KEY = prev;
+    }
+  });
+
   test('failure: POST /api/onboard-client returns 401 without api key', async () => {
     const { createClientOpsRouter } = await import('../../routes/client-ops-mount.js');
     const app = express();

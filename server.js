@@ -31,21 +31,16 @@ import twilio from 'twilio';
 import { createHash } from 'crypto';
 import { performanceMiddleware, getPerformanceMonitor } from './lib/performance-monitor.js';
 import { cacheMiddleware, getCache } from './lib/cache.js';
+import { sqlHoursAgo as sqlHoursAgoFn, sqlDaysAgo as sqlDaysAgoFn } from './lib/sql-relative-interval.js';
 import { phoneMatchKey, pgQueueLeadPhoneKeyExpr } from './lib/lead-phone-key.js';
 import { handleCalendarCheckBook } from './lib/calendar-check-book.js';
 import { handleCalendarBookSlot } from './lib/calendar-book-slot.js';
 import { handleCalendarFindSlots } from './lib/calendar-find-slots.js';
 import { scheduleAtOptimalCallWindow } from './lib/optimal-call-window.js';
 import { runOutboundCallsForImportedLeads } from './lib/lead-import-outbound.js';
-import { handleGcalPing } from './lib/gcal-ping.js';
-import { handleHealthz } from './lib/healthz.js';
 import { handleTwilioSmsInbound } from './lib/twilio-sms-inbound-webhook.js';
-import { handleSmsTestEndpoint } from './lib/sms-test-endpoint.js';
 import { handleNotifyTest, handleNotifySend } from './lib/notify-api.js';
-import { handleDashboardReset } from './lib/dashboard-reset.js';
 import { handleSmsStatusWebhook } from './lib/sms-status-webhook.js';
-import { handleLeadsScore, handleLeadsPrioritize } from './lib/leads-score-prioritize.js';
-import { handleRoiCalculatorSave } from './lib/roi-calculator-save.js';
 import { isOptedOut } from './lib/lead-deduplication.js';
 import { isMobileNumber } from './lib/google-places-search.js';
 import googlePlacesSearchRouter from './routes/google-places-search.js';
@@ -140,6 +135,11 @@ import { createCreateClientRouter } from './routes/create-client.js';
 import { createQualityAlertsRouter } from './routes/quality-alerts.js';
 import { createImportLeadsRouter } from './routes/import-leads.js';
 import { createMetaIngestWebhooksRouter } from './routes/meta-ingest-webhooks-mount.js';
+import { createNotifyAndTwilioSmsRouter } from './routes/notify-and-twilio-sms-mount.js';
+import { createInlineJsonApiRouter } from './routes/inline-json-api-mount.js';
+import { createPublicReadsRouter } from './routes/public-reads-mount.js';
+import { createHealthProbesRouter } from './routes/health-probes-mount.js';
+import { getIntegrationStatuses as getIntegrationStatusesForClient } from './lib/integration-statuses.js';
 import { createDevTestRouter } from './routes/dev-test-mount.js';
 import { createCallInsightsRouter } from './routes/call-insights-mount.js';
 import { createCompanyEnrichmentRouter } from './routes/company-enrichment-mount.js';
@@ -227,6 +227,8 @@ const io = new SocketIOServer(server, {
 const performanceMonitor = getPerformanceMonitor();
 const cache = getCache();
 const isPostgres = (process.env.DB_TYPE || '').toLowerCase() === 'postgres';
+const sqlHoursAgo = (hours = 1) => sqlHoursAgoFn(isPostgres, hours);
+const sqlDaysAgo = (days = 1) => sqlDaysAgoFn(isPostgres, days);
 const TIMEZONE = process.env.TZ || process.env.TIMEZONE || 'Europe/London';
 
 /** API-safe lead row (matches routes/core-api.js). */
@@ -579,7 +581,13 @@ app.use(
     pickTimezone
   })
 );
-app.use('/api', createCoreApiRouter({ query, getIntegrationStatuses }));
+app.use(
+  '/api',
+  createCoreApiRouter({
+    query,
+    getIntegrationStatuses: (clientKey) => getIntegrationStatusesForClient(clientKey, { query })
+  })
+);
 app.use(
   '/api/clients',
   createClientsApiRouter({
@@ -733,127 +741,7 @@ app.use('/api/admin', createAdminRoiCalculatorRouter());
 
 // moved: /api/admin/social/* → routes/admin-social.js
 
-// Mock Lead Call Route (No API Key Required)
-app['get']('/mock-call', async (req, res) => {
-  try {
-    const vapiKey = process.env.VAPI_PRIVATE_KEY || process.env.VAPI_PUBLIC_KEY || process.env.VAPI_API_KEY;
-    
-    if (!vapiKey) {
-      return res.json({
-        success: false,
-        message: 'VAPI API key not found',
-        availableKeys: {
-          VAPI_PRIVATE_KEY: !!process.env.VAPI_PRIVATE_KEY,
-          VAPI_PUBLIC_KEY: !!process.env.VAPI_PUBLIC_KEY,
-          VAPI_API_KEY: !!process.env.VAPI_API_KEY
-        }
-      });
-    }
-    
-    // Get assistant ID from query or use default
-    const assistantId = req.query.assistantId || "dd67a51c-7485-4b62-930a-4a84f328a1c9";
-    const phoneNumberId = req.query.phoneNumberId || "934ecfdb-fe7b-4d53-81c0-7908b97036b5";
-    const phoneNumber = req.query.phone || "+447491683261";
-    
-    // Mock lead data
-    const mockLead = {
-      businessName: "Test Business",
-      decisionMaker: "Test Lead",
-      industry: "general",
-      location: "UK",
-      phoneNumber: phoneNumber,
-      email: "test@example.com",
-      website: "www.example.com"
-    };
-    
-    // Create a call with specified assistant
-    // Include correlation ID in VAPI call
-    const correlationId = req.correlationId || req.id || `req_${nanoid(12)}`;
-    
-    const callData = {
-      assistantId: assistantId,
-      phoneNumberId: phoneNumberId,
-      customer: {
-        number: mockLead.phoneNumber,
-        name: mockLead.decisionMaker
-      },
-      metadata: {
-        correlationId,
-        requestId: correlationId
-      }
-    };
-    
-    const vapiResponse = await fetch('https://api.vapi.ai/call', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${vapiKey}`,
-        'Content-Type': 'application/json',
-        'X-Correlation-ID': correlationId,
-        'X-Request-ID': correlationId
-      },
-      body: JSON.stringify(callData)
-    });
-    
-    const responseText = await vapiResponse.text();
-    
-    // Check if response is HTML (Cloudflare error page)
-    if (responseText.trim().startsWith('<!DOCTYPE') || responseText.includes('Cloudflare')) {
-      return res.json({
-        success: false,
-        message: 'Vapi API is currently experiencing issues (Cloudflare error)',
-        error: 'Vapi API returned HTML error page instead of JSON',
-        status: vapiResponse.status,
-        suggestion: 'Please try again in a few minutes. The Vapi service appears to be temporarily unavailable due to Cloudflare issues.',
-        responsePreview: responseText.substring(0, 200)
-      });
-    }
-    
-    if (vapiResponse.ok) {
-      try {
-        const callResult = JSON.parse(responseText);
-        res.json({
-          success: true,
-          message: 'Mock call initiated successfully!',
-          callId: callResult.id,
-          mockLead: mockLead,
-          status: 'Calling your mobile now...'
-        });
-      } catch (e) {
-        res.json({
-          success: false,
-          message: 'Vapi returned invalid JSON response',
-          error: 'Response was not valid JSON',
-          responsePreview: responseText.substring(0, 200)
-        });
-      }
-    } else {
-      try {
-        const errorData = JSON.parse(responseText);
-        res.json({
-          success: false,
-          message: 'Failed to initiate mock call',
-          error: errorData,
-          status: vapiResponse.status
-        });
-      } catch (e) {
-        res.json({
-          success: false,
-          message: 'Failed to initiate mock call',
-          error: 'Invalid JSON response from Vapi',
-          status: vapiResponse.status,
-          responsePreview: responseText.substring(0, 300)
-        });
-      }
-    }
-    
-  } catch (error) {
-    res.json({
-      success: false,
-      message: 'Mock call failed',
-      error: error.message
-    });
-  }
-});
+// moved: GET /mock-call → routes/public-reads-mount.js (lib/mock-call-route.js)
 
 // moved: /test-booking → routes/booking-test.js
 
@@ -905,20 +793,6 @@ app.use('/', googlePlacesSearchRouter);
 
 /** Rolling activity windows & touchpoint day buckets on the client dashboard (GMT/BST). */
 const DASHBOARD_ACTIVITY_TZ = 'Europe/London';
-
-function sqlHoursAgo(hours = 1) {
-  if (isPostgres) {
-    return `NOW() - INTERVAL '${hours} hour${hours === 1 ? '' : 's'}'`;
-  }
-  return `datetime('now','-${hours} hour${hours === 1 ? '' : 's'}')`;
-}
-
-function sqlDaysAgo(days = 1) {
-  if (isPostgres) {
-    return `NOW() - INTERVAL '${days} day${days === 1 ? '' : 's'}'`;
-  }
-  return `datetime('now','-${days} day${days === 1 ? '' : 's'}')`;
-}
 
 function formatGBP(value = 0) {
   const formatter = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 });
@@ -1374,279 +1248,7 @@ function mapStatusClass(status) {
 // moved: GET /api/demo-dashboard/:clientKey → routes/demo-dashboard.js
 
 
-/**
- * Hour-by-hour outbound queue drilldown for a specific local day (tenant timezone).
- * Query param: day=YYYY-MM-DD
- */
-app['get']('/api/outbound-queue-day/:clientKey', async (req, res) => {
-  const { clientKey } = req.params;
-  const day = String(req.query.day || '').trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
-    return res.status(400).json({ ok: false, error: 'Expected ?day=YYYY-MM-DD' });
-  }
-  try {
-    const client = await getFullClient(clientKey, { bypassCache: false });
-    const tenantTz = client?.booking?.timezone || client?.timezone || 'Europe/London';
-    if (!isPostgres) {
-      res.set('Cache-Control', 'no-store, must-revalidate, max-age=0');
-      return res.json({ ok: true, day, timezone: tenantTz, hours: [] });
-    }
-    const [rows, explainRows] = await Promise.all([
-      query(
-      `
-      WITH base AS (
-        SELECT
-          cq.status,
-          cq.priority,
-          cq.scheduled_for,
-          (cq.scheduled_for AT TIME ZONE $2::text) AS local_ts
-        FROM call_queue cq
-        WHERE cq.client_key = $1
-          AND cq.status IN ('pending','processing')
-      ),
-      scoped AS (
-        SELECT *
-        FROM base
-        WHERE to_char(local_ts, 'YYYY-MM-DD') = $3
-      )
-      SELECT
-        to_char(date_trunc('hour', local_ts), 'HH24:00') AS hour_key,
-        COUNT(*) FILTER (WHERE status = 'pending')::int AS pending_n,
-        COUNT(*) FILTER (WHERE status = 'pending' AND scheduled_for <= NOW())::int AS due_now_n,
-        COUNT(*) FILTER (WHERE status = 'processing')::int AS processing_n,
-        MIN(scheduled_for) AS first_scheduled_for,
-        MAX(scheduled_for) AS last_scheduled_for,
-        MIN(priority)::int AS best_priority,
-        MAX(priority)::int AS worst_priority
-      FROM scoped
-      GROUP BY 1
-      ORDER BY 1 ASC
-    `,
-      [clientKey, tenantTz, day]
-    ),
-      query(
-        `
-        WITH base AS (
-          SELECT
-            cq.status,
-            cq.priority,
-            cq.scheduled_for,
-            cq.call_data,
-            (cq.scheduled_for AT TIME ZONE $2::text) AS local_ts
-          FROM call_queue cq
-          WHERE cq.client_key = $1
-            AND cq.status IN ('pending','processing')
-        ),
-        scoped AS (
-          SELECT *
-          FROM base
-          WHERE to_char(local_ts, 'YYYY-MM-DD') = $3
-        )
-        SELECT
-          -- totals
-          (SELECT COUNT(*)::int FROM scoped WHERE status = 'pending') AS total_pending,
-          (SELECT COUNT(*)::int FROM scoped WHERE status = 'pending' AND scheduled_for <= NOW()) AS total_due_now,
-          (SELECT COUNT(*)::int FROM scoped WHERE status = 'processing') AS total_processing,
-          -- scheduling tags (why a time was chosen)
-          COALESCE((
-            SELECT jsonb_agg(jsonb_build_object('tag', tag, 'n', n) ORDER BY n DESC, tag ASC)
-            FROM (
-              SELECT COALESCE(NULLIF(scoped.call_data->>'scheduling',''), 'unspecified') AS tag, COUNT(*)::int AS n
-              FROM scoped
-              GROUP BY 1
-            ) x
-          ), '[]'::jsonb) AS schedule_tags,
-          -- trigger types
-          COALESCE((
-            SELECT jsonb_agg(jsonb_build_object('trigger', trig, 'n', n) ORDER BY n DESC, trig ASC)
-            FROM (
-              SELECT COALESCE(NULLIF(scoped.call_data->>'triggerType',''), 'unspecified') AS trig, COUNT(*)::int AS n
-              FROM scoped
-              GROUP BY 1
-            ) y
-          ), '[]'::jsonb) AS trigger_types,
-          -- raw priority distribution
-          COALESCE((
-            SELECT jsonb_agg(jsonb_build_object('priority', p, 'n', n) ORDER BY p ASC)
-            FROM (
-              SELECT priority::int AS p, COUNT(*)::int AS n
-              FROM scoped
-              GROUP BY 1
-            ) z
-          ), '[]'::jsonb) AS priority_counts
-        `
-        ,
-        [clientKey, tenantTz, day]
-      )
-    ]);
-    const explain = explainRows.rows?.[0] || {};
-    res.set('Cache-Control', 'no-store, must-revalidate, max-age=0');
-    return res.json({
-      ok: true,
-      day,
-      timezone: tenantTz,
-      explain: {
-        totals: {
-          pending: parseInt(explain.total_pending, 10) || 0,
-          dueNow: parseInt(explain.total_due_now, 10) || 0,
-          processing: parseInt(explain.total_processing, 10) || 0
-        },
-        scheduleTags: explain.schedule_tags || [],
-        triggerTypes: explain.trigger_types || [],
-        priorityCounts: explain.priority_counts || [],
-        notes: [
-          'queued time is the row’s scheduled_for (in tenant timezone)',
-          'distribution shows how queued calls are spread across business hours',
-          'priority is used when multiple calls are due at once (smaller number runs sooner)'
-        ]
-      },
-      hours: (rows.rows || []).map((r) => ({
-        hourKey: r.hour_key,
-        pendingN: parseInt(r.pending_n, 10) || 0,
-        dueNowN: parseInt(r.due_now_n, 10) || 0,
-        processingN: parseInt(r.processing_n, 10) || 0,
-        firstScheduledFor: r.first_scheduled_for ? new Date(r.first_scheduled_for).toISOString() : null,
-        lastScheduledFor: r.last_scheduled_for ? new Date(r.last_scheduled_for).toISOString() : null,
-        bestPriority: r.best_priority != null ? parseInt(r.best_priority, 10) : null,
-        worstPriority: r.worst_priority != null ? parseInt(r.worst_priority, 10) : null
-      }))
-    });
-  } catch (error) {
-    console.error('[OUTBOUND QUEUE DAY ERROR]', error);
-    return res.status(500).json({ ok: false, error: error.message });
-  }
-});
-
-const SSE_POLL_INTERVAL_MS = 4000;
-const SSE_HEARTBEAT_MS = 15000;
-
-app['get']('/api/events/:clientKey', async (req, res) => {
-  const { clientKey } = req.params;
-  res.set({
-    'Cache-Control': 'no-cache',
-    'Content-Type': 'text/event-stream',
-    Connection: 'keep-alive'
-  });
-  res.flushHeaders?.();
-
-  let isClosed = false;
-  let lastSent = new Date(Date.now() - 2 * 60 * 1000).toISOString();
-  let activityChannel = 'AI call';
-  try {
-    const streamClient = await getFullClient(clientKey);
-    activityChannel = activityFeedChannelLabel(streamClient);
-  } catch {
-    /* default AI call */
-  }
-
-  const sendRecentCalls = async () => {
-    if (isClosed) return;
-    try {
-      const recentCallRows = await query(`
-        SELECT c.call_id, c.id, c.lead_phone, c.status, c.outcome, c.created_at, c.duration, c.recording_url,
-               c.transcript, c.retry_attempt, c.metadata,
-               l.name, l.service
-        FROM (
-          SELECT id, call_id, client_key, lead_phone, status, outcome, created_at, duration, recording_url,
-                 LEFT(COALESCE(transcript, ''), 512) AS transcript,
-                 retry_attempt,
-                 CASE WHEN metadata IS NULL THEN NULL
-                   ELSE COALESCE(
-                     jsonb_strip_nulls(jsonb_build_object(
-                       'fromQueue', metadata->'fromQueue',
-                       'reason',
-                         CASE
-                           WHEN jsonb_typeof(metadata->'reason') = 'string'
-                           THEN to_jsonb(LEFT(metadata->>'reason', 400))
-                           ELSE metadata->'reason'
-                         END,
-                       'abExperiment', metadata->'abExperiment',
-                       'abVariant', metadata->'abVariant',
-                       'abOutbound', metadata->'abOutbound'
-                     )),
-                     '{}'::jsonb
-                   )
-                 END AS metadata
-          FROM calls
-          WHERE client_key = $1
-            AND created_at > $2
-          ORDER BY created_at ASC
-          LIMIT 10
-        ) c
-        LEFT JOIN leads l ON l.client_key = c.client_key AND l.phone = c.lead_phone
-        ORDER BY c.created_at ASC
-      `, [clientKey, lastSent]);
-
-      for (const row of recentCallRows.rows || []) {
-        lastSent = row.created_at;
-        let friendly = outcomeToFriendlyLabel(row.outcome);
-        if (isCallQueueStartFailureRow(row)) friendly = 'Could not start call';
-        const metaObj = parseCallsRowMetadata(row?.metadata) || {};
-        const queueFailReasonRaw = typeof metaObj.reason === 'string' ? metaObj.reason : (metaObj.reason != null ? String(metaObj.reason) : '');
-        const queueFailReason = queueFailReasonRaw && queueFailReasonRaw.length > 180
-          ? `${queueFailReasonRaw.slice(0, 180).trim()}…`
-          : queueFailReasonRaw;
-        const durationLabel = formatCallDuration(row.duration);
-        const summary = (isCallQueueStartFailureRow(row) && queueFailReason)
-          ? `Could not start call — ${queueFailReason}`
-          : (row.outcome
-            ? (durationLabel ? `${friendly || row.outcome} • ${durationLabel}` : (friendly || `Outcome: ${row.outcome}`))
-            : (durationLabel ? `Call ended • ${durationLabel}` : 'Call completed'));
-        const transcriptPreview = truncateActivityFeedText(row.transcript);
-        const retryAttempt = row.retry_attempt != null ? Math.max(0, parseInt(row.retry_attempt, 10) || 0) : 0;
-        const payload = {
-          id: row.call_id || row.id,
-          callId: row.call_id,
-          dbId: row.id,
-          name: row.name || row.lead_phone,
-          leadPhone: row.lead_phone && String(row.lead_phone).trim() ? String(row.lead_phone).trim() : null,
-          service: row.service || 'Lead Follow-Up',
-          channel: activityChannel,
-          summary,
-          status: mapCallStatus(row.status),
-          statusClass: mapStatusClass(row.status),
-          rawStatus: row.status || null,
-          timestamp: row.created_at,
-          createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
-          outcome: row.outcome || null,
-          outcomeLabel: friendly || null,
-          duration: row.duration != null ? row.duration : null,
-          durationLabel: durationLabel || null,
-          recordingUrl: row.recording_url && String(row.recording_url).trim()
-            ? String(row.recording_url).trim()
-            : null,
-          transcriptPreview: transcriptPreview || null,
-          endedReason: null,
-          queueStartFailureReason: isCallQueueStartFailureRow(row) ? (queueFailReason || null) : null,
-          retryAttempt,
-          hasRecording: !!(row.recording_url && String(row.recording_url).trim())
-        };
-        res.write(`data: ${JSON.stringify(payload)}\n\n`);
-      }
-    } catch (error) {
-      console.error('[EVENT STREAM ERROR]', error);
-      res.write(`event: error\ndata: ${JSON.stringify({ message: 'stream_error' })}\n\n`);
-    }
-  };
-
-  const interval = setInterval(sendRecentCalls, SSE_POLL_INTERVAL_MS);
-  const heartbeat = setInterval(() => {
-    if (isClosed) return;
-    res.write('event: ping\ndata: {}\n\n');
-  }, SSE_HEARTBEAT_MS);
-
-  const closeStream = () => {
-    if (isClosed) return;
-    isClosed = true;
-    clearInterval(interval);
-    clearInterval(heartbeat);
-    res.end();
-  };
-
-  req.on('close', closeStream);
-  req.on('end', closeStream);
-  sendRecentCalls();
-});
+// moved: GET /api/outbound-queue-day/:clientKey, GET /api/events/:clientKey → routes/public-reads-mount.js
 
 // moved: /api/leads/:leadId/(snooze|escalate) → routes/core-api.js
 
@@ -1659,267 +1261,7 @@ app['get']('/api/events/:clientKey', async (req, res) => {
  */
 // moved: POST /api/leads/existing-match-keys → routes/leads-existing-match-keys.js
 
-async function getIntegrationStatuses(clientKey) {
-  const integrations = [
-    {
-      name: 'Vapi Voice',
-      status: 'warning', // Default to warning, will test actual connection
-      detail: 'Checking connection...'
-    },
-    {
-      name: 'Twilio SMS',
-      status: 'warning', // Default to warning, will check client-specific config
-      detail: 'Checking connection...'
-    },
-    {
-      name: 'Google Calendar',
-      status: 'warning', // Default to warning, will check actual connection
-      detail: 'Checking connection...'
-    }
-  ];
-
-  // Check Vapi connection for this specific client (multi-tenant)
-  if (clientKey) {
-    try {
-      // Get client config - handle both vapi_json column
-      let clientResult;
-      let vapiConfig = {};
-      
-      try {
-        clientResult = await query(`
-          SELECT vapi_json, twilio_json
-          FROM tenants
-          WHERE client_key = $1
-        `, [clientKey]);
-        
-        const client = clientResult.rows?.[0];
-        if (!client) {
-          // Client doesn't exist in database
-          const vapiIntegration = integrations.find(i => i.name === 'Vapi Voice');
-          if (vapiIntegration) {
-            vapiIntegration.status = 'error';
-            vapiIntegration.detail = `Client "${clientKey}" not found in database. Create the client first using /api/admin/client POST endpoint or ensure the client_key is correct.`;
-          }
-          return integrations; // Exit early
-        }
-        vapiConfig = client?.vapi_json || {};
-      } catch (columnError) {
-        // If query fails, check if it's a column error or something else
-        if (columnError.message?.includes('does not exist') && columnError.message?.includes('vapi_json')) {
-          throw columnError; // Re-throw column errors
-        }
-        // For other errors, set empty config and let error handler below deal with it
-        vapiConfig = {};
-        throw columnError; // Re-throw to be caught by outer catch
-      }
-      
-      // Check if THIS CLIENT has Vapi configured (multi-tenant - no global fallback)
-      const hasAssistantId = !!vapiConfig.assistantId;
-      const hasPhoneNumberId = !!vapiConfig.phoneNumberId;
-      const hasClientVapiConfig = !!(vapiConfig.assistantId || vapiConfig.phoneNumberId || vapiConfig.apiKey || vapiConfig.privateKey);
-      
-      const vapiIntegration = integrations.find(i => i.name === 'Vapi Voice');
-      if (vapiIntegration) {
-        if (hasClientVapiConfig) {
-          // Client has Vapi config - test connection using client's API key if available
-          const vapiKey = vapiConfig.privateKey || vapiConfig.apiKey || vapiConfig.publicKey;
-          
-          if (vapiKey) {
-            try {
-              const vapiResponse = await fetch('https://api.vapi.ai/assistant', {
-                method: 'GET',
-                headers: {
-                  'Authorization': `Bearer ${vapiKey}`,
-                  'Content-Type': 'application/json'
-                },
-                signal: AbortSignal.timeout(5000) // 5 second timeout
-              });
-              
-              if (vapiResponse.ok) {
-                vapiIntegration.status = 'active';
-                vapiIntegration.detail = hasPhoneNumberId 
-                  ? 'Assistant + phone number connected'
-                  : 'Assistant connected (phone number not configured)';
-              } else {
-                vapiIntegration.status = 'warning';
-                const statusText = await vapiResponse.text().catch(() => '');
-                vapiIntegration.detail = `Assistant configured but API key test failed (HTTP ${vapiResponse.status}). Verify the API key is correct.`;
-              }
-            } catch (error) {
-              vapiIntegration.status = 'warning';
-              vapiIntegration.detail = `Assistant configured but connection test failed: ${error.message}. Verify the API key is correct.`;
-            }
-          } else {
-            // Has assistantId but no API key - show as configured but with warning
-            if (hasAssistantId) {
-              vapiIntegration.status = 'active';
-              vapiIntegration.detail = hasPhoneNumberId
-                ? 'Assistant connected (API key not stored - connection test skipped)'
-                : `Assistant "${vapiConfig.assistantId}" connected (API key not stored - connection test skipped)`;
-            } else {
-              vapiIntegration.status = 'warning';
-              vapiIntegration.detail = 'Vapi configuration incomplete. Add assistantId and optionally privateKey for connection testing.';
-            }
-          }
-        } else {
-          // Client exists but does NOT have Vapi configured
-          vapiIntegration.status = 'error';
-          vapiIntegration.detail = 'This client does not have Vapi configured. Update the client\'s vapi_json in the database (tenants table) with: { "assistantId": "...", "phoneNumberId": "...", "privateKey": "..." } or use the /api/admin/client/:clientKey PUT endpoint.';
-        }
-      }
-    } catch (error) {
-      console.error('[INTEGRATION HEALTH ERROR]', error);
-      const vapiIntegration = integrations.find(i => i.name === 'Vapi Voice');
-      if (vapiIntegration) {
-        if (error.message?.includes('does not exist') && error.message?.includes('vapi_json')) {
-          vapiIntegration.status = 'error';
-          vapiIntegration.detail = 'Database schema needs update. The tenants table is missing vapi_json column. Contact support to update the database schema.';
-        } else if (error.message?.includes('relation "tenants" does not exist')) {
-          vapiIntegration.status = 'error';
-          vapiIntegration.detail = 'Database table not found. The tenants table does not exist. Contact support to set up the database.';
-        } else {
-          // Most likely: client doesn't exist or no vapi_json configured
-          vapiIntegration.status = 'error';
-          vapiIntegration.detail = 'This client does not have Vapi configured. Update the client\'s vapi_json in the database (tenants table) with: { "assistantId": "...", "phoneNumberId": "...", "privateKey": "..." } or use the /api/admin/client/:clientKey PUT endpoint.';
-        }
-      }
-    }
-  } else {
-    // No client key - can't check client-specific config
-    const vapiIntegration = integrations.find(i => i.name === 'Vapi Voice');
-    if (vapiIntegration) {
-      vapiIntegration.status = 'error';
-      vapiIntegration.detail = 'Client key required to check Vapi configuration. Each client must have their own Vapi settings in vapi_json (tenants table) or configured via /api/admin/client/:clientKey PUT endpoint.';
-    }
-  }
-
-  // Check Twilio connection for this specific client
-  if (clientKey) {
-    try {
-      // Get client config from twilio_json column
-      let clientResult;
-      let smsConfig = {};
-      
-      try {
-        // Query twilio_json (sms_json column doesn't exist in schema)
-        clientResult = await query(`
-          SELECT twilio_json, vapi_json
-          FROM tenants
-          WHERE client_key = $1
-        `, [clientKey]);
-        
-        const client = clientResult.rows?.[0];
-        smsConfig = client?.twilio_json || {};
-      } catch (error) {
-        // If query fails, log and continue with empty config
-        console.error('[INTEGRATION HEALTH ERROR] Failed to query client config:', error.message);
-        smsConfig = {};
-      }
-      
-      // Check if THIS CLIENT has Twilio configured (multi-tenant - no global fallback)
-      const hasClientSmsConfig = !!(smsConfig.messagingServiceSid || smsConfig.fromNumber || smsConfig.accountSid || smsConfig.authToken);
-      
-      const twilioIntegration = integrations.find(i => i.name === 'Twilio SMS');
-      if (twilioIntegration) {
-        if (hasClientSmsConfig) {
-          // Client has Twilio config - test connection using client's credentials
-          const twilioSid = smsConfig.accountSid || smsConfig.messagingServiceSid;
-          const twilioToken = smsConfig.authToken;
-          
-          if (twilioSid && twilioToken) {
-            try {
-              const auth = Buffer.from(`${twilioSid}:${twilioToken}`).toString('base64');
-              const twilioResponse = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioSid}.json`, {
-                method: 'GET',
-                headers: {
-                  'Authorization': `Basic ${auth}`
-                },
-                signal: AbortSignal.timeout(5000) // 5 second timeout
-              });
-              
-              if (twilioResponse.ok) {
-                twilioIntegration.status = 'active';
-                twilioIntegration.detail = 'Messaging service verified';
-              } else {
-                twilioIntegration.status = 'warning';
-                const statusText = await twilioResponse.text().catch(() => '');
-                twilioIntegration.detail = `Twilio credentials invalid or expired (HTTP ${twilioResponse.status}). Update this client's sms_json/twilio_json.accountSid and authToken in the database (tenants table) or via /api/admin/client/:clientKey PUT endpoint.`;
-              }
-            } catch (error) {
-              twilioIntegration.status = 'warning';
-              twilioIntegration.detail = `Connection test failed: ${error.message}. Check this client's sms_json/twilio_json in the database (tenants table) or update via /api/admin/client/:clientKey PUT endpoint.`;
-            }
-          } else {
-            twilioIntegration.status = 'warning';
-            twilioIntegration.detail = 'This client has SMS configuration but missing accountSid or authToken. Update the client\'s sms_json/twilio_json in the database or via /api/admin/client/:clientKey PUT endpoint.';
-          }
-        } else {
-          // Client does NOT have Twilio configured
-          twilioIntegration.status = 'warning';
-          twilioIntegration.detail = 'This client does not have Twilio configured. Update the client\'s sms_json or twilio_json in the database (tenants table) with: { "accountSid": "...", "authToken": "...", "messagingServiceSid": "..." } or use the /api/admin/client/:clientKey PUT endpoint.';
-        }
-      }
-    } catch (error) {
-      console.error('[INTEGRATION HEALTH ERROR]', error);
-      const twilioIntegration = integrations.find(i => i.name === 'Twilio SMS');
-      if (twilioIntegration) {
-        // Provide more helpful error message based on error type
-        if (error.message?.includes('does not exist')) {
-          twilioIntegration.status = 'warning';
-          twilioIntegration.detail = 'Database schema needs update. The tenants table is missing SMS configuration columns. Contact support to update the database schema.';
-        } else {
-          twilioIntegration.status = 'warning';
-          twilioIntegration.detail = `Unable to check Twilio configuration: ${error.message}. Database connection may be unavailable.`;
-        }
-      }
-    }
-  } else {
-    // No client key - can't check client-specific config
-    const twilioIntegration = integrations.find(i => i.name === 'Twilio SMS');
-    if (twilioIntegration) {
-      twilioIntegration.status = 'warning';
-      twilioIntegration.detail = 'Client key required to check Twilio configuration. Each client must have their own SMS settings in sms_json/twilio_json (tenants table) or configured via /api/admin/client/:clientKey PUT endpoint.';
-    }
-  }
-
-  // Check actual calendar connection for this client
-  if (clientKey) {
-    try {
-      const tenantResult = await query(`
-        SELECT calendar_json
-        FROM tenants
-        WHERE client_key = $1
-      `, [clientKey]);
-
-      const calendarConfig = tenantResult.rows?.[0]?.calendar_json || {};
-      const isConnected = !!(calendarConfig.service_account_email || calendarConfig.access_token);
-      
-      const calendarIntegration = integrations.find(i => i.name === 'Google Calendar');
-      if (calendarIntegration) {
-        calendarIntegration.status = isConnected ? 'active' : 'warning';
-        calendarIntegration.detail = isConnected 
-          ? 'Auto-booking synced' 
-          : 'This client does not have Google Calendar connected. Update the client\'s calendar_json in the database (tenants table) with: { "service_account_email": "..." } or { "access_token": "..." } or use the /api/admin/client/:clientKey PUT endpoint.';
-      }
-    } catch (error) {
-      console.error('[INTEGRATION HEALTH ERROR]', error);
-      const calendarIntegration = integrations.find(i => i.name === 'Google Calendar');
-      if (calendarIntegration) {
-        calendarIntegration.status = 'warning';
-        calendarIntegration.detail = `Unable to check calendar configuration: ${error.message}. Database connection may be unavailable.`;
-      }
-    }
-  } else {
-    // No client key - can't check client-specific config
-    const calendarIntegration = integrations.find(i => i.name === 'Google Calendar');
-    if (calendarIntegration) {
-      calendarIntegration.status = 'warning';
-      calendarIntegration.detail = 'Client key required to check Google Calendar configuration. Each client must have their own calendar settings in calendar_json (tenants table) or configured via /api/admin/client/:clientKey PUT endpoint.';
-    }
-  }
-
-  return integrations;
-}
+// moved: getIntegrationStatuses → lib/integration-statuses.js
 
 // moved: /api/integration-health/:clientKey → routes/core-api.js
 
@@ -4239,8 +3581,7 @@ app.use(receptionistRouter);
 // Add caching middleware to frequently accessed endpoints
 app.use('/api/stats', cacheMiddleware({ ttl: 60000 })); // 1 minute cache
 app.use('/api/analytics', cacheMiddleware({ ttl: 300000 })); // 5 minute cache
-// Cache middleware for client endpoints - using specific route patterns to avoid conflicts
-app['get']('/api/clients/:clientKey', cacheMiddleware({ ttl: 180000 })); // 3 minute cache
+// moved: GET /api/clients/:key response caching → routes/clients-api.js (cacheMiddleware on /:key)
 
 app.use(vapiWebhooks);
 
@@ -4295,7 +3636,7 @@ async function withRetry(fn, { retries = 2, delayMs = 250 } = {}) {
   throw lastErr;
 }
 
-// Simple Health Check (Basic - for load balancers/uptime monitors)
+// Simple health + gcal probes → routes/health-probes-mount.js
 const healthzDeps = {
   listFullClients,
   getIntegrationFlags: () => ({
@@ -4305,9 +3646,6 @@ const healthzDeps = {
     dbPath: DB_PATH
   })
 };
-app['get']('/healthz', (req, res) => handleHealthz(req, res, healthzDeps));
-
-// Optional: gcal ping
 const gcalPingDeps = {
   getGoogleCredentials: () => ({
     clientEmail: GOOGLE_CLIENT_EMAIL,
@@ -4315,7 +3653,7 @@ const gcalPingDeps = {
     privateKeyB64: GOOGLE_PRIVATE_KEY_B64
   })
 };
-app['get']('/gcal/ping', (req, res) => handleGcalPing(req, res, gcalPingDeps));
+app.use(createHealthProbesRouter({ healthzDeps, gcalPingDeps }));
 
 // moved: /api/calendar/book-slot → routes/calendar-api.js
 
@@ -4334,29 +3672,9 @@ const smsStatusWebhookDeps = {
   smsStatusPath: SMS_STATUS_PATH,
 };
 
-// Simple SMS send route (per-tenant or global fallback)
-// Support both /api/notify/send and /api/notify/send/:param for VAPI compatibility
-console.log('🟢🟢🟢 [NOTIFY-ROUTES] ABOUT TO REGISTER ROUTES...');
+// Simple SMS send + Twilio status/inbound → routes/notify-and-twilio-sms-mount.js
 
-app['post']('/api/notify/test', handleNotifyTest);
-console.log('🟢🟢🟢 [NOTIFY-ROUTES] REGISTERED: POST /api/notify/test');
-
-app['post']('/api/notify/send', (req, res) => handleNotifySend(req, res, notifySendDeps));
-console.log('🟢🟢🟢 [NOTIFY-ROUTES] REGISTERED: POST /api/notify/send');
-app['post']('/api/notify/send/:param', (req, res) => handleNotifySend(req, res, notifySendDeps));
-console.log('🟢🟢🟢 [NOTIFY-ROUTES] REGISTERED: POST /api/notify/send/:param');
-
-// Real Twilio webhook (with signature verification)
-app.post(
-  '/webhooks/twilio-status',
-  express.urlencoded({ extended: false }),
-  twilioWebhookVerification,
-  (req, res) => handleSmsStatusWebhook(req, res, smsStatusWebhookDeps)
-);
-
-// moved: POST /api/test/sms-status-webhook early registration near public endpoints (deduped)
-
-// Twilio inbound STOP/START to toggle consent + YES => trigger Vapi call
+// Twilio inbound deps (Vapi constants used below and by twilioSmsInboundDeps)
 const VAPI_URL = 'https://api.vapi.ai';
 const resolveVapiKey = () =>
   process.env.VAPI_PRIVATE_KEY ||
@@ -4412,12 +3730,19 @@ const twilioSmsInboundDeps = {
   google,
 };
 
-app.post(
-  '/webhooks/twilio-inbound',
-  express.urlencoded({ extended: false }),
-  twilioWebhookVerification,
-  smsRateLimit,
-  safeAsync((req, res) => handleTwilioSmsInbound(req, res, twilioSmsInboundDeps))
+app.use(
+  createNotifyAndTwilioSmsRouter({
+    notifySendDeps,
+    smsStatusWebhookDeps,
+    twilioSmsInboundDeps,
+    handleNotifyTest,
+    handleNotifySend,
+    handleSmsStatusWebhook,
+    handleTwilioSmsInbound,
+    twilioWebhookVerification,
+    smsRateLimit,
+    safeAsync
+  })
 );
 
 const webhooksNewLeadDeps = {
@@ -4446,8 +3771,6 @@ app.use(
   })
 );
 
-app['post']('/sms', (req, res) => handleSmsTestEndpoint(req, res, { getApiKey: () => process.env.API_KEY }));
-
 // Booking (auto-book + branded SMS)
 // Helper to check if a client is a demo client
 function isDemoClient(client) {
@@ -4466,10 +3789,7 @@ function isDemoClient(client) {
 // moved: GET /api/debug/cache → routes/runtime-metrics-mount.js
 
 const dashboardResetDeps = { query };
-app['post']('/api/dashboard/reset/:clientKey', (req, res) =>
-  handleDashboardReset(req, res, dashboardResetDeps)
-);
-console.log('🟢🟢🟢 [DASHBOARD-RESET] REGISTERED: POST /api/dashboard/reset/:clientKey');
+// moved: POST /api/dashboard/reset → routes/inline-json-api-mount.js
 // moved: /api/calendar/check-book → routes/calendar-api.js
 
 // moved: GET /api/time/now → routes/runtime-metrics-mount.js
@@ -4614,11 +3934,40 @@ function calculateCacheHitRate(tenantKey) {
 // moved: GET /api/insights/:clientKey → routes/runtime-metrics-mount.js
 
 const leadsScorePrioritizeDeps = { LeadScoringEngine };
-app['post']('/api/leads/score', (req, res) => handleLeadsScore(req, res, leadsScorePrioritizeDeps));
-app['post']('/api/leads/prioritize', (req, res) => handleLeadsPrioritize(req, res, leadsScorePrioritizeDeps));
-
 const roiCalculatorSaveDeps = { query };
-app['post']('/api/roi-calculator/save', (req, res) => handleRoiCalculatorSave(req, res, roiCalculatorSaveDeps));
+
+app.use(
+  createInlineJsonApiRouter({
+    getApiKey: () => process.env.API_KEY,
+    dashboardResetDeps,
+    leadsScorePrioritizeDeps,
+    roiCalculatorSaveDeps
+  })
+);
+console.log('🟢🟢🟢 [INLINE-JSON-API] REGISTERED: /sms, /api/dashboard/reset/:clientKey, leads score/prioritize, roi save');
+
+app.use(
+  createPublicReadsRouter({
+    nanoid,
+    mockCallFetchImpl: globalThis.fetch,
+    getFullClient,
+    isPostgres,
+    query,
+    eventsSseDeps: {
+      query,
+      getFullClient,
+      activityFeedChannelLabel,
+      outcomeToFriendlyLabel,
+      isCallQueueStartFailureRow,
+      parseCallsRowMetadata,
+      formatCallDuration,
+      truncateActivityFeedText,
+      mapCallStatus,
+      mapStatusClass
+    }
+  })
+);
+console.log('🟢🟢🟢 [PUBLIC-READS] REGISTERED: /mock-call, /api/outbound-queue-day/:clientKey, /api/events/:clientKey');
 
 // moved: /api/admin/roi-calculator/leads → routes/admin-roi-calculator.js
 

@@ -46,5 +46,23 @@ describe('Twilio voice webhook contracts', () => {
       expect(validateRequest).toHaveBeenCalled();
     });
   });
+
+  test('missing signature header yields 403 when TWILIO_AUTH_TOKEN is set', async () => {
+    await withEnv({ TWILIO_AUTH_TOKEN: 'test_auth_token' }, async () => {
+      const { default: router } = await import('../../routes/twilio-voice-webhooks.js');
+      const app = createContractApp({ mounts: [{ path: '/', router }], json: false });
+
+      await request(app)
+        .post('/webhooks/twilio-voice-inbound')
+        .type('form')
+        .send({
+          CallSid: 'CA999',
+          From: '+15551230000',
+          To: '+15557650000',
+          CallStatus: 'ringing'
+        })
+        .expect(403);
+    });
+  });
 });
 

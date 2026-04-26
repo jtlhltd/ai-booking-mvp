@@ -56,5 +56,43 @@ describe('lib/leads-import', () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual(expect.objectContaining({ ok: true, inserted: 1 }));
   });
+
+  test('42P10 on INSERT falls back to update-or-insert path', async () => {
+    const req = {
+      method: 'POST',
+      url: '/api/leads/import',
+      headers: {},
+      body: { clientKey: 'c1', leads: [{ phone: '+447700900000', name: 'A' }] }
+    };
+    const res = mockRes();
+
+    const err42 = new Error('no constraint');
+    err42.code = '42P10';
+
+    const query = jest.fn(async (sql) => {
+      const s = String(sql);
+      if (s.includes('SELECT COUNT(*)')) return { rows: [{ n: 0 }] };
+      if (s.includes('ON CONFLICT')) throw err42;
+      if (s.includes('UPDATE leads')) {
+        return { rows: [{ id: 9, name: 'A', phone: '+447700900000', service: 'Lead Follow-Up', source: 'Import', status: 'new' }] };
+      }
+      if (s.includes('INSERT INTO leads') && !s.includes('ON CONFLICT')) {
+        return { rows: [] };
+      }
+      return { rows: [] };
+    });
+
+    await handleLeadsImport(req, res, {
+      query,
+      validateAndSanitizePhone: (p) => p,
+      phoneMatchKey: () => 'k',
+      sanitizeInput: (s) => s,
+      isOptedOut: async () => false
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.inserted).toBe(1);
+    expect(query.mock.calls.some((c) => String(c[0]).includes('UPDATE leads'))).toBe(true);
+  });
 });
 

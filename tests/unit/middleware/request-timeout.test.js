@@ -10,6 +10,7 @@ describe('Request Timeout Middleware', () => {
   });
   
   afterEach(() => {
+    jest.clearAllTimers();
     jest.useRealTimers();
   });
   
