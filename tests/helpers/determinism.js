@@ -25,3 +25,14 @@ export function withMockedMathRandom(value, fn) {
   }
 }
 
+export function withFrozenTimeAndRandom({ nowMs, random } = {}, fn) {
+  const spies = [];
+  if (nowMs !== undefined) spies.push(jest.spyOn(Date, 'now').mockReturnValue(nowMs));
+  if (random !== undefined) spies.push(jest.spyOn(Math, 'random').mockReturnValue(random));
+  try {
+    return fn();
+  } finally {
+    for (const s of spies.reverse()) s.mockRestore();
+  }
+}
+

@@ -66,15 +66,51 @@ Server listens on `http://localhost:3000` (or `PORT`).
 
 The repo’s `render.yaml` uses **`npm run render-start`** so migrations run before the server starts (same as the manual start command above).
 
-**Local Node version:** `.nvmrc` is **18** (matches `NODE_VERSION` in `render.yaml`). With [nvm](https://github.com/nvm-sh/nvm) or [fnm](https://github.com/Schniz/fnm): `nvm use` / `fnm use`.
+**Local Node version:** `.nvmrc` / `.node-version` are **20.16.0** (recommended for dev + tests; avoids native addon build friction). With [nvm](https://github.com/nvm-sh/nvm) or [fnm](https://github.com/Schniz/fnm): `nvm use` / `fnm use`.
 
 ---
 
 ## GitHub: CI and branch protection (recommended)
 
-- **CI:** Pushes and pull requests to `main` / `master` run **GitHub Actions** (`.github/workflows/ci.yml`): `npm ci` and `npm test` on Node 18 and 20. Check results under the repo **Actions** tab or on the PR **Checks** section.
-- **Branch protection:** In GitHub: **Settings → Branches → Branch protection rules** (or **Rulesets**) for `main`. Enable **Require status checks to pass before merging** and select the **CI** jobs (e.g. `test (18)` and `test (20)`). That way failing tests block merges even though Render deploys independently.
+- **CI:** Pushes and pull requests to `main` / `master` run **GitHub Actions** (`.github/workflows/ci.yml`). Check results under the repo **Actions** tab or on the PR **Checks** section.
+- **Branch protection:** In GitHub: **Settings → Branches → Branch protection rules** (or **Rulesets**) for `main`. Enable **Require status checks to pass before merging** and select the **CI** jobs (e.g. `test`). That way failing tests block merges even though Render deploys independently.
 - **Dependabot:** `.github/dependabot.yml` opens weekly npm dependency update PRs; review and merge as you like.
+
+### Test tiers / commands
+
+Recommended tiers (in increasing “integration” level):
+
+- **Tier 1 (fast, always)**: unit tests
+  - `npm run test:unit`
+- **Tier 2 (always runnable, Windows-friendly)**: contract tests
+  - `npm run test:integration-lite` (runs `tests/routes/**` + `tests/db/**`)
+- **Tier 3 (opt-in)**: integration tests
+  - SQLite integration tests: set `RUN_SQLITE_INTEGRATION_TESTS=1`
+  - DB connection pool tests: set `RUN_DB_INTEGRATION_TESTS=1`
+  - Postgres smoke: set `RUN_POSTGRES_SMOKE_TESTS=1` and `TEST_DATABASE_URL=...`
+
+#### Harness / manual scripts (not CI)
+
+The repo also contains **harness/manual** test scripts used for operator-style checks and “real world” validation.
+
+- These are **not** run by Jest or CI, and they may call `process.exit()` or hit real endpoints.
+- Current locations:
+  - `tests/lib/test-*.js` (script-style checks; explicitly excluded from Jest discovery)
+  - `tests/*.ps1` (PowerShell harness scripts)
+  - other one-off harness scripts under `tests/`
+
+Examples:
+
+```bash
+# run Tier 2 only
+npm run test:integration-lite
+
+# run integration suite (Tier 3) locally when you have the environment
+RUN_SQLITE_INTEGRATION_TESTS=1 RUN_DB_INTEGRATION_TESTS=1 npm test -- tests/integration
+
+# run Postgres connectivity smoke
+RUN_POSTGRES_SMOKE_TESTS=1 TEST_DATABASE_URL=postgresql://... npm test -- tests/integration/postgres-url-smoke.test.js
+```
 
 ---
 

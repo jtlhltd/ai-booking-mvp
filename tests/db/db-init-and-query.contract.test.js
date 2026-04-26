@@ -1,4 +1,5 @@
 import { describe, expect, test, jest, beforeEach } from '@jest/globals';
+import { withIsolatedModulesAndEnv } from '../helpers/contract-harness.js';
 
 const sqliteState = { lastPreparedSql: null, allRows: [{ x: 1 }] };
 
@@ -14,104 +15,103 @@ beforeEach(() => {
 
 describe('db.js init/query contracts (branch coverage)', () => {
   test('init throws when DB_TYPE=postgres but DATABASE_URL missing', async () => {
-    process.env.DB_TYPE = 'postgres';
-
-    jest.unstable_mockModule('pg', () => ({
-      Pool: class Pool {
-        // Should never be constructed for this branch.
-        constructor() {
-          throw new Error('Pool should not be constructed');
+    await withIsolatedModulesAndEnv(jest, { DB_TYPE: 'postgres' }, async () => {
+      jest.unstable_mockModule('pg', () => ({
+        Pool: class Pool {
+          // Should never be constructed for this branch.
+          constructor() {
+            throw new Error('Pool should not be constructed');
+          }
         }
-      }
-    }));
+      }));
 
-    const db = await import('../../db.js');
-    await expect(db.init()).rejects.toThrow(/DATABASE_URL is required/i);
+      const db = await import('../../db.js');
+      await expect(db.init()).rejects.toThrow(/DATABASE_URL is required/i);
+    });
   });
 
   test('sqlite query converts $1 placeholders and returns stmt.all rows', async () => {
-    process.env.DB_TYPE = 'sqlite';
-    process.env.DATA_DIR = 'data-test';
-    process.env.DB_PATH = 'data-test/app.db';
+    await withIsolatedModulesAndEnv(
+      jest,
+      { DB_TYPE: 'sqlite', DATA_DIR: 'data-test', DB_PATH: 'data-test/app.db', JEST_WORKER_ID: '1' },
+      async () => {
+        jest.unstable_mockModule('fs', () => ({
+          default: {
+            existsSync: () => true,
+            mkdirSync: () => {},
+            readFileSync: () => '{}',
+            writeFileSync: () => {}
+          },
+          existsSync: () => true,
+          mkdirSync: () => {},
+          readFileSync: () => '{}',
+          writeFileSync: () => {}
+        }));
 
-    jest.unstable_mockModule('fs', () => ({
-      default: {
-        existsSync: () => true,
-        mkdirSync: () => {},
-        readFileSync: () => '{}',
-        writeFileSync: () => {}
-      },
-      existsSync: () => true,
-      mkdirSync: () => {},
-      readFileSync: () => '{}',
-      writeFileSync: () => {}
-    }));
+        jest.unstable_mockModule('better-sqlite3', () => ({
+          default: class Database {
+            exec() {}
+            prepare(sql) {
+              sqliteState.lastPreparedSql = sql;
+              return {
+                get: () => ({}),
+                all: () => sqliteState.allRows,
+                run: () => ({ changes: 1 })
+              };
+            }
+            close() {}
+          }
+        }));
 
-    jest.unstable_mockModule('better-sqlite3', () => ({
-      default: class Database {
-        exec() {}
-        prepare(sql) {
-          sqliteState.lastPreparedSql = sql;
-          return {
-            get: () => ({}),
-            all: () => sqliteState.allRows,
-            run: () => ({ changes: 1 })
-          };
-        }
-        close() {}
+        jest.unstable_mockModule('../../lib/cache.js', () => ({
+          getCache: () => ({
+            get: async () => null,
+            set: async () => {},
+            clear: async () => {},
+            delPrefix: async () => {}
+          })
+        }));
+
+        const db = await import('../../db.js');
+        await db.init();
+
+        const out = await db.query('SELECT * FROM t WHERE a = $1 AND b = $2', [1, 2]);
+        expect(out).toEqual({ rows: [{ x: 1 }] });
+        expect(sqliteState.lastPreparedSql).toBe('SELECT * FROM t WHERE a = ? AND b = ?');
       }
-    }));
-
-    jest.unstable_mockModule('../../lib/cache.js', () => ({
-      getCache: () => ({
-        get: async () => null,
-        set: async () => {},
-        clear: async () => {},
-        delPrefix: async () => {}
-      })
-    }));
-
-    // Avoid async perf-tracker import scheduling.
-    process.env.JEST_WORKER_ID = '1';
-    const db = await import('../../db.js');
-    await db.init();
-
-    const out = await db.query('SELECT * FROM t WHERE a = $1 AND b = $2', [1, 2]);
-    expect(out).toEqual({ rows: [{ x: 1 }] });
-    expect(sqliteState.lastPreparedSql).toBe('SELECT * FROM t WHERE a = ? AND b = ?');
+    );
   });
 
   test('query uses JSON fallback when neither postgres nor sqlite initialized', async () => {
-    process.env.DB_TYPE = '';
+    await withIsolatedModulesAndEnv(jest, { DB_TYPE: '', JEST_WORKER_ID: '1' }, async () => {
+      jest.unstable_mockModule('../../lib/cache.js', () => ({
+        getCache: () => ({
+          get: async () => null,
+          set: async () => {},
+          clear: async () => {},
+          delPrefix: async () => {}
+        })
+      }));
 
-    jest.unstable_mockModule('../../lib/cache.js', () => ({
-      getCache: () => ({
-        get: async () => null,
-        set: async () => {},
-        clear: async () => {},
-        delPrefix: async () => {}
-      })
-    }));
-
-    jest.unstable_mockModule('fs', () => ({
-      default: {
+      jest.unstable_mockModule('fs', () => ({
+        default: {
+          existsSync: () => false,
+          readFileSync: () => '{}',
+          writeFileSync: () => {}
+        },
         existsSync: () => false,
         readFileSync: () => '{}',
         writeFileSync: () => {}
-      },
-      existsSync: () => false,
-      readFileSync: () => '{}',
-      writeFileSync: () => {}
-    }));
+      }));
 
-    jest.unstable_mockModule('better-sqlite3', () => ({ default: class Database {} }));
-    jest.unstable_mockModule('pg', () => ({ Pool: class Pool {} }));
+      jest.unstable_mockModule('better-sqlite3', () => ({ default: class Database {} }));
+      jest.unstable_mockModule('pg', () => ({ Pool: class Pool {} }));
 
-    process.env.JEST_WORKER_ID = '1';
-    const db = await import('../../db.js');
+      const db = await import('../../db.js');
 
-    const out = await db.query('SELECT * FROM leads', []);
-    expect(out).toEqual({ rows: [] });
+      const out = await db.query('SELECT * FROM leads', []);
+      expect(out).toEqual({ rows: [] });
+    });
   });
 
   test('query serves cached SELECT results on second call', async () => {

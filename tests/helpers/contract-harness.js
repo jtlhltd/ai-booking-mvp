@@ -26,6 +26,37 @@ export async function withEnv(env, fn) {
 }
 
 /**
+ * Wrap a callback in a safe "env + module isolation" pattern used by many contract tests.
+ *
+ * Note: Jest ESM mocking requires module isolation patterns like `jest.resetModules()`
+ * before dynamic imports. We keep this helper here (rather than global setup) so tests
+ * can opt into isolation only when they need it.
+ */
+export async function withIsolatedModulesAndEnv(jest, env, fn) {
+  if (jest?.resetModules) jest.resetModules();
+  return await withEnv(env, fn);
+}
+
+/**
+ * Some modules schedule timers on import. For "import smoke" contracts, disable timers
+ * during the import window to avoid leaked handles, then restore immediately.
+ */
+export async function withDisabledTimersOnImport(fn) {
+  const realSetInterval = global.setInterval;
+  const realSetTimeout = global.setTimeout;
+  // eslint-disable-next-line no-global-assign
+  global.setInterval = () => 0;
+  // eslint-disable-next-line no-global-assign
+  global.setTimeout = () => 0;
+  try {
+    return await fn();
+  } finally {
+    global.setInterval = realSetInterval;
+    global.setTimeout = realSetTimeout;
+  }
+}
+
+/**
  * Create a minimal Express app and mount routers.
  *
  * mounts: [{ path: string, router: express.Router | function returning router }]
