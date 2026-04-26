@@ -174,6 +174,20 @@ const router = express.Router();
 // Middleware to preserve raw body for signature verification
 // Note: Global express.json() may have already parsed the body, so we handle both cases
 router.use('/webhooks/vapi', (req, res, next) => {
+  // Prefer byte-stable `req.rawBody` from `express.json({ verify })` (see server.js) for HMAC verification.
+  if (Buffer.isBuffer(req.rawBody) && req.rawBody.length > 0) {
+    if (typeof req.body !== 'object' || req.body === null || Buffer.isBuffer(req.body)) {
+      try {
+        const s = req.rawBody.toString('utf8');
+        req.body = s ? JSON.parse(s) : {};
+      } catch (e) {
+        console.error('[VAPI WEBHOOK MIDDLEWARE] JSON parse error:', e.message);
+        req.body = {};
+      }
+    }
+    vapiWebhookVerboseLog('[VAPI WEBHOOK MIDDLEWARE] Using captured rawBody. Keys:', Object.keys(req.body || {}));
+    return next();
+  }
   // If body is already parsed (from global express.json()), use it directly
   // Otherwise, try to get raw body if available
   if (typeof req.body === 'object' && req.body !== null && !Buffer.isBuffer(req.body)) {

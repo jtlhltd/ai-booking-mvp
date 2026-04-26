@@ -202,6 +202,7 @@ import messagingService from './lib/messaging-service.js';
 import { sendOperatorAlert } from './lib/operator-alerts.js';
 import { AIInsightsEngine, LeadScoringEngine } from './lib/ai-insights.js';
 import { getCallContext, storeCallContext, getMostRecentCallContext, getCallContextCacheStats } from './lib/call-context-cache.js';
+import { installAdminHubSocketAuth, resolveSocketIoAllowedOrigins } from './lib/socket-io-admin-hub.js';
 // Real API integration - dynamic imports will be used in endpoints
 
 const app = express();
@@ -216,12 +217,27 @@ const JOBS_PATH = path.join(DATA_DIR, 'jobs.json');
 
 // Create HTTP server and Socket.IO server
 const server = createServer(app);
+const socketIoAllowedOrigins = resolveSocketIoAllowedOrigins();
 const io = new SocketIOServer(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (!socketIoAllowedOrigins.length) {
+        const prod = String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
+        if (prod) return callback(new Error('Socket.IO CORS: set PUBLIC_BASE_URL or SOCKETIO_EXTRA_ORIGINS'), false);
+        return callback(null, true);
+      }
+      return callback(null, socketIoAllowedOrigins.includes(origin));
+    },
+    methods: ['GET', 'POST'],
+    credentials: true
   }
 });
+installAdminHubSocketAuth(io);
+
+const ADMIN_HUB_BURST_WINDOW_MS = 60_000;
+const ADMIN_HUB_BURST_MAX = 45;
+const adminHubRequestBursts = new Map();
 
 // Initialize performance monitoring and caching
 const performanceMonitor = getPerformanceMonitor();
@@ -279,12 +295,23 @@ io.on('connection', (socket) => {
   
   // Handle client disconnection
   socket.on('disconnect', () => {
+    adminHubRequestBursts.delete(socket.id);
     console.log('Admin Hub client disconnected:', socket.id);
   });
   
   // Handle real-time data requests
   socket.on('request-update', async (dataType) => {
     try {
+      const now = Date.now();
+      const bucket = adminHubRequestBursts.get(socket.id) || [];
+      const pruned = bucket.filter((t) => now - t < ADMIN_HUB_BURST_WINDOW_MS);
+      pruned.push(now);
+      if (pruned.length > ADMIN_HUB_BURST_MAX) {
+        socket.emit('error', { message: 'Rate limit exceeded' });
+        return;
+      }
+      adminHubRequestBursts.set(socket.id, pruned);
+
       let updateData = {};
       
       switch(dataType) {
@@ -371,7 +398,27 @@ app.use((req, res, next) => {
 
 // Middleware for parsing JSON bodies (must be before routes that need it)
 app.use(compression()); // Compress responses for better performance
-app.use(express.json({ limit: '10mb' }));
+// Vapi webhooks: capture exact request bytes for HMAC (must run before global express.json).
+const vapiWebhookJsonCapture = express.json({
+  limit: '10mb',
+  verify: (req, _res, buf) => {
+    req.rawBody = Buffer.isBuffer(buf) ? buf : Buffer.from(buf || []);
+  }
+});
+app.use('/webhooks/vapi', (req, res, next) => {
+  if (req.method !== 'POST' && req.method !== 'PUT') return next();
+  return vapiWebhookJsonCapture(req, res, next);
+});
+const globalJsonParser = express.json({ limit: '10mb' });
+app.use((req, res, next) => {
+  if (
+    (req.method === 'POST' || req.method === 'PUT') &&
+    (req.path === '/webhooks/vapi' || req.path.startsWith('/webhooks/vapi/'))
+  ) {
+    return next();
+  }
+  return globalJsonParser(req, res, next);
+});
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 app.use(enforceAdminApiKeyIfConfigured);
@@ -3022,6 +3069,8 @@ app.use(rateLimit({ windowMs: 60_000, max: 60, standardHeaders: true, legacyHead
 let isShuttingDown = false;
 let activeRequests = 0;
 let shutdownTimeout = null;
+/** @type {{ stop: () => void } | null} */
+let scheduledJobsController = null;
 
 // Track active requests for graceful shutdown
 app.use((req, res, next) => {
@@ -3967,7 +4016,9 @@ app.use(
     }
   })
 );
-console.log('🟢🟢🟢 [PUBLIC-READS] REGISTERED: /mock-call, /api/outbound-queue-day/:clientKey, /api/events/:clientKey');
+console.log(
+  '🟢 [PUBLIC-READS] Routes registered (gated by ENABLE_PUBLIC_DEV_ROUTES): /mock-call, /api/outbound-queue-day/:clientKey, /api/events/:clientKey'
+);
 
 // moved: /api/admin/roi-calculator/leads → routes/admin-roi-calculator.js
 
@@ -5081,7 +5132,7 @@ async function processVapiCallFromQueue(call) {
                     'at', NOW(),
                     'kind', 'throw',
                     'error', 'transient_before_vapi_response',
-                    'message', $3
+                    'message', $3::text
                   ),
                   true
                 ),
@@ -5201,9 +5252,9 @@ async function processVapiCallFromQueue(call) {
                   jsonb_build_object(
                     'at', NOW(),
                     'kind', 'vapi',
-                    'error', $3,
-                    'statusCode', $4,
-                    'details', $5
+                    'error', $3::text,
+                    'statusCode', $4::integer,
+                    'details', $5::text
                   ),
                   true
                 ),
@@ -5251,7 +5302,7 @@ async function processVapiCallFromQueue(call) {
                     'at', NOW(),
                     'kind', 'vapi',
                     'error', 'vapi_no_credits',
-                    'details', $3
+                    'details', $3::text
                   ),
                   true
                 ),
@@ -5261,6 +5312,14 @@ async function processVapiCallFromQueue(call) {
           [next, call.id, detailsStr.slice(0, 220)]
         );
         console.warn('[QUEUE CALL] Deferred due to VAPI credits', { queueId: call.id, scheduledFor: next.toISOString() });
+        void sendOperatorAlert({
+          subject: 'Vapi wallet or credits blocking outbound dials',
+          text:
+            `Queue item ${call.id} for tenant ${clientKey} was deferred after a Vapi wallet/credits style error. ` +
+            `Top of details: ${detailsStr.slice(0, 240)}. Expect automatic retries after backoff; add credits or upgrade the Vapi plan if this persists.`,
+          dedupeKey: 'vapi:no_credits',
+          throttleMinutes: 120
+        }).catch(() => {});
         return;
       }
 
@@ -6709,8 +6768,13 @@ async function startServer() {
         console.log(`✅ Applied ${migrationResult.applied} new migrations`);
       }
     } catch (migrationError) {
+      const isProd = String(process.env.NODE_ENV || '').toLowerCase() === 'production';
+      if (isProd) {
+        console.error('❌ Migration failed in production — refusing to start:', migrationError?.message || migrationError);
+        process.exit(1);
+      }
       console.warn('⚠️ Migration failed, but continuing server startup:', migrationError.message);
-      // Continue anyway - migrations can be run manually
+      // Non-production: migrations can be run manually
     }
     
     // Bootstrap clients after DB is ready
@@ -6729,7 +6793,7 @@ async function startServer() {
     
     // Register all scheduled jobs (crons + reminder setInterval); see lib/scheduled-jobs.js
     const { registerScheduledJobs } = await import('./lib/scheduled-jobs.js');
-    registerScheduledJobs({
+    scheduledJobsController = registerScheduledJobs({
       processCallQueue,
       processRetryQueue,
       queueNewLeadsForCalling,
@@ -6752,6 +6816,15 @@ async function gracefulShutdown(signal) {
   isShuttingDown = true;
   console.log(`\n[SHUTDOWN] ${signal} received, starting graceful shutdown...`);
   console.log(`[SHUTDOWN] Active requests: ${activeRequests}`);
+
+  if (scheduledJobsController?.stop) {
+    try {
+      scheduledJobsController.stop();
+    } catch (e) {
+      console.warn('[SHUTDOWN] scheduled jobs stop error:', e?.message || e);
+    }
+    scheduledJobsController = null;
+  }
   
   // Step 1: Stop accepting new connections
   server.close(() => {
@@ -6767,6 +6840,10 @@ async function gracefulShutdown(signal) {
   const waitForRequests = setInterval(() => {
     if (activeRequests === 0) {
       clearInterval(waitForRequests);
+      if (shutdownTimeout) {
+        clearTimeout(shutdownTimeout);
+        shutdownTimeout = null;
+      }
       closeDatabase();
     } else {
       console.log(`[SHUTDOWN] Waiting for ${activeRequests} active requests to complete...`);
@@ -6783,6 +6860,10 @@ async function gracefulShutdown(signal) {
 
 async function closeDatabase() {
   try {
+    if (shutdownTimeout) {
+      clearTimeout(shutdownTimeout);
+      shutdownTimeout = null;
+    }
     // Close database pool
     if (pool) {
       console.log('[SHUTDOWN] Closing database pool...');

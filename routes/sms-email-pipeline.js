@@ -3,6 +3,7 @@
  * Mounted at root (paths are mixed: /api/*, /webhook*, /test-*).
  */
 import express from 'express';
+import { twilioWebhookVerification } from '../middleware/security.js';
 
 export function createSmsEmailPipelineRouter(deps) {
   const { smsEmailPipeline } = deps || {};
@@ -94,10 +95,7 @@ export function createSmsEmailPipelineRouter(deps) {
   });
 
   // Twilio Webhook for SMS Replies (Alternative endpoint for Twilio compatibility)
-  router.post('/webhooks/sms', express.urlencoded({ extended: false }), async (req, res) => {
-    // Verify Twilio signature for security
-    const { twilioWebhookVerification } = await import('../lib/security.js');
-    twilioWebhookVerification(req, res, () => {});
+  router.post('/webhooks/sms', express.urlencoded({ extended: false }), twilioWebhookVerification, async (req, res) => {
     try {
       const { From, Body } = req.body;
 
@@ -170,14 +168,7 @@ export function createSmsEmailPipelineRouter(deps) {
   });
 
   // Twilio Webhook for SMS Replies
-  router.post('/webhook/sms-reply', express.urlencoded({ extended: false }), async (req, res) => {
-    const { twilioWebhookVerification } = await import('../lib/security.js');
-    const verified = await new Promise((resolve) => {
-      twilioWebhookVerification(req, res, () => resolve(true));
-    });
-
-    if (!verified) return;
-
+  router.post('/webhook/sms-reply', express.urlencoded({ extended: false }), twilioWebhookVerification, async (req, res) => {
     try {
       const { From, Body } = req.body;
 

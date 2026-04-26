@@ -114,11 +114,25 @@ describe('security', () => {
     expect(wl.isAllowed('8.8.8.8')).toBe(true);
     expect(wl.isAllowed('1.1.1.1')).toBe(false);
 
+    const prevTok = process.env.TWILIO_AUTH_TOKEN;
+    const prevNode = process.env.NODE_ENV;
     delete process.env.TWILIO_AUTH_TOKEN;
+    process.env.NODE_ENV = 'test';
     const next = jest.fn();
-    const res = { status: jest.fn(() => ({ json: jest.fn() })) };
-    twilioWebhookVerification({ get: () => '' }, res, next);
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    twilioWebhookVerification(
+      {
+        protocol: 'https',
+        originalUrl: '/w',
+        body: {},
+        get: (h) => (h === 'host' ? 'example.test' : '')
+      },
+      res,
+      next
+    );
     expect(next).toHaveBeenCalled();
+    process.env.TWILIO_AUTH_TOKEN = prevTok;
+    process.env.NODE_ENV = prevNode;
   });
 
   test('logAudit delegates to singleton', async () => {

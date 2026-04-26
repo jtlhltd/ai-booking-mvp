@@ -366,9 +366,11 @@ describe('middleware/security', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  test('twilioWebhookVerification skips verification when token missing', async () => {
-    const prev = process.env.TWILIO_AUTH_TOKEN;
+  test('twilioWebhookVerification skips verification when token missing (non-production)', async () => {
+    const prevTok = process.env.TWILIO_AUTH_TOKEN;
+    const prevNode = process.env.NODE_ENV;
     delete process.env.TWILIO_AUTH_TOKEN;
+    process.env.NODE_ENV = 'test';
 
     const req = {
       protocol: 'https',
@@ -382,7 +384,32 @@ describe('middleware/security', () => {
     twilioWebhookVerification(req, res, next);
     expect(next).toHaveBeenCalledWith();
 
-    process.env.TWILIO_AUTH_TOKEN = prev;
+    process.env.TWILIO_AUTH_TOKEN = prevTok;
+    process.env.NODE_ENV = prevNode;
+  });
+
+  test('twilioWebhookVerification returns 500 when token missing in production', async () => {
+    const prevTok = process.env.TWILIO_AUTH_TOKEN;
+    const prevNode = process.env.NODE_ENV;
+    delete process.env.TWILIO_AUTH_TOKEN;
+    process.env.NODE_ENV = 'production';
+
+    const req = {
+      protocol: 'https',
+      originalUrl: '/webhooks/twilio/sms-inbound',
+      body: { a: 1 },
+      get: (h) => (h === 'host' ? 'example.test' : ''),
+    };
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    const next = jest.fn();
+
+    twilioWebhookVerification(req, res, next);
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(res.json.mock.calls[0][0].code).toBe('MISSING_TWILIO_AUTH_TOKEN');
+    expect(next).not.toHaveBeenCalled();
+
+    process.env.TWILIO_AUTH_TOKEN = prevTok;
+    process.env.NODE_ENV = prevNode;
   });
 
   test('twilioWebhookVerification returns 403 on invalid signature', async () => {
@@ -404,7 +431,6 @@ describe('middleware/security', () => {
     const next = jest.fn();
 
     twilioWebhookVerification(req, res, next);
-    await new Promise((r) => setImmediate(r));
 
     expect(res.status).toHaveBeenCalledWith(403);
     expect(res.json.mock.calls[0][0].code).toBe('INVALID_SIGNATURE');
@@ -413,7 +439,7 @@ describe('middleware/security', () => {
     process.env.TWILIO_AUTH_TOKEN = prev;
   });
 
-  test('twilioWebhookVerification allows request when validator throws (graceful degradation)', async () => {
+  test('twilioWebhookVerification returns 403 when validator throws', async () => {
     const prev = process.env.TWILIO_AUTH_TOKEN;
     process.env.TWILIO_AUTH_TOKEN = 'tok';
     twilioValidator.mockImplementation(() => {
@@ -434,10 +460,10 @@ describe('middleware/security', () => {
     const next = jest.fn();
 
     twilioWebhookVerification(req, res, next);
-    await new Promise((r) => setImmediate(r));
 
-    expect(next).toHaveBeenCalledWith();
-    expect(res.status).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json.mock.calls[0][0].code).toBe('TWILIO_VERIFY_ERROR');
+    expect(next).not.toHaveBeenCalled();
 
     process.env.TWILIO_AUTH_TOKEN = prev;
   });

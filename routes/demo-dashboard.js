@@ -6,6 +6,7 @@
  * GET /api/demo-dashboard/:clientKey
  */
 import { Router } from 'express';
+import { sqlDaysAgo as sqlDaysAgoLib } from '../lib/sql-relative-interval.js';
 
 /**
  * This router intentionally uses a wide deps surface because the original handler referenced many server.js locals.
@@ -56,6 +57,17 @@ export async function handleDemoDashboard(req, res, deps) {
   } = deps || {};
 
   const fetch = fetchImpl || global.fetch;
+
+  const daysAgoSql = (days) => {
+    if (typeof sqlDaysAgo === 'function') {
+      const frag = sqlDaysAgo(days);
+      if (frag != null && String(frag).trim() !== '') return String(frag).trim();
+    }
+    return sqlDaysAgoLib(!!isPostgres, days);
+  };
+
+  const activityTzLabel = String(DASHBOARD_ACTIVITY_TZ || 'Europe/London');
+  const activityTzSqlLiteral = activityTzLabel.replace(/'/g, "''");
 
   const { clientKey } = req.params;
   /** Max rows returned for Recent Leads card (full list for typical tenants; keep in sync with client-dashboard RECENT_LEADS_DASHBOARD_CAP). */
@@ -132,9 +144,7 @@ export async function handleDemoDashboard(req, res, deps) {
 
   const demoDashboardCallsAndPhoneStatsSql = deps?.demoDashboardCallsAndPhoneStatsSql;
   /** Unnest parallel arrays from the lead query ($2..$4) into rows for `call_phone_stats`. */
-  const dashboardCallPhoneStatsFromArraysCte =
-    deps?.dashboardCallPhoneStatsFromArraysCte ??
-    `call_phone_stats AS (
+  const defaultDashboardCallPhoneStatsFromArraysCte = `call_phone_stats AS (
       SELECT
         t.phone_key::text AS phone_key,
         t.calls_n::int AS calls_n,
@@ -145,7 +155,14 @@ export async function handleDemoDashboard(req, res, deps) {
         COALESCE($4::int[], ARRAY[]::int[])
       ) AS t(phone_key, calls_n, reached_max)
     )`;
-  const dashboardLeadPhoneKeyRef = deps?.dashboardLeadPhoneKeyRef || 'l.phone_match_key';
+  const dashboardCallPhoneStatsFromArraysCte =
+    typeof deps?.dashboardCallPhoneStatsFromArraysCte === 'string' && deps.dashboardCallPhoneStatsFromArraysCte.trim() !== ''
+      ? deps.dashboardCallPhoneStatsFromArraysCte
+      : defaultDashboardCallPhoneStatsFromArraysCte;
+  const dashboardLeadPhoneKeyRefCandidate = deps?.dashboardLeadPhoneKeyRef || 'l.phone_match_key';
+  const dashboardLeadPhoneKeyRef = /^[a-zA-Z0-9_.]+$/.test(String(dashboardLeadPhoneKeyRefCandidate).trim())
+    ? String(dashboardLeadPhoneKeyRefCandidate).trim()
+    : 'l.phone_match_key';
   /** Join recent calls `c` to `lead_lookup.phone_key` using the same 10-digit key rule as dashboardCallPhoneAggSql. */
   const dashboardCallRowPhoneKeySql =
     deps?.dashboardCallRowPhoneKeySql ??
@@ -160,21 +177,21 @@ export async function handleDemoDashboard(req, res, deps) {
     const activityChannel = activityFeedChannelLabel(client);
     const tenantTz = client?.booking?.timezone || client?.timezone || 'Europe/London';
 
-    const rollingSinceInstant = DateTime.now().setZone(DASHBOARD_ACTIVITY_TZ).minus({ hours: 24 });
+    const rollingSinceInstant = DateTime.now().setZone(activityTzLabel).minus({ hours: 24 });
     const activityRollingSinceIso = rollingSinceInstant.toUTC().toISO();
     const dashboardCallsStatsCutoffIso = DateTime.now()
-      .setZone(DASHBOARD_ACTIVITY_TZ)
+      .setZone(activityTzLabel)
       .minus({ days: 180 })
       .toUTC()
       .toISO();
-    const activityAsOfLondon = DateTime.now().setZone(DASHBOARD_ACTIVITY_TZ);
+    const activityAsOfLondon = DateTime.now().setZone(activityTzLabel);
 
     const touchpointDayKeySql = isPostgres
-      ? `to_char(created_at AT TIME ZONE '${DASHBOARD_ACTIVITY_TZ}', 'YYYY-MM-DD')`
+      ? `to_char(created_at AT TIME ZONE '${activityTzSqlLiteral}', 'YYYY-MM-DD')`
       : `strftime('%Y-%m-%d', created_at)`;
     const touchpointDayKeyFromD = touchpointDayKeySql.replace(/\bcreated_at\b/g, 'd.created_at');
 
-    const outreachPulseAnchor = DateTime.now().setZone(DASHBOARD_ACTIVITY_TZ);
+    const outreachPulseAnchor = DateTime.now().setZone(activityTzLabel);
     const outreachPulseCutoff40Iso = outreachPulseAnchor.minus({ days: 40 }).toUTC().toISO();
     const outreachPulseCutoff30Iso = outreachPulseAnchor.minus({ days: 30 }).toUTC().toISO();
     const outreachPulseCutoff7Iso = outreachPulseAnchor.minus({ days: 7 }).toUTC().toISO();
@@ -585,7 +602,7 @@ export async function handleDemoDashboard(req, res, deps) {
                COUNT(*) FILTER (WHERE status IN ('cancelled','canceled')) AS cancellations
         FROM appointments
         WHERE client_key = $1
-          AND created_at >= ${sqlDaysAgo(7)}
+          AND created_at >= ${daysAgoSql(7)}
       `,
         [clientKey]
       ),
@@ -608,7 +625,7 @@ export async function handleDemoDashboard(req, res, deps) {
         FROM appointments a
         LEFT JOIN leads l ON l.id = a.lead_id AND l.client_key = a.client_key
         WHERE a.client_key = $1
-          AND a.created_at >= ${sqlDaysAgo(7)}
+          AND a.created_at >= ${daysAgoSql(7)}
         GROUP BY COALESCE(l.service, 'General')
         ORDER BY appointment_count DESC
       `,
@@ -748,7 +765,7 @@ export async function handleDemoDashboard(req, res, deps) {
                 )
             ) ts ON TRUE
             WHERE c.client_key = $1
-              AND c.created_at >= ${sqlDaysAgo(6)}
+              AND c.created_at >= ${daysAgoSql(6)}
           ) d
         )
         SELECT
@@ -869,16 +886,16 @@ export async function handleDemoDashboard(req, res, deps) {
       query(
         `
         SELECT
-          (SELECT COUNT(*) FROM calls WHERE client_key = $1 AND created_at >= ${sqlDaysAgo(7)}) AS calls_7d,
-          (SELECT COALESCE(SUM(COALESCE(duration, 0)), 0) FROM calls WHERE client_key = $1 AND created_at >= ${sqlDaysAgo(
+          (SELECT COUNT(*) FROM calls WHERE client_key = $1 AND created_at >= ${daysAgoSql(7)}) AS calls_7d,
+          (SELECT COALESCE(SUM(COALESCE(duration, 0)), 0) FROM calls WHERE client_key = $1 AND created_at >= ${daysAgoSql(
             7
           )}) AS talk_seconds_7d,
-          (SELECT COUNT(*) FROM calls WHERE client_key = $1 AND created_at >= ${sqlDaysAgo(30)}) AS calls_30d,
-          (SELECT COALESCE(SUM(COALESCE(duration, 0)), 0) FROM calls WHERE client_key = $1 AND created_at >= ${sqlDaysAgo(
+          (SELECT COUNT(*) FROM calls WHERE client_key = $1 AND created_at >= ${daysAgoSql(30)}) AS calls_30d,
+          (SELECT COALESCE(SUM(COALESCE(duration, 0)), 0) FROM calls WHERE client_key = $1 AND created_at >= ${daysAgoSql(
             30
           )}) AS talk_seconds_30d,
-          (SELECT COUNT(*) FROM leads WHERE client_key = $1 AND created_at >= ${sqlDaysAgo(30)}) AS leads_new_30d,
-          (SELECT COUNT(*) FROM appointments WHERE client_key = $1 AND created_at >= ${sqlDaysAgo(
+          (SELECT COUNT(*) FROM leads WHERE client_key = $1 AND created_at >= ${daysAgoSql(30)}) AS leads_new_30d,
+          (SELECT COUNT(*) FROM appointments WHERE client_key = $1 AND created_at >= ${daysAgoSql(
             30
           )}) AS appointments_30d
         `,
@@ -1014,7 +1031,7 @@ export async function handleDemoDashboard(req, res, deps) {
         status: row.status || 'Awaiting follow-up',
         lastMessage:
           row.notes ||
-          `Added ${new Date(row.created_at).toLocaleDateString('en-GB', { timeZone: DASHBOARD_ACTIVITY_TZ })}`,
+          `Added ${new Date(row.created_at).toLocaleDateString('en-GB', { timeZone: activityTzLabel })}`,
         service: row.service || 'Lead Follow-Up',
         source: row.source || 'Web form',
         timeAgo: formatTimeAgoLabel(row.created_at),
@@ -1979,7 +1996,7 @@ export async function handleDemoDashboard(req, res, deps) {
         highPriorityLeads,
         mediumPriorityLeads,
         lowPriorityLeads,
-        activityTimezone: DASHBOARD_ACTIVITY_TZ,
+        activityTimezone: activityTzLabel,
         activityWindowHours: 24
       },
       serviceMix,
@@ -2018,7 +2035,7 @@ export async function handleDemoDashboard(req, res, deps) {
         industry: client?.industry || client?.whiteLabel?.industry || null
       },
       activityAsOfIso: activityAsOfLondon.toISO(),
-      activityTimezone: DASHBOARD_ACTIVITY_TZ,
+      activityTimezone: activityTzLabel,
       outreachCapacity: {
         crmTotalLeads: totalLeads,
         uniqueLeadsDialed: displayCalls,

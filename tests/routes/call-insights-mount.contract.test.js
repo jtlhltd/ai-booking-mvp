@@ -11,6 +11,7 @@ describe('routes/call-insights-mount', () => {
     const { createCallInsightsRouter } = await import('../../routes/call-insights-mount.js');
     const app = express();
     app.use(
+      '/api',
       createCallInsightsRouter({
         cacheMiddleware: () => (_req, _res, next) => next(),
         poolQuerySelect: async () => {
@@ -39,6 +40,7 @@ describe('routes/call-insights-mount', () => {
     const app = express();
     app.use(express.json());
     app.use(
+      '/api',
       createCallInsightsRouter({
         cacheMiddleware: () => (_req, _res, next) => next(),
         poolQuerySelect: async () => ({ rows: [] }),

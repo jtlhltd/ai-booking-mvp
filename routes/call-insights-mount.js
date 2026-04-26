@@ -6,7 +6,7 @@ export function createCallInsightsRouter(deps) {
 
   // API endpoint for dashboard call quality metrics (7-day window; aligns with main dashboard “answered” heuristics)
   router.get(
-    '/api/call-quality/:clientKey',
+    '/call-quality/:clientKey',
     cacheMiddleware({ ttl: 60000, keyPrefix: 'call-quality:v10:' }),
     async (req, res) => {
       try {
@@ -396,7 +396,7 @@ export function createCallInsightsRouter(deps) {
 
   // Aggregated “learning loop” insights from transcripts + routing recommendations
   router.get(
-    '/api/call-insights/:clientKey',
+    '/call-insights/:clientKey',
     cacheMiddleware({ ttl: 60000, keyPrefix: 'call-insights:v1:' }),
     async (req, res) => {
       try {
@@ -440,7 +440,7 @@ export function createCallInsightsRouter(deps) {
     },
   );
 
-  router.post('/api/call-insights/:clientKey/recompute', async (req, res) => {
+  router.post('/call-insights/:clientKey/recompute', async (req, res) => {
     try {
       const { clientKey } = req.params;
       const days = Math.max(

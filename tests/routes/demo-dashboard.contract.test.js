@@ -376,6 +376,93 @@ describe('routes/demo-dashboard', () => {
     expect(res.body).toEqual(expect.objectContaining({ ok: true }));
   });
 
+  test('happy: brief=1 without sqlDaysAgo dep still returns ok (Tom-style tenant)', async () => {
+    jest.unstable_mockModule('../../db.js', () => ({
+      inferOutboundAbExperimentName: jest.fn(async () => null),
+      getOutboundAbExperimentSummary: jest.fn(async () => null)
+    }));
+    jest.unstable_mockModule('../../lib/outbound-ab-baseline.js', () => ({
+      getVapiAssistantCreativeSnapshot: jest.fn(async () => ({
+        voiceId: '',
+        firstMessage: '',
+        script: '',
+        fetchFailedReason: 'no_vapi_private_key'
+      }))
+    }));
+    jest.unstable_mockModule('../../lib/outbound-ab-dashboard-enrich.js', () => ({
+      enrichOutboundAbDashboardSummariesFromAssistant: jest.fn(async () => {})
+    }));
+    jest.unstable_mockModule('../../lib/outbound-ab-focus.js', () => ({
+      resolveOutboundAbDimensionsForDial: jest.fn(() => []),
+      outboundAbDialWarning: jest.fn(() => null)
+    }));
+    jest.unstable_mockModule('../../lib/outbound-ab-live-results.js', () => ({
+      buildOutboundAbLiveResultsPayload: jest.fn(() => ({
+        serverTime: new Date().toISOString(),
+        minSamplesPerVariant: 50,
+        notifyEmailConfigured: false,
+        focusExperiment: null,
+        reason: 'ok'
+      }))
+    }));
+    jest.unstable_mockModule('../../lib/outbound-ab-review-lock.js', () => ({
+      isOutboundAbReviewPending: jest.fn(() => false)
+    }));
+
+    const { createDemoDashboardRouter, handleDemoDashboard } = await import('../../routes/demo-dashboard.js');
+    const resultsQueue = [
+      { rows: [{ total: 1, last24: 1 }] },
+      { rows: [{ total: 1, unique_leads_called: 1, last24: 1, unique_leads_called_last24: 1, booked: 0, answered: 0, not_answered: 1, outcome_pending: 0, reached_leads: 0, no_pickup_only_leads: 1, pending_only_leads: 0, unique_reached_last24: 0, unique_no_pickup_last24: 1 }] },
+      { rows: [] },
+      { rows: [{ total: 0, no_shows: 0, cancellations: 0 }] },
+      { rows: [] },
+      { rows: [] },
+      { rows: [] },
+      { rows: [] },
+      { rows: [] },
+      { rows: [] },
+      { rows: [] },
+      { rows: [{ n: 0 }] },
+      { rows: [{ callable_leads_today: 0, blocked_daily_limit_today: 0 }] },
+      { rows: [{ last_dial_attempt_at: null, attempts_7d: 0, attempts_30d: 0, unique_called_7d: 0, unique_called_30d: 0, unique_reached_7d: 0, unique_reached_30d: 0 }] },
+      { rows: [{}] },
+      { rows: [{ calls_7d: 0, talk_seconds_7d: 0, calls_30d: 0, talk_seconds_30d: 0, leads_new_30d: 0, appointments_30d: 0 }] },
+      { rows: [] }
+    ];
+    const query = jest.fn(async () => (resultsQueue.length ? resultsQueue.shift() : { rows: [] }));
+    const deps = {
+      getFullClient: jest.fn(async () => ({
+        displayName: 'D2D Xpress',
+        booking: { timezone: 'Europe/London' },
+        timezone: 'Europe/London',
+        vapi: {}
+      })),
+      activityFeedChannelLabel: jest.fn(() => 'calls'),
+      DateTime,
+      isPostgres: true,
+      query,
+      formatTimeAgoLabel: () => '1h',
+      formatCallDuration: () => '1m',
+      truncateActivityFeedText: () => null,
+      formatVapiEndedReasonDisplay: () => null,
+      outcomeToFriendlyLabel: () => 'Completed',
+      parseCallsRowMetadata: () => ({}),
+      isCallQueueStartFailureRow: () => false,
+      mapCallStatus: () => 'ended',
+      mapStatusClass: () => 'ok',
+      trimEnvDashboard: () => '',
+      buildDashboardExperience: () => ({ ok: true }),
+      sendOperatorAlert: jest.fn(async () => {}),
+      fetchImpl: jest.fn(async () => ({ ok: false }))
+    };
+    const router = createDemoDashboardRouter({
+      handleDemoDashboard: (req, res) => handleDemoDashboard(req, res, deps)
+    });
+    const app = createContractApp({ mounts: [{ path: '/api', router }] });
+    const res = await request(app).get('/api/demo-dashboard/d2d-xpress-tom?brief=1').expect(200);
+    expect(res.body).toEqual(expect.objectContaining({ ok: true }));
+  });
+
   test('happy: isPostgres=true path still returns ok true', async () => {
     jest.unstable_mockModule('../../db.js', () => ({
       inferOutboundAbExperimentName: jest.fn(async () => null),

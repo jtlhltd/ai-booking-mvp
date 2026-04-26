@@ -129,6 +129,26 @@ describe('VAPI Webhook Signature Verification', () => {
     expect(next).not.toHaveBeenCalled();
   });
   
+  test('returns 500 in production when secret is set but raw body is missing', () => {
+    process.env.NODE_ENV = 'production';
+    const body = { test: 'data' };
+    const bodyString = JSON.stringify(body);
+    const validSignature = crypto.createHmac('sha256', secret).update(bodyString).digest('hex');
+    const req = {
+      get: (header) => (header === 'X-Vapi-Signature' ? validSignature : null),
+      body,
+      correlationId: 'test-123'
+    };
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn()
+    };
+    const next = jest.fn();
+    verifyVapiSignature(req, res, next);
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(next).not.toHaveBeenCalled();
+  });
+
   test('should accept request with valid signature', () => {
     const body = { test: 'data' };
     const bodyString = JSON.stringify(body);

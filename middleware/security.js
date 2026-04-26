@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import bcrypt from 'bcrypt';
+import twilio from 'twilio';
 
 // Enhanced security middleware for multi-tenant authentication and rate limiting
 
@@ -445,9 +446,17 @@ setInterval(cleanupRateLimitRecords, 60 * 60 * 1000);
 export function twilioWebhookVerification(req, res, next) {
   try {
     const authToken = process.env.TWILIO_AUTH_TOKEN;
-    
+    const isProd = String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
+
     if (!authToken) {
-      console.warn('[TWILIO AUTH] TWILIO_AUTH_TOKEN not set, skipping verification');
+      if (isProd) {
+        console.error('[TWILIO AUTH] TWILIO_AUTH_TOKEN missing in production');
+        return res.status(500).json({
+          error: 'Twilio webhook verification misconfigured',
+          code: 'MISSING_TWILIO_AUTH_TOKEN'
+        });
+      }
+      console.warn('[TWILIO AUTH] TWILIO_AUTH_TOKEN not set, skipping verification (non-production only)');
       return next();
     }
 
@@ -455,32 +464,26 @@ export function twilioWebhookVerification(req, res, next) {
     const url = req.protocol + '://' + req.get('host') + req.originalUrl;
     const params = req.body || {};
 
-    // Import Twilio's validator
-    import('twilio').then(({ default: twilio }) => {
-      const validator = twilio.webhook(authToken);
-      
-      if (signature && validator(url, params, signature)) {
-        next();
-      } else {
-        console.error('[TWILIO AUTH] Invalid signature:', {
-          url,
-          hasSignature: !!signature,
-          timestamp: new Date().toISOString()
-        });
-        res.status(403).json({ 
-          error: 'Invalid webhook signature',
-          code: 'INVALID_SIGNATURE'
-        });
-      }
-    }).catch((error) => {
-      console.error('[TWILIO AUTH ERROR]', error);
-      // Allow request if verification fails (graceful degradation)
-      next();
+    const validator = twilio.webhook(authToken);
+
+    if (signature && validator(url, params, signature)) {
+      return next();
+    }
+    console.error('[TWILIO AUTH] Invalid signature:', {
+      url,
+      hasSignature: !!signature,
+      timestamp: new Date().toISOString()
+    });
+    return res.status(403).json({
+      error: 'Invalid webhook signature',
+      code: 'INVALID_SIGNATURE'
     });
   } catch (error) {
     console.error('[TWILIO WEBHOOK VERIFICATION ERROR]', error);
-    // Graceful degradation - allow request if verification fails
-    next();
+    return res.status(403).json({
+      error: 'Webhook verification failed',
+      code: 'TWILIO_VERIFY_ERROR'
+    });
   }
 }
 

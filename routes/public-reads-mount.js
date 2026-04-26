@@ -2,9 +2,11 @@ import express from 'express';
 import { handleMockCallRoute } from '../lib/mock-call-route.js';
 import { handleOutboundQueueDayRoute } from '../lib/outbound-queue-day-route.js';
 import { handleEventsSseStream } from '../lib/events-sse-stream.js';
+import { publicDevRoutesMiddleware } from '../lib/public-dev-routes-gate.js';
 
 /**
- * Public read routes previously inline in server.js (mock-call, queue drilldown, events SSE).
+ * Dev / operator read routes (mock-call, queue drilldown, events SSE).
+ * Require ENABLE_PUBLIC_DEV_ROUTES=1|true|yes; in production also X-API-Key when API_KEY is set.
  */
 export function createPublicReadsRouter(deps) {
   const {
@@ -17,16 +19,17 @@ export function createPublicReadsRouter(deps) {
   } = deps || {};
 
   const router = express.Router();
+  const gate = publicDevRoutesMiddleware();
 
-  router.get('/mock-call', (req, res) =>
+  router.get('/mock-call', gate, (req, res) =>
     handleMockCallRoute(req, res, { nanoid, fetchImpl: mockCallFetchImpl })
   );
 
-  router.get('/api/outbound-queue-day/:clientKey', (req, res) =>
+  router.get('/api/outbound-queue-day/:clientKey', gate, (req, res) =>
     handleOutboundQueueDayRoute(req, res, { getFullClient, isPostgres, query })
   );
 
-  router.get('/api/events/:clientKey', (req, res) => handleEventsSseStream(req, res, eventsSseDeps));
+  router.get('/api/events/:clientKey', gate, (req, res) => handleEventsSseStream(req, res, eventsSseDeps));
 
   return router;
 }

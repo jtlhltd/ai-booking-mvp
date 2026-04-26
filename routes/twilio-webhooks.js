@@ -2,11 +2,12 @@ import express from 'express';
 import * as store from '../store.js';     // ← was: import store from '../store.js'
 import * as sheets from '../sheets.js';   // ← was: import sheets from '../sheets.js'
 import { normalizePhone } from '../util/phone.js';
+import { twilioWebhookVerification } from '../middleware/security.js';
 
 
 const router = express.Router();
 
-router.post('/webhooks/twilio/sms-inbound', async (req, res) => {
+router.post('/webhooks/twilio/sms-inbound', express.urlencoded({ extended: false }), twilioWebhookVerification, async (req, res) => {
   try {
     const from = normalizePhone(req.body.From);
     const body = (req.body.Body || '').trim().toUpperCase();

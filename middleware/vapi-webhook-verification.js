@@ -56,16 +56,21 @@ export function verifyVapiSignature(req, res, next) {
     });
   }
   
-  // Get raw body for signature verification
-  // Note: This requires express.raw() or express.json() to preserve raw body
+  // Get raw body for signature verification (must match provider bytes; JSON.stringify is not stable).
   let bodyString;
-  if (req.rawBody) {
-    bodyString = req.rawBody.toString();
-  } else if (Buffer.isBuffer(req.body)) {
-    bodyString = req.body.toString();
+  if (Buffer.isBuffer(req.rawBody) && req.rawBody.length > 0) {
+    bodyString = req.rawBody.toString('utf8');
+  } else if (Buffer.isBuffer(req.body) && req.body.length > 0) {
+    bodyString = req.body.toString('utf8');
+  } else if (isProd) {
+    console.error('[VAPI WEBHOOK] Missing raw body for signature verification in production');
+    return res.status(500).json({
+      ok: false,
+      error: 'Webhook verification misconfigured',
+      message: 'Raw request body was not captured; cannot verify Vapi signature'
+    });
   } else {
-    // Fallback: stringify JSON body
-    bodyString = JSON.stringify(req.body);
+    bodyString = JSON.stringify(req.body ?? {});
   }
   
   // Compute expected signature
