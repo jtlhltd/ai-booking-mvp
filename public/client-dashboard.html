@@ -4738,6 +4738,10 @@
             flex: 0 0 auto;
         }
 
+        .follow-up-th-drag:active {
+            cursor: grabbing;
+        }
+
         body[data-theme="dark"] .follow-up-th-drag {
             background: rgba(37, 43, 61, 0.92);
             border-color: var(--border);
@@ -13602,9 +13606,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const thCls = isActive ? `follow-up-th--active follow-up-th--${sortDir}` : '';
                 const ind = isActive ? (sortDir === 'asc' ? '▲' : '▼') : '⇅';
                 const label = `Sort by ${c}${isActive ? (sortDir === 'asc' ? ', ascending' : ', descending') : ''}`;
-                return `<th scope="col" data-col="${escapeHtml(slug)}" class="${thCls}" aria-sort="${ariaSort}" data-fu-col-name="${escapeHtml(c)}" draggable="true">` +
+                return `<th scope="col" data-col="${escapeHtml(slug)}" class="${thCls}" aria-sort="${ariaSort}" data-fu-col-name="${escapeHtml(c)}">` +
                     `<div class="follow-up-th-inner">` +
-                        `<span class="follow-up-th-drag" draggable="true" data-fu-col-drag="1" data-fu-col-name="${escapeHtml(c)}" title="Drag to reorder" aria-label="Drag to reorder ${escapeHtml(c)} column">⋮⋮</span>` +
+                        `<span class="follow-up-th-drag" data-fu-col-drag="1" data-fu-col-name="${escapeHtml(c)}" title="Drag to reorder" aria-label="Drag to reorder ${escapeHtml(c)} column">⋮⋮</span>` +
                         `<button type="button" class="follow-up-th-btn" data-fu-col-idx="${i}" data-fu-col-name="${escapeHtml(c)}" aria-label="${escapeHtml(label)}">` +
                             `<span class="follow-up-th-label">${escapeHtml(c)}</span>` +
                             `<span class="follow-up-th-sort" aria-hidden="true">${ind}</span>` +
@@ -14818,45 +14822,39 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
             if (wrap && !wrap.dataset.colDnD) {
                 wrap.dataset.colDnD = '1';
-                let draggingCol = null;
-                wrap.addEventListener('dragstart', (e) => {
-                    // Avoid starting drag from click controls (sort / move)
-                    const blocked = e.target && e.target.closest ? e.target.closest('.follow-up-th-btn, .follow-up-th-move-btn') : null;
-                    if (blocked) return;
-                    const th = e.target && e.target.closest ? e.target.closest('th[data-fu-col-name]') : null;
-                    const name = th ? th.getAttribute('data-fu-col-name') : null;
+                let mouseDraggingCol = null;
+                let mouseTargetCol = null;
+
+                wrap.addEventListener('mousedown', (e) => {
+                    const handle = e.target && e.target.closest ? e.target.closest('[data-fu-col-drag][data-fu-col-name]') : null;
+                    if (!handle) return;
+                    const name = handle.getAttribute('data-fu-col-name');
                     if (!name) return;
-                    draggingCol = name;
-                    try {
-                        e.dataTransfer.effectAllowed = 'move';
-                        e.dataTransfer.setData('text/plain', name);
-                    } catch {}
+                    e.preventDefault();
+                    mouseDraggingCol = name;
+                    mouseTargetCol = null;
+                    wrap.querySelectorAll('th.fu-col-drop-target').forEach((el) => el.classList.remove('fu-col-drop-target'));
                 });
-                wrap.addEventListener('dragover', (e) => {
+
+                wrap.addEventListener('mouseover', (e) => {
+                    if (!mouseDraggingCol) return;
                     const th = e.target && e.target.closest ? e.target.closest('th[data-fu-col-name]') : null;
                     if (!th) return;
-                    e.preventDefault();
+                    const target = th.getAttribute('data-fu-col-name');
+                    if (!target) return;
+                    mouseTargetCol = target;
                     wrap.querySelectorAll('th.fu-col-drop-target').forEach((el) => el.classList.remove('fu-col-drop-target'));
                     th.classList.add('fu-col-drop-target');
                 });
-                wrap.addEventListener('dragleave', (e) => {
-                    const th = e.target && e.target.closest ? e.target.closest('th[data-fu-col-name]') : null;
-                    if (!th) return;
-                    th.classList.remove('fu-col-drop-target');
-                });
-                wrap.addEventListener('drop', (e) => {
-                    const th = e.target && e.target.closest ? e.target.closest('th[data-fu-col-name]') : null;
-                    if (!th) return;
-                    e.preventDefault();
+
+                document.addEventListener('mouseup', () => {
+                    if (!mouseDraggingCol) return;
+                    const dragged = mouseDraggingCol;
+                    const target = mouseTargetCol;
+                    mouseDraggingCol = null;
+                    mouseTargetCol = null;
                     wrap.querySelectorAll('th.fu-col-drop-target').forEach((el) => el.classList.remove('fu-col-drop-target'));
-                    const target = th.getAttribute('data-fu-col-name');
-                    let dragged = draggingCol;
-                    try {
-                        const fromDt = e.dataTransfer.getData('text/plain');
-                        if (fromDt) dragged = fromDt;
-                    } catch {}
-                    followUpApplyColumnOrderFromDnD(currentClient, dragged, target);
-                    draggingCol = null;
+                    if (target) followUpApplyColumnOrderFromDnD(currentClient, dragged, target);
                 });
             }
         }
