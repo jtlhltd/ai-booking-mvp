@@ -17,9 +17,7 @@ export default {
     '/archive/',
     '/docs/',
     '/tests/harness/',
-    // NOTE: `tests/lib/test-*.js` are standalone script-style checks (custom harness, `process.exit`, etc),
-    // not Jest tests. Keep them out of Jest discovery even if `testMatch` is widened later.
-    '/tests/lib/test-.*\\.js$'
+    '/scripts/smoke/'
   ],
   collectCoverageFrom: [
     'db.js',
@@ -63,10 +61,15 @@ export default {
       // Jest `global` = merge of covered files that do NOT match any `./…` key below. Path gates exclude those files
       // from this merge (often *lowering* the global % if you peel off small, near-100% modules). Max safe floors here
       // are set from `jest --coverage` threshold errors, not only the printed summary table.
-      branches: 35,
-      functions: 51,
-      lines: 48,
-      statements: 47
+      // Bumped after test-suite-overhaul Phase 3-4 (added contract tests for receptionist, core-api,
+      // tools-mount, outreach, leads/portal mounts, vapi-webhooks boundaries, plus the coverage-boost-3
+      // batch). Path gates below peel several near-100% routes off this merge, so the *global* numbers
+      // here are lower than the printed summary table. Measured at threshold time: 40.43% branches /
+      // 53.17% lines / 55.38%+ functions / 51.91% statements.
+      branches: 40,
+      functions: 55,
+      lines: 53,
+      statements: 51
     },
     // Module gates for the highest-risk surfaces (booking + admin).
     './lib/booking.js': {
@@ -164,6 +167,51 @@ export default {
       functions: 80,
       lines: 64,
       statements: 64
+    },
+    // Per-module gates added by test-suite-overhaul Phase 5 for the newly-improved routes.
+    // Floors are set below current measured coverage to leave headroom; ratchet upward as
+    // additional contract/branch tests are added.
+    './routes/receptionist.js': {
+      branches: 95,
+      functions: 95,
+      lines: 95,
+      statements: 95
+    },
+    './routes/core-api.js': {
+      branches: 80,
+      functions: 95,
+      lines: 95,
+      statements: 95
+    },
+    './routes/outreach.js': {
+      branches: 90,
+      functions: 95,
+      lines: 90,
+      statements: 90
+    },
+    './routes/tools-mount.js': {
+      branches: 70,
+      functions: 55,
+      lines: 95,
+      statements: 95
+    },
+    './routes/leads-portal-mount.js': {
+      branches: 75,
+      functions: 95,
+      lines: 85,
+      statements: 85
+    },
+    './routes/portal-pages-mount.js': {
+      branches: 95,
+      functions: 95,
+      lines: 80,
+      statements: 80
+    },
+    './routes/pipeline-tracking.js': {
+      branches: 65,
+      functions: 95,
+      lines: 70,
+      statements: 70
     }
   },
   verbose: true

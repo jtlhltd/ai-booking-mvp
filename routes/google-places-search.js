@@ -18,6 +18,9 @@ router.post('/api/search-google-places', async (req, res) => {
       });
     }
   }, 1200000); // 1200 seconds (20 minutes) for comprehensive searches
+  if (typeof timeout?.unref === 'function') timeout.unref();
+  res.on('finish', () => clearTimeout(timeout));
+  res.on('close', () => clearTimeout(timeout));
   
   try {
     const { query, location, maxResults = 20, businessSize, mobileOnly, decisionMakerTitles } = req.body;

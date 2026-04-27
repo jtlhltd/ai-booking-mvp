@@ -3,6 +3,7 @@ import request from 'supertest';
 import { DateTime } from 'luxon';
 
 import { createContractApp, withIsolatedModulesAndEnv } from '../helpers/contract-harness.js';
+import { assertNoStoreCache, assertNoTenantKeyLeak } from '../helpers/contract-asserts.js';
 
 beforeEach(() => {
   jest.resetModules();
@@ -143,7 +144,7 @@ describe('routes/demo-dashboard', () => {
 
       const res = await request(app).get('/api/demo-dashboard/c1').expect(200);
       expect(res.body).toEqual(expect.objectContaining({ ok: true, source: 'live' }));
-      expect(res.headers['cache-control']).toContain('no-store');
+      assertNoStoreCache(res);
     });
   });
 
@@ -461,6 +462,11 @@ describe('routes/demo-dashboard', () => {
     const app = createContractApp({ mounts: [{ path: '/api', router }] });
     const res = await request(app).get('/api/demo-dashboard/d2d-xpress-tom?brief=1').expect(200);
     expect(res.body).toEqual(expect.objectContaining({ ok: true }));
+    // Tom-context safety (per .cursor/rules/tom-client-context.mdc):
+    // The internal tenant key d2d-xpress-tom must not appear in customer-facing
+    // payloads/headers — display name only.
+    assertNoTenantKeyLeak(res, 'd2d-xpress-tom');
+    assertNoStoreCache(res);
   });
 
   test('happy: isPostgres=true path still returns ok true', async () => {

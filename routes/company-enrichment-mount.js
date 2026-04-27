@@ -93,11 +93,15 @@ export function createCompanyEnrichmentRouter() {
         });
       }
     }, 30000);
+    if (typeof timeout?.unref === 'function') timeout.unref();
+    res.on('finish', () => clearTimeout(timeout));
+    res.on('close', () => clearTimeout(timeout));
 
     try {
       const { business, industry, targetRole } = req.body;
 
       if (!business || !industry || !targetRole) {
+        clearTimeout(timeout);
         return res.status(400).json({
           error: 'Business, industry, and targetRole are required',
         });

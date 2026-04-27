@@ -26,40 +26,47 @@ if (fs.existsSync(envTest)) {
 
 global.sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Keep CI output readable: drop the noisiest info logs, keep warnings/errors.
-// Opt-out by setting JEST_VERBOSE_LOGS=1.
+// CI-output hygiene: deny-by-default for `console.log` so the test runner stays readable.
+// Opt back in via JEST_VERBOSE_LOGS=1 (e.g. when debugging locally).
+// `console.warn` and `console.error` are NEVER suppressed — they remain visible so failures and
+// real warnings bubble up.
 if (process.env.JEST_VERBOSE_LOGS !== '1') {
-  const origLog = console.log.bind(console);
-  console.log = (...args) => {
-    const msg = String(args?.[0] ?? '');
-    if (
-      msg.startsWith('🔍 Database configuration:') ||
-      msg.startsWith('🔄 Initializing') ||
-      msg.startsWith('DB: SQLite') ||
-      msg.startsWith('✅ SQLite') ||
-      msg.startsWith('[DB CACHE]') ||
-      msg.includes('[CONVERSATION-UPDATE]') ||
-      msg.includes('[VAPI WEBHOOK]') ||
-      msg.includes('[VAPI WEBHOOK SKIP]') ||
-      msg.startsWith('[CALL ANALYSIS]') ||
-      msg.startsWith('[CALL TRACKING UPDATE]') ||
-      msg.startsWith('[VAPI CONCURRENCY]') ||
-      msg.startsWith('[COST TRACKED]')
-    ) {
-      return;
-    }
-    origLog(...args);
-  };
+  // eslint-disable-next-line no-empty-function
+  console.log = () => {};
+  // eslint-disable-next-line no-empty-function
+  console.info = () => {};
+  // eslint-disable-next-line no-empty-function
+  console.debug = () => {};
 }
 
 afterAll(async () => {
   // Best-effort cleanup to avoid leaked handles between suites.
-  try {
-    const { pool } = await import('../db.js');
-    if (pool && typeof pool.end === 'function') {
-      await pool.end();
+  // Order matters: stop background timers before closing pools/sockets.
+  const disposers = [
+    async () => {
+      const mod = await import('../lib/cache.js').catch(() => null);
+      const cache = mod?.getCache?.();
+      if (cache && typeof cache.destroy === 'function') cache.destroy();
+    },
+    async () => {
+      const mod = await import('../lib/monitoring.js').catch(() => null);
+      mod?.getMetricsCollector?.()?.stop?.();
+      mod?.getAlertManager?.()?.stop?.();
+      mod?.getHealthCheckManager?.()?.stop?.();
+    },
+    async () => {
+      const mod = await import('../db.js').catch(() => null);
+      if (mod?.pool && typeof mod.pool.end === 'function') {
+        await mod.pool.end();
+      }
     }
-  } catch {
-    // ignore
+  ];
+
+  for (const dispose of disposers) {
+    try {
+      await dispose();
+    } catch {
+      // ignore — best effort
+    }
   }
 });

@@ -440,7 +440,9 @@ export async function cleanupRateLimitRecords() {
 }
 
 // Run cleanup every hour
-setInterval(cleanupRateLimitRecords, 60 * 60 * 1000);
+const rateLimitCleanupTimer = setInterval(cleanupRateLimitRecords, 60 * 60 * 1000);
+// Allow test workers / CLI scripts to exit when this is the only active timer.
+if (typeof rateLimitCleanupTimer?.unref === 'function') rateLimitCleanupTimer.unref();
 
 // Twilio webhook verification middleware
 export function twilioWebhookVerification(req, res, next) {
