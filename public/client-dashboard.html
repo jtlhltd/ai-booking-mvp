@@ -4465,6 +4465,70 @@
             color: var(--primary, #5c6ac4);
         }
 
+        .fu-columns-modal {
+            width: min(560px, 92vw);
+            max-height: min(72vh, 720px);
+            overflow: auto;
+        }
+
+        .fu-columns-hint {
+            margin: 8px 0 12px 0;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            line-height: 1.45;
+        }
+
+        .fu-columns-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .fu-columns-row {
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            background: var(--surface-3);
+            border-radius: 12px;
+        }
+
+        .fu-columns-handle {
+            width: 18px;
+            height: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--surface-2);
+            color: var(--text-secondary);
+            cursor: grab;
+            user-select: none;
+        }
+
+        .fu-columns-row[aria-grabbed="true"] .fu-columns-handle {
+            cursor: grabbing;
+        }
+
+        .fu-columns-name {
+            font-size: 0.9rem;
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        .fu-columns-hide {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            user-select: none;
+        }
+
         .follow-up-queue-table td[data-col="called"],
         .follow-up-queue-table th[data-col="called"] {
             white-space: nowrap;
@@ -6776,6 +6840,7 @@
                             <option value="spoke">Spoke</option>
                         </select>
                     </label>
+                    <button type="button" id="followUpColumnsBtn" class="export-btn secondary" title="Choose and reorder columns">Columns…</button>
                     <input type="search" id="followUpSearchInput" class="dashboard-list-search" placeholder="Search business, name, phone, notes…" autocomplete="off" enterkeyhint="search" style="max-width:260px;">
                     <div class="follow-up-pager" id="followUpQueuePager" aria-label="Follow-up list pagination">
                         <button type="button" class="export-btn secondary follow-up-page-btn" id="followUpPrevPage" disabled>Prev</button>
@@ -6997,6 +7062,23 @@
             </div>
             <div class="modal-body">
                 <div class="timeline" id="timelineContent" role="region" aria-live="polite">Loading timeline...</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-backdrop" id="followUpColumnsModal" role="dialog" aria-labelledby="followUpColumnsTitle" aria-modal="true">
+        <div class="lead-modal fu-columns-modal">
+            <div class="modal-header">
+                <h4 id="followUpColumnsTitle">Follow-up columns</h4>
+                <button class="modal-close" id="followUpColumnsCloseBtn" aria-label="Close columns modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="fu-columns-hint">Drag rows to reorder. Untick a column to hide it. Changes save per dashboard client automatically.</p>
+                <div id="followUpColumnsList" class="fu-columns-list" role="list"></div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="modal-btn" id="followUpColumnsResetBtn">Reset</button>
+                <button type="button" class="modal-btn primary" id="followUpColumnsDoneBtn">Done</button>
             </div>
         </div>
     </div>
@@ -13183,6 +13265,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             'Called Number'
         ];
 
+        const FOLLOW_UP_COLUMNS_LS_PREFIX = 'dash.fu.columns.';
+        const followUpDefaultColumnOrder = [...FOLLOW_UP_TABLE_COLUMNS];
+        let followUpColumnPrefs = { order: null, hidden: [] };
+
         let followUpQueueState = {
             rawRows: [],
             cols: [],
@@ -13200,6 +13286,61 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         let followUpSearchTerm = '';
         let followUpDispositionFilter = 'all'; // all | voicemail | spoke
         const followUpSelectedKeys = new Set();
+
+        function followUpColumnsLsKey(clientKey) {
+            return `${FOLLOW_UP_COLUMNS_LS_PREFIX}${String(clientKey || '').trim() || 'unknown'}`;
+        }
+
+        function loadFollowUpColumnPrefs(clientKey) {
+            const key = followUpColumnsLsKey(clientKey);
+            const out = { order: null, hidden: [] };
+            try {
+                const raw = localStorage.getItem(key);
+                if (!raw) return out;
+                const parsed = JSON.parse(raw);
+                if (parsed && typeof parsed === 'object') {
+                    if (Array.isArray(parsed.order)) out.order = parsed.order.map((x) => String(x)).filter(Boolean);
+                    if (Array.isArray(parsed.hidden)) out.hidden = parsed.hidden.map((x) => String(x)).filter(Boolean);
+                }
+            } catch {}
+            return out;
+        }
+
+        function saveFollowUpColumnPrefs(clientKey, prefs) {
+            const key = followUpColumnsLsKey(clientKey);
+            const safe = {
+                order: Array.isArray(prefs?.order) ? prefs.order.map((x) => String(x)).filter(Boolean) : null,
+                hidden: Array.isArray(prefs?.hidden) ? prefs.hidden.map((x) => String(x)).filter(Boolean) : []
+            };
+            try {
+                localStorage.setItem(key, JSON.stringify(safe));
+            } catch {}
+        }
+
+        function applyFollowUpColumnPrefs(cols, prefs) {
+            const all = Array.isArray(cols) ? cols.slice() : [];
+            const rawOrder = Array.isArray(prefs?.order) && prefs.order.length ? prefs.order : null;
+            const hiddenSet = new Set((prefs?.hidden || []).map((x) => String(x)));
+
+            const baseOrder = rawOrder || followUpDefaultColumnOrder;
+            const ordered = [];
+            const seen = new Set();
+            for (const c of baseOrder) {
+                const name = String(c);
+                if (!all.includes(name)) continue;
+                if (seen.has(name)) continue;
+                seen.add(name);
+                ordered.push(name);
+            }
+            for (const c of all) {
+                const name = String(c);
+                if (seen.has(name)) continue;
+                seen.add(name);
+                ordered.push(name);
+            }
+            const visibleCols = ordered.filter((c) => !hiddenSet.has(c));
+            return { allColsInOrder: ordered, visibleCols };
+        }
 
         function followUpLoadPrefs() {
             try {
@@ -13362,8 +13503,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const thCls = isActive ? `follow-up-th--active follow-up-th--${sortDir}` : '';
                 const ind = isActive ? (sortDir === 'asc' ? '▲' : '▼') : '⇅';
                 const label = `Sort by ${c}${isActive ? (sortDir === 'asc' ? ', ascending' : ', descending') : ''}`;
-                return `<th scope="col" data-col="${escapeHtml(slug)}" class="${thCls}" aria-sort="${ariaSort}">` +
-                    `<button type="button" class="follow-up-th-btn" data-fu-col-idx="${i}" aria-label="${escapeHtml(label)}">` +
+                return `<th scope="col" data-col="${escapeHtml(slug)}" class="${thCls}" aria-sort="${ariaSort}" draggable="true" data-fu-col-name="${escapeHtml(c)}">` +
+                    `<button type="button" class="follow-up-th-btn" data-fu-col-idx="${i}" data-fu-col-name="${escapeHtml(c)}" draggable="true" aria-label="${escapeHtml(label)}">` +
                     `<span class="follow-up-th-label">${escapeHtml(c)}</span>` +
                     `<span class="follow-up-th-sort" aria-hidden="true">${ind}</span></button></th>`;
             }).join('')}</tr></thead>`;
@@ -13382,6 +13523,111 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }).join('');
             wrap.innerHTML = `<table class="follow-up-queue-table">${thead}<tbody>${tbody}</tbody></table>`;
             followUpUpdateSelectionUi();
+        }
+
+        function followUpApplyColumnOrderFromDnD(clientKey, draggedCol, targetCol) {
+            if (!draggedCol || !targetCol || draggedCol === targetCol) return;
+            const prefs = loadFollowUpColumnPrefs(clientKey);
+            const hidden = Array.isArray(prefs.hidden) ? prefs.hidden.slice() : [];
+
+            const base = followUpQueueState.cols && followUpQueueState.cols.length
+                ? followUpQueueState.cols.slice()
+                : followUpDefaultColumnOrder.slice();
+            const existing = new Set(base);
+            const order = (Array.isArray(prefs.order) && prefs.order.length ? prefs.order : base).filter((c) => existing.has(c));
+            const full = [...new Set([...order, ...base])];
+            const from = full.indexOf(draggedCol);
+            const to = full.indexOf(targetCol);
+            if (from < 0 || to < 0) return;
+            full.splice(from, 1);
+            full.splice(to, 0, draggedCol);
+            prefs.order = full;
+            prefs.hidden = hidden;
+            followUpColumnPrefs = prefs;
+            saveFollowUpColumnPrefs(clientKey, prefs);
+
+            const applied = applyFollowUpColumnPrefs(base, prefs);
+            followUpQueueState.cols = applied.visibleCols;
+            const wrap = document.getElementById('follow-up-queue');
+            if (wrap) followUpPaintTable(wrap);
+        }
+
+        function followUpResetColumnPrefs(clientKey) {
+            const prefs = { order: followUpDefaultColumnOrder.slice(), hidden: [] };
+            followUpColumnPrefs = prefs;
+            saveFollowUpColumnPrefs(clientKey, prefs);
+            const base = followUpQueueState.cols && followUpQueueState.cols.length
+                ? followUpQueueState.cols.slice()
+                : followUpDefaultColumnOrder.slice();
+            const applied = applyFollowUpColumnPrefs(base, prefs);
+            followUpQueueState.cols = applied.visibleCols;
+            const wrap = document.getElementById('follow-up-queue');
+            if (wrap) followUpPaintTable(wrap);
+        }
+
+        function followUpOpenColumnsModal(clientKey) {
+            const modal = document.getElementById('followUpColumnsModal');
+            const list = document.getElementById('followUpColumnsList');
+            if (!modal || !list) return;
+
+            const prefs = loadFollowUpColumnPrefs(clientKey);
+            followUpColumnPrefs = prefs;
+
+            const baseCols = followUpVisibleColumns(followUpQueueState.rawRows || []);
+            const applied = applyFollowUpColumnPrefs(baseCols, prefs);
+            const hiddenSet = new Set((prefs.hidden || []).map((x) => String(x)));
+
+            list.innerHTML = applied.allColsInOrder.map((c) => {
+                const checked = !hiddenSet.has(c);
+                return `
+                    <div class="fu-columns-row" role="listitem" draggable="true" data-fu-col-item="${escapeHtml(c)}" aria-grabbed="false">
+                        <span class="fu-columns-handle" aria-hidden="true">⋮⋮</span>
+                        <span class="fu-columns-name">${escapeHtml(c)}</span>
+                        <label class="fu-columns-hide">
+                            <input type="checkbox" data-fu-col-visible="1" ${checked ? 'checked' : ''} />
+                            Show
+                        </label>
+                    </div>
+                `;
+            }).join('');
+
+            modal.classList.add('open');
+        }
+
+        function followUpCloseColumnsModal() {
+            const modal = document.getElementById('followUpColumnsModal');
+            if (!modal) return;
+            modal.classList.remove('open');
+        }
+
+        function followUpApplyColumnsFromModal(clientKey) {
+            const list = document.getElementById('followUpColumnsList');
+            if (!list) return;
+            const rows = [...list.querySelectorAll('[data-fu-col-item]')];
+            const order = rows.map((el) => el.getAttribute('data-fu-col-item')).filter(Boolean);
+            const hidden = [];
+            rows.forEach((el) => {
+                const name = el.getAttribute('data-fu-col-item');
+                const cb = el.querySelector('input[type="checkbox"][data-fu-col-visible="1"]');
+                const visible = !!(cb && cb.checked);
+                if (name && !visible) hidden.push(name);
+            });
+
+            const prefs = { order, hidden };
+            followUpColumnPrefs = prefs;
+            saveFollowUpColumnPrefs(clientKey, prefs);
+
+            // If we hid the active sort column, auto-clear (simplicity)
+            if (followUpQueueState.sortKey && hidden.includes(followUpQueueState.sortKey)) {
+                followUpQueueState.sortKey = null;
+                followUpQueueState.sortDir = 'desc';
+            }
+
+            const baseCols = followUpVisibleColumns(followUpQueueState.rawRows || []);
+            const applied = applyFollowUpColumnPrefs(baseCols, prefs);
+            followUpQueueState.cols = applied.visibleCols;
+            const wrap = document.getElementById('follow-up-queue');
+            if (wrap) followUpPaintTable(wrap);
         }
 
         function followUpUpdateSelectionUi() {
@@ -13717,17 +13963,16 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     }
                     return copy;
                 });
-                const cols = followUpVisibleColumns(rows);
+                const colsRaw = followUpVisibleColumns(rows);
+                followUpColumnPrefs = loadFollowUpColumnPrefs(clientKey);
+                const applied = applyFollowUpColumnPrefs(colsRaw, followUpColumnPrefs);
+                const cols = applied.visibleCols;
                 if (myGen !== followUpQueueLoadGen) return;
                 followUpQueueState = {
                     rawRows: rows.slice(),
                     cols,
-                    sortKey: cols.includes(priorSortKey)
-                        ? priorSortKey
-                        : null,
-                    sortDir: cols.includes(priorSortKey)
-                        ? (priorSortDir || 'desc')
-                        : 'desc',
+                    sortKey: cols.includes(priorSortKey) ? priorSortKey : null,
+                    sortDir: cols.includes(priorSortKey) ? (priorSortDir || 'desc') : 'desc',
                     total: data.total != null ? data.total : rows.length,
                     offset: data.offset != null ? data.offset : offset,
                     limit: data.limit != null ? data.limit : limit
@@ -13783,6 +14028,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
         function initFollowUpQueueUi() {
             const btn = document.getElementById('followUpQueueRefresh');
+            const colsBtn = document.getElementById('followUpColumnsBtn');
             const selectAll = document.getElementById('followUpSelectAllBtn');
             const clearSel = document.getElementById('followUpClearSelectionBtn');
             const prev = document.getElementById('followUpPrevPage');
@@ -13793,6 +14039,81 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const dispSelect = document.getElementById('followUpDispositionSelect');
             const bulkBar = document.getElementById('followUpBulkActions');
             followUpLoadPrefs();
+            followUpColumnPrefs = loadFollowUpColumnPrefs(currentClient);
+            const colsModal = document.getElementById('followUpColumnsModal');
+            const colsClose = document.getElementById('followUpColumnsCloseBtn');
+            const colsDone = document.getElementById('followUpColumnsDoneBtn');
+            const colsReset = document.getElementById('followUpColumnsResetBtn');
+
+            if (colsBtn && !colsBtn.dataset.bound) {
+                colsBtn.dataset.bound = '1';
+                colsBtn.addEventListener('click', () => followUpOpenColumnsModal(currentClient));
+            }
+            if (colsClose && !colsClose.dataset.bound) {
+                colsClose.dataset.bound = '1';
+                colsClose.addEventListener('click', followUpCloseColumnsModal);
+            }
+            if (colsDone && !colsDone.dataset.bound) {
+                colsDone.dataset.bound = '1';
+                colsDone.addEventListener('click', () => {
+                    followUpApplyColumnsFromModal(currentClient);
+                    followUpCloseColumnsModal();
+                });
+            }
+            if (colsReset && !colsReset.dataset.bound) {
+                colsReset.dataset.bound = '1';
+                colsReset.addEventListener('click', () => {
+                    followUpResetColumnPrefs(currentClient);
+                    followUpOpenColumnsModal(currentClient);
+                });
+            }
+            if (colsModal && !colsModal.dataset.bound) {
+                colsModal.dataset.bound = '1';
+                colsModal.addEventListener('click', (e) => {
+                    if (e.target === colsModal) followUpCloseColumnsModal();
+                });
+            }
+            const colsList = document.getElementById('followUpColumnsList');
+            if (colsList && !colsList.dataset.colDnD) {
+                colsList.dataset.colDnD = '1';
+                let dragging = null;
+                colsList.addEventListener('dragstart', (e) => {
+                    const row = e.target && e.target.closest ? e.target.closest('[data-fu-col-item]') : null;
+                    if (!row) return;
+                    dragging = row;
+                    row.setAttribute('aria-grabbed', 'true');
+                    try {
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.setData('text/plain', row.getAttribute('data-fu-col-item') || '');
+                    } catch {}
+                });
+                colsList.addEventListener('dragover', (e) => {
+                    const row = e.target && e.target.closest ? e.target.closest('[data-fu-col-item]') : null;
+                    if (!row) return;
+                    e.preventDefault();
+                });
+                colsList.addEventListener('drop', (e) => {
+                    const row = e.target && e.target.closest ? e.target.closest('[data-fu-col-item]') : null;
+                    if (!row || !dragging || row === dragging) return;
+                    e.preventDefault();
+                    const rows = [...colsList.querySelectorAll('[data-fu-col-item]')];
+                    const from = rows.indexOf(dragging);
+                    const to = rows.indexOf(row);
+                    if (from < 0 || to < 0) return;
+                    if (from < to) {
+                        row.insertAdjacentElement('afterend', dragging);
+                    } else {
+                        row.insertAdjacentElement('beforebegin', dragging);
+                    }
+                    dragging.setAttribute('aria-grabbed', 'false');
+                    dragging = null;
+                });
+                colsList.addEventListener('dragend', () => {
+                    if (dragging) dragging.setAttribute('aria-grabbed', 'false');
+                    dragging = null;
+                });
+            }
+
             if (selectAll && !selectAll.dataset.bound) {
                 selectAll.dataset.bound = '1';
                 selectAll.addEventListener('click', () => {
@@ -14339,6 +14660,39 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     } catch (e2) {
                         showToast('Failed', 'Could not remove from DNC.', 'error', 3200);
                     }
+                });
+            }
+
+            if (wrap && !wrap.dataset.colDnD) {
+                wrap.dataset.colDnD = '1';
+                let draggingCol = null;
+                wrap.addEventListener('dragstart', (e) => {
+                    const th = e.target && e.target.closest ? e.target.closest('[data-fu-col-name]') : null;
+                    const name = th ? th.getAttribute('data-fu-col-name') : null;
+                    if (!name) return;
+                    draggingCol = name;
+                    try {
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.setData('text/plain', name);
+                    } catch {}
+                });
+                wrap.addEventListener('dragover', (e) => {
+                    const th = e.target && e.target.closest ? e.target.closest('th[data-fu-col-name]') : null;
+                    if (!th) return;
+                    e.preventDefault();
+                });
+                wrap.addEventListener('drop', (e) => {
+                    const th = e.target && e.target.closest ? e.target.closest('th[data-fu-col-name]') : null;
+                    if (!th) return;
+                    e.preventDefault();
+                    const target = th.getAttribute('data-fu-col-name');
+                    let dragged = draggingCol;
+                    try {
+                        const fromDt = e.dataTransfer.getData('text/plain');
+                        if (fromDt) dragged = fromDt;
+                    } catch {}
+                    followUpApplyColumnOrderFromDnD(currentClient, dragged, target);
+                    draggingCol = null;
                 });
             }
         }
@@ -15758,6 +16112,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     closeLeadModal();
                     closeTranscriptModal();
                     closeTimelineModal();
+                    followUpCloseColumnsModal();
                 }
             });
             const snoozeBtn = document.getElementById('modalSnoozeBtn');
