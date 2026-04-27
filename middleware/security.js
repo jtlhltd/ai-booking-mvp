@@ -449,6 +449,7 @@ export function twilioWebhookVerification(req, res, next) {
   try {
     const authToken = process.env.TWILIO_AUTH_TOKEN;
     const isProd = String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
+    const isTest = String(process.env.NODE_ENV || '').trim().toLowerCase() === 'test' || String(process.env.JEST_WORKER_ID || '').trim() !== '';
 
     if (!authToken) {
       if (isProd) {
@@ -458,7 +459,8 @@ export function twilioWebhookVerification(req, res, next) {
           code: 'MISSING_TWILIO_AUTH_TOKEN'
         });
       }
-      console.warn('[TWILIO AUTH] TWILIO_AUTH_TOKEN not set, skipping verification (non-production only)');
+      // CI/test runs exercise routes without real Twilio creds; don't spam logs.
+      if (!isTest) console.warn('[TWILIO AUTH] TWILIO_AUTH_TOKEN not set, skipping verification (non-production only)');
       return next();
     }
 

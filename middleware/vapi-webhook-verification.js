@@ -13,6 +13,7 @@ import crypto from 'crypto';
  */
 export function verifyVapiSignature(req, res, next) {
   const isProd = String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
+  const isTest = String(process.env.NODE_ENV || '').trim().toLowerCase() === 'test' || String(process.env.JEST_WORKER_ID || '').trim() !== '';
   const secret = process.env.VAPI_WEBHOOK_SECRET;
   const secretHeader = req.get('X-Vapi-Secret') || req.get('x-vapi-secret');
   const requireExplicit =
@@ -42,7 +43,8 @@ export function verifyVapiSignature(req, res, next) {
         message: 'Set VAPI_WEBHOOK_SECRET (or disable VAPI_WEBHOOK_REQUIRE_SIGNATURE) to accept VAPI webhooks'
       });
     }
-    console.error('[VAPI WEBHOOK] No VAPI_WEBHOOK_SECRET configured — accepting webhooks without verification');
+    // In test/dev we frequently run without webhook secrets; keep logs clean.
+    if (!isTest) console.warn('[VAPI WEBHOOK] No VAPI_WEBHOOK_SECRET configured — accepting webhooks without verification');
     return next();
   }
   
