@@ -1514,8 +1514,33 @@ async function processWebhookPayload(body, correlationId) {
         // Email fallback notification for callback queue (per-tenant if available)
         const callbackInbox = tenant?.vapi?.callbackInboxEmail || process.env.CALLBACK_INBOX_EMAIL;
         if (sheetData.callbackNeeded === 'TRUE' && callbackInbox) {
+          const normalizeStringList = (v) => {
+            if (v == null) return [];
+            if (Array.isArray(v)) {
+              return v
+                .flatMap((x) => (x == null ? [] : [String(x).trim()]))
+                .filter((s) => s);
+            }
+            if (typeof v === 'string') {
+              // Allow either "a,b,c" or "a | b | c" style strings
+              return v
+                .split(/[,\|]/g)
+                .map((s) => s.trim())
+                .filter((s) => s);
+            }
+            // If structured output gave an object, keep it readable without throwing
+            try {
+              const s = JSON.stringify(v);
+              return s && s !== '{}' ? [s] : [];
+            } catch {
+              return [String(v)];
+            }
+          };
+
           const subject = `Callback needed: ${sheetData.businessName || 'Unknown business'} (${leadPhone})`;
-          const body = `A receptionist requested a callback or decision maker was unavailable.\n\nBusiness: ${sheetData.businessName || 'Unknown'}\nReceptionist: ${sheetData.receptionistName || 'Unknown'}\nPhone: ${leadPhone}\nEmail: ${extracted.email || 'N/A'}\nInternational: ${extracted.international || 'N/A'}\nCouriers: ${(extracted.mainCouriers || []).join(', ') || 'N/A'}\nFrequency: ${extracted.frequency || 'N/A'}\nCountries: ${(extracted.mainCountries || []).join(', ') || 'N/A'}\nExample Shipment: ${extracted.exampleShipment || 'N/A'} (Cost: ${extracted.exampleShipmentCost || 'N/A'})\nRecording: ${recordingUrl || 'N/A'}\nCall ID: ${callId}\n\nTranscript snippet:\n${transcript.slice(0, 800)}`;
+          const couriers = normalizeStringList(extracted.mainCouriers).join(', ') || 'N/A';
+          const countries = normalizeStringList(extracted.mainCountries).join(', ') || 'N/A';
+          const body = `A receptionist requested a callback or decision maker was unavailable.\n\nBusiness: ${sheetData.businessName || 'Unknown'}\nReceptionist: ${sheetData.receptionistName || 'Unknown'}\nPhone: ${leadPhone}\nEmail: ${extracted.email || 'N/A'}\nInternational: ${extracted.international || 'N/A'}\nCouriers: ${couriers}\nFrequency: ${extracted.frequency || 'N/A'}\nCountries: ${countries}\nExample Shipment: ${extracted.exampleShipment || 'N/A'} (Cost: ${extracted.exampleShipmentCost || 'N/A'})\nRecording: ${recordingUrl || 'N/A'}\nCall ID: ${callId}\n\nTranscript snippet:\n${transcript.slice(0, 800)}`;
           setImmediate(() => {
             void messagingService.sendEmail({ to: callbackInbox, subject, body }).catch((err) => {
               console.error('[LOGISTICS] Callback inbox email failed:', err?.message || err);
