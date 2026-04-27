@@ -5283,6 +5283,14 @@ async function processVapiCallFromQueue(call) {
         /wallet balance|purchase more credits|upgrade your plan/i.test(detailsStr);
 
       if (isNoCredits) {
+        // Pre-flight wallet gate (intent: billing.wallet-check-before-dial).
+        // Flag the wallet as depleted so subsequent dials skip fetch entirely
+        // until the flag self-clears. Without this, every queued row spends a
+        // full Vapi POST round-trip just to learn the wallet is still empty.
+        try {
+          const { markVapiWalletDepleted } = await import('./lib/instant-calling.js');
+          markVapiWalletDepleted({ ttlMs: 15 * 60 * 1000 });
+        } catch (_) { /* non-fatal */ }
         // Don't create a fake failed call record; just defer the queue item so it runs when credits are back.
         const next = smearCallQueueScheduledFor(
           new Date(Date.now() + 15 * 60 * 1000),

@@ -28,14 +28,29 @@ const root = path.resolve(__dirname, '..');
 // -----------------------------------------------------------------------------
 // Rules
 //
-// `pattern` — regex applied per-file (multiline).
-// `allow`   — list of file paths or directory prefixes (POSIX-style, repo-relative).
-//             A file is allow-listed when its path equals an entry, or starts
-//             with any directory entry (must end with '/').
-// `scope`   — optional directory prefix (POSIX-style, ending '/'). When set,
-//             only files under this prefix are checked. (Use this for "must
-//             not appear in routes/" style rules.)
-// `intentId` — anchor in docs/INTENT.md.
+// Rule shape:
+//   { intentId, description, scope?, allow?, mode? }
+//
+// Two modes are supported:
+//
+// 1. `mode: 'forbid'` (default) — file VIOLATES if `pattern` matches.
+//    `pattern`        — regex applied per-file (multiline).
+//
+// 2. `mode: 'require'` — file VIOLATES if its name matches `filePattern` but
+//    NONE of the regexes in `requireAny` match its content. Use this for
+//    "every new webhook route under routes/ must import the verifier" rules.
+//    `filePattern`    — regex applied to file PATH (decides which files are
+//                       checked under `scope`).
+//    `requireAny`     — array of regexes; file MUST match at least one. If
+//                       none match, that's a violation.
+//
+// Common fields:
+//   `allow`   — list of file paths or directory prefixes (POSIX-style,
+//               repo-relative). A file is allow-listed when its path equals
+//               an entry, or starts with any directory entry (must end '/').
+//   `scope`   — optional directory prefix (POSIX-style, ending '/'). When
+//               set, only files under this prefix are checked.
+//   `intentId` — anchor in docs/INTENT.md.
 // -----------------------------------------------------------------------------
 const rules = [
   {
@@ -120,6 +135,25 @@ const rules = [
       // The instant-calling worker references the slug only in a comment.
       'lib/instant-calling.js'
     ]
+  },
+  {
+    intentId: 'webhook.signature-required',
+    description:
+      'Any route file handling Vapi webhooks must import verifyVapiSignature from middleware/vapi-webhook-verification.js, and any Twilio voice webhook route must call twilio.validateRequest. New webhook routes that skip signature verification are forbidden.',
+    mode: 'require',
+    scope: 'routes/',
+    // Vapi webhook routes (vapi-webhooks.js, vapi-webhooks-mount.js, ...) and
+    // Twilio voice webhooks (twilio-voice-webhooks.js, twilio-webhooks.js, ...).
+    filePattern: /^routes\/(vapi-webhooks?|twilio[-_a-z0-9]*-webhooks?|twilio[-_a-z0-9]*-voice|twilio-voice-webhooks?)[-_a-z0-9]*\.js$/,
+    requireAny: [
+      /verifyVapiSignature/,
+      /vapi-webhook-verification/,
+      /twilio\.validateRequest/,
+      /validateTwilioRequest/,
+      /twilioWebhookVerification/,
+      /X-Twilio-Signature/i
+    ],
+    allow: []
   }
 ];
 
@@ -211,13 +245,28 @@ function scanFile(absPath, relPath, rule) {
   } catch {
     return null;
   }
-  const text = relPath.endsWith('.js') || relPath.endsWith('.mjs') || relPath.endsWith('.cjs')
-    ? stripComments(src)
-    : src;
+  const isJs = relPath.endsWith('.js') || relPath.endsWith('.mjs') || relPath.endsWith('.cjs');
+  const text = isJs ? stripComments(src) : src;
+  const lines = src.split(/\r?\n/);
+
+  // require-mode: the file's filename must match `filePattern` AND the file
+  // body must match at least one of `requireAny`. Otherwise: violation.
+  if (rule.mode === 'require') {
+    if (rule.filePattern && !rule.filePattern.test(relPath)) return null;
+    const required = rule.requireAny || [];
+    if (required.length === 0) return null;
+    const hit = required.some((re) => re.test(text));
+    if (hit) return null;
+    return {
+      line: 1,
+      snippet: lines[0]?.trim?.() || '(missing required pattern)'
+    };
+  }
+
+  // Default forbid-mode: a match in the file is a violation.
+  if (!rule.pattern) return null;
   const m = text.match(rule.pattern);
   if (!m) return null;
-  // Find the first matching line in the original source for nicer reporting.
-  const lines = src.split(/\r?\n/);
   let lineNo = 0;
   for (let i = 0; i < lines.length; i++) {
     if (rule.pattern.test(lines[i])) {

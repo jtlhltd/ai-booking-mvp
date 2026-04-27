@@ -1,3 +1,8 @@
+// intent: webhook.signature-required
+// This contract test enforces that the Twilio voice webhook rejects unsigned
+// payloads when TWILIO_AUTH_TOKEN is configured. It is the enforcement gate
+// for the `webhook.signature-required` row in docs/INTENT.md alongside the
+// matching policy rule in scripts/check-policy.mjs.
 import { describe, test, expect, jest, beforeEach } from '@jest/globals';
 import request from 'supertest';
 

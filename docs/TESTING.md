@@ -74,7 +74,31 @@ To prevent that, this repo has **Behavioral Intent Gates**:
 
 When you change dialing/routing/queueing/tenant/billing behavior, the PR is not complete
 until you update `docs/INTENT.md` **and** add at least one matching enforcement gate
-(policy, canary, or invariant). This is enforced by `.cursor/rules/behavioral-gates.mdc`.
+(policy, canary, invariant, or `tests/routes/` contract test tagged with
+`// intent: <id>`). This is enforced by `.cursor/rules/behavioral-gates.mdc` plus
+`tests/unit/intent/intent-contract.enforced.test.js`, which fails CI when any
+intent ID in `docs/INTENT.md` lacks a matching enforcement.
+
+### Current high-ROI intent gates
+
+The repo currently enforces these behavioral intent IDs end-to-end (each has at
+least one canary, invariant, policy rule, or tagged contract test). New high-ROI
+surfaces — anything that **spends money, dials someone, sends a message, or
+crosses a tenant boundary** — should be added to this list.
+
+| Intent ID | Surface | Enforcement |
+| --- | --- | --- |
+| `billing.wallet-check-before-dial` | `lib/instant-calling.js` | `tests/canaries/wallet-gate.canary.test.js` |
+| `billing.idle-call-cutoffs` | Vapi outbound payload | `tests/canaries/idle-cutoffs.canary.test.js` |
+| `billing.max-retries-bounded` | `lib/follow-up-processor.js` | canary + `retry_loop_per_lead` invariant |
+| `queue.concurrency-cap` | `lib/instant-calling.js` `acquireVapiSlot` | `tests/canaries/concurrency-cap.canary.test.js` |
+| `queue.dedupe-active-call` | `lib/instant-calling.js` | `tests/canaries/dedupe-active-call.canary.test.js` |
+| `scheduling.no-past-scheduled-for` | `lib/optimal-call-window.js` | canary + `past_scheduled_for` invariant |
+| `webhook.signature-required` | `routes/vapi-webhooks.js`, `routes/twilio-voice-webhooks.js`, `routes/twilio-webhooks.js` | policy rule + tagged contract tests |
+
+Removing any of these gates is expected to fail CI; verify by deleting the gate
+locally and re-running `npm run test:ci` before opening a PR that intentionally
+relaxes a gate.
 
 ## Writing new tests
 

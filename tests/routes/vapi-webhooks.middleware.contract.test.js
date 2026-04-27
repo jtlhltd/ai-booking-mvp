@@ -1,3 +1,8 @@
+// intent: webhook.signature-required
+// This contract test exercises the Vapi webhook signature verification
+// middleware (verifyVapiSignature). It is the enforcement gate for the
+// `webhook.signature-required` row in docs/INTENT.md alongside the matching
+// policy rule in scripts/check-policy.mjs.
 import { describe, expect, test, jest, beforeEach } from '@jest/globals';
 import express from 'express';
 import request from 'supertest';

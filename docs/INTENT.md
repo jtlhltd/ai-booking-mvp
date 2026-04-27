@@ -57,6 +57,8 @@ Rules here keep the queue from clumping (top-of-hour spikes), stalling
 | `queue.no-phantom-completed` | Rows MUST NOT transition to `status='completed'` with `initiated_call_id IS NULL`. That indicates a worker bug or race. | `lib/instant-calling.js`, queue worker write paths | invariant | `lib/ops-invariants.js#phantom` query returns 0. |
 | `queue.no-stuck-processing` | Rows in `status='processing'` whose `updated_at` is older than `OPS_INVARIANTS_STUCK_PROCESSING_MINUTES` (default 15) indicate a crashed worker. | queue worker, reaper | invariant | `lib/ops-invariants.js#stuck` returns 0. Reaper job (`lib/stuck-processing-reaper.js`) must be running. |
 | `queue.retry-backlog-bounded` | `retry_queue` rows whose `scheduled_for <= NOW()` must stay below `OPS_INVARIANTS_RETRY_DUE_THRESHOLD` (default 50). Larger means workers aren't draining. | `lib/follow-up-processor.js`, retry worker | invariant | `lib/ops-invariants.js#retryDue` returns < threshold. |
+| `queue.concurrency-cap` | The queue worker must never have more than `VAPI_MAX_CONCURRENT` (default 1) Vapi requests in flight at once. `acquireVapiSlot` blocks the surplus until a slot is released. | `lib/instant-calling.js#acquireVapiSlot` | canary | Fire `N+1` simultaneous `acquireVapiSlot()` calls; the surplus must remain pending until a release. |
+| `queue.dedupe-active-call` | The queue worker must not start a second Vapi call for a phone with an already-active call id on the same instance. | `lib/instant-calling.js#callLeadInstantly` | canary | Mark a phone active via `markVapiCallActive(callId, { phone })`; a follow-up `callLeadInstantly` for that phone must return `{ ok: false, error: 'phone_already_active' }` and never `fetch` Vapi. |
 
 ## Domain: tenant
 
@@ -80,8 +82,31 @@ respecting the wallet check before placing a call.
 | ID | Statement | Constrains | Enforced by | Manual disprove |
 | --- | --- | --- | --- | --- |
 | `billing.no-burst-dial` | Across all tenants, the count of `calls` rows with `created_at > NOW() - 5m` divided by distinct minute buckets must stay below the configured threshold. A burst usually indicates an unthrottled import or a stuck retry loop. | queue worker, all enqueue call sites | invariant | `lib/ops-invariants.js#dial_burst_detected` returns 0. |
-| `billing.wallet-check-before-dial` | The queue worker must check Vapi wallet balance / concurrency slot before dialing. If the wallet is depleted, the row stays `pending` (not `failed`/`completed`). | `lib/instant-calling.js` | canary | Mock a wallet-empty response; the row should remain `pending` and not consume a Vapi credit. |
-| `billing.idle-call-cutoffs` | All Vapi assistants must be configured with `endCallOnSilence`, `endCallOnVoicemail`, and a `maxDurationSeconds` cap to prevent runaway idle calls. | Vapi assistant config / payload builder | canary | Inspect a generated Vapi payload; verify the three caps are present and within sane bounds. |
+| `billing.wallet-check-before-dial` | When `markVapiWalletDepleted()` has been called (because Vapi recently returned a wallet/credits error), `callLeadInstantly` must return `{ ok: false, error: 'vapi_wallet_depleted' }` and skip `fetch('https://api.vapi.ai/call')` entirely until the flag clears. The queue worker keeps the row `pending`. | `lib/instant-calling.js#callLeadInstantly`, `server.js#processQueueCall` | canary | After `markVapiWalletDepleted()`, a call attempt must return `vapi_wallet_depleted` and the global fetch must not be invoked. |
+| `billing.idle-call-cutoffs` | Every outbound Vapi payload built by `lib/instant-calling.js` must include `assistantOverrides.maxDurationSeconds`, `assistantOverrides.silenceTimeoutSeconds`, `assistantOverrides.endCallOnSilence`, and `assistantOverrides.voicemailDetection`. These bound the worst-case spend on idle / voicemail / runaway calls. | `lib/instant-calling.js#callLeadInstantly` payload builder | canary | Intercept the Vapi payload; the four cutoff fields must be present and within sane bounds. |
+| `billing.max-retries-bounded` | A single lead cannot generate more than `MAX_RETRIES_PER_LEAD` (default 3) `vapi_call` retry rows in the configured window (`MAX_RETRIES_PER_LEAD_WINDOW_HOURS`, default 24). `sendRetryCall` must refuse to enqueue when the cap is reached. | `lib/follow-up-processor.js#sendRetryCall` | canary, invariant | Pre-populate `MAX_RETRIES_PER_LEAD` retry rows for a phone; the next `sendRetryCall` must return `{ ok: false, error: 'max_retries_exceeded' }`. `lib/ops-invariants.js#retry_loop_per_lead` returns 0 over the lookback window. |
+
+## Domain: scheduling
+
+The scheduler (`lib/optimal-call-window.js#scheduleAtOptimalCallWindow`) is the
+single point where every enqueued dial picks a `scheduled_for` instant. A bad
+output here defeats every other distribution gate: a row with `scheduled_for`
+in the past is dialed immediately, which means a regression here turns into a
+burst.
+
+| ID | Statement | Constrains | Enforced by | Manual disprove |
+| --- | --- | --- | --- | --- |
+| `scheduling.no-past-scheduled-for` | `scheduleAtOptimalCallWindow` must never return a `Date` strictly earlier than the `baseline` it was given. New `vapi_call` `call_queue` rows in the last 5 minutes must not have `scheduled_for < created_at`. | `lib/optimal-call-window.js`, all enqueue call sites | canary, invariant | Call `scheduleAtOptimalCallWindow(client, null, now)`; result `>= now`. `lib/ops-invariants.js#past_scheduled_for` returns 0. |
+
+## Domain: webhook
+
+Inbound webhooks (Vapi end-of-call reports, Twilio voice) are write paths
+controlled by third parties. They must verify provider signatures so a third
+party cannot forge state changes (booked calls, completed dials, refunds).
+
+| ID | Statement | Constrains | Enforced by | Manual disprove |
+| --- | --- | --- | --- | --- |
+| `webhook.signature-required` | Vapi and Twilio webhook routes must reject unsigned/invalid payloads when verification is configured (`VAPI_WEBHOOK_SECRET` / `TWILIO_AUTH_TOKEN`). New webhook routes under `routes/` must import the matching verifier middleware. | `routes/vapi-webhooks.js`, `routes/twilio-voice-webhooks.js`, `middleware/vapi-webhook-verification.js` | policy, canary | `POST /webhooks/twilio-voice-inbound` without a valid `X-Twilio-Signature` (token configured) returns 403. `POST /webhooks/vapi` with `VAPI_WEBHOOK_SECRET` set and missing signature returns 401. |
 
 ## Domain: error envelope
 
