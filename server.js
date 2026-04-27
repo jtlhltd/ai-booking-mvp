@@ -5478,6 +5478,13 @@ async function queueNewLeadsForCalling() {
       }
       
       try {
+        const isImportSource = (lead) => String(lead?.source || '').trim().toLowerCase() === 'import';
+        // Throttle bursty sources (notably CSV imports). These constants are intentionally conservative:
+        // - They distribute dials so we don't burn wallet on a single import burst
+        // - They keep overall daily throughput acceptable while we iterate on smarter routing
+        const IMPORT_SPACING_MS = 45_000; // ~80 calls/hour per tenant from import-driven leads
+        const IMPORT_INITIAL_DELAY_MS = 5 * 60_000; // push imported leads out of the immediate "now" window
+
         // Get new leads that haven't been called yet
         // Check call_queue (pending) and in-flight calls; Mon–Fri outbound journey (per number) blocks until terminal or next bucket day
         const newLeads = await poolQuerySelect(`
@@ -5529,6 +5536,29 @@ async function queueNewLeadsForCalling() {
         const { scheduleAtOptimalCallWindow } = await import('./lib/optimal-call-window.js');
         const insightsRow = await getLatestCallInsights(client.clientKey).catch(() => null);
         const routing = insightsRow?.routing;
+
+        // Import throttling state: start after whatever is already queued for this tenant so we don't stack
+        // a new import burst on top of an existing call_queue backlog.
+        const maxScheduled = await poolQuerySelect(
+          `
+            SELECT MAX(scheduled_for) AS max_scheduled_for
+            FROM call_queue
+            WHERE client_key = $1
+              AND call_type = 'vapi_call'
+              AND status IN ('pending', 'processing')
+          `,
+          [client.clientKey]
+        );
+        const maxScheduledAt = maxScheduled?.rows?.[0]?.max_scheduled_for
+          ? new Date(maxScheduled.rows[0].max_scheduled_for)
+          : null;
+        let nextImportSlot = new Date(
+          Math.max(
+            Date.now() + IMPORT_INITIAL_DELAY_MS,
+            maxScheduledAt ? maxScheduledAt.getTime() + IMPORT_SPACING_MS : 0
+          )
+        );
+
         for (const lead of newLeads.rows) {
           try {
             // Check if we should call now or schedule for later
@@ -5544,7 +5574,9 @@ async function queueNewLeadsForCalling() {
               jitterKey: lead.phone
             });
 
-            const finalScheduledFor = scheduledFor;
+            const finalScheduledFor = isImportSource(lead)
+              ? new Date(Math.max(new Date(scheduledFor).getTime(), nextImportSlot.getTime()))
+              : scheduledFor;
             const scheduleTag = shouldCallNow ? 'optimal_today' : 'optimal';
 
             // Calculate priority based on lead age and source
@@ -5568,9 +5600,14 @@ async function queueNewLeadsForCalling() {
                 leadSource: lead.source,
                 leadStatus: lead.status,
                 businessHours: shouldCallNow ? 'within' : 'outside',
-                scheduling: scheduleTag
+                scheduling: scheduleTag,
+                importThrottle: isImportSource(lead) ? { spacingMs: IMPORT_SPACING_MS } : undefined
               }
             });
+
+            if (isImportSource(lead)) {
+              nextImportSlot = new Date(nextImportSlot.getTime() + IMPORT_SPACING_MS);
+            }
             
             const now = new Date();
             const scheduledTime = new Date(finalScheduledFor);
