@@ -4744,6 +4744,41 @@
             background: rgba(124, 134, 220, 0.12);
         }
 
+        .follow-up-th-move {
+            display: inline-flex;
+            gap: 4px;
+            opacity: 0;
+            transform: translateX(4px);
+            transition: opacity 0.16s ease, transform 0.16s ease;
+        }
+
+        th:hover .follow-up-th-move,
+        th:focus-within .follow-up-th-move {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        .follow-up-th-move-btn {
+            border: 1px solid var(--border);
+            background: var(--surface-2);
+            color: var(--text-secondary);
+            padding: 2px 6px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            line-height: 1;
+            cursor: pointer;
+        }
+
+        body[data-theme="dark"] .follow-up-th-move-btn {
+            background: rgba(37, 43, 61, 0.92);
+            color: var(--text-secondary);
+            border-color: var(--border);
+        }
+
+        .follow-up-th-move-btn:hover {
+            filter: brightness(1.03);
+        }
+
         body[data-theme="dark"] .follow-up-queue-table th.follow-up-th--active .follow-up-th-sort {
             color: #a5b4fc;
         }
@@ -13536,7 +13571,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 return `<th scope="col" data-col="${escapeHtml(slug)}" class="${thCls}" aria-sort="${ariaSort}" draggable="true" data-fu-col-name="${escapeHtml(c)}">` +
                     `<button type="button" class="follow-up-th-btn" data-fu-col-idx="${i}" data-fu-col-name="${escapeHtml(c)}" draggable="true" aria-label="${escapeHtml(label)}">` +
                     `<span class="follow-up-th-label">${escapeHtml(c)}</span>` +
-                    `<span class="follow-up-th-sort" aria-hidden="true">${ind}</span></button></th>`;
+                    `<span class="follow-up-th-sort" aria-hidden="true">${ind}</span>` +
+                    `<span class="follow-up-th-move" aria-hidden="false">` +
+                        `<button type="button" class="follow-up-th-move-btn" data-fu-move="left" data-fu-col-name="${escapeHtml(c)}" aria-label="Move ${escapeHtml(c)} column left">‹</button>` +
+                        `<button type="button" class="follow-up-th-move-btn" data-fu-move="right" data-fu-col-name="${escapeHtml(c)}" aria-label="Move ${escapeHtml(c)} column right">›</button>` +
+                    `</span>` +
+                    `</button></th>`;
             }).join('')}</tr></thead>`;
             const tbody = displayRows.map((row) => {
                 const key = followUpRowKey(row);
@@ -13571,6 +13611,42 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             if (from < 0 || to < 0) return;
             full.splice(from, 1);
             full.splice(to, 0, draggedCol);
+            prefs.order = full;
+            prefs.hidden = hidden;
+            followUpColumnPrefs = prefs;
+            saveFollowUpColumnPrefs(clientKey, prefs);
+
+            const applied = applyFollowUpColumnPrefs(base, prefs);
+            followUpQueueState.cols = applied.visibleCols;
+            const wrap = document.getElementById('follow-up-queue');
+            if (wrap) followUpPaintTable(wrap);
+        }
+
+        function followUpMoveColumnByClick(clientKey, colName, dir) {
+            const col = String(colName || '').trim();
+            if (!col) return;
+            const delta = dir === 'left' ? -1 : dir === 'right' ? 1 : 0;
+            if (!delta) return;
+
+            const prefs = loadFollowUpColumnPrefs(clientKey);
+            const hidden = Array.isArray(prefs.hidden) ? prefs.hidden.slice() : [];
+
+            const base = followUpQueueState.cols && followUpQueueState.cols.length
+                ? followUpQueueState.cols.slice()
+                : followUpDefaultColumnOrder.slice();
+            const existing = new Set(base);
+            const order = (Array.isArray(prefs.order) && prefs.order.length ? prefs.order : base).filter((c) => existing.has(c));
+            const full = [...new Set([...order, ...base])];
+
+            const idx = full.indexOf(col);
+            if (idx < 0) return;
+            const nextIdx = idx + delta;
+            if (nextIdx < 0 || nextIdx >= full.length) return;
+
+            const swap = full[nextIdx];
+            full[nextIdx] = col;
+            full[idx] = swap;
+
             prefs.order = full;
             prefs.hidden = hidden;
             followUpColumnPrefs = prefs;
@@ -14376,6 +14452,15 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         if (sel.checked) followUpSelectedKeys.add(key);
                         else followUpSelectedKeys.delete(key);
                         followUpUpdateSelectionUi();
+                        return;
+                    }
+                    const moveBtn = e.target.closest('[data-fu-move][data-fu-col-name]');
+                    if (moveBtn) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const dir = moveBtn.getAttribute('data-fu-move');
+                        const colName = moveBtn.getAttribute('data-fu-col-name');
+                        followUpMoveColumnByClick(currentClient, colName, dir);
                         return;
                     }
                     const btn = e.target.closest('.follow-up-th-btn');
