@@ -152,39 +152,43 @@ export function createImportLeadsRouter(deps) {
         client &&
         isBusinessHours(client)
       ) {
-        console.log(`[INSTANT CALLING] Starting immediate calls for ${results.imported} leads...`);
+        // Do NOT start immediate outbound calls for imports. Imported lead lists can be large and bursty;
+        // we always enqueue and let the insights/routing scheduler distribute dials across the day.
+        console.log(`[LEAD IMPORT] Enqueueing ${results.imported} lead(s) for routing-based distribution...`);
 
-        const { processCallQueue, estimateCallTime } = await import('../lib/instant-calling.js');
+        if (typeof runOutboundCallsForImportedLeads !== 'function') {
+          throw new Error('runOutboundCallsForImportedLeads dependency missing');
+        }
 
-        const leadsToCall = validLeads
-          .filter((l) => {
-            return l.phone && l.leadScore > 0;
-          })
-          .slice(0, results.imported);
+        // Mirror the inserted subset we just imported so we don't enqueue invalids.
+        const insertedSubset = validLeads
+          .filter((l) => l.phone && l.leadScore > 0)
+          .slice(0, results.imported)
+          .map((l, idx) => ({
+            id: l.id ?? `import_${Date.now()}_${idx}`,
+            phone: l.phone,
+            name: l.name,
+            service: l.service,
+            source: l.source || 'Import',
+            status: l.status || 'new'
+          }));
 
-        const estimate = estimateCallTime(leadsToCall.length, 2000);
-        console.log(
-          `[INSTANT CALLING] ETA: ${estimate.formatted} (complete by ${estimate.completionTime})`
-        );
-
-        processCallQueue(leadsToCall, client, {
-          maxConcurrent: 1,
-          delayBetweenCalls: 2000,
-          maxCallsPerBatch: 50
-        })
-          .then((callResults) => {
-            console.log(`[INSTANT CALLING] ✅ Campaign complete: ${callResults.initiated} calls made`);
-          })
-          .catch((error) => {
-            console.error(`[INSTANT CALLING] ❌ Campaign failed:`, error);
-          });
+        // Fire-and-forget: enqueue work happens synchronously; the actual dialing is handled by call_queue processors.
+        const summary = await runOutboundCallsForImportedLeads({
+          clientKey,
+          inserted: insertedSubset,
+          isBusinessHours,
+          getNextBusinessHour,
+          scheduleAtOptimalCallWindow,
+          addToCallQueue,
+          TIMEZONE: process.env.TIMEZONE || process.env.TZ || 'UTC'
+        });
 
         callResults = {
-          status: 'started',
-          totalLeads: leadsToCall.length,
-          estimatedTime: estimate.formatted,
-          completionTime: estimate.completionTime,
-          message: `Campaign started! Calling ${leadsToCall.length} leads now...`
+          status: 'queued',
+          totalLeads: insertedSubset.length,
+          message: `Queued ${insertedSubset.length} lead(s) for routing-based distribution.`,
+          summary
         };
       }
 

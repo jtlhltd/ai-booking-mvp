@@ -64,63 +64,38 @@ export function createLeadsFollowupsRouter(deps) {
         return res.status(500).json({ ok: false, error: 'Vapi not configured' });
       }
 
-      const payload = {
-        assistantId,
-        phoneNumberId,
-        customer: { number: phone, name: lead.name || 'Lead' },
-        maxDurationSeconds: 5,
-        assistantOverrides: {
-          variableValues: {
-            ClientKey: clientKey,
-            BusinessName: client.displayName || client.clientKey,
-            ConsentLine: 'This call may be recorded for quality.',
-            DefaultService: lead.service || '',
-            DefaultDurationMin: client?.booking?.defaultDurationMin || 30,
-            Timezone: client?.booking?.timezone || TIMEZONE,
-            ServicesJSON: client?.servicesJson || '[]',
-            PricesJSON: client?.pricesJson || '{}',
-            HoursJSON: client?.hoursJson || '{}',
-            ClosedDatesJSON: client?.closedDatesJson || '[]',
-            Locale: client?.locale || 'en-GB',
-            ScriptHints: client?.scriptHints || '',
-            FAQJSON: client?.faqJson || '[]'
-          }
-        },
-        metadata: {
-          clientKey: clientKey,
-          service: lead.service || '',
+      // Always enqueue recalls and let the insights/routing distribution system schedule and execute the dial.
+      const { addToCallQueue, getLatestCallInsights, getCallTimeBanditState } = await import('../db.js');
+      const { scheduleAtOptimalCallWindow } = await import('../lib/optimal-call-window.js');
+
+      const insightsRow = await getLatestCallInsights(clientKey).catch(() => null);
+      const routing = insightsRow?.routing;
+      const banditArms = await getCallTimeBanditState(clientKey).catch(() => ({}));
+
+      const scheduledFor = await scheduleAtOptimalCallWindow(client, routing, new Date(), {
+        fallbackTz: client?.booking?.timezone || client?.timezone || TIMEZONE,
+        clientKey,
+        jitterKey: `recall:${clientKey}:${phone}`,
+        banditArms
+      });
+
+      await addToCallQueue({
+        clientKey,
+        leadPhone: phone,
+        priority: 9,
+        scheduledFor,
+        callType: 'vapi_call',
+        callData: {
+          triggerType: 'manual_recall',
+          leadName: lead.name || 'Lead',
+          leadService: lead.service || '',
+          leadSource: lead.source || null,
           recall: true
         }
-      };
+      });
 
-      const { acquireVapiSlot, releaseVapiSlot, markVapiCallActive } = await import(
-        '../lib/instant-calling.js'
-      );
-      await acquireVapiSlot();
-      let resp;
-      try {
-        resp = await fetch('https://api.vapi.ai/call', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${VAPI_PRIVATE_KEY}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        if (resp.ok) {
-          const data = await resp.clone().json().catch(() => null);
-          if (data?.id) markVapiCallActive(data.id, { ttlMs: 30 * 60 * 1000 });
-          else releaseVapiSlot({ reason: 'no_call_id' });
-        } else {
-          releaseVapiSlot({ reason: `start_failed_${resp.status}` });
-        }
-      } catch (e) {
-        releaseVapiSlot({ reason: 'start_failed' });
-        throw e;
-      }
-
-      const ok = resp.ok;
-      console.log('[LEAD RECALL]', { clientKey, phone, vapiStatus: ok ? 'ok' : resp.status });
-      if (!ok) return res.status(502).json({ ok: false, error: `vapi ${resp.status}` });
-
-      return res.json({ ok: true });
+      console.log('[LEAD RECALL] queued', { clientKey, phone, scheduledFor: scheduledFor.toISOString() });
+      return res.json({ ok: true, queued: true, scheduledFor: scheduledFor.toISOString() });
     } catch (e) {
       console.error('[POST /api/leads/recall] error', e?.message || e);
       res.status(500).json({ ok: false, error: 'Internal error' });

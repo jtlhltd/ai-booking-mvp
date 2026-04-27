@@ -70,19 +70,20 @@ describe('routes/leads-followups.js contracts', () => {
     expect(res.body).toEqual(expect.objectContaining({ ok: false, error: 'Vapi not configured' }));
   });
 
-  test('POST /api/leads/recall returns 502 when Vapi call start fails', async () => {
-    await withEnv({ }, async () => {
-      jest.unstable_mockModule('../../lib/instant-calling.js', () => ({
-        acquireVapiSlot: jest.fn(async () => {}),
-        releaseVapiSlot: jest.fn(async () => {}),
-        markVapiCallActive: jest.fn()
+  test('happy: POST /api/leads/recall enqueues and returns scheduledFor', async () => {
+    await withEnv({}, async () => {
+      jest.unstable_mockModule('../../db.js', () => ({
+        addToCallQueue: jest.fn(async () => {}),
+        getLatestCallInsights: jest.fn(async () => ({ routing: { recommendations: { bestHours: [{ hour: 10, score: 1 }] } } })),
+        getCallTimeBanditState: jest.fn(async () => ({}))
       }));
-
-      global.fetch = jest.fn(async () => ({ ok: false, status: 429 }));
+      jest.unstable_mockModule('../../lib/optimal-call-window.js', () => ({
+        scheduleAtOptimalCallWindow: jest.fn(async () => new Date('2030-01-01T10:00:00Z'))
+      }));
 
       const { createLeadsFollowupsRouter } = await import('../../routes/leads-followups.js');
       const router = createLeadsFollowupsRouter({
-        getFullClient: jest.fn(async () => ({ clientKey: 'c1', displayName: 'Acme' })),
+        getFullClient: jest.fn(async () => ({ clientKey: 'c1', displayName: 'Acme', booking: { timezone: 'Europe/London' } })),
         isBusinessHours: jest.fn(() => true),
         TIMEZONE: 'Europe/London',
         VAPI_PRIVATE_KEY: 'k',
@@ -97,9 +98,9 @@ describe('routes/leads-followups.js contracts', () => {
       const app = createContractApp({ mounts: [{ path: '/api/leads', router }] });
       const res = await request(app)
         .post('/api/leads/recall')
-        .send({ clientKey: 'c1', lead: { phone: '+441' } })
-        .expect(502);
-      expect(res.body).toEqual({ ok: false, error: 'vapi 429' });
+        .send({ clientKey: 'c1', lead: { phone: '+441234', name: 'L' } })
+        .expect(200);
+      expect(res.body).toEqual(expect.objectContaining({ ok: true, queued: true, scheduledFor: '2030-01-01T10:00:00.000Z' }));
     });
   });
 });
