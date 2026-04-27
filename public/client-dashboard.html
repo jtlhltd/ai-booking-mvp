@@ -14826,6 +14826,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 let draggingCol = null;
                 let targetCol = null;
                 let pointerId = null;
+                let docMoveBound = false;
 
                 const clearTargets = () => {
                     wrap.querySelectorAll('th.fu-col-drop-target').forEach((el) => el.classList.remove('fu-col-drop-target'));
@@ -14849,30 +14850,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     th.classList.add('fu-col-drop-target');
                 };
 
-                wrap.addEventListener('pointerdown', (e) => {
-                    const handle = e.target && e.target.closest ? e.target.closest('[data-fu-col-drag][data-fu-col-name]') : null;
-                    if (!handle) return;
-                    const name = handle.getAttribute('data-fu-col-name');
-                    if (!name) return;
-                    e.preventDefault();
-                    e.stopPropagation();
-                    draggingCol = name;
-                    targetCol = null;
-                    pointerId = e.pointerId;
-                    try {
-                        handle.setPointerCapture(pointerId);
-                    } catch {}
-                    clearTargets();
-                    updateTargetFromPoint(e.clientX, e.clientY);
-                });
-
-                wrap.addEventListener('pointermove', (e) => {
-                    if (!draggingCol) return;
-                    if (pointerId != null && e.pointerId !== pointerId) return;
-                    e.preventDefault();
-                    updateTargetFromPoint(e.clientX, e.clientY);
-                });
-
                 const finish = () => {
                     if (!draggingCol) return;
                     const dragged = draggingCol;
@@ -14884,18 +14861,49 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     if (target) followUpApplyColumnOrderFromDnD(currentClient, dragged, target);
                 };
 
-                wrap.addEventListener('pointerup', (e) => {
+                const onDocMove = (e) => {
                     if (!draggingCol) return;
                     if (pointerId != null && e.pointerId !== pointerId) return;
-                    e.preventDefault();
-                    finish();
-                });
+                    try { e.preventDefault(); } catch {}
+                    updateTargetFromPoint(e.clientX, e.clientY);
+                };
 
-                wrap.addEventListener('pointercancel', () => {
+                const onDocUp = (e) => {
+                    if (!draggingCol) return;
+                    if (pointerId != null && e.pointerId !== pointerId) return;
+                    try { e.preventDefault(); } catch {}
+                    finish();
+                };
+
+                const onDocCancel = () => {
                     draggingCol = null;
                     targetCol = null;
                     pointerId = null;
                     clearTargets();
+                };
+
+                wrap.addEventListener('pointerdown', (e) => {
+                    const handle = e.target && e.target.closest ? e.target.closest('[data-fu-col-drag][data-fu-col-name]') : null;
+                    if (!handle) return;
+                    const name = handle.getAttribute('data-fu-col-name');
+                    if (!name) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    draggingCol = name;
+                    targetCol = null;
+                    pointerId = e.pointerId;
+                    clearTargets();
+                    updateTargetFromPoint(e.clientX, e.clientY);
+
+                    // Bind global listeners for the duration of drag so
+                    // releasing outside the table still commits the reorder.
+                    if (!docMoveBound) {
+                        docMoveBound = true;
+                        document.addEventListener('pointermove', onDocMove, { passive: false });
+                        document.addEventListener('pointerup', onDocUp, { passive: false });
+                        document.addEventListener('pointercancel', onDocCancel, { passive: true });
+                        document.addEventListener('blur', onDocCancel, { passive: true });
+                    }
                 });
             }
         }
