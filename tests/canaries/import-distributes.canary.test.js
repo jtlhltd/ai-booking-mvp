@@ -1,5 +1,6 @@
 /**
  * Canary for Intent Contract: dial.imports-distribute-not-burst
+ * Also covers: queue.spread-min-spacing
  *
  * A 50-lead import must:
  *   1. NOT call fetch('https://api.vapi.ai/call', ...) directly.
@@ -20,7 +21,7 @@ beforeEach(() => {
   });
 });
 
-describe('canary: dial.imports-distribute-not-burst', () => {
+describe('canary: dial.imports-distribute-not-burst / queue.spread-min-spacing', () => {
   test('runOutboundCallsForImportedLeads enqueues every lead and spreads scheduled_for', async () => {
     const addToCallQueue = jest.fn(async () => ({ id: Math.random() }));
 
