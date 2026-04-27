@@ -4680,6 +4680,19 @@
             box-shadow: 0 2px 6px rgba(16, 26, 62, 0.07);
         }
 
+        .follow-up-queue-table th[draggable="true"] {
+            cursor: grab;
+        }
+
+        .follow-up-queue-table th.fu-col-drop-target {
+            outline: 2px solid rgba(92, 106, 196, 0.55);
+            outline-offset: -2px;
+        }
+
+        body[data-theme="dark"] .follow-up-queue-table th.fu-col-drop-target {
+            outline-color: rgba(124, 134, 220, 0.7);
+        }
+
         .follow-up-th-btn {
             display: flex;
             align-items: center;
@@ -14697,11 +14710,19 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     const th = e.target && e.target.closest ? e.target.closest('th[data-fu-col-name]') : null;
                     if (!th) return;
                     e.preventDefault();
+                    wrap.querySelectorAll('th.fu-col-drop-target').forEach((el) => el.classList.remove('fu-col-drop-target'));
+                    th.classList.add('fu-col-drop-target');
+                });
+                wrap.addEventListener('dragleave', (e) => {
+                    const th = e.target && e.target.closest ? e.target.closest('th[data-fu-col-name]') : null;
+                    if (!th) return;
+                    th.classList.remove('fu-col-drop-target');
                 });
                 wrap.addEventListener('drop', (e) => {
                     const th = e.target && e.target.closest ? e.target.closest('th[data-fu-col-name]') : null;
                     if (!th) return;
                     e.preventDefault();
+                    wrap.querySelectorAll('th.fu-col-drop-target').forEach((el) => el.classList.remove('fu-col-drop-target'));
                     const target = th.getAttribute('data-fu-col-name');
                     let dragged = draggingCol;
                     try {
