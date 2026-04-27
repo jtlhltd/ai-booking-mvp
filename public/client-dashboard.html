@@ -318,6 +318,68 @@
             border-radius: 2px;
         }
 
+        /* Collapsible sections/cards (no extra wrappers — keeps .card > #id selectors valid) */
+        .section-header.section-header--collapsible {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .section-header__label {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .card-title--collapsible {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .card-title-inner {
+            flex: 1;
+            min-width: 0;
+        }
+
+        button.collapse-toggle {
+            flex-shrink: 0;
+            margin: 0;
+            padding: 4px 8px;
+            border: 1px solid var(--border, rgba(92, 106, 196, 0.25));
+            border-radius: 8px;
+            background: var(--card-bg, rgba(255, 255, 255, 0.6));
+            color: var(--primary);
+            cursor: pointer;
+            line-height: 1;
+            font-size: 0.75rem;
+        }
+
+        button.collapse-toggle:focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
+        }
+
+        .collapse-toggle-chevron {
+            display: inline-block;
+            transition: transform 0.15s ease;
+        }
+
+        button.collapse-toggle[aria-expanded="false"] .collapse-toggle-chevron {
+            transform: rotate(-90deg);
+        }
+
+        .dashboard-section[data-collapsible="true"][data-collapsed="true"] > :not(h2.section-header) {
+            display: none !important;
+        }
+
+        .card[data-collapsible="true"][data-collapsed="true"] > :not(h3) {
+            display: none !important;
+        }
+
         .dashboard-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -6591,6 +6653,7 @@
                 </div>
                 <div style="display:flex; align-items:center; gap:12px;">
                     <div class="status-chip" style="background: #1b5e20; color: #fff;" id="conciergeStatus">✓ Concierge Active</div>
+                    <button type="button" class="export-btn secondary" id="dashboardLayoutToggleBtn" style="font-size:12px;padding:6px 10px;white-space:nowrap;display:none;" title="Collapse or expand all sections and cards" aria-label="Collapse or expand all sections and cards">Collapse all</button>
                     <button class="test-call-btn" id="testCallBtn" type="button" aria-label="Test call" style="display: none;">📞 Test Call</button>
                     <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle dark mode">Dark mode</button>
                     <div class="status-chip" id="clientStatus">Live</div>
@@ -7266,6 +7329,220 @@
             } catch {
                 /* ignore */
             }
+        }
+
+        /** Per-tenant minimized sections/cards (localStorage JSON array of data-collapse-id values). */
+        const DASH_COLLAPSED_LS_PREFIX = 'dashboard:collapsed:';
+
+        function slugCollapseId(text) {
+            const s = String(text || '')
+                .trim()
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '');
+            return (s || 'item').slice(0, 80);
+        }
+
+        function ensureSectionCollapseKey(section) {
+            if (!section) return 'sec-root';
+            if (section.dataset.collapseId) return section.dataset.collapseId;
+            let id = '';
+            if (section.id) id = `sec-${section.id}`;
+            else {
+                const ar = section.getAttribute('aria-label');
+                if (ar) id = `sec-${slugCollapseId(ar)}`;
+            }
+            if (!id) {
+                const h3preview = section.querySelector(':scope > article.card h3, :scope h3');
+                id = `sec-${slugCollapseId(h3preview ? h3preview.textContent : 'section')}`;
+            }
+            section.dataset.collapseId = id;
+            return id;
+        }
+
+        function findCollapseToggleButton(root) {
+            return root.querySelector(':scope > h2 .collapse-toggle, :scope > h3 .collapse-toggle');
+        }
+
+        function persistDashboardCollapsedState() {
+            const ck = currentClient != null ? String(currentClient).trim() : '';
+            if (!ck) return;
+            const ids = [];
+            document.querySelectorAll('[data-collapsible="true"][data-collapse-id]').forEach((el) => {
+                if (el.dataset.collapsed === 'true' && el.dataset.collapseId) ids.push(el.dataset.collapseId);
+            });
+            try {
+                localStorage.setItem(DASH_COLLAPSED_LS_PREFIX + ck, JSON.stringify(ids));
+            } catch {
+                /* ignore */
+            }
+        }
+
+        function applyStoredDashboardCollapsedState() {
+            const ck = currentClient != null ? String(currentClient).trim() : '';
+            let ids = [];
+            if (ck) {
+                try {
+                    const raw = localStorage.getItem(DASH_COLLAPSED_LS_PREFIX + ck);
+                    if (raw) ids = JSON.parse(raw);
+                } catch {
+                    ids = [];
+                }
+            }
+            const collapsed = new Set(Array.isArray(ids) ? ids : []);
+            document.querySelectorAll('[data-collapsible="true"][data-collapse-id]').forEach((el) => {
+                const cid = el.dataset.collapseId;
+                const isCollapsed = collapsed.has(cid);
+                el.dataset.collapsed = isCollapsed ? 'true' : 'false';
+                const btn = findCollapseToggleButton(el);
+                if (btn) btn.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+            });
+            updateDashboardLayoutToggleButton();
+        }
+
+        function setDashboardTargetCollapsed(el, collapsed) {
+            if (!el || el.dataset.collapsible !== 'true') return;
+            el.dataset.collapsed = collapsed ? 'true' : 'false';
+            const btn = findCollapseToggleButton(el);
+            if (btn) btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            persistDashboardCollapsedState();
+            updateDashboardLayoutToggleButton();
+        }
+
+        function toggleDashboardTarget(el) {
+            const next = el.dataset.collapsed !== 'true';
+            setDashboardTargetCollapsed(el, next);
+        }
+
+        function getAllDashboardCollapseTargets() {
+            return Array.from(document.querySelectorAll('[data-collapsible="true"][data-collapse-id]'));
+        }
+
+        function updateDashboardLayoutToggleButton() {
+            const btn = document.getElementById('dashboardLayoutToggleBtn');
+            if (!btn) return;
+            const targets = getAllDashboardCollapseTargets();
+            if (targets.length === 0) {
+                btn.style.display = 'none';
+                return;
+            }
+            btn.style.display = '';
+            const allCollapsed = targets.every((t) => t.dataset.collapsed === 'true');
+            btn.textContent = allCollapsed ? 'Expand all' : 'Collapse all';
+        }
+
+        function toggleDashboardCollapseAll() {
+            const targets = getAllDashboardCollapseTargets();
+            if (targets.length === 0) return;
+            const allCollapsed = targets.every((t) => t.dataset.collapsed === 'true');
+            const nextCollapsed = !allCollapsed;
+            targets.forEach((t) => {
+                t.dataset.collapsed = nextCollapsed ? 'true' : 'false';
+                const btn = findCollapseToggleButton(t);
+                if (btn) btn.setAttribute('aria-expanded', nextCollapsed ? 'false' : 'true');
+            });
+            persistDashboardCollapsedState();
+            updateDashboardLayoutToggleButton();
+        }
+
+        function mountDashboardCollapsibleSections() {
+            document.querySelectorAll('section.dashboard-section:not(.tom-ab-test-section)').forEach((section) => {
+                if (section.dataset.collapsibleMounted === '1') return;
+                if (section.getAttribute('data-collapsible') === 'false') return;
+                const h2 = section.querySelector(':scope > h2.section-header');
+                if (!h2) return;
+
+                const collapseId = section.id ? `sec-${section.id}` : `sec-${slugCollapseId(h2.textContent)}`;
+                section.dataset.collapseId = collapseId;
+                section.dataset.collapsible = 'true';
+                section.dataset.collapsed = 'false';
+
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'collapse-toggle';
+                btn.setAttribute('aria-expanded', 'true');
+                btn.title = 'Collapse or expand this section';
+                btn.innerHTML = '<span class="collapse-toggle-chevron" aria-hidden="true">▼</span>';
+                const label = document.createElement('span');
+                label.className = 'section-header__label';
+                while (h2.firstChild) label.appendChild(h2.firstChild);
+                h2.appendChild(label);
+                h2.appendChild(btn);
+                h2.classList.add('section-header--collapsible');
+
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleDashboardTarget(section);
+                });
+
+                section.dataset.collapsibleMounted = '1';
+            });
+        }
+
+        function mountDashboardCollapsibleCards() {
+            const slugCounts = new Map();
+            document.querySelectorAll('article.card').forEach((card) => {
+                if (card.closest('section.tom-ab-test-section')) return;
+                if (card.dataset.collapsibleMounted === '1') return;
+                if (card.getAttribute('data-collapsible') === 'false') return;
+
+                const h3 = card.querySelector(':scope > h3');
+                if (!h3) return;
+
+                const section = card.closest('section.dashboard-section');
+                const secPrefix = ensureSectionCollapseKey(section);
+                const baseSlug = slugCollapseId(h3.textContent);
+                const k = `${secPrefix}__${baseSlug}`;
+                const n = (slugCounts.get(k) || 0) + 1;
+                slugCounts.set(k, n);
+                const collapseId = n > 1 ? `${secPrefix}-card-${baseSlug}-${n}` : `${secPrefix}-card-${baseSlug}`;
+
+                card.dataset.collapseId = collapseId;
+                card.dataset.collapsible = 'true';
+                card.dataset.collapsed = 'false';
+
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'collapse-toggle';
+                btn.setAttribute('aria-expanded', 'true');
+                btn.title = 'Collapse or expand this card';
+                btn.innerHTML = '<span class="collapse-toggle-chevron" aria-hidden="true">▼</span>';
+
+                const inner = document.createElement('span');
+                inner.className = 'card-title-inner';
+                while (h3.firstChild) inner.appendChild(h3.firstChild);
+                h3.appendChild(inner);
+                h3.appendChild(btn);
+                h3.classList.add('card-title--collapsible');
+
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleDashboardTarget(card);
+                });
+
+                card.dataset.collapsibleMounted = '1';
+            });
+        }
+
+        function initDashboardCollapsibleUi() {
+            if (document.body.dataset.dashboardCollapsibleInit === '1') {
+                applyStoredDashboardCollapsedState();
+                return;
+            }
+            mountDashboardCollapsibleSections();
+            mountDashboardCollapsibleCards();
+            applyStoredDashboardCollapsedState();
+            const layoutBtn = document.getElementById('dashboardLayoutToggleBtn');
+            if (layoutBtn && layoutBtn.dataset.bound !== '1') {
+                layoutBtn.dataset.bound = '1';
+                layoutBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    toggleDashboardCollapseAll();
+                });
+            }
+            document.body.dataset.dashboardCollapsibleInit = '1';
         }
 
         function setLeadsFunnelSegment(seg) {
@@ -15570,6 +15847,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             initTomAbCollapsibleForOutreach();
             initScrollToMetricsForOutreach();
             initTomAbUnloadDraftGuard();
+            initDashboardCollapsibleUi();
 
             // Fetch client config from API if not demo
             let clientConfig = null;
