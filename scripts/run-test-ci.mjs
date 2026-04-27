@@ -62,6 +62,10 @@ function run(cmd, args, opts = {}) {
 const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
 try {
+  // Behavioral policy gate: catch regressions of intent rules from docs/INTENT.md
+  // before any test runs. Fails fast (~1s) with a precise file:line pointer.
+  await run(npmCmd, ['run', 'check:policy']);
+
   // Inventory gates: prevent silent regressions in routing surface.
   await run(npmCmd, ['run', 'test:route-inventory']);
   await run(npmCmd, ['run', 'test:server-inline-inventory']);

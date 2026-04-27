@@ -1,0 +1,38 @@
+---
+description: Require behavioral intent gates for dialing/routing/billing changes
+alwaysApply: true
+---
+
+# Behavioral Intent Gates (always required)
+
+This repo has a **Behavioral Intent Contract** at `docs/INTENT.md` to prevent regressions where the code "works" but does not do what we want (e.g. burst dialing after imports).
+
+## When this applies
+
+Treat these areas as **behavioral / billing-affecting** surfaces:
+
+- Outbound dialing, retries, recalls, queue worker behavior
+- Lead import, lead queueing, scheduling, routing distribution (`scheduleAtOptimalCallWindow`)
+- Tenant boundaries (auth / isolation / key leakage)
+- Anything that can change Vapi spend characteristics (burst rate, idle call handling, wallet checks)
+
+## Requirements for any change in those areas
+
+For **every** such change, you MUST do all of the following in the same PR:
+
+1. **Update the intent contract**
+   - Add or update a row in `docs/INTENT.md` (stable `intentId`, statement, constrained files, enforcement, manual disprove).
+
+2. **Add or update at least one enforcement gate**
+   - Static policy: `scripts/check-policy.mjs` (fast fail, forbidden patterns / allow-lists), and/or
+   - Synthetic canary: `tests/canaries/*.canary.test.js` (behavioral assertions), and/or
+   - Runtime invariant: `lib/ops-invariants.js` (cron check + alert signal).
+
+3. **Run the full CI test command locally before commit**
+   - `npm run test:ci`
+
+## Hard constraints
+
+- Do NOT introduce new direct `fetch('https://api.vapi.ai/call', ...)` call sites outside the allow-listed worker modules.
+- Any user-reported "works but not what we want" bug is not complete until there is a new gate (policy/canary/invariant) that would have caught the regression.
+

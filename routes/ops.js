@@ -152,6 +152,31 @@ router.get('/api/analytics/best-call-times/:clientKey', async (req, res) => {
   }
 });
 
+// ----- Behavioral intent status (docs/INTENT.md) -----
+// Surfaces lib/ops-invariants.js as a plain-English checklist a non-coder can
+// read. One row per Intent Contract ID so an operator can verify the system is
+// "doing what we want" without reading source. Cache disabled so the dashboard
+// shows live state.
+router.get('/api/ops/intent-status', async (req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    const { checkOpsInvariants, summarizeOpsInvariants } = await import('../lib/ops-invariants.js');
+    const result = await checkOpsInvariants({ clientKey: req.query.clientKey || null });
+    const summary = summarizeOpsInvariants(result);
+    res.json({
+      ok: summary.ok,
+      items: summary.items,
+      checked: result.checked || 0,
+      skipped: result.skipped || false,
+      reason: result.reason || null,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[OPS INTENT STATUS ERROR]', error);
+    res.status(500).set('Cache-Control', 'no-store').json({ ok: false, error: error.message });
+  }
+});
+
 // ----- Active indicator -----
 router.get('/api/active-indicator/:clientKey', cacheMiddleware({ ttl: 10000, keyPrefix: 'active-indicator:' }), async (req, res) => {
   try {

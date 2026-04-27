@@ -62,6 +62,20 @@ SMOKE=1 node scripts/smoke/<name>.mjs
 
 CI (`npm run test:ci`) does **not** run smoke scripts.
 
+## Behavioral gates (\"does what we want\")
+
+CI can be green even when the system violates intent (e.g. burst dialing after imports).
+To prevent that, this repo has **Behavioral Intent Gates**:
+
+- **Intent Contract**: `docs/INTENT.md` — plain-English behavioral requirements with stable IDs.
+- **Static policy gate**: `npm run check:policy` (`scripts/check-policy.mjs`) — fails fast on forbidden patterns (e.g. new direct Vapi call sites).
+- **Synthetic canaries**: `npm run test:canaries` (`tests/canaries/*.canary.test.js`) — behavioral tests that assert the *intent* of flows (enqueue vs dial, spacing, no tenant key leaks).
+- **Runtime invariants**: `lib/ops-invariants.js` (cron) + `GET /api/ops/intent-status` (`routes/ops.js`) — production checks surfaced as a non-coder-readable checklist.
+
+When you change dialing/routing/queueing/tenant/billing behavior, the PR is not complete
+until you update `docs/INTENT.md` **and** add at least one matching enforcement gate
+(policy, canary, or invariant). This is enforced by `.cursor/rules/behavioral-gates.mdc`.
+
 ## Writing new tests
 
 ### Test tiers

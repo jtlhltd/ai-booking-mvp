@@ -98,29 +98,36 @@ describe('lib/lead-import-outbound', () => {
       addToCallQueue,
       TIMEZONE: 'UTC'
     });
-    expect(out.reason).toBe('outside_business_hours');
+    expect(out.reason).toBe('queued_for_routing_distribution');
     expect(out.queued).toBe(2);
+    expect(out.called).toBe(0);
+    expect(out.shouldCallNow).toBe(false);
     expect(addToCallQueue).toHaveBeenCalledTimes(2);
     expect(scheduleAtOptimalCallWindow).toHaveBeenCalled();
+    expect(mockProcessCallQueue).not.toHaveBeenCalled();
   });
 
-  test('in business hours schedules processCallQueue via setImmediate', async () => {
+  test('in business hours still queues (no background dialing)', async () => {
     mockGetFullClient.mockResolvedValue({
       isEnabled: true,
       clientKey: 'c1',
       vapi: { assistantId: 'asst_1' }
     });
+    const addToCallQueue = jest.fn(async () => {});
     const out = await runOutboundCallsForImportedLeads({
       clientKey: 'c1',
       inserted: [{ id: 1, phone: '+447700900000', name: 'x' }],
       isBusinessHours: () => true,
       getNextBusinessHour: () => new Date(),
-      scheduleAtOptimalCallWindow: jest.fn(),
-      addToCallQueue: jest.fn(),
+      scheduleAtOptimalCallWindow: jest.fn(async () => new Date('2026-06-01T10:00:00Z')),
+      addToCallQueue,
       TIMEZONE: 'UTC'
     });
-    expect(out.reason).toBe('calls_background');
-    await new Promise((r) => setImmediate(r));
-    expect(mockProcessCallQueue).toHaveBeenCalledTimes(1);
+    expect(out.reason).toBe('queued_for_routing_distribution');
+    expect(out.queued).toBe(1);
+    expect(out.called).toBe(0);
+    expect(out.shouldCallNow).toBe(false);
+    expect(addToCallQueue).toHaveBeenCalledTimes(1);
+    expect(mockProcessCallQueue).not.toHaveBeenCalled();
   });
 });

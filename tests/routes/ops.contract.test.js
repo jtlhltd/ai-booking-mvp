@@ -39,6 +39,29 @@ jest.unstable_mockModule('../../db.js', () => ({
 }));
 
 describe('Ops routes contracts', () => {
+  test('GET /api/ops/intent-status returns ok+items and sets no-store cache', async () => {
+    jest.unstable_mockModule('../../lib/ops-invariants.js', () => ({
+      checkOpsInvariants: jest.fn(async () => ({ ok: true, checked: 1, results: [{ clientKey: 'c1', problems: [] }] })),
+      summarizeOpsInvariants: jest.fn(() => ({
+        ok: true,
+        items: [{ intentId: 'billing.no-burst-dial', label: 'x', status: 'ok', detail: 'y' }]
+      }))
+    }));
+
+    const { default: router } = await import('../../routes/ops.js');
+    const app = createContractApp({ mounts: [{ path: '/', router }] });
+
+    const res = await request(app).get('/api/ops/intent-status').expect(200);
+    expect(String(res.headers['cache-control'] || '')).toMatch(/no-store/i);
+    expect(res.body).toEqual(
+      expect.objectContaining({
+        ok: true,
+        items: expect.any(Array),
+        timestamp: expect.any(String)
+      })
+    );
+  });
+
   test('GET /api/performance/queries/stats returns 500 when stats null', async () => {
     trackerState.statsNull = true;
     const { default: router } = await import('../../routes/ops.js');
