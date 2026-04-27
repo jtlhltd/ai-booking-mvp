@@ -2024,7 +2024,7 @@ export async function claimOutboundWeekdayJourneySlot(clientKey, leadPhone, time
       };
     }
     if (sqlite) {
-      const trans = sqlite.transaction(() => {
+      const transBody = () => {
         const row = sqlite
           .prepare(
             `SELECT weekday_mask, closed_at, closed_reason FROM outbound_weekday_journey WHERE client_key = ? AND phone_match_key = ?`
@@ -2071,7 +2071,8 @@ export async function claimOutboundWeekdayJourneySlot(clientKey, leadPhone, time
               nowIso
             );
         }
-      });
+      };
+      const trans = typeof sqlite.transaction === 'function' ? sqlite.transaction(transBody) : transBody;
       try {
         trans();
       } catch (e) {

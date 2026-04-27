@@ -66,6 +66,11 @@ function mockSqliteEnv({
       exec(sql) {
         if (sql) ran.push(String(sql));
       }
+      transaction(fn) {
+        // better-sqlite3 returns a callable wrapper that runs `fn` inside a transaction.
+        // For unit/contract tests we only need the callable shape.
+        return (...args) => fn(...args);
+      }
       prepare(sql) {
         const s = String(sql);
         prepared.push(s);

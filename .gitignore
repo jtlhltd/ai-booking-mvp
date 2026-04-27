@@ -2,6 +2,7 @@ node_modules
 .env
 .env.test
 coverage
+coverage-tmp/
 data/*.log
 data/*.tmp
 data/*.db
