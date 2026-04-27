@@ -4,6 +4,24 @@ export function createCallRecordingsStreamRouter(deps) {
   const { poolQuerySelect } = deps || {};
   const router = express.Router();
 
+  function pickUpstreamAuthHeaders(urlString) {
+    try {
+      const u = new URL(String(urlString || ''));
+      const host = String(u.hostname || '').toLowerCase();
+      const looksLikeVapi = host === 'api.vapi.ai' || host.endsWith('.vapi.ai');
+      if (!looksLikeVapi) return { headers: {}, authUsed: false, host };
+      const token = process.env.VAPI_PRIVATE_KEY || '';
+      if (!token) return { headers: {}, authUsed: false, host };
+      return { headers: { Authorization: `Bearer ${token}` }, authUsed: true, host };
+    } catch {
+      return { headers: {}, authUsed: false, host: '' };
+    }
+  }
+
+  async function sleep(ms) {
+    await new Promise((r) => setTimeout(r, ms));
+  }
+
   router.get('/call-recordings/:clientKey/stream/:callRowId', async (req, res) => {
     const { Readable } = await import('stream');
     try {
@@ -23,25 +41,61 @@ export function createCallRecordingsStreamRouter(deps) {
         return res.status(404).json({ ok: false, error: 'Recording not found' });
       }
 
-      const ac = new AbortController();
-      const kill = setTimeout(() => ac.abort(), 120000);
       const range = req.headers.range;
       const fetchHeaders = {};
       if (range) fetchHeaders.Range = range;
+      const upstreamAuth = pickUpstreamAuthHeaders(recordingUrl);
+      Object.assign(fetchHeaders, upstreamAuth.headers);
 
       let upstream;
-      try {
-        upstream = await fetch(recordingUrl, {
-          redirect: 'follow',
-          signal: ac.signal,
-          headers: fetchHeaders
-        });
-      } finally {
-        clearTimeout(kill);
+      const maxAttempts = 3;
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        const ac = new AbortController();
+        const kill = setTimeout(() => ac.abort(), 120000);
+        try {
+          upstream = await fetch(recordingUrl, {
+            redirect: 'follow',
+            signal: ac.signal,
+            headers: fetchHeaders
+          });
+          break;
+        } catch (e) {
+          const msg = String(e?.message || e || '');
+          const retryable = e?.name === 'AbortError' || msg.toLowerCase().includes('fetch failed');
+          const willRetry = retryable && attempt < maxAttempts;
+          console.warn('[RECORDING STREAM] upstream fetch failed', {
+            attempt,
+            willRetry,
+            host: upstreamAuth.host || undefined,
+            authUsed: upstreamAuth.authUsed,
+            hasRange: !!range,
+            error: msg
+          });
+          if (!willRetry) {
+            return res.status(502).json({
+              ok: false,
+              error: 'upstream_fetch_failed',
+              details: msg
+            });
+          }
+          await sleep(200 * attempt);
+        } finally {
+          clearTimeout(kill);
+        }
+      }
+
+      if (!upstream) {
+        return res.status(502).json({ ok: false, error: 'upstream_fetch_failed', details: 'No upstream response' });
       }
 
       if (!upstream.ok) {
-        return res.status(502).json({ ok: false, error: `Recording host returned ${upstream.status}` });
+        console.warn('[RECORDING STREAM] upstream non-OK', {
+          host: upstreamAuth.host || undefined,
+          authUsed: upstreamAuth.authUsed,
+          hasRange: !!range,
+          status: upstream.status
+        });
+        return res.status(502).json({ ok: false, error: 'upstream_status', status: upstream.status });
       }
 
       const ct = upstream.headers.get('content-type') || 'audio/mpeg';
@@ -74,7 +128,7 @@ export function createCallRecordingsStreamRouter(deps) {
     } catch (error) {
       console.error('[RECORDING STREAM ERROR]', error);
       if (!res.headersSent) {
-        res.status(500).json({ ok: false, error: error.message || 'Stream failed' });
+        res.status(502).json({ ok: false, error: 'stream_failed', details: error?.message || 'Stream failed' });
       }
     }
   });

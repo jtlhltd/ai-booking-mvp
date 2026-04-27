@@ -4,6 +4,30 @@ export function createRecordingsQualityCheckRouter(deps) {
   const { query } = deps || {};
   const router = express.Router();
 
+  function pickUpstreamAuthHeaders(urlString) {
+    try {
+      const u = new URL(String(urlString || ''));
+      const host = String(u.hostname || '').toLowerCase();
+      const looksLikeVapi = host === 'api.vapi.ai' || host.endsWith('.vapi.ai');
+      if (!looksLikeVapi) return {};
+      const token = process.env.VAPI_PRIVATE_KEY || '';
+      if (!token) return {};
+      return { Authorization: `Bearer ${token}` };
+    } catch {
+      return {};
+    }
+  }
+
+  async function fetchWithTimeout(url, init, timeoutMs) {
+    const ac = new AbortController();
+    const kill = setTimeout(() => ac.abort(), timeoutMs);
+    try {
+      return await fetch(url, { ...(init || {}), signal: ac.signal });
+    } finally {
+      clearTimeout(kill);
+    }
+  }
+
   router.get('/recordings/quality-check/:clientKey', async (req, res) => {
     try {
       const { clientKey } = req.params;
@@ -29,9 +53,18 @@ export function createRecordingsQualityCheckRouter(deps) {
 
         if (rec.recording_url) {
           try {
-            const response = await fetch(rec.recording_url, { method: 'HEAD', timeout: 5000 });
-            accessible = response.ok;
-            statusCode = response.status;
+            const headers = pickUpstreamAuthHeaders(rec.recording_url);
+            // Prefer HEAD to keep this cheap, but fall back to a 1-byte range GET when HEAD is blocked.
+            let response = await fetchWithTimeout(rec.recording_url, { method: 'HEAD', headers }, 5000);
+            if (!response.ok && (response.status === 405 || response.status === 403)) {
+              response = await fetchWithTimeout(
+                rec.recording_url,
+                { method: 'GET', headers: { ...headers, Range: 'bytes=0-0' } },
+                5000
+              );
+            }
+            accessible = !!response.ok;
+            statusCode = response.status ?? null;
           } catch (error) {
             accessible = false;
           }
