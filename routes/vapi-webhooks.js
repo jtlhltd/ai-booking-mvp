@@ -1513,7 +1513,10 @@ async function processWebhookPayload(body, correlationId) {
 
         // Email fallback notification for callback queue (per-tenant if available)
         const callbackInbox = tenant?.vapi?.callbackInboxEmail || process.env.CALLBACK_INBOX_EMAIL;
-        if (sheetData.callbackNeeded === 'TRUE' && callbackInbox) {
+        const callbackEmailsDisabled = ['1', 'true', 'yes'].includes(
+          String(process.env.DISABLE_CALLBACK_INBOX_EMAILS || '').trim().toLowerCase()
+        );
+        if (sheetData.callbackNeeded === 'TRUE' && callbackInbox && !callbackEmailsDisabled) {
           const normalizeStringList = (v) => {
             if (v == null) return [];
             if (Array.isArray(v)) {
