@@ -47,6 +47,8 @@ const envVars = {
   EMAIL_USER: 'Email username for SMTP',
   EMAIL_PASS: 'Email password/app password',
   YOUR_EMAIL: 'Operator inbox: sheet/dashboard alerts + weekly stack summary (PDF)',
+  ENABLE_QUALITY_MONITORING_EMAILS:
+    'Set true to send hourly call-quality alert emails (plain outbox + HTML); default off',
   USAGE_CAP_MONTHLY_CALLS: 'Optional: monthly dial cap for dashboard usage meter (30d bar)',
   USAGE_CAP_MONTHLY_MINUTES: 'Optional: monthly talk-minute cap for dashboard usage meter',
   USAGE_PLAN_NAME: 'Plan label shown on client dashboard',
@@ -170,6 +172,7 @@ function generateEnvTemplate() {
     'EMAIL_USER',
     'EMAIL_PASS',
     'YOUR_EMAIL',
+    'ENABLE_QUALITY_MONITORING_EMAILS',
     'USAGE_CAP_MONTHLY_CALLS',
     'USAGE_CAP_MONTHLY_MINUTES',
     'USAGE_PLAN_NAME',
