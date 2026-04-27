@@ -4,12 +4,40 @@ export function createRecordingsQualityCheckRouter(deps) {
   const { query } = deps || {};
   const router = express.Router();
 
+  const TRUSTED_VAPI_RECORDING_HOSTS = new Set([
+    'storage.vapi.ai',
+    'api.vapi.ai',
+    'vapi-call-recordings.s3.us-west-2.amazonaws.com'
+  ]);
+
+  const hostLogState = {
+    lastLogAtByHost: new Map(),
+    lastSummaryAtMs: 0,
+    seenHosts: new Set()
+  };
+
+  function maybeLogRecordingHost(host) {
+    const h = String(host || '').toLowerCase().trim();
+    if (!h) return;
+    hostLogState.seenHosts.add(h);
+    const now = Date.now();
+    const last = hostLogState.lastLogAtByHost.get(h) || 0;
+    if (now - last > 10 * 60 * 1000) {
+      hostLogState.lastLogAtByHost.set(h, now);
+      console.log('[RECORDING QUALITY] upstream host', { host: h });
+    }
+    if (now - hostLogState.lastSummaryAtMs > 60 * 60 * 1000) {
+      hostLogState.lastSummaryAtMs = now;
+      console.log('[RECORDING QUALITY] hosts seen (hourly)', { hosts: Array.from(hostLogState.seenHosts).sort() });
+    }
+  }
+
   function pickUpstreamAuthHeaders(urlString) {
     try {
       const u = new URL(String(urlString || ''));
       const host = String(u.hostname || '').toLowerCase();
-      const looksLikeVapi = host === 'api.vapi.ai' || host.endsWith('.vapi.ai');
-      if (!looksLikeVapi) return {};
+      const trusted = TRUSTED_VAPI_RECORDING_HOSTS.has(host);
+      if (!trusted) return {};
       const token = process.env.VAPI_PRIVATE_KEY || '';
       if (!token) return {};
       return { Authorization: `Bearer ${token}` };
@@ -53,6 +81,14 @@ export function createRecordingsQualityCheckRouter(deps) {
 
         if (rec.recording_url) {
           try {
+            const host = (() => {
+              try {
+                return new URL(String(rec.recording_url)).hostname;
+              } catch {
+                return '';
+              }
+            })();
+            maybeLogRecordingHost(host);
             const headers = pickUpstreamAuthHeaders(rec.recording_url);
             // Prefer HEAD to keep this cheap, but fall back to a 1-byte range GET when HEAD is blocked.
             let response = await fetchWithTimeout(rec.recording_url, { method: 'HEAD', headers }, 5000);
@@ -84,11 +120,14 @@ export function createRecordingsQualityCheckRouter(deps) {
       // Alert if broken recordings found
       if (brokenCount > 0 && process.env.YOUR_EMAIL) {
         try {
-          const messagingService = (await import('../lib/messaging-service.js')).default;
-          await messagingService.sendEmail({
-            to: process.env.YOUR_EMAIL,
+          const { enqueueEmailAlert } = await import('../lib/email-alert-outbox.js');
+          await enqueueEmailAlert({
+            clientKey,
+            fingerprint: `broken_recordings:${clientKey}`,
+            to: String(process.env.YOUR_EMAIL || '').trim(),
             subject: `⚠️ ${brokenCount} Broken Recording${brokenCount > 1 ? 's' : ''} Found`,
-            body: `Found ${brokenCount} inaccessible recording(s) for ${clientKey}\n\nCheck the /api/recordings/quality-check/${clientKey} endpoint for details.`
+            body: `Found ${brokenCount} inaccessible recording(s) for ${clientKey}\n\nCheck the /api/recordings/quality-check/${clientKey} endpoint for details.`,
+            meta: { brokenCount }
           });
         } catch (emailError) {
           console.error('[RECORDING QUALITY] Failed to send alert:', emailError.message);

@@ -50,6 +50,40 @@ describe('routes/call-recordings-stream.js contracts', () => {
     });
   });
 
+  test('adds Vapi auth for storage.vapi.ai and S3 recording hosts', async () => {
+    const poolQuerySelect = jest.fn(async () => ({
+      rows: [{ recording_url: 'https://storage.vapi.ai/call-recordings/test123.mp3' }]
+    }));
+    const fetchMock = jest.fn(async (_url, init) => {
+      expect(init?.headers?.Authorization).toBe('Bearer k');
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: (k) => (String(k || '').toLowerCase() === 'content-type' ? 'audio/mpeg' : null) },
+        body: null,
+        arrayBuffer: async () => new Uint8Array([1]).buffer
+      };
+    });
+
+    await withEnv({ VAPI_PRIVATE_KEY: 'k' }, async () => {
+      global.fetch = fetchMock;
+      const { createCallRecordingsStreamRouter } = await import('../../routes/call-recordings-stream.js');
+      const app = createContractApp({ mounts: [{ path: '/', router: () => createCallRecordingsStreamRouter({ poolQuerySelect }) }] });
+      await request(app).get('/call-recordings/c1/stream/123').expect(200);
+    });
+
+    // S3 host
+    const poolQuerySelect2 = jest.fn(async () => ({
+      rows: [{ recording_url: 'https://vapi-call-recordings.s3.us-west-2.amazonaws.com/test123.mp3' }]
+    }));
+    await withEnv({ VAPI_PRIVATE_KEY: 'k' }, async () => {
+      global.fetch = fetchMock;
+      const { createCallRecordingsStreamRouter } = await import('../../routes/call-recordings-stream.js');
+      const app = createContractApp({ mounts: [{ path: '/', router: () => createCallRecordingsStreamRouter({ poolQuerySelect: poolQuerySelect2 }) }] });
+      await request(app).get('/call-recordings/c1/stream/123').expect(200);
+    });
+  });
+
   test('GET /call-recordings/:clientKey/stream/:callRowId returns 502 upstream_fetch_failed on network failure', async () => {
     const poolQuerySelect = jest.fn(async () => ({ rows: [{ recording_url: 'https://api.vapi.ai/recordings/test123.mp3' }] }));
     await withEnv({ VAPI_PRIVATE_KEY: 'k' }, async () => {

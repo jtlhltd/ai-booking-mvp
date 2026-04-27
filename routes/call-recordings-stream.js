@@ -4,12 +4,40 @@ export function createCallRecordingsStreamRouter(deps) {
   const { poolQuerySelect } = deps || {};
   const router = express.Router();
 
+  const TRUSTED_VAPI_RECORDING_HOSTS = new Set([
+    'storage.vapi.ai',
+    'api.vapi.ai',
+    'vapi-call-recordings.s3.us-west-2.amazonaws.com'
+  ]);
+
+  const hostLogState = {
+    lastLogAtByHost: new Map(),
+    lastSummaryAtMs: 0,
+    seenHosts: new Set()
+  };
+
+  function maybeLogRecordingHost(host, extra = {}) {
+    const h = String(host || '').toLowerCase().trim();
+    if (!h) return;
+    hostLogState.seenHosts.add(h);
+    const now = Date.now();
+    const last = hostLogState.lastLogAtByHost.get(h) || 0;
+    if (now - last > 10 * 60 * 1000) {
+      hostLogState.lastLogAtByHost.set(h, now);
+      console.log('[RECORDING STREAM] upstream host', { host: h, ...extra });
+    }
+    if (now - hostLogState.lastSummaryAtMs > 60 * 60 * 1000) {
+      hostLogState.lastSummaryAtMs = now;
+      console.log('[RECORDING STREAM] hosts seen (hourly)', { hosts: Array.from(hostLogState.seenHosts).sort() });
+    }
+  }
+
   function pickUpstreamAuthHeaders(urlString) {
     try {
       const u = new URL(String(urlString || ''));
       const host = String(u.hostname || '').toLowerCase();
-      const looksLikeVapi = host === 'api.vapi.ai' || host.endsWith('.vapi.ai');
-      if (!looksLikeVapi) return { headers: {}, authUsed: false, host };
+      const trusted = TRUSTED_VAPI_RECORDING_HOSTS.has(host);
+      if (!trusted) return { headers: {}, authUsed: false, host };
       const token = process.env.VAPI_PRIVATE_KEY || '';
       if (!token) return { headers: {}, authUsed: false, host };
       return { headers: { Authorization: `Bearer ${token}` }, authUsed: true, host };
@@ -47,11 +75,14 @@ export function createCallRecordingsStreamRouter(deps) {
       const upstreamAuth = pickUpstreamAuthHeaders(recordingUrl);
       Object.assign(fetchHeaders, upstreamAuth.headers);
 
+      maybeLogRecordingHost(upstreamAuth.host, { authUsed: upstreamAuth.authUsed, hasRange: !!range });
+
       let upstream;
       const maxAttempts = 3;
+      const attemptTimeoutMs = 8000;
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         const ac = new AbortController();
-        const kill = setTimeout(() => ac.abort(), 120000);
+        const kill = setTimeout(() => ac.abort(), attemptTimeoutMs);
         try {
           upstream = await fetch(recordingUrl, {
             redirect: 'follow',
@@ -75,6 +106,7 @@ export function createCallRecordingsStreamRouter(deps) {
             return res.status(502).json({
               ok: false,
               error: 'upstream_fetch_failed',
+              hint: 'Recording host unavailable; try again',
               details: msg
             });
           }
@@ -95,7 +127,12 @@ export function createCallRecordingsStreamRouter(deps) {
           hasRange: !!range,
           status: upstream.status
         });
-        return res.status(502).json({ ok: false, error: 'upstream_status', status: upstream.status });
+        return res.status(502).json({
+          ok: false,
+          error: 'upstream_status',
+          hint: 'Recording host returned an error; try again',
+          status: upstream.status
+        });
       }
 
       const ct = upstream.headers.get('content-type') || 'audio/mpeg';
