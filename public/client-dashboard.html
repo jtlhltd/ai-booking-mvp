@@ -13643,12 +13643,13 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const prefs = loadFollowUpColumnPrefs(clientKey);
             const hidden = Array.isArray(prefs.hidden) ? prefs.hidden.slice() : [];
 
-            const base = followUpQueueState.cols && followUpQueueState.cols.length
-                ? followUpQueueState.cols.slice()
+            // Persist against the full column set, not just the visible subset.
+            const baseAll = (followUpQueueState.rawRows && followUpQueueState.rawRows.length)
+                ? followUpVisibleColumns(followUpQueueState.rawRows)
                 : followUpDefaultColumnOrder.slice();
-            const existing = new Set(base);
-            const order = (Array.isArray(prefs.order) && prefs.order.length ? prefs.order : base).filter((c) => existing.has(c));
-            const full = [...new Set([...order, ...base])];
+            const existing = new Set(baseAll);
+            const order = (Array.isArray(prefs.order) && prefs.order.length ? prefs.order : baseAll).filter((c) => existing.has(c));
+            const full = [...new Set([...order, ...baseAll])];
             const from = full.indexOf(draggedCol);
             const to = full.indexOf(targetCol);
             if (from < 0 || to < 0) return;
@@ -13659,7 +13660,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             followUpColumnPrefs = prefs;
             saveFollowUpColumnPrefs(clientKey, prefs);
 
-            const applied = applyFollowUpColumnPrefs(base, prefs);
+            const applied = applyFollowUpColumnPrefs(baseAll, prefs);
             followUpQueueState.cols = applied.visibleCols;
             const wrap = document.getElementById('follow-up-queue');
             if (wrap) followUpPaintTable(wrap);
@@ -13674,12 +13675,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const prefs = loadFollowUpColumnPrefs(clientKey);
             const hidden = Array.isArray(prefs.hidden) ? prefs.hidden.slice() : [];
 
-            const base = followUpQueueState.cols && followUpQueueState.cols.length
-                ? followUpQueueState.cols.slice()
+            const baseAll = (followUpQueueState.rawRows && followUpQueueState.rawRows.length)
+                ? followUpVisibleColumns(followUpQueueState.rawRows)
                 : followUpDefaultColumnOrder.slice();
-            const existing = new Set(base);
-            const order = (Array.isArray(prefs.order) && prefs.order.length ? prefs.order : base).filter((c) => existing.has(c));
-            const full = [...new Set([...order, ...base])];
+            const existing = new Set(baseAll);
+            const order = (Array.isArray(prefs.order) && prefs.order.length ? prefs.order : baseAll).filter((c) => existing.has(c));
+            const full = [...new Set([...order, ...baseAll])];
 
             const idx = full.indexOf(col);
             if (idx < 0) return;
@@ -13695,7 +13696,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             followUpColumnPrefs = prefs;
             saveFollowUpColumnPrefs(clientKey, prefs);
 
-            const applied = applyFollowUpColumnPrefs(base, prefs);
+            const applied = applyFollowUpColumnPrefs(baseAll, prefs);
             followUpQueueState.cols = applied.visibleCols;
             const wrap = document.getElementById('follow-up-queue');
             if (wrap) followUpPaintTable(wrap);
@@ -13705,10 +13706,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const prefs = { order: followUpDefaultColumnOrder.slice(), hidden: [] };
             followUpColumnPrefs = prefs;
             saveFollowUpColumnPrefs(clientKey, prefs);
-            const base = followUpQueueState.cols && followUpQueueState.cols.length
-                ? followUpQueueState.cols.slice()
+            const baseAll = (followUpQueueState.rawRows && followUpQueueState.rawRows.length)
+                ? followUpVisibleColumns(followUpQueueState.rawRows)
                 : followUpDefaultColumnOrder.slice();
-            const applied = applyFollowUpColumnPrefs(base, prefs);
+            const applied = applyFollowUpColumnPrefs(baseAll, prefs);
             followUpQueueState.cols = applied.visibleCols;
             const wrap = document.getElementById('follow-up-queue');
             if (wrap) followUpPaintTable(wrap);
