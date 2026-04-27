@@ -5478,13 +5478,6 @@ async function queueNewLeadsForCalling() {
       }
       
       try {
-        const isImportSource = (lead) => String(lead?.source || '').trim().toLowerCase() === 'import';
-        // Throttle bursty sources (notably CSV imports). These constants are intentionally conservative:
-        // - They distribute dials so we don't burn wallet on a single import burst
-        // - They keep overall daily throughput acceptable while we iterate on smarter routing
-        const IMPORT_SPACING_MS = 45_000; // ~80 calls/hour per tenant from import-driven leads
-        const IMPORT_INITIAL_DELAY_MS = 5 * 60_000; // push imported leads out of the immediate "now" window
-
         // Get new leads that haven't been called yet
         // Check call_queue (pending) and in-flight calls; Mon–Fri outbound journey (per number) blocks until terminal or next bucket day
         const newLeads = await poolQuerySelect(`
@@ -5537,8 +5530,9 @@ async function queueNewLeadsForCalling() {
         const insightsRow = await getLatestCallInsights(client.clientKey).catch(() => null);
         const routing = insightsRow?.routing;
 
-        // Import throttling state: start after whatever is already queued for this tenant so we don't stack
-        // a new import burst on top of an existing call_queue backlog.
+        // Spread new-lead dials using the same insights/routing system used elsewhere: we set a moving baseline
+        // that starts at the current call_queue backlog and then advances as we schedule each new lead. This
+        // avoids burst scheduling while keeping hour/day selection inside scheduleAtOptimalCallWindow().
         const maxScheduled = await poolQuerySelect(
           `
             SELECT MAX(scheduled_for) AS max_scheduled_for
@@ -5552,10 +5546,16 @@ async function queueNewLeadsForCalling() {
         const maxScheduledAt = maxScheduled?.rows?.[0]?.max_scheduled_for
           ? new Date(maxScheduled.rows[0].max_scheduled_for)
           : null;
-        let nextImportSlot = new Date(
+        // Minimum spacing between newly queued leads for this run; keeps queue inserts from concentrating
+        // on the same minute while still allowing the routing system to choose best hours/days.
+        const QUEUE_SPREAD_MIN_SPACING_MS = Math.max(
+          0,
+          Math.min(10 * 60_000, parseInt(process.env.LEAD_QUEUE_MIN_SPACING_MS || '15000', 10) || 15000)
+        );
+        let movingBaseline = new Date(
           Math.max(
-            Date.now() + IMPORT_INITIAL_DELAY_MS,
-            maxScheduledAt ? maxScheduledAt.getTime() + IMPORT_SPACING_MS : 0
+            Date.now(),
+            maxScheduledAt ? maxScheduledAt.getTime() + QUEUE_SPREAD_MIN_SPACING_MS : 0
           )
         );
 
@@ -5568,15 +5568,14 @@ async function queueNewLeadsForCalling() {
               : getNextBusinessHour(client);
             // Inside business hours, we still schedule via insights/routing so dials are spread across the day.
             // Outside hours, schedule into the next allowed/optimal window.
-            const scheduledFor = await scheduleAtOptimalCallWindow(client, routing, scheduledBaseline, {
+            const baselineForThisLead = new Date(Math.max(scheduledBaseline.getTime(), movingBaseline.getTime()));
+            const scheduledFor = await scheduleAtOptimalCallWindow(client, routing, baselineForThisLead, {
               fallbackTz: pickTimezone(client),
               clientKey: client.clientKey,
               jitterKey: lead.phone
             });
 
-            const finalScheduledFor = isImportSource(lead)
-              ? new Date(Math.max(new Date(scheduledFor).getTime(), nextImportSlot.getTime()))
-              : scheduledFor;
+            const finalScheduledFor = scheduledFor;
             const scheduleTag = shouldCallNow ? 'optimal_today' : 'optimal';
 
             // Calculate priority based on lead age and source
@@ -5600,14 +5599,12 @@ async function queueNewLeadsForCalling() {
                 leadSource: lead.source,
                 leadStatus: lead.status,
                 businessHours: shouldCallNow ? 'within' : 'outside',
-                scheduling: scheduleTag,
-                importThrottle: isImportSource(lead) ? { spacingMs: IMPORT_SPACING_MS } : undefined
+                scheduling: scheduleTag
               }
             });
 
-            if (isImportSource(lead)) {
-              nextImportSlot = new Date(nextImportSlot.getTime() + IMPORT_SPACING_MS);
-            }
+            // Advance baseline slightly so subsequent leads don't share an identical baseline.
+            movingBaseline = new Date(Math.max(movingBaseline.getTime() + QUEUE_SPREAD_MIN_SPACING_MS, new Date(finalScheduledFor).getTime()));
             
             const now = new Date();
             const scheduledTime = new Date(finalScheduledFor);
