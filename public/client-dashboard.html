@@ -4735,6 +4735,7 @@
             color: var(--text-secondary);
             cursor: grab;
             user-select: none;
+            touch-action: none;
             flex: 0 0 auto;
         }
 
@@ -14822,39 +14823,79 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
             if (wrap && !wrap.dataset.colDnD) {
                 wrap.dataset.colDnD = '1';
-                let mouseDraggingCol = null;
-                let mouseTargetCol = null;
+                let draggingCol = null;
+                let targetCol = null;
+                let pointerId = null;
 
-                wrap.addEventListener('mousedown', (e) => {
+                const clearTargets = () => {
+                    wrap.querySelectorAll('th.fu-col-drop-target').forEach((el) => el.classList.remove('fu-col-drop-target'));
+                };
+
+                const updateTargetFromPoint = (clientX, clientY) => {
+                    // elementFromPoint requires viewport coords
+                    const el = document.elementFromPoint(clientX, clientY);
+                    const th = el && el.closest ? el.closest('th[data-fu-col-name]') : null;
+                    clearTargets();
+                    if (!th) {
+                        targetCol = null;
+                        return;
+                    }
+                    const name = th.getAttribute('data-fu-col-name');
+                    if (!name) {
+                        targetCol = null;
+                        return;
+                    }
+                    targetCol = name;
+                    th.classList.add('fu-col-drop-target');
+                };
+
+                wrap.addEventListener('pointerdown', (e) => {
                     const handle = e.target && e.target.closest ? e.target.closest('[data-fu-col-drag][data-fu-col-name]') : null;
                     if (!handle) return;
                     const name = handle.getAttribute('data-fu-col-name');
                     if (!name) return;
                     e.preventDefault();
-                    mouseDraggingCol = name;
-                    mouseTargetCol = null;
-                    wrap.querySelectorAll('th.fu-col-drop-target').forEach((el) => el.classList.remove('fu-col-drop-target'));
+                    e.stopPropagation();
+                    draggingCol = name;
+                    targetCol = null;
+                    pointerId = e.pointerId;
+                    try {
+                        handle.setPointerCapture(pointerId);
+                    } catch {}
+                    clearTargets();
+                    updateTargetFromPoint(e.clientX, e.clientY);
                 });
 
-                wrap.addEventListener('mouseover', (e) => {
-                    if (!mouseDraggingCol) return;
-                    const th = e.target && e.target.closest ? e.target.closest('th[data-fu-col-name]') : null;
-                    if (!th) return;
-                    const target = th.getAttribute('data-fu-col-name');
-                    if (!target) return;
-                    mouseTargetCol = target;
-                    wrap.querySelectorAll('th.fu-col-drop-target').forEach((el) => el.classList.remove('fu-col-drop-target'));
-                    th.classList.add('fu-col-drop-target');
+                wrap.addEventListener('pointermove', (e) => {
+                    if (!draggingCol) return;
+                    if (pointerId != null && e.pointerId !== pointerId) return;
+                    e.preventDefault();
+                    updateTargetFromPoint(e.clientX, e.clientY);
                 });
 
-                document.addEventListener('mouseup', () => {
-                    if (!mouseDraggingCol) return;
-                    const dragged = mouseDraggingCol;
-                    const target = mouseTargetCol;
-                    mouseDraggingCol = null;
-                    mouseTargetCol = null;
-                    wrap.querySelectorAll('th.fu-col-drop-target').forEach((el) => el.classList.remove('fu-col-drop-target'));
+                const finish = () => {
+                    if (!draggingCol) return;
+                    const dragged = draggingCol;
+                    const target = targetCol;
+                    draggingCol = null;
+                    targetCol = null;
+                    pointerId = null;
+                    clearTargets();
                     if (target) followUpApplyColumnOrderFromDnD(currentClient, dragged, target);
+                };
+
+                wrap.addEventListener('pointerup', (e) => {
+                    if (!draggingCol) return;
+                    if (pointerId != null && e.pointerId !== pointerId) return;
+                    e.preventDefault();
+                    finish();
+                });
+
+                wrap.addEventListener('pointercancel', () => {
+                    draggingCol = null;
+                    targetCol = null;
+                    pointerId = null;
+                    clearTargets();
                 });
             }
         }
