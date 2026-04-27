@@ -4701,6 +4701,7 @@
             width: 100%;
             margin: 0;
             padding: 10px 14px;
+            padding-right: 58px; /* reserve room for move buttons */
             border: none;
             background: transparent;
             font: inherit;
@@ -4715,6 +4716,7 @@
         }
 
         .follow-up-th-inner {
+            position: relative;
             display: flex;
             align-items: center;
             gap: 6px;
@@ -4724,9 +4726,9 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: 24px;
-            height: 26px;
-            margin-left: 8px;
+            width: 22px;
+            height: 24px;
+            margin-left: 10px;
             border-radius: 8px;
             border: 1px solid var(--border);
             background: var(--surface-2);
@@ -4773,17 +4775,21 @@
         }
 
         .follow-up-th-move {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
             display: inline-flex;
             gap: 4px;
             opacity: 0;
-            transform: translateX(4px);
-            transition: opacity 0.16s ease, transform 0.16s ease;
+            pointer-events: none;
+            transition: opacity 0.16s ease;
         }
 
         th:hover .follow-up-th-move,
         th:focus-within .follow-up-th-move {
             opacity: 1;
-            transform: translateX(0);
+            pointer-events: auto;
         }
 
         .follow-up-th-move-btn {
@@ -13596,7 +13602,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const thCls = isActive ? `follow-up-th--active follow-up-th--${sortDir}` : '';
                 const ind = isActive ? (sortDir === 'asc' ? '▲' : '▼') : '⇅';
                 const label = `Sort by ${c}${isActive ? (sortDir === 'asc' ? ', ascending' : ', descending') : ''}`;
-                return `<th scope="col" data-col="${escapeHtml(slug)}" class="${thCls}" aria-sort="${ariaSort}" data-fu-col-name="${escapeHtml(c)}">` +
+                return `<th scope="col" data-col="${escapeHtml(slug)}" class="${thCls}" aria-sort="${ariaSort}" data-fu-col-name="${escapeHtml(c)}" draggable="true">` +
                     `<div class="follow-up-th-inner">` +
                         `<span class="follow-up-th-drag" draggable="true" data-fu-col-drag="1" data-fu-col-name="${escapeHtml(c)}" title="Drag to reorder" aria-label="Drag to reorder ${escapeHtml(c)} column">⋮⋮</span>` +
                         `<button type="button" class="follow-up-th-btn" data-fu-col-idx="${i}" data-fu-col-name="${escapeHtml(c)}" aria-label="${escapeHtml(label)}">` +
@@ -14814,8 +14820,11 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 wrap.dataset.colDnD = '1';
                 let draggingCol = null;
                 wrap.addEventListener('dragstart', (e) => {
-                    const drag = e.target && e.target.closest ? e.target.closest('[data-fu-col-drag][data-fu-col-name]') : null;
-                    const name = drag ? drag.getAttribute('data-fu-col-name') : null;
+                    // Avoid starting drag from click controls (sort / move)
+                    const blocked = e.target && e.target.closest ? e.target.closest('.follow-up-th-btn, .follow-up-th-move-btn') : null;
+                    if (blocked) return;
+                    const th = e.target && e.target.closest ? e.target.closest('th[data-fu-col-name]') : null;
+                    const name = th ? th.getAttribute('data-fu-col-name') : null;
                     if (!name) return;
                     draggingCol = name;
                     try {
