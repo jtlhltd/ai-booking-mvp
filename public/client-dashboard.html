@@ -7155,9 +7155,11 @@
                         <button type="button" class="follow-up-status-chip" data-fu-status-filter="all">All</button>
                     </div>
                     <div class="follow-up-status-filters" id="followUpBulkActions" role="group" aria-label="Bulk actions for selected follow-up rows">
-                        <button type="button" class="follow-up-status-chip" data-fu-bulk="todo" title="Set selected rows to To Call">To Call</button>
-                        <button type="button" class="follow-up-status-chip" data-fu-bulk="called" title="Set selected rows to Called">Called</button>
-                        <button type="button" class="follow-up-status-chip" data-fu-bulk="quoted" title="Set selected rows to Quoted">Quoted</button>
+                        <button type="button" class="export-btn secondary" data-fu-bulk="todo" title="Set selected rows to To Call">Bulk To Call</button>
+                        <button type="button" class="export-btn secondary" data-fu-bulk="called" title="Set selected rows to Called">Bulk Called</button>
+                        <button type="button" class="export-btn secondary" data-fu-bulk="quoted" title="Set selected rows to Quoted">Bulk Quoted</button>
+                        <button type="button" class="export-btn secondary" data-fu-bulk="vm" title="Set selected rows to Voicemail (Disposition)">Bulk VM</button>
+                        <button type="button" class="export-btn secondary" data-fu-bulk="spoke" title="Set selected rows to Spoke (Disposition)">Bulk Spoke</button>
                     </div>
                     <label class="follow-up-page-size" title="Disposition filter" style="display:inline-flex;gap:6px;align-items:center;">
                         <span class="sr-only">Disposition filter</span>
@@ -14415,10 +14417,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
             const nowIso = new Date().toISOString();
             const mapAction = (k) => {
-                if (k === 'todo') return { Status: 'To call', Disposition: '', 'Callback Needed': 'FALSE', 'Last Outcome At': nowIso };
+                if (k === 'todo') return { Status: 'To Call', Disposition: '', 'Callback Needed': 'FALSE', 'Last Outcome At': nowIso };
                 if (k === 'called') return { Status: 'Called', Disposition: 'Spoke', 'Callback Needed': 'TRUE', 'Last Outcome At': nowIso };
                 if (k === 'quoted') return { Status: 'Quoted', Disposition: 'Spoke', 'Callback Needed': 'TRUE', 'Last Outcome At': nowIso };
-                if (k === 'vm') return { Status: 'To call', Disposition: 'Voicemail', 'Callback Needed': 'FALSE', 'Last Outcome At': nowIso };
+                if (k === 'vm') return { Status: 'To Call', Disposition: 'Voicemail', 'Callback Needed': 'FALSE', 'Last Outcome At': nowIso };
                 if (k === 'spoke') return { Status: 'Called', Disposition: 'Spoke', 'Callback Needed': 'TRUE', 'Last Outcome At': nowIso };
                 return null;
             };
@@ -14493,7 +14495,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         function followUpStatusBadgeHtml(statusRaw) {
             const s = String(statusRaw || '').trim();
             const sl = s.toLowerCase();
-            if (!s) return '<span class="status-tag status-tag--todo">To call</span>';
+            if (!s) return '<span class="status-tag status-tag--todo">To Call</span>';
             if (sl === 'called') return '<span class="status-tag status-tag--called">Called</span>';
             if (sl === 'quoted') return '<span class="status-tag status-tag--other" title="Quoted">Quoted</span>';
             if (sl.includes('do not call') || sl === 'dnc') return '<span class="status-tag status-tag--dnc">DNC</span>';
@@ -14503,7 +14505,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
         function followUpInlineActionsHtml() {
             return `<span class="fu-inline-actions">` +
-                `<button type="button" class="fu-mini-btn" data-fu-action="setStatus" data-fu-value="To call" title="Move back to To call">To call</button>` +
+                `<button type="button" class="fu-mini-btn" data-fu-action="setStatus" data-fu-value="To call" title="Move back to To Call">To Call</button>` +
                 `<button type="button" class="fu-mini-btn" data-fu-action="setStatus" data-fu-value="Called" title="Mark as Called">Called</button>` +
                 `<button type="button" class="fu-mini-btn fu-mini-btn--muted" data-fu-action="setStatus" data-fu-value="Quoted" title="Marked as quoted (follow up / close)">Quoted</button>` +
             `</span>`;
@@ -14746,7 +14748,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     const isCalled = rawFlag === 'TRUE' || rawFlag === 'YES' || rawFlag === 'CALLED';
                     copy['Called?'] = isCalled ? 'TRUE' : 'FALSE';
                     if (!copy.Status) {
-                        copy.Status = isCalled ? 'Called' : 'To call';
+                        copy.Status = isCalled ? 'Called' : 'To Call';
                     }
                     return copy;
                 });
@@ -15046,7 +15048,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         if (!row || typeof row._row !== 'number') return;
 
                         if (action === 'setStatus') {
-                            const nextStatus = String(value || '').trim() || 'To call';
+                            const nextStatus = String(value || '').trim() || 'To Call';
                             const nextStatusLower = nextStatus.toLowerCase();
                             const called = nextStatusLower === 'called' || nextStatusLower === 'quoted';
                             const nextDisp = nextStatusLower === 'quoted'
@@ -15093,9 +15095,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         if (action === 'setDisposition') {
                             const nextDisp = String(value || '').trim() || '';
                             const dispLower = nextDisp.toLowerCase();
-                            let nextStatus = String(row.Status || '').trim() || 'To call';
+                            let nextStatus = String(row.Status || '').trim() || 'To Call';
                             if (dispLower === 'spoke') nextStatus = 'Called';
-                            else nextStatus = 'To call';
+                            else nextStatus = 'To Call';
                             const called = String(nextStatus).toLowerCase() === 'called';
                             const nowIso = new Date().toISOString();
 
@@ -15285,7 +15287,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const metrics = [
                     { label: 'New today (sheet)', value: `${formatNumber(today.total || 0)}` },
                     { label: 'Called today', value: `${formatNumber(today.called || 0)}` },
-                    { label: 'To call (queue)', value: `${formatNumber(fu.todo || 0)}` },
+                    { label: 'To Call (queue)', value: `${formatNumber(fu.todo || 0)}` },
                     { label: 'Quoted (queue)', value: `${formatNumber(fu.quoted || 0)}` },
                     { label: 'Outbound due now', value: `${formatNumber(q.callQueueDueNow || 0)}` },
                     { label: 'Retries due now', value: `${formatNumber(q.retryDueNow || 0)}` }
