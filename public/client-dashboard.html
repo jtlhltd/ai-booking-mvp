@@ -372,6 +372,17 @@
             justify-content: center;
         }
 
+        /* Failsafe: render chevron even if JS span is lost */
+        button.collapse-toggle::before {
+            content: '▼';
+            font-size: 0.75rem;
+            line-height: 1;
+        }
+
+        button.collapse-toggle .collapse-toggle-chevron {
+            display: none;
+        }
+
         button.collapse-toggle:focus-visible {
             outline: 2px solid var(--primary);
             outline-offset: 2px;
