@@ -1558,7 +1558,7 @@
 
         .dashboard-experience-head {
             display: flex;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
             align-items: center;
             justify-content: space-between;
             gap: 10px;
@@ -1569,6 +1569,11 @@
             margin: 0;
             font-size: 1rem;
             font-weight: 650;
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .dashboard-integration-grid {
@@ -7644,11 +7649,11 @@
             if (title && !title.classList.contains('section-header')) title.classList.add('section-header');
             if (title && !title.classList.contains('section-header--collapsible')) title.classList.add('section-header--collapsible');
 
-            // Use a floating toggle pinned to the panel so it never gets pushed out of view.
-            if (!sec.querySelector(':scope > .collapse-toggle')) {
+            // Keep the toggle in the header row (avoid overlapping the Copy button).
+            if (!head.querySelector(':scope > .collapse-toggle')) {
                 const btn = document.createElement('button');
                 btn.type = 'button';
-                btn.className = 'collapse-toggle collapse-toggle--float';
+                btn.className = 'collapse-toggle';
                 btn.setAttribute('aria-expanded', sec.dataset.collapsed === 'true' ? 'false' : 'true');
                 btn.title = 'Collapse or expand this section';
                 btn.setAttribute('aria-label', 'Collapse or expand this section');
@@ -7657,7 +7662,9 @@
                     e.stopPropagation();
                     toggleDashboardTarget(sec);
                 });
-                sec.insertBefore(btn, sec.firstChild);
+                const copyBtn = head.querySelector('#copyDebugBundleBtn');
+                if (copyBtn) head.insertBefore(btn, copyBtn.nextSibling);
+                else head.appendChild(btn);
             }
             sec.dataset.collapsibleMounted = '1';
         }
