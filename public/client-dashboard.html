@@ -1000,6 +1000,11 @@
             gap: 8px;
         }
 
+        /* Avoid overlapping the outreach-only "↑ Metrics" pill in bottom-right. */
+        body.tom-outreach-dashboard .data-freshness {
+            bottom: 64px;
+        }
+
         .data-freshness-dot {
             width: 8px;
             height: 8px;
@@ -1670,7 +1675,7 @@
             padding: 10px 14px;
             border-radius: 999px;
             border: 1px solid rgba(92, 106, 196, 0.35);
-            background: rgba(255, 255, 255, 0.96);
+            background: var(--surface, rgba(255, 255, 255, 0.96));
             color: var(--primary, #5c6ac4);
             font-size: 0.8125rem;
             font-weight: 650;
