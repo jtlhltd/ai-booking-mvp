@@ -176,6 +176,12 @@
             max-width: 100%;
         }
 
+        /* Allow client-meta to have a collapse button aligned right */
+        .client-meta > .collapse-toggle {
+            margin-left: auto;
+            align-self: center;
+        }
+
         .meta-item {
             background: var(--light);
             border-radius: 10px;
@@ -382,6 +388,10 @@
         }
 
         /* Non-section blocks that still need to collapse */
+        #clientMeta[data-collapsible="true"][data-collapsed="true"] > :not(.collapse-toggle) {
+            display: none !important;
+        }
+
         #dashboardExperienceSection[data-collapsible="true"][data-collapsed="true"] > :not(.dashboard-experience-head) {
             display: none !important;
         }
@@ -6743,7 +6753,9 @@
                 </div>
             </div>
             
-        <section class="status-bar" id="dashboardMetricsAnchor" role="region" aria-label="Dashboard statistics">
+        <section class="dashboard-section" id="dashboardMetricsAnchor" role="region" aria-label="Dashboard statistics">
+            <h2 class="section-header">📌 Key metrics</h2>
+            <div class="status-bar">
             <div class="status-card" id="statusBarLeadsCard" title="Distinct phone numbers stored for this client in the CRM" role="article" aria-label="Unique contacts in CRM">
                 <h4 id="statusCardLeads">Unique contacts in CRM</h4>
                 <div class="status-value" id="statusTotalLeads" aria-live="polite">—</div>
@@ -6773,6 +6785,7 @@
                 <h4 id="statusCardResponse">Lead → first call time</h4>
                 <div class="status-value" id="statusFirstResponse" aria-live="polite">—</div>
                 <p class="status-hint" id="statusHintResponse">Loading...</p>
+            </div>
             </div>
         </section>
 
@@ -7395,7 +7408,9 @@
         }
 
         function findCollapseToggleButton(root) {
-            return root.querySelector(':scope > h2 .collapse-toggle, :scope > h3 .collapse-toggle');
+            return root.querySelector(
+                ':scope > .collapse-toggle, :scope > h2 .collapse-toggle, :scope > h3 .collapse-toggle, :scope > h4 .collapse-toggle, :scope > .dashboard-experience-head .collapse-toggle, :scope > .outreach-strip-head .collapse-toggle'
+            );
         }
 
         function persistDashboardCollapsedState() {
@@ -7563,33 +7578,34 @@
 
         function mountDashboardCollapsibleExperiencePanel() {
             const sec = document.getElementById('dashboardExperienceSection');
-            if (!sec || sec.dataset.collapsibleMounted === '1') return;
+            if (!sec) return;
             if (sec.getAttribute('data-collapsible') === 'false') return;
             const head = sec.querySelector(':scope > .dashboard-experience-head');
             if (!head) return;
 
             sec.dataset.collapseId = 'sec-dashboardExperienceSection';
             sec.dataset.collapsible = 'true';
-            sec.dataset.collapsed = 'false';
+            if (sec.dataset.collapsed !== 'true') sec.dataset.collapsed = 'false';
 
             // Reuse the existing title node if present; otherwise just append the button.
             const title = head.querySelector(':scope > h2');
             if (title && !title.classList.contains('section-header')) title.classList.add('section-header');
             if (title && !title.classList.contains('section-header--collapsible')) title.classList.add('section-header--collapsible');
 
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'collapse-toggle';
-            btn.setAttribute('aria-expanded', 'true');
-            btn.title = 'Collapse or expand this section';
-            btn.innerHTML = '<span class="collapse-toggle-chevron" aria-hidden="true">▼</span>';
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                toggleDashboardTarget(sec);
-            });
-
-            head.appendChild(btn);
+            if (!head.querySelector(':scope > .collapse-toggle')) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'collapse-toggle';
+                btn.setAttribute('aria-expanded', sec.dataset.collapsed === 'true' ? 'false' : 'true');
+                btn.title = 'Collapse or expand this section';
+                btn.innerHTML = '<span class="collapse-toggle-chevron" aria-hidden="true">▼</span>';
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleDashboardTarget(sec);
+                });
+                head.appendChild(btn);
+            }
             sec.dataset.collapsibleMounted = '1';
         }
 
@@ -7606,30 +7622,59 @@
             ];
 
             mounts.forEach(({ el, getHeader }) => {
-                if (!el || el.dataset.collapsibleMounted === '1') return;
+                if (!el) return;
                 if (el.getAttribute('data-collapsible') === 'false') return;
                 const header = getHeader(el);
                 if (!header) return;
 
                 el.dataset.collapseId = el.id ? `sec-${el.id}` : `sec-${slugCollapseId(header.textContent || 'strip')}`;
                 el.dataset.collapsible = 'true';
-                el.dataset.collapsed = 'false';
+                if (el.dataset.collapsed !== 'true') el.dataset.collapsed = 'false';
 
+                if (!header.querySelector(':scope > .collapse-toggle')) {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'collapse-toggle';
+                    btn.setAttribute('aria-expanded', el.dataset.collapsed === 'true' ? 'false' : 'true');
+                    btn.title = 'Collapse or expand this section';
+                    btn.innerHTML = '<span class="collapse-toggle-chevron" aria-hidden="true">▼</span>';
+                    btn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        toggleDashboardTarget(el);
+                    });
+                    header.appendChild(btn);
+                }
+
+                el.dataset.collapsibleMounted = '1';
+            });
+        }
+
+        function mountDashboardCollapsibleClientMeta() {
+            const meta = document.getElementById('clientMeta');
+            if (!meta) return;
+            if (meta.getAttribute('data-collapsible') === 'false') return;
+            meta.dataset.collapseId = 'sec-clientMeta';
+            meta.dataset.collapsible = 'true';
+            if (meta.dataset.collapsed !== 'true') meta.dataset.collapsed = 'false';
+
+            if (!meta.querySelector(':scope > .collapse-toggle')) {
                 const btn = document.createElement('button');
                 btn.type = 'button';
                 btn.className = 'collapse-toggle';
-                btn.setAttribute('aria-expanded', 'true');
-                btn.title = 'Collapse or expand this section';
+                btn.setAttribute('aria-expanded', meta.dataset.collapsed === 'true' ? 'false' : 'true');
+                btn.title = 'Collapse or expand client details';
+                btn.setAttribute('aria-label', 'Collapse or expand client details');
                 btn.innerHTML = '<span class="collapse-toggle-chevron" aria-hidden="true">▼</span>';
                 btn.addEventListener('click', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    toggleDashboardTarget(el);
+                    toggleDashboardTarget(meta);
                 });
+                meta.appendChild(btn);
+            }
 
-                header.appendChild(btn);
-                el.dataset.collapsibleMounted = '1';
-            });
+            meta.dataset.collapsibleMounted = '1';
         }
 
         function initDashboardCollapsibleUi() {
@@ -7639,6 +7684,7 @@
             }
             mountDashboardCollapsibleSections();
             mountDashboardCollapsibleCards();
+            mountDashboardCollapsibleClientMeta();
             mountDashboardCollapsibleExperiencePanel();
             mountDashboardCollapsibleStrips();
             applyStoredDashboardCollapsedState();
@@ -7735,12 +7781,14 @@
             if (!isOutreachDashboardClient(currentClient)) {
                 el.hidden = true;
                 el.innerHTML = '';
+                el.dataset.collapsibleMounted = '0';
                 return;
             }
             const oc = data && data.outreachCapacity;
             if (!oc || typeof oc !== 'object') {
                 el.hidden = true;
                 el.innerHTML = '';
+                el.dataset.collapsibleMounted = '0';
                 return;
             }
             el.hidden = false;
@@ -8094,6 +8142,7 @@
                 ${trendsHtml}`;
 
             // Ensure strips get a collapse toggle once they have content.
+            el.dataset.collapsibleMounted = '0';
             mountDashboardCollapsibleStrips();
             applyStoredDashboardCollapsedState();
         }
@@ -8327,6 +8376,7 @@
             if (!um || !um.windows) {
                 el.hidden = true;
                 el.innerHTML = '';
+                el.dataset.collapsibleMounted = '0';
                 return;
             }
             el.hidden = false;
@@ -8388,6 +8438,7 @@
             )}</p>`;
 
             // Ensure strips get a collapse toggle once they have content.
+            el.dataset.collapsibleMounted = '0';
             mountDashboardCollapsibleStrips();
             applyStoredDashboardCollapsedState();
         }
