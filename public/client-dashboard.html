@@ -14503,7 +14503,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const v = String(val || '').trim();
             const canEdit = row && typeof row._row === 'number';
             if (col === 'Notes') {
-                const label = v || '—';
+                const isUnknown = v.toLowerCase() === 'unknown';
+                const label = (!v || isUnknown) ? '—' : v;
                 return `<span class="fu-cell-actions"><span title="${escapeHtml(label)}">${escapeHtml(label)}</span>${followUpPencilBtn(col, !canEdit)}</span>`;
             }
             if (col === 'Recording URI' && /^https?:\/\//i.test(v)) {
@@ -14738,7 +14739,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 rows = rows.map((r) => {
                     const copy = { ...r };
                     const rk = followUpRowKey(copy);
-                    if (rk) copy.Notes = String(notesMap[rk] || '');
+                    // Always override any sheet-provided Notes/Unknown unless we have a saved local note.
+                    copy.Notes = rk ? String(notesMap[rk] || '') : '';
                     return copy;
                 });
                 const colsRaw = followUpVisibleColumns(rows);
