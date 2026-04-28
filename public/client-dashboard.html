@@ -5104,6 +5104,21 @@
             box-shadow: -6px 0 18px -10px rgba(0, 0, 0, 0.45);
         }
 
+        /* Keep sticky Notes opaque on row hover (avoid bleed-through). */
+        .follow-up-queue-table tr:hover td[data-col="notes"] {
+            background-color: var(--surface, #ffffff);
+            box-shadow:
+                -6px 0 18px -10px rgba(0, 0, 0, 0.25),
+                inset 0 0 0 9999px rgba(92, 106, 196, 0.05);
+        }
+
+        body[data-theme="dark"] .follow-up-queue-table tr:hover td[data-col="notes"] {
+            background-color: var(--surface, #252b3d);
+            box-shadow:
+                -6px 0 18px -10px rgba(0, 0, 0, 0.45),
+                inset 0 0 0 9999px rgba(124, 134, 220, 0.08);
+        }
+
         .follow-up-queue-table td[data-col="decision-maker"],
         .follow-up-queue-table th[data-col="decision-maker"] {
             min-width: 8rem;
