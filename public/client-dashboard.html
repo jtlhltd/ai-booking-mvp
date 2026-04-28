@@ -7638,13 +7638,17 @@
                 btn.className = 'collapse-toggle';
                 btn.setAttribute('aria-expanded', sec.dataset.collapsed === 'true' ? 'false' : 'true');
                 btn.title = 'Collapse or expand this section';
-                btn.innerHTML = '<span class="collapse-toggle-chevron" aria-hidden="true">▼</span>';
+                btn.setAttribute('aria-label', 'Collapse or expand this section');
+                // Use direct text content here (not a nested span) to avoid any pseudo-element/CSS edge cases.
+                btn.textContent = '▼';
                 btn.addEventListener('click', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
                     toggleDashboardTarget(sec);
                 });
-                head.appendChild(btn);
+                const copyBtn = head.querySelector('#copyDebugBundleBtn');
+                if (copyBtn) head.insertBefore(btn, copyBtn.nextSibling);
+                else head.appendChild(btn);
             }
             sec.dataset.collapsibleMounted = '1';
         }
