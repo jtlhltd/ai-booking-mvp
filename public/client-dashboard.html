@@ -9860,7 +9860,7 @@ ${actionsRow}
             const conversionFunnelSubtitle = document.getElementById('conversionFunnelSubtitle');
             if (conversionFunnelSubtitle) {
                 conversionFunnelSubtitle.textContent = isOutreachDashboardClient(currentClient)
-                    ? `Real counts for ${businessName}. “Unique in CRM” is distinct phone numbers on file (one row per phone; uploads merge). Percentages are vs that total. Reached + no pickup = everyone we dialed. Click a stage to filter Recent Leads below.`
+                    ? `Real counts for ${businessName}. “Unique in CRM” is distinct phone numbers on file (one row per phone; uploads merge). If dial history includes a number not in the latest CRM export, percentages use the larger of (CRM unique, dialed unique) so the funnel stays consistent. Reached + no pickup = everyone we dialed. Click a stage to filter Recent Leads below.`
                     : `Independent counts for ${businessName} — not a strict funnel. Bar length compares rows; % is vs total leads.`;
             }
             
@@ -12775,7 +12775,7 @@ ${actionsRow}
         function renderLeadJourney(data) {
             const container = document.getElementById('lead-journey');
             if (!container) return;
-            const totalLeads = data.totalLeads || 0;
+            const totalLeadsRaw = data.totalLeads || 0;
             const contacted = data.totalCalls || 0;
             const m = data.metrics || {};
             const engagedRaw = m.uniqueLeadsAnswered ?? m.callsAnswered ?? 0;
@@ -12784,6 +12784,9 @@ ${actionsRow}
             const noPickup = Math.min(Math.max(0, noPickupRaw), contacted || noPickupRaw);
             const booked = data.bookingsThisWeek || 0;
             const tom = isOutreachDashboardClient(currentClient);
+            // In some datasets, dial history can include a number that isn't currently in the CRM export.
+            // For the outreach dashboard, treat the "universe" as the max so stages/percentages don't exceed 100%.
+            const totalLeads = tom ? Math.max(totalLeadsRaw, contacted) : totalLeadsRaw;
 
             const stages = tom
                 ? [
