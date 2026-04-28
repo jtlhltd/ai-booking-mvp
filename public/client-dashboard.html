@@ -372,6 +372,14 @@
             justify-content: center;
         }
 
+        /* For panels where the header content may reflow, keep toggle pinned. */
+        .collapse-toggle--float {
+            position: absolute;
+            top: 10px;
+            right: 12px;
+            z-index: 5;
+        }
+
         /* Failsafe: render chevron using CSS triangle (no font glyphs). */
         button.collapse-toggle::before {
             content: '';
@@ -421,7 +429,7 @@
             display: none !important;
         }
 
-        #dashboardExperienceSection[data-collapsible="true"][data-collapsed="true"] > :not(.dashboard-experience-head) {
+        #dashboardExperienceSection[data-collapsible="true"][data-collapsed="true"] > :not(.dashboard-experience-head):not(.collapse-toggle) {
             display: none !important;
         }
 
@@ -1544,6 +1552,7 @@
             border-radius: 12px;
             border: 1px solid var(--border, #e8eaf5);
             background: var(--surface, #fff);
+            position: relative;
         }
 
         .dashboard-experience-head {
@@ -7634,23 +7643,20 @@
             if (title && !title.classList.contains('section-header')) title.classList.add('section-header');
             if (title && !title.classList.contains('section-header--collapsible')) title.classList.add('section-header--collapsible');
 
-            if (!head.querySelector(':scope > .collapse-toggle')) {
+            // Use a floating toggle pinned to the panel so it never gets pushed out of view.
+            if (!sec.querySelector(':scope > .collapse-toggle')) {
                 const btn = document.createElement('button');
                 btn.type = 'button';
-                btn.className = 'collapse-toggle';
+                btn.className = 'collapse-toggle collapse-toggle--float';
                 btn.setAttribute('aria-expanded', sec.dataset.collapsed === 'true' ? 'false' : 'true');
                 btn.title = 'Collapse or expand this section';
                 btn.setAttribute('aria-label', 'Collapse or expand this section');
-                // Use direct text content here (not a nested span) to avoid any pseudo-element/CSS edge cases.
-                btn.textContent = '▼';
                 btn.addEventListener('click', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
                     toggleDashboardTarget(sec);
                 });
-                const copyBtn = head.querySelector('#copyDebugBundleBtn');
-                if (copyBtn) head.insertBefore(btn, copyBtn.nextSibling);
-                else head.appendChild(btn);
+                sec.insertBefore(btn, sec.firstChild);
             }
             sec.dataset.collapsibleMounted = '1';
         }
