@@ -415,7 +415,8 @@
             transform: rotate(-90deg);
         }
 
-        section[data-collapsible="true"][data-collapsed="true"] > :not(h2.section-header) {
+        /* Only collapse real dashboard sections via the generic rule. */
+        section.dashboard-section[data-collapsible="true"][data-collapsed="true"] > :not(h2.section-header) {
             display: none !important;
         }
 
