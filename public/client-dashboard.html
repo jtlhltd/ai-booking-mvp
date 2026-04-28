@@ -377,6 +377,14 @@
             content: '▼';
             font-size: 0.75rem;
             line-height: 1;
+            display: inline-block;
+            color: currentColor;
+            transform: rotate(0deg);
+            transform-origin: 50% 50%;
+        }
+
+        button.collapse-toggle[aria-expanded="false"]::before {
+            transform: rotate(-90deg);
         }
 
         button.collapse-toggle .collapse-toggle-chevron {
