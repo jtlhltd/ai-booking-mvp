@@ -7155,10 +7155,9 @@
                         <button type="button" class="follow-up-status-chip" data-fu-status-filter="all">All</button>
                     </div>
                     <div class="follow-up-status-filters" id="followUpBulkActions" role="group" aria-label="Bulk actions for selected follow-up rows">
-                        <button type="button" class="export-btn secondary" data-fu-bulk="called">Bulk Called</button>
-                        <button type="button" class="export-btn secondary" data-fu-bulk="quoted">Bulk Quoted</button>
-                        <button type="button" class="export-btn secondary" data-fu-bulk="vm">Bulk VM</button>
-                        <button type="button" class="export-btn secondary" data-fu-bulk="spoke">Bulk Spoke</button>
+                        <button type="button" class="follow-up-status-chip" data-fu-bulk="todo" title="Set selected rows to To Call">To Call</button>
+                        <button type="button" class="follow-up-status-chip" data-fu-bulk="called" title="Set selected rows to Called">Called</button>
+                        <button type="button" class="follow-up-status-chip" data-fu-bulk="quoted" title="Set selected rows to Quoted">Quoted</button>
                     </div>
                     <label class="follow-up-page-size" title="Disposition filter" style="display:inline-flex;gap:6px;align-items:center;">
                         <span class="sr-only">Disposition filter</span>
@@ -14416,6 +14415,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
             const nowIso = new Date().toISOString();
             const mapAction = (k) => {
+                if (k === 'todo') return { Status: 'To call', Disposition: '', 'Callback Needed': 'FALSE', 'Last Outcome At': nowIso };
                 if (k === 'called') return { Status: 'Called', Disposition: 'Spoke', 'Callback Needed': 'TRUE', 'Last Outcome At': nowIso };
                 if (k === 'quoted') return { Status: 'Quoted', Disposition: 'Spoke', 'Callback Needed': 'TRUE', 'Last Outcome At': nowIso };
                 if (k === 'vm') return { Status: 'To call', Disposition: 'Voicemail', 'Callback Needed': 'FALSE', 'Last Outcome At': nowIso };
@@ -14435,7 +14435,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 return {
                     ...r,
                     Status: patch.Status,
-                    Disposition: patch.Disposition,
+                    ...(String(patch.Disposition || '').trim() ? { Disposition: patch.Disposition } : { Disposition: '' }),
                     'Called?': String(patch['Callback Needed'] || '').toUpperCase() === 'TRUE' ? 'TRUE' : 'FALSE',
                     'Last Outcome At': nowIso
                 };
