@@ -372,7 +372,12 @@
             transform: rotate(-90deg);
         }
 
-        .dashboard-section[data-collapsible="true"][data-collapsed="true"] > :not(h2.section-header) {
+        section[data-collapsible="true"][data-collapsed="true"] > :not(h2.section-header) {
+            display: none !important;
+        }
+
+        /* Tom outreach A/B block: keep the mobile toggle visible when collapsed */
+        section.tom-ab-test-section[data-collapsible="true"][data-collapsed="true"] > :not(h2.section-header):not(.tom-ab-mobile-section-toggle) {
             display: none !important;
         }
 
@@ -1570,6 +1575,11 @@
             body.tom-outreach-dashboard .tom-ab-mobile-section-toggle[aria-expanded='false'] .tom-ab-mobile-section-toggle-chevron {
                 transform: rotate(-90deg);
             }
+
+            /* On mobile, use the dedicated toggle button instead of the H2 collapse control. */
+            body.tom-outreach-dashboard section.tom-ab-test-section > h2.section-header {
+                display: none;
+            }
         }
 
         .scroll-to-metrics-btn {
@@ -1611,6 +1621,13 @@
 
             .tom-ab-mobile-section-toggle-chevron {
                 transition: none !important;
+            }
+        }
+
+        @media (min-width: 769px) {
+            /* On desktop, hide the mobile-only toggle button. */
+            body.tom-outreach-dashboard .tom-ab-mobile-section-toggle {
+                display: none;
             }
         }
 
@@ -6764,6 +6781,7 @@
                 <span class="tom-ab-mobile-section-toggle-label">Creatives &amp; live test</span>
                 <span class="tom-ab-mobile-section-toggle-chevron" aria-hidden="true">▼</span>
             </button>
+            <h2 class="section-header">🧪 Creatives &amp; live test</h2>
             <div id="tomAbCollapsibleShell" class="tom-ab-collapsible-shell">
             <article class="card card-fullwidth tom-ab-client-console">
                 <h3>Creatives &amp; live test</h3>
@@ -6873,6 +6891,7 @@
 
         <!-- INSIGHTS & ROUTING: full-width block (same pattern as Creatives & live test) -->
         <section class="dashboard-section" id="insightsRoutingSection" aria-label="Insights and routing">
+            <h2 class="section-header">🧠 Insights & Routing</h2>
             <article class="card card-fullwidth card-insights-routing">
                 <h3>🧠 Insights & Routing</h3>
                 <p class="card-subtitle" id="callInsightsSubtitle">
@@ -7136,6 +7155,7 @@
 
         <!-- LIVE ACTIVITY SECTION -->
         <section class="dashboard-section">
+            <h2 class="section-header">🗓️ Live Activity Feed</h2>
             <article class="card card-fullwidth">
                 <h3 class="activity-feed-heading">
                     <span>🗓️ Live Activity Feed</span>
@@ -7164,6 +7184,7 @@
 
         <!-- WORKFLOW SECTION (hidden for D2D Xpress / Tom outreach dashboard) -->
         <section class="dashboard-section tom-hide-for-outreach">
+            <h2 class="section-header">📋 Workflow</h2>
             <article class="card card-fullwidth">
                 <h3>📋 How We Handle Everything For You</h3>
                 <p class="card-subtitle">Your done-for-you workflow - this is what we do automatically every day.</p>
@@ -7446,7 +7467,8 @@
         }
 
         function mountDashboardCollapsibleSections() {
-            document.querySelectorAll('section.dashboard-section:not(.tom-ab-test-section)').forEach((section) => {
+            // Make every top-level section with a visible H2 toggleable (not just a subset).
+            document.querySelectorAll('section').forEach((section) => {
                 if (section.dataset.collapsibleMounted === '1') return;
                 if (section.getAttribute('data-collapsible') === 'false') return;
                 const h2 = section.querySelector(':scope > h2.section-header');
