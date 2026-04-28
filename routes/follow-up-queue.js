@@ -125,6 +125,7 @@ export function createFollowUpQueueRouter(deps) {
         const dispRaw = String(row?.Disposition || row?.['Disposition'] || '').trim();
         const status = (statusRaw || dispRaw || 'To call').toLowerCase();
         if (status === 'called') return 'called';
+        if (status === 'quoted') return 'quoted';
         if (status.includes('do not call') || status === 'dnc') return 'dnc';
         if (status.includes('disqual')) return 'disqualified';
         return 'todo';
@@ -162,9 +163,10 @@ export function createFollowUpQueueRouter(deps) {
           total: 0,
           todo: 0,
           called: 0,
+          quoted: 0,
           dnc: 0,
           disqualified: 0,
-          today: { total: 0, todo: 0, called: 0, dnc: 0, disqualified: 0 }
+          today: { total: 0, todo: 0, called: 0, quoted: 0, dnc: 0, disqualified: 0 }
         };
         for (const row of rows || []) {
           const kind = classifyRowStatus(row);

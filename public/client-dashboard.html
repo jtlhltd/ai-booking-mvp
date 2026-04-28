@@ -7149,14 +7149,14 @@
                         <span id="followUpSelectedCount" class="dashboard-search-hint" style="margin-left:4px;" hidden></span>
                     </div>
                     <div class="follow-up-status-filters" id="followUpStatusFilters" role="group" aria-label="Filter follow-up rows by status">
-                        <button type="button" class="follow-up-status-chip follow-up-status-chip--active" data-fu-status-filter="todo">Need Calling</button>
+                        <button type="button" class="follow-up-status-chip follow-up-status-chip--active" data-fu-status-filter="todo">To Call</button>
                         <button type="button" class="follow-up-status-chip" data-fu-status-filter="called">Called</button>
-                        <button type="button" class="follow-up-status-chip" data-fu-status-filter="dnc">DNC</button>
-                        <button type="button" class="follow-up-status-chip" data-fu-status-filter="disqualified">Disqualified</button>
+                        <button type="button" class="follow-up-status-chip" data-fu-status-filter="quoted">Quoted</button>
                         <button type="button" class="follow-up-status-chip" data-fu-status-filter="all">All</button>
                     </div>
                     <div class="follow-up-status-filters" id="followUpBulkActions" role="group" aria-label="Bulk actions for selected follow-up rows">
                         <button type="button" class="export-btn secondary" data-fu-bulk="called">Bulk Called</button>
+                        <button type="button" class="export-btn secondary" data-fu-bulk="quoted">Bulk Quoted</button>
                         <button type="button" class="export-btn secondary" data-fu-bulk="vm">Bulk VM</button>
                         <button type="button" class="export-btn secondary" data-fu-bulk="spoke">Bulk Spoke</button>
                     </div>
@@ -14000,7 +14000,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         let followUpStats = null;
 
         let followUpQueuePage = 1;
-        let followUpStatusFilter = 'todo'; // todo | called | dnc | disqualified | all
+        let followUpStatusFilter = 'todo'; // todo | called | quoted | all
         let followUpSearchTerm = '';
         let followUpDispositionFilter = 'all'; // all | voicemail | spoke
         const followUpSelectedKeys = new Set();
@@ -14065,7 +14065,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const ps = parseInt(localStorage.getItem('dash.fu.pageSize') || '', 10);
                 if (Number.isFinite(ps)) followUpQueueState.limit = Math.min(200, Math.max(1, ps));
                 const sf = localStorage.getItem('dash.fu.statusFilter') || '';
-                if (['todo', 'called', 'dnc', 'disqualified', 'all'].includes(sf)) followUpStatusFilter = sf;
+                if (['todo', 'called', 'quoted', 'all'].includes(sf)) followUpStatusFilter = sf;
                 followUpSearchTerm = localStorage.getItem('dash.fu.search') || '';
                 const df = localStorage.getItem('dash.fu.dispositionFilter') || '';
                 if (['all','voicemail','spoke'].includes(df)) followUpDispositionFilter = df;
@@ -14195,14 +14195,14 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const dispRaw = String(row.Disposition || row['Disposition'] || '').trim().toLowerCase();
                 const status = statusRaw || (dispRaw ? dispRaw : 'to call');
                 const isCalled = status === 'called';
+                const isQuoted = status === 'quoted';
                 const isDnc = status.includes('do not call') || status === 'dnc' || dispRaw.includes('do not call') || dispRaw === 'dnc';
                 const isDisqualified = status.includes('disqual') || dispRaw.includes('disqual');
                 if (followUpStatusFilter === 'called') return isCalled;
-                if (followUpStatusFilter === 'dnc') return isDnc;
-                if (followUpStatusFilter === 'disqualified') return isDisqualified;
+                if (followUpStatusFilter === 'quoted') return isQuoted;
                 if (followUpStatusFilter === 'all') return true;
                 // todo: everything else that isn't "called" or terminal
-                const statusOk = (!isCalled && !isDnc && !isDisqualified);
+                const statusOk = (!isCalled && !isQuoted && !isDnc && !isDisqualified);
                 if (!statusOk) return false;
 
                 // Disposition filter (applies after status filter)
@@ -14417,6 +14417,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const nowIso = new Date().toISOString();
             const mapAction = (k) => {
                 if (k === 'called') return { Status: 'Called', Disposition: 'Spoke', 'Callback Needed': 'TRUE', 'Last Outcome At': nowIso };
+                if (k === 'quoted') return { Status: 'Quoted', Disposition: 'Spoke', 'Callback Needed': 'TRUE', 'Last Outcome At': nowIso };
                 if (k === 'vm') return { Status: 'To call', Disposition: 'Voicemail', 'Callback Needed': 'FALSE', 'Last Outcome At': nowIso };
                 if (k === 'spoke') return { Status: 'Called', Disposition: 'Spoke', 'Callback Needed': 'TRUE', 'Last Outcome At': nowIso };
                 return null;
@@ -14494,6 +14495,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const sl = s.toLowerCase();
             if (!s) return '<span class="status-tag status-tag--todo">To call</span>';
             if (sl === 'called') return '<span class="status-tag status-tag--called">Called</span>';
+            if (sl === 'quoted') return '<span class="status-tag status-tag--other" title="Quoted">Quoted</span>';
             if (sl.includes('do not call') || sl === 'dnc') return '<span class="status-tag status-tag--dnc">DNC</span>';
             if (sl.includes('disqual')) return '<span class="status-tag status-tag--disq">Disqualified</span>';
             return `<span class="status-tag status-tag--other" title="${escapeHtml(s)}">${escapeHtml(s)}</span>`;
@@ -14503,7 +14505,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             return `<span class="fu-inline-actions">` +
                 `<button type="button" class="fu-mini-btn" data-fu-action="setStatus" data-fu-value="To call" title="Move back to To call">To call</button>` +
                 `<button type="button" class="fu-mini-btn" data-fu-action="setStatus" data-fu-value="Called" title="Mark as Called">Called</button>` +
-                `<button type="button" class="fu-mini-btn fu-mini-btn--muted" data-fu-action="setStatus" data-fu-value="Disqualified" title="Not a fit / no need">Disqualify</button>` +
+                `<button type="button" class="fu-mini-btn fu-mini-btn--muted" data-fu-action="setStatus" data-fu-value="Quoted" title="Marked as quoted (follow up / close)">Quoted</button>` +
             `</span>`;
         }
 
@@ -14803,9 +14805,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         const extra = [
                             `Queue: ${formatNumber(s.todo || 0)} to call`,
                             `${formatNumber(s.called || 0)} called`,
-                            `${formatNumber(s.dnc || 0)} DNC`,
-                            `${formatNumber(s.disqualified || 0)} disq`,
-                            `Today: ${formatNumber(today.called || 0)} called / ${formatNumber(today.total || 0)} new`
+                            `${formatNumber(s.quoted || 0)} quoted`,
+                            `Today: ${formatNumber((today.called || 0) + (today.quoted || 0))} outcomes / ${formatNumber(today.total || 0)} new`
                         ];
                         hint.textContent = `${hint.textContent} · ${extra.join(' · ')}`;
                         hint.hidden = false;
@@ -15047,10 +15048,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         if (action === 'setStatus') {
                             const nextStatus = String(value || '').trim() || 'To call';
                             const nextStatusLower = nextStatus.toLowerCase();
-                            const called = nextStatusLower === 'called';
-                            const nextDisp = (nextStatusLower.includes('do not call') || nextStatusLower === 'dnc' || nextStatusLower.includes('disqual'))
-                                ? nextStatus
-                                : (String(row.Disposition || '').trim());
+                            const called = nextStatusLower === 'called' || nextStatusLower === 'quoted';
+                            const nextDisp = nextStatusLower === 'quoted'
+                                ? 'Spoke'
+                                : (nextStatusLower.includes('do not call') || nextStatusLower === 'dnc' || nextStatusLower.includes('disqual'))
+                                    ? nextStatus
+                                    : (String(row.Disposition || '').trim());
                             const shouldStamp = nextStatusLower !== 'to call';
                             const nowIso = new Date().toISOString();
 
@@ -15283,7 +15286,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     { label: 'New today (sheet)', value: `${formatNumber(today.total || 0)}` },
                     { label: 'Called today', value: `${formatNumber(today.called || 0)}` },
                     { label: 'To call (queue)', value: `${formatNumber(fu.todo || 0)}` },
-                    { label: 'DNC / Disq', value: `${formatNumber((fu.dnc || 0) + (fu.disqualified || 0))}` },
+                    { label: 'Quoted (queue)', value: `${formatNumber(fu.quoted || 0)}` },
                     { label: 'Outbound due now', value: `${formatNumber(q.callQueueDueNow || 0)}` },
                     { label: 'Retries due now', value: `${formatNumber(q.retryDueNow || 0)}` }
                 ];
