@@ -13929,8 +13929,48 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         ];
 
         const FOLLOW_UP_COLUMNS_LS_PREFIX = 'dash.fu.columns.';
+        const FOLLOW_UP_NOTES_LS_PREFIX = 'dash.fu.notes.';
         const followUpDefaultColumnOrder = [...FOLLOW_UP_TABLE_COLUMNS];
         let followUpColumnPrefs = { order: null, hidden: [] };
+
+        function followUpNotesLsKey(clientKey) {
+            return `${FOLLOW_UP_NOTES_LS_PREFIX}${String(clientKey || '').trim() || 'unknown'}`;
+        }
+
+        function loadFollowUpNotesMap(clientKey) {
+            const key = followUpNotesLsKey(clientKey);
+            try {
+                const raw = localStorage.getItem(key);
+                if (!raw) return {};
+                const parsed = JSON.parse(raw);
+                if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+                const out = {};
+                for (const [k, v] of Object.entries(parsed)) {
+                    const kk = String(k || '').trim();
+                    if (!kk) continue;
+                    out[kk] = String(v || '');
+                }
+                return out;
+            } catch {
+                return {};
+            }
+        }
+
+        function saveFollowUpNotesMap(clientKey, notesMap) {
+            const key = followUpNotesLsKey(clientKey);
+            const safe = {};
+            try {
+                const src = notesMap && typeof notesMap === 'object' && !Array.isArray(notesMap) ? notesMap : {};
+                for (const [k, v] of Object.entries(src)) {
+                    const kk = String(k || '').trim();
+                    if (!kk) continue;
+                    const vv = String(v || '').trim();
+                    if (!vv) continue;
+                    safe[kk] = vv;
+                }
+                localStorage.setItem(key, JSON.stringify(safe));
+            } catch {}
+        }
 
         let followUpQueueState = {
             rawRows: [],
@@ -14130,6 +14170,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         row['Decision Maker'],
                         row.Phone,
                         row.Email,
+                        row.Notes,
                         row['Main Countries'],
                         row['Transcript Snippet']
                     ].map((v) => String(v || '').toLowerCase()).join(' ');
@@ -14410,6 +14451,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const cols = FOLLOW_UP_TABLE_COLUMNS.filter((c) =>
                 rows.some((r) => String(r[c] || '').trim() !== '')
             );
+            if (!cols.includes('Notes')) cols.push('Notes');
             return cols.length ? cols : ['Timestamp', 'Business Name', 'Phone', 'Transcript Snippet'];
         }
 
@@ -14460,6 +14502,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         function formatFollowUpCell(col, val, row = null, extra = null) {
             const v = String(val || '').trim();
             const canEdit = row && typeof row._row === 'number';
+            if (col === 'Notes') {
+                const label = v || '—';
+                return `<span class="fu-cell-actions"><span title="${escapeHtml(label)}">${escapeHtml(label)}</span>${followUpPencilBtn(col, !canEdit)}</span>`;
+            }
             if (col === 'Recording URI' && /^https?:\/\//i.test(v)) {
                 return `<span class="fu-cell-actions"><a href="${escapeHtml(v)}" target="_blank" rel="noopener noreferrer">Open</a>${followUpPencilBtn(col, !canEdit)}</span>`;
             }
@@ -14526,17 +14572,24 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             if (!row || typeof row._row !== 'number') return;
 
             const initial = String(row[colName] || '').trim();
-            const input = document.createElement('input');
-            // Always text: spreadsheet cells often hold "Unknown", units ("30kg"), ranges, etc.
-            // type="number" blocks letters and shows spinners.
-            input.type = 'text';
+            const isNotes = colName === 'Notes';
+            const input = isNotes ? document.createElement('textarea') : document.createElement('input');
+            if (!isNotes) {
+                // Always text: spreadsheet cells often hold "Unknown", units ("30kg"), ranges, etc.
+                // type="number" blocks letters and shows spinners.
+                input.type = 'text';
+            }
             input.value = initial;
             input.className = 'dashboard-list-search';
             input.style.maxWidth = '100%';
             input.style.width = '100%';
+            if (isNotes) {
+                input.rows = 3;
+                input.style.resize = 'vertical';
+            }
             input.setAttribute('aria-label', `Edit ${colName}`);
-            if (colName === 'Phone' || colName === 'Called Number') input.inputMode = 'tel';
-            if (colName === 'Email') input.inputMode = 'email';
+            if (!isNotes && (colName === 'Phone' || colName === 'Called Number')) input.inputMode = 'tel';
+            if (!isNotes && colName === 'Email') input.inputMode = 'email';
 
             td.dataset.fuEditing = '1';
             td.innerHTML = '';
@@ -14562,6 +14615,13 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const wrapEl = document.getElementById('follow-up-queue');
                 if (wrapEl) followUpPaintTable(wrapEl);
 
+                if (colName === 'Notes') {
+                    const map = loadFollowUpNotesMap(currentClient);
+                    map[key] = nextVal;
+                    saveFollowUpNotesMap(currentClient, map);
+                    return;
+                }
+
                 fetch(`${BASE_URL}/api/follow-up-queue/${encodeURIComponent(currentClient)}/patch`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -14576,7 +14636,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             };
 
             input.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
+                if (e.key === 'Enter' && !isNotes) {
                     e.preventDefault();
                     input.blur();
                 } else if (e.key === 'Escape') {
@@ -14670,6 +14730,15 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     if (!copy.Status) {
                         copy.Status = isCalled ? 'Called' : 'To call';
                     }
+                    return copy;
+                });
+
+                // Merge locally persisted Notes (per clientKey + followUpRowKey)
+                const notesMap = loadFollowUpNotesMap(clientKey);
+                rows = rows.map((r) => {
+                    const copy = { ...r };
+                    const rk = followUpRowKey(copy);
+                    if (rk) copy.Notes = String(notesMap[rk] || '');
                     return copy;
                 });
                 const colsRaw = followUpVisibleColumns(rows);
