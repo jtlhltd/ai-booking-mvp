@@ -9131,6 +9131,8 @@ ${actionsRow}
         let callRecordingsMeta = { totalWithRecordings: 0, limit: 50, isDemo: false };
         let callRecordingsOutcomeFilter = 'all';
         let liveEventSource = null;
+        let liveEventSourceReconnectAttempts = 0;
+        let liveEventSourceReconnectDisabled = false;
         /** True when /api/demo-dashboard/:key failed so UI would otherwise show silent zeros. */
         let dashboardLivePayloadFailed = false;
         /** Last fetch error (HTTP or network) for the dashboard API — safe to show in UI. */
@@ -12910,14 +12912,36 @@ ${actionsRow}
 
             const toast = document.createElement('div');
             toast.className = `toast ${type}`;
-            toast.innerHTML = `
-                <span class="toast-icon">${icons[type] || icons.info}</span>
-                <div class="toast-content">
-                    <div class="toast-title">${title}</div>
-                    <div class="toast-message">${message}</div>
-                </div>
-                <button class="toast-close" onclick="this.parentElement.remove()">&times;</button>
-            `;
+            const safeTitle = String(title ?? '');
+            const safeMessage = String(message ?? '');
+
+            const icon = document.createElement('span');
+            icon.className = 'toast-icon';
+            icon.textContent = icons[type] || icons.info;
+
+            const content = document.createElement('div');
+            content.className = 'toast-content';
+
+            const titleEl = document.createElement('div');
+            titleEl.className = 'toast-title';
+            titleEl.textContent = safeTitle;
+
+            const messageEl = document.createElement('div');
+            messageEl.className = 'toast-message';
+            messageEl.textContent = safeMessage;
+
+            content.appendChild(titleEl);
+            content.appendChild(messageEl);
+
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'toast-close';
+            closeBtn.type = 'button';
+            closeBtn.textContent = '×';
+            closeBtn.addEventListener('click', () => toast.remove());
+
+            toast.appendChild(icon);
+            toast.appendChild(content);
+            toast.appendChild(closeBtn);
 
             container.appendChild(toast);
             setTimeout(() => {
@@ -12949,6 +12973,48 @@ ${actionsRow}
             const showDetail = detail && detail !== label && !label.includes(detail);
             const sub = showDetail ? `<div class="transcript-ended-by__detail">${escapeHtml(detail)}</div>` : '';
             el.innerHTML = `<div class="transcript-ended-by__headline">${escapeHtml(label)}</div>${sub}`;
+        }
+
+        function setTranscriptErrorUi(contentEl, error, callId, name) {
+            const errMsg = String(error?.message || 'Please try again later.');
+            contentEl.textContent = '';
+
+            const wrap = document.createElement('div');
+            wrap.className = 'error-message';
+            wrap.setAttribute('role', 'alert');
+
+            const icon = document.createElement('span');
+            icon.className = 'error-message-icon';
+            icon.textContent = '⚠️';
+
+            const inner = document.createElement('div');
+
+            const strong = document.createElement('strong');
+            strong.textContent = 'Unable to load transcript';
+
+            const msg = document.createElement('div');
+            msg.style.fontSize = '0.9rem';
+            msg.style.marginTop = '4px';
+            msg.textContent = errMsg;
+
+            const retryBtn = document.createElement('button');
+            retryBtn.type = 'button';
+            retryBtn.className = 'empty-state-btn';
+            retryBtn.style.marginTop = '8px';
+            retryBtn.style.fontSize = '0.85rem';
+            retryBtn.style.padding = '6px 12px';
+            retryBtn.textContent = 'Retry';
+            // Use dataset attributes so the delegated transcript click handler can retry.
+            retryBtn.setAttribute('data-view-transcript', String(callId));
+            retryBtn.setAttribute('data-view-name', String(name));
+
+            inner.appendChild(strong);
+            inner.appendChild(msg);
+            inner.appendChild(retryBtn);
+
+            wrap.appendChild(icon);
+            wrap.appendChild(inner);
+            contentEl.appendChild(wrap);
         }
 
         async function viewTranscript(callId, name) {
@@ -13079,16 +13145,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             } catch (error) {
                 console.error('Failed to load transcript', error);
                 clearTranscriptEndedByBanner();
-                contentEl.innerHTML = `
-                    <div class="error-message" role="alert">
-                        <span class="error-message-icon">⚠️</span>
-                        <div>
-                            <strong>Unable to load transcript</strong>
-                            <div style="font-size: 0.9rem; margin-top: 4px;">${error.message || 'Please try again later.'}</div>
-                            <button class="empty-state-btn" style="margin-top: 8px; font-size: 0.85rem; padding: 6px 12px;" onclick="viewTranscript('${callId}', '${name}')">Retry</button>
-                        </div>
-                    </div>
-                `;
+                setTranscriptErrorUi(contentEl, error, callId, name);
             }
         }
 
@@ -14424,6 +14481,34 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             if (wrap) followUpPaintTable(wrap);
         }
 
+        // Pure helpers used by follow-up queue optimistic mutations.
+        // Kept side-effect free so they can be unit tested.
+        function followUpBuildBatchPatchPayload(rawRows, keySet, patch, keyForRow) {
+            return {
+                patches: (rawRows || [])
+                    .filter((r) => keySet.has(keyForRow(r)) && typeof r._row === 'number')
+                    .map((r) => ({ row: r._row, patch }))
+            };
+        }
+
+        function followUpRestoreByKeySnapshots(rawRows, originalsByKey, keyForRow) {
+            return (rawRows || []).map((r) => {
+                const rk = keyForRow(r);
+                if (!originalsByKey.has(rk)) return r;
+                return originalsByKey.get(rk);
+            });
+        }
+
+        function followUpRestoreFailedRows(rawRows, originalsByRowNumber, failedRowNumbers) {
+            const failedSet = new Set((failedRowNumbers || []).filter((n) => Number.isFinite(n)));
+            return (rawRows || []).map((r) => {
+                if (typeof r?._row !== 'number') return r;
+                const rn = r._row;
+                if (!failedSet.has(rn)) return r;
+                return originalsByRowNumber.get(rn) || r;
+            });
+        }
+
         function followUpUpdateSelectionUi() {
             const el = document.getElementById('followUpSelectedCount');
             if (!el) return;
@@ -14457,11 +14542,20 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
             // Optimistic update
             const keySet = new Set(selected);
-            const rows = [];
+            const originalsByKey = new Map();
+            const originalsByRowNumber = new Map();
+
+            for (const r of followUpQueueState.rawRows || []) {
+                const rk = followUpRowKey(r);
+                if (!keySet.has(rk)) continue;
+                const snap = { ...r };
+                originalsByKey.set(rk, snap);
+                if (typeof snap._row === 'number') originalsByRowNumber.set(snap._row, snap);
+            }
+
             followUpQueueState.rawRows = followUpQueueState.rawRows.map((r) => {
                 const rk = followUpRowKey(r);
                 if (!keySet.has(rk)) return r;
-                if (typeof r._row === 'number') rows.push(r._row);
                 return {
                     ...r,
                     Status: patch.Status,
@@ -14474,11 +14568,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             if (wrapEl) followUpPaintTable(wrapEl);
 
             // Persist in one request
-            const payload = {
-                patches: followUpQueueState.rawRows
-                    .filter((r) => keySet.has(followUpRowKey(r)) && typeof r._row === 'number')
-                    .map((r) => ({ row: r._row, patch }))
-            };
+            const payload = followUpBuildBatchPatchPayload(followUpQueueState.rawRows, keySet, patch, followUpRowKey);
             fetch(`${BASE_URL}/api/follow-up-queue/${encodeURIComponent(currentClient)}/batchPatch`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -14486,10 +14576,51 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }).then(async (res) => {
                 const out = await res.json().catch(() => ({}));
                 if (!res.ok || !out?.ok) throw new Error(out?.error || `HTTP ${res.status}`);
+
+                const results = Array.isArray(out.results) ? out.results : [];
+                const failedRowNumbers = results
+                    .filter((r) => !r?.ok)
+                    .map((r) => (typeof r.row === 'number' ? r.row : parseInt(r.row, 10)))
+                    .filter((n) => Number.isFinite(n));
+
+                if (failedRowNumbers.length) {
+                    // Partial success: keep optimistic updates for successful rows,
+                    // but restore only the rows the backend said failed.
+                    followUpQueueState.rawRows = followUpRestoreFailedRows(
+                        followUpQueueState.rawRows,
+                        originalsByRowNumber,
+                        failedRowNumbers
+                    );
+                    if (wrapEl) followUpPaintTable(wrapEl);
+
+                    showToast(
+                        'Partial save',
+                        `Some rows failed to update (${failedRowNumbers.length}). Re-syncing…`,
+                        'warning',
+                        5000
+                    );
+
+                    // Converge to sheet truth so operators don't have to refresh manually.
+                    loadFollowUpQueue(currentClient, { page: followUpQueuePage, silent: false });
+                    return;
+                }
+
                 showToast('Saved', `Updated ${formatNumber(out.updated || 0)} row(s).`, 'success', 2500);
             }).catch((err) => {
                 console.warn('Bulk patch failed', err);
+
+                // Full failure: restore all optimistic mutations for this selection.
+                followUpQueueState.rawRows = followUpRestoreByKeySnapshots(
+                    followUpQueueState.rawRows,
+                    originalsByKey,
+                    followUpRowKey
+                );
+                if (wrapEl) followUpPaintTable(wrapEl);
+
                 showToast('Save failed', 'Bulk update failed. Please try again.', 'error', 3500);
+
+                // Re-sync to ensure sheet truth convergence.
+                loadFollowUpQueue(currentClient, { page: followUpQueuePage, silent: false });
             });
         }
 
@@ -15175,6 +15306,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                                     : (String(row.Disposition || '').trim());
                             const shouldStamp = nextStatusLower !== 'to call';
                             const nowIso = new Date().toISOString();
+                            const originalRow = { ...row };
 
                             // Optimistic update (Status + Called?)
                             followUpQueueState.rawRows = followUpQueueState.rawRows.map((r) => {
@@ -15206,6 +15338,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                                 if (!res.ok || !payload?.ok) throw new Error(payload?.error || `HTTP ${res.status}`);
                             }).catch((err) => {
                                 console.warn('Failed to persist follow-up status action', err);
+                                // Roll back the optimistic UI mutation back to the snapshot.
+                                followUpQueueState.rawRows = followUpQueueState.rawRows.map((r) => {
+                                    if (followUpRowKey(r) !== key) return r;
+                                    return originalRow;
+                                });
+                                followUpPaintTable(wrap);
                                 showToast('Save failed', 'Could not save status to sheet. Please try again.', 'error', 3500);
                             });
                         }
@@ -15217,6 +15355,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             else nextStatus = 'To Call';
                             const called = String(nextStatus).toLowerCase() === 'called';
                             const nowIso = new Date().toISOString();
+                            const originalRow = { ...row };
 
                             // Optimistic update
                             followUpQueueState.rawRows = followUpQueueState.rawRows.map((r) => {
@@ -15248,6 +15387,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                                 if (!res.ok || !payload?.ok) throw new Error(payload?.error || `HTTP ${res.status}`);
                             }).catch((err) => {
                                 console.warn('Failed to persist follow-up disposition action', err);
+                                // Roll back the optimistic UI mutation back to the snapshot.
+                                followUpQueueState.rawRows = followUpQueueState.rawRows.map((r) => {
+                                    if (followUpRowKey(r) !== key) return r;
+                                    return originalRow;
+                                });
+                                followUpPaintTable(wrap);
                                 showToast('Save failed', 'Could not save disposition to sheet. Please try again.', 'error', 3500);
                             });
 
@@ -16184,7 +16329,16 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             try {
                 showToast('Exporting', `Preparing ${type} export...`, 'info');
                 const response = await fetch(`${BASE_URL}/api/export/${type}?clientKey=${currentClient}`);
-                if (!response.ok) throw new Error('Export failed');
+                if (!response.ok) {
+                    const payload = await response.json().catch(() => ({}));
+                    const err =
+                        payload?.error ||
+                        payload?.message ||
+                        response.statusText ||
+                        `Export failed (${response.status})`;
+                    showToast('Export Failed', String(err), 'error');
+                    return;
+                }
 
                 const blob = await response.blob();
                 const url = window.URL.createObjectURL(blob);
@@ -16254,6 +16408,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 return;
             }
             if (liveEventSource) liveEventSource.close();
+            liveEventSourceReconnectAttempts = 0;
+            liveEventSourceReconnectDisabled = false;
             if (activityFeedLiveBadgeTimer) {
                 clearInterval(activityFeedLiveBadgeTimer);
                 activityFeedLiveBadgeTimer = null;
@@ -16270,8 +16426,38 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     console.warn('Failed to parse event payload', err);
                 }
             };
+            // Server can explicitly emit: `event: error` with a JSON payload.
+            liveEventSource.addEventListener('error', (evt) => {
+                const raw = evt?.data;
+                if (!raw) return; // connection errors are handled in `onerror` below
+                try {
+                    const payload = JSON.parse(raw);
+                    const message = payload?.message || payload?.error || 'stream_error';
+                    liveEventSourceReconnectDisabled = true;
+                    stopLiveEvents();
+                    showToast('Live activity error', String(message), 'error', 8000);
+                } catch {
+                    // If we can't parse, still stop the retry loop to avoid silent churn.
+                    liveEventSourceReconnectDisabled = true;
+                    stopLiveEvents();
+                    showToast('Live activity error', 'stream_error', 'error', 8000);
+                }
+            });
             liveEventSource.onerror = () => {
+                if (liveEventSourceReconnectDisabled) return;
                 stopLiveEvents();
+                liveEventSourceReconnectAttempts += 1;
+                const MAX_ATTEMPTS = 3;
+                if (liveEventSourceReconnectAttempts >= MAX_ATTEMPTS) {
+                    liveEventSourceReconnectDisabled = true;
+                    showToast(
+                        'Live activity unavailable',
+                        'Could not connect to the activity stream. Refresh to retry.',
+                        'error',
+                        8000
+                    );
+                    return;
+                }
                 setTimeout(() => startLiveEvents(clientKey), 10000);
             };
             activityFeedLiveBadgeTimer = setInterval(updateActivityFeedLiveBadge, 4000);
@@ -16633,12 +16819,20 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         renderCalls(callsToRender);
                         renderTomAbTestSection(dashboardData);
                         await renderCallRecordings(callsToRender);
-                        await renderCallQuality(dashboardData);
-                        await renderCallInsights(dashboardData);
-                        await renderRetryQueue(dashboardData);
-                        await renderDailySummary();
-                        await renderOpsHealth();
-                        await renderCalendarDetails(dashboardData);
+
+                        // Non-critical panels: parallelize to reduce main-thread blocking.
+                        // Also avoid repainting the follow-up/retry queue while modals are open.
+                        const modalsOpen = !!document.querySelector('.modal-backdrop.open');
+                        const tasks = [
+                            renderCallQuality(dashboardData),
+                            renderCallInsights(dashboardData),
+                            modalsOpen ? Promise.resolve() : renderRetryQueue(dashboardData),
+                            renderDailySummary(),
+                            renderOpsHealth(),
+                            renderCalendarDetails(dashboardData)
+                        ];
+                        await Promise.allSettled(tasks);
+
                         renderChart(config, dashboardData);
                         syncDashboardFreshnessUi();
                     } else if (currentClient !== DEMO_CLIENT_KEY) {

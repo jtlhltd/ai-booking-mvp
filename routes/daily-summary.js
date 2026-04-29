@@ -24,7 +24,7 @@ export function createDailySummaryRouter(deps) {
       const { clientKey } = req.params;
       res.set('Cache-Control', 'no-store');
 
-      function parseUkTimestampToMs(s) {
+      function parseUkTimestampToMs(s, tz) {
         const m = String(s || '')
           .trim()
           .match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}),\s*(\d{1,2}):(\d{2})(?::(\d{2}))?/);
@@ -35,14 +35,20 @@ export function createDailySummaryRouter(deps) {
         const h = Number(m[4]);
         const mi = Number(m[5]);
         const se = m[6] != null ? Number(m[6]) : 0;
-        const t = new Date(y, mo - 1, d, h, mi, se).getTime();
-        return Number.isFinite(t) ? t : NaN;
+        const dt = DateTime.fromObject(
+          { year: y, month: mo, day: d, hour: h, minute: mi, second: se },
+          { zone: tz }
+        );
+        return dt.isValid ? dt.toMillis() : NaN;
       }
 
-      function parseAnyTimestampToMs(s) {
-        const uk = parseUkTimestampToMs(s);
+      function parseAnyTimestampToMs(s, tz) {
+        const uk = parseUkTimestampToMs(s, tz);
         if (Number.isFinite(uk)) return uk;
-        const iso = Date.parse(String(s || '').trim());
+        const trimmed = String(s || '').trim();
+        const dt = DateTime.fromISO(trimmed, { zone: tz });
+        if (dt.isValid) return dt.toMillis();
+        const iso = Date.parse(trimmed);
         return Number.isFinite(iso) ? iso : NaN;
       }
 
@@ -56,11 +62,11 @@ export function createDailySummaryRouter(deps) {
         return 'todo';
       }
 
-      function computeFollowUpStats(rows) {
-        const now = Date.now();
-        const todayStart = new Date();
-        todayStart.setHours(0, 0, 0, 0);
-        const startMs = todayStart.getTime();
+      function computeFollowUpStats(rows, tz) {
+        const now = DateTime.now().setZone(tz);
+        const todayStart = now.startOf('day');
+        const startMs = todayStart.toMillis();
+        const nowMs = now.toMillis();
         const out = {
           total: 0,
           todo: 0,
@@ -73,13 +79,13 @@ export function createDailySummaryRouter(deps) {
           const kind = classifyRowStatus(row);
           out.total += 1;
           out[kind] += 1;
-          const createdMs = parseAnyTimestampToMs(row?.Timestamp);
-          if (Number.isFinite(createdMs) && createdMs >= startMs && createdMs <= now) {
+          const createdMs = parseAnyTimestampToMs(row?.Timestamp, tz);
+          if (Number.isFinite(createdMs) && createdMs >= startMs && createdMs <= nowMs) {
             out.today.total += 1;
           }
-          const outcomeMs = parseAnyTimestampToMs(row?.['Last Outcome At'] || row?.['Last Outcome'] || '');
+          const outcomeMs = parseAnyTimestampToMs(row?.['Last Outcome At'] || row?.['Last Outcome'] || '', tz);
           const effectiveMs = Number.isFinite(outcomeMs) ? outcomeMs : createdMs;
-          if (Number.isFinite(effectiveMs) && effectiveMs >= startMs && effectiveMs <= now) {
+          if (Number.isFinite(effectiveMs) && effectiveMs >= startMs && effectiveMs <= nowMs) {
             out.today[kind] += 1;
           }
         }
@@ -96,32 +102,32 @@ export function createDailySummaryRouter(deps) {
         return 'other';
       }
 
-      function computeDispositionBreakdown(rows) {
-        const now = Date.now();
-        const todayStart = new Date();
-        todayStart.setHours(0, 0, 0, 0);
-        const startMs = todayStart.getTime();
+      function computeDispositionBreakdown(rows, tz) {
+        const now = DateTime.now().setZone(tz);
+        const todayStart = now.startOf('day');
+        const startMs = todayStart.toMillis();
+        const nowMs = now.toMillis();
         const base = { voicemail: 0, spoke: 0, callback: 0, not_interested: 0, other: 0, none: 0 };
         const out = { total: { ...base }, today: { ...base } };
         for (const row of rows || []) {
           const disp = String(row?.Disposition || row?.['Disposition'] || '').trim();
           const k = disp ? dispositionKey(disp) : 'none';
           out.total[k] += 1;
-          const createdMs = parseAnyTimestampToMs(row?.Timestamp);
-          const outcomeMs = parseAnyTimestampToMs(row?.['Last Outcome At'] || row?.['Last Outcome'] || '');
+          const createdMs = parseAnyTimestampToMs(row?.Timestamp, tz);
+          const outcomeMs = parseAnyTimestampToMs(row?.['Last Outcome At'] || row?.['Last Outcome'] || '', tz);
           const effectiveMs = Number.isFinite(outcomeMs) ? outcomeMs : createdMs;
-          if (Number.isFinite(effectiveMs) && effectiveMs >= startMs && effectiveMs <= now) {
+          if (Number.isFinite(effectiveMs) && effectiveMs >= startMs && effectiveMs <= nowMs) {
             out.today[k] += 1;
           }
         }
         return out;
       }
 
-      function topToCallFromRows(rows, limit = 10) {
+      function topToCallFromRows(rows, limit = 10, tz) {
         const items = (rows || [])
           .map((r) => {
             const kind = classifyRowStatus(r);
-            const tsMs = parseUkTimestampToMs(r?.Timestamp);
+            const tsMs = parseUkTimestampToMs(r?.Timestamp, tz);
             const cb = String(
               r?.['Callback Window'] ||
                 r?.['Callback Window '] ||
@@ -219,6 +225,7 @@ export function createDailySummaryRouter(deps) {
       }
 
       if (isFollowUpQueueDemoClient(clientKey)) {
+        const demoTz = 'Europe/London';
         const demoRows = [
           {
             Timestamp: new Date(Date.now() - 2 * 3600000).toLocaleString('en-GB', {
@@ -239,27 +246,28 @@ export function createDailySummaryRouter(deps) {
             'Transcript Snippet': 'Not ready until Q3.'
           }
         ];
-        const fu = computeFollowUpStats(demoRows);
-        const dispositions = computeDispositionBreakdown(demoRows);
+        const fu = computeFollowUpStats(demoRows, demoTz);
+        const dispositions = computeDispositionBreakdown(demoRows, demoTz);
         return res.json({
           ok: true,
           demo: true,
           followUp: fu,
           dispositions,
           queue: { callQueuePending, callQueueDueNow, retryPending, retryDueNow },
-          topToCall: topToCallFromRows(demoRows, 8)
+          topToCall: topToCallFromRows(demoRows, 8, demoTz)
         });
       }
 
       const client = await getFullClient(clientKey);
+      const tz = pickTimezone(client);
       const spreadsheetId = resolveLogisticsSpreadsheetId(client);
       if (!spreadsheetId) {
         return res.json({
           ok: true,
           demo: false,
           configured: false,
-          followUp: computeFollowUpStats([]),
-          dispositions: computeDispositionBreakdown([]),
+          followUp: computeFollowUpStats([], tz),
+          dispositions: computeDispositionBreakdown([], tz),
           queue: { callQueuePending, callQueueDueNow, retryPending, retryDueNow },
           topToCall: []
         });
@@ -271,7 +279,6 @@ export function createDailySummaryRouter(deps) {
 
       let callQueueSchedule = null;
       try {
-        const tz = pickTimezone(client);
         if (isPostgres) {
           const { rows } = await query(
             `
@@ -368,11 +375,11 @@ export function createDailySummaryRouter(deps) {
         ok: true,
         demo: false,
         configured: true,
-        followUp: computeFollowUpStats(records),
-        dispositions: computeDispositionBreakdown(records),
+        followUp: computeFollowUpStats(records, tz),
+        dispositions: computeDispositionBreakdown(records, tz),
         queue: { callQueuePending, callQueueDueNow, retryPending, retryDueNow },
         callQueueSchedule,
-        topToCall: topToCallFromRows(records, 10)
+        topToCall: topToCallFromRows(records, 10, tz)
       });
     } catch (error) {
       console.error('[DAILY SUMMARY ERROR]', error);

@@ -51,4 +51,52 @@ describe('lib/events-sse-stream', () => {
     listeners.close?.();
     listeners.end?.();
   });
+
+  test('emits event: error with JSON payload on internal polling failure', async () => {
+    const written = [];
+    const res = {
+      set: jest.fn(),
+      flushHeaders: jest.fn(),
+      write: jest.fn((chunk) => {
+        written.push(String(chunk));
+      }),
+      end: jest.fn()
+    };
+    const listeners = {};
+    const req = {
+      params: { clientKey: 'c1' },
+      on: jest.fn((ev, fn) => {
+        listeners[ev] = fn;
+        return req;
+      })
+    };
+
+    const query = jest.fn(() => {
+      throw new Error('boom');
+    });
+
+    const deps = {
+      query,
+      getFullClient: jest.fn(async () => ({ sms: {} })),
+      activityFeedChannelLabel: () => 'AI call',
+      outcomeToFriendlyLabel: () => 'Booked',
+      isCallQueueStartFailureRow: () => false,
+      parseCallsRowMetadata: () => ({}),
+      formatCallDuration: () => '1m',
+      truncateActivityFeedText: (s) => s,
+      mapCallStatus: (s) => s,
+      mapStatusClass: () => 'info',
+      ssePollIntervalMs: 5000,
+      sseHeartbeatMs: 5000
+    };
+
+    await handleEventsSseStream(req, res, deps);
+
+    const s = written.join('');
+    expect(s).toContain('event: error');
+    expect(s).toContain(`"message":"stream_error"`);
+
+    listeners.close?.();
+    listeners.end?.();
+  });
 });
