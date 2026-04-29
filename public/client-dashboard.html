@@ -9903,7 +9903,11 @@ ${actionsRow}
 
             const pipelineH = document.getElementById('pipelineSnapshotHeading');
             if (pipelineH) {
-                pipelineH.textContent = isOutreachDashboardClient(currentClient) ? '📊 Engagement snapshot' : '📊 Pipeline snapshot';
+                const nextLabel = isOutreachDashboardClient(currentClient) ? '📊 Engagement snapshot' : '📊 Pipeline snapshot';
+                // Preserve collapse toggles injected into <h3> by initDashboardCollapsibleUi.
+                const inner = pipelineH.querySelector(':scope > .card-title-inner');
+                if (inner) inner.textContent = nextLabel;
+                else pipelineH.textContent = nextLabel;
             }
         }
         
