@@ -1,4 +1,5 @@
 import express from 'express';
+import { DateTime } from 'luxon';
 
 export function createDailySummaryRouter(deps) {
   const {
@@ -316,9 +317,7 @@ export function createDailySummaryRouter(deps) {
           SELECT
             COUNT(*) AS pending_total,
             MIN(scheduled_for) AS next_scheduled_for,
-            MAX(scheduled_for) AS last_scheduled_for,
-            SUM(CASE WHEN datetime(scheduled_for) <= datetime('now') THEN 1 ELSE 0 END) AS due_now,
-            SUM(CASE WHEN datetime(scheduled_for) > datetime('now') AND datetime(scheduled_for) <= datetime('now', '+60 minutes') THEN 1 ELSE 0 END) AS due_next_hour
+            MAX(scheduled_for) AS last_scheduled_for
           FROM call_queue
           WHERE client_key = ?
             AND call_type = 'vapi_call'
@@ -326,6 +325,29 @@ export function createDailySummaryRouter(deps) {
           `,
             [clientKey]
           );
+          const pendingRows = await query(
+            `
+          SELECT scheduled_for
+          FROM call_queue
+          WHERE client_key = ?
+            AND call_type = 'vapi_call'
+            AND status = 'pending'
+          `,
+            [clientKey]
+          );
+          const nowUtc = DateTime.utc();
+          const nowPlusHour = nowUtc.plus({ minutes: 60 });
+          let dueNow = 0;
+          let dueNextHour = 0;
+          for (const row of pendingRows.rows || []) {
+            const when = DateTime.fromJSDate(new Date(row.scheduled_for), { zone: 'utc' });
+            if (!when.isValid) continue;
+            if (when <= nowUtc) {
+              dueNow += 1;
+            } else if (when <= nowPlusHour) {
+              dueNextHour += 1;
+            }
+          }
           const r = rows?.[0];
           if (r) {
             callQueueSchedule = {
@@ -333,8 +355,8 @@ export function createDailySummaryRouter(deps) {
               pendingTotal: Number(r.pending_total) || 0,
               nextScheduledFor: r.next_scheduled_for,
               lastScheduledFor: r.last_scheduled_for,
-              dueNow: Number(r.due_now) || 0,
-              dueNextHour: Number(r.due_next_hour) || 0
+              dueNow,
+              dueNextHour
             };
           }
         }

@@ -2,6 +2,7 @@
 // Handle inbound voice calls from Twilio and route to Vapi
 
 import express from 'express';
+import { DateTime } from 'luxon';
 import { routeInboundCall, createVapiInboundCall, logInboundCall } from '../lib/inbound-call-router.js';
 import { normalizePhoneE164 } from '../lib/utils.js';
 import { recordReceptionistTelemetry } from '../lib/demo-telemetry.js';
@@ -694,11 +695,11 @@ async function processCallbackRequest({ callSid, fromPhone, toPhone }) {
 
 // Helper: Calculate preferred callback time
 function calculatePreferredCallbackTime(client) {
-  const now = new Date();
+  const now = DateTime.utc();
   const tz = client?.booking?.timezone || client?.timezone || 'Europe/London';
-  const clientTime = new Date(now.toLocaleString('en-US', { timeZone: tz }));
-  const hour = clientTime.getHours();
-  const day = clientTime.getDay(); // 0 = Sunday, 6 = Saturday
+  const clientTime = now.setZone(tz);
+  const hour = clientTime.hour;
+  const day = clientTime.weekday === 7 ? 0 : clientTime.weekday; // 0 = Sunday, 6 = Saturday
 
   const businessHours = client?.businessHours || client?.booking?.businessHours || {
     start: 9,
@@ -712,31 +713,24 @@ function calculatePreferredCallbackTime(client) {
 
   if (isWeekday && isBusinessHour) {
     // Callback in 30 minutes
-    return new Date(now.getTime() + 30 * 60 * 1000);
+    return now.plus({ minutes: 30 }).toJSDate();
   }
 
   // Otherwise, callback at next business hour start
-  let callbackTime = new Date(clientTime);
-  callbackTime.setMinutes(0);
-  callbackTime.setSeconds(0);
-  callbackTime.setMilliseconds(0);
+  let callbackTime = clientTime.set({ minute: 0, second: 0, millisecond: 0 });
 
   // If it's after business hours today, move to next day
   if (!isWeekday || hour >= businessHours.end) {
-    callbackTime.setDate(callbackTime.getDate() + 1);
+    callbackTime = callbackTime.plus({ days: 1 });
     // Find next business day
-    while (!businessHours.days.includes(callbackTime.getDay())) {
-      callbackTime.setDate(callbackTime.getDate() + 1);
+    while (!businessHours.days.includes(callbackTime.weekday === 7 ? 0 : callbackTime.weekday)) {
+      callbackTime = callbackTime.plus({ days: 1 });
     }
   }
 
   // Set to business hours start
-  callbackTime.setHours(businessHours.start);
-
-  // Convert back to server timezone
-  const serverTime = new Date(callbackTime.toLocaleString('en-US', { timeZone: 'UTC' }));
-  const offset = now.getTime() - clientTime.getTime();
-  return new Date(serverTime.getTime() + offset);
+  callbackTime = callbackTime.set({ hour: businessHours.start });
+  return callbackTime.toUTC().toJSDate();
 }
 
 // Helper: Notify client of callback request

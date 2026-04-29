@@ -7143,6 +7143,7 @@
                 <p class="card-subtitle" id="followUpQueueSubtitle">Contacts and details captured from AI call transcripts into your linked Google Sheet — use this for human follow-up dials.</p>
                 <div class="dashboard-list-toolbar follow-up-queue-toolbar">
                     <button type="button" id="followUpQueueRefresh" class="export-btn secondary">Refresh</button>
+                    <button type="button" id="followUpQueueExport" class="export-btn secondary">Export CSV</button>
                     <div class="follow-up-status-filters" style="gap:6px;">
                         <button type="button" class="export-btn secondary" id="followUpSelectAllBtn" title="Select all rows on this page">Select page</button>
                         <button type="button" class="export-btn secondary" id="followUpClearSelectionBtn" title="Clear selection">Clear</button>
@@ -7201,7 +7202,7 @@
 
                 <article class="card card-list">
                     <h3>🧾 Daily Summary</h3>
-                    <p class="card-subtitle" id="dailySummarySubtitle">Quick brief: what came in today, what’s due, and who to call next.</p>
+                    <p class="card-subtitle" id="dailySummarySubtitle">Quick brief: what came in today and what’s due.</p>
                     <div id="daily-summary" class="thin-scroll"></div>
                 </article>
 
@@ -9516,6 +9517,7 @@ ${actionsRow}
                     roi: livePayload.roi || { costs: { total: 0, perCall: 0 }, revenue: { total: 0, bookings: 0, avgDealValue: 0 }, roi: { profit: 0, multiplier: 0, percentage: 0 } },
                     activityAsOfIso: livePayload.activityAsOfIso || metrics.activityAsOfIso || null,
                     activityTimezone: livePayload.activityTimezone || metrics.activityTimezone || DASHBOARD_ACTIVITY_TZ,
+                    tenantTimezone: livePayload.tenantTimezone || livePayload.config?.timezone || metrics.tenantTimezone || null,
                     outboundAbTest: livePayload.outboundAbTest
                         ? { ...livePayload.outboundAbTest }
                         : null,
@@ -9604,6 +9606,7 @@ ${actionsRow}
                 roi: livePayload.roi ? livePayload.roi : base.roi,
                 activityAsOfIso: livePayload.activityAsOfIso ?? base.activityAsOfIso ?? null,
                 activityTimezone: livePayload.activityTimezone ?? base.activityTimezone ?? DASHBOARD_ACTIVITY_TZ,
+                tenantTimezone: livePayload.tenantTimezone ?? base.tenantTimezone ?? livePayload.config?.timezone ?? null,
                 outboundAbTest: livePayload.outboundAbTest ?? base.outboundAbTest ?? null,
                 outreachCapacity:
                     livePayload.outreachCapacity && typeof livePayload.outreachCapacity === 'object'
@@ -9693,7 +9696,8 @@ ${actionsRow}
                          config.whiteLabel?.phone)) || null;
             
             // Timezone: from timezone or booking.timezone
-            const timezone = (hasClientConfig && (config.timezone || 
+            const timezone = (hasClientConfig && (dashboardData.tenantTimezone ||
+                          config.timezone || 
                            config.booking?.timezone ||
                            config.calendar_json?.booking?.timezone)) || null;
             
@@ -10113,11 +10117,23 @@ ${actionsRow}
             const leadTotalNum = data.totalLeads != null && Number.isFinite(Number(data.totalLeads))
                 ? Number(data.totalLeads)
                 : NaN;
+            const crmDialGap =
+                Number.isFinite(leadTotalNum) && leadTotalNum > 0 && uniqDial > 0
+                    ? uniqDial - leadTotalNum
+                    : 0;
+            if (crmDialGap > 0) {
+                hintLines.push(
+                    `${formatNumber(crmDialGap)} dialed number${crmDialGap === 1 ? '' : 's'} not in current CRM snapshot`
+                );
+            }
             let leadsHint;
             if (tomOutreach) {
                 leadsHint = `One saved row per phone. Imports update existing numbers — total only rises for new phones.\nLast 24h: ${last24} new`;
                 if (Number.isFinite(leadTotalNum) && leadTotalNum > 0 && uniqDial > 0 && leadTotalNum !== uniqDial) {
                     leadsHint += `\n${formatNumber(leadTotalNum)} contacts · ${formatNumber(uniqDial)} with ≥1 dial`;
+                    if (crmDialGap > 0) {
+                        leadsHint += `\n${formatNumber(crmDialGap)} dialed number${crmDialGap === 1 ? '' : 's'} missing from current CRM export`;
+                    }
                 }
             } else {
                 leadsHint = `Last 24h: ${last24} new`;
@@ -10141,7 +10157,7 @@ ${actionsRow}
             const convHint = document.getElementById('statusHintConversion');
             if (convHint) {
                 convHint.textContent = tomOutreach
-                    ? 'Reached ÷ dialed (unique numbers). Booking-style “conversion %” is not the goal for cold outreach — use reach, connect rate, and the 7d/30d strip above the A/B console.'
+                    ? `Reached ÷ dialed (unique numbers).${crmDialGap > 0 ? ` Includes ${formatNumber(crmDialGap)} dialed number${crmDialGap === 1 ? '' : 's'} not in current CRM snapshot.` : ''} Booking-style “conversion %” is not the goal for cold outreach — use reach, connect rate, and the 7d/30d strip above the A/B console.`
                     : `Win rate: ${winRate}`;
             }
             const respN = data.metrics?.firstResponseSampleSize;
@@ -10162,6 +10178,12 @@ ${actionsRow}
             const d = new Date(iso);
             if (Number.isNaN(d.getTime())) return '';
             return d.toLocaleString('en-GB', { timeZone, dateStyle: 'medium', timeStyle: 'short' });
+        }
+
+        function getOperationalTimezone(data = null) {
+            const d = data && typeof data === 'object' ? data : (dashboardData || {});
+            const cfg = d.config || {};
+            return d.tenantTimezone || cfg.timezone || d.activityTimezone || DASHBOARD_ACTIVITY_TZ;
         }
 
         /** “5m ago” plus absolute clock for the same instant (QOL #7). */
@@ -10959,7 +10981,9 @@ ${actionsRow}
             if (!isoDate) return '—';
             const date = new Date(isoDate);
             if (Number.isNaN(date.getTime())) return '—';
+            const tz = getOperationalTimezone();
             return date.toLocaleString('en-GB', {
+                timeZone: tz,
                 weekday: 'short',
                 day: 'numeric',
                 month: 'short',
@@ -11082,7 +11106,9 @@ ${actionsRow}
             if (!iso) return '';
             const d = new Date(iso);
             if (Number.isNaN(d.getTime())) return '';
+            const tz = getOperationalTimezone();
             return d.toLocaleString('en-GB', {
+                timeZone: tz,
                 weekday: 'short',
                 day: 'numeric',
                 month: 'short',
@@ -13996,7 +14022,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             sortDir: 'desc',
             total: 0,
             offset: 0,
-            limit: 100
+            limit: 100,
+            sourceTimezone: null
         };
 
         let followUpStats = null;
@@ -14673,6 +14700,106 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
         let followUpQueueLoadGen = 0;
 
+        function followUpHydrateRowsForDashboard(rows, clientKey) {
+            const notesMap = loadFollowUpNotesMap(clientKey);
+            return (Array.isArray(rows) ? rows : []).map((r) => {
+                const copy = { ...r };
+                const rawFlag = String(copy['Called?'] || copy['Callback Needed'] || '').trim().toUpperCase();
+                const isCalled = rawFlag === 'TRUE' || rawFlag === 'YES' || rawFlag === 'CALLED';
+                copy['Called?'] = isCalled ? 'TRUE' : 'FALSE';
+                if (!copy.Status) copy.Status = isCalled ? 'Called' : 'To Call';
+                const rk = followUpRowKey(copy);
+                copy.Notes = rk ? String(notesMap[rk] || '') : '';
+                return copy;
+            });
+        }
+
+        function csvEscapeCell(value) {
+            const s = String(value ?? '');
+            const needsQuotes = /[",\r\n]/.test(s);
+            const escaped = s.replace(/"/g, '""');
+            return needsQuotes ? `"${escaped}"` : escaped;
+        }
+
+        function downloadCsv(filename, headers, rows) {
+            const headerLine = headers.map(csvEscapeCell).join(',');
+            const bodyLines = rows.map((row) => headers.map((h) => csvEscapeCell(row[h] ?? '')).join(','));
+            const csv = [headerLine, ...bodyLines].join('\r\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }
+
+        async function exportFollowUpQueueCsv(clientKey) {
+            if (!clientKey) return;
+            const btn = document.getElementById('followUpQueueExport');
+            const prev = btn ? btn.textContent : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Exporting…';
+            }
+            try {
+                const limit = 200;
+                let offset = 0;
+                let allRows = [];
+                let configured = true;
+                let sourceTimezone = '';
+                let safety = 0;
+                while (safety < 500) {
+                    safety += 1;
+                    const q = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+                    const res = await fetch(`${BASE_URL}/api/follow-up-queue/${encodeURIComponent(clientKey)}?${q}`, { cache: 'no-store' });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok || data.ok === false) {
+                        throw new Error(data?.message || data?.error || `Could not export (${res.status})`);
+                    }
+                    if (!data.configured) {
+                        configured = false;
+                        break;
+                    }
+                    if (!sourceTimezone && data.sourceTimezone) sourceTimezone = String(data.sourceTimezone);
+                    const rows = Array.isArray(data.rows) ? data.rows : [];
+                    allRows = allRows.concat(rows);
+                    const total = Number.isFinite(Number(data.total)) ? Number(data.total) : null;
+                    offset += rows.length;
+                    if (!rows.length) break;
+                    if (total != null && allRows.length >= total) break;
+                    if (rows.length < limit) break;
+                }
+                if (!configured) {
+                    showToast('Export unavailable', 'Follow-up sheet is not configured for this client.', 'warning');
+                    return;
+                }
+                if (!allRows.length) {
+                    showToast('Nothing to export', 'No follow-up rows found.', 'info');
+                    return;
+                }
+                const hydrated = followUpHydrateRowsForDashboard(allRows, clientKey);
+                if (sourceTimezone) {
+                    hydrated.forEach((r) => { r['Timestamp Timezone'] = sourceTimezone; });
+                }
+                const headers = followUpVisibleColumns(hydrated);
+                if (sourceTimezone && !headers.includes('Timestamp Timezone')) headers.push('Timestamp Timezone');
+                const day = new Date().toISOString().slice(0, 10);
+                downloadCsv(`follow-up-call-list-${clientKey}-${day}.csv`, headers, hydrated);
+                showToast('Export complete', `Downloaded ${formatNumber(hydrated.length)} follow-up rows.`, 'success');
+            } catch (error) {
+                console.error('Follow-up export failed', error);
+                showToast('Export failed', error?.message || 'Could not export follow-up rows.', 'error');
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = prev || 'Export CSV';
+                }
+            }
+        }
+
         async function loadFollowUpQueue(clientKey, { page = followUpQueuePage, silent = false } = {}) {
             const wrap = document.getElementById('follow-up-queue');
             const hint = document.getElementById('followUpQueueHint');
@@ -14742,27 +14869,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     followUpUpdatePagerUi();
                     return;
                 }
-                // Ensure Status / Called? fields present, deriving from sheet's "Callback Needed" when available
-                rows = rows.map((r) => {
-                    const copy = { ...r };
-                    const rawFlag = String(copy['Called?'] || copy['Callback Needed'] || '').trim().toUpperCase();
-                    const isCalled = rawFlag === 'TRUE' || rawFlag === 'YES' || rawFlag === 'CALLED';
-                    copy['Called?'] = isCalled ? 'TRUE' : 'FALSE';
-                    if (!copy.Status) {
-                        copy.Status = isCalled ? 'Called' : 'To Call';
-                    }
-                    return copy;
-                });
-
-                // Merge locally persisted Notes (per clientKey + followUpRowKey)
-                const notesMap = loadFollowUpNotesMap(clientKey);
-                rows = rows.map((r) => {
-                    const copy = { ...r };
-                    const rk = followUpRowKey(copy);
-                    // Always override any sheet-provided Notes/Unknown unless we have a saved local note.
-                    copy.Notes = rk ? String(notesMap[rk] || '') : '';
-                    return copy;
-                });
+                rows = followUpHydrateRowsForDashboard(rows, clientKey);
                 const colsRaw = followUpVisibleColumns(rows);
                 followUpColumnPrefs = loadFollowUpColumnPrefs(clientKey);
                 const applied = applyFollowUpColumnPrefs(colsRaw, followUpColumnPrefs);
@@ -14775,7 +14882,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     sortDir: cols.includes(priorSortKey) ? (priorSortDir || 'desc') : 'desc',
                     total: data.total != null ? data.total : rows.length,
                     offset: data.offset != null ? data.offset : offset,
-                    limit: data.limit != null ? data.limit : limit
+                    limit: data.limit != null ? data.limit : limit,
+                    sourceTimezone: data.sourceTimezone || null
                 };
                 followUpPaintTable(wrap);
                 if (hint) {
@@ -14789,6 +14897,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         `${formatNumber(totalTodo)} to call`,
                         `${formatNumber(totalCalled)} called`
                     ];
+                    if (followUpQueueState.sourceTimezone) {
+                        parts.push(`timestamps: ${followUpQueueState.sourceTimezone}`);
+                    }
                     if (data.demo) parts.push('demo');
                     hint.textContent = parts.join(' · ');
                     hint.hidden = false;
@@ -14827,6 +14938,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
         function initFollowUpQueueUi() {
             const btn = document.getElementById('followUpQueueRefresh');
+            const exportBtn = document.getElementById('followUpQueueExport');
             const colsBtn = document.getElementById('followUpColumnsBtn');
             const selectAll = document.getElementById('followUpSelectAllBtn');
             const clearSel = document.getElementById('followUpClearSelectionBtn');
@@ -14942,6 +15054,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             if (btn && !btn.dataset.bound) {
                 btn.dataset.bound = '1';
                 btn.addEventListener('click', () => loadFollowUpQueue(currentClient, { page: followUpQueuePage }));
+            }
+            if (exportBtn && !exportBtn.dataset.bound) {
+                exportBtn.dataset.bound = '1';
+                exportBtn.addEventListener('click', () => exportFollowUpQueueCsv(currentClient));
             }
             if (size && !size.dataset.bound) {
                 size.dataset.bound = '1';
@@ -15280,7 +15396,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const fu = payload.followUp || {};
                 const today = fu.today || {};
                 const q = payload.queue || {};
-                const top = Array.isArray(payload.topToCall) ? payload.topToCall : [];
                 const disp = payload.dispositions || {};
                 const dispToday = disp.today || {};
                 const dispTotal = disp.total || {};
@@ -15293,18 +15408,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     { label: 'Outbound due now', value: `${formatNumber(q.callQueueDueNow || 0)}` },
                     { label: 'Retries due now', value: `${formatNumber(q.retryDueNow || 0)}` }
                 ];
-
-                const topHtml = top.length
-                    ? `<ol style="margin:10px 0 0 18px;padding:0;display:flex;flex-direction:column;gap:8px;">${
-                        top.slice(0, 8).map((t) => {
-                            const nm = t.businessName || t.decisionMaker || 'Prospect';
-                            const cb = t.callbackWindow ? ` · <strong>Callback:</strong> ${escapeHtml(t.callbackWindow)}` : '';
-                            const snip = t.transcriptSnippet ? `<div style="color:var(--text-secondary,#5a5d72);font-size:0.82rem;margin-top:2px;">${escapeHtml(t.transcriptSnippet).slice(0, 180)}</div>` : '';
-                            const phone = t.phone ? `<span style="font-variant-numeric:tabular-nums;">${escapeHtml(t.phone)}</span>` : '—';
-                            return `<li><div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;"><strong>${escapeHtml(nm)}</strong><span>${phone}</span>${cb}</div>${snip}</li>`;
-                        }).join('')
-                    }</ol>`
-                    : `<div class="empty-state-message" style="padding:10px 0;">No “to call” rows found yet.</div>`;
 
                 const dispRow = (label, todayN, totalN) =>
                     `<div style="display:flex;justify-content:space-between;gap:10px;font-size:0.85rem;color:var(--text-secondary,#5a5d72);">
@@ -15327,10 +15430,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             ${dispRow('Voicemail', dispToday.voicemail, dispTotal.voicemail)}
                             ${dispRow('Spoke', dispToday.spoke, dispTotal.spoke)}
                         </div>
-                    </div>
-                    <div style="margin-top:10px;">
-                        <div class="meta-label" style="margin-bottom:6px;">Top to call next</div>
-                        ${topHtml}
                     </div>
                 `;
             } catch (e) {

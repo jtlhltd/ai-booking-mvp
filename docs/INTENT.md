@@ -97,6 +97,7 @@ burst.
 | ID | Statement | Constrains | Enforced by | Manual disprove |
 | --- | --- | --- | --- | --- |
 | `scheduling.no-past-scheduled-for` | `scheduleAtOptimalCallWindow` must never return a `Date` strictly earlier than the `baseline` it was given. New `vapi_call` `call_queue` rows in the last 5 minutes must not have `scheduled_for < created_at`. | `lib/optimal-call-window.js`, all enqueue call sites | canary, invariant | Call `scheduleAtOptimalCallWindow(client, null, now)`; result `>= now`. `lib/ops-invariants.js#past_scheduled_for` returns 0. |
+| `scheduling.export-timezone-contract` | CSV exports must include explicit timezone semantics: UTC timestamp columns plus tenant-local timestamp columns and tenant timezone label. Export routes must not emit ambiguous JS date-string-only timestamp columns. | `routes/core-api.js`, `routes/admin-clients.js`, dashboard export triggers | canary | Export leads/calls/appointments and verify columns include UTC + Local + Tenant Timezone; values must be parseable timestamps (not only locale-rendered browser strings). |
 
 ## Domain: webhook
 

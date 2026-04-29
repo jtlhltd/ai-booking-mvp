@@ -99,7 +99,7 @@ export function createClientsApiRouter(deps) {
       if (!key) return res.status(400).json({ ok: false, error: 'clientKey is required' });
       const tz = pickTimezone(c);
       if (typeof tz !== 'string' || !tz.length) {
-        return res.status(400).json({ ok: false, error: 'booking.timezone is required' });
+        return res.status(400).json({ ok: false, error: 'timezone is required (booking.timezone or timezone)' });
       }
       if (c.sms && !(c.sms.messagingServiceSid || c.sms.fromNumber)) {
         return res.status(400).json({

@@ -1,8 +1,20 @@
 import express from 'express';
+import { resolveTenantTimezone, toLocalTimestamp, toUtcIso } from '../lib/timezone-resolver.js';
 
 export function createCoreApiRouter(deps) {
-  const { query, getIntegrationStatuses } = deps || {};
+  const { query, getIntegrationStatuses, getFullClient } = deps || {};
   const router = express.Router();
+  const escapeCsv = (val) => `"${String(val ?? '').replace(/\"/g, '""')}"`;
+
+  async function getExportTimezone(clientKey) {
+    if (typeof getFullClient !== 'function') return resolveTenantTimezone(null);
+    try {
+      const c = await getFullClient(clientKey);
+      return resolveTenantTimezone(c);
+    } catch {
+      return resolveTenantTimezone(null);
+    }
+  }
 
   async function getLeadRecord(leadId) {
     const result = await query(
@@ -198,6 +210,7 @@ export function createCoreApiRouter(deps) {
         return res.status(400).json({ ok: false, error: 'clientKey required' });
       }
 
+      const timezone = await getExportTimezone(clientKey);
       let csv = '';
       let filename = '';
 
@@ -212,10 +225,11 @@ export function createCoreApiRouter(deps) {
           [clientKey]
         );
 
-        csv = 'Name,Phone,Service,Source,Status,Notes,Created\n';
+        csv = 'Name,Phone,Service,Source,Status,Notes,Created UTC,Created Local,Tenant Timezone\n';
         result.rows.forEach((row) => {
-          const escape = (val) => `"${String(val || '').replace(/\"/g, '""')}"`;
-          csv += `${escape(row.name)},${escape(row.phone)},${escape(row.service)},${escape(row.source)},${escape(row.status)},${escape(row.notes)},${escape(row.created_at)}\n`;
+          const createdUtc = toUtcIso(row.created_at);
+          const createdLocal = toLocalTimestamp(row.created_at, timezone);
+          csv += `${escapeCsv(row.name)},${escapeCsv(row.phone)},${escapeCsv(row.service)},${escapeCsv(row.source)},${escapeCsv(row.status)},${escapeCsv(row.notes)},${escapeCsv(createdUtc)},${escapeCsv(createdLocal)},${escapeCsv(timezone)}\n`;
         });
         filename = `leads-export-${new Date().toISOString().split('T')[0]}.csv`;
       } else if (type === 'calls') {
@@ -230,10 +244,11 @@ export function createCoreApiRouter(deps) {
           [clientKey]
         );
 
-        csv = 'Name,Phone,Status,Outcome,Duration (s),Created\n';
+        csv = 'Name,Phone,Status,Outcome,Duration (s),Created UTC,Created Local,Tenant Timezone\n';
         result.rows.forEach((row) => {
-          const escape = (val) => `"${String(val || '').replace(/\"/g, '""')}"`;
-          csv += `${escape(row.name)},${escape(row.lead_phone)},${escape(row.status)},${escape(row.outcome)},${escape(row.duration)},${escape(row.created_at)}\n`;
+          const createdUtc = toUtcIso(row.created_at);
+          const createdLocal = toLocalTimestamp(row.created_at, timezone);
+          csv += `${escapeCsv(row.name)},${escapeCsv(row.lead_phone)},${escapeCsv(row.status)},${escapeCsv(row.outcome)},${escapeCsv(row.duration)},${escapeCsv(createdUtc)},${escapeCsv(createdLocal)},${escapeCsv(timezone)}\n`;
         });
         filename = `calls-export-${new Date().toISOString().split('T')[0]}.csv`;
       } else if (type === 'appointments') {
@@ -248,10 +263,13 @@ export function createCoreApiRouter(deps) {
           [clientKey]
         );
 
-        csv = 'Name,Start,End,Status,Service\n';
+        csv = 'Name,Start UTC,Start Local,End UTC,End Local,Status,Service,Tenant Timezone\n';
         result.rows.forEach((row) => {
-          const escape = (val) => `"${String(val || '').replace(/\"/g, '""')}"`;
-          csv += `${escape(row.name)},${escape(row.start_iso)},${escape(row.end_iso)},${escape(row.status)},${escape(row.service)}\n`;
+          const startUtc = toUtcIso(row.start_iso);
+          const startLocal = toLocalTimestamp(row.start_iso, timezone);
+          const endUtc = toUtcIso(row.end_iso);
+          const endLocal = toLocalTimestamp(row.end_iso, timezone);
+          csv += `${escapeCsv(row.name)},${escapeCsv(startUtc)},${escapeCsv(startLocal)},${escapeCsv(endUtc)},${escapeCsv(endLocal)},${escapeCsv(row.status)},${escapeCsv(row.service)},${escapeCsv(timezone)}\n`;
         });
         filename = `appointments-export-${new Date().toISOString().split('T')[0]}.csv`;
       } else {

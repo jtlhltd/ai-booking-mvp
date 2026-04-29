@@ -2031,9 +2031,10 @@ export async function handleDemoDashboard(req, res, deps) {
       config: {
         phone: client?.phone || client?.whiteLabel?.phone || client?.numbers?.primary || null,
         businessHours: client?.businessHours || client?.whiteLabel?.businessHours || client?.booking?.businessHours || null,
-        timezone: client?.timezone || client?.booking?.timezone || null,
+        timezone: client?.booking?.timezone || client?.timezone || null,
         industry: client?.industry || client?.whiteLabel?.industry || null
       },
+      tenantTimezone: tenantTz,
       activityAsOfIso: activityAsOfLondon.toISO(),
       activityTimezone: activityTzLabel,
       outreachCapacity: {

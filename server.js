@@ -33,6 +33,7 @@ import { performanceMiddleware, getPerformanceMonitor } from './lib/performance-
 import { cacheMiddleware, getCache } from './lib/cache.js';
 import { sqlHoursAgo as sqlHoursAgoFn, sqlDaysAgo as sqlDaysAgoFn } from './lib/sql-relative-interval.js';
 import { phoneMatchKey, pgQueueLeadPhoneKeyExpr } from './lib/lead-phone-key.js';
+import { resolveTenantTimezone } from './lib/timezone-resolver.js';
 import { handleCalendarCheckBook } from './lib/calendar-check-book.js';
 import { handleCalendarBookSlot } from './lib/calendar-book-slot.js';
 import { handleCalendarFindSlots } from './lib/calendar-find-slots.js';
@@ -632,6 +633,7 @@ app.use(
   '/api',
   createCoreApiRouter({
     query,
+    getFullClient,
     getIntegrationStatuses: (clientKey) => getIntegrationStatusesForClient(clientKey, { query })
   })
 );
@@ -3423,7 +3425,7 @@ async function getClientFromHeader(req) {
 }
 // Single source of truth for tenant timezone on the server.
 // Use this everywhere instead of process.env.TZ / TIMEZONE directly.
-function pickTimezone(client) { return client?.booking?.timezone || client?.timezone || TIMEZONE; }
+function pickTimezone(client) { return resolveTenantTimezone(client, TIMEZONE); }
 function pickCalendarId(client) { return client?.calendarId || GOOGLE_CALENDAR_ID; }
 function smsConfig(client) {
   const messagingServiceSid = client?.sms?.messagingServiceSid || TWILIO_MESSAGING_SERVICE_SID || null;

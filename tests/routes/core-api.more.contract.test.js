@@ -292,7 +292,7 @@ describe('routes/core-api.js additional contracts (happy + failure)', () => {
       mounts: [{ path: '/', router: () => createCoreApiRouter({ query, getIntegrationStatuses: async () => ({}) }) }]
     });
     const res = await request(app).get('/export/appointments').query({ clientKey: 'acme' }).expect(200);
-    expect(res.text).toMatch(/^Name,Start,End,Status,Service/);
+    expect(res.text).toMatch(/^Name,Start UTC,Start Local,End UTC,End Local,Status,Service,Tenant Timezone/);
     expect(res.headers['content-disposition']).toMatch(/appointments-export-/);
   });
 

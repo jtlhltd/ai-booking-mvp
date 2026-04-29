@@ -35,7 +35,7 @@ describe('routes/clients-api.js validation contracts', () => {
     expect(res.body).toEqual({ ok: false, error: 'clientKey is required' });
   });
 
-  test('POST /api/clients rejects missing booking.timezone', async () => {
+  test('POST /api/clients rejects missing timezone inputs', async () => {
     const listFullClients = jest.fn(async () => []);
     const getFullClient = jest.fn(async () => null);
     const upsertFullClient = jest.fn(async () => ({}));
@@ -57,7 +57,7 @@ describe('routes/clients-api.js validation contracts', () => {
       .post('/api/clients')
       .send({ clientKey: 'c1', booking: {} })
       .expect(400);
-    expect(res.body).toEqual({ ok: false, error: 'booking.timezone is required' });
+    expect(res.body).toEqual({ ok: false, error: 'timezone is required (booking.timezone or timezone)' });
   });
 
   test('POST /api/clients rejects sms block without fromNumber/messagingServiceSid', async () => {

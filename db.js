@@ -11,6 +11,7 @@ import { getCallAnalyticsEnvOverrideIso } from './lib/call-analytics-cutoff.js';
 import { activeRowsMatchOutboundAbStopSlice } from './lib/outbound-ab-stop-slice.js';
 import { phoneMatchKey, pgQueueLeadPhoneKeyExpr, outboundDialClaimKeyFromRaw } from './lib/lead-phone-key.js';
 import { normalizePhoneE164 } from './lib/utils.js';
+import { resolveTenantTimezone } from './lib/timezone-resolver.js';
 import { createPostgresPoolAndLimiter, testPostgresPoolConnection } from './db/connection.js';
 import { createQueryRunner } from './db/query.js';
 import * as callQueueReads from './db/call-queue-reads.js';
@@ -1692,10 +1693,19 @@ export async function upsertFullClient(c) {
   if (c.vapiAssistantId) vapi.assistantId = c.vapiAssistantId;
   if (c.vapiPhoneNumberId) vapi.phoneNumberId = c.vapiPhoneNumberId;
   const vapi_json = Object.keys(vapi).length ? JSON.stringify(vapi) : null;
+  const resolvedTimezone = resolveTenantTimezone(c);
+  const nextBooking = {
+    ...(c.booking && typeof c.booking === 'object' ? c.booking : {}),
+    defaultDurationMin:
+      c?.booking?.defaultDurationMin != null
+        ? c.booking.defaultDurationMin
+        : (c.bookingDefaultDurationMin || 30),
+    timezone: resolvedTimezone
+  };
   const calendar = {
     calendarId: c.calendarId || c.gcalCalendarId || null,
     services: Array.isArray(c.services) ? c.services.reduce((acc, s) => { acc[s.id] = s; return acc; }, {}) : (c.serviceMap || {}),
-    booking: c.booking || { defaultDurationMin: c.bookingDefaultDurationMin || 30, timezone: c.timezone || c.booking?.timezone }
+    booking: nextBooking
   };
   const calendar_json = JSON.stringify(calendar);
   const sms_templates_json = c.smsTemplates ? JSON.stringify(c.smsTemplates) : null;
@@ -1727,7 +1737,7 @@ export async function upsertFullClient(c) {
   const white_label_config = Object.keys(whiteLabel).length > 0 ? JSON.stringify(whiteLabel) : null;
 
   const args = [
-    c.clientKey, c.displayName || c.clientKey, c.booking?.timezone || c.timezone || null, c.locale || 'en-GB',
+    c.clientKey, c.displayName || c.clientKey, resolvedTimezone || null, c.locale || 'en-GB',
     numbers_json, twilio_json, vapi_json, calendar_json, sms_templates_json, white_label_config
   ];
 

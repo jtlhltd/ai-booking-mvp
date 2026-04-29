@@ -13,6 +13,7 @@ import {
   getCallsByTenant
 } from '../db.js';
 import { getClientsData, getCallsData } from '../lib/admin-hub-data.js';
+import { resolveTenantTimezone, toLocalTimestamp, toUtcIso } from '../lib/timezone-resolver.js';
 
 function convertToCSV(data) {
   if (!data.length) return '';
@@ -23,7 +24,7 @@ function convertToCSV(data) {
   for (const row of data) {
     const values = headers.map((header) => {
       const value = row[header];
-      return typeof value === 'string' && value.includes(',') ? `"${value}"` : value;
+      return `"${String(value ?? '').replace(/"/g, '""')}"`;
     });
     csvRows.push(values.join(','));
   }
@@ -351,17 +352,37 @@ export function createAdminClientsRouter({ broadcast }) {
 
         case 'calls':
           data = await getCallsData();
+          data = data.map((row) => {
+            const tz = resolveTenantTimezone(row);
+            const utc = toUtcIso(row.timestamp || row.created_at || '');
+            return {
+              ...row,
+              timestamp_utc: utc || '',
+              timestamp_local: utc ? toLocalTimestamp(utc, tz) : '',
+              tenant_timezone: tz
+            };
+          });
           filename = `calls-export-${new Date().toISOString().split('T')[0]}`;
           break;
 
         case 'leads': {
           const leads = await query(`
-          SELECT l.*, t.display_name as client_name 
+          SELECT l.*, t.display_name as client_name,
+                 COALESCE((t.calendar_json->'booking'->>'timezone'), t.timezone, 'Europe/London') AS tenant_timezone
           FROM leads l 
           JOIN tenants t ON l.client_key = t.client_key 
           ORDER BY l.created_at DESC
         `);
-          data = leads.rows || [];
+          data = (leads.rows || []).map((row) => {
+            const tz = resolveTenantTimezone({ timezone: row.tenant_timezone });
+            const utc = toUtcIso(row.created_at);
+            return {
+              ...row,
+              created_at_utc: utc || '',
+              created_at_local: utc ? toLocalTimestamp(utc, tz) : '',
+              tenant_timezone: tz
+            };
+          });
           filename = `leads-export-${new Date().toISOString().split('T')[0]}`;
           break;
         }
