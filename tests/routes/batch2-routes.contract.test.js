@@ -691,7 +691,41 @@ describe('Batch2: next 25 routes (happy + failure)', () => {
   });
 
   describe('routes/clients-api.js', () => {
-    test('happy: GET /api/clients returns ok true', async () => {
+    beforeEach(() => {
+      jest.resetModules();
+      jest.unstable_mockModule('../../middleware/security.js', () => ({
+        authenticateApiKey: (req, res, next) => {
+          const k = req.get('X-API-Key');
+          if (!k) return res.status(401).json({ ok: false, error: 'unauthorized' });
+          if (k === 'k1') {
+            req.clientKey = 'c1';
+            req.apiKey = { permissions: [] };
+            return next();
+          }
+          if (k === 'k2') {
+            req.clientKey = 'c2';
+            req.apiKey = { permissions: [] };
+            return next();
+          }
+          if (k === 'admin') {
+            req.clientKey = 'admin';
+            req.apiKey = { permissions: ['*'] };
+            return next();
+          }
+          return res.status(401).json({ ok: false, error: 'unauthorized' });
+        },
+        requireTenantAccess: (req, res, next) => {
+          const requested = req.params?.tenantKey || req.params?.clientKey || req.params?.key || req.query?.clientKey || req.body?.clientKey;
+          if (!requested) return res.status(400).json({ ok: false, error: 'tenant_key_required' });
+          if (requested !== req.clientKey && !(Array.isArray(req.apiKey?.permissions) && req.apiKey.permissions.includes('*'))) {
+            return res.status(403).json({ ok: false, error: 'forbidden' });
+          }
+          next();
+        }
+      }));
+    });
+
+    test('failure: GET /api/clients returns 401 without api key', async () => {
       const { createClientsApiRouter } = await import('../../routes/clients-api.js');
       const app = createContractApp({
         mounts: [
@@ -700,7 +734,7 @@ describe('Batch2: next 25 routes (happy + failure)', () => {
             router: () =>
               createClientsApiRouter({
                 listFullClients: async () => [{ clientKey: 'c1' }],
-                getFullClient: async () => null,
+                getFullClient: async () => ({ clientKey: 'c1' }),
                 upsertFullClient: async () => ({}),
                 deleteClient: async () => ({ changes: 1 }),
                 pickTimezone: () => 'Europe/London',
@@ -709,11 +743,53 @@ describe('Batch2: next 25 routes (happy + failure)', () => {
           }
         ]
       });
-      const res = await request(app).get('/api/clients').expect(200);
+      await request(app).get('/api/clients').expect(401);
+    });
+
+    test('happy: GET /api/clients returns ok true (self-only for non-admin)', async () => {
+      const { createClientsApiRouter } = await import('../../routes/clients-api.js');
+      const app = createContractApp({
+        mounts: [
+          {
+            path: '/api/clients',
+            router: () =>
+              createClientsApiRouter({
+                listFullClients: async () => [{ clientKey: 'c1' }],
+                getFullClient: async (k) => (k === 'c1' ? { clientKey: 'c1' } : null),
+                upsertFullClient: async () => ({}),
+                deleteClient: async () => ({ changes: 1 }),
+                pickTimezone: () => 'Europe/London',
+                isDashboardSelfServiceClient: () => false
+              })
+          }
+        ]
+      });
+      const res = await request(app).get('/api/clients').set('X-API-Key', 'k1').expect(200);
       expect(res.body).toEqual(expect.objectContaining({ ok: true, count: 1 }));
     });
 
-    test('failure: GET /api/clients/:key returns 404 when missing', async () => {
+    test('failure: GET /api/clients/:key returns 403 on tenant mismatch', async () => {
+      const { createClientsApiRouter } = await import('../../routes/clients-api.js');
+      const app = createContractApp({
+        mounts: [
+          {
+            path: '/api/clients',
+            router: () =>
+              createClientsApiRouter({
+                listFullClients: async () => [],
+                getFullClient: async () => ({ clientKey: 'c2' }),
+                upsertFullClient: async () => ({}),
+                deleteClient: async () => ({ changes: 0 }),
+                pickTimezone: () => 'Europe/London',
+                isDashboardSelfServiceClient: () => false
+              })
+          }
+        ]
+      });
+      await request(app).get('/api/clients/c2').set('X-API-Key', 'k1').expect(403);
+    });
+
+    test('failure: GET /api/clients/:key returns 404 when missing (authorized tenant)', async () => {
       const { createClientsApiRouter } = await import('../../routes/clients-api.js');
       const app = createContractApp({
         mounts: [
@@ -731,7 +807,7 @@ describe('Batch2: next 25 routes (happy + failure)', () => {
           }
         ]
       });
-      await request(app).get('/api/clients/missing').expect(404);
+      await request(app).get('/api/clients/c1').set('X-API-Key', 'k1').expect(404);
     });
   });
 

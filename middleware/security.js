@@ -204,7 +204,12 @@ export function requirePermission(permission) {
 // Tenant isolation middleware
 export function requireTenantAccess(req, res, next) {
   try {
-    const requestedTenant = req.params.tenantKey || req.body.clientKey;
+    const requestedTenant =
+      req.params.tenantKey ||
+      req.params.clientKey ||
+      req.params.key ||
+      req.query?.clientKey ||
+      req.body?.clientKey;
     const userTenant = req.clientKey;
     
     if (!requestedTenant) {
@@ -218,8 +223,7 @@ export function requireTenantAccess(req, res, next) {
       return res.status(403).json({ 
         error: 'Access denied to tenant',
         code: 'TENANT_ACCESS_DENIED',
-        requested: requestedTenant,
-        authorized: userTenant
+        requested: requestedTenant
       });
     }
     

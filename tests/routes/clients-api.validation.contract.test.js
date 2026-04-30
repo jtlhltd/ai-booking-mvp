@@ -8,6 +8,15 @@ beforeEach(() => {
 });
 
 function makeRouter() {
+  jest.unstable_mockModule('../../middleware/security.js', () => ({
+    authenticateApiKey: (req, _res, next) => {
+      req.clientKey = 'c1';
+      req.apiKey = { permissions: ['*'] };
+      next();
+    },
+    requireTenantAccess: (_req, _res, next) => next()
+  }));
+
   const listFullClients = jest.fn(async () => []);
   const getFullClient = jest.fn(async () => null);
   const upsertFullClient = jest.fn(async () => ({}));
