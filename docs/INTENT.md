@@ -72,6 +72,7 @@ must always 403, never silently 200.
 | `tenant.no-internal-key-leak` | The internal tenant key `d2d-xpress-tom` (and any other internal client_key) MUST NOT appear in Vapi payload `metadata`, transcripts, customer-facing copy, or response bodies. Use `displayName` instead. | `routes/**`, `lib/instant-calling.js`, `lib/follow-up-processor.js`, prompt builders | policy (allow-listed: `db.js`, `tests/`, `scripts/`, `docs/`), canary | `assertNoTenantKeyLeak(res, 'd2d-xpress-tom')` on every customer-facing response. |
 | `tenant.cross-tenant-isolation` | Authenticated requests with a `clientKey` the caller does not own must return 403, never silent 200. | `routes/**` admin/client surfaces | canary (uses `assertTenantIsolation`) | Authenticate as tenant A, request tenant B's resources; response must be 401/403. |
 | `tenant.auth-required-on-admin` | Admin/client endpoints must return 401 when `X-API-Key` is missing or invalid. | `routes/admin-*.js`, `routes/client-*.js` | canary (uses `assertAuthRequired`) | Send a request without `X-API-Key`; response must be 401 with a JSON error envelope. |
+| `tools.auth-required` | Tool endpoints must require either API-key auth or provider signature verification. They must not accept unauthenticated requests and must never write to a fallback/default tenant. | `routes/tools-mount.js` | policy, canary | Send a tool request without API key or valid signature; it must 401/403. Send with an API key for tenant A and `tenantKey=B`; it must 403. |
 
 ## Domain: billing
 

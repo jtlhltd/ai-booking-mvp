@@ -1,9 +1,9 @@
 import { describe, test, expect, jest, beforeAll, afterAll, beforeEach } from '@jest/globals';
 import express from 'express';
 import request from 'supertest';
-import { createToolsRouter } from '../../routes/tools-mount.js';
 
-function makeApp(deps) {
+async function makeApp(deps) {
+  const { createToolsRouter } = await import('../../routes/tools-mount.js');
   const app = express();
   app.use(express.json());
   app.use(createToolsRouter(deps));
@@ -19,6 +19,29 @@ const SHEET_TENANT = { vapi_json: { logisticsSheetId: SHEET_ID } };
 
 describe('routes/tools-mount /tools/access_google_sheet', () => {
   let consoleErrSpy;
+  beforeEach(() => {
+    jest.resetModules();
+    jest.unstable_mockModule('../../middleware/security.js', () => ({
+      authenticateApiKey: (req, res, next) => {
+        const k = req.get('X-API-Key');
+        if (!k) return res.status(401).json({ error: 'API key required', code: 'MISSING_API_KEY' });
+        if (k === 'k1') {
+          req.clientKey = 't1';
+          req.apiKey = { permissions: [] };
+          return next();
+        }
+        if (k === 'admin') {
+          req.clientKey = 'admin';
+          req.apiKey = { permissions: ['*'] };
+          return next();
+        }
+        return res.status(401).json({ error: 'Invalid API key', code: 'INVALID_API_KEY' });
+      }
+    }));
+    jest.unstable_mockModule('../../middleware/vapi-webhook-verification.js', () => ({
+      verifyVapiSignature: (_req, res, _next) => res.status(401).json({ error: 'signature_required' })
+    }));
+  });
   beforeAll(() => {
     consoleErrSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
   });
@@ -26,8 +49,8 @@ describe('routes/tools-mount /tools/access_google_sheet', () => {
     consoleErrSpy.mockRestore();
   });
 
-  test('400 when action missing in direct format', async () => {
-    const app = makeApp({
+  test('401 when missing api key and signature', async () => {
+    const app = await makeApp({
       store: { getFullClient: async () => null },
       sheets: { ensureLogisticsHeader: async () => {}, appendLogistics: async () => {}, readSheet: async () => [] },
       sendOperatorAlert: async () => {},
@@ -35,14 +58,39 @@ describe('routes/tools-mount /tools/access_google_sheet', () => {
     });
 
     const res = await request(app).post('/tools/access_google_sheet').send({});
+    expect(res.status).toBe(401);
+  });
+
+  test('400 when action missing (authorized)', async () => {
+    const app = await makeApp({
+      store: { getFullClient: async () => null },
+      sheets: { ensureLogisticsHeader: async () => {}, appendLogistics: async () => {}, readSheet: async () => [] },
+      sendOperatorAlert: async () => {},
+      messagingService: { sendEmail: async () => {} }
+    });
+
+    const res = await request(app).post('/tools/access_google_sheet').set('X-API-Key', 'k1').send({ tenantKey: 't1' });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('Action is required');
   });
 
+  test('400 when tenantKey missing (authorized)', async () => {
+    const app = await makeApp({
+      store: { getFullClient: async () => null },
+      sheets: { ensureLogisticsHeader: async () => {}, appendLogistics: async () => {}, readSheet: async () => [] },
+      sendOperatorAlert: async () => {},
+      messagingService: { sendEmail: async () => {} }
+    });
+
+    const res = await request(app).post('/tools/access_google_sheet').set('X-API-Key', 'k1').send({ action: 'read' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('tenantKey is required');
+  });
+
   test('400 + operator alert when sheet ID not configured', async () => {
     const sendOperatorAlert = jest.fn(async () => {});
-    const app = makeApp({
-      store: { getFullClient: async () => null },
+    const app = await makeApp({
+      store: { getFullClient: async () => ({}) },
       sheets: { ensureLogisticsHeader: async () => {}, appendLogistics: async () => {}, readSheet: async () => [] },
       sendOperatorAlert,
       messagingService: { sendEmail: async () => {} }
@@ -53,13 +101,14 @@ describe('routes/tools-mount /tools/access_google_sheet', () => {
     try {
       const res = await request(app)
         .post('/tools/access_google_sheet')
-        .send({ action: 'append', data: { name: 'x' }, tenantKey: 'no-config' });
+        .set('X-API-Key', 'admin')
+        .send({ action: 'append', data: { name: 'x' }, tenantKey: 't1' });
       expect(res.status).toBe(400);
       expect(res.body.error).toBe('Google Sheet ID not configured');
       expect(sendOperatorAlert).toHaveBeenCalledWith(
         expect.objectContaining({
           subject: expect.stringMatching(/Google Sheet not configured/),
-          dedupeKey: expect.stringContaining('sheet-missing:no-config')
+          dedupeKey: expect.stringContaining('sheet-missing:t1')
         })
       );
     } finally {
@@ -70,7 +119,7 @@ describe('routes/tools-mount /tools/access_google_sheet', () => {
   test('append happy: direct format calls ensureHeader + appendLogistics with timestamp', async () => {
     const ensureLogisticsHeader = jest.fn(async () => {});
     const appendLogistics = jest.fn(async () => {});
-    const app = makeApp({
+    const app = await makeApp({
       store: { getFullClient: async () => SHEET_TENANT },
       sheets: { ensureLogisticsHeader, appendLogistics, readSheet: async () => [] },
       sendOperatorAlert: async () => {},
@@ -79,6 +128,7 @@ describe('routes/tools-mount /tools/access_google_sheet', () => {
 
     const res = await request(app)
       .post('/tools/access_google_sheet')
+      .set('X-API-Key', 'k1')
       .send({ action: 'append', data: { name: 'Tom Co', phone: '+44...' }, tenantKey: 't1' });
 
     expect(res.status).toBe(200);
@@ -97,7 +147,7 @@ describe('routes/tools-mount /tools/access_google_sheet', () => {
 
   test('append via VAPI message format: extracts toolCallId, parses string args, returns VAPI envelope', async () => {
     const appendLogistics = jest.fn(async () => {});
-    const app = makeApp({
+    const app = await makeApp({
       store: { getFullClient: async () => SHEET_TENANT },
       sheets: { ensureLogisticsHeader: async () => {}, appendLogistics, readSheet: async () => [] },
       sendOperatorAlert: async () => {},
@@ -118,7 +168,7 @@ describe('routes/tools-mount /tools/access_google_sheet', () => {
       }
     };
 
-    const res = await request(app).post('/tools/access_google_sheet').send(body);
+    const res = await request(app).post('/tools/access_google_sheet').set('X-API-Key', 'k1').send(body);
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
       results: [
@@ -135,7 +185,7 @@ describe('routes/tools-mount /tools/access_google_sheet', () => {
 
   test('append via VAPI message format with object arguments (not stringified)', async () => {
     const appendLogistics = jest.fn(async () => {});
-    const app = makeApp({
+    const app = await makeApp({
       store: { getFullClient: async () => SHEET_TENANT },
       sheets: { ensureLogisticsHeader: async () => {}, appendLogistics, readSheet: async () => [] },
       sendOperatorAlert: async () => {},
@@ -153,15 +203,13 @@ describe('routes/tools-mount /tools/access_google_sheet', () => {
       }
     };
 
-    const res = await request(app).post('/tools/access_google_sheet').send(body);
-    expect(res.status).toBe(200);
-    expect(res.body.results?.[0]?.toolCallId).toBe('tc_222');
-    expect(appendLogistics).toHaveBeenCalled();
+    const res = await request(app).post('/tools/access_google_sheet').set('X-API-Key', 'k1').send(body);
+    expect(res.status).toBe(403);
   });
 
   test('append via VAPI direct function format with stringified arguments', async () => {
     const appendLogistics = jest.fn(async () => {});
-    const app = makeApp({
+    const app = await makeApp({
       store: { getFullClient: async () => SHEET_TENANT },
       sheets: { ensureLogisticsHeader: async () => {}, appendLogistics, readSheet: async () => [] },
       sendOperatorAlert: async () => {},
@@ -176,7 +224,7 @@ describe('routes/tools-mount /tools/access_google_sheet', () => {
       }
     };
 
-    const res = await request(app).post('/tools/access_google_sheet').send(body);
+    const res = await request(app).post('/tools/access_google_sheet').set('X-API-Key', 'k1').send(body);
     expect(res.status).toBe(200);
     expect(res.body.results?.[0]?.toolCallId).toBe('tc_333');
     expect(appendLogistics).toHaveBeenCalledWith(SHEET_ID, expect.objectContaining({
@@ -187,7 +235,7 @@ describe('routes/tools-mount /tools/access_google_sheet', () => {
 
   test('read action returns sheet rows (direct format)', async () => {
     const rows = [['a', 'b'], ['c', 'd']];
-    const app = makeApp({
+    const app = await makeApp({
       store: { getFullClient: async () => SHEET_TENANT },
       sheets: { ensureLogisticsHeader: async () => {}, appendLogistics: async () => {}, readSheet: async () => rows },
       sendOperatorAlert: async () => {},
@@ -196,6 +244,7 @@ describe('routes/tools-mount /tools/access_google_sheet', () => {
 
     const res = await request(app)
       .post('/tools/access_google_sheet')
+      .set('X-API-Key', 'k1')
       .send({ action: 'read', tenantKey: 't1' });
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ success: true, data: rows, action: 'read' });
@@ -203,7 +252,7 @@ describe('routes/tools-mount /tools/access_google_sheet', () => {
 
   test('read action wraps response in VAPI envelope when toolCallList present', async () => {
     const rows = [['x']];
-    const app = makeApp({
+    const app = await makeApp({
       store: { getFullClient: async () => SHEET_TENANT },
       sheets: { ensureLogisticsHeader: async () => {}, appendLogistics: async () => {}, readSheet: async () => rows },
       sendOperatorAlert: async () => {},
@@ -212,17 +261,18 @@ describe('routes/tools-mount /tools/access_google_sheet', () => {
 
     const body = {
       message: {
+        call: { assistantId: 't1' },
         toolCallList: [{ id: 'tc_read', function: { arguments: { action: 'read' } } }]
       }
     };
-    const res = await request(app).post('/tools/access_google_sheet').send(body);
+    const res = await request(app).post('/tools/access_google_sheet').set('X-API-Key', 'k1').send(body);
     expect(res.status).toBe(200);
     expect(res.body.results?.[0]?.toolCallId).toBe('tc_read');
     expect(JSON.parse(res.body.results[0].result)).toEqual(expect.objectContaining({ action: 'read' }));
   });
 
   test('400 when action present but neither append-with-data nor read', async () => {
-    const app = makeApp({
+    const app = await makeApp({
       store: { getFullClient: async () => SHEET_TENANT },
       sheets: { ensureLogisticsHeader: async () => {}, appendLogistics: async () => {}, readSheet: async () => [] },
       sendOperatorAlert: async () => {},
@@ -230,6 +280,7 @@ describe('routes/tools-mount /tools/access_google_sheet', () => {
     });
     const res = await request(app)
       .post('/tools/access_google_sheet')
+      .set('X-API-Key', 'k1')
       .send({ action: 'delete', tenantKey: 't1' });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('Invalid action or missing data');
@@ -237,7 +288,7 @@ describe('routes/tools-mount /tools/access_google_sheet', () => {
 
   test('500 + operator alert when append throws', async () => {
     const sendOperatorAlert = jest.fn(async () => {});
-    const app = makeApp({
+    const app = await makeApp({
       store: { getFullClient: async () => SHEET_TENANT },
       sheets: {
         ensureLogisticsHeader: async () => {},
@@ -250,6 +301,7 @@ describe('routes/tools-mount /tools/access_google_sheet', () => {
 
     const res = await request(app)
       .post('/tools/access_google_sheet')
+      .set('X-API-Key', 'k1')
       .send({ action: 'append', data: { x: 1 }, tenantKey: 't1' });
     expect(res.status).toBe(500);
     expect(res.body).toEqual(expect.objectContaining({ error: 'Failed to access Google Sheet' }));
@@ -265,7 +317,7 @@ describe('routes/tools-mount /tools/access_google_sheet', () => {
     const prev = process.env.LOGISTICS_SHEET_ID;
     process.env.LOGISTICS_SHEET_ID = 'env_sheet';
     try {
-      const app = makeApp({
+      const app = await makeApp({
         store: { getFullClient: async () => ({}) },
         sheets: { ensureLogisticsHeader, appendLogistics, readSheet: async () => [] },
         sendOperatorAlert: async () => {},
@@ -273,6 +325,7 @@ describe('routes/tools-mount /tools/access_google_sheet', () => {
       });
       const res = await request(app)
         .post('/tools/access_google_sheet')
+        .set('X-API-Key', 'k1')
         .send({ action: 'append', data: { foo: 1 }, tenantKey: 't1' });
       expect(res.status).toBe(200);
       expect(ensureLogisticsHeader).toHaveBeenCalledWith('env_sheet');
@@ -286,6 +339,29 @@ describe('routes/tools-mount /tools/access_google_sheet', () => {
 
 describe('routes/tools-mount /tools/schedule_callback', () => {
   let consoleErrSpy;
+  beforeEach(() => {
+    jest.resetModules();
+    jest.unstable_mockModule('../../middleware/security.js', () => ({
+      authenticateApiKey: (req, res, next) => {
+        const k = req.get('X-API-Key');
+        if (!k) return res.status(401).json({ error: 'API key required', code: 'MISSING_API_KEY' });
+        if (k === 'k1') {
+          req.clientKey = 't1';
+          req.apiKey = { permissions: [] };
+          return next();
+        }
+        if (k === 'admin') {
+          req.clientKey = 'admin';
+          req.apiKey = { permissions: ['*'] };
+          return next();
+        }
+        return res.status(401).json({ error: 'Invalid API key', code: 'INVALID_API_KEY' });
+      }
+    }));
+    jest.unstable_mockModule('../../middleware/vapi-webhook-verification.js', () => ({
+      verifyVapiSignature: (_req, res, _next) => res.status(401).json({ error: 'signature_required' })
+    }));
+  });
   beforeAll(() => { consoleErrSpy = jest.spyOn(console, 'error').mockImplementation(() => {}); });
   afterAll(() => { consoleErrSpy.mockRestore(); });
 
@@ -300,28 +376,58 @@ describe('routes/tools-mount /tools/schedule_callback', () => {
   };
 
   test('400 when required fields missing', async () => {
-    const app = makeApp({
+    const app = await makeApp({
       store: { getFullClient: async () => ({ vapi_json: { callbackInboxEmail: 'inbox@x' } }) },
       sheets: {},
       sendOperatorAlert: async () => {},
       messagingService: { sendEmail: jest.fn(async () => {}) }
     });
-    const res = await request(app).post('/tools/schedule_callback').send({ businessName: 'X' });
+    const res = await request(app).post('/tools/schedule_callback').set('X-API-Key', 'k1').send({ businessName: 'X' });
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/Business name, phone, and reason/);
+  });
+
+  test('400 when tenantKey missing', async () => {
+    const app = await makeApp({
+      store: { getFullClient: async () => ({ vapi_json: { callbackInboxEmail: 'inbox@x' } }) },
+      sheets: {},
+      sendOperatorAlert: async () => {},
+      messagingService: { sendEmail: jest.fn(async () => {}) }
+    });
+    const res = await request(app)
+      .post('/tools/schedule_callback')
+      .set('X-API-Key', 'k1')
+      .send({ businessName: 'X', phone: '+1', reason: 'r' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('tenantKey is required');
+  });
+
+  test('403 on tenant mismatch', async () => {
+    const app = await makeApp({
+      store: { getFullClient: async () => ({ vapi_json: { callbackInboxEmail: 'inbox@x' } }) },
+      sheets: {},
+      sendOperatorAlert: async () => {},
+      messagingService: { sendEmail: jest.fn(async () => {}) }
+    });
+    const res = await request(app).post('/tools/schedule_callback').set('X-API-Key', 'k1').send({
+      ...validBody,
+      tenantKey: 'other-tenant'
+    });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('forbidden');
   });
 
   test('400 when callback inbox email not configured anywhere', async () => {
     const prev = process.env.CALLBACK_INBOX_EMAIL;
     delete process.env.CALLBACK_INBOX_EMAIL;
     try {
-      const app = makeApp({
-        store: { getFullClient: async () => null },
+      const app = await makeApp({
+        store: { getFullClient: async () => ({}) },
         sheets: {},
         sendOperatorAlert: async () => {},
         messagingService: { sendEmail: jest.fn(async () => {}) }
       });
-      const res = await request(app).post('/tools/schedule_callback').send(validBody);
+      const res = await request(app).post('/tools/schedule_callback').set('X-API-Key', 'k1').send(validBody);
       expect(res.status).toBe(400);
       expect(res.body.error).toBe('Callback inbox email not configured');
     } finally {
@@ -331,13 +437,13 @@ describe('routes/tools-mount /tools/schedule_callback', () => {
 
   test('200 sends email to tenant inbox', async () => {
     const sendEmail = jest.fn(async () => {});
-    const app = makeApp({
+    const app = await makeApp({
       store: { getFullClient: async () => ({ vapi_json: { callbackInboxEmail: 'inbox@x' } }) },
       sheets: {},
       sendOperatorAlert: async () => {},
       messagingService: { sendEmail }
     });
-    const res = await request(app).post('/tools/schedule_callback').send(validBody);
+    const res = await request(app).post('/tools/schedule_callback').set('X-API-Key', 'k1').send(validBody);
     expect(res.status).toBe(200);
     expect(res.body).toEqual(expect.objectContaining({ success: true, callbackEmail: 'inbox@x' }));
     expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({
@@ -347,13 +453,13 @@ describe('routes/tools-mount /tools/schedule_callback', () => {
   });
 
   test('500 when email send throws', async () => {
-    const app = makeApp({
+    const app = await makeApp({
       store: { getFullClient: async () => ({ vapi_json: { callbackInboxEmail: 'inbox@x' } }) },
       sheets: {},
       sendOperatorAlert: async () => {},
       messagingService: { sendEmail: jest.fn(async () => { throw new Error('smtp'); }) }
     });
-    const res = await request(app).post('/tools/schedule_callback').send(validBody);
+    const res = await request(app).post('/tools/schedule_callback').set('X-API-Key', 'k1').send(validBody);
     expect(res.status).toBe(500);
     expect(res.body.error).toBe('Failed to schedule callback');
   });

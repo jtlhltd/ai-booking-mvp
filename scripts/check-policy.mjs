@@ -163,6 +163,16 @@ const rules = [
     // that trips lib/ops-invariants.js#retryDue and can amplify spend.
     pattern: /updateRetryStatus\s*\(\s*[^,]+,\s*['"`]pending['"`]\s*,\s*[^)]+\+\s*1\s*\)/,
     allow: ['tests/', 'docs/']
+  },
+  {
+    intentId: 'tools.auth-required',
+    description:
+      'Tool endpoints must require either API-key auth or provider signature verification; unauthenticated tool routes are forbidden.',
+    mode: 'require',
+    scope: 'routes/',
+    filePattern: /^routes\/tools-mount\.js$/,
+    requireAny: [/authenticateApiKey/, /verifyVapiSignature/, /vapi-webhook-verification/],
+    allow: []
   }
 ];
 
