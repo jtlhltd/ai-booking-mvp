@@ -4210,8 +4210,26 @@ async function processRetryQueue() {
 
           // Check if we should retry again or mark as failed
           if (retry.retry_attempt < retry.max_retries) {
-            // Schedule another retry
-            await updateRetryStatus(retry.id, 'pending', retry.retry_attempt + 1);
+            // Schedule another retry with backoff so due-now backlog stays bounded.
+            const nextAttempt = (parseInt(retry.retry_attempt, 10) || 0) + 1;
+            const baseMinutes = Math.max(1, Math.min(60, parseInt(process.env.RETRY_QUEUE_BACKOFF_BASE_MINUTES || '5', 10) || 5));
+            const maxMinutes = Math.max(baseMinutes, Math.min(24 * 60, parseInt(process.env.RETRY_QUEUE_BACKOFF_MAX_MINUTES || '240', 10) || 240));
+            const exp = Math.max(0, nextAttempt - 1);
+            const backoffMinutes = Math.min(maxMinutes, baseMinutes * Math.pow(2, exp));
+            const jitterSeconds = Math.floor(Math.random() * 30);
+            const nextRetryAt = new Date(Date.now() + backoffMinutes * 60 * 1000 + jitterSeconds * 1000);
+
+            await query(
+              `
+                UPDATE retry_queue
+                SET status = 'pending',
+                    retry_attempt = $1,
+                    scheduled_for = $2,
+                    updated_at = NOW()
+                WHERE id = $3
+              `,
+              [nextAttempt, nextRetryAt.toISOString(), retry.id]
+            );
           } else {
             // Max retries reached, mark as failed
             await updateRetryStatus(retry.id, 'failed');
