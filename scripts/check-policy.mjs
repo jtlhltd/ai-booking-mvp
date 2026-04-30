@@ -154,6 +154,15 @@ const rules = [
       /X-Twilio-Signature/i
     ],
     allow: []
+  },
+  {
+    intentId: 'queue.retry-backlog-bounded',
+    description:
+      'Retry queue failures must reschedule scheduled_for with backoff; do not reintroduce "pending + attempt++" without moving the timestamp forward.',
+    // This exact pattern caused retries to stay due-now, creating an ever-growing backlog
+    // that trips lib/ops-invariants.js#retryDue and can amplify spend.
+    pattern: /updateRetryStatus\s*\(\s*[^,]+,\s*['"`]pending['"`]\s*,\s*[^)]+\+\s*1\s*\)/,
+    allow: ['tests/', 'docs/']
   }
 ];
 
