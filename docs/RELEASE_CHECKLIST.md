@@ -29,7 +29,7 @@ Expected:
   - `/admin/metrics`
 
 ## 4) Manual acceptance (quick)
-Run and follow: `tests/test-manual-checklist.ps1`
+Run and follow: `tests/manual/test-manual-checklist.ps1`
 
 This is the human “does the product feel correct?” layer (onboarding + dashboards + SMS flows + integration sanity).
 

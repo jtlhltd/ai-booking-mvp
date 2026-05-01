@@ -13,10 +13,11 @@ smoke and lives here so it can be invoked deliberately.
 
 ## Existing smoke surfaces
 
-PowerShell-based smoke harnesses already exist at `tests/*.ps1` (e.g.
-`tests/smoke.ps1`, `tests/quick-test.ps1`, `tests/test-vapi-integration.ps1`).
-They predate this folder and continue to work; new smoke checks added as Node
-scripts should land here.
+PowerShell-based smoke harnesses live at `tests/smoke.ps1` (the canonical
+local smoke entry point, invoked via `npm run smoke:local`) and under
+`tests/manual/` (e.g. `tests/manual/quick-test.ps1`,
+`tests/manual/test-vapi-integration.ps1`). They predate this folder and
+continue to work; new smoke checks added as Node scripts should land here.
 
 ## Conventions
 
