@@ -42,47 +42,38 @@ Severity scale:
   - Add a dedicated retry counter for non-vapi `call_queue` types (new column) or store retry attempt in `call_data` and update it atomically.\n
   - Add a canary that forces a request-queue item to fail repeatedly and asserts it eventually hits `failed` (bounded retries).
 
-### P1 — Legacy “instant import dialing” path still exists and can bypass routing distribution
+### P1 — Legacy "instant import dialing" path still exists and can bypass routing distribution — RESOLVED in PR-9
 
 - **Area**: dial spend control / burst risk
 - **Files**:
-  - `lib/lead-import-outbound.js#processLeadImportOutboundCalls` calls `lib/instant-calling.js#processCallQueue` which dials immediately with delays (2s) rather than enforcing `scheduleAtOptimalCallWindow` distribution.\n
-  - The primary import path (`lib/lead-import-outbound.js#runOutboundCallsForImportedLeads` and `routes/import-leads.js`) now enqueues and is safer, but the legacy function remains callable.
-- **Why this matters**:
-  - Any accidental call-site reintroduction can re-enable burst dialing after imports.\n
-  - This is exactly the type of regression the Intent Contract aims to prevent (`dial.imports-distribute-not-burst`, `billing.no-burst-dial`).
-- **Related Intent IDs**: `dial.imports-distribute-not-burst`, `billing.no-burst-dial`
-- **How to verify (manual)**:
-  - Search for call sites of `processLeadImportOutboundCalls` and confirm none are reachable from routes/crons.
-- **Likely fix direction (PR-ready)**:
-  - Delete or hard-disable `processLeadImportOutboundCalls`, or gate it behind an explicit `ALLOW_LEGACY_INSTANT_IMPORT_DIAL=1` env.\n
-  - Add a **policy gate** forbidding new call sites of `processCallQueue(` outside allow-list (similar to existing `processCallQueue` policy under `routes/` but broadened).
+  - `lib/lead-import-outbound.js#processLeadImportOutboundCalls` previously called `lib/instant-calling.js#processCallQueue` and dialed imports in a burst.
+  - The primary import path (`lib/lead-import-outbound.js#runOutboundCallsForImportedLeads` and `routes/import-leads.js`) is the safe path and enqueues via `scheduleAtOptimalCallWindow`.
+- **Resolution (PR-9)**:
+  - `processLeadImportOutboundCalls` now throws unless `ALLOW_LEGACY_INSTANT_IMPORT_DIAL=1` is set; default behavior is hard-disabled with a descriptive error.
+  - Updated the function to call the renamed `dialLeadsNowBatch` (see next item).
 
-### P1 — Duplicate “call queue processor” concepts (DB-backed vs in-memory list dialing) increases regression risk
+### P1 — Duplicate "call queue processor" concepts (DB-backed vs in-memory list dialing) increases regression risk — RESOLVED in PR-9
 
 - **Area**: maintainability leading to correctness issues
 - **Files**:
-  - `server.js#processCallQueue` appears to be the DB-backed `call_queue` worker.\n
-  - `lib/instant-calling.js#processCallQueue` is an in-memory “call these leads now” batch dialer.\n
-  - Both share a name, increasing the odds of accidental misuse.
-- **Why this matters**:
-  - A developer can easily import the wrong `processCallQueue` and bypass distribution/guards.
-- **Related Intent IDs**: `dial.imports-distribute-not-burst`, `dial.no-direct-vapi-outside-worker`
-- **Likely fix direction (PR-ready)**:
-  - Rename the in-memory batch dialer to something explicit like `dialLeadsNowBatch`.\n
-  - Add a policy check that forbids importing `processCallQueue` from `lib/instant-calling.js` outside a small allow-list.
+  - `server.js#processCallQueue` is the DB-backed `call_queue` worker (kept).
+  - `lib/instant-calling.js#processCallQueue` was the in-memory batch dialer.
+- **Resolution (PR-9)**:
+  - Renamed `lib/instant-calling.js#processCallQueue` → `lib/instant-calling.js#dialLeadsNowBatch`. Updated callers (`lib/lead-import-outbound.js`) and tests (`tests/unit/lib/instant-calling.test.js`, `tests/lib/lead-import-outbound.test.js`).
+  - Added new policy gate `dial.no-instant-calling-process-call-queue-import` in `scripts/check-policy.mjs` and `docs/INTENT.md` that forbids any new import of `processCallQueue` from `lib/instant-calling.js` (static or dynamic), so the rename cannot be quietly reversed.
 
-### P2 — Multi-instance concurrency slot release is an ops footgun
+### P2 — Multi-instance concurrency slot release is an ops footgun — INVARIANT ADDED in PR-9
 
 - **Area**: throughput / stuck dial prevention
 - **File**: `lib/instant-calling.js#releaseVapiSlot` supports `VAPI_CONCURRENCY_RELEASE_UNKNOWN=1` to release slots when a webhook arrives on a different instance.
 - **Why this matters**:
-  - Helpful for multi-instance webhook routing mismatches, but can also under-count concurrency and allow oversubscription/spend spikes if enabled incorrectly.\n
+  - Helpful for multi-instance webhook routing mismatches, but can also under-count concurrency and allow oversubscription/spend spikes if enabled incorrectly.
   - This needs an explicit operational playbook and a stronger invariant.
 - **Related Intent IDs**: `queue.concurrency-cap`, `billing.no-burst-dial`
-- **Likely fix direction (PR-ready)**:
-  - Add a runtime invariant that flags `currentVapiCalls` underflow/negative transitions (or rapid releases).\n
-  - Prefer a DB-backed “in-flight call slot” lease for multi-instance correctness if scaling beyond 1 instance becomes common.
+- **Resolution (PR-9, partial)**:
+  - `lib/instant-calling.js#_releaseOneSlot` now increments `vapiSlotUnderflowCount` when called with `currentVapiCalls === 0` (release without matching acquire) and `vapiSlotUnknownReleaseCount` when the `VAPI_CONCURRENCY_RELEASE_UNKNOWN=1` escape hatch fires.
+  - `lib/ops-invariants.js` reads `getVapiConcurrencyState()` and emits `vapi_concurrency_underflow` / `vapi_concurrency_unknown_release` problems mapped to `queue.concurrency-cap` so the cron alert fires before spend amplifies.
+  - Caveat: counters are process-local. Multi-instance deployments still need a DB-backed slot lease (tracked separately) — the invariant only catches single-instance regressions.
 
 ## Security, compliance, and tenant safety
 

@@ -92,6 +92,14 @@ const rules = [
     ]
   },
   {
+    intentId: 'dial.no-instant-calling-process-call-queue-import',
+    description:
+      'Importing the legacy processCallQueue export from lib/instant-calling.js is forbidden. That export has been renamed to dialLeadsNowBatch precisely so it cannot be confused with the DB-backed worker. New callers MUST use dialLeadsNowBatch (and even then, only after confirming the route does not bypass scheduleAtOptimalCallWindow).',
+    pattern:
+      /(?:import\s*\{[^}]*\bprocessCallQueue\b[^}]*\}\s*from\s*['"][^'"]*instant-calling)|(?:\{\s*[^}]*\bprocessCallQueue\b[^}]*\}\s*=\s*(?:await\s+import|require)\s*\(\s*['"][^'"]*instant-calling)/,
+    allow: ['tests/', 'docs/']
+  },
+  {
     intentId: 'dial.recall-goes-through-scheduler',
     description:
       'POST /api/leads/recall must enqueue via addToCallQueue + scheduleAtOptimalCallWindow, not fetch Vapi directly. (Covered by dial.no-direct-vapi-outside-worker, but checked separately to localize the failure message.)',

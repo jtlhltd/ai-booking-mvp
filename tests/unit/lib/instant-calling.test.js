@@ -248,10 +248,10 @@ describe('instant-calling', () => {
     mod.releaseVapiSlot({ reason: 'cleanup' });
   });
 
-  test('processCallQueue tallies failures when Vapi not configured', async () => {
+  test('dialLeadsNowBatch tallies failures when Vapi not configured', async () => {
     delete process.env.VAPI_PRIVATE_KEY;
-    const { processCallQueue } = await import('../../../lib/instant-calling.js');
-    const r = await processCallQueue(
+    const { dialLeadsNowBatch } = await import('../../../lib/instant-calling.js');
+    const r = await dialLeadsNowBatch(
       [{ phone: '+1' }, { phone: '+2' }],
       { client_key: 'ck' },
       { delayBetweenCalls: 0, maxCallsPerBatch: 10 }

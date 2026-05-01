@@ -3,7 +3,7 @@ import { describe, test, expect, jest, beforeAll, beforeEach } from '@jest/globa
 const mockGetFullClient = jest.fn();
 const mockGetLatestCallInsights = jest.fn();
 const mockGetCallTimeBanditState = jest.fn();
-const mockProcessCallQueue = jest.fn();
+const mockDialLeadsNowBatch = jest.fn();
 
 jest.unstable_mockModule('../../db.js', () => ({
   getFullClient: (...args) => mockGetFullClient(...args),
@@ -12,7 +12,7 @@ jest.unstable_mockModule('../../db.js', () => ({
 }));
 
 jest.unstable_mockModule('../../lib/instant-calling.js', () => ({
-  processCallQueue: (...args) => mockProcessCallQueue(...args)
+  dialLeadsNowBatch: (...args) => mockDialLeadsNowBatch(...args)
 }));
 
 let runOutboundCallsForImportedLeads;
@@ -25,7 +25,7 @@ beforeEach(() => {
   mockGetFullClient.mockReset();
   mockGetLatestCallInsights.mockReset();
   mockGetCallTimeBanditState.mockReset();
-  mockProcessCallQueue.mockReset();
+  mockDialLeadsNowBatch.mockReset();
   mockGetLatestCallInsights.mockResolvedValue(null);
   mockGetCallTimeBanditState.mockResolvedValue({});
   delete process.env.IMPORT_ALLOW_ENV_VAPI_FALLBACK;
@@ -104,7 +104,7 @@ describe('lib/lead-import-outbound', () => {
     expect(out.shouldCallNow).toBe(false);
     expect(addToCallQueue).toHaveBeenCalledTimes(2);
     expect(scheduleAtOptimalCallWindow).toHaveBeenCalled();
-    expect(mockProcessCallQueue).not.toHaveBeenCalled();
+    expect(mockDialLeadsNowBatch).not.toHaveBeenCalled();
   });
 
   test('in business hours still queues (no background dialing)', async () => {
@@ -128,6 +128,6 @@ describe('lib/lead-import-outbound', () => {
     expect(out.called).toBe(0);
     expect(out.shouldCallNow).toBe(false);
     expect(addToCallQueue).toHaveBeenCalledTimes(1);
-    expect(mockProcessCallQueue).not.toHaveBeenCalled();
+    expect(mockDialLeadsNowBatch).not.toHaveBeenCalled();
   });
 });
