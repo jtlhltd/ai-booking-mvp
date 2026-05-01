@@ -111,6 +111,14 @@ burst.
 | `scheduling.no-past-scheduled-for` | `scheduleAtOptimalCallWindow` must never return a `Date` strictly earlier than the `baseline` it was given. New `vapi_call` `call_queue` rows in the last 5 minutes must not have `scheduled_for < created_at`. | `lib/optimal-call-window.js`, all enqueue call sites | canary, invariant | Call `scheduleAtOptimalCallWindow(client, null, now)`; result `>= now`. `lib/ops-invariants.js#past_scheduled_for` returns 0. |
 | `scheduling.export-timezone-contract` | CSV exports must include explicit timezone semantics: UTC timestamp columns plus tenant-local timestamp columns and tenant timezone label. Export routes must not emit ambiguous JS date-string-only timestamp columns. | `routes/core-api.js`, `routes/admin-clients.js`, dashboard export triggers | canary | Export leads/calls/appointments and verify columns include UTC + Local + Tenant Timezone; values must be parseable timestamps (not only locale-rendered browser strings). |
 
+## Domain: privacy
+
+Production logs must not echo full webhook or API bodies. Use `lib/log-scrubber.js` (`scrubBody`) before logging parsed payloads.
+
+| ID | Statement | Constrains | Enforced by | Manual disprove |
+| --- | --- | --- | --- | --- |
+| `privacy.no-pretty-json-req-body` | Route files must not pass `JSON.stringify(req.body, null, …)` to logs or responses (pretty-printed raw body). Rewrites must use `scrubBody(req.body)` (or equivalent) inside `JSON.stringify`. Exception: constructing byte-stable buffers for signature verification (e.g. `Buffer.from(JSON.stringify(req.body))`) is allowed when required for crypto — prefer `req.rawBody` when present. | `routes/**` | policy | Add `JSON.stringify(req.body, null, 2)` to a route; `npm run check:policy` must fail with `privacy.no-pretty-json-req-body`. |
+
 ## Domain: webhook
 
 Inbound webhooks (Vapi end-of-call reports, Twilio voice) are write paths

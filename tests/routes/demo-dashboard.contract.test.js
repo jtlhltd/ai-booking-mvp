@@ -145,6 +145,13 @@ describe('routes/demo-dashboard', () => {
       const res = await request(app).get('/api/demo-dashboard/c1').expect(200);
       expect(res.body).toEqual(expect.objectContaining({ ok: true, source: 'live' }));
       assertNoStoreCache(res);
+
+      const capped = await request(app)
+        .get('/api/demo-dashboard/c1')
+        .query({ leadsLimit: '99999', callsFeedLimit: '500' })
+        .expect(200);
+      expect(capped.body.recentLeadsListCap).toBe(5000);
+      expect(capped.body.activityFeedLimit).toBe(100);
     });
   });
 

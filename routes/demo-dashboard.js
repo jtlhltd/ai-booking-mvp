@@ -69,20 +69,36 @@ export async function handleDemoDashboard(req, res, deps) {
   const activityTzLabel = String(DASHBOARD_ACTIVITY_TZ || 'Europe/London');
   const activityTzSqlLiteral = activityTzLabel.replace(/'/g, "''");
 
+  const clampInt = (raw, min, max, fallback) => {
+    const n = parseInt(String(raw ?? ''), 10);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.min(max, Math.max(min, n));
+  };
+
   const { clientKey } = req.params;
   /** Max rows returned for Recent Leads card (full list for typical tenants; keep in sync with client-dashboard RECENT_LEADS_DASHBOARD_CAP). */
   const RECENT_LEADS_DASHBOARD_CAP = 5000;
+  /** Server-enforced ceiling for `?leadsLimit=` (full mode only). */
+  const LEADS_LIMIT_HARD_MAX = 5000;
   /** Lighter first paint when `?brief=1` (client outreach dash); keep in sync with client-dashboard DASHBOARD_BRIEF_LEADS_CAP. */
   const DASHBOARD_BRIEF_LEADS_CAP = 120;
   const DASHBOARD_BRIEF_CALLS_CAP = 12;
   /** Live Activity Feed rows (keep in sync with client-dashboard ACTIVITY_FEED_DISPLAY_CAP). */
   const RECENT_CALLS_FEED_CAP = 40;
+  /** Server-enforced ceiling for `?callsFeedLimit=` (full mode only). */
+  const CALLS_FEED_HARD_MAX = 100;
   const briefRequested =
     req.query.brief === '1' ||
     req.query.brief === 'true' ||
     String(req.query.brief || '').toLowerCase() === 'yes';
-  const leadsDashboardCap = briefRequested ? DASHBOARD_BRIEF_LEADS_CAP : RECENT_LEADS_DASHBOARD_CAP;
-  const recentCallsFeedCap = briefRequested ? DASHBOARD_BRIEF_CALLS_CAP : RECENT_CALLS_FEED_CAP;
+  let leadsDashboardCap = briefRequested ? DASHBOARD_BRIEF_LEADS_CAP : RECENT_LEADS_DASHBOARD_CAP;
+  if (!briefRequested) {
+    leadsDashboardCap = clampInt(req.query.leadsLimit, 1, LEADS_LIMIT_HARD_MAX, RECENT_LEADS_DASHBOARD_CAP);
+  }
+  let recentCallsFeedCap = briefRequested ? DASHBOARD_BRIEF_CALLS_CAP : RECENT_CALLS_FEED_CAP;
+  if (!briefRequested) {
+    recentCallsFeedCap = clampInt(req.query.callsFeedLimit, 1, CALLS_FEED_HARD_MAX, RECENT_CALLS_FEED_CAP);
+  }
 
   const dashboardCallPhoneAggSql = `
     SELECT phone_key, calls_n, reached_max
@@ -1921,6 +1937,7 @@ export async function handleDemoDashboard(req, res, deps) {
       source: 'live',
       briefInitialLoad: briefRequested,
       recentLeadsListCap: leadsDashboardCap,
+      activityFeedLimit: recentCallsFeedCap,
       outboundAbTest: {
         mode: dimensionalMode ? 'dimensional' : 'legacy',
         voice: {

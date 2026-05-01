@@ -200,6 +200,14 @@ const rules = [
     filePattern: /^middleware\/admin-api-key\.js$/,
     requireAny: [/api\/monitoring/],
     allow: []
+  },
+  {
+    intentId: 'privacy.no-pretty-json-req-body',
+    description:
+      'Do not pretty-print raw req.body in routes (logs leak PII). Use scrubBody(req.body) inside JSON.stringify. Buffer.from(JSON.stringify(req.body)) for HMAC where rawBody is unavailable is excluded — allow-listed only on vapi-webhooks signature reconstruction line.',
+    scope: 'routes/',
+    pattern: /JSON\.stringify\s*\(\s*req\.body\s*,\s*null\b/,
+    allow: ['tests/', 'docs/', 'scripts/', 'demos/']
   }
 ];
 

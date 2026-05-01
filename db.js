@@ -659,6 +659,29 @@ async function initPostgres() {
         ADD CONSTRAINT call_queue_completed_requires_call_id
         CHECK (status <> 'completed' OR call_type <> 'vapi_call' OR initiated_call_id IS NOT NULL) NOT VALID;
     END $$;
+    -- Phantom completed vapi_call rows (no initiated_call_id) violate the CHECK once validated. Mark failed, then validate on existing rows.
+    DO $$
+    BEGIN
+      UPDATE call_queue
+      SET status = 'failed', updated_at = NOW()
+      WHERE status = 'completed'
+        AND call_type = 'vapi_call'
+        AND initiated_call_id IS NULL;
+
+      IF EXISTS (
+        SELECT 1
+        FROM pg_constraint c
+        JOIN pg_class r ON r.oid = c.conrelid
+        JOIN pg_namespace n ON n.oid = r.relnamespace
+        WHERE n.nspname = 'public'
+          AND r.relname = 'call_queue'
+          AND c.conname = 'call_queue_completed_requires_call_id'
+          AND c.contype = 'c'
+          AND NOT c.convalidated
+      ) THEN
+        ALTER TABLE call_queue VALIDATE CONSTRAINT call_queue_completed_requires_call_id;
+      END IF;
+    END $$;
     CREATE INDEX IF NOT EXISTS call_queue_tenant_idx ON call_queue(client_key);
     CREATE INDEX IF NOT EXISTS call_queue_scheduled_idx ON call_queue(scheduled_for);
     CREATE INDEX IF NOT EXISTS call_queue_status_idx ON call_queue(status);

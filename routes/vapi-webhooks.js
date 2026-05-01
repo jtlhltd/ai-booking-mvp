@@ -10,6 +10,7 @@ import { storeCallContext } from '../lib/call-context-cache.js';
 import { verifyVapiSignature } from '../middleware/vapi-webhook-verification.js';
 import { mapVapiEndedReasonToOutcome } from '../lib/vapi-call-outcome-map.js';
 import { vapiWebhookVerboseLog } from '../lib/vapi-webhook-verbose-log.js';
+import { scrubBody } from '../lib/log-scrubber.js';
 import { query, dbType } from '../db.js';
 
 function isPostgres() {
@@ -318,9 +319,12 @@ router.post('/webhooks/vapi', verifyVapiSignature, async (req, res) => {
     }
     // Temporary debug: log full payload for end-of-call-report to verify analysis.structuredData
     if (req.body?.type === 'end-of-call-report') {
-      vapiWebhookVerboseLog('END OF CALL PAYLOAD:', JSON.stringify(req.body, null, 2));
+      vapiWebhookVerboseLog('END OF CALL PAYLOAD:', JSON.stringify(scrubBody(req.body), null, 2));
     }
-    vapiWebhookVerboseLog(`[${correlationId}] [VAPI WEBHOOK DEBUG] Raw body:`, JSON.stringify(req.body, null, 2));
+    vapiWebhookVerboseLog(
+      `[${correlationId}] [VAPI WEBHOOK DEBUG] Raw body:`,
+      JSON.stringify(scrubBody(req.body), null, 2),
+    );
     vapiWebhookVerboseLog(`[${correlationId}] [VAPI WEBHOOK DEBUG] Raw body type:`, typeof req.body);
     vapiWebhookVerboseLog(`[${correlationId}] [VAPI WEBHOOK DEBUG] Body keys:`, Object.keys(req.body || {}));
     vapiWebhookVerboseLog(`[${correlationId}] [VAPI WEBHOOK DEBUG] Headers:`, JSON.stringify(req.headers, null, 2));
