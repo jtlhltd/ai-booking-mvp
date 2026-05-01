@@ -1,8 +1,8 @@
 import { describe, expect, test } from '@jest/globals';
 
-import { normalizePhone } from '../../../util/phone.js';
+import { normalizePhone } from '../../../lib/phone-util.js';
 
-describe('util/phone', () => {
+describe('lib/phone-util', () => {
   test('returns input for null/undefined/empty', () => {
     expect(normalizePhone(null)).toBeNull();
     expect(normalizePhone(undefined)).toBeUndefined();
