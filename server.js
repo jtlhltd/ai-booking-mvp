@@ -90,6 +90,7 @@ import {
   rateLimitMiddleware, 
   requirePermission, 
   requireTenantAccess,
+  requireTenantAccessOrAdmin,
   validateAndSanitizeInput,
   securityHeaders,
   requestLogging,
@@ -602,7 +603,15 @@ app.use('/api', createReportsRouter({ authenticateApiKey }));
 app.use('/api', createSmsTemplatesRouter({ authenticateApiKey }));
 app.use('/api', createMonitoringDashboardRouter({ authenticateApiKey }));
 app.use(createApiDocsRouter());
-app.use('/api', createQuickWinMetricsRouter({ query, cacheMiddleware }));
+app.use(
+  '/api',
+  createQuickWinMetricsRouter({
+    query,
+    cacheMiddleware,
+    authenticateApiKey,
+    requireTenantAccessOrAdmin
+  })
+);
 app.use(createHealthAndDiagnosticsRouter({ query }));
 app.use(
   '/api',
@@ -614,7 +623,9 @@ app.use(
     deactivateOptOut,
     query,
     dbType,
-    DB_PATH
+    DB_PATH,
+    authenticateApiKey,
+    requireTenantAccessOrAdmin
   })
 );
 app.use(
@@ -626,7 +637,9 @@ app.use(
     isPostgres,
     poolQuerySelect,
     query,
-    pickTimezone
+    pickTimezone,
+    authenticateApiKey,
+    requireTenantAccessOrAdmin
   })
 );
 app.use(

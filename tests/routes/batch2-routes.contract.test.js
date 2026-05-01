@@ -2,6 +2,10 @@ import { describe, expect, test, jest, beforeEach, beforeAll, afterAll } from '@
 import request from 'supertest';
 
 import { createContractApp, withEnv } from '../helpers/contract-harness.js';
+import { requireTenantAccessOrAdmin } from '../../middleware/security.js';
+import { createDashboardRouteAuthStubs } from '../helpers/dashboard-route-auth-stubs.js';
+
+const { authenticateApiKey: stubDashboardApiKey } = createDashboardRouteAuthStubs();
 
 beforeEach(() => {
   jest.resetModules();
@@ -68,7 +72,9 @@ describe('Batch2: next 25 routes (happy + failure)', () => {
                 isPostgres: false,
                 poolQuerySelect: async () => ({ rows: [{ n: 0 }] }),
                 query: async () => ({ rows: [{ n: 0 }] }),
-                pickTimezone: () => 'Europe/London'
+                pickTimezone: () => 'Europe/London',
+                authenticateApiKey: stubDashboardApiKey,
+                requireTenantAccessOrAdmin
               })
           }
         ]
@@ -98,7 +104,9 @@ describe('Batch2: next 25 routes (happy + failure)', () => {
                 isPostgres: false,
                 poolQuerySelect: async () => ({ rows: [{ n: 0 }] }),
                 query: async () => ({ rows: [{ n: 0 }] }),
-                pickTimezone: () => 'Europe/London'
+                pickTimezone: () => 'Europe/London',
+                authenticateApiKey: stubDashboardApiKey,
+                requireTenantAccessOrAdmin
               })
           }
         ]
@@ -123,7 +131,9 @@ describe('Batch2: next 25 routes (happy + failure)', () => {
                 deactivateOptOut: async () => ({ phone: '+44' }),
                 query: async () => ({ rows: [{ n: 0 }] }),
                 dbType: 'postgres',
-                DB_PATH: 'x'
+                DB_PATH: 'x',
+                authenticateApiKey: stubDashboardApiKey,
+                requireTenantAccessOrAdmin
               })
           }
         ]
@@ -143,7 +153,13 @@ describe('Batch2: next 25 routes (happy + failure)', () => {
                 listOptOutList: async () => [],
                 query: async () => ({ rows: [{ n: 0 }] }),
                 dbType: 'postgres',
-                DB_PATH: 'x'
+                DB_PATH: 'x',
+                getFullClient: async () => ({}),
+                resolveLogisticsSpreadsheetId: () => null,
+                upsertOptOut: async () => ({}),
+                deactivateOptOut: async () => ({}),
+                authenticateApiKey: stubDashboardApiKey,
+                requireTenantAccessOrAdmin
               })
           }
         ]

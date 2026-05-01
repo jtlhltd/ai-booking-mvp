@@ -60,6 +60,14 @@ Rules here keep the queue from clumping (top-of-hour spikes), stalling
 | `queue.concurrency-cap` | The queue worker must never have more than `VAPI_MAX_CONCURRENT` (default 1) Vapi requests in flight at once. `acquireVapiSlot` blocks the surplus until a slot is released. | `lib/instant-calling.js#acquireVapiSlot` | canary | Fire `N+1` simultaneous `acquireVapiSlot()` calls; the surplus must remain pending until a release. |
 | `queue.dedupe-active-call` | The queue worker must not start a second Vapi call for a phone with an already-active call id on the same instance. | `lib/instant-calling.js#callLeadInstantly` | canary | Mark a phone active via `markVapiCallActive(callId, { phone })`; a follow-up `callLeadInstantly` for that phone must return `{ ok: false, error: 'phone_already_active' }` and never `fetch` Vapi. |
 
+## Domain: ops
+
+Operator-only endpoints (global metrics, cache clear) must not be anonymously enumerable when admin API-key enforcement is enabled.
+
+| ID | Statement | Constrains | Enforced by | Manual disprove |
+| --- | --- | --- | --- | --- |
+| `ops.monitoring-admin-key` | Paths under `/api/monitoring` must be gated by `middleware/admin-api-key.js` (same `API_KEY` / `ENFORCE_ADMIN_API_KEY` behavior as `/api/admin/*`), not left publicly readable. | `middleware/admin-api-key.js` | policy | With enforcement enabled, `curl` `/api/monitoring/metrics` without `X-API-Key` → 401. |
+
 ## Domain: tenant
 
 Tom is the anchor client and lives behind the tenant key `d2d-xpress-tom`.
@@ -72,6 +80,7 @@ must always 403, never silently 200.
 | `tenant.no-internal-key-leak` | The internal tenant key `d2d-xpress-tom` (and any other internal client_key) MUST NOT appear in Vapi payload `metadata`, transcripts, customer-facing copy, or response bodies. Use `displayName` instead. | `routes/**`, `lib/instant-calling.js`, `lib/follow-up-processor.js`, prompt builders | policy (allow-listed: `db.js`, `tests/`, `scripts/`, `docs/`), canary | `assertNoTenantKeyLeak(res, 'd2d-xpress-tom')` on every customer-facing response. |
 | `tenant.cross-tenant-isolation` | Authenticated requests with a `clientKey` the caller does not own must return 403, never silent 200. | `routes/**` admin/client surfaces | canary (uses `assertTenantIsolation`) | Authenticate as tenant A, request tenant B's resources; response must be 401/403. |
 | `tenant.auth-required-on-admin` | Admin/client endpoints must return 401 when `X-API-Key` is missing or invalid. | `routes/admin-*.js`, `routes/client-*.js` | canary (uses `assertAuthRequired`) | Send a request without `X-API-Key`; response must be 401 with a JSON error envelope. |
+| `tenant.scoped-reads-require-api-key` | Tenant-scoped JSON surfaces (`GET /api/daily-summary/:clientKey`, `GET/POST /api/dnc/*`, `GET /api/ops/health/:clientKey`, quick-win metrics under `/api/sms-delivery-rate|calendar-sync|quality-metrics`) must return **401** when `X-API-Key` is missing (before body reveals tenant existence). With a valid tenant API key, `clientKey` in the path/query/body must match the key’s tenant unless the key has admin permissions. | `routes/daily-summary.js`, `routes/ops-health-and-dnc.js`, `routes/quick-win-metrics.js` | policy, canary | `curl` any listed route without `X-API-Key` → 401. With tenant A’s key, request tenant B’s `clientKey` → 403. |
 | `tools.auth-required` | Tool endpoints must require either API-key auth or provider signature verification. They must not accept unauthenticated requests and must never write to a fallback/default tenant. | `routes/tools-mount.js` | policy, canary | Send a tool request without API key or valid signature; it must 401/403. Send with an API key for tenant A and `tenantKey=B`; it must 403. |
 
 ## Domain: billing

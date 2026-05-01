@@ -9,12 +9,21 @@ export function createOpsHealthAndDncRouter(deps) {
     deactivateOptOut,
     query,
     dbType,
-    DB_PATH
+    DB_PATH,
+    authenticateApiKey,
+    requireTenantAccessOrAdmin
   } = deps || {};
 
   const router = express.Router();
+  const auth = authenticateApiKey;
+  const tenant = requireTenantAccessOrAdmin;
+  if (typeof auth !== 'function' || typeof tenant !== 'function') {
+    throw new Error(
+      'createOpsHealthAndDncRouter: authenticateApiKey and requireTenantAccessOrAdmin are required'
+    );
+  }
 
-  router.get('/ops/health/:clientKey', async (req, res) => {
+  router.get('/ops/health/:clientKey', auth, tenant, async (req, res) => {
     try {
       const { clientKey } = req.params;
       res.set('Cache-Control', 'no-store');
@@ -52,7 +61,7 @@ export function createOpsHealthAndDncRouter(deps) {
     }
   });
 
-  router.get('/dnc/list', async (req, res) => {
+  router.get('/dnc/list', auth, tenant, async (req, res) => {
     try {
       const { clientKey = '', q = '', active = '1', limit = '100', offset = '0' } = req.query || {};
       const ck = String(clientKey || '').trim();
@@ -74,7 +83,7 @@ export function createOpsHealthAndDncRouter(deps) {
     }
   });
 
-  router.post('/dnc/add', async (req, res) => {
+  router.post('/dnc/add', auth, tenant, async (req, res) => {
     try {
       const { clientKey = '', phone, reason, notes } = req.body || {};
       const ck = String(clientKey || '').trim();
@@ -93,7 +102,7 @@ export function createOpsHealthAndDncRouter(deps) {
     }
   });
 
-  router.post('/dnc/remove', async (req, res) => {
+  router.post('/dnc/remove', auth, tenant, async (req, res) => {
     try {
       const { clientKey = '', phone } = req.body || {};
       const ck = String(clientKey || '').trim();

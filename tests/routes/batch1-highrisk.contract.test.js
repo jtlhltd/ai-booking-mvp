@@ -2,6 +2,10 @@ import { describe, expect, test, jest, beforeEach, beforeAll, afterAll } from '@
 import request from 'supertest';
 
 import { createContractApp, withEnv } from '../helpers/contract-harness.js';
+import { requireTenantAccessOrAdmin } from '../../middleware/security.js';
+import { createDashboardRouteAuthStubs } from '../helpers/dashboard-route-auth-stubs.js';
+
+const { authenticateApiKey: stubDashboardApiKey } = createDashboardRouteAuthStubs();
 
 beforeEach(() => {
   jest.resetModules();
@@ -326,7 +330,16 @@ describe('Batch1: high-risk route contracts (happy + failure)', () => {
       const cacheMiddleware = () => (_req, _res, next) => next();
       const { createQuickWinMetricsRouter } = await import('../../routes/quick-win-metrics.js');
       const app = createContractApp({
-        mounts: [{ path: '/', router: () => createQuickWinMetricsRouter({ query: q, cacheMiddleware }) }]
+        mounts: [{
+          path: '/',
+          router: () =>
+            createQuickWinMetricsRouter({
+              query: q,
+              cacheMiddleware,
+              authenticateApiKey: stubDashboardApiKey,
+              requireTenantAccessOrAdmin
+            })
+        }]
       });
       const res = await request(app).get('/sms-delivery-rate/c1?days=7').expect(200);
       expect(res.body).toEqual(expect.objectContaining({ ok: true, clientKey: 'c1' }));
@@ -339,7 +352,16 @@ describe('Batch1: high-risk route contracts (happy + failure)', () => {
       const cacheMiddleware = () => (_req, _res, next) => next();
       const { createQuickWinMetricsRouter } = await import('../../routes/quick-win-metrics.js');
       const app = createContractApp({
-        mounts: [{ path: '/', router: () => createQuickWinMetricsRouter({ query: q, cacheMiddleware }) }]
+        mounts: [{
+          path: '/',
+          router: () =>
+            createQuickWinMetricsRouter({
+              query: q,
+              cacheMiddleware,
+              authenticateApiKey: stubDashboardApiKey,
+              requireTenantAccessOrAdmin
+            })
+        }]
       });
       await request(app).get('/sms-delivery-rate/c1?days=7').expect(500);
     });

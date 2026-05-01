@@ -148,7 +148,6 @@ router.get('/api/monitoring/cache-stats', (req, res) => {
  * Clear cache (admin only)
  */
 router.post('/api/monitoring/cache/clear', asyncHandler(async (req, res) => {
-  // TODO: Add admin authentication check
   const cache = getCache();
   cache.clear();
   

@@ -9288,6 +9288,37 @@ ${actionsRow}
             return clientParam;
         }
 
+        const DASH_X_API_KEY_LS = 'dash.xApiKey';
+        function syncDashboardApiKeyFromUrl() {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const fromUrl = (params.get('xApiKey') || params.get('apiKey') || '').trim();
+                if (!fromUrl) return;
+                localStorage.setItem(DASH_X_API_KEY_LS, fromUrl);
+                params.delete('xApiKey');
+                params.delete('apiKey');
+                const qs = params.toString();
+                const next = `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash || ''}`;
+                window.history.replaceState({}, '', next);
+            } catch (_) {
+                /* ignore */
+            }
+        }
+        function getDashboardXApiKey() {
+            try {
+                return (localStorage.getItem(DASH_X_API_KEY_LS) || '').trim();
+            } catch (_) {
+                return '';
+            }
+        }
+        /** Headers for tenant-scoped API routes that require X-API-Key (see middleware/security.js). */
+        function dashAuthHeaders(base = {}) {
+            const out = { ...base };
+            const k = getDashboardXApiKey();
+            if (k) out['X-API-Key'] = k;
+            return out;
+        }
+
         let lastDataUpdate = new Date();
         async function fetchLiveData(clientKey, options = {}) {
             const bustCache = options && options.bustCache === true;
@@ -15538,7 +15569,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             if (!host || !currentClient) return;
             host.innerHTML = '<div class="empty-state-message" style="padding:16px;">Loading…</div>';
             try {
-                const res = await fetch(`${BASE_URL}/api/daily-summary/${encodeURIComponent(currentClient)}`, { cache: 'no-store' });
+                const res = await fetch(`${BASE_URL}/api/daily-summary/${encodeURIComponent(currentClient)}`, {
+                    cache: 'no-store',
+                    headers: dashAuthHeaders()
+                });
                 const payload = await res.json().catch(() => ({}));
                 if (!res.ok || !payload?.ok) throw new Error(payload?.message || payload?.error || `HTTP ${res.status}`);
 
@@ -15597,7 +15631,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             if (!host || !currentClient) return;
             host.innerHTML = '<div class="empty-state-message" style="padding:16px;">Loading…</div>';
             try {
-                const res = await fetch(`${BASE_URL}/api/ops/health/${encodeURIComponent(currentClient)}`, { cache: 'no-store' });
+                const res = await fetch(`${BASE_URL}/api/ops/health/${encodeURIComponent(currentClient)}`, {
+                    cache: 'no-store',
+                    headers: dashAuthHeaders()
+                });
                 const payload = await res.json().catch(() => ({}));
                 if (!res.ok || !payload?.ok) throw new Error(payload?.message || payload?.error || `HTTP ${res.status}`);
                 const sheetOk = !!payload?.sheet?.configured;
@@ -15630,7 +15667,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             host.innerHTML = '<div class="empty-state-message" style="padding:16px;">Loading…</div>';
             const q = (document.getElementById('dncSearchInput')?.value || '').trim();
             try {
-                const res = await fetch(`${BASE_URL}/api/dnc/list?clientKey=${encodeURIComponent(currentClient)}&q=${encodeURIComponent(q)}&active=1&limit=100`, { cache: 'no-store' });
+                const res = await fetch(
+                    `${BASE_URL}/api/dnc/list?clientKey=${encodeURIComponent(currentClient)}&q=${encodeURIComponent(q)}&active=1&limit=100`,
+                    { cache: 'no-store', headers: dashAuthHeaders() }
+                );
                 const payload = await res.json().catch(() => ({}));
                 if (!res.ok || !payload?.ok) throw new Error(payload?.message || payload?.error || `HTTP ${res.status}`);
                 const rows = payload.rows || [];
@@ -15683,7 +15723,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     try {
                         const res = await fetch(`${BASE_URL}/api/dnc/add`, {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
+                            headers: dashAuthHeaders({ 'Content-Type': 'application/json' }),
                             body: JSON.stringify({ clientKey: currentClient, phone, reason })
                         });
                         const out = await res.json().catch(() => ({}));
@@ -15707,7 +15747,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     try {
                         const res = await fetch(`${BASE_URL}/api/dnc/remove`, {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
+                            headers: dashAuthHeaders({ 'Content-Type': 'application/json' }),
                             body: JSON.stringify({ clientKey: currentClient, phone })
                         });
                         const out = await res.json().catch(() => ({}));
@@ -16277,7 +16317,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
 
             try {
-                const response = await fetch(`${BASE_URL}/api/calendar-sync/${currentClient}`);
+                const response = await fetch(`${BASE_URL}/api/calendar-sync/${currentClient}`, {
+                    headers: dashAuthHeaders()
+                });
                 const payload = await response.json();
                 if (response.ok && payload?.ok) {
                     const lastSyncTime = formatTimeAgo(payload.lastSync);
@@ -16497,6 +16539,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         }
 
         async function initDashboard() {
+            syncDashboardApiKeyFromUrl();
             currentClient = getClientFromURL();
             activityFeedOutcomeFilter = 'all';
             try {

@@ -10,6 +10,11 @@ import { getRetryManager } from '../lib/retry-logic.js';
  * @param {() => { dbType: string; pool: import('pg').Pool | null; sqlite: import('better-sqlite3').Database | null; pgQueryLimiter: { run: (fn: () => Promise<any>) => Promise<any> } | null }} getState
  */
 export function createQueryRunner(getState) {
+  /** Opt-in: set DB_QUERY_CACHE_SELECTS=1 to restore legacy 5m SELECT result caching (off by default to avoid stale reads). */
+  function selectQueryCacheEnabled() {
+    return /^(1|true|yes)$/i.test(String(process.env.DB_QUERY_CACHE_SELECTS || '').trim());
+  }
+
   async function query(text, params = []) {
     const { dbType, pool, sqlite, pgQueryLimiter } = getState();
     const cache = getCache();
@@ -19,11 +24,11 @@ export function createQueryRunner(getState) {
     }
     const cacheKey = `query:${sqlText}:${JSON.stringify(params)}`;
     const upper = sqlText.trim().toUpperCase();
+    const cacheSelects = selectQueryCacheEnabled();
 
-    if (upper.startsWith('SELECT')) {
+    if (cacheSelects && upper.startsWith('SELECT')) {
       const cached = await cache.get(cacheKey);
       if (cached) {
-        console.log('[DB CACHE] Serving cached query result');
         return cached;
       }
     }
@@ -76,20 +81,19 @@ export function createQueryRunner(getState) {
         });
       }
 
-      if (upper.startsWith('SELECT') && result.rows) {
+      if (cacheSelects && upper.startsWith('SELECT') && result.rows) {
         await cache.set(cacheKey, result, 300000);
-        console.log('[DB CACHE] Cached query result');
       }
 
       if (
-        upper.startsWith('INSERT') ||
-        upper.startsWith('UPDATE') ||
-        upper.startsWith('DELETE') ||
-        upper.startsWith('UPSERT')
+        cacheSelects &&
+        (upper.startsWith('INSERT') ||
+          upper.startsWith('UPDATE') ||
+          upper.startsWith('DELETE') ||
+          upper.startsWith('UPSERT'))
       ) {
         try {
           await cache.clear();
-          console.log('[DB CACHE] Cleared after mutation');
         } catch {
           /* best-effort */
         }

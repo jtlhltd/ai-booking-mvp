@@ -237,6 +237,51 @@ export function requireTenantAccess(req, res, next) {
   }
 }
 
+/**
+ * Like requireTenantAccess but allows platform/admin API keys (same rules as clients-api isAdminKey).
+ */
+export function requireTenantAccessOrAdmin(req, res, next) {
+  try {
+    const perms = Array.isArray(req.apiKey?.permissions) ? req.apiKey.permissions : [];
+    const isAdmin =
+      perms.includes('*') ||
+      perms.includes('admin') ||
+      perms.includes('admin:clients');
+    if (isAdmin) return next();
+
+    const requestedTenant =
+      req.params.tenantKey ||
+      req.params.clientKey ||
+      req.params.key ||
+      req.query?.clientKey ||
+      req.body?.clientKey;
+    const userTenant = req.clientKey;
+
+    if (!requestedTenant) {
+      return res.status(400).json({
+        error: 'Tenant key required',
+        code: 'MISSING_TENANT_KEY'
+      });
+    }
+
+    if (requestedTenant !== userTenant) {
+      return res.status(403).json({
+        error: 'Access denied to tenant',
+        code: 'TENANT_ACCESS_DENIED',
+        requested: requestedTenant
+      });
+    }
+
+    next();
+  } catch (error) {
+    console.error('[TENANT ACCESS OR ADMIN ERROR]', error);
+    res.status(500).json({
+      error: 'Tenant access check error',
+      code: 'TENANT_ERROR'
+    });
+  }
+}
+
 // Input validation and sanitization middleware
 export function validateAndSanitizeInput(schema) {
   return (req, res, next) => {

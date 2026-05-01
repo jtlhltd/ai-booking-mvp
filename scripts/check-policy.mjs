@@ -173,6 +173,26 @@ const rules = [
     filePattern: /^routes\/tools-mount\.js$/,
     requireAny: [/authenticateApiKey/, /verifyVapiSignature/, /vapi-webhook-verification/],
     allow: []
+  },
+  {
+    intentId: 'tenant.scoped-reads-require-api-key',
+    description:
+      'Tenant-scoped dashboard routes (daily-summary, ops-health-and-dnc, quick-win-metrics) must wire requireTenantAccessOrAdmin alongside authenticateApiKey.',
+    mode: 'require',
+    scope: 'routes/',
+    filePattern: /^routes\/(daily-summary|ops-health-and-dnc|quick-win-metrics)\.js$/,
+    requireAny: [/requireTenantAccessOrAdmin/],
+    allow: []
+  },
+  {
+    intentId: 'ops.monitoring-admin-key',
+    description:
+      'middleware/admin-api-key.js must include /api/monitoring paths in adminSurfaceRequiresApiKey so monitoring is not anonymously reachable when enforcement is on.',
+    mode: 'require',
+    scope: 'middleware/',
+    filePattern: /^middleware\/admin-api-key\.js$/,
+    requireAny: [/api\/monitoring/],
+    allow: []
   }
 ];
 

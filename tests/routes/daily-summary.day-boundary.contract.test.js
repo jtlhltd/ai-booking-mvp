@@ -2,6 +2,10 @@ import { describe, expect, test, jest, beforeEach } from '@jest/globals';
 import request from 'supertest';
 
 import { createContractApp } from '../helpers/contract-harness.js';
+import { requireTenantAccessOrAdmin } from '../../middleware/security.js';
+import { createDashboardRouteAuthStubs } from '../helpers/dashboard-route-auth-stubs.js';
+
+const { authenticateApiKey: stubDashboardApiKey } = createDashboardRouteAuthStubs();
 
 describe('routes/daily-summary.js day-boundary (tenant timezone)', () => {
   beforeEach(() => {
@@ -27,7 +31,7 @@ describe('routes/daily-summary.js day-boundary (tenant timezone)', () => {
         ensureLogisticsHeader: jest.fn(async () => {}),
         readSheet: jest.fn(async () => ({ rows: [] })),
         logisticsSheetRowsToRecords: jest.fn(() => [
-          // Tenant-local “yesterday 23:30” => NOT today
+          // Tenant-local "yesterday 23:30" => NOT today
           {
             Timestamp: '28/04/2026, 23:30:00',
             Status: 'To call',
@@ -58,7 +62,9 @@ describe('routes/daily-summary.js day-boundary (tenant timezone)', () => {
             'Call ID': 'call-2'
           }
         ])
-      }
+      },
+      authenticateApiKey: stubDashboardApiKey,
+      requireTenantAccessOrAdmin
     });
 
     const app = createContractApp({ mounts: [{ path: '/', router }] });
