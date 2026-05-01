@@ -1,12 +1,14 @@
 import express from 'express';
 
+import { scrubBody } from '../lib/log-scrubber.js';
+
 export function createZapierWebhookRouter(deps) {
   const { requireApiKey, getClientFromHeader } = deps || {};
   const router = express.Router();
 
   router.post('/zapier', requireApiKey, async (req, res) => {
     try {
-      console.log('[ZAPIER WEBHOOK] Received lead:', req.body);
+      console.log('[ZAPIER WEBHOOK] Received lead:', scrubBody(req.body));
 
       const client = await getClientFromHeader(req);
       if (!client) {

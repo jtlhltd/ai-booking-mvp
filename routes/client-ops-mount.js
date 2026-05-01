@@ -1,5 +1,7 @@
 import { Router } from 'express';
 
+import { scrubBody } from '../lib/log-scrubber.js';
+
 export function createClientOpsRouter(deps) {
   const {
     getFullClient,
@@ -363,7 +365,7 @@ export function createClientOpsRouter(deps) {
       }
 
       console.log(`[SIGNUP] New signup request for ${businessName} (${email})`);
-      console.log(`[SIGNUP] Request body:`, req.body);
+      console.log(`[SIGNUP] Request body:`, scrubBody(req.body));
 
       const { createClient, sendWelcomeEmail } = await import('../lib/auto-onboarding.js');
       console.log(`[SIGNUP] Auto-onboarding module imported successfully`);
