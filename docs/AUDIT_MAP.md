@@ -5,9 +5,15 @@ This file is a **map of what to test** (and what “the system” is) so verific
 ## Primary entrypoints
 
 ### Server
-- **HTTP server**: `server.js`
-- **DB layer**: `db.js` (Postgres + SQLite fallback)
+- **HTTP server**: `server.js` (still the main wiring file; ongoing burndown documented in `docs/ENTRYPOINT_BURNDOWN.md` and `docs/HYGIENE.md`)
+- **DB layer**: `db.js` (Postgres + SQLite fallback). Cohesive query clusters now live in sibling modules and `db.js` re-exports thin wrappers:
+  - `db/cost-budget-tracking.js` — cost tracking, budget limits, cost alerts
+  - `db/analytics-events.js` — analytics events, conversion stages, conversion funnel
 - **Scheduled work**: `lib/scheduled-jobs.js` (cron + intervals)
+- **Pure helpers extracted from `server.js`**:
+  - `lib/dashboard-activity-formatters.js` — dashboard / lead-timeline formatting + classification (no module state)
+  - `lib/bootstrap-clients.js` — `BOOTSTRAP_CLIENTS_JSON` env-driven client seeding
+- **In-memory dial path**: `lib/instant-calling.js` — burst dialer is named `dialLeadsNowBatch` (renamed from `processCallQueue` in PR-9). The DB-polling worker `processCallQueue` lives in `server.js` and is the only one cron should ever call.
 
 ### HTTP routes mounted in `server.js`
 The app uses a mix of routers (from `routes/*.js`) plus a number of legacy inline `app.get/app.post` handlers.
@@ -125,4 +131,10 @@ All schedules are registered via `registerScheduledJobs(deps)`. Current schedule
 - **Tier 1 (CI gate)**: Jest unit + integration (mock externals; deterministic; no real Twilio/Vapi/Google).
 - **Tier 2 (nightly/pre-release)**: E2E smoke tests (start server, hit key endpoints, verify DB effects).
 - **Tier 3 (nightly/on-demand)**: sandbox integration checks for Twilio/Vapi/Google with strict rate limits and “kill switches”.
+
+## Behavioural gates protecting this map
+- **Static policy**: `scripts/check-policy.mjs` (run via `npm run check:policy`) — forbidden import patterns, no direct `fetch('https://api.vapi.ai/call', ...)` outside the allow-list, no imports of the renamed `processCallQueue` from `lib/instant-calling.js`.
+- **Canaries**: `tests/canaries/*.canary.test.js` — bounded request-queue retries, gated legacy instant-import dial path, etc.
+- **Runtime invariants**: `lib/ops-invariants.js` — Vapi concurrency underflow / unknown-release detection, queue health, etc.
+- **Intent contract**: `docs/INTENT.md` — every behavioural / billing-affecting change must update an Intent ID and at least one of the gates above.
 

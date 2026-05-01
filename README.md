@@ -46,41 +46,66 @@ Server runs on `http://localhost:3000`
 ```
 /ai-booking-mvp-skeleton-v2/
 │
-├── server.js                    # Main application server (Express.js)
-├── db.js                        # Database queries (PostgreSQL)
+├── server.js                    # Main HTTP server (Express + inline + mounted routers)
+├── db.js                        # DB layer (Postgres + SQLite fallback). Cohesive
+│                                # query clusters live in /db/* siblings; db.js
+│                                # re-exports thin wrappers for back-compat.
 ├── package.json                 # Dependencies
 │
-├── /lib/                        # Core utilities
-│   ├── auto-onboarding.js       # Client self-service signup
-│   ├── vapi.js                  # Vapi AI integration
-│   ├── cache.js                 # Response caching
-│   ├── security.js              # Encryption, GDPR, 2FA
-│   ├── white-label.js           # Client branding
-│   └── ... (38 utility modules)
+├── /lib/                        # Core utilities + extracted helpers
+│   ├── instant-calling.js                # In-memory burst dialer (dialLeadsNowBatch).
+│   │                                     # NOT the cron worker; that one lives in server.js.
+│   ├── dashboard-activity-formatters.js  # Pure formatters extracted from server.js (PR-10)
+│   ├── bootstrap-clients.js              # BOOTSTRAP_CLIENTS_JSON seed logic (PR-10)
+│   ├── log-scrubber.js                   # PII redaction for production logs (PR-6)
+│   ├── ops-invariants.js                 # Periodic runtime invariant checks
+│   ├── scheduled-jobs.js                 # Cron + setInterval registration
+│   ├── vapi.js                           # Vapi AI integration
+│   ├── auto-onboarding.js                # Client self-service signup
+│   ├── security.js                       # Encryption, GDPR, 2FA
+│   ├── white-label.js                    # Client branding
+│   └── ... (many more utility modules)
 │
-├── /public/                     # Client-facing pages
-│   ├── index.html               # Landing page
-│   ├── dashboard-v2.html        # Client dashboard
-│   ├── leads.html               # Lead management
-│   ├── onboarding-wizard.html   # Client signup flow
-│   └── ... (42 HTML pages)
+├── /db/                         # SQL clusters extracted from db.js (PR-11)
+│   ├── cost-budget-tracking.js           # Cost tracking, budget limits, cost alerts
+│   └── analytics-events.js               # Analytics events, conversion stages + funnel
 │
-├── /routes/                     # API routes
-│   ├── leads.js                 # Lead CRUD operations
-│   ├── vapi-webhooks.js         # Vapi call webhooks
-│   └── twilio-webhooks.js       # SMS webhooks
+├── /routes/                     # Express routers mounted from server.js
+│   ├── leads.js                          # Lead CRUD operations
+│   ├── vapi-webhooks.js                  # Vapi call webhooks (verifyVapiSignature gate)
+│   ├── clients-api.js                    # Tenant-scoped client API (authenticateApiKey gate)
+│   ├── tools-mount.js                    # Vapi tool endpoints
+│   ├── twilio-webhooks.js                # SMS webhooks
+│   └── ... (many more routers)
 │
-├── /migrations/                 # Database schema updates
-│   └── *.sql                    # Migration files (auto-run on deploy)
+├── /public/                     # Client-facing pages (landing, dashboards, wizards)
+│
+├── /migrations/                 # SQL migrations (auto-run on deploy)
+│
+├── /scripts/                    # Operational + CI scripts
+│   └── check-policy.mjs                  # Static policy gate (forbidden import patterns)
+│
+├── /tests/                      # Jest tests
+│   ├── /canaries/                        # Behavioural regression catchers
+│   ├── /db/                              # DB contract tests (sibling modules)
+│   ├── /unit/                            # Pure unit tests
+│   ├── /lib/                             # Tests scoped to /lib modules
+│   ├── /routes/                          # Route-level tests
+│   ├── /manual/                          # PowerShell / .bat smoke scripts (PR-2)
+│   └── /fixtures/                        # Test fixtures (HTML, JSON, etc.)
 │
 ├── /docs/                       # Documentation
-│   ├── /archive/                # Historical analysis & setup guides
-│   └── /vapi-history/           # Old Vapi script versions
+│   ├── HYGIENE.md                        # Codebase hygiene burndown summary (PR-12)
+│   ├── INTENT.md                         # Behavioural intent contract
+│   ├── AUDIT_MAP.md                      # Entrypoints + dependencies map
+│   ├── AUDIT_BACKLOG.md                  # Outstanding audit findings
+│   ├── ENTRYPOINT_BURNDOWN.md            # server.js / db.js refactor roadmap
+│   ├── /setup/                           # Deployment + integration setup guides
+│   └── /vapi-history/                    # Old Vapi script versions
 │
-├── .env                         # Environment variables (local only)
-├── .env.example                 # Template for setup
+├── .env.example                 # Required environment variables
 ├── render.yaml                  # Render deployment config
-└── VAPI-FINAL-OPTIMIZED.txt     # Latest Vapi AI script (10/10 rated)
+└── VAPI-FINAL-OPTIMIZED.txt     # Latest Vapi AI script
 ```
 
 ---
@@ -125,8 +150,13 @@ Server runs on `http://localhost:3000`
 | `.nvmrc` | Node 20 for local dev (recommended for Windows + native deps like `better-sqlite3`) |
 | `VAPI-FINAL-OPTIMIZED.txt` | Latest AI cold calling script (paste into Vapi dashboard) |
 | `.env.example` | Required environment variables |
-| `docs/archive/DEPLOYMENT-GUIDE.md` | Full deployment instructions |
-| `docs/archive/CLIENT-ONBOARDING-GUIDE.md` | How to onboard new clients |
+| `docs/HYGIENE.md` | Codebase hygiene burndown summary (PR-1 → PR-12) |
+| `docs/INTENT.md` | Behavioural intent contract (gates, canaries, invariants) |
+| `docs/AUDIT_MAP.md` | Entrypoints, scheduled jobs, integrations, gates |
+| `docs/AUDIT_BACKLOG.md` | Outstanding audit findings + status |
+| `docs/setup/RENDER-DEPLOYMENT-GUIDE.md` | Full deployment instructions |
+| `docs/CLIENT-ONBOARDING-GUIDE.md` | How to onboard new clients |
+| `docs/API_SETUP_GUIDE.md` | API setup + integration reference |
 
 ---
 
@@ -272,9 +302,9 @@ npm run render-start
 ## 📞 Support & Docs
 
 - **Vapi Script:** `VAPI-FINAL-OPTIMIZED.txt`
-- **Deployment Guide:** `docs/archive/DEPLOYMENT-GUIDE.md`
-- **Onboarding Guide:** `docs/archive/CLIENT-ONBOARDING-GUIDE.md`
-- **API Docs:** `docs/archive/API_SETUP_GUIDE.md`
+- **Deployment Guide:** `docs/setup/RENDER-DEPLOYMENT-GUIDE.md`
+- **Onboarding Guide:** `docs/CLIENT-ONBOARDING-GUIDE.md`
+- **API Docs:** `docs/API_SETUP_GUIDE.md`
 
 ---
 

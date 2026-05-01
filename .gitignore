@@ -65,3 +65,10 @@ public/ChatGPT*.png
 # Cursor workspace metadata (never commit)
 .cursor/
 
+# Per-client runtime artifacts written by routes/create-client.js
+# (created when a client is provisioned; not source-of-truth, easy to regenerate).
+# Real client folders that need source control should be tracked explicitly.
+clients/acme/
+clients/*/dashboard.html
+clients/*/checklist.md
+
