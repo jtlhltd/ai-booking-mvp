@@ -109,17 +109,17 @@ site:instagram.com "hair salon" "[city]" link
 
 ---
 
-### **METHOD 6: Your Existing Tools (If Available)**
+### **METHOD 6: Built-in Business Search APIs**
 
-**Check if you have these scripts:**
-- `enhanced-uk-business-search.js` - Business search tool
-- `real-decision-maker-contact-finder.js` - Decision maker finder
+The repo ships two reusable libraries (in `lib/`) that power the same lookups via the running server:
+- `lib/enhanced-business-search.js` — sample/fallback UK business generator (used by `POST /api/uk-business-search`)
+- `lib/real-uk-business-search.js` — real Google Places + Companies House lookup
+- `lib/real-decision-maker-contact-finder.js` — decision-maker discovery (used by `POST /api/decision-maker-contacts`)
 
 **How to use:**
-1. Run your business search tool
-2. Search for "beauty salon" or "hair salon"
-3. Export results → Get names + websites
-4. Copy websites to your Google Sheet
+1. Hit `POST /api/uk-business-search` with `{ "query": "beauty salon london" }` to get matching businesses
+2. Hit `POST /api/decision-maker-contacts` with the business payload to get owner/director contacts
+3. Export to your Google Sheet
 
 ---
 

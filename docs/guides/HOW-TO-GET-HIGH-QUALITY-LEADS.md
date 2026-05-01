@@ -180,14 +180,16 @@ For each practice, note:
 
 ---
 
-## 🛠️ METHOD 5: USE YOUR DECISION MAKER SCRIPT
+## 🛠️ METHOD 5: DECISION MAKER CONTACT API
 
-You have a script specifically for finding decision makers!
+The repo exposes a decision-maker lookup as an API endpoint (backed by `lib/real-decision-maker-contact-finder.js`).
 
-### **Run This:**
+### **Call This:**
 
 ```bash
-node real-decision-maker-contact-finder.js
+curl -X POST http://localhost:3000/api/decision-maker-contacts \
+  -H "Content-Type: application/json" \
+  -d '{"businessName":"Smile Dental","website":"smiledental.co.uk","industry":"dentist"}'
 ```
 
 **What It Does:**

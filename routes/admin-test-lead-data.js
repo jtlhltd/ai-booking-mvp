@@ -20,14 +20,14 @@ export function createAdminTestLeadDataRouter() {
         limit: 5
       };
 
-      const { generateUKBusinesses } = await import('../src/enhanced-business-search.js');
+      const { generateUKBusinesses } = await import('../lib/enhanced-business-search.js');
       const businesses = generateUKBusinesses(testQuery);
 
       if (businesses.length > 0) {
         const testBusiness = businesses[0];
 
         const { RealDecisionMakerContactFinder } = await import(
-          '../src/real-decision-maker-contact-finder.js'
+          '../lib/real-decision-maker-contact-finder.js'
         );
         const contactFinder = new RealDecisionMakerContactFinder();
 

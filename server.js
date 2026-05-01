@@ -2,8 +2,8 @@
 import 'dotenv/config';
 import { normalizePhoneE164 } from './lib/utils.js';
 import { parseStartPreference } from './lib/start-preference.js';
-import { generateUKBusinesses, getIndustryCategories, fuzzySearch } from './enhanced-business-search.js';
-import RealUKBusinessSearch from './real-uk-business-search.js';
+import { generateUKBusinesses, getIndustryCategories, fuzzySearch } from './lib/enhanced-business-search.js';
+import RealUKBusinessSearch from './lib/real-uk-business-search.js';
 import BookingSystem from './booking-system.js';
 import SMSEmailPipeline from './sms-email-pipeline.js';
 import morgan from 'morgan';

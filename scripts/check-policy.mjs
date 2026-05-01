@@ -70,7 +70,6 @@ const rules = [
       'routes/admin-vapi-logistics-mount.js',
       'routes/call-recordings.js',
       'routes/demo-dashboard-debug.js',
-      'schedule-prospect-calls.js',
       // Legacy debt: server.js still has two inline call-initiation sites.
       // Keep them allow-listed until they are extracted to the queue worker
       // (tracked as a follow-up; do NOT add new sites here).
