@@ -13,7 +13,7 @@
  */
 
 import 'dotenv/config';
-import fetch from 'node-fetch';
+// Uses Node 20+ native global fetch.
 
 const VAPI_PRIVATE_KEY = process.env.VAPI_PRIVATE_KEY;
 const ASSISTANT_ID = process.env.VAPI_ASSISTANT_ID || process.argv[2];

@@ -1,7 +1,6 @@
 // scripts/update-vapi-assistant-script.js
 // Update VAPI assistant with improved script and configuration
-
-import fetch from 'node-fetch';
+// Uses Node 20+ native global fetch.
 
 const VAPI_PRIVATE_KEY = process.env.VAPI_PRIVATE_KEY;
 const VAPI_ASSISTANT_ID = process.env.VAPI_ASSISTANT_ID || 'dd67a51c-7485-4b62-930a-4a84f328a1c9'; // Default assistant ID

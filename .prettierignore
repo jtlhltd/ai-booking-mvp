@@ -1,0 +1,13 @@
+node_modules
+coverage
+coverage-tmp
+data
+demos
+public
+docs
+tests/manual
+tests/fixtures
+archive
+.cursor
+*.min.js
+package-lock.json

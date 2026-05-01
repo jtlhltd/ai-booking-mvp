@@ -50,7 +50,7 @@ export function createClientOpsRouter(deps) {
 
       if (selfServiceOk) {
         const { isOutboundAbReviewPending, OUTBOUND_AB_REVIEW_PENDING_MESSAGE } = await import(
-          '../lib/outbound-ab-review-lock.js',
+          '../lib/outbound-ab-review-lock.js'
         );
         const existingLock = await getFullClient(clientKey);
         if (isOutboundAbReviewPending(existingLock?.vapi)) {

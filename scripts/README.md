@@ -74,8 +74,8 @@ Make sure these are set in your `.env` file:
 ## Troubleshooting
 
 **"fetch is not defined"**
-- You need Node.js 18+ (which has built-in fetch)
-- Or install node-fetch: `npm install node-fetch`
+- You need Node.js 18+ (which has built-in `globalThis.fetch`). Node 20
+  (the repo's `volta.node`) is recommended.
 
 **"API_KEY not set"**
 - Add `API_KEY=your_key` to your `.env` file
