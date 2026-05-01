@@ -17,6 +17,8 @@ import { createQueryRunner } from './db/query.js';
 import * as callQueueReads from './db/call-queue-reads.js';
 import * as callQueueWrites from './db/call-queue-writes.js';
 import { smearCallQueueScheduledFor } from './db/call-queue-smear.js';
+import * as costBudgetTracking from './db/cost-budget-tracking.js';
+import * as analyticsEvents from './db/analytics-events.js';
 
 const dbType = (process.env.DB_TYPE || '').toLowerCase();
 let pool = null;
@@ -3447,278 +3449,60 @@ export async function dedupePendingVapiCallQueueRows() {
 }
 
 // Cost tracking functions
-export async function trackCost({ clientKey, callId, costType, amount, currency = 'GBP', description, metadata }) {
-  const metadataJson = metadata ? JSON.stringify(metadata) : null;
-  
-  const { rows } = await query(`
-    INSERT INTO cost_tracking (client_key, call_id, cost_type, amount, currency, description, metadata)
-    VALUES ($1, $2, $3, $4, $5, $6, $7)
-    RETURNING *
-  `, [clientKey, callId, costType, amount, currency, description, metadataJson]);
-  
-  return rows[0];
+// Cost / budget / alert helpers — implementations live in db/cost-budget-tracking.js (PR-11).
+// These thin wrappers preserve the legacy db.js call shape (no `query` arg).
+export async function trackCost(args) {
+  return costBudgetTracking.trackCost(query, args);
 }
-
 export async function getCostsByTenant(clientKey, limit = 100) {
-  const { rows } = await query(`
-    SELECT * FROM cost_tracking 
-    WHERE client_key = $1 
-    ORDER BY created_at DESC 
-    LIMIT $2
-  `, [clientKey, limit]);
-  return rows;
+  return costBudgetTracking.getCostsByTenant(query, clientKey, limit);
 }
-
 export async function getCostsByPeriod(clientKey, period = 'daily') {
-  let interval;
-  switch (period) {
-    case 'daily': interval = '1 day'; break;
-    case 'weekly': interval = '7 days'; break;
-    case 'monthly': interval = '30 days'; break;
-    default: interval = '1 day';
-  }
-  
-  const { rows } = await query(`
-    SELECT 
-      cost_type,
-      SUM(amount) as total_amount,
-      COUNT(*) as transaction_count,
-      AVG(amount) as avg_amount
-    FROM cost_tracking 
-    WHERE client_key = $1 
-    AND created_at > now() - interval '${interval}'
-    GROUP BY cost_type
-    ORDER BY total_amount DESC
-  `, [clientKey]);
-  return rows;
+  return costBudgetTracking.getCostsByPeriod(query, clientKey, period);
 }
-
 export async function getTotalCostsByTenant(clientKey, period = 'daily') {
-  let interval;
-  switch (period) {
-    case 'daily': interval = '1 day'; break;
-    case 'weekly': interval = '7 days'; break;
-    case 'monthly': interval = '30 days'; break;
-    default: interval = '1 day';
-  }
-  
-  const { rows } = await query(`
-    SELECT 
-      SUM(amount) as total_cost,
-      COUNT(*) as transaction_count,
-      AVG(amount) as avg_cost
-    FROM cost_tracking 
-    WHERE client_key = $1 
-    AND created_at > now() - interval '${interval}'
-  `, [clientKey]);
-  return rows[0];
+  return costBudgetTracking.getTotalCostsByTenant(query, clientKey, period);
 }
-
-// Budget management functions
-export async function setBudgetLimit({ clientKey, budgetType, dailyLimit, weeklyLimit, monthlyLimit, currency = 'GBP' }) {
-  const { rows } = await query(`
-    INSERT INTO budget_limits (client_key, budget_type, daily_limit, weekly_limit, monthly_limit, currency)
-    VALUES ($1, $2, $3, $4, $5, $6)
-    ON CONFLICT (client_key, budget_type) 
-    DO UPDATE SET 
-      daily_limit = EXCLUDED.daily_limit,
-      weekly_limit = EXCLUDED.weekly_limit,
-      monthly_limit = EXCLUDED.monthly_limit,
-      currency = EXCLUDED.currency,
-      updated_at = now()
-    RETURNING *
-  `, [clientKey, budgetType, dailyLimit, weeklyLimit, monthlyLimit, currency]);
-  
-  return rows[0];
+export async function setBudgetLimit(args) {
+  return costBudgetTracking.setBudgetLimit(query, args);
 }
-
 export async function getBudgetLimits(clientKey) {
-  const { rows } = await query(`
-    SELECT * FROM budget_limits 
-    WHERE client_key = $1 AND is_active = TRUE
-    ORDER BY budget_type
-  `, [clientKey]);
-  return rows;
+  return costBudgetTracking.getBudgetLimits(query, clientKey);
 }
-
 export async function checkBudgetExceeded(clientKey, budgetType, period = 'daily') {
-  const budgetLimits = await getBudgetLimits(clientKey);
-  const budget = budgetLimits.find(b => b.budget_type === budgetType);
-  
-  if (!budget) return { exceeded: false, limit: 0, current: 0 };
-  
-  const currentCosts = await getTotalCostsByTenant(clientKey, period);
-  const currentAmount = parseFloat(currentCosts.total_cost || 0);
-  
-  let limit;
-  switch (period) {
-    case 'daily': limit = parseFloat(budget.daily_limit || 0); break;
-    case 'weekly': limit = parseFloat(budget.weekly_limit || 0); break;
-    case 'monthly': limit = parseFloat(budget.monthly_limit || 0); break;
-    default: limit = parseFloat(budget.daily_limit || 0);
-  }
-  
-  return {
-    exceeded: currentAmount > limit,
-    limit,
-    current: currentAmount,
-    remaining: Math.max(0, limit - currentAmount),
-    percentage: limit > 0 ? (currentAmount / limit) * 100 : 0
-  };
+  return costBudgetTracking.checkBudgetExceeded(query, clientKey, budgetType, period);
 }
-
-// Cost alert functions
-export async function createCostAlert({ clientKey, alertType, threshold, currentAmount, period }) {
-  const { rows } = await query(`
-    INSERT INTO cost_alerts (client_key, alert_type, threshold, current_amount, period, status)
-    VALUES ($1, $2, $3, $4, $5, 'active')
-    RETURNING *
-  `, [clientKey, alertType, threshold, currentAmount, period]);
-  
-  return rows[0];
+export async function createCostAlert(args) {
+  return costBudgetTracking.createCostAlert(query, args);
 }
-
 export async function getActiveAlerts(clientKey) {
-  const { rows } = await query(`
-    SELECT * FROM cost_alerts 
-    WHERE client_key = $1 AND status = 'active'
-    ORDER BY created_at DESC
-  `, [clientKey]);
-  return rows;
+  return costBudgetTracking.getActiveAlerts(query, clientKey);
 }
-
 export async function triggerAlert(alertId) {
-  await query(`
-    UPDATE cost_alerts 
-    SET status = 'triggered', triggered_at = now()
-    WHERE id = $1
-  `, [alertId]);
+  return costBudgetTracking.triggerAlert(query, alertId);
 }
-
 export async function checkCostAlerts(clientKey) {
-  const alerts = await getActiveAlerts(clientKey);
-  const triggeredAlerts = [];
-  
-  for (const alert of alerts) {
-    const budgetCheck = await checkBudgetExceeded(clientKey, alert.alert_type, alert.period);
-    
-    if (budgetCheck.exceeded && budgetCheck.current >= alert.threshold) {
-      await triggerAlert(alert.id);
-      triggeredAlerts.push({
-        alert,
-        budgetCheck,
-        message: `Budget exceeded: ${alert.alert_type} ${alert.period} limit of $${alert.threshold} reached (current: $${budgetCheck.current.toFixed(2)})`
-      });
-    }
-  }
-  
-  return triggeredAlerts;
+  return costBudgetTracking.checkCostAlerts(query, clientKey);
 }
 
-// Analytics functions
-export async function trackAnalyticsEvent({ clientKey, eventType, eventCategory, eventData, sessionId, userAgent, ipAddress }) {
-  const eventDataJson = eventData ? JSON.stringify(eventData) : null;
-  
-  const { rows } = await query(`
-    INSERT INTO analytics_events (client_key, event_type, event_category, event_data, session_id, user_agent, ip_address)
-    VALUES ($1, $2, $3, $4, $5, $6, $7)
-    RETURNING *
-  `, [clientKey, eventType, eventCategory, eventDataJson, sessionId, userAgent, ipAddress]);
-  
-  return rows[0];
+// Analytics events + conversion funnel — implementations live in db/analytics-events.js (PR-11).
+export async function trackAnalyticsEvent(args) {
+  return analyticsEvents.trackAnalyticsEvent(query, args);
 }
-
 export async function getAnalyticsEvents(clientKey, limit = 100, eventType = null) {
-  let queryStr = `
-    SELECT * FROM analytics_events 
-    WHERE client_key = $1
-  `;
-  const params = [clientKey];
-  
-  if (eventType) {
-    queryStr += ` AND event_type = $2`;
-    params.push(eventType);
-  }
-  
-  queryStr += ` ORDER BY created_at DESC LIMIT $${params.length + 1}`;
-  params.push(limit);
-  
-  const { rows } = await query(queryStr, params);
-  return rows;
+  return analyticsEvents.getAnalyticsEvents(query, clientKey, limit, eventType);
 }
-
 export async function getAnalyticsSummary(clientKey, days = 7) {
-  const { rows } = await query(`
-    SELECT 
-      event_type,
-      event_category,
-      COUNT(*) as event_count,
-      COUNT(DISTINCT session_id) as unique_sessions,
-      COUNT(DISTINCT ip_address) as unique_ips
-    FROM analytics_events 
-    WHERE client_key = $1 
-    AND created_at > now() - interval '${days} days'
-    GROUP BY event_type, event_category
-    ORDER BY event_count DESC
-  `, [clientKey]);
-  return rows;
+  return analyticsEvents.getAnalyticsSummary(query, clientKey, days);
 }
-
-// Conversion funnel functions
-export async function trackConversionStage({ clientKey, leadPhone, stage, stageData, previousStage = null, timeToStage = null }) {
-  const stageDataJson = stageData ? JSON.stringify(stageData) : null;
-  
-  const { rows } = await query(`
-    INSERT INTO conversion_funnel (client_key, lead_phone, stage, stage_data, previous_stage, time_to_stage)
-    VALUES ($1, $2, $3, $4, $5, $6)
-    RETURNING *
-  `, [clientKey, leadPhone, stage, stageDataJson, previousStage, timeToStage]);
-  
-  return rows[0];
+export async function trackConversionStage(args) {
+  return analyticsEvents.trackConversionStage(query, args);
 }
-
 export async function getConversionFunnel(clientKey, days = 30) {
-  const { rows } = await query(`
-    SELECT 
-      stage,
-      COUNT(*) as stage_count,
-      COUNT(DISTINCT lead_phone) as unique_leads,
-      AVG(time_to_stage) as avg_time_to_stage
-    FROM conversion_funnel 
-    WHERE client_key = $1 
-    AND created_at > now() - interval '${days} days'
-    GROUP BY stage
-    ORDER BY stage_count DESC
-  `, [clientKey]);
-  return rows;
+  return analyticsEvents.getConversionFunnel(query, clientKey, days);
 }
-
 export async function getConversionRates(clientKey, days = 30) {
-  const { rows } = await query(`
-    WITH stage_counts AS (
-      SELECT 
-        stage,
-        COUNT(DISTINCT lead_phone) as unique_leads
-      FROM conversion_funnel 
-      WHERE client_key = $1 
-      AND created_at > now() - interval '${days} days'
-      GROUP BY stage
-    ),
-    total_leads AS (
-      SELECT COUNT(DISTINCT lead_phone) as total FROM conversion_funnel 
-      WHERE client_key = $1 
-      AND created_at > now() - interval '${days} days'
-    )
-    SELECT 
-      sc.stage,
-      sc.unique_leads,
-      tl.total,
-      ROUND((sc.unique_leads::DECIMAL / tl.total) * 100, 2) as conversion_rate
-    FROM stage_counts sc
-    CROSS JOIN total_leads tl
-    ORDER BY sc.unique_leads DESC
-  `, [clientKey]);
-  return rows;
+  return analyticsEvents.getConversionRates(query, clientKey, days);
 }
 
 // Performance metrics functions
