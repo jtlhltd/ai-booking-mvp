@@ -784,6 +784,37 @@ describe('Batch2: next 25 routes (happy + failure)', () => {
       expect(res.body).toEqual(expect.objectContaining({ ok: true, count: 1 }));
     });
 
+    test('failure: GET /api/clients returns 401 for non-admin when req.clientKey is missing', async () => {
+      jest.resetModules();
+      jest.unstable_mockModule('../../middleware/security.js', () => ({
+        authenticateApiKey: (req, _res, next) => {
+          req.clientKey = undefined;
+          req.apiKey = { permissions: [] };
+          next();
+        },
+        requireTenantAccess: (_req, _res, next) => next()
+      }));
+      const { createClientsApiRouter } = await import('../../routes/clients-api.js');
+      const app = createContractApp({
+        mounts: [
+          {
+            path: '/api/clients',
+            router: () =>
+              createClientsApiRouter({
+                listFullClients: async () => [],
+                getFullClient: async () => null,
+                upsertFullClient: async () => ({}),
+                deleteClient: async () => ({ changes: 0 }),
+                pickTimezone: () => 'Europe/London',
+                isDashboardSelfServiceClient: () => false
+              })
+          }
+        ]
+      });
+      const res = await request(app).get('/api/clients').set('X-API-Key', 'orphan').expect(401);
+      expect(res.body).toEqual(expect.objectContaining({ ok: false, error: 'unauthorized' }));
+    });
+
     test('happy: GET /api/clients admin list is capped and reports total + truncated', async () => {
       const many = Array.from({ length: 600 }, (_, i) => ({ clientKey: `c${i}` }));
       const { createClientsApiRouter } = await import('../../routes/clients-api.js');

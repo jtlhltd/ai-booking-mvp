@@ -144,6 +144,13 @@ import { createHealthProbesRouter } from './routes/health-probes-mount.js';
 import { getIntegrationStatuses as getIntegrationStatusesForClient } from './lib/integration-statuses.js';
 import { bootstrapClients } from './lib/bootstrap-clients.js';
 import {
+  resolveLogisticsSpreadsheetId,
+  trimEnvDashboard,
+  buildDashboardExperience,
+  adjustColorBrightness
+} from './lib/dashboard-experience.js';
+import { buildAnalyticsReportFromDashboard } from './lib/analytics-report-builder.js';
+import {
   DASHBOARD_ACTIVITY_TZ,
   formatGBP,
   formatTimeAgoLabel,
@@ -1018,92 +1025,6 @@ function effectiveDialScheduledForApiDisplay(row, tenant) {
 
 // moved: /api/retry-queue/* → routes/retry-queue.js
 
-function resolveLogisticsSpreadsheetId(client) {
-  if (!client) return process.env.LOGISTICS_SHEET_ID || null;
-  return (
-    client.vapi_json?.logisticsSheetId
-    || client.vapi?.logisticsSheetId
-    || client.gsheet_id
-    || process.env.LOGISTICS_SHEET_ID
-    || null
-  );
-}
-
-function trimEnvDashboard(key) {
-  const v = process.env[key];
-  if (v == null || String(v).trim() === '') return null;
-  return String(v).trim();
-}
-
-function parseDashboardPrivacyBullets() {
-  const raw = trimEnvDashboard('DASHBOARD_PRIVACY_BULLETS');
-  if (!raw) return [];
-  return raw
-    .split('|')
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .slice(0, 10);
-}
-
-/**
- * Client-dashboard-only bundle: integrations, sync timestamps, privacy copy, build ids, read-only flag.
- */
-function buildDashboardExperience(client, metricsAsOfIso) {
-  const v = client?.vapi && typeof client.vapi === 'object' && !Array.isArray(client.vapi) ? client.vapi : {};
-  const voiceOk = !!(client?.vapiAssistantId || v.assistantId);
-  const tenantLogistics = !!(v.logisticsSheetId && String(v.logisticsSheetId).trim());
-  const resolvedSheet = resolveLogisticsSpreadsheetId(client);
-  const logisticsAny = !!resolvedSheet;
-  const crmLeadSheet = !!(v.gsheet_id || v.gsheetId || v.crmSheetId || v.googleSheetId);
-  const smsOk = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN);
-  const readOnlyGlobal = /^(1|true|yes)$/i.test(String(process.env.DASHBOARD_GLOBAL_READ_ONLY || '').trim());
-  const readOnlyTenant = v.dashboardReadOnly === true || String(v.dashboardReadOnly || '').toLowerCase() === 'true';
-
-  const sheetHint = tenantLogistics
-    ? 'Logistics / call-result sheet id is set on this workspace.'
-    : logisticsAny
-      ? 'A sheet id is available via server default (e.g. LOGISTICS_SHEET_ID). Prefer setting logisticsSheetId on the tenant for production.'
-      : 'No logistics sheet id — voice tool writes to Sheets may fail until configured.';
-
-  return {
-    integrations: [
-      {
-        id: 'voice',
-        label: 'Voice (Vapi)',
-        ok: voiceOk,
-        hint: voiceOk ? 'Assistant is linked for outbound/inbound flows.' : 'Add assistantId to this workspace Vapi config.'
-      },
-      {
-        id: 'google_sheets',
-        label: 'Google Sheets',
-        ok: logisticsAny || crmLeadSheet,
-        hint: `${sheetHint}${crmLeadSheet ? ' Lead-list / CRM sheet id also present.' : ''}`.trim()
-      },
-      {
-        id: 'sms',
-        label: 'SMS (Twilio)',
-        ok: smsOk,
-        hint: smsOk ? 'Server Twilio credentials are set (tenant may still need templates).' : 'Twilio env vars missing — SMS may be unavailable.'
-      }
-    ],
-    sync: {
-      metricsAsOfIso: metricsAsOfIso || null,
-      payloadGeneratedAtIso: new Date().toISOString()
-    },
-    privacy: {
-      bullets: parseDashboardPrivacyBullets(),
-      exportNote: trimEnvDashboard('DASHBOARD_PRIVACY_EXPORT_NOTE')
-    },
-    app: {
-      version: trimEnvDashboard('DASHBOARD_APP_VERSION'),
-      commit: trimEnvDashboard('RENDER_GIT_COMMIT')
-    },
-    ui: {
-      readOnly: readOnlyGlobal || readOnlyTenant
-    }
-  };
-}
-
 // moved: /api/follow-up-queue/* → routes/follow-up-queue.js
 
 // moved: /api/daily-summary/:clientKey → routes/daily-summary.js
@@ -1140,17 +1061,7 @@ app.use(opsRouter);
 
 // moved: /api/(sms-delivery-rate|calendar-sync|quality-metrics) → routes/quick-win-metrics.js
 
-// Helper function to adjust color brightness
-function adjustColorBrightness(hex, percent) {
-  const num = parseInt(hex.replace("#", ""), 16);
-  const amt = Math.round(2.55 * percent);
-  const R = (num >> 16) + amt;
-  const G = (num >> 8 & 0x00FF) + amt;
-  const B = (num & 0x0000FF) + amt;
-  return "#" + (0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 +
-      (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 +
-      (B < 255 ? B < 1 ? 0 : B : 255)).toString(16).slice(1);
-}
+// Dashboard experience + logistics sheet id + color helper: lib/dashboard-experience.js
 
 // moved: /api/health/comprehensive, /api/call-status, /health/lb → routes/health-and-diagnostics.js
 
@@ -1590,111 +1501,11 @@ async function generateAnalyticsReport(clientKey, reportType = 'comprehensive', 
   try {
     const dashboard = await getAnalyticsDashboard(clientKey, days);
     if (!dashboard) return null;
-    
-    const { summary, conversionFunnel, conversionRates, performanceMetrics, costMetrics } = dashboard;
-    
-    // Generate insights
-    const insights = [];
-    
-    if (summary.conversionRate < 10) {
-      insights.push({
-        type: 'warning',
-        category: 'conversion',
-        message: `Low conversion rate (${summary.conversionRate}%). Consider optimizing assistant prompts or call timing.`
-      });
-    }
-    
-    if (summary.costPerConversion > 5) {
-      insights.push({
-        type: 'warning',
-        category: 'cost',
-        message: `High cost per conversion ($${summary.costPerConversion}). Review call duration and assistant efficiency.`
-      });
-    }
-    
-    if (summary.avgCallDuration > 300) {
-      insights.push({
-        type: 'info',
-        category: 'efficiency',
-        message: `Average call duration is ${Math.round(summary.avgCallDuration / 60)} minutes. Consider optimizing for shorter, more focused calls.`
-      });
-    }
-    
-    // Find conversion bottlenecks
-    const funnelStages = conversionFunnel.map(stage => ({
-      stage: stage.stage,
-      leads: stage.unique_leads,
-      conversionRate: stage.unique_leads / summary.totalLeads * 100
-    }));
-    
-    const bottleneckStage = funnelStages.reduce((min, stage) => 
-      stage.conversionRate < min.conversionRate ? stage : min
-    );
-    
-    if (bottleneckStage.conversionRate < 50) {
-      insights.push({
-        type: 'recommendation',
-        category: 'optimization',
-        message: `Conversion bottleneck detected at "${bottleneckStage.stage}" stage (${Math.round(bottleneckStage.conversionRate)}%). Focus optimization efforts here.`
-      });
-    }
-    
-    return {
-      reportType,
-      period: `${days} days`,
-      generatedAt: new Date().toISOString(),
-      clientKey,
-      summary,
-      insights,
-      funnelStages,
-      recommendations: generateRecommendations(summary, insights),
-      data: {
-        conversionFunnel,
-        conversionRates,
-        performanceMetrics,
-        costMetrics
-      }
-    };
+    return buildAnalyticsReportFromDashboard(dashboard, reportType, clientKey, days);
   } catch (error) {
     console.error('[ANALYTICS REPORT ERROR]', error);
     return null;
   }
-}
-
-function generateRecommendations(summary, insights) {
-  const recommendations = [];
-  
-  if (summary.conversionRate < 15) {
-    recommendations.push({
-      priority: 'high',
-      category: 'conversion_optimization',
-      action: 'Optimize Assistant Prompts',
-      description: 'Review and improve assistant conversation flow to increase conversion rates',
-      expectedImpact: 'Increase conversion rate by 5-10%'
-    });
-  }
-  
-  if (summary.costPerConversion > 3) {
-    recommendations.push({
-      priority: 'medium',
-      category: 'cost_optimization',
-      action: 'Implement Call Scheduling',
-      description: 'Use intelligent call scheduling to reduce costs and improve timing',
-      expectedImpact: 'Reduce cost per conversion by 20-30%'
-    });
-  }
-  
-  if (summary.avgCallDuration > 240) {
-    recommendations.push({
-      priority: 'medium',
-      category: 'efficiency',
-      action: 'Streamline Call Process',
-      description: 'Optimize call flow to reduce average duration while maintaining quality',
-      expectedImpact: 'Reduce call duration by 15-25%'
-    });
-  }
-  
-  return recommendations;
 }
 
 // A/B Testing functions

@@ -13,7 +13,7 @@ For behavioral contracts, see [INTENT.md](INTENT.md). For the hygiene burndown i
 ### P2 — Heavy dashboard / admin reads
 
 - **Status**: [routes/demo-dashboard.js](../routes/demo-dashboard.js) `handleDemoDashboard` accepts optional `leadsLimit` and `callsFeedLimit` query params with **server-enforced caps** (see handler). [routes/admin-clients.js](../routes/admin-clients.js) `GET /client/:clientKey` accepts `leadsLimit` / `callsLimit` with caps. [routes/leads-portal-mount.js](../routes/leads-portal-mount.js) clamps `GET /api/leads` `limit`. [routes/clients-api.js](../routes/clients-api.js) admin `GET /` uses bounded `limit` / `offset` over `listFullClients()`.
-- **Remaining**: Further pagination/caps or composite indexes as **measured** slow queries appear in [lib/query-performance-tracker.js](../lib/query-performance-tracker.js) (evidence-driven).
+- **Remaining (monitoring-first)**: No speculative composite indexes in the hygiene roadmap; caps and in-memory slicing above are the baseline. Add pagination, caps, or **one** composite index per **confirmed** repeat offender from `query_performance` / slow-query alerts ([lib/query-performance-tracker.js](../lib/query-performance-tracker.js)), not from guesswork.
 
 ---
 

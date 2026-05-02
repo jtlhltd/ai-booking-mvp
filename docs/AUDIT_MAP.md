@@ -11,6 +11,8 @@ This file is a **map of what to test** (and what “the system” is) so verific
   - `db/analytics-events.js` — analytics events, conversion stages, conversion funnel
 - **Scheduled work**: `lib/scheduled-jobs.js` (cron + intervals)
 - **Pure helpers extracted from `server.js`**:
+  - `lib/dashboard-experience.js` — client dashboard bundle (integrations hints, privacy bullets, read-only flags, logistics sheet id resolution, `adjustColorBrightness`)
+  - `lib/analytics-report-builder.js` — pure assembly of admin analytics report payload from a dashboard snapshot (`buildAnalyticsReportFromDashboard`, `generateRecommendations`)
   - `lib/dashboard-activity-formatters.js` — dashboard / lead-timeline formatting + classification (no module state)
   - `lib/bootstrap-clients.js` — `BOOTSTRAP_CLIENTS_JSON` env-driven client seeding
 - **In-memory dial path**: `lib/instant-calling.js` — burst dialer is named `dialLeadsNowBatch` (renamed from `processCallQueue` in PR-9). The DB-polling worker `processCallQueue` lives in `server.js` and is the only one cron should ever call.

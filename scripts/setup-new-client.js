@@ -13,8 +13,12 @@
  * 5. Sending welcome email
  */
 
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { adjustColorBrightness } from '../lib/dashboard-experience.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Get command line arguments
 const args = process.argv.slice(2);
@@ -169,18 +173,6 @@ const clientConfig = {
         ]
     }
 };
-
-// Helper function to adjust color brightness
-function adjustColorBrightness(hex, percent) {
-    const num = parseInt(hex.replace("#", ""), 16);
-    const amt = Math.round(2.55 * percent);
-    const R = (num >> 16) + amt;
-    const G = (num >> 8 & 0x00FF) + amt;
-    const B = (num & 0x0000FF) + amt;
-    return "#" + (0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 +
-        (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 +
-        (B < 255 ? B < 1 ? 0 : B : 255)).toString(16).slice(1);
-}
 
 // Create client directory
 const clientDir = path.join(__dirname, '..', 'clients', clientKey);

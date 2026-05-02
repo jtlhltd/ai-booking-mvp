@@ -20,3 +20,5 @@ Process-local invariants in ops-invariants **cannot** detect cross-host drift.
 ## Out of scope for the audit backlog closure
 
 No migration or worker changes are implemented here; this document anchors the epic for a future PR.
+
+**Hygiene roadmap:** Still deferred until horizontal scaling is a product requirement; no DB lease work was added in that pass (see [AUDIT_BACKLOG.md](AUDIT_BACKLOG.md) DEFERRED).
