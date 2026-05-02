@@ -150,6 +150,8 @@ import {
   adjustColorBrightness
 } from './lib/dashboard-experience.js';
 import { buildAnalyticsReportFromDashboard } from './lib/analytics-report-builder.js';
+import { generateCostRecommendations } from './lib/cost-optimization-recommendations.js';
+import { categorizeError, shouldRetryError, calculateRetryDelay } from './lib/error-retry-policy.js';
 import {
   DASHBOARD_ACTIVITY_TZ,
   formatGBP,
@@ -1352,39 +1354,7 @@ async function getCostOptimizationMetrics(tenantKey) {
   }
 }
 
-function generateCostRecommendations(costs, budgetStatus) {
-  const recommendations = [];
-  
-  if (costs.total_cost > 0) {
-    const avgCostPerCall = costs.total_cost / costs.transaction_count;
-    
-    if (avgCostPerCall > 0.10) {
-      recommendations.push({
-        type: 'cost_optimization',
-        priority: 'high',
-        message: `Average call cost is $${avgCostPerCall.toFixed(2)}. Consider optimizing assistant prompts to reduce call duration.`
-      });
-    }
-    
-    if (budgetStatus.vapi_calls?.daily?.percentage > 80) {
-      recommendations.push({
-        type: 'budget_alert',
-        priority: 'medium',
-        message: `Daily budget utilization is ${budgetStatus.vapi_calls.daily.percentage.toFixed(1)}%. Consider setting up budget alerts.`
-      });
-    }
-    
-    if (costs.transaction_count > 50) {
-      recommendations.push({
-        type: 'volume_optimization',
-        priority: 'low',
-        message: `High call volume (${costs.transaction_count} calls). Consider implementing call scheduling to optimize timing.`
-      });
-    }
-  }
-  
-  return recommendations;
-}
+// generateCostRecommendations: lib/cost-optimization-recommendations.js
 
 // Analytics and reporting functions
 async function trackAnalyticsEvent({ clientKey, eventType, eventCategory, eventData, sessionId, userAgent, ipAddress }) {
@@ -1767,76 +1737,7 @@ app.use(compression({
 // Connection pool optimization
 setInterval(optimizeDatabaseConnections, 5 * 60 * 1000); // Every 5 minutes
 
-// Categorize errors for appropriate retry handling
-function categorizeError(error) {
-  const message = error.message?.toLowerCase() || '';
-  const status = error.status || error.statusCode;
-  
-  // Network/connectivity errors (retryable)
-  if (message.includes('timeout') || message.includes('econnreset') || message.includes('enotfound')) {
-    return 'network';
-  }
-  
-  // Rate limiting (retryable with longer delay)
-  if (status === 429 || message.includes('rate limit') || message.includes('too many requests')) {
-    return 'rate_limit';
-  }
-  
-  // Server errors (retryable)
-  if (status >= 500 && status < 600) {
-    return 'server_error';
-  }
-  
-  // Client errors (not retryable)
-  if (status >= 400 && status < 500) {
-    return 'client_error';
-  }
-  
-  // VAPI-specific errors
-  if (message.includes('vapi') || message.includes('assistant') || message.includes('phone number')) {
-    return 'vapi_error';
-  }
-  
-  // Critical errors (circuit breaker)
-  if (message.includes('unauthorized') || message.includes('forbidden') || message.includes('invalid key')) {
-    return 'critical';
-  }
-  
-  return 'unknown';
-}
-
-// Determine if error should be retried
-function shouldRetryError(errorType, attempt, maxRetries) {
-  const retryableErrors = ['network', 'server_error', 'rate_limit'];
-  const nonRetryableErrors = ['client_error', 'critical'];
-  
-  if (nonRetryableErrors.includes(errorType)) {
-    return false;
-  }
-  
-  if (retryableErrors.includes(errorType)) {
-    return attempt < maxRetries;
-  }
-  
-  // Unknown errors: retry once
-  return attempt === 1;
-}
-
-// Calculate retry delay with jitter
-function calculateRetryDelay(baseDelay, attempt, errorType) {
-  let delay = baseDelay * Math.pow(2, attempt - 1);
-  
-  // Special handling for rate limiting
-  if (errorType === 'rate_limit') {
-    delay = Math.max(delay, 5000); // Minimum 5 seconds for rate limits
-  }
-  
-  // Add jitter (±25% random variation)
-  const jitter = delay * 0.25 * (Math.random() - 0.5);
-  delay = Math.max(100, delay + jitter);
-  
-  return Math.floor(delay);
-}
+// categorizeError / shouldRetryError / calculateRetryDelay: lib/error-retry-policy.js
 
 // Circuit breaker state management
 const circuitBreakerState = new Map();

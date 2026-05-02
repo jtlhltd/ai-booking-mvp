@@ -71,6 +71,8 @@ multi-instance deployments). Each one has an Intent ID in
 [`docs/INTENT.md`](INTENT.md), so the gates will keep behaviour pinned
 even before the underlying work lands.
 
+**Living exhaustive queue (signals + status):** [`docs/HYGIENE_EXHAUSTIVE_QUEUE.md`](HYGIENE_EXHAUSTIVE_QUEUE.md). **Explicit deferrals / known leftovers:** [`docs/HYGIENE_PASS_RESIDUAL.md`](HYGIENE_PASS_RESIDUAL.md).
+
 ## Pattern: how to extract another helper cluster
 
 If a future contributor wants to keep peeling away at `server.js` /

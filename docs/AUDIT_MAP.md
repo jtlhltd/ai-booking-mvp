@@ -13,6 +13,8 @@ This file is a **map of what to test** (and what “the system” is) so verific
 - **Pure helpers extracted from `server.js`**:
   - `lib/dashboard-experience.js` — client dashboard bundle (integrations hints, privacy bullets, read-only flags, logistics sheet id resolution, `adjustColorBrightness`)
   - `lib/analytics-report-builder.js` — pure assembly of admin analytics report payload from a dashboard snapshot (`buildAnalyticsReportFromDashboard`, `generateRecommendations`)
+  - `lib/cost-optimization-recommendations.js` — `generateCostRecommendations` from daily cost + budget status
+  - `lib/error-retry-policy.js` — `categorizeError`, `shouldRetryError`, `calculateRetryDelay` for retry backoff
   - `lib/dashboard-activity-formatters.js` — dashboard / lead-timeline formatting + classification (no module state)
   - `lib/bootstrap-clients.js` — `BOOTSTRAP_CLIENTS_JSON` env-driven client seeding
 - **In-memory dial path**: `lib/instant-calling.js` — burst dialer is named `dialLeadsNowBatch` (renamed from `processCallQueue` in PR-9). The DB-polling worker `processCallQueue` lives in `server.js` and is the only one cron should ever call.
