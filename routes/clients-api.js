@@ -6,6 +6,16 @@ import { Router } from 'express';
 import { cacheMiddleware } from '../lib/cache.js';
 import { authenticateApiKey, requireTenantAccess } from '../middleware/security.js';
 
+const ADMIN_CLIENT_LIST_DEFAULT = 500;
+const ADMIN_CLIENT_LIST_MAX = 500;
+const ADMIN_CLIENT_LIST_OFFSET_MAX = 500000;
+
+function clampAdminClientListInt(raw, min, max, fallback) {
+  const n = parseInt(String(raw ?? ''), 10);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
 /**
  * @param {{
  *  listFullClients: () => Promise<any[]>,
@@ -39,7 +49,23 @@ export function createClientsApiRouter(deps) {
     try {
       if (isAdminKey(req)) {
         const rows = await listFullClients();
-        return res.json({ ok: true, count: rows.length, clients: rows });
+        const limit = clampAdminClientListInt(
+          req.query.limit,
+          1,
+          ADMIN_CLIENT_LIST_MAX,
+          ADMIN_CLIENT_LIST_DEFAULT
+        );
+        const offset = clampAdminClientListInt(req.query.offset, 0, ADMIN_CLIENT_LIST_OFFSET_MAX, 0);
+        const slice = rows.slice(offset, offset + limit);
+        return res.json({
+          ok: true,
+          total: rows.length,
+          count: slice.length,
+          limit,
+          offset,
+          clients: slice,
+          truncated: offset + limit < rows.length
+        });
       }
 
       const ck = req.clientKey;

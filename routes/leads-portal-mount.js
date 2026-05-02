@@ -1,5 +1,16 @@
 import { Router } from 'express';
 
+/** Default page size for GET /api/leads (portal). */
+const LEADS_PORTAL_LIST_DEFAULT = 1000;
+/** Hard cap aligned with demo-dashboard full-mode leads ceiling. */
+const LEADS_PORTAL_LIST_HARD_MAX = 5000;
+
+function clampLeadsPortalListLimit(raw) {
+  const n = parseInt(String(raw ?? ''), 10);
+  if (!Number.isFinite(n) || n < 1) return LEADS_PORTAL_LIST_DEFAULT;
+  return Math.min(LEADS_PORTAL_LIST_HARD_MAX, n);
+}
+
 export function createLeadsPortalRouter(deps) {
   const {
     getClientFromHeader,
@@ -106,7 +117,7 @@ export function createLeadsPortalRouter(deps) {
       }
 
       const { query } = await import('../db.js');
-      const limit = parseInt(req.query.limit) || 1000;
+      const limit = clampLeadsPortalListLimit(req.query.limit);
 
       const result = await query(
         `

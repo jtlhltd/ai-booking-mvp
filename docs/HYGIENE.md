@@ -30,6 +30,8 @@ done, what is still outstanding, and which gates protect the new state.
 | PR-11 | db.js sibling extraction                     | Extracted cost / budget / cost-alert and analytics-events / conversion-funnel query clusters into `db/cost-budget-tracking.js` and `db/analytics-events.js`; db.js shrunk by 216 lines; added 24 contract tests with whitelisted `period`/`days` to interval mapping. |
 | PR-12 | Docs sweep                                   | This file. Refreshed `README.md` project structure, refreshed `docs/AUDIT_MAP.md` to reflect the new file layout, deleted superseded planning docs.                                                                                                     |
 
+**Post-PR-12 (hygiene backlog closure):** Route payload logging is pinned by policy (`privacy.no-pretty-json-req-body`, `privacy.no-bare-req-body-console-arg`) plus `lib/log-scrubber.js`. Remaining OPEN items in [`AUDIT_BACKLOG.md`](AUDIT_BACKLOG.md) are **heavy reads** (evidence-driven caps/indexes) and **DEFERRED** multi-instance Vapi slot lease only.
+
 ## Gates added or sharpened
 
 These are the regression catchers wired into `npm run test:ci`:
@@ -40,6 +42,7 @@ These are the regression catchers wired into `npm run test:ci`:
 - `tests/canaries/`
   - `request-queue-retries-bounded.canary.test.js` (PR-7)
   - `legacy-instant-import-dial-gated.canary.test.js` (PR-9)
+  - `sqlite-call-queue-phantom-check.canary.test.js` (post-PR-12 SQLite **call_queue** parity)
 - `lib/ops-invariants.js`
   - `vapi_concurrency_underflow` (PR-9)
   - `vapi_concurrency_unknown_release` (PR-9)

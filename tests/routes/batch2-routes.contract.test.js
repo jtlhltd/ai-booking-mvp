@@ -784,6 +784,65 @@ describe('Batch2: next 25 routes (happy + failure)', () => {
       expect(res.body).toEqual(expect.objectContaining({ ok: true, count: 1 }));
     });
 
+    test('happy: GET /api/clients admin list is capped and reports total + truncated', async () => {
+      const many = Array.from({ length: 600 }, (_, i) => ({ clientKey: `c${i}` }));
+      const { createClientsApiRouter } = await import('../../routes/clients-api.js');
+      const app = createContractApp({
+        mounts: [
+          {
+            path: '/api/clients',
+            router: () =>
+              createClientsApiRouter({
+                listFullClients: async () => many,
+                getFullClient: async () => null,
+                upsertFullClient: async () => ({}),
+                deleteClient: async () => ({ changes: 1 }),
+                pickTimezone: () => 'Europe/London',
+                isDashboardSelfServiceClient: () => false
+              })
+          }
+        ]
+      });
+      const res = await request(app).get('/api/clients').set('X-API-Key', 'admin').expect(200);
+      expect(res.body.ok).toBe(true);
+      expect(res.body.total).toBe(600);
+      expect(res.body.clients).toHaveLength(500);
+      expect(res.body.truncated).toBe(true);
+      expect(res.body.limit).toBe(500);
+      expect(res.body.offset).toBe(0);
+    });
+
+    test('happy: GET /api/clients admin offset + limit slices listFullClients', async () => {
+      const rows = [
+        { clientKey: 'a' },
+        { clientKey: 'b' },
+        { clientKey: 'c' },
+        { clientKey: 'd' }
+      ];
+      const { createClientsApiRouter } = await import('../../routes/clients-api.js');
+      const app = createContractApp({
+        mounts: [
+          {
+            path: '/api/clients',
+            router: () =>
+              createClientsApiRouter({
+                listFullClients: async () => rows,
+                getFullClient: async () => null,
+                upsertFullClient: async () => ({}),
+                deleteClient: async () => ({ changes: 1 }),
+                pickTimezone: () => 'Europe/London',
+                isDashboardSelfServiceClient: () => false
+              })
+          }
+        ]
+      });
+      const res = await request(app).get('/api/clients').query({ offset: 1, limit: 2 }).set('X-API-Key', 'admin').expect(200);
+      expect(res.body.clients.map((c) => c.clientKey)).toEqual(['b', 'c']);
+      expect(res.body.total).toBe(4);
+      expect(res.body.count).toBe(2);
+      expect(res.body.truncated).toBe(true);
+    });
+
     test('failure: GET /api/clients/:key returns 403 on tenant mismatch', async () => {
       const { createClientsApiRouter } = await import('../../routes/clients-api.js');
       const app = createContractApp({

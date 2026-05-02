@@ -10,19 +10,10 @@ For behavioral contracts, see [INTENT.md](INTENT.md). For the hygiene burndown i
 
 ## OPEN — still actionable
 
-### P2 — Route payload logging hygiene
-
-- **Status**: Partially addressed (`lib/log-scrubber.js`, many routes use `scrubBody`). Policy gates in [scripts/check-policy.mjs](../scripts/check-policy.mjs): `privacy.no-pretty-json-req-body` (no pretty-printed `JSON.stringify(req.body, null, …)` in `routes/`) and `privacy.no-bare-req-body-console-arg` (no raw `req.body` as a terminal `console.*` argument in `routes/`). See [INTENT.md](INTENT.md) Domain: privacy.
-- **Remaining**: When adding new routes, keep using `scrubBody` (or keys-only) for any payload logging; CI enforces the two policy rules above. Test-only endpoints (`import-test`, dev mounts) should stay non-production or scrubbed.
-
 ### P2 — Heavy dashboard / admin reads
 
-- **Status**: [routes/demo-dashboard.js](../routes/demo-dashboard.js) `handleDemoDashboard` accepts optional `leadsLimit` and `callsFeedLimit` query params with **server-enforced caps** (see handler). [routes/admin-clients.js](../routes/admin-clients.js) `GET /client/:clientKey` accepts `leadsLimit` / `callsLimit` with caps.
-- **Remaining**: Add pagination/caps to other hot list endpoints as they show up in [lib/query-performance-tracker.js](../lib/query-performance-tracker.js); add composite indexes for measured slow queries.
-
-### P3 — SQLite vs Postgres queue invariants
-
-- **Note**: Postgres enforces `call_queue_completed_requires_call_id` for `vapi_call` rows (see [db.js](../db.js)). SQLite `call_queue` has **no** equivalent CHECK; local/dev SQLite relies on application logic and tests. Low priority unless queue bugs are reproduced on SQLite only.
+- **Status**: [routes/demo-dashboard.js](../routes/demo-dashboard.js) `handleDemoDashboard` accepts optional `leadsLimit` and `callsFeedLimit` query params with **server-enforced caps** (see handler). [routes/admin-clients.js](../routes/admin-clients.js) `GET /client/:clientKey` accepts `leadsLimit` / `callsLimit` with caps. [routes/leads-portal-mount.js](../routes/leads-portal-mount.js) clamps `GET /api/leads` `limit`. [routes/clients-api.js](../routes/clients-api.js) admin `GET /` uses bounded `limit` / `offset` over `listFullClients()`.
+- **Remaining**: Further pagination/caps or composite indexes as **measured** slow queries appear in [lib/query-performance-tracker.js](../lib/query-performance-tracker.js) (evidence-driven).
 
 ---
 
@@ -71,6 +62,15 @@ For behavioral contracts, see [INTENT.md](INTENT.md). For the hygiene burndown i
 ### P2 — PII logging / log scrubber
 
 - **Resolution**: `lib/log-scrubber.js`; ongoing route sweep + policy for pretty-json body logging.
+
+### P2 — Route payload logging hygiene (policy closure)
+
+- **Resolution**: CI policy gates in [scripts/check-policy.mjs](../scripts/check-policy.mjs): `privacy.no-pretty-json-req-body`, `privacy.no-bare-req-body-console-arg` (see [INTENT.md](INTENT.md) Domain: privacy). Vapi webhook middleware logs scrubbed payloads on error paths ([routes/vapi-webhooks.js](../routes/vapi-webhooks.js)).
+- **Ongoing**: New routes should use `scrubBody` or keys-only for payload logs; test-only mounts stay non-production or scrubbed.
+
+### P3 — SQLite vs Postgres queue invariants
+
+- **Resolution**: SQLite `call_queue` enforces the same phantom-completion rule as Postgres via inline `CHECK` + idempotent on-disk migration in [db.js](../db.js) (`migrateSqliteCallQueuePhantomConstraint`). CI canary: [tests/canaries/sqlite-call-queue-phantom-check.canary.test.js](../tests/canaries/sqlite-call-queue-phantom-check.canary.test.js) (asserts DDL + migration symbols stay in **db.js**).
 
 ### P1 — `optimizedQuery` timer leak
 

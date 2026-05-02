@@ -1142,7 +1142,8 @@ function ensureSqliteCallQueueAndQualityAlertsTables() {
       initiated_call_id TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (client_key) REFERENCES tenants(client_key) ON DELETE CASCADE
+      FOREIGN KEY (client_key) REFERENCES tenants(client_key) ON DELETE CASCADE,
+      CHECK (status != 'completed' OR call_type != 'vapi_call' OR initiated_call_id IS NOT NULL)
     );
     CREATE INDEX IF NOT EXISTS call_queue_sqlite_pending_scheduled_priority_idx
       ON call_queue (scheduled_for ASC, priority ASC)
@@ -1183,6 +1184,77 @@ function ensureSqliteCallQueueAndQualityAlertsTables() {
   `);
   } catch (e) {
     console.warn('[sqlite] ensure call_queue / quality_alerts:', e?.message || e);
+  }
+}
+
+/**
+ * SQLite: align call_queue with Postgres phantom-completion guard (completed vapi_call requires initiated_call_id).
+ * Idempotent. Pass `targetSqlite` for tests (:memory:); otherwise uses module `sqlite`.
+ */
+function migrateSqliteCallQueuePhantomConstraint(targetSqlite) {
+  const db = targetSqlite ?? sqlite;
+  if (!db) return;
+  try {
+    const row = db.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='call_queue'`).get();
+    if (!row?.sql) return;
+    const tblSql = String(row.sql);
+    if (/CHECK\s*\(/i.test(tblSql)) return;
+
+    db.pragma('foreign_keys = OFF');
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      db.exec(`
+        UPDATE call_queue
+        SET status = 'failed', updated_at = datetime('now')
+        WHERE status = 'completed' AND call_type = 'vapi_call'
+          AND (initiated_call_id IS NULL OR trim(COALESCE(initiated_call_id, '')) = '');
+      `);
+      db.exec(`DROP TABLE IF EXISTS call_queue__phantom_mig;`);
+      db.exec(`
+        CREATE TABLE call_queue__phantom_mig (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          client_key TEXT NOT NULL,
+          lead_phone TEXT NOT NULL,
+          priority INTEGER DEFAULT 5,
+          scheduled_for TEXT NOT NULL,
+          call_type TEXT NOT NULL,
+          call_data TEXT,
+          status TEXT DEFAULT 'pending',
+          retry_attempt INTEGER DEFAULT 0,
+          initiated_call_id TEXT,
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now')),
+          FOREIGN KEY (client_key) REFERENCES tenants(client_key) ON DELETE CASCADE,
+          CHECK (status != 'completed' OR call_type != 'vapi_call' OR initiated_call_id IS NOT NULL)
+        );
+      `);
+      db.exec(`
+        INSERT INTO call_queue__phantom_mig (
+          id, client_key, lead_phone, priority, scheduled_for, call_type, call_data, status, retry_attempt, initiated_call_id, created_at, updated_at
+        )
+        SELECT id, client_key, lead_phone, priority, scheduled_for, call_type, call_data, status, retry_attempt, initiated_call_id, created_at, updated_at
+        FROM call_queue;
+      `);
+      db.exec(`DROP TABLE call_queue;`);
+      db.exec(`ALTER TABLE call_queue__phantom_mig RENAME TO call_queue;`);
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS call_queue_sqlite_pending_scheduled_priority_idx
+          ON call_queue (scheduled_for ASC, priority ASC)
+          WHERE status = 'pending';
+      `);
+      db.exec('COMMIT');
+    } catch (e) {
+      try {
+        db.exec('ROLLBACK');
+      } catch (_) {
+        /* ignore */
+      }
+      throw e;
+    } finally {
+      db.pragma('foreign_keys = ON');
+    }
+  } catch (e) {
+    console.warn('[sqlite] migrateSqliteCallQueuePhantomConstraint:', e?.message || e);
   }
 }
 
@@ -1271,6 +1343,7 @@ function initSqlite() {
   `);
 
   ensureSqliteCallQueueAndQualityAlertsTables();
+  migrateSqliteCallQueuePhantomConstraint();
 
   // avoid template literal parsing issues
   if (DB_PATH === 'json-file') {
