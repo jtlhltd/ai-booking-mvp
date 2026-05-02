@@ -73,7 +73,9 @@ export function createCalendarApiRouter(deps) {
             else if (fromNumber) payload.from = fromNumber;
             await smsClient.messages.create(payload);
           }
-        } catch {}
+        } catch {
+          /* best-effort SMS */
+        }
       }
       res.json({ ok: true });
     } catch (e) {
@@ -101,7 +103,9 @@ export function createCalendarApiRouter(deps) {
       const cal = google.calendar({ version: 'v3', auth });
       try {
         await cal.events.delete({ calendarId, eventId: oldEventId });
-      } catch {}
+      } catch {
+        /* ignore missing old event */
+      }
 
       const dur = client?.booking?.defaultDurationMin || 30;
       const endISO = new Date(new Date(newStartISO).getTime() + dur * 60000).toISOString();
@@ -144,7 +148,9 @@ export function createCalendarApiRouter(deps) {
           else if (fromNumber) payload.from = fromNumber;
           await smsClient.messages.create(payload);
         }
-      } catch {}
+      } catch {
+        /* best-effort SMS */
+      }
 
       res.status(201).json({
         ok: true,

@@ -66,10 +66,13 @@ try {
   // before any test runs. Fails fast (~1s) with a precise file:line pointer.
   await run(npmCmd, ['run', 'check:policy']);
 
+  // Prod dependency audit (moderate+); dev-only advisories are informational.
+  await run(npmCmd, ['run', 'audit:ci']);
+
   // Lint gate: errors only (warnings are informational; ratchet over time).
   // Skip when SKIP_LINT_LANE=1 for fast local iteration.
   if (process.env.SKIP_LINT_LANE !== '1') {
-    await run(npmCmd, ['run', 'lint', '--', '--quiet']);
+    await run(npmCmd, ['run', 'lint']);
   }
 
   // Inventory gates: prevent silent regressions in routing surface.

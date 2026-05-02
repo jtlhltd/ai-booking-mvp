@@ -9,6 +9,7 @@ This file is a **map of what to test** (and what “the system” is) so verific
 - **DB layer**: `db.js` (Postgres + SQLite fallback). Cohesive query clusters now live in sibling modules and `db.js` re-exports thin wrappers:
   - `db/cost-budget-tracking.js` — cost tracking, budget limits, cost alerts
   - `db/analytics-events.js` — analytics events, conversion stages, conversion funnel
+  - `db/call-quality-reads.js` — `getCallsByPhone`, `getRecentCallsCount`, `getCallQualityMetrics` (PR-16)
 - **Scheduled work**: `lib/scheduled-jobs.js` (cron + intervals)
 - **Pure helpers extracted from `server.js`**:
   - `lib/dashboard-experience.js` — client dashboard bundle (integrations hints, privacy bullets, read-only flags, logistics sheet id resolution, `adjustColorBrightness`)

@@ -7,6 +7,7 @@ import { getCache } from '../lib/cache.js';
 import { getLogger } from '../lib/structured-logger.js';
 import { query } from '../db.js';
 import { asyncHandler } from '../lib/errors.js';
+import { getTopSlowQueryOffenders } from '../lib/query-performance-tracker.js';
 
 const router = express.Router();
 const logger = getLogger({ component: 'monitoring' });
@@ -51,6 +52,25 @@ router.get('/api/monitoring/slow-queries', asyncHandler(async (req, res) => {
     timestamp: new Date().toISOString(),
     slowQueries,
     count: slowQueries.length
+  });
+}));
+
+/**
+ * GET /api/monitoring/slow-queries/top
+ * DB-backed top repeat offenders (query_performance); admin key enforced at server mount.
+ */
+router.get('/api/monitoring/slow-queries/top', asyncHandler(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const limit = Math.min(500, Math.max(1, parseInt(String(req.query.limit || '25'), 10) || 25));
+  const windowHours = Math.min(24 * 60, Math.max(1, parseInt(String(req.query.windowHours || '168'), 10) || 168));
+  const minAvgMs = Math.max(50, parseInt(String(req.query.minAvgMs || '100'), 10) || 100);
+  const offenders = await getTopSlowQueryOffenders({ limit, windowHours, minAvgMs });
+  res.json({
+    timestamp: new Date().toISOString(),
+    windowHours,
+    minAvgMs,
+    count: offenders.length,
+    offenders
   });
 }));
 

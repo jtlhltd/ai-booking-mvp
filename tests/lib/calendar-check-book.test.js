@@ -246,7 +246,7 @@ describe('lib/calendar-check-book', () => {
       status: 200,
       json: async () => ({ customer: { number: '+447700901111', name: 'FromVapi' } })
     }));
-    // eslint-disable-next-line no-global-assign
+     
     global.fetch = fetchMock;
 
     try {
@@ -266,7 +266,7 @@ describe('lib/calendar-check-book', () => {
     } finally {
       if (prevKey === undefined) delete process.env.VAPI_PRIVATE_KEY;
       else process.env.VAPI_PRIVATE_KEY = prevKey;
-      // eslint-disable-next-line no-global-assign
+       
       global.fetch = prevFetch;
     }
   });

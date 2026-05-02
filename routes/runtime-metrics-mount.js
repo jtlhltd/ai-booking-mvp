@@ -50,7 +50,7 @@ export function createRuntimeMetricsRouter(deps) {
       };
 
       health.services.googleCalendar = {
-        status: !!(GOOGLE_CLIENT_EMAIL && GOOGLE_PRIVATE_KEY) ? 'configured' : 'not_configured',
+        status: GOOGLE_CLIENT_EMAIL && GOOGLE_PRIVATE_KEY ? 'configured' : 'not_configured',
         calendarId: GOOGLE_CALENDAR_ID || 'primary',
       };
 

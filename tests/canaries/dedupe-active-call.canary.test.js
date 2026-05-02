@@ -60,7 +60,7 @@ describe('canary: queue.dedupe-active-call', () => {
     const mod = await import('../../lib/instant-calling.js');
 
     const phone = '+447700900444';
-    mod.markVapiCallActive('canary_active_cid', { phone, ttlMs: 60_000 });
+    await mod.markVapiCallActive('canary_active_cid', { phone, ttlMs: 60_000 });
     expect(mod.isVapiPhoneActive(phone)).toBe(true);
 
     const result = await mod.callLeadInstantly({
@@ -76,7 +76,7 @@ describe('canary: queue.dedupe-active-call', () => {
     expect(global.fetch).not.toHaveBeenCalled();
 
     // Cleanup: release the active marker so subsequent tests are not poisoned.
-    mod.releaseVapiSlot({ callId: 'canary_active_cid', reason: 'canary_cleanup' });
+    await mod.releaseVapiSlot({ callId: 'canary_active_cid', reason: 'canary_cleanup' });
     expect(mod.isVapiPhoneActive(phone)).toBe(false);
   });
 });

@@ -424,6 +424,25 @@ export function createClientOpsRouter(deps) {
       if (error.code === '42P01') {
         console.error('[SIGNUP] Database table missing, creating...');
         try {
+          const {
+            businessName,
+            industry,
+            primaryService,
+            serviceArea,
+            website,
+            ownerName,
+            email,
+            phone,
+            role,
+            currentLeadSource,
+            voiceGender,
+            workingDays,
+            workingHours,
+            yearlySchedule,
+            businessSize,
+            monthlyLeads,
+            timezone,
+          } = req.body || {};
           const { query } = await import('../db.js');
           await query(`
           CREATE TABLE IF NOT EXISTS client_metadata (

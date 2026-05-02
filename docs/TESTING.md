@@ -11,7 +11,8 @@ as smoke and lives in `scripts/smoke/` (see [Smoke layer](#smoke-layer-opt-in)).
 | `npm test` | Run the full Jest suite (no coverage). |
 | `npm run test:coverage` | Run with coverage; enforces `coverageThreshold` from `jest.config.js`. |
 | `npm run test:coverage-hotspots` | Coverage run + `scripts/coverage-hotspots.mjs` to surface low-coverage files. |
-| `npm run test:ci` | Tiered CI run (route-inventory + server-inline gates + Jest + leak detection). |
+| `npm run test:ci` | Tiered CI run (`check:policy` + `audit:ci` + lint + route/server-inline gates + Jest + leak detection). |
+| `npm run audit:ci` | `npm audit --omit=dev --audit-level=moderate` (also invoked from `test:ci`). |
 | `npm run test:unit` | Only `tests/unit/**`. |
 | `npm run test:integration` | Only `tests/integration/**`. |
 | `npm run test:integration-db` | The Postgres/SQLite integration test (needs `TEST_DATABASE_URL`). |
@@ -91,7 +92,8 @@ crosses a tenant boundary** — should be added to this list.
 | `billing.wallet-check-before-dial` | `lib/instant-calling.js` | `tests/canaries/wallet-gate.canary.test.js` |
 | `billing.idle-call-cutoffs` | Vapi outbound payload | `tests/canaries/idle-cutoffs.canary.test.js` |
 | `billing.max-retries-bounded` | `lib/follow-up-processor.js` | canary + `retry_loop_per_lead` invariant |
-| `queue.concurrency-cap` | `lib/instant-calling.js` `acquireVapiSlot` | `tests/canaries/concurrency-cap.canary.test.js` |
+| `queue.concurrency-cap` | `lib/instant-calling.js` `acquireVapiSlot` (+ `lib/vapi-slot-lease.js` when DB leases on) | `tests/canaries/concurrency-cap.canary.test.js` |
+| `queue.cross-instance-concurrency-cap` | `lib/vapi-slot-lease.js` | `tests/canaries/cross-instance-concurrency-cap.canary.test.js` |
 | `queue.dedupe-active-call` | `lib/instant-calling.js` | `tests/canaries/dedupe-active-call.canary.test.js` |
 | `scheduling.no-past-scheduled-for` | `lib/optimal-call-window.js` | canary + `past_scheduled_for` invariant |
 | `webhook.signature-required` | `routes/vapi-webhooks.js`, `routes/twilio-voice-webhooks.js`, `routes/twilio-webhooks.js` | policy rule + tagged contract tests |

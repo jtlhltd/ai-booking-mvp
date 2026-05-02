@@ -44,9 +44,9 @@ export async function withIsolatedModulesAndEnv(jest, env, fn) {
 export async function withDisabledTimersOnImport(fn) {
   const realSetInterval = global.setInterval;
   const realSetTimeout = global.setTimeout;
-  // eslint-disable-next-line no-global-assign
+   
   global.setInterval = () => 0;
-  // eslint-disable-next-line no-global-assign
+   
   global.setTimeout = () => 0;
   try {
     return await fn();
@@ -77,7 +77,7 @@ export function createContractApp({ mounts = [], json = true } = {}) {
 
   // Helpful default for tests: don't crash on thrown async errors.
   // Individual apps can still mount their own errorHandler if desired.
-  // eslint-disable-next-line no-unused-vars
+   
   app.use((err, _req, res, _next) => {
     res.status(500).json({ ok: false, error: err?.message || 'Internal error' });
   });

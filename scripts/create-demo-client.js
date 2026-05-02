@@ -540,7 +540,7 @@ async function getOrCreateDemoClient() {
       timezone: 'Europe/London',
       locale: 'en-GB',
       isEnabled: true,
-      isDemo: !isRealClient, // Demo clients simulate bookings, real clients use actual calendar/SMS
+      isDemo: true, // getOrCreateDemoClient always seeds the shared demo tenant
       booking: {
         timezone: 'Europe/London',
         defaultDurationMin: 30,

@@ -31,11 +31,11 @@ global.sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // `console.warn` and `console.error` are NEVER suppressed — they remain visible so failures and
 // real warnings bubble up.
 if (process.env.JEST_VERBOSE_LOGS !== '1') {
-  // eslint-disable-next-line no-empty-function
+   
   console.log = () => {};
-  // eslint-disable-next-line no-empty-function
+   
   console.info = () => {};
-  // eslint-disable-next-line no-empty-function
+   
   console.debug = () => {};
 }
 

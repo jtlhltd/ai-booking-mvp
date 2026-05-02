@@ -19,8 +19,7 @@ router.use(validateRequest(validationSchemas.queryParams, 'query'));
  * GET /api/clients - List all clients with error handling
  */
 router.get('/', asyncHandler(async (req, res) => {
-  try {
-    const { limit, offset, sortBy, sortOrder, status } = req.query;
+  const { limit, offset, sortBy, sortOrder, status } = req.query;
     
     // Build dynamic query with error handling
     let query = `
@@ -64,21 +63,16 @@ router.get('/', asyncHandler(async (req, res) => {
     const countResult = await safeQuery('SELECT COUNT(*) as total FROM tenants');
     const total = parseInt(countResult.rows[0]?.total || 0);
 
-    res.json({
-      success: true,
-      data: result.rows,
-      pagination: {
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-        total,
-        hasMore: offset + limit < total
-      }
-    });
-
-  } catch (error) {
-    // Error will be handled by the error handler middleware
-    throw error;
-  }
+  res.json({
+    success: true,
+    data: result.rows,
+    pagination: {
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      total,
+      hasMore: offset + limit < total
+    }
+  });
 }));
 
 /**

@@ -189,7 +189,7 @@ export async function handleDemoDashboard(req, res, deps) {
     END)`;
 
   try {
-    let client = await getFullClient(clientKey, { bypassCache: false });
+    const client = await getFullClient(clientKey, { bypassCache: false });
     const activityChannel = activityFeedChannelLabel(client);
     const tenantTz = client?.booking?.timezone || client?.timezone || 'Europe/London';
 

@@ -1,24 +1,26 @@
-# Multi-instance Vapi concurrency (deferred epic)
+# Multi-instance Vapi concurrency (implementation)
 
-## Problem
+## Problem (historical)
 
-[`lib/instant-calling.js`](../lib/instant-calling.js) uses **in-process** counters for `acquireVapiSlot` / `releaseVapiSlot`. Each Node process has its own view of “how many Vapi calls are in flight.”
+Multiple Node processes each ran an in-process `acquireVapiSlot` / `releaseVapiSlot` counter, so global Vapi concurrency was not coordinated across hosts.
 
-That is correct for **single-instance** deployments. With **multiple** app instances behind a load balancer:
+## Current behavior (PR-13)
 
-- Concurrent dial caps do not coordinate across hosts → risk of **oversubscription** (too many simultaneous `fetch` to Vapi).
-- Webhooks may land on a different instance than the one that acquired the slot → `VAPI_CONCURRENCY_RELEASE_UNKNOWN=1` is an operational escape hatch; misuse can **under-count** slots (see [`lib/ops-invariants.js`](../lib/ops-invariants.js) signals `vapi_concurrency_underflow` / `vapi_concurrency_unknown_release`).
+1. **Table** `vapi_slot_leases` — Postgres via [migrations/add-vapi-slot-leases-table.sql](../migrations/add-vapi-slot-leases-table.sql); SQLite DDL applied in [db.js](../db.js) `initSqlite()` from [lib/vapi-slot-lease.js](../lib/vapi-slot-lease.js) `SQLITE_VAPI_SLOT_LEASES_DDL`.
+2. **Acquire** — [lib/vapi-slot-lease.js](../lib/vapi-slot-lease.js) `tryAcquireDbLeaseOnce()`: Postgres uses `pg_advisory_xact_lock` + `COUNT(*)` + `INSERT`; SQLite uses `BEGIN IMMEDIATE` transaction + same logic.
+3. **Release** — `DELETE` by `call_id` (webhooks on any instance) or by `lease_id` (abort before Vapi returns an id).
+4. **Link** — After Vapi returns `id`, `linkDbLeaseToCallId(leaseId, callId)` sets `call_id` on the row.
+5. **TTL** — `expires_at` defaults from `VAPI_SLOT_LEASE_TTL_MS` (default 45 minutes). Cron reap: [lib/scheduled-jobs.js](../lib/scheduled-jobs.js) `7-59/10 * * * *` calls `reapExpiredDbLeases()`.
+6. **Intent** — `queue.cross-instance-concurrency-cap` in [INTENT.md](INTENT.md); ops invariant `vapi_slot_lease_over_cap` in [lib/ops-invariants.js](../lib/ops-invariants.js); canary [tests/canaries/cross-instance-concurrency-cap.canary.test.js](../tests/canaries/cross-instance-concurrency-cap.canary.test.js).
 
-Process-local invariants in ops-invariants **cannot** detect cross-host drift.
+## Environment
 
-## Direction (when horizontal scaling is required)
+| Variable | Meaning |
+| -------- | ------- |
+| `VAPI_DB_SLOT_LEASE` | `0` / `false` / `no` — force in-process limiter only. `1` / `true` — force DB leases (tests). **Unset**: DB leases in non-Jest; in Jest workers, memory limiter unless set to `1`. |
+| `VAPI_INSTANCE_ID` | Optional stable id per process for debugging (`instance_id` column). |
+| `VAPI_SLOT_LEASE_TTL_MS` | Lease row lifetime (must cover worst-case call length). |
 
-1. **DB-backed lease table** (or Redis with TTL): acquire increments a row keyed by `deployment_id` or global singleton; release decrements; webhook handlers use the same store.
-2. **Short TTL + stale recovery**: if a worker dies, leases expire so slots are not stuck forever.
-3. **Intent + gates**: extend `queue.concurrency-cap` / `billing.no-burst-dial` with a new intent row for cross-instance cap; add canary or invariant that compares in-flight leases to `VAPI_MAX_CONCURRENT` across the fleet (where measurable).
+## Jest
 
-## Out of scope for the audit backlog closure
-
-No migration or worker changes are implemented here; this document anchors the epic for a future PR.
-
-**Hygiene roadmap:** Still deferred until horizontal scaling is a product requirement; no DB lease work was added in that pass (see [AUDIT_BACKLOG.md](AUDIT_BACKLOG.md) DEFERRED).
+Workers set `JEST_WORKER_ID`; without `VAPI_DB_SLOT_LEASE=1`, unit/canary tests keep the **memory** limiter so `db.js` does not need a real `vapi_slot_leases` table.

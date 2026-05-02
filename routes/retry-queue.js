@@ -276,7 +276,9 @@ export function createRetryQueueRouter(deps) {
       try {
         const dbId = parseInt(req.body?.id, 10);
         if (Number.isFinite(dbId)) await updateRetryStatus(dbId, 'failed');
-      } catch {}
+      } catch {
+        /* status update best-effort */
+      }
       res
         .status(500)
         .json({ ok: false, error: 'retry_run_failed', message: error?.message || String(error) });

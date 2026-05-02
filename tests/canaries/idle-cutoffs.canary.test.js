@@ -98,6 +98,6 @@ describe('canary: billing.idle-call-cutoffs', () => {
     expect(ov.voicemailDetection).toBeTruthy();
     expect(ov.voicemailDetection.enabled).toBe(true);
 
-    mod.releaseVapiSlot({ callId: 'cid_idle_canary', reason: 'canary_cleanup' });
+    await mod.releaseVapiSlot({ callId: 'cid_idle_canary', reason: 'canary_cleanup' });
   });
 });

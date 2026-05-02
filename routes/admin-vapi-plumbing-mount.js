@@ -146,7 +146,9 @@ export function createAdminVapiPlumbingRouter(deps) {
 
       // Make the test call (guarded by active-call concurrency limiter)
       const { acquireVapiSlot, releaseVapiSlot, markVapiCallActive } = await import('../lib/instant-calling.js');
-      await acquireVapiSlot();
+      let slotLeaseId = null;
+      const _acq = await acquireVapiSlot();
+      slotLeaseId = _acq?.leaseId ?? null;
       let callResponse;
       try {
         callResponse = await fetch('https://api.vapi.ai/call', {
@@ -168,14 +170,14 @@ export function createAdminVapiPlumbingRouter(deps) {
           }),
         });
       } catch (e) {
-        releaseVapiSlot({ reason: 'start_failed' });
+        await releaseVapiSlot({ leaseId: slotLeaseId, reason: 'start_failed' });
         throw e;
       }
 
       if (callResponse.ok) {
         const callData = await callResponse.json();
-        if (callData?.id) markVapiCallActive(callData.id, { ttlMs: 30 * 60 * 1000 });
-        else releaseVapiSlot({ reason: 'no_call_id' });
+        if (callData?.id) await markVapiCallActive(callData.id, { ttlMs: 30 * 60 * 1000, leaseId: slotLeaseId });
+        else await releaseVapiSlot({ leaseId: slotLeaseId, reason: 'no_call_id' });
         res.json({
           success: true,
           message: 'Test call initiated successfully',
@@ -186,7 +188,7 @@ export function createAdminVapiPlumbingRouter(deps) {
         });
       } else {
         const errorData = await callResponse.json();
-        releaseVapiSlot({ reason: `start_failed_${callResponse.status}` });
+        await releaseVapiSlot({ leaseId: slotLeaseId, reason: `start_failed_${callResponse.status}` });
         res.status(400).json({
           success: false,
           message: 'Failed to initiate test call',
@@ -359,7 +361,9 @@ export function createAdminVapiPlumbingRouter(deps) {
 
       // Make call via VAPI API (guarded by active-call concurrency limiter)
       const { acquireVapiSlot, releaseVapiSlot, markVapiCallActive } = await import('../lib/instant-calling.js');
-      await acquireVapiSlot();
+      let slotLeaseId = null;
+      const _acq2 = await acquireVapiSlot();
+      slotLeaseId = _acq2?.leaseId ?? null;
       let vapiResponse;
       try {
         vapiResponse = await fetch('https://api.vapi.ai/call', {
@@ -378,19 +382,19 @@ export function createAdminVapiPlumbingRouter(deps) {
           }),
         });
       } catch (e) {
-        releaseVapiSlot({ reason: 'start_failed' });
+        await releaseVapiSlot({ leaseId: slotLeaseId, reason: 'start_failed' });
         throw e;
       }
 
       if (!vapiResponse.ok) {
         const errorText = await vapiResponse.text();
-        releaseVapiSlot({ reason: `start_failed_${vapiResponse.status}` });
+        await releaseVapiSlot({ leaseId: slotLeaseId, reason: `start_failed_${vapiResponse.status}` });
         throw new Error(`VAPI API error: ${vapiResponse.status} ${errorText}`);
       }
 
       const call = await vapiResponse.json();
-      if (call?.id) markVapiCallActive(call.id, { ttlMs: 30 * 60 * 1000 });
-      else releaseVapiSlot({ reason: 'no_call_id' });
+      if (call?.id) await markVapiCallActive(call.id, { ttlMs: 30 * 60 * 1000, leaseId: slotLeaseId });
+      else await releaseVapiSlot({ leaseId: slotLeaseId, reason: 'no_call_id' });
 
       console.log('[VAPI CALL INITIATED]', {
         callId: call.id,

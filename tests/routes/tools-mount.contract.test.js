@@ -7,7 +7,7 @@ async function makeApp(deps) {
   const app = express();
   app.use(express.json());
   app.use(createToolsRouter(deps));
-  // eslint-disable-next-line no-unused-vars
+   
   app.use((err, _req, res, _next) => {
     res.status(500).json({ ok: false, error: err?.message || 'err' });
   });

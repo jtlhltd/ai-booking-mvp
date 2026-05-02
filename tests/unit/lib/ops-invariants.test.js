@@ -148,7 +148,8 @@ describe('lib/ops-invariants', () => {
         'billing.no-burst-dial',
         'dial.imports-distribute-not-burst',
         'billing.max-retries-bounded',
-        'scheduling.no-past-scheduled-for'
+        'scheduling.no-past-scheduled-for',
+        'queue.cross-instance-concurrency-cap'
       ])
     );
 

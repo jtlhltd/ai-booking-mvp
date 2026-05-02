@@ -32,6 +32,14 @@ jest.unstable_mockModule('../../..//lib/cost-monitoring.js', () => ({
 jest.unstable_mockModule('../../..//lib/webhook-retry.js', () => ({
   processWebhookRetryQueue: jest.fn(async () => ({ processed: 0, success: 0, failed: 0 }))
 }));
+jest.unstable_mockModule('../../../lib/vapi-slot-lease.js', () => ({
+  SQLITE_VAPI_SLOT_LEASES_DDL: '-- mocked',
+  reapExpiredDbLeases: jest.fn(async () => 0),
+  shouldUseDbSlotLeases: jest.fn(() => false)
+}));
+jest.unstable_mockModule('../../../lib/query-performance-tracker.js', () => ({
+  appendQueryPerformanceDailySnapshot: jest.fn(async () => ({ ok: true }))
+}));
 
 describe('registerScheduledJobs', () => {
   let setIntervalSpy;
@@ -66,6 +74,7 @@ describe('registerScheduledJobs', () => {
 
     // allow dynamic-import .then() blocks to run
     await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
 
     const exprs = scheduled.map((s) => s.expr);
     expect(exprs).toEqual(expect.arrayContaining([
@@ -73,6 +82,8 @@ describe('registerScheduledJobs', () => {
       '1-59/5 * * * *',
       '2-59/5 * * * *',
       '3-59/5 * * * *',
+      '7-59/10 * * * *',
+      '23 5 * * *',
       '0-58/2 * * * *',
       '1-59/2 * * * *',
       '*/5 * * * *'

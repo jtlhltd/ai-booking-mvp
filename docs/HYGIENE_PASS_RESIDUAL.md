@@ -4,15 +4,11 @@ This file answers “what’s **known** left?” after an exhaustive hygiene pas
 
 ## Deferred by product / architecture
 
-| Item | Reason |
-|------|--------|
-| **Multi-instance Vapi slot lease** | Needs horizontal-scaling requirement + migration; see [MULTI_INSTANCE_VAPI_SLOT_LEASE.md](MULTI_INSTANCE_VAPI_SLOT_LEASE.md) and [AUDIT_BACKLOG.md](AUDIT_BACKLOG.md) DEFERRED. |
+No open deferrals in this bucket (multi-instance Vapi slot lease **resolved** in PR-13 — [MULTI_INSTANCE_VAPI_SLOT_LEASE.md](MULTI_INSTANCE_VAPI_SLOT_LEASE.md), [AUDIT_BACKLOG.md](AUDIT_BACKLOG.md)).
 
 ## Deferred by upstream / tooling
 
-| Item | Reason |
-|------|--------|
-| **Transitive `uuid` &lt; 14** (`npm audit` moderate, ×5) | Forcing `uuid@^14` via `package.json` overrides breaks Jest loading `googleapis` → `gaxios` (ESM/CJS). Clear when `googleapis` / `gaxios` / `node-cron` pull a patched `uuid`, or add a targeted Jest `transformIgnorePatterns` / transform pipeline (tradeoffs). |
+None currently. **PR-15:** `node-cron@4` + `googleapis@171` cleared production `uuid` moderate advisories; `npm run audit:ci` (`npm audit --omit=dev --audit-level=moderate`) runs inside `npm run test:ci`.
 
 ## Monitoring-first (not guesswork)
 
@@ -27,9 +23,9 @@ This file answers “what’s **known** left?” after an exhaustive hygiene pas
 | **`server.js` ~6k lines** | Wiring + many helpers; continue extracting pure clusters to `lib/*` per [HYGIENE.md](HYGIENE.md). |
 | **`db.js` ~4k lines** | Continue `db/*.js` siblings with contract tests. |
 
-## Lint warnings (non-blocking in CI)
+## Lint warnings
 
-`npm run lint` without `--quiet` reports many **warnings** (`prefer-const`, `no-useless-escape`, etc.). CI uses `eslint . --quiet` (errors only). Warning cleanup can proceed file-by-file.
+**PR-17:** `npm run lint` uses `eslint . --max-warnings 0` (same gate as `npm run test:ci`). `no-useless-escape` is off globally (high churn / low signal); other rules remain strict.
 
 ## Verification commands
 

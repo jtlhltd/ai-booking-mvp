@@ -288,7 +288,7 @@ export function createAdminClientsHealthRouter(deps) {
       const db = await loadDbOrImport();
       const allCalls = [];
       for (const client of clients) {
-        // eslint-disable-next-line no-await-in-loop
+         
         const clientCalls = await db.getCallsByTenant(client.clientKey, 1000);
         allCalls.push(...clientCalls);
       }

@@ -100,7 +100,7 @@ const requiredVars = [
   'API_KEY'
 ];
 
-let missingVars = [];
+const missingVars = [];
 requiredVars.forEach(varName => {
   if (!process.env[varName]) {
     missingVars.push(varName);

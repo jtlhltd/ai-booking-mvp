@@ -14,7 +14,7 @@ async function createAppWithErrors(router) {
   app.set('trust proxy', 1);
   app.use(express.json({ limit: '10mb' }));
   app.use('/api/clients', router);
-  // eslint-disable-next-line no-unused-vars
+   
   app.use((err, req, res, _next) => {
     const status = err?.statusCode || 500;
     res.status(status).json(formatErrorResponse(err, req));

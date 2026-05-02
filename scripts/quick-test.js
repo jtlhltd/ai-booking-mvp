@@ -45,7 +45,7 @@ const steps = [
   { name: 'Submitting test lead...', script: 'scripts/test-submit-lead.js', required: true }
 ];
 
-let failedSteps = [];
+const failedSteps = [];
 
 for (let i = 0; i < steps.length; i++) {
   const step = steps[i];

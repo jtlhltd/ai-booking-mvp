@@ -63,7 +63,7 @@ export function createBookDemoRouter(deps) {
       } else if (preferredTimes && typeof preferredTimes === 'object') {
         const values = [];
         for (const key in preferredTimes) {
-          if (preferredTimes.hasOwnProperty(key)) values.push(preferredTimes[key]);
+          if (Object.prototype.hasOwnProperty.call(preferredTimes, key)) values.push(preferredTimes[key]);
         }
         slotsToUse = values.length > 0 ? values : bookingSystem.generateTimeSlots(7);
       } else {

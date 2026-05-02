@@ -18,7 +18,7 @@ describe('All routes modules import (smoke contract)', () => {
       const failures = [];
       for (const f of files) {
         try {
-          // eslint-disable-next-line no-await-in-loop
+           
           const mod = await import(`../../routes/${f}`);
           // Each route module should export either a default Router or a create*Router factory.
           const hasDefault = !!mod?.default;

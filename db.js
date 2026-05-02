@@ -19,6 +19,8 @@ import * as callQueueWrites from './db/call-queue-writes.js';
 import { smearCallQueueScheduledFor } from './db/call-queue-smear.js';
 import * as costBudgetTracking from './db/cost-budget-tracking.js';
 import * as analyticsEvents from './db/analytics-events.js';
+import * as callQualityReads from './db/call-quality-reads.js';
+import { SQLITE_VAPI_SLOT_LEASES_DDL } from './lib/vapi-slot-lease.js';
 
 const dbType = (process.env.DB_TYPE || '').toLowerCase();
 let pool = null;
@@ -811,6 +813,19 @@ async function initPostgres() {
     CREATE INDEX IF NOT EXISTS query_perf_hash_idx ON query_performance(query_hash);
     CREATE INDEX IF NOT EXISTS query_perf_duration_idx ON query_performance(avg_duration DESC);
 
+    CREATE TABLE IF NOT EXISTS query_performance_daily (
+      id BIGSERIAL PRIMARY KEY,
+      snapshot_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      query_hash TEXT NOT NULL,
+      query_preview TEXT,
+      avg_duration DOUBLE PRECISION,
+      max_duration DOUBLE PRECISION,
+      call_count BIGINT,
+      inferred_surface TEXT
+    );
+    CREATE INDEX IF NOT EXISTS query_performance_daily_snapshot_at_idx
+      ON query_performance_daily (snapshot_at DESC);
+
     CREATE TABLE IF NOT EXISTS analytics_events (
       id BIGSERIAL PRIMARY KEY,
       client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
@@ -1181,6 +1196,18 @@ function ensureSqliteCallQueueAndQualityAlertsTables() {
     CREATE UNIQUE INDEX IF NOT EXISTS query_perf_hash_unique_idx ON query_performance(query_hash);
     CREATE INDEX IF NOT EXISTS query_perf_hash_idx ON query_performance(query_hash);
     CREATE INDEX IF NOT EXISTS query_perf_duration_idx ON query_performance(avg_duration DESC);
+
+    CREATE TABLE IF NOT EXISTS query_performance_daily (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      snapshot_at TEXT DEFAULT (datetime('now')),
+      query_hash TEXT NOT NULL,
+      query_preview TEXT,
+      avg_duration REAL,
+      max_duration REAL,
+      call_count INTEGER,
+      inferred_surface TEXT
+    );
+    CREATE INDEX IF NOT EXISTS qperf_daily_snapshot_idx ON query_performance_daily (snapshot_at DESC);
   `);
   } catch (e) {
     console.warn('[sqlite] ensure call_queue / quality_alerts:', e?.message || e);
@@ -1344,6 +1371,11 @@ function initSqlite() {
 
   ensureSqliteCallQueueAndQualityAlertsTables();
   migrateSqliteCallQueuePhantomConstraint();
+  try {
+    sqlite.exec(SQLITE_VAPI_SLOT_LEASES_DDL);
+  } catch (e) {
+    console.warn('[sqlite] vapi_slot_leases DDL:', e?.message || e);
+  }
 
   // avoid template literal parsing issues
   if (DB_PATH === 'json-file') {
@@ -1533,6 +1565,17 @@ export async function closeDatabaseConnectionsForTests() {
   }
   pool = null;
   closeSqliteForTesting();
+}
+
+export function getSqliteDatabase() {
+  return sqlite;
+}
+
+/** Synchronous IMMEDIATE transaction (better-sqlite3). Used by lib/vapi-slot-lease.js. */
+export function runSqliteTransactionImmediate(fn) {
+  if (!sqlite) throw new Error('[db] runSqliteTransactionImmediate: sqlite not initialized');
+  const tr = sqlite.transaction(fn, { begin: 'IMMEDIATE' });
+  return tr();
 }
 
 export { DB_PATH, pool, dbType };
@@ -2995,63 +3038,16 @@ export async function recordCallTimeBanditAfterCallComplete({ clientKey, callId 
 }
 
 export async function getCallsByPhone(clientKey, leadPhone, limit = 50) {
-  const { rows } = await query(`
-    SELECT
-      id, call_id, client_key, lead_phone, status, outcome, duration, cost,
-      metadata, retry_attempt,
-      LEFT(COALESCE(transcript, ''), 512) AS transcript,
-      recording_url, sentiment, quality_score, objections, key_phrases, metrics,
-      analyzed_at, created_at, updated_at
-    FROM calls
-    WHERE client_key = $1 AND lead_phone = $2
-    ORDER BY created_at DESC
-    LIMIT $3
-  `, [clientKey, leadPhone, limit]);
-  return rows;
+  return callQualityReads.getCallsByPhone(query, clientKey, leadPhone, limit);
 }
 
 export async function getRecentCallsCount(clientKey, minutesBack = 60) {
-  const { rows } = await query(`
-    SELECT COUNT(*) as count FROM calls 
-    WHERE client_key = $1 AND created_at > now() - interval '${minutesBack} minutes'
-  `, [clientKey]);
-  return parseInt(rows[0]?.count || 0);
+  return callQualityReads.getRecentCallsCount(query, clientKey, minutesBack);
 }
 
 // Get quality metrics for a client
 export async function getCallQualityMetrics(clientKey, days = 30) {
-  const dayMs = Math.max(1, Number(days) || 30) * 86400000;
-  let sinceMs = Date.now() - dayMs;
-  const minIso = await getCallAnalyticsFloorIso();
-  const t = new Date(minIso).getTime();
-  if (t > sinceMs) sinceMs = t;
-  const since = new Date(sinceMs).toISOString();
-  const { rows } = await query(`
-    SELECT 
-      COUNT(*) as total_calls,
-      COUNT(*) FILTER (WHERE status = 'completed') as successful_calls,
-      COUNT(*) FILTER (WHERE outcome = 'booked') as bookings,
-      AVG(quality_score) as avg_quality_score,
-      AVG(duration) as avg_duration,
-      COUNT(*) FILTER (WHERE sentiment = 'positive') as positive_sentiment_count,
-      COUNT(*) FILTER (WHERE sentiment = 'negative') as negative_sentiment_count,
-      COUNT(*) FILTER (WHERE sentiment = 'neutral') as neutral_sentiment_count
-    FROM calls
-    WHERE client_key = $1 
-      AND created_at >= $2::timestamptz
-      AND quality_score IS NOT NULL
-  `, [clientKey, since]);
-  
-  return rows[0] || {
-    total_calls: 0,
-    successful_calls: 0,
-    bookings: 0,
-    avg_quality_score: 0,
-    avg_duration: 0,
-    positive_sentiment_count: 0,
-    negative_sentiment_count: 0,
-    neutral_sentiment_count: 0
-  };
+  return callQualityReads.getCallQualityMetrics(query, clientKey, days, { getCallAnalyticsFloorIso });
 }
 
 // Get quality alerts for a client

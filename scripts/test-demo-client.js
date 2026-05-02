@@ -28,7 +28,7 @@ async function testDemoClient() {
     await init();
     
     // Get demo client
-    let client = await getFullClient(DEMO_CLIENT_KEY);
+    const client = await getFullClient(DEMO_CLIENT_KEY);
     if (!client) {
       console.log('❌ Demo client not found. Run create-demo-client.js first to create it.');
       process.exit(1);

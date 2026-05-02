@@ -29,7 +29,7 @@ describe('canary: queue.concurrency-cap', () => {
     await mod.acquireVapiSlot({});
     await mod.acquireVapiSlot({});
 
-    let stateAfterTwo = mod.getVapiConcurrencyState();
+    const stateAfterTwo = mod.getVapiConcurrencyState();
     expect(stateAfterTwo.max).toBe(2);
     expect(stateAfterTwo.current).toBe(2);
 
@@ -47,13 +47,13 @@ describe('canary: queue.concurrency-cap', () => {
     expect(stateWhileQueued.queued).toBeGreaterThanOrEqual(1);
 
     // Release one slot; the third acquire should now resolve.
-    mod.releaseVapiSlot({ reason: 'canary_release_one' });
+    await mod.releaseVapiSlot({ reason: 'canary_release_one' });
     await third;
     expect(resolved).toBe(true);
 
     // Cleanup: drain remaining slots so other tests start from zero.
-    mod.releaseVapiSlot({ reason: 'canary_cleanup_1' });
-    mod.releaseVapiSlot({ reason: 'canary_cleanup_2' });
+    await mod.releaseVapiSlot({ reason: 'canary_cleanup_1' });
+    await mod.releaseVapiSlot({ reason: 'canary_cleanup_2' });
     const final = mod.getVapiConcurrencyState();
     expect(final.current).toBe(0);
   });

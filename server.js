@@ -298,7 +298,7 @@ function sanitizeLead(row) {
 // Support both individual env vars AND full JSON base64
 let GOOGLE_CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL || '';
 let GOOGLE_PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY || '';
-let GOOGLE_PRIVATE_KEY_B64 = process.env.GOOGLE_PRIVATE_KEY_B64 || '';
+const GOOGLE_PRIVATE_KEY_B64 = process.env.GOOGLE_PRIVATE_KEY_B64 || '';
 
 // If GOOGLE_SA_JSON_BASE64 is provided, extract credentials from it
 if (process.env.GOOGLE_SA_JSON_BASE64 && !GOOGLE_CLIENT_EMAIL) {
@@ -696,7 +696,6 @@ app.use(
   '/api/calendar',
   createCalendarApiRouter({
     getClientFromHeader,
-    servicesFor: (typeof servicesFor === 'function') ? servicesFor : undefined,
     makeJwtAuth,
     GOOGLE_CLIENT_EMAIL,
     GOOGLE_PRIVATE_KEY,
@@ -3584,22 +3583,28 @@ async function processVapiRetry(retry) {
     
     // Make VAPI call (guarded by global concurrency limiter from instant-calling)
     const { acquireVapiSlot, releaseVapiSlot, markVapiCallActive } = await import('./lib/instant-calling.js');
-    await acquireVapiSlot();
+    let slotLeaseId = null;
+    const _acq = await acquireVapiSlot();
+    slotLeaseId = _acq?.leaseId ?? null;
     let vapiResult;
     try {
-      vapiResult = await makeVapiCall({
-        assistantId: retryData.clientConfig?.assistantId || client.vapi?.assistantId,
-        phoneNumberId: retryData.clientConfig?.phoneNumberId || client.vapi?.phoneNumberId,
-        customerNumber: leadPhone,
-        maxDurationSeconds: 10
+      const { postOutboundCall } = await import('./lib/vapi.js');
+      vapiResult = await postOutboundCall({
+        bearerToken: process.env.VAPI_PRIVATE_KEY,
+        payload: {
+          assistantId: retryData.clientConfig?.assistantId || client.vapi?.assistantId,
+          phoneNumberId: retryData.clientConfig?.phoneNumberId || client.vapi?.phoneNumberId,
+          customer: { number: leadPhone },
+          maxDurationSeconds: 10
+        }
       });
       if (vapiResult?.id) {
-        markVapiCallActive(vapiResult.id, { ttlMs: 30 * 60 * 1000 });
+        await markVapiCallActive(vapiResult.id, { ttlMs: 30 * 60 * 1000, leaseId: slotLeaseId });
       } else {
-        releaseVapiSlot({ reason: 'no_call_id' });
+        await releaseVapiSlot({ leaseId: slotLeaseId, reason: 'no_call_id' });
       }
     } catch (e) {
-      releaseVapiSlot({ reason: 'start_failed' });
+      await releaseVapiSlot({ leaseId: slotLeaseId, reason: 'start_failed' });
       throw e;
     }
     
@@ -5083,7 +5088,11 @@ async function runLogisticsOutreach({ assistantId, businesses, tenantKey, vapiKe
 // Start cold call campaign with advanced optimization
 async function startColdCallCampaign(campaign) {
   const results = [];
-  
+  const vapiKey = process.env.VAPI_PRIVATE_KEY || process.env.VAPI_PUBLIC_KEY || process.env.VAPI_API_KEY;
+  if (!vapiKey) {
+    throw new Error('VAPI API key not configured');
+  }
+
   try {
     console.log(`[COLD CALL CAMPAIGN] Starting optimized campaign ${campaign.id} with ${campaign.businesses.length} businesses`);
     
@@ -5157,14 +5166,14 @@ async function startColdCallCampaign(campaign) {
           });
           
           if (callResponse.ok) {
-            const callData = await callResponse.json();
+            const callResultJson = await callResponse.json();
             results.push({
               businessId: business.id,
               businessName: business.name,
               phone: business.phone,
               decisionMaker: business.decisionMaker,
               status: 'call_initiated',
-              callId: callData.id,
+              callId: callResultJson.id,
               priority: i + index + 1,
               message: 'Call initiated successfully',
               timestamp: new Date().toISOString()

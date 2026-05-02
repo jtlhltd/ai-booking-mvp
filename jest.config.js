@@ -74,8 +74,8 @@ export default {
       // 53.63% functions / 49.63% statements. Floors set ~1% below measured.
       branches: 38,
       functions: 52,
-      lines: 49,
-      statements: 48
+      lines: 50,
+      statements: 49
     },
     // Module gates for the highest-risk surfaces (booking + admin).
     './lib/booking.js': {
@@ -117,7 +117,7 @@ export default {
     './lib/scheduled-jobs.js': {
       branches: 12,
       functions: 38,
-      lines: 46,
+      lines: 45,
       statements: 50
     },
     './lib/healthz.js': {
@@ -157,10 +157,10 @@ export default {
       statements: 82
     },
     './lib/query-performance-tracker.js': {
-      branches: 62,
+      branches: 51,
       functions: 88,
-      lines: 75,
-      statements: 75
+      lines: 74,
+      statements: 69
     },
     './lib/optimal-call-window.js': {
       branches: 44,

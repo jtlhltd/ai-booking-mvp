@@ -487,7 +487,7 @@ async function processWebhookPayload(body, correlationId) {
     if (callId && looksEnded) {
       try {
         const { releaseVapiSlot } = await import('../lib/instant-calling.js');
-        releaseVapiSlot({ callId, reason: isEndOfCallReport ? 'end_of_call_report' : 'call_ended_signal' });
+        await releaseVapiSlot({ callId, reason: isEndOfCallReport ? 'end_of_call_report' : 'call_ended_signal' });
       } catch (e) {
         console.warn('[VAPI CONCURRENCY] Failed to release slot from webhook:', e?.message || e);
       }

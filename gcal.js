@@ -11,7 +11,11 @@ import { google } from 'googleapis';
 export function makeJwtAuth({ clientEmail, privateKey, privateKeyB64 }) {
   let key = privateKey || '';
   if (!key && privateKeyB64) {
-    try { key = Buffer.from(privateKeyB64, 'base64').toString('utf8'); } catch {}
+    try {
+      key = Buffer.from(privateKeyB64, 'base64').toString('utf8');
+    } catch {
+      /* invalid base64 */
+    }
   }
   if (key && key.includes('\\n')) {
     key = key.replace(/\\n/g, '\n');

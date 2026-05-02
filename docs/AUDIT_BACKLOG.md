@@ -13,21 +13,18 @@ For behavioral contracts, see [INTENT.md](INTENT.md). For the hygiene burndown i
 ### P2 — Heavy dashboard / admin reads
 
 - **Status**: [routes/demo-dashboard.js](../routes/demo-dashboard.js) `handleDemoDashboard` accepts optional `leadsLimit` and `callsFeedLimit` query params with **server-enforced caps** (see handler). [routes/admin-clients.js](../routes/admin-clients.js) `GET /client/:clientKey` accepts `leadsLimit` / `callsLimit` with caps. [routes/leads-portal-mount.js](../routes/leads-portal-mount.js) clamps `GET /api/leads` `limit`. [routes/clients-api.js](../routes/clients-api.js) admin `GET /` uses bounded `limit` / `offset` over `listFullClients()`.
-- **Remaining (monitoring-first)**: No speculative composite indexes in the hygiene roadmap; caps and in-memory slicing above are the baseline. Add pagination, caps, or **one** composite index per **confirmed** repeat offender from `query_performance` / slow-query alerts ([lib/query-performance-tracker.js](../lib/query-performance-tracker.js)), not from guesswork.
-
----
-
-## DEFERRED — epic / product decision
-
-### Multi-instance Vapi concurrency (DB-backed slot lease)
-
-- **Issue**: In-process slot counters in `lib/instant-calling.js` do not coordinate across hosts; `VAPI_CONCURRENCY_RELEASE_UNKNOWN` is an operational escape hatch (see [MULTI_INSTANCE_VAPI_SLOT_LEASE.md](MULTI_INSTANCE_VAPI_SLOT_LEASE.md)).
-- **Intent IDs**: Extends `queue.concurrency-cap`, `billing.no-burst-dial`.
-- **Next**: Design + migration + INTENT/canaries when horizontal scaling is required.
+- **Remaining (monitoring-first)**: Wiring landed in **PR-14**: admin `GET /api/monitoring/slow-queries/top` (see [routes/monitoring.js](../routes/monitoring.js)), stronger `inferHeavyReadSurface` heuristics in [lib/query-performance-tracker.js](../lib/query-performance-tracker.js), nightly `appendQueryPerformanceDailySnapshot` → `query_performance_daily` ([lib/scheduled-jobs.js](../lib/scheduled-jobs.js), migration `migrations/add-query-performance-daily-snapshot.sql`). No speculative composite indexes; add **one** composite index per **confirmed** repeat offender from that top-N report / snapshots, not from guesswork.
 
 ---
 
 ## RESOLVED — reference only
+
+### Multi-instance Vapi concurrency (DB-backed slot lease) — PR-13
+
+- **Resolution**: Table `vapi_slot_leases` (Postgres migration + SQLite DDL in [db.js](../db.js)), coordination in [lib/vapi-slot-lease.js](../lib/vapi-slot-lease.js), wired through [lib/instant-calling.js](../lib/instant-calling.js). Intent `queue.cross-instance-concurrency-cap`; canary `tests/canaries/cross-instance-concurrency-cap.canary.test.js`; invariant in [lib/ops-invariants.js](../lib/ops-invariants.js); reap cron in [lib/scheduled-jobs.js](../lib/scheduled-jobs.js). Jest defaults to in-process limiter (`VAPI_DB_SLOT_LEASE` unset in test workers); production uses DB leases unless `VAPI_DB_SLOT_LEASE=0`.
+- **Docs**: [MULTI_INSTANCE_VAPI_SLOT_LEASE.md](MULTI_INSTANCE_VAPI_SLOT_LEASE.md) updated to implementation notes.
+
+---
 
 ### P0 — Postgres `call_queue` completion vs `request-queue`
 
@@ -45,7 +42,7 @@ For behavioral contracts, see [INTENT.md](INTENT.md). For the hygiene burndown i
 
 ### P2 — Multi-instance slot release footgun (partial)
 
-- **Resolution**: PR-9 — counters + `lib/ops-invariants.js` signals. Full multi-instance fix deferred above.
+- **Resolution**: PR-9 — counters + `lib/ops-invariants.js` signals (process-local). **Superseded for fleet-wide cap** by PR-13 DB slot leases above; `VAPI_CONCURRENCY_RELEASE_UNKNOWN` removed once DB leases are enabled.
 
 ### P0 — `routes/clients-api.js` unauthenticated
 

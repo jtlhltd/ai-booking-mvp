@@ -46,7 +46,7 @@ try {
   console.log(customized.systemPrompt.substring(0, 200) + '...\n');
 
   // Get or create assistant
-  let assistantId = VAPI_TEMPLATE_ASSISTANT_ID;
+  const assistantId = VAPI_TEMPLATE_ASSISTANT_ID;
   
   if (VAPI_TEMPLATE_ASSISTANT_ID && VAPI_PRIVATE_KEY) {
     console.log('🔄 Updating VAPI assistant with improved prompt...\n');

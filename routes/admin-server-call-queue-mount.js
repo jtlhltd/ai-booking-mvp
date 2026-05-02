@@ -42,7 +42,7 @@ export function createAdminServerCallQueueRouter(deps) {
       const queueByTenant = {};
 
       for (const tenant of tenants) {
-        // eslint-disable-next-line no-await-in-loop
+         
         const tenantQueue = await getCallQueueByTenant(tenant.clientKey, 50);
         queueByTenant[tenant.clientKey] = {
           displayName: tenant.displayName,

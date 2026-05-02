@@ -35,12 +35,20 @@ jest.unstable_mockModule('../../lib/stuck-processing-reaper.js', () => ({
 jest.unstable_mockModule('../../lib/ops-invariants.js', () => ({ checkOpsInvariants }));
 jest.unstable_mockModule('../../lib/dead-letter-queue.js', () => ({ cleanupDLQ }));
 jest.unstable_mockModule('../../lib/webhook-retry.js', () => ({ processWebhookRetryQueue }));
+jest.unstable_mockModule('../../lib/vapi-slot-lease.js', () => ({
+  SQLITE_VAPI_SLOT_LEASES_DDL: '-- mocked',
+  reapExpiredDbLeases: jest.fn(async () => 0),
+  shouldUseDbSlotLeases: jest.fn(() => false)
+}));
+jest.unstable_mockModule('../../lib/query-performance-tracker.js', () => ({
+  appendQueryPerformanceDailySnapshot: jest.fn(async () => ({ ok: true }))
+}));
 
 async function flushPromises(times = 1) {
   for (let i = 0; i < times; i++) {
     // Dynamic `import()` resolution and `.then(...)` callbacks run on the microtask queue.
     // Using Promise ticks avoids getting stuck under fake timers.
-    // eslint-disable-next-line no-await-in-loop
+     
     await Promise.resolve();
   }
 }

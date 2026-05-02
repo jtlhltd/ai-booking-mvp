@@ -281,7 +281,7 @@ describe('Batch1: high-risk route contracts (happy + failure)', () => {
         const res = await request(app).post('/test-google-places');
         // If this ever fails again, keep the body visible in Jest output.
         if (res.status !== 200) {
-          // eslint-disable-next-line no-console
+           
           console.log('google-places-test unexpected response', { status: res.status, body: res.body });
         }
         expect(res.status).toBe(200);
@@ -391,7 +391,9 @@ describe('Batch1: high-risk route contracts (happy + failure)', () => {
       jest.unstable_mockModule('../../lib/query-performance-tracker.js', () => ({
         getQueryPerformanceStats: jest.fn(async () => null),
         getSlowQueries: jest.fn(async () => []),
-        getOptimizationRecommendations: jest.fn(async () => [])
+        getOptimizationRecommendations: jest.fn(async () => []),
+        getTopSlowQueryOffenders: jest.fn(async () => []),
+        appendQueryPerformanceDailySnapshot: jest.fn(async () => ({ ok: true }))
       }));
       jest.unstable_mockModule('../../lib/cache.js', () => ({
         cacheMiddleware: () => (_req, _res, next) => next(),

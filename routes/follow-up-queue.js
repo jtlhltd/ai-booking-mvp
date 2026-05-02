@@ -87,7 +87,7 @@ export function createFollowUpQueueRouter(deps) {
 
       await sheets.ensureLogisticsHeader(spreadsheetId);
       const { rows: rawRows } = await sheets.readSheet(spreadsheetId, 'Sheet1!A:Z');
-      let records = sheets.logisticsSheetRowsToRecords(rawRows).map((r, idx) => ({
+      const records = sheets.logisticsSheetRowsToRecords(rawRows).map((r, idx) => ({
         ...r,
         _row: idx + 2
       }));
@@ -326,7 +326,9 @@ export function createFollowUpQueueRouter(deps) {
           retryAttempt: 1,
           maxRetries: 5
         });
-      } catch {}
+      } catch {
+        /* enqueue DLQ best-effort */
+      }
       res.status(500).json({ ok: false, error: error.message || String(error) });
     }
   });

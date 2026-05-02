@@ -3,7 +3,7 @@ import { describe, expect, test, jest, beforeEach } from '@jest/globals';
 const query = jest.fn();
 const sendCriticalAlert = jest.fn(async () => {});
 
-jest.unstable_mockModule('../../../db.js', () => ({ query }));
+jest.unstable_mockModule('../../../db.js', () => ({ query, dbType: 'postgres' }));
 jest.unstable_mockModule('../../../lib/error-monitoring.js', () => ({ sendCriticalAlert }));
 jest.unstable_mockModule('../../../lib/alert-email-throttle.js', () => ({
   reserveAlertEmailSlot: jest.fn(async () => true),
@@ -34,6 +34,11 @@ describe('query-performance-tracker', () => {
   test('trackQueryPerformance skips feedback-loop tables', async () => {
     const { trackQueryPerformance } = await import('../../../lib/query-performance-tracker.js');
     expect(await trackQueryPerformance('INSERT INTO query_performance (x) VALUES (1)', 500)).toBeNull();
+  });
+
+  test('trackQueryPerformance skips query_performance_daily', async () => {
+    const { trackQueryPerformance } = await import('../../../lib/query-performance-tracker.js');
+    expect(await trackQueryPerformance('INSERT INTO query_performance_daily (x) VALUES (1)', 500)).toBeNull();
   });
 
   test('trackQueryPerformance records slow generic SELECT', async () => {
@@ -133,5 +138,42 @@ describe('query-performance-tracker', () => {
     query.mockResolvedValueOnce({ rowCount: 3 });
     const { cleanupOldQueryData } = await import('../../../lib/query-performance-tracker.js');
     expect(await cleanupOldQueryData(14)).toBe(3);
+  });
+
+  test('inferHeavyReadSurface tags demo_dashboard CTE shape', async () => {
+    const { inferHeavyReadSurface } = await import('../../../lib/query-performance-tracker.js');
+    expect(inferHeavyReadSurface('WITH lead_lookup AS (SELECT phone FROM leads) SELECT * FROM calls')).toBe(
+      'demo_dashboard'
+    );
+  });
+
+  test('getTopSlowQueryOffenders maps rows', async () => {
+    query.mockResolvedValueOnce({
+      rows: [
+        {
+          query_hash: 'ab',
+          query_preview: 'SELECT * FROM call_queue WHERE client_key = $1',
+          avg_duration: 200,
+          max_duration: 400,
+          call_count: 5,
+          last_executed_at: '2026-01-01'
+        }
+      ]
+    });
+    const { getTopSlowQueryOffenders } = await import('../../../lib/query-performance-tracker.js');
+    const rows = await getTopSlowQueryOffenders({ limit: 10, windowHours: 24, minAvgMs: 100 });
+    expect(rows[0]).toMatchObject({
+      queryHash: 'ab',
+      callCount: 5,
+      inferredSurface: 'call_queue',
+      score: 1000
+    });
+  });
+
+  test('appendQueryPerformanceDailySnapshot swallows errors', async () => {
+    query.mockRejectedValueOnce(new Error('no table'));
+    const { appendQueryPerformanceDailySnapshot } = await import('../../../lib/query-performance-tracker.js');
+    const out = await appendQueryPerformanceDailySnapshot();
+    expect(out.ok).toBe(false);
   });
 });

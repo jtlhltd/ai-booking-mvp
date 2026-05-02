@@ -17,7 +17,9 @@ jest.unstable_mockModule('../../lib/query-performance-tracker.js', () => ({
     return [{ q: 'select 1', duration_ms: 1200 }];
   }),
   getQueryPerformanceStats: jest.fn(async () => (trackerState.statsNull ? null : { total: 1 })),
-  getOptimizationRecommendations: jest.fn(async () => [{ id: 'r1' }])
+  getOptimizationRecommendations: jest.fn(async () => [{ id: 'r1' }]),
+  getTopSlowQueryOffenders: jest.fn(async () => []),
+  appendQueryPerformanceDailySnapshot: jest.fn(async () => ({ ok: true }))
 }));
 
 jest.unstable_mockModule('../../lib/cache.js', () => ({

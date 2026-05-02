@@ -47,7 +47,7 @@ describe('routes/google-places-search.js', () => {
         }
         return { json: async () => ({ results: [] }) };
       });
-      // eslint-disable-next-line no-global-assign
+       
       global.fetch = fetchMock;
 
       const { default: router } = await import('../../routes/google-places-search.js');

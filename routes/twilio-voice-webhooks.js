@@ -297,7 +297,7 @@ router.post('/webhooks/twilio-voice-recording', express.urlencoded({ extended: f
     }
 
     // Step 2: Download and transcribe recording
-    let transcription = null;
+    const transcription = null;
     let transcriptionText = null;
 
     if (recordingSid && twilioClient) {
