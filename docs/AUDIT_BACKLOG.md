@@ -12,8 +12,8 @@ For behavioral contracts, see [INTENT.md](INTENT.md). For the hygiene burndown i
 
 ### P2 — Route payload logging hygiene
 
-- **Status**: Partially addressed (`lib/log-scrubber.js`, many routes use `scrubBody`). Policy gate `privacy.no-pretty-json-req-body` in [scripts/check-policy.mjs](../scripts/check-policy.mjs) forbids pretty-printing raw `req.body` in `routes/`.
-- **Remaining**: Periodically grep `routes/` for `console.log(... req.body` without scrubbing; keep test-only endpoints (`import-test`, dev mounts) non-production or scrubbed.
+- **Status**: Partially addressed (`lib/log-scrubber.js`, many routes use `scrubBody`). Policy gates in [scripts/check-policy.mjs](../scripts/check-policy.mjs): `privacy.no-pretty-json-req-body` (no pretty-printed `JSON.stringify(req.body, null, …)` in `routes/`) and `privacy.no-bare-req-body-console-arg` (no raw `req.body` as a terminal `console.*` argument in `routes/`). See [INTENT.md](INTENT.md) Domain: privacy.
+- **Remaining**: When adding new routes, keep using `scrubBody` (or keys-only) for any payload logging; CI enforces the two policy rules above. Test-only endpoints (`import-test`, dev mounts) should stay non-production or scrubbed.
 
 ### P2 — Heavy dashboard / admin reads
 

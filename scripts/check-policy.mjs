@@ -208,6 +208,14 @@ const rules = [
     scope: 'routes/',
     pattern: /JSON\.stringify\s*\(\s*req\.body\s*,\s*null\b/,
     allow: ['tests/', 'docs/', 'scripts/', 'demos/']
+  },
+  {
+    intentId: 'privacy.no-bare-req-body-console-arg',
+    description:
+      'Do not pass raw req.body as a terminal argument to console.* in routes (PII leak). Use scrubBody(req.body) or keys-only. Pattern: console.(log|error|warn|info|debug)(... , req.body) on one statement line — excludes scrubBody(req.body) because the comma before req is inside scrubBody(.',
+    scope: 'routes/',
+    pattern: /console\.(log|error|warn|info|debug)\([^;]*,\s*req\.body\s*\)/,
+    allow: ['tests/', 'docs/', 'scripts/', 'demos/']
   }
 ];
 

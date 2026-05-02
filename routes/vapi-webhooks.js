@@ -213,7 +213,7 @@ router.use('/webhooks/vapi', (req, res, next) => {
     }
   } else {
     // Body might be empty or in unexpected format
-    console.error('[VAPI WEBHOOK MIDDLEWARE] Unexpected body type:', typeof req.body, 'Value:', req.body);
+    console.error('[VAPI WEBHOOK MIDDLEWARE] Unexpected body type:', typeof req.body, 'scrubbed:', scrubBody(req.body));
     req.rawBody = Buffer.alloc(0);
     req.body = req.body || {};
   }

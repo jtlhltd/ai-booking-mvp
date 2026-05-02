@@ -118,6 +118,7 @@ Production logs must not echo full webhook or API bodies. Use `lib/log-scrubber.
 | ID | Statement | Constrains | Enforced by | Manual disprove |
 | --- | --- | --- | --- | --- |
 | `privacy.no-pretty-json-req-body` | Route files must not pass `JSON.stringify(req.body, null, …)` to logs or responses (pretty-printed raw body). Rewrites must use `scrubBody(req.body)` (or equivalent) inside `JSON.stringify`. Exception: constructing byte-stable buffers for signature verification (e.g. `Buffer.from(JSON.stringify(req.body))`) is allowed when required for crypto — prefer `req.rawBody` when present. | `routes/**` | policy | Add `JSON.stringify(req.body, null, 2)` to a route; `npm run check:policy` must fail with `privacy.no-pretty-json-req-body`. |
+| `privacy.no-bare-req-body-console-arg` | Route files must not pass the raw inbound **req** body object as a terminal argument to **console** logging (log, error, warn, info, debug): a comma-separated final argument of the form **req**-dot-body before the closing parenthesis is forbidden. Use **scrubBody** (see log-scrubber), keys-only, or typed summaries. Non-logging calls such as passing the body into an update helper are out of scope. | `routes/**` | policy | Add a one-line **console**-dot-error call whose last argument is **req**-dot-body under **routes**; `npm run check:policy` must fail with `privacy.no-bare-req-body-console-arg`. |
 
 ## Domain: webhook
 
