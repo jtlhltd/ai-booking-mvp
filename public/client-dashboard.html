@@ -2690,6 +2690,17 @@
             color: #7b7f9f;
         }
 
+        .lead-item-row3.lead-qual-snippet {
+            margin-top: 4px;
+            font-size: 0.75rem;
+            color: #5c617a;
+            line-height: 1.35;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
         .lead-meta-phone {
             font-variant-numeric: tabular-nums;
             word-break: break-all;
@@ -6119,6 +6130,10 @@
 
         body[data-theme="dark"] .lead-item-row2 {
             color: #d0d4e8;
+        }
+
+        body[data-theme="dark"] .lead-item-row3.lead-qual-snippet {
+            color: #b4bdd9;
         }
 
         body[data-theme="dark"] .lead-meta-sep {
@@ -10463,7 +10478,7 @@ ${actionsRow}
 
         function leadMatchesSearch(lead, q) {
             if (!q) return true;
-            const hay = [lead.name, lead.phone, lead.email, lead.service, lead.source, lead.status, lead.timeAgo, lead.lastMessage]
+            const hay = [lead.name, lead.phone, lead.email, lead.service, lead.source, lead.status, lead.timeAgo, lead.lastMessage, lead.logisticsQualSummary]
                 .map((x) => String(x || '')).join(' ').toLowerCase();
             return hay.includes(q);
         }
@@ -10597,6 +10612,9 @@ ${actionsRow}
                         <span class="lead-meta-service">${escapeHtml(lead.service || 'General')}</span>
                         ${timeBit}
                     </div>
+                    ${isOutreachDashboardClient(currentClient) && String(lead.logisticsQualSummary || '').trim()
+                        ? `<div class="lead-item-row3 lead-qual-snippet" title="Structured qualification">${escapeHtml(lead.logisticsQualSummary)}</div>`
+                        : ''}
                 </div>
             `;
         }

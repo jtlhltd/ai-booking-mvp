@@ -203,6 +203,23 @@ async function migrateSqliteLeadsPhoneMatchKey() {
   console.log('✅ SQLite leads.phone_match_key migration complete');
 }
 
+/** CRM columns used by leads portal + logistics qual merge (parity with Postgres migrations). */
+async function migrateSqliteLeadsCrmColumns() {
+  if (!sqlite) return;
+  try {
+    const cols = sqlite.prepare('PRAGMA table_info(leads)').all();
+    const names = new Set(cols.map((c) => c.name));
+    if (!names.has('custom_fields')) {
+      sqlite.exec("ALTER TABLE leads ADD COLUMN custom_fields TEXT DEFAULT '{}'");
+    }
+    if (!names.has('updated_at')) {
+      sqlite.exec("ALTER TABLE leads ADD COLUMN updated_at TEXT DEFAULT (datetime('now'))");
+    }
+  } catch (e) {
+    console.warn('⚠️  SQLite leads CRM columns migration:', e.message);
+  }
+}
+
 async function migrateSqliteCallsLeadPhoneMatchKey() {
   if (!sqlite) return;
   try {
@@ -1536,6 +1553,9 @@ export async function init() {
   await migrateSqliteLeadsPhoneMatchKey().catch((e) =>
     console.warn('⚠️  SQLite phone_match_key migration:', e.message)
   );
+  await migrateSqliteLeadsCrmColumns().catch((e) =>
+    console.warn('⚠️  SQLite leads CRM columns migration:', e.message)
+  );
   await migrateSqliteCallsLeadPhoneMatchKey().catch((e) =>
     console.warn('⚠️  SQLite calls.lead_phone_match_key migration:', e.message)
   );
@@ -1942,6 +1962,58 @@ export async function findOrCreateLead({ tenantKey, phone, name = null, service 
   if (out.rows) return out.rows[0];
   const row = sqlite.prepare('SELECT last_insert_rowid() as id').get();
   return { id: row?.id, client_key: tenantKey, name, phone, phone_match_key: mk, service, source };
+}
+
+/**
+ * Merge structured logistics qualification into leads.custom_fields.logisticsQual (JSONB / TEXT).
+ * Creates a lead row if none exists for this tenant+phone.
+ */
+export async function mergeLeadLogisticsQual({ clientKey, phone, patch, sourceCallId = '' } = {}) {
+  if (!clientKey || !phone || !patch || typeof patch !== 'object') {
+    return { ok: false, error: 'invalid_args' };
+  }
+  const isPg = (process.env.DB_TYPE || '').toLowerCase() === 'postgres';
+  const mk = phoneMatchKey(phone);
+  const findSql = mk
+    ? 'SELECT id, custom_fields FROM leads WHERE client_key=$1 AND phone_match_key=$2 ORDER BY created_at DESC LIMIT 1'
+    : 'SELECT id, custom_fields FROM leads WHERE client_key=$1 AND phone=$2 ORDER BY created_at DESC LIMIT 1';
+  let { rows } = await query(findSql, mk ? [clientKey, mk] : [clientKey, phone]);
+  if (!rows?.length) {
+    await findOrCreateLead({
+      tenantKey: clientKey,
+      phone,
+      name: null,
+      service: null,
+      source: 'vapi_logistics_qual'
+    });
+    ({ rows } = await query(findSql, mk ? [clientKey, mk] : [clientKey, phone]));
+  }
+  if (!rows?.length) return { ok: false, error: 'lead_not_found' };
+  const row = rows[0];
+  let cf = row.custom_fields;
+  if (typeof cf === 'string') {
+    try {
+      cf = JSON.parse(cf || '{}');
+    } catch {
+      cf = {};
+    }
+  }
+  if (!cf || typeof cf !== 'object' || Array.isArray(cf)) cf = {};
+  const prev = cf.logisticsQual && typeof cf.logisticsQual === 'object' && !Array.isArray(cf.logisticsQual) ? cf.logisticsQual : {};
+  const mergedLq = { ...prev, ...patch };
+  if (sourceCallId) mergedLq._captureCallId = String(sourceCallId);
+  mergedLq._capturedAt = new Date().toISOString();
+  cf.logisticsQual = mergedLq;
+
+  if (isPg) {
+    await query('UPDATE leads SET custom_fields = $1::jsonb, updated_at = NOW() WHERE id = $2', [cf, row.id]);
+  } else {
+    await query(`UPDATE leads SET custom_fields = $1, updated_at = datetime('now') WHERE id = $2`, [
+      JSON.stringify(cf),
+      row.id
+    ]);
+  }
+  return { ok: true, leadId: row.id };
 }
 
 export async function getLeadsByClient(clientKey, limit = 100) {

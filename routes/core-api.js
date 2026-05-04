@@ -1,5 +1,6 @@
 import express from 'express';
 import { resolveTenantTimezone, toLocalTimestamp, toUtcIso } from '../lib/timezone-resolver.js';
+import { LOGISTICS_QUAL_CSV_LABELS, LOGISTICS_QUAL_FIELD_IDS } from '../lib/logistics-qual-schema.js';
 
 export function createCoreApiRouter(deps) {
   const { query, getIntegrationStatuses, getFullClient } = deps || {};
@@ -217,7 +218,7 @@ export function createCoreApiRouter(deps) {
       if (type === 'leads') {
         const result = await query(
           `
-        SELECT name, phone, service, source, status, notes, created_at
+        SELECT name, phone, service, source, status, notes, custom_fields, created_at
         FROM leads
         WHERE client_key = $1
         ORDER BY created_at DESC
@@ -225,11 +226,21 @@ export function createCoreApiRouter(deps) {
           [clientKey]
         );
 
-        csv = 'Name,Phone,Service,Source,Status,Notes,Created UTC,Created Local,Tenant Timezone\n';
+        const qualHdr = LOGISTICS_QUAL_CSV_LABELS.map(escapeCsv).join(',');
+        csv = `Name,Phone,Service,Source,Status,Notes,${qualHdr},Created UTC,Created Local,Tenant Timezone\n`;
         result.rows.forEach((row) => {
           const createdUtc = toUtcIso(row.created_at);
           const createdLocal = toLocalTimestamp(row.created_at, timezone);
-          csv += `${escapeCsv(row.name)},${escapeCsv(row.phone)},${escapeCsv(row.service)},${escapeCsv(row.source)},${escapeCsv(row.status)},${escapeCsv(row.notes)},${escapeCsv(createdUtc)},${escapeCsv(createdLocal)},${escapeCsv(timezone)}\n`;
+          let lq = {};
+          try {
+            const cf = row.custom_fields;
+            const parsed = typeof cf === 'string' ? JSON.parse(cf || '{}') : (cf || {});
+            lq = parsed.logisticsQual && typeof parsed.logisticsQual === 'object' ? parsed.logisticsQual : {};
+          } catch {
+            lq = {};
+          }
+          const qualCells = LOGISTICS_QUAL_FIELD_IDS.map((id) => escapeCsv(lq[id] || '')).join(',');
+          csv += `${escapeCsv(row.name)},${escapeCsv(row.phone)},${escapeCsv(row.service)},${escapeCsv(row.source)},${escapeCsv(row.status)},${escapeCsv(row.notes)},${qualCells},${escapeCsv(createdUtc)},${escapeCsv(createdLocal)},${escapeCsv(timezone)}\n`;
         });
         filename = `leads-export-${new Date().toISOString().split('T')[0]}.csv`;
       } else if (type === 'calls') {

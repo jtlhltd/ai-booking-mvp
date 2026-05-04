@@ -7,6 +7,7 @@
  */
 import { Router } from 'express';
 import { sqlDaysAgo as sqlDaysAgoLib } from '../lib/sql-relative-interval.js';
+import { summarizeLogisticsQual } from '../lib/logistics-qual-from-vapi.js';
 
 /**
  * This router intentionally uses a wide deps surface because the original handler referenced many server.js locals.
@@ -942,6 +943,7 @@ export async function handleDemoDashboard(req, res, deps) {
                l.service,
                l.source,
                l.notes,
+               l.custom_fields,
                l.created_at,
                le.lead_score,
                (COALESCE(cs.calls_n, 0) > 0) AS outreach_called,
@@ -1040,14 +1042,24 @@ export async function handleDemoDashboard(req, res, deps) {
       const rawScore = row.lead_score;
       const numScore = rawScore == null ? NaN : Number(rawScore);
       const derivedScore = Number.isFinite(numScore) ? numScore : null;
+      let logisticsQualSummary = '';
+      try {
+        const cf = row.custom_fields;
+        const parsed = typeof cf === 'string' ? JSON.parse(cf || '{}') : (cf || {});
+        logisticsQualSummary = summarizeLogisticsQual(parsed.logisticsQual || {});
+      } catch {
+        logisticsQualSummary = '';
+      }
+      const defaultLast =
+        row.notes ||
+        `Added ${new Date(row.created_at).toLocaleDateString('en-GB', { timeZone: activityTzLabel })}`;
       return {
         id: row.id,
         name: row.name || row.phone,
         phone: row.phone,
         status: row.status || 'Awaiting follow-up',
-        lastMessage:
-          row.notes ||
-          `Added ${new Date(row.created_at).toLocaleDateString('en-GB', { timeZone: activityTzLabel })}`,
+        lastMessage: logisticsQualSummary || defaultLast,
+        logisticsQualSummary,
         service: row.service || 'Lead Follow-Up',
         source: row.source || 'Web form',
         timeAgo: formatTimeAgoLabel(row.created_at),
