@@ -426,7 +426,7 @@ export function createAdminClientsRouter({ broadcast }) {
         return res.status(400).json({ error: 'Items array is required' });
       }
 
-      const results = [];
+      let results = [];
 
       switch (operation) {
         case 'clients':

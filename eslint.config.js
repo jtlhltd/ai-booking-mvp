@@ -2,7 +2,7 @@
 //
 // Intentionally permissive baseline so the rule set can be ratcheted upward
 // over time without dumping a wall of pre-existing violations on every PR.
-// CI and `npm run lint` use `--max-warnings 0` (see package.json / scripts/run-test-ci.mjs).
+// Fail-on-error in CI is wired via `npm run lint`; warnings are informational.
 
 import js from '@eslint/js';
 import globals from 'globals';
@@ -53,8 +53,7 @@ export default [
       'no-empty': 'warn',
       'no-prototype-builtins': 'warn',
       'no-useless-catch': 'warn',
-      // Cosmetic in many legacy regex/string literals; fixing hundreds of hits adds churn without safety win.
-      'no-useless-escape': 'off',
+      'no-useless-escape': 'warn', // mostly cosmetic regex escapes
       'no-async-promise-executor': 'warn',
       'no-constant-condition': 'warn',
       'no-misleading-character-class': 'warn',

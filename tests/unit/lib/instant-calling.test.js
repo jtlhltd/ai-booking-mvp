@@ -65,6 +65,7 @@ describe('instant-calling', () => {
     process.env.VAPI_PHONE_NUMBER_ID = 'ph';
     process.env.VAPI_MAX_CONCURRENT = '1';
     process.env.VAPI_SLOT_WAIT_MS = '5000';
+    delete process.env.VAPI_CONCURRENCY_RELEASE_UNKNOWN;
   });
 
   afterEach(() => {
@@ -116,7 +117,7 @@ describe('instant-calling', () => {
       allowOutsideBusinessHours: true
     });
     expect(ok.ok).toBe(true);
-    await modHours.releaseVapiSlot({ callId: 'cid1', reason: 'test' });
+    modHours.releaseVapiSlot({ callId: 'cid1', reason: 'test' });
   });
 
   test('callLeadInstantly rejects empty phone', async () => {
@@ -176,7 +177,7 @@ describe('instant-calling', () => {
       client: { booking: { timezone: 'Europe/London' }, vapi: {} }
     });
     expect(cancelDuplicatePendingCalls).toHaveBeenCalledWith('c1', '+447700900003', 42);
-    await modQ.releaseVapiSlot({ callId: 'cq1', reason: 'test' });
+    modQ.releaseVapiSlot({ callId: 'cq1', reason: 'test' });
   });
 
   test('callLeadInstantly returns vapi_client_error on 4xx', async () => {
@@ -216,7 +217,18 @@ describe('instant-calling', () => {
     expect(r.ok).toBe(true);
     expect(r.callId).toBe('vapi_ok_1');
     expect(upsertCall).toHaveBeenCalled();
-    await modSucc.releaseVapiSlot({ callId: 'vapi_ok_1', reason: 'test' });
+    modSucc.releaseVapiSlot({ callId: 'vapi_ok_1', reason: 'test' });
+  });
+
+  test('releaseVapiSlot can force-release unknown callId when env flag set', async () => {
+    process.env.VAPI_CONCURRENCY_RELEASE_UNKNOWN = '1';
+    const { acquireVapiSlot, releaseVapiSlot, getVapiConcurrencyState } = await import(
+      '../../../lib/instant-calling.js'
+    );
+    await acquireVapiSlot({});
+    expect(getVapiConcurrencyState().current).toBe(1);
+    releaseVapiSlot({ callId: 'never-seen', reason: 'ended' });
+    expect(getVapiConcurrencyState().current).toBe(0);
   });
 
   test('acquireVapiSlot throws when signal already aborted', async () => {
@@ -233,7 +245,7 @@ describe('instant-calling', () => {
     const p2 = mod.acquireVapiSlot({ signal: ac.signal });
     queueMicrotask(() => ac.abort());
     await expect(p2).rejects.toMatchObject({ code: 'queue_handler_aborted' });
-    await mod.releaseVapiSlot({ reason: 'cleanup' });
+    mod.releaseVapiSlot({ reason: 'cleanup' });
   });
 
   test('dialLeadsNowBatch tallies failures when Vapi not configured', async () => {
