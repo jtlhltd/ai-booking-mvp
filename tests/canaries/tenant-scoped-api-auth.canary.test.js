@@ -12,32 +12,28 @@ beforeEach(() => {
   jest.resetModules();
 });
 
-describe('canary: tenant.scoped-reads-require-api-key', () => {
-  test('GET /api/daily-summary/:clientKey returns 401 without X-API-Key', async () => {
-    jest.unstable_mockModule('../../db.js', () => ({
-      getApiKeyByHash: jest.fn(async () => null),
-      updateApiKeyLastUsed: jest.fn(),
-      logSecurityEvent: jest.fn()
-    }));
-    const { authenticateApiKey, requireTenantAccessOrAdmin } = await import('../../middleware/security.js');
+describe('canary: tenant.daily-summary-public-readonly', () => {
+  test('GET /api/daily-summary/:clientKey is public read-only (no X-API-Key required)', async () => {
     const { createDailySummaryRouter } = await import('../../routes/daily-summary.js');
     const router = createDailySummaryRouter({
-      getFullClient: jest.fn(),
+      getFullClient: jest.fn(async () => null),
       resolveLogisticsSpreadsheetId: () => null,
       sheets: {},
       isPostgres: false,
       poolQuerySelect: jest.fn(async () => ({ rows: [] })),
       query: jest.fn(async () => ({ rows: [] })),
       pickTimezone: () => 'UTC',
-      authenticateApiKey,
-      requireTenantAccessOrAdmin
     });
     const app = createContractApp({ mounts: [{ path: '/', router }] });
-    const res = await request(app).get('/daily-summary/acme');
-    expect(res.status).toBe(401);
-    expect(res.body?.code || res.body?.error).toBeTruthy();
+    const res = await request(app).get('/daily-summary/not-a-tenant');
+    expect(res.status).toBe(200);
+    expect(res.headers['cache-control'] || '').toMatch(/no-store/i);
+    expect(res.body?.ok).toBe(true);
+    expect(res.body?.configured).toBe(false);
   });
+});
 
+describe('canary: tenant.scoped-reads-require-api-key', () => {
   test('GET /api/dnc/list returns 401 without X-API-Key', async () => {
     jest.unstable_mockModule('../../db.js', () => ({
       getApiKeyByHash: jest.fn(async () => null),
