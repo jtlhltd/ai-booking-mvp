@@ -1260,7 +1260,7 @@
             color: var(--primary);
         }
 
-        /* Outreach dashboard (self-service client keys): hide booking-calendar KPIs and related chrome */
+        /* Outreach dashboard (self-service client keys): hide scheduling KPIs and related chrome */
         body.tom-outreach-dashboard .tom-hide-for-outreach {
             display: none !important;
         }
@@ -3101,37 +3101,7 @@
             min-width: 140px;
         }
 
-        .roi-panel {
-            margin-bottom: 14px;
-            border-radius: 12px;
-            padding: 14px 16px;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: #fff;
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-            gap: 12px;
-            box-shadow: 0 8px 19px rgba(51, 65, 145, 0.38);
-        }
-
-        .roi-metric span {
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            font-size: 0.75rem;
-            opacity: 0.85;
-        }
-
-        .roi-metric strong {
-            display: block;
-            font-size: 1.4rem;
-            margin-top: 3px;
-            line-height: 1.12;
-        }
-
-        .roi-metric small {
-            display: block;
-            margin-top: 4px;
-            opacity: 0.85;
-        }
+        /* ROI panel removed (not used for Tom). */
 
         .integration-list {
             margin-top: 14px;
@@ -6975,43 +6945,6 @@
             </div>
         </section>
 
-        <section class="roi-panel" id="roiPanel" aria-hidden="false">
-            <div class="roi-metric">
-                <span>Your Investment (30d)</span>
-                <strong id="roiSpend">£0</strong>
-                <small>our service fee</small>
-                </div>
-            <div class="roi-metric">
-                <span>Revenue We Generated</span>
-                <strong id="roiRevenue">£0</strong>
-                <small id="roiBookings">from bookings we made</small>
-            </div>
-            <div class="roi-metric">
-                <span>Your ROI</span>
-                <strong id="roiMultiplier">0x</strong>
-                <small id="roiProfit">£0 profit</small>
-            </div>
-            <details id="roiSettingsWrap" class="roi-settings-panel" style="display:none;width:100%;margin-top:12px;">
-                <summary style="cursor:pointer;color:var(--muted);font-size:0.9rem;">Operator: ROI assumptions (monthly fee &amp; avg booking value)</summary>
-                <div style="margin-top:10px;display:grid;gap:10px;max-width:420px;">
-                    <p style="margin:0;font-size:0.85rem;color:var(--muted);">Uses your server <code style="font-size:0.8rem;">API_KEY</code>. Values are stored on the tenant record.</p>
-                    <label style="display:flex;flex-direction:column;gap:4px;font-size:0.85rem;">Monthly service fee (£)
-                        <input type="number" id="roiInputMonthly" min="0" step="1" style="padding:8px;border-radius:8px;border:1px solid var(--border);" />
-                    </label>
-                    <label style="display:flex;flex-direction:column;gap:4px;font-size:0.85rem;">Average booking value (£)
-                        <input type="number" id="roiInputAvgDeal" min="0" step="1" style="padding:8px;border-radius:8px;border:1px solid var(--border);" />
-                    </label>
-                    <label style="display:flex;flex-direction:column;gap:4px;font-size:0.85rem;">API key
-                        <input type="password" id="roiInputApiKey" autocomplete="off" style="padding:8px;border-radius:8px;border:1px solid var(--border);" />
-                    </label>
-                    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-                        <button type="button" id="roiSaveBtn" class="export-btn secondary">Save ROI settings</button>
-                        <span id="roiSettingsMsg" style="font-size:0.85rem;color:var(--muted);"></span>
-                    </div>
-                </div>
-            </details>
-        </section>
-
         <!-- PERFORMANCE & ANALYTICS SECTION -->
         <section class="dashboard-section dashboard-section--balanced-row dashboard-section--analytics-row">
             <h2 class="section-header">📊 Performance & Analytics</h2>
@@ -7243,15 +7176,6 @@
                     <div id="ops-health" class="thin-scroll"></div>
                 </article>
 
-                <article class="card card-list tom-hide-for-outreach">
-                    <h3>📅 Upcoming Appointments</h3>
-                    <p class="card-subtitle" id="appointmentsSubtitle">Appointments we booked for you.</p>
-                    <div id="upcoming-appointments" class="appt-list thin-scroll"></div>
-                    <div class="export-buttons">
-                        <button class="export-btn secondary" onclick="exportData('appointments')">📥 Export</button>
-            </div>
-                </article>
-
                 <article class="card card-list">
                     <h3>🎙️ Call Recordings</h3>
                     <p class="card-subtitle" id="callRecordingsSubtitle">Recent calls with a saved recording. Audio plays via our server; each row shows exact time plus “time ago”. Open in a new tab if needed.</p>
@@ -7287,7 +7211,7 @@
             <div class="dashboard-grid">
                 <article class="card">
                     <h3>🔌 Integrations</h3>
-                    <p class="card-subtitle" id="integrationsCardSubtitle">Everything connected to handle your bookings.</p>
+                    <p class="card-subtitle" id="integrationsCardSubtitle">Channels connected for voice, SMS, and related integrations.</p>
                     <div id="system-status" class="status-compact">
                         <div class="metric-row">
                             <span class="metric-label">Lead number</span>
@@ -7449,7 +7373,7 @@
             const k = key.trim().toLowerCase();
             return k === DEMO_CLIENT_KEY || DEMO_URL_ALIASES.has(k);
         }
-        /** Outreach-only UI: no appointments/ROI/conversion tiles; copy avoids booking/calendar framing */
+        /** Outreach-only UI: copy avoids scheduling framing */
         const OUTREACH_DASHBOARD_WORKFLOW_STEPS = [
             { icon: '📥', title: 'Leads received', desc: 'Contacts arrive from your lists, uploads, and integrations.' },
             { icon: '📞', title: 'Outbound calls', desc: 'We dial according to your hours and priorities and log every attempt.' },
@@ -7465,16 +7389,7 @@
             }
             return false;
         }
-        function shouldShowRoiPanel(clientKey) {
-            return !isOutreachDashboardClient(clientKey);
-        }
-        function applyRoiPanelVisibility(clientKey) {
-            const el = document.getElementById('roiPanel');
-            if (!el) return;
-            const show = shouldShowRoiPanel(clientKey);
-            el.style.display = show ? '' : 'none';
-            el.setAttribute('aria-hidden', show ? 'false' : 'true');
-        }
+        // ROI panel removed (not used for outbound qualification dashboards).
         function applyTomOutreachDashboardMode(clientKey) {
             const on = isOutreachDashboardClient(clientKey);
             document.body.classList.toggle('tom-outreach-dashboard', on);
@@ -8566,9 +8481,6 @@
                 <div class="usage-meter-item"><span class="tom-ab-test-meta">Last 30 days · new leads</span><strong>${formatNumber(
                     Number(w30.newLeads) || 0
                 )}</strong></div>
-                <div class="usage-meter-item"><span class="tom-ab-test-meta">Last 30 days · appointments</span><strong>${formatNumber(
-                    Number(w30.appointments) || 0
-                )}</strong></div>
             </div>${capHtml}${(() => {
                 const pl = um.plan && typeof um.plan === 'object' ? um.plan : {};
                 if (!pl.name && !pl.periodNote && !pl.upgradeUrl) return '';
@@ -8804,53 +8716,53 @@ ${actionsRow}
             
             const messaging = {
                 dental: {
-                    tagline: `We're calling every lead you've already paid for and booking them into your calendar.`,
-                    description: `Your AI receptionist is following up on leads and booking appointments 24/7.`,
+                    tagline: `We're calling every lead you've already paid for and turning outreach into real conversations.`,
+                    description: `Your AI assistant follows up on leads and captures outcomes 24/7.`,
                     workflow: [
                         { icon: '📥', title: 'Import leads', desc: 'We pull directly from your CRM, forms, or spreadsheets.' },
-                        { icon: '🤖', title: 'AI speed-to-lead', desc: 'Calls go out within minutes to convert inquiries into appointments.' },
-                        { icon: '📅', title: 'Appointments land in calendar', desc: 'Confirmed bookings drop straight into your practice calendar.' },
-                        { icon: '📊', title: 'Daily digest', desc: 'Email summary with leads touched and appointments booked.' }
+                        { icon: '🤖', title: 'AI speed-to-lead', desc: 'Calls go out within minutes to qualify and capture structured details.' },
+                        { icon: '🧾', title: 'Handoff-ready notes', desc: 'Key details are saved so follow-up is short and high-close.' },
+                        { icon: '📊', title: 'Daily digest', desc: 'Summary with leads touched and outcomes.' }
                     ]
                 },
                 fitness: {
-                    tagline: `We're calling every lead you've already paid for and booking them into your calendar.`,
-                    description: `Your AI booking assistant is following up on leads and scheduling sessions 24/7.`,
+                    tagline: `We're calling every lead you've already paid for and turning outreach into real conversations.`,
+                    description: `Your AI assistant follows up on leads and captures outcomes 24/7.`,
                     workflow: [
                         { icon: '📥', title: 'Import leads', desc: 'We pull directly from your CRM, forms, or spreadsheets.' },
-                        { icon: '🤖', title: 'AI speed-to-lead', desc: 'Calls go out within minutes to convert inquiries into sessions.' },
-                        { icon: '📅', title: 'Sessions land in calendar', desc: 'Confirmed bookings drop straight into your training calendar.' },
-                        { icon: '📊', title: 'Daily digest', desc: 'Email summary with leads touched and sessions booked.' }
+                        { icon: '🤖', title: 'AI speed-to-lead', desc: 'Calls go out within minutes to qualify and capture structured details.' },
+                        { icon: '🧾', title: 'Handoff-ready notes', desc: 'Key details are saved so follow-up is short and high-close.' },
+                        { icon: '📊', title: 'Daily digest', desc: 'Summary with leads touched and outcomes.' }
                     ]
                 },
                 beauty: {
-                    tagline: `We're calling every lead you've already paid for and booking them into your calendar.`,
-                    description: `Your AI booking assistant is following up on leads and scheduling appointments 24/7.`,
+                    tagline: `We're calling every lead you've already paid for and turning outreach into real conversations.`,
+                    description: `Your AI assistant follows up on leads and captures outcomes 24/7.`,
                     workflow: [
                         { icon: '📥', title: 'Import leads', desc: 'We pull directly from your CRM, forms, or spreadsheets.' },
-                        { icon: '🤖', title: 'AI speed-to-lead', desc: 'Calls go out within minutes to convert inquiries into bookings.' },
-                        { icon: '📅', title: 'Appointments land in calendar', desc: 'Confirmed bookings drop straight into your salon calendar.' },
-                        { icon: '📊', title: 'Daily digest', desc: 'Email summary with leads touched and appointments booked.' }
+                        { icon: '🤖', title: 'AI speed-to-lead', desc: 'Calls go out within minutes to qualify and capture structured details.' },
+                        { icon: '🧾', title: 'Handoff-ready notes', desc: 'Key details are saved so follow-up is short and high-close.' },
+                        { icon: '📊', title: 'Daily digest', desc: 'Summary with leads touched and outcomes.' }
                     ]
                 },
                 legal: {
-                    tagline: `We're calling every lead you've already paid for and booking them into your calendar.`,
-                    description: `Your AI receptionist is following up on leads and scheduling consultations 24/7.`,
+                    tagline: `We're calling every lead you've already paid for and turning outreach into real conversations.`,
+                    description: `Your AI assistant follows up on leads and captures outcomes 24/7.`,
                     workflow: [
                         { icon: '📥', title: 'Import leads', desc: 'We pull directly from your CRM, forms, or spreadsheets.' },
-                        { icon: '🤖', title: 'AI speed-to-lead', desc: 'Calls go out within minutes to convert inquiries into consultations.' },
-                        { icon: '📅', title: 'Consultations land in calendar', desc: 'Confirmed bookings drop straight into your practice calendar.' },
-                        { icon: '📊', title: 'Daily digest', desc: 'Email summary with leads touched and consultations booked.' }
+                        { icon: '🤖', title: 'AI speed-to-lead', desc: 'Calls go out within minutes to qualify and capture structured details.' },
+                        { icon: '🧾', title: 'Handoff-ready notes', desc: 'Key details are saved so follow-up is short and high-close.' },
+                        { icon: '📊', title: 'Daily digest', desc: 'Summary with leads touched and outcomes.' }
                     ]
                 },
                 medical: {
-                    tagline: `We're calling every lead you've already paid for and booking them into your calendar.`,
-                    description: `Your AI receptionist is following up on leads and scheduling appointments 24/7.`,
+                    tagline: `We're calling every lead you've already paid for and turning outreach into real conversations.`,
+                    description: `Your AI assistant follows up on leads and captures outcomes 24/7.`,
                     workflow: [
                         { icon: '📥', title: 'Import leads', desc: 'We pull directly from your CRM, forms, or spreadsheets.' },
-                        { icon: '🤖', title: 'AI speed-to-lead', desc: 'Calls go out within minutes to convert inquiries into appointments.' },
-                        { icon: '📅', title: 'Appointments land in calendar', desc: 'Confirmed bookings drop straight into your practice calendar.' },
-                        { icon: '📊', title: 'Daily digest', desc: 'Email summary with leads touched and appointments booked.' }
+                        { icon: '🤖', title: 'AI speed-to-lead', desc: 'Calls go out within minutes to qualify and capture structured details.' },
+                        { icon: '🧾', title: 'Handoff-ready notes', desc: 'Key details are saved so follow-up is short and high-close.' },
+                        { icon: '📊', title: 'Daily digest', desc: 'Summary with leads touched and outcomes.' }
                     ]
                 }
             };
@@ -8929,20 +8841,20 @@ ${actionsRow}
         
         const CLIENT_CONFIG = {
             demo_client: {
-                name: 'Demo Booking Partner',
-                description: 'Live sandbox showing the AI concierge following up + booking',
-                tagline: 'Upload existing leads → AI calls in minutes → appointments land in your calendar.',
+                name: 'Demo Client',
+                description: 'Live sandbox showing outbound follow-up + qualification',
+                tagline: 'Upload existing leads → AI calls in minutes → outcomes & handoff notes appear here.',
                 logo: '✨',
                 status: 'Demo Live',
                 phone: '+44 20 3880 1234',
                 timezone: 'Europe/London',
                 businessHours: '8am - 8pm, 7 days/week',
-                industry: 'AI Booking Concierge',
+                industry: 'Outbound qualification',
                 workflow: [
                     { icon: '📥', title: 'Import leads', desc: 'We pull directly from your CRM, forms, or spreadsheets.' },
                     { icon: '🤖', title: 'AI speed-to-lead', desc: 'Calls + SMS go out within minutes (24/7 coverage).' },
-                    { icon: '📅', title: 'Bookings land in calendar', desc: 'Confirmed appointments drop straight into your calendar.' },
-                    { icon: '📊', title: 'Daily digest', desc: 'Slack/email summary with leads touched and outcomes.' }
+                    { icon: '🧾', title: 'Handoff-ready notes', desc: 'Key details are captured so your follow-up is short and high-close.' },
+                    { icon: '📊', title: 'Daily digest', desc: 'Summary with leads touched and outcomes.' }
                 ],
                 chart: [5, 7, 6, 9, 8, 10, 7]
             }
@@ -8957,7 +8869,7 @@ ${actionsRow}
             // Generate service-specific lead names and scenarios
             const leadNames = ['Jordan Hale', 'Priya Desai', 'Lewis Grant', 'Emily Carr', 'Tom Osei'];
             const statuses = [
-                `Booked • ${primaryService} confirmed`,
+                `Qualified • ${primaryService} details captured`,
                 `Awaiting reply • interested in ${primaryService}`,
                 `Engaged • asked about ${primaryService}`,
                 `Left voicemail • SMS reminder sent`,
@@ -8971,7 +8883,6 @@ ${actionsRow}
                 conversionRate: 63,
                 successRate: 84,
                 firstResponse: '2m 58s',
-                bookingsThisWeek: 18,
                 avgLeadScore: 87,
                 highPriorityLeads: 9,
                 mediumPriorityLeads: 14,
@@ -8990,24 +8901,16 @@ ${actionsRow}
                 serviceMix: services.map((service, i) => ({
                     name: service,
                     percent: i === 0 ? 45 : Math.floor(55 / (services.length - 1)),
-                    notes: `${service} bookings`
+                    notes: `${service} outcomes`
                 })),
                 recentCalls: [
-                    { id: 'demo-1', callId: 'pdemo-1', dbId: 9101, name: 'Sarah Patel', leadPhone: '+447700900111', service: primaryService, summary: `Booked ${primaryService} via AI call — slot confirmed and invite sent.`, channel: 'Phone', timeAgo: '2 min ago', outcome: 'booked', outcomeLabel: 'Booked', status: 'Ended', rawStatus: 'ended', durationLabel: '3m 12s' },
+                    { id: 'demo-1', callId: 'pdemo-1', dbId: 9101, name: 'Sarah Patel', leadPhone: '+447700900111', service: primaryService, summary: 'Qualified via AI call — key details captured for follow-up.', channel: 'Phone', timeAgo: '2 min ago', outcome: 'qualified', outcomeLabel: 'Qualified', status: 'Ended', rawStatus: 'ended', durationLabel: '3m 12s' },
                     { id: 'demo-2', callId: 'pdemo-2', dbId: 9102, name: 'Marcus Flynn', leadPhone: '+447700900222', service: primaryService, summary: 'Requested reschedule • SMS follow-up sent with afternoon options.', channel: 'SMS → Call', timeAgo: '9 min ago', outcome: 'completed', outcomeLabel: 'Picked up', status: 'Ended', rawStatus: 'ended', durationLabel: '4m 05s' },
-                    { id: 'demo-3', callId: 'pdemo-3', dbId: 9103, name: 'Laura Chen', leadPhone: '+447700900333', service: primaryService, summary: 'Synced with calendar • reminder scheduled for 24h before.', channel: 'Webhook sync', timeAgo: '25 min ago', outcome: 'completed', outcomeLabel: 'Completed', status: 'Ended', rawStatus: 'ended', durationLabel: '2m 40s' },
-                    { id: 'demo-4', callId: 'pdemo-4', dbId: 9104, name: 'Rick Alvarez', leadPhone: '+447700900444', service: primaryService, summary: 'Moved appointment • calendar updated for all attendees.', channel: 'Phone', timeAgo: '42 min ago', outcome: 'booked', outcomeLabel: 'Booked', status: 'Ended', rawStatus: 'ended', durationLabel: '5m 01s' }
+                    { id: 'demo-3', callId: 'pdemo-3', dbId: 9103, name: 'Laura Chen', leadPhone: '+447700900333', service: primaryService, summary: 'Captured preferences • follow-up queued for next window.', channel: 'Webhook sync', timeAgo: '25 min ago', outcome: 'completed', outcomeLabel: 'Completed', status: 'Ended', rawStatus: 'ended', durationLabel: '2m 40s' },
+                    { id: 'demo-4', callId: 'pdemo-4', dbId: 9104, name: 'Rick Alvarez', leadPhone: '+447700900444', service: primaryService, summary: 'Requested callback window • follow-up queued.', channel: 'Phone', timeAgo: '42 min ago', outcome: 'callback', outcomeLabel: 'Callback', status: 'Ended', rawStatus: 'ended', durationLabel: '5m 01s' }
                 ],
-                appointments: [
-                    { id: 101, name: 'Isla Brown', service: primaryService, start: new Date(Date.now() + 60 * 60 * 1000).toISOString(), status: 'booked' },
-                    { id: 102, name: 'Liam Wright', service: primaryService, start: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(), status: 'booked' },
-                    { id: 103, name: 'Maya Reyes', service: primaryService, start: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(), status: 'pending' }
-                ],
-                roi: {
-                    costs: { total: 612.4, perCall: 12.4 },
-                    revenue: { total: 6280, bookings: 18, avgDealValue: 349 },
-                    roi: { profit: 5667.6, multiplier: 10.3, percentage: 930 }
-                }
+                appointments: [],
+                roi: null
             };
         }
 
@@ -9019,7 +8922,7 @@ ${actionsRow}
             conversionRate: 63,
             successRate: 84,
             firstResponse: '2m 58s',
-            bookingsThisWeek: 18,
+                bookingsThisWeek: 0,
             avgLeadScore: 87,
             highPriorityLeads: 9,
             mediumPriorityLeads: 14,
@@ -9029,7 +8932,7 @@ ${actionsRow}
                 data: [5, 7, 6, 9, 8, 10, 7]
             },
             recentLeads: [
-                { id: 1, name: 'Jordan Hale', phone: '+44 7700 900451', service: 'AI Strategy Session', status: 'Booked • calendar invite sent', source: 'Facebook Lead Ad', timeAgo: '2 min ago', lastMessage: '“Got the confirmation, see you Tuesday.”' },
+                    { id: 1, name: 'Jordan Hale', phone: '+44 7700 900451', service: 'AI Strategy Session', status: 'Qualified • details captured', source: 'Facebook Lead Ad', timeAgo: '2 min ago', lastMessage: '“Thanks — call me Thursday afternoon.”' },
                 { id: 2, name: 'Priya Desai', phone: '+44 7700 900512', service: 'Follow-up Call', status: 'Awaiting reply • wants afternoon slot', source: 'Website form', timeAgo: '9 min ago', lastMessage: 'Asked for 4-6pm slot; AI sent options.' },
                 { id: 3, name: 'Lewis Grant', phone: '+44 7700 900623', service: 'Pricing Review', status: 'Engaged • asked for case study', source: 'Referral', timeAgo: '25 min ago', lastMessage: 'Shared case study + queued callback tomorrow.' },
                 { id: 4, name: 'Emily Carr', phone: '+44 7700 900734', service: 'Calendar Integration', status: 'Left voicemail • SMS reminder queued', source: 'CRM import', timeAgo: '40 min ago', lastMessage: 'Voicemail dropped, SMS reminder scheduled at 9am.' },
@@ -9037,30 +8940,22 @@ ${actionsRow}
             ],
             serviceMix: [
                 { name: 'Lead Follow-Up', percent: 35, notes: 'Speed-to-lead flows' },
-                { name: 'Appointment Booking', percent: 45, notes: 'AI calendar concierge' },
+                { name: 'Qualification', percent: 45, notes: 'Outcome + handoff notes' },
                 { name: 'Calendar Integration', percent: 20, notes: 'Multi-calendar sync' }
             ],
             recentCalls: [
-                { id: 'demo-1', callId: 'static-demo-1', dbId: 9201, name: 'Sarah Patel', leadPhone: '+447700900111', service: 'AI Strategy Session', summary: 'Booked Tuesday 2:30pm via AI call — confirmation SMS delivered.', channel: 'Phone', timeAgo: '2 min ago', outcome: 'booked', outcomeLabel: 'Booked', status: 'Ended', rawStatus: 'ended', durationLabel: '3m 12s' },
+                { id: 'demo-1', callId: 'static-demo-1', dbId: 9201, name: 'Sarah Patel', leadPhone: '+447700900111', service: 'AI Strategy Session', summary: 'Qualified via AI call — key details captured for follow-up.', channel: 'Phone', timeAgo: '2 min ago', outcome: 'qualified', outcomeLabel: 'Qualified', status: 'Ended', rawStatus: 'ended', durationLabel: '3m 12s' },
                 { id: 'demo-2', callId: 'static-demo-2', dbId: 9202, name: 'Marcus Flynn', leadPhone: '+447700900222', service: 'Follow-up Call', summary: 'Requested reschedule • SMS follow-up sent with three time windows.', channel: 'SMS → Call', timeAgo: '9 min ago', outcome: 'completed', outcomeLabel: 'Picked up', status: 'Ended', rawStatus: 'ended', durationLabel: '4m 05s' },
-                { id: 'demo-3', callId: 'static-demo-3', dbId: 9203, name: 'Laura Chen', leadPhone: '+447700900333', service: 'Calendar Integration', summary: 'Synced with Google Calendar • reminder scheduled for prospect.', channel: 'Webhook sync', timeAgo: '25 min ago', outcome: 'completed', outcomeLabel: 'Completed', status: 'Ended', rawStatus: 'ended', durationLabel: '2m 40s' },
-                { id: 'demo-4', callId: 'static-demo-4', dbId: 9204, name: 'Rick Alvarez', leadPhone: '+447700900444', service: 'AI Concierge Setup', summary: 'Moved to Thursday • calendar updated; team notified in Slack.', channel: 'Phone', timeAgo: '42 min ago', outcome: 'booked', outcomeLabel: 'Booked', status: 'Ended', rawStatus: 'ended', durationLabel: '5m 01s' }
+                { id: 'demo-3', callId: 'static-demo-3', dbId: 9203, name: 'Laura Chen', leadPhone: '+447700900333', service: 'Integration', summary: 'Captured preferences • follow-up queued for next window.', channel: 'Webhook sync', timeAgo: '25 min ago', outcome: 'completed', outcomeLabel: 'Completed', status: 'Ended', rawStatus: 'ended', durationLabel: '2m 40s' },
+                { id: 'demo-4', callId: 'static-demo-4', dbId: 9204, name: 'Rick Alvarez', leadPhone: '+447700900444', service: 'Follow-up', summary: 'Requested callback window • follow-up queued.', channel: 'Phone', timeAgo: '42 min ago', outcome: 'callback', outcomeLabel: 'Callback', status: 'Ended', rawStatus: 'ended', durationLabel: '5m 01s' }
             ],
-            appointments: [
-                { id: 101, name: 'Isla Brown', service: 'AI Strategy Session', start: new Date(Date.now() + 60 * 60 * 1000).toISOString(), status: 'booked' },
-                { id: 102, name: 'Liam Wright', service: 'Calendar Integration', start: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(), status: 'booked' },
-                { id: 103, name: 'Maya Reyes', service: 'Follow-up Call', start: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(), status: 'pending' }
-            ],
-            roi: {
-                costs: { total: 612.4, perCall: 12.4 },
-                revenue: { total: 6280, bookings: 18, avgDealValue: 349 },
-                roi: { profit: 5667.6, multiplier: 10.3, percentage: 930 }
-            },
+            appointments: [],
+            roi: null,
             usageMeters: {
                 asOf: new Date().toISOString(),
                 windows: {
                     last7Days: { dialAttempts: 142, talkMinutes: 58.2 },
-                    last30Days: { dialAttempts: 580, talkMinutes: 241.5, newLeads: 95, appointments: 22 }
+                    last30Days: { dialAttempts: 580, talkMinutes: 241.5, newLeads: 95 }
                 },
                 caps: {
                     monthlyDialAttempts: 2000,
@@ -9092,7 +8987,7 @@ ${actionsRow}
         const DEMO_INTEGRATIONS = [
             { name: 'Vapi Voice', status: 'active', detail: 'Assistant + phone number connected' },
             { name: 'Twilio SMS', status: 'active', detail: 'Messaging service verified' },
-            { name: 'Google Calendar', status: 'active', detail: 'Auto-booking in sync' },
+            { name: 'Google Calendar', status: 'active', detail: 'Optional scheduling integration' },
             { name: 'Slack Digest', status: 'warning', detail: 'Add webhook to enable daily summary' }
         ];
 
@@ -9413,7 +9308,7 @@ ${actionsRow}
                     CLIENT_CONFIG[DEMO_CLIENT_KEY] ||
                     {};
                 renderChart(chartCfg, dashboardData);
-                renderAppointments(dashboardData.appointments || []);
+                // appointments panel removed
                 if (isOutreachDashboardClient(currentClient)) {
                     renderTomAbTestSection(dashboardData);
                 }
@@ -9743,13 +9638,13 @@ ${actionsRow}
                          config.sms?.fromNumber ||
                          config.whiteLabel?.phone)) || null;
             
-            // Timezone: from timezone or booking.timezone
+            // Timezone: from timezone or legacy booking.timezone
             const timezone = (hasClientConfig && (dashboardData.tenantTimezone ||
                           config.timezone || 
                            config.booking?.timezone ||
                            config.calendar_json?.booking?.timezone)) || null;
             
-            // Business Hours: from businessHours or booking config
+            // Business Hours: from businessHours or legacy booking config
             const businessHours = (hasClientConfig && (config.businessHours ||
                                  config.booking?.businessHours ||
                                  config.calendar_json?.booking?.businessHours ||
@@ -9851,10 +9746,6 @@ ${actionsRow}
             const statusCardResponse = document.getElementById('statusCardResponse');
             if (statusCardResponse) statusCardResponse.textContent = `${businessName}: lead → first call`;
             
-            // Update ROI panel
-            const roiRevenueLabel = document.getElementById('roiRevenueLabel');
-            if (roiRevenueLabel) roiRevenueLabel.textContent = `Revenue We Generated for ${businessName}`;
-            
             // Update active indicator
             const activeTitle = document.getElementById('activeTitle');
             if (activeTitle) {
@@ -9886,7 +9777,7 @@ ${actionsRow}
             const callInsightsSubtitle = document.getElementById('callInsightsSubtitle');
             if (callInsightsSubtitle) {
                 callInsightsSubtitle.textContent = isOutreachDashboardClient(currentClient)
-                    ? `Easy-to-read call timing tips for ${businessName} — focused on reaching people, not calendar bookings.`
+                    ? `Easy-to-read call timing tips for ${businessName} — focused on reaching people and capturing outcomes.`
                     : `Plain-English tips from your call times and answer rates.`;
             }
             
@@ -9895,11 +9786,6 @@ ${actionsRow}
                 recentLeadsSubtitle.textContent = isOutreachDashboardClient(currentClient)
                     ? `Recently added leads for ${businessName}, newest at the top. Use pipeline chips or the engagement snapshot above to slice dialed / reached / no pickup; search still applies on top. Export downloads the full CRM.`
                     : `Recently added leads for ${businessName}, newest at the top. Search filters the list below; the summary line compares loaded rows to your CRM total. Export downloads the full set.`;
-            }
-            
-            const appointmentsSubtitle = document.getElementById('appointmentsSubtitle');
-            if (appointmentsSubtitle && !isOutreachDashboardClient(currentClient)) {
-                appointmentsSubtitle.textContent = `Appointments we booked for ${businessName}.`;
             }
             
             const activityFeedSubtitle = document.getElementById('activityFeedSubtitle');
@@ -9944,7 +9830,7 @@ ${actionsRow}
             if (integrationsSub) {
                 integrationsSub.textContent = isOutreachDashboardClient(currentClient)
                     ? `Channels connected for ${businessName}'s outreach (voice, SMS, and related integrations).`
-                    : `Everything connected to handle your bookings.`;
+                    : `Channels connected for ${businessName}.`;
             }
 
             const pipelineH = document.getElementById('pipelineSnapshotHeading');
@@ -10049,7 +9935,6 @@ ${actionsRow}
 
         function updateStatusBar(data) {
             const tomOutreach = isOutreachDashboardClient(currentClient);
-            const totalLeads = formatNumber(data.totalLeads);
             const totalCalls = formatNumber(data.totalCalls);
             const totalCallsNum =
                 data.totalCalls != null && Number.isFinite(Number(data.totalCalls))
@@ -10058,7 +9943,6 @@ ${actionsRow}
             const conversion = formatPercent(data.conversionRate);
             const firstResponse = data.firstResponse || '—';
 
-            document.getElementById('statusTotalLeads').textContent = totalLeads;
             const callsAnswered = data.metrics?.callsAnswered ?? 0;
             const callsNotAnswered = data.metrics?.callsNotAnswered ?? 0;
             const pendingLeadsOnly = data.metrics?.uniqueLeadsPendingOnly ?? 0;
@@ -10163,12 +10047,16 @@ ${actionsRow}
             document.getElementById('statusFirstResponse').textContent = firstResponse;
 
             const last24 = formatNumber(data.last24hLeads ?? 0);
-            const bookings = formatNumber(data.bookingsThisWeek ?? 0);
             const winRate = formatPercent(data.successRate ?? 0);
 
             const leadTotalNum = data.totalLeads != null && Number.isFinite(Number(data.totalLeads))
                 ? Number(data.totalLeads)
                 : NaN;
+            const displayTotalLeadsNum =
+                tomOutreach && Number.isFinite(leadTotalNum)
+                    ? Math.max(leadTotalNum || 0, uniqDial || 0)
+                    : (Number.isFinite(leadTotalNum) ? leadTotalNum : (data.totalLeads || 0));
+            document.getElementById('statusTotalLeads').textContent = formatNumber(displayTotalLeadsNum);
             const crmDialGap =
                 Number.isFinite(leadTotalNum) && leadTotalNum > 0 && uniqDial > 0
                     ? uniqDial - leadTotalNum
@@ -10209,7 +10097,7 @@ ${actionsRow}
             const convHint = document.getElementById('statusHintConversion');
             if (convHint) {
                 convHint.textContent = tomOutreach
-                    ? `Reached ÷ dialed (unique numbers).${crmDialGap > 0 ? ` Includes ${formatNumber(crmDialGap)} dialed number${crmDialGap === 1 ? '' : 's'} not in current CRM snapshot.` : ''} Booking-style “conversion %” is not the goal for cold outreach — use reach, connect rate, and the 7d/30d strip above the A/B console.`
+                    ? `Reached ÷ dialed (unique numbers).${crmDialGap > 0 ? ` Includes ${formatNumber(crmDialGap)} dialed number${crmDialGap === 1 ? '' : 's'} not in current CRM snapshot.` : ''} “Conversion %” is not the goal for cold outreach — use reach/connect rate and the 7d/30d strip above the A/B console.`
                     : `Win rate: ${winRate}`;
             }
             const respN = data.metrics?.firstResponseSampleSize;
@@ -10292,20 +10180,10 @@ ${actionsRow}
                 </div>`
                 : '';
 
-            const bookingsSection = !tom
-                ? `
-                <div class="activity-split-heading">Bookings (7 days)</div>
-                <div class="activity-rhythm-block activity-rhythm-block--solo">
-                    <div class="activity-metric">
-                        <div class="activity-metric-label">Bookings logged</div>
-                        <div class="activity-metric-value">${formatNumber(data.bookingsThisWeek || 0)}</div>
-                        <div class="activity-metric-hint">From appointments and “booked” call outcomes.</div>
-                    </div>
-                </div>`
-                : '';
+            const bookingsSection = '';
 
             const foot = tom
-                ? `Rolling 24h window (${actTz.replace(/_/g, ' ')}). Hover the ? on “Last 24 hours” for full definitions. This outreach view centres on dials and reach — calendar bookings are not the headline KPI here.`
+                ? `Rolling 24h window (${actTz.replace(/_/g, ' ')}). Hover the ? on “Last 24 hours” for full definitions. This outreach view centres on dials and reach — outcomes and handoff quality are the headline KPI here.`
                 : `<strong>How to read this:</strong> 24-hour figures are a rolling 24h window in ${actTz.replace(/_/g, ' ')} (same instant boundary for leads, dials, and reach). All-time dials include retries. Reached + no pickup partition unique numbers dialed (ambiguous rows = no pickup). Response time is mean minutes from lead created to first outbound dial (recent leads sample).`;
 
             container.innerHTML = `
@@ -10378,90 +10256,11 @@ ${actionsRow}
                     </div>
                 </div>
                 ${firstDialBlock}
-                ${bookingsSection}
                 <div class="activity-footnote">${foot}</div>
             `;
         }
 
-        function renderROI(roi = {}) {
-            document.getElementById('roiSpend').textContent = formatCurrency(roi.costs?.total);
-            document.getElementById('roiRevenue').textContent = formatCurrency(roi.revenue?.total);
-            const bookings = roi.revenue?.bookings ?? 0;
-            const avgDeal = roi.revenue?.avgDealValue;
-            const bookingLine = `${formatNumber(bookings)} bookings${avgDeal != null && Number.isFinite(Number(avgDeal)) ? ` × ${formatCurrency(avgDeal)}` : ''}`;
-            document.getElementById('roiBookings').textContent = bookingLine;
-            const mult = roi.roi?.multiplier;
-            document.getElementById('roiMultiplier').textContent = mult != null && Number.isFinite(Number(mult)) ? `${Number(mult).toFixed(1)}x` : '—';
-            const profit = roi.roi?.profit;
-            const profitStr = profit != null && Number.isFinite(Number(profit))
-                ? `${formatCurrency(profit)} profit`
-                : '—';
-            document.getElementById('roiProfit').textContent = profitStr;
-        }
-
-        function prefillRoiSettingsInputs() {
-            const m = document.getElementById('roiInputMonthly');
-            const a = document.getElementById('roiInputAvgDeal');
-            if (!m || !a) return;
-            const fee = dashboardData.roi?.costs?.monthlyFee;
-            const deal = dashboardData.roi?.revenue?.avgDealValue;
-            if (fee != null && Number.isFinite(Number(fee))) m.value = String(Math.round(Number(fee)));
-            else m.value = '';
-            if (deal != null && Number.isFinite(Number(deal))) a.value = String(Math.round(Number(deal)));
-            else a.value = '';
-        }
-
-        function initRoiSettingsPanel() {
-            const wrap = document.getElementById('roiSettingsWrap');
-            const btn = document.getElementById('roiSaveBtn');
-            if (!wrap || !btn) return;
-            if (currentClient === DEMO_CLIENT_KEY || !shouldShowRoiPanel(currentClient)) {
-                wrap.style.display = 'none';
-                return;
-            }
-            wrap.style.display = 'block';
-            if (btn.dataset.bound === '1') return;
-            btn.dataset.bound = '1';
-            btn.addEventListener('click', () => saveRoiSettings());
-        }
-
-        async function saveRoiSettings() {
-            const monthly = document.getElementById('roiInputMonthly')?.value;
-            const avg = document.getElementById('roiInputAvgDeal')?.value;
-            const apiKeyEl = document.getElementById('roiInputApiKey');
-            const apiKey = apiKeyEl?.value?.trim();
-            const msg = document.getElementById('roiSettingsMsg');
-            if (!apiKey) {
-                if (msg) msg.textContent = 'API key required.';
-                return;
-            }
-            if (msg) msg.textContent = '';
-            try {
-                const body = {};
-                if (monthly !== '') body.monthlyFee = Number(monthly);
-                if (avg !== '') body.avgDealValue = Number(avg);
-                const res = await fetch(`${BASE_URL}/api/clients/${encodeURIComponent(currentClient)}/config`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
-                    body: JSON.stringify(body)
-                });
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
-                if (msg) msg.textContent = 'Saved. Refreshing data…';
-                if (apiKeyEl) apiKeyEl.value = '';
-                const livePayload = await fetchLiveData(currentClient);
-                if (livePayload) {
-                    dashboardData = mergeData({}, livePayload, false);
-                    if (shouldShowRoiPanel(currentClient)) {
-                        renderROI(dashboardData.roi);
-                        prefillRoiSettingsInputs();
-                    }
-                }
-                if (msg) msg.textContent = 'Saved.';
-            } catch (e) {
-                if (msg) msg.textContent = e.message || 'Save failed';
-            }
-        }
+        // ROI calculator removed.
 
         async function loadBuildFingerprint() {
             const el = document.getElementById('buildFingerprint');
@@ -10804,40 +10603,7 @@ ${actionsRow}
         }
 
 
-        function renderAppointments(appointments = []) {
-            const container = document.getElementById('upcoming-appointments');
-            if (!container) return;
-            if (isOutreachDashboardClient(currentClient)) {
-                container.innerHTML = '';
-                return;
-            }
-            // Use current clientBusinessName (updated by personalizeDashboard)
-            const businessName = clientBusinessName || 'Your Business';
-            if (!Array.isArray(appointments) || !appointments.length) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <span class="empty-state-icon">📅</span>
-                        <div class="empty-state-title">No upcoming appointments</div>
-                        <div class="empty-state-message">Appointments we book for ${businessName} will appear here automatically.</div>
-                        <div class="empty-state-cta">
-                            <button class="empty-state-btn" onclick="document.getElementById('leadImportButton')?.click()" aria-label="Upload leads to get started">
-                                📤 Send ${businessName} Leads to Book
-                            </button>
-                    </div>
-                    </div>
-                `;
-                return;
-            }
-            container.innerHTML = appointments.map(appt => `
-                <div class="appt-item">
-                    <div>
-                        <div class="appt-name">${escapeHtml(appt.name || 'Prospect')}</div>
-                        <div class="appt-service">${escapeHtml(appt.service || 'Consultation')}</div>
-                    </div>
-                    <div class="appt-time">${formatAppointmentTime(appt.start)}</div>
-                </div>
-            `).join('');
-        }
+        // Appointments UI removed.
 
         function formatWeeklyTooltipDate(iso) {
             if (!iso || typeof iso !== 'string') return '';
@@ -11032,20 +10798,7 @@ ${actionsRow}
             }
         }
 
-        function formatAppointmentTime(isoDate) {
-            if (!isoDate) return '—';
-            const date = new Date(isoDate);
-            if (Number.isNaN(date.getTime())) return '—';
-            const tz = getOperationalTimezone();
-            return date.toLocaleString('en-GB', {
-                timeZone: tz,
-                weekday: 'short',
-                day: 'numeric',
-                month: 'short',
-                hour: 'numeric',
-                minute: '2-digit'
-            });
-        }
+        // formatAppointmentTime removed (appointments UI removed).
 
 
         async function renderSystemStatus(config) {
@@ -12625,10 +12378,10 @@ ${actionsRow}
             if (callsToShow.length === 0 && currentClient === DEMO_CLIENT_KEY) {
                 const ago = (m) => new Date(Date.now() - m * 60 * 1000).toISOString();
                 callsToShow = [
-                    { id: 'demo-1', callId: 'demo-call-1', dbId: 9001, name: 'Sarah Patel', leadPhone: '+447700900111', service: 'Lead Follow-Up', summary: 'Booked Tuesday 2:30pm — calendar invite sent to prospect.', channel: 'Phone', timeAgo: '2 min ago', createdAt: ago(2), outcome: 'booked', outcomeLabel: 'Booked', status: 'Ended', rawStatus: 'ended', durationLabel: '3m 12s', transcriptPreview: 'User confirmed Tuesday 2:30pm works; sending calendar invite now.', endedReason: 'Assistant ended call after confirmation', retryAttempt: 0, hasRecording: true },
+                    { id: 'demo-1', callId: 'demo-call-1', dbId: 9001, name: 'Sarah Patel', leadPhone: '+447700900111', service: 'Lead Follow-Up', summary: 'Qualified — key details captured for follow-up.', channel: 'Phone', timeAgo: '2 min ago', createdAt: ago(2), outcome: 'qualified', outcomeLabel: 'Qualified', status: 'Ended', rawStatus: 'ended', durationLabel: '3m 12s', transcriptPreview: 'Captured timeline + decision maker; requested Thursday afternoon callback.', endedReason: 'Assistant ended call after capturing details', retryAttempt: 0, hasRecording: true },
                     { id: 'demo-2', callId: 'demo-call-2', dbId: 9002, name: 'Marcus Flynn', leadPhone: '+447700900222', service: 'Campaign A', summary: 'Requested reschedule; SMS follow-up with three slot options.', channel: 'SMS → Call', timeAgo: '9 min ago', createdAt: ago(9), outcome: 'completed', outcomeLabel: 'Picked up', status: 'Ended', rawStatus: 'ended', durationLabel: '4m 05s', transcriptPreview: 'Happy to move it — afternoon is better. Text me three windows?', endedReason: null, retryAttempt: 1, hasRecording: true },
                     { id: 'demo-3', callId: 'demo-call-3', dbId: 9003, name: 'Laura Chen', leadPhone: '+447700900333', service: 'Inbound callback', summary: 'Webhook ping — result will sync to CRM.', channel: 'Webhook sync', timeAgo: '25 min ago', createdAt: ago(25), outcome: 'completed', outcomeLabel: 'Completed', status: 'Ended', rawStatus: 'ended', durationLabel: '2m 40s', retryAttempt: 0, hasRecording: false },
-                    { id: 'demo-4', callId: 'demo-call-4', dbId: 9004, name: 'Rick Alvarez', leadPhone: '+447700900444', service: 'Lead Follow-Up', summary: 'Moved appointment to Thursday; internal notes updated.', channel: 'Phone', timeAgo: '42 min ago', createdAt: ago(42), outcome: 'booked', outcomeLabel: 'Booked', status: 'Ended', rawStatus: 'ended', durationLabel: '5m 01s', retryAttempt: 0, hasRecording: true },
+                    { id: 'demo-4', callId: 'demo-call-4', dbId: 9004, name: 'Rick Alvarez', leadPhone: '+447700900444', service: 'Lead Follow-Up', summary: 'Requested callback window; follow-up queued.', channel: 'Phone', timeAgo: '42 min ago', createdAt: ago(42), outcome: 'callback', outcomeLabel: 'Callback', status: 'Ended', rawStatus: 'ended', durationLabel: '5m 01s', retryAttempt: 0, hasRecording: true },
                     { id: 'demo-5', callId: 'demo-call-5', dbId: 9005, name: 'Alex Rivera', leadPhone: '+447700900555', service: 'Lead Follow-Up', summary: 'Left voicemail — callback task created for next business day.', channel: 'Phone', timeAgo: '1h ago', createdAt: ago(60), outcome: 'voicemail', outcomeLabel: 'Voicemail', status: 'Ended', rawStatus: 'ended', durationLabel: '0m 48s', endedReason: 'Voicemail', transcriptPreview: 'Hi Alex, returning your web enquiry — call me back on this number.', retryAttempt: 0, hasRecording: true },
                     { id: 'demo-6', callId: 'demo-call-6', dbId: 9006, name: 'Jordan Lee', leadPhone: '+447700900666', service: 'Lead Follow-Up', channel: 'Phone', timeAgo: '2h ago', createdAt: ago(120), outcome: 'no-answer', outcomeLabel: 'No answer', status: 'Ended', rawStatus: 'ended', durationLabel: '—', endedReason: 'Customer did not answer', retryAttempt: 2, hasRecording: false }
                 ];
@@ -12863,7 +12616,6 @@ ${actionsRow}
             const engaged = Math.min(engagedRaw, contacted || engagedRaw);
             const noPickupRaw = m.uniqueLeadsNoPickup ?? m.callsNotAnswered ?? 0;
             const noPickup = Math.min(Math.max(0, noPickupRaw), contacted || noPickupRaw);
-            const booked = data.bookingsThisWeek || 0;
             const tom = isOutreachDashboardClient(currentClient);
             // In some datasets, dial history can include a number that isn't currently in the CRM export.
             // For the outreach dashboard, treat the "universe" as the max so stages/percentages don't exceed 100%.
@@ -12872,12 +12624,12 @@ ${actionsRow}
             const stages = tom
                 ? [
                     {
-                        label: 'Unique in CRM',
+                        label: 'Unique contacts (universe)',
                         segment: 'all',
                         value: totalLeads,
                         color: '#5c6ac4',
                         icon: '📥',
-                        tip: 'Distinct phone numbers on file for this client. One row per phone; re-imports update the same row — this number is the full set in the system, not “rows in your last file.”'
+                        tip: 'Uses the larger of (unique contacts in CRM) and (unique numbers in dial history) so percentages never exceed 100%. This keeps the snapshot internally consistent even when dial history includes numbers not present in the latest CRM export.'
                     },
                     {
                         label: 'Leads we called',
@@ -12908,8 +12660,7 @@ ${actionsRow}
                     { label: 'Total leads', value: totalLeads, color: '#5c6ac4', icon: '📥', tip: 'Leads in your CRM for this workspace.' },
                     { label: 'Leads we called', value: contacted, color: '#764ba2', icon: '📞', tip: 'Distinct numbers with at least one outbound dial (all time).' },
                     { label: 'Reached (unique)', value: engaged, color: '#667eea', icon: '✓', tip: 'Numbers with at least one conversation-style dial.' },
-                    { label: 'No pickup (unique)', value: noPickup, color: '#546e7a', icon: '○', tip: 'Dialed but not reached on our rules.' },
-                    { label: 'Appointments (7 days)', value: booked, color: '#1b5e20', icon: '📅', tip: 'New appointments logged in the last 7 days.' }
+                    { label: 'No pickup (unique)', value: noPickup, color: '#546e7a', icon: '○', tip: 'Dialed but not reached on our rules.' }
                 ];
 
             const maxValue = Math.max(...stages.map(s => s.value), 1);
@@ -12924,7 +12675,7 @@ ${actionsRow}
                 const barPct = maxValue > 0 ? Math.round((stage.value / maxValue) * 100) : 0;
                 const ofLeadsPct = totalLeads > 0 ? Math.round((stage.value / totalLeads) * 100) : 0;
                 const segKey = tom && stage.segment ? stage.segment : '';
-                const pctSuffix = tom ? '% of CRM contacts' : '% of leads';
+                const pctSuffix = tom ? '% of universe' : '% of leads';
                 const tipRaw = (stage.tip || '') + (segKey ? ' · Click to filter Recent Leads' : '');
                 const titleAttr = escapeHtml(tipRaw);
                 const clickClass = segKey ? ' funnel-stage--clickable' : '';
@@ -13086,7 +12837,7 @@ ${actionsRow}
             if (isDemo) {
                 // Show realistic demo transcripts based on call ID
                 const demoTranscripts = {
-                    'demo-1': `AI: Hi Sarah, this is your AI booking concierge. I'm calling to follow up on your inquiry about our AI Strategy Session.
+                    'demo-1': `AI: Hi Sarah, this is your AI outreach assistant. I'm calling to follow up and capture a few details for a quick human follow-up.
 
 Sarah: Oh yes, I was interested in learning more about how this could help my business.
 
@@ -13094,22 +12845,22 @@ AI: Great! I'd be happy to help. Based on your inquiry, it sounds like you're lo
 
 Sarah: Exactly. We're getting leads but struggling to follow up quickly enough.
 
-AI: Perfect! Our AI concierge can handle that for you. We can call your leads within minutes of them coming in, 24/7. Would you like to schedule a strategy session to see how this would work for your business?
+AI: Perfect. We can call your leads within minutes and capture a clean handoff summary. What’s your timeline to make a change here?
 
-Sarah: Yes, that would be great. When are you available?
+Sarah: This month.
 
-AI: I have availability next Tuesday at 2:30pm or Thursday at 10am. Which works better for you?
+AI: Got it. Who would make the final decision, and what’s the best callback window for a brief follow-up?
 
-Sarah: Tuesday at 2:30pm sounds perfect.
+Sarah: I’m the decision maker. Thursday afternoon.
 
-AI: Excellent! I've booked you for Tuesday, November 19th at 2:30pm. You'll receive a calendar invite and confirmation email shortly. Is there anything else I can help you with today?
+AI: Perfect. We’ll call back Thursday afternoon. Anything else we should know before we follow up?
 
-Sarah: No, that's perfect. Thank you so much!
+Sarah: No, that’s it. Thanks!
 
-AI: You're very welcome, Sarah! We'll see you on Tuesday. Have a wonderful day!
+AI: You're welcome, Sarah. Have a great day!
 
-[Call ended - Duration: 3m 42s | Outcome: Booked]`,
-                    'demo-2': `AI: Hi Marcus, this is your AI booking concierge. I'm calling about your appointment scheduled for tomorrow.
+[Call ended - Duration: 3m 42s | Outcome: Qualified]`,
+                    'demo-2': `AI: Hi Marcus, this is your AI outreach assistant. I'm calling back as requested.
 
 Marcus: Oh hi, actually I need to reschedule if possible.
 
@@ -13117,29 +12868,29 @@ AI: Of course! I'd be happy to help you reschedule. What day and time would work
 
 Marcus: Could we do Thursday afternoon instead? Maybe around 3pm?
 
-AI: Let me check... Yes, I have Thursday at 3pm available. Would you like me to move your appointment to Thursday at 3pm?
+AI: Got it. Thursday at 3pm works. Want me to set a callback for then?
 
 Marcus: Yes, that would be perfect.
 
-AI: Done! I've rescheduled your appointment to Thursday, November 21st at 3pm. You'll receive an updated calendar invite. Is there anything else I can help with?
+AI: Done — I’ve queued a callback for Thursday at 3pm. Is there anything else I can help with?
 
 Marcus: No, that's all. Thanks!
 
-AI: You're welcome! We'll see you Thursday. Have a great day!
+AI: You're welcome! We'll follow up Thursday. Have a great day!
 
 [Call ended - Duration: 1m 15s | Outcome: Rescheduled | SMS follow-up sent]`,
-                    'demo-3': `AI: Hi Laura, this is your AI booking concierge. I'm calling to confirm your appointment details and send you a reminder.
+                    'demo-3': `AI: Hi Laura, this is your AI outreach assistant. I'm calling to capture a few details and confirm next steps.
 
 Laura: Hi, yes I'm all set for tomorrow.
 
-AI: Perfect! Your appointment is scheduled for tomorrow, Wednesday at 10am. I've just synced this with your Google Calendar and sent you a reminder. You should see it appear in your calendar shortly.
+AI: Perfect. What’s the best callback window, and who should we speak with on the follow-up?
 
-Laura: Great, I can see it now. Thank you for the reminder!
+Laura: Sounds good.
 
-AI: You're very welcome! We'll see you tomorrow at 10am. If anything comes up, just let us know. Have a great day!
+AI: You're very welcome! If anything changes, just let us know. Have a great day!
 
-[Call ended - Duration: 1m 8s | Outcome: Confirmed | Calendar synced]`,
-                    'demo-4': `AI: Hi Rick, this is your AI booking concierge. I'm calling about your appointment scheduled for this week.
+[Call ended - Duration: 1m 8s | Outcome: Confirmed | Callback window captured]`,
+                    'demo-4': `AI: Hi Rick, this is your AI outreach assistant. I'm calling to confirm a good callback window.
 
 Rick: Hi, I actually need to move it to next week if possible.
 
@@ -13557,7 +13308,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     <summary>Full calculation details</summary>
                     <ul class="insights-provenance-list">
                         <li><strong>Report window</strong> — Up to <strong>${cap}</strong> most recent calls from the last <strong>${days}</strong> days; figures above use <strong>${n}</strong> calls in this snapshot.</li>
-                        <li><strong>Answered rate</strong> — Share of those calls classified as answered (see kicker). Useful for overall reach, not calendar bookings.</li>
+                        <li><strong>Answered rate</strong> — Share of those calls classified as answered (see kicker). Useful for overall reach and connect rate.</li>
                         <li><strong>Best hours</strong> — Each call is bucketed by <strong>start hour</strong> in <strong>${tz}</strong>. The bracket score (e.g. 18:00 <strong>(72)</strong>) is answered rate scaled to <strong>0–100</strong>. We only <strong>rank</strong> an hour after <strong>${minSlot}</strong> or more calls in that hour.</li>
                         <li><strong>Best days</strong> — Same logic by <strong>weekday</strong>, with the same <strong>${minSlot}</strong>-call minimum before a day can rank.</li>
                         <li><strong>Top objections &amp; key phrases</strong> — After a call, we run <strong>keyword rules</strong> on the transcript (e.g. cost → “price”, callback language → “timing”). Counts are <strong>how often tags fired</strong> in this window — automated, not a human review of every call.</li>
@@ -13818,14 +13569,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const minRank = hc.minCallsPerSlotForRanking ?? 6;
                 const capCalls = hc.maxCallsFromDatabase != null ? formatNumber(hc.maxCallsFromDatabase) : formatNumber(2000);
                 const callsN = formatNumber(summary.attempts ?? sampleSize ?? 0);
-                const bookedMetricHtml = tomInsights
-                    ? ''
-                    : `
-                    <div class="quality-metric">
-                        <div class="quality-label">Booked rate</div>
-                        <div class="quality-value">${Number(summary.bookedRate || 0)}%</div>
-                        <div class="quality-badge">Calls marked with a “booked” outcome in this same report.</div>
-                    </div>`;
+                const bookedMetricHtml = '';
 
                 container.innerHTML = `
                     <div class="insights-stack">
@@ -16323,7 +16067,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         <span class="calendar-detail-value">${conflictsResolved} this week</span>
                                 </div>
                     <div class="calendar-detail-item">
-                        <span class="calendar-detail-label">Appointments booked</span>
+                        <span class="calendar-detail-label">Outcomes logged</span>
                         <span class="calendar-detail-value success">${appointmentsBooked} this week</span>
                                 </div>
                     <div class="calendar-detail-item">
@@ -16351,7 +16095,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             <span class="calendar-detail-value">${payload.conflictsResolved || 0} this week</span>
                             </div>
                         <div class="calendar-detail-item">
-                            <span class="calendar-detail-label">Appointments booked</span>
+                            <span class="calendar-detail-label">Outcomes logged</span>
                             <span class="calendar-detail-value success">${payload.appointmentsBooked || 0} this week</span>
                         </div>
                         <div class="calendar-detail-item">
@@ -16373,7 +16117,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         <span class="calendar-detail-value">0 this week</span>
                     </div>
                     <div class="calendar-detail-item">
-                        <span class="calendar-detail-label">Appointments booked</span>
+                        <span class="calendar-detail-label">Outcomes logged</span>
                         <span class="calendar-detail-value">0 this week</span>
                     </div>
                     <div class="calendar-detail-item">
@@ -16566,7 +16310,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             } catch {}
             initActivityFeedChips();
             initFollowUpQueueUi();
-            applyRoiPanelVisibility(currentClient);
             applyTomOutreachDashboardMode(currentClient);
             initTomAbTestSetupPanel();
             initTomAbOutreachSectionDelegation();
@@ -16701,7 +16444,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             // But ensure branding is applied even if updateHeader doesn't do it
             updateHeader(config, !!clientConfig);
 
-            applyRoiPanelVisibility(currentClient);
             applyTomOutreachDashboardMode(currentClient);
             initTomAbTestSetupPanel();
             
@@ -16739,7 +16481,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
 
             // Show loading skeletons
-            const loadingContainers = ['leads-list', 'upcoming-appointments', 'recent-calls', 'recent-activity'];
+            const loadingContainers = ['leads-list', 'recent-calls', 'recent-activity'];
             loadingContainers.forEach(id => {
                 const container = document.getElementById(id);
                 if (container) showSkeleton(container, id === 'recent-activity' ? 'metrics' : 'list');
@@ -16820,18 +16562,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             // Render critical data first (non-blocking)
             updateStatusBar(dashboardData);
             renderRecentActivity(dashboardData);
-            if (shouldShowRoiPanel(currentClient)) {
-                const roiData = dashboardData.roi || { costs: { total: 0, perCall: 0 }, revenue: { total: 0, bookings: 0, avgDealValue: 0 }, roi: { profit: 0, multiplier: 0, percentage: 0 } };
-                renderROI(roiData);
-                prefillRoiSettingsInputs();
-                initRoiSettingsPanel();
-            }
             loadBuildFingerprint();
             loadLeadsFunnelSegmentForClient(currentClient);
             syncLeadsFunnelChipUi();
             renderLeadJourney(dashboardData);
             renderLeads(dashboardData.recentLeads || []);
-            renderAppointments(dashboardData.appointments || []);
+            // appointments panel removed
             renderChart(config, dashboardData);
             const callsToRender = dashboardData.recentCalls || [];
             renderCalls(callsToRender);
@@ -16893,15 +16629,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         dashboardData = merged;
                         updateStatusBar(dashboardData);
                         renderRecentActivity(dashboardData);
-                        if (shouldShowRoiPanel(currentClient)) {
-                            const roiData = dashboardData.roi || { costs: { total: 0, perCall: 0 }, revenue: { total: 0, bookings: 0, avgDealValue: 0 }, roi: { profit: 0, multiplier: 0, percentage: 0 } };
-                            renderROI(roiData);
-                            prefillRoiSettingsInputs();
-                        }
                         await renderActiveIndicator(dashboardData);
                         renderLeadJourney(dashboardData);
                         renderLeads(dashboardData.recentLeads || []);
-                        renderAppointments(dashboardData.appointments || []);
+                        // appointments panel removed
                         const callsToRender = dashboardData.recentCalls || [];
                         renderCalls(callsToRender);
                         renderTomAbTestSection(dashboardData);
@@ -17064,7 +16795,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             renderRecentActivity(dashboardData);
                             renderLeadJourney(dashboardData);
                             renderLeads(dashboardData.recentLeads || []);
-                            renderAppointments(dashboardData.appointments || []);
+                            // appointments panel removed
                         }
                     } catch (error) {
                         console.error('Failed to refresh after coming online', error);
