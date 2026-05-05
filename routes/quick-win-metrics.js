@@ -1,10 +1,22 @@
 import express from 'express';
 
 export function createQuickWinMetricsRouter(deps) {
-  const { query, cacheMiddleware } = deps || {};
+  const {
+    query,
+    cacheMiddleware,
+    authenticateApiKey,
+    requireTenantAccessOrAdmin
+  } = deps || {};
   const router = express.Router();
+  const auth = authenticateApiKey;
+  const tenant = requireTenantAccessOrAdmin;
+  if (typeof auth !== 'function' || typeof tenant !== 'function') {
+    throw new Error(
+      'createQuickWinMetricsRouter: authenticateApiKey and requireTenantAccessOrAdmin are required'
+    );
+  }
 
-  router.get('/sms-delivery-rate/:clientKey', async (req, res) => {
+  router.get('/sms-delivery-rate/:clientKey', auth, tenant, async (req, res) => {
     try {
       const { clientKey } = req.params;
       const days = parseInt(req.query.days, 10) || 7;
@@ -65,6 +77,8 @@ export function createQuickWinMetricsRouter(deps) {
 
   router.get(
     '/calendar-sync/:clientKey',
+    auth,
+    tenant,
     cacheMiddleware({ ttl: 300000, keyPrefix: 'calendar-sync:' }),
     async (req, res) => {
       try {
@@ -149,7 +163,7 @@ export function createQuickWinMetricsRouter(deps) {
     }
   );
 
-  router.get('/quality-metrics/:clientKey', async (req, res) => {
+  router.get('/quality-metrics/:clientKey', auth, tenant, async (req, res) => {
     try {
       const { clientKey } = req.params;
       const days = parseInt(req.query.days, 10) || 30;

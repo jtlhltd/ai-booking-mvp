@@ -176,6 +176,36 @@ describe('middleware/security', () => {
     expect(next).toHaveBeenCalledWith();
   });
 
+  // The middleware must read the tenant id from any of the three idiomatic
+  // path-param names used by routers across the repo. Routes that mount with
+  // `:clientKey` / `:key` (most of /api/clients/*, /api/leads/recall/...)
+  // rather than `:tenantKey` previously slipped through unchecked. These three
+  // tests lock that fix in.
+  test('requireTenantAccess accepts req.params.clientKey', () => {
+    const req = { params: { clientKey: 'tenant_a' }, body: {}, clientKey: 'tenant_a' };
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    const next = jest.fn();
+    requireTenantAccess(req, res, next);
+    expect(next).toHaveBeenCalledWith();
+  });
+
+  test('requireTenantAccess accepts req.params.key', () => {
+    const req = { params: { key: 'tenant_a' }, body: {}, clientKey: 'tenant_a' };
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    const next = jest.fn();
+    requireTenantAccess(req, res, next);
+    expect(next).toHaveBeenCalledWith();
+  });
+
+  test('requireTenantAccess 403s on cross-tenant via :clientKey', () => {
+    const req = { params: { clientKey: 'tenant_b' }, body: {}, clientKey: 'tenant_a' };
+    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    const next = jest.fn();
+    requireTenantAccess(req, res, next);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+
   test('requirePermission 401 without apiKey', () => {
     const mw = requirePermission('read');
     const req = {};

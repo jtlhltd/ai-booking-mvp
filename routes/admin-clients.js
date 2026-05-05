@@ -15,6 +15,12 @@ import {
 import { getClientsData, getCallsData } from '../lib/admin-hub-data.js';
 import { resolveTenantTimezone, toLocalTimestamp, toUtcIso } from '../lib/timezone-resolver.js';
 
+function clampInt(raw, min, max, fallback) {
+  const n = parseInt(String(raw ?? ''), 10);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
 function convertToCSV(data) {
   if (!data.length) return '';
 
@@ -47,8 +53,10 @@ export function createAdminClientsRouter({ broadcast }) {
         return res.status(404).json({ error: 'Client not found' });
       }
 
-      const leads = await getLeadsByClient(clientKey, 1000).catch(() => []);
-      const calls = await getCallsByTenant(clientKey, 1000).catch(() => []);
+      const leadsCap = clampInt(req.query.leadsLimit, 1, 1000, 1000);
+      const callsCap = clampInt(req.query.callsLimit, 1, 1000, 1000);
+      const leads = await getLeadsByClient(clientKey, leadsCap).catch(() => []);
+      const calls = await getCallsByTenant(clientKey, callsCap).catch(() => []);
       const appointments = await query(
         `
       SELECT COUNT(*) as count FROM appointments 

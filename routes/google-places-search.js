@@ -2,12 +2,13 @@ import express from 'express';
 
 import { generateEmail, isMobileNumber } from '../lib/google-places-search.js';
 import { buildTextSearchQueryVariations } from '../lib/google-places-query-variations.js';
+import { scrubBody } from '../lib/log-scrubber.js';
 
 const router = express.Router();
 
 // Google Places Search API endpoint (extracted from server.js)
 router.post('/api/search-google-places', async (req, res) => {
-  console.log('[SEARCH REQUEST] Received request:', req.body);
+  console.log('[SEARCH REQUEST] Received request:', scrubBody(req.body));
   
   // Set a 300-second timeout to prevent 504 errors on large searches
   const timeout = setTimeout(() => {

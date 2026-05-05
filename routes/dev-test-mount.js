@@ -1,5 +1,6 @@
 import express from 'express';
 import { Buffer } from 'buffer';
+import { scrubBody } from '../lib/log-scrubber.js';
 
 export function createDevTestRouter(deps) {
   const { query, readJson, writeJson, SMS_STATUS_PATH } = deps || {};
@@ -27,7 +28,7 @@ export function createDevTestRouter(deps) {
     async (req, res) => {
       // Preserve the original server.js behavior closely.
       console.log('[TEST SMS STATUS] Test webhook called');
-      console.log('[TEST SMS STATUS] Body:', JSON.stringify(req.body));
+      console.log('[TEST SMS STATUS] Body:', JSON.stringify(scrubBody(req.body)));
 
       const messageSid = req.body.MessageSid;
       const status = req.body.MessageStatus;

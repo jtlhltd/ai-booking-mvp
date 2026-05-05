@@ -1,7 +1,6 @@
 // Load Testing Script for AI Booking System
 // Tests system performance under load
-
-import fetch from 'node-fetch';
+// Uses Node 20+ native global fetch.
 
 const BASE_URL = process.env.PUBLIC_BASE_URL || 'https://ai-booking-mvp.onrender.com';
 const API_KEY = process.env.API_KEY || 'test-key';

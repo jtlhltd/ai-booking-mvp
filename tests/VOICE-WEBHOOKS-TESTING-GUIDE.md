@@ -32,7 +32,7 @@ This guide explains how to test voicemail processing and callback scheduling web
 
 ```powershell
 # Run the complete test
-.\tests\test-voice-webhooks-complete.ps1
+.\tests\manual\test-voice-webhooks-complete.ps1
 ```
 
 **What it does:**

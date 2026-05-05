@@ -17,6 +17,8 @@ import { createQueryRunner } from './db/query.js';
 import * as callQueueReads from './db/call-queue-reads.js';
 import * as callQueueWrites from './db/call-queue-writes.js';
 import { smearCallQueueScheduledFor } from './db/call-queue-smear.js';
+import * as costBudgetTracking from './db/cost-budget-tracking.js';
+import * as analyticsEvents from './db/analytics-events.js';
 
 const dbType = (process.env.DB_TYPE || '').toLowerCase();
 let pool = null;
@@ -622,6 +624,7 @@ async function initPostgres() {
       call_type TEXT NOT NULL,
       call_data JSONB,
       status TEXT DEFAULT 'pending',
+      retry_attempt INTEGER DEFAULT 0,
       created_at TIMESTAMPTZ DEFAULT now(),
       updated_at TIMESTAMPTZ DEFAULT now()
     );
@@ -635,16 +638,48 @@ async function initPostgres() {
         ALTER TABLE call_queue ADD COLUMN initiated_call_id TEXT;
       END IF;
     END $$;
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'call_queue' AND column_name = 'retry_attempt'
+      ) THEN
+        ALTER TABLE call_queue ADD COLUMN retry_attempt INTEGER DEFAULT 0;
+      END IF;
+    END $$;
     -- DB-level guard: never allow a row to be marked completed unless we have an initiated call id.
     -- Use NOT VALID so we can add without scanning existing rows; it will still enforce on new writes.
     DO $$
     BEGIN
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'call_queue_completed_requires_call_id'
+      -- Narrow to vapi_call only so request-queue items (sms_send, lead_import, etc) can complete.
+      IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'call_queue_completed_requires_call_id') THEN
+        ALTER TABLE call_queue DROP CONSTRAINT call_queue_completed_requires_call_id;
+      END IF;
+      ALTER TABLE call_queue
+        ADD CONSTRAINT call_queue_completed_requires_call_id
+        CHECK (status <> 'completed' OR call_type <> 'vapi_call' OR initiated_call_id IS NOT NULL) NOT VALID;
+    END $$;
+    -- Phantom completed vapi_call rows (no initiated_call_id) violate the CHECK once validated. Mark failed, then validate on existing rows.
+    DO $$
+    BEGIN
+      UPDATE call_queue
+      SET status = 'failed', updated_at = NOW()
+      WHERE status = 'completed'
+        AND call_type = 'vapi_call'
+        AND initiated_call_id IS NULL;
+
+      IF EXISTS (
+        SELECT 1
+        FROM pg_constraint c
+        JOIN pg_class r ON r.oid = c.conrelid
+        JOIN pg_namespace n ON n.oid = r.relnamespace
+        WHERE n.nspname = 'public'
+          AND r.relname = 'call_queue'
+          AND c.conname = 'call_queue_completed_requires_call_id'
+          AND c.contype = 'c'
+          AND NOT c.convalidated
       ) THEN
-        ALTER TABLE call_queue
-          ADD CONSTRAINT call_queue_completed_requires_call_id
-          CHECK (status <> 'completed' OR initiated_call_id IS NOT NULL) NOT VALID;
+        ALTER TABLE call_queue VALIDATE CONSTRAINT call_queue_completed_requires_call_id;
       END IF;
     END $$;
     CREATE INDEX IF NOT EXISTS call_queue_tenant_idx ON call_queue(client_key);
@@ -1107,7 +1142,8 @@ function ensureSqliteCallQueueAndQualityAlertsTables() {
       initiated_call_id TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (client_key) REFERENCES tenants(client_key) ON DELETE CASCADE
+      FOREIGN KEY (client_key) REFERENCES tenants(client_key) ON DELETE CASCADE,
+      CHECK (status != 'completed' OR call_type != 'vapi_call' OR initiated_call_id IS NOT NULL)
     );
     CREATE INDEX IF NOT EXISTS call_queue_sqlite_pending_scheduled_priority_idx
       ON call_queue (scheduled_for ASC, priority ASC)
@@ -1148,6 +1184,77 @@ function ensureSqliteCallQueueAndQualityAlertsTables() {
   `);
   } catch (e) {
     console.warn('[sqlite] ensure call_queue / quality_alerts:', e?.message || e);
+  }
+}
+
+/**
+ * SQLite: align call_queue with Postgres phantom-completion guard (completed vapi_call requires initiated_call_id).
+ * Idempotent. Pass `targetSqlite` for tests (:memory:); otherwise uses module `sqlite`.
+ */
+function migrateSqliteCallQueuePhantomConstraint(targetSqlite) {
+  const db = targetSqlite ?? sqlite;
+  if (!db) return;
+  try {
+    const row = db.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='call_queue'`).get();
+    if (!row?.sql) return;
+    const tblSql = String(row.sql);
+    if (/CHECK\s*\(/i.test(tblSql)) return;
+
+    db.pragma('foreign_keys = OFF');
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      db.exec(`
+        UPDATE call_queue
+        SET status = 'failed', updated_at = datetime('now')
+        WHERE status = 'completed' AND call_type = 'vapi_call'
+          AND (initiated_call_id IS NULL OR trim(COALESCE(initiated_call_id, '')) = '');
+      `);
+      db.exec(`DROP TABLE IF EXISTS call_queue__phantom_mig;`);
+      db.exec(`
+        CREATE TABLE call_queue__phantom_mig (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          client_key TEXT NOT NULL,
+          lead_phone TEXT NOT NULL,
+          priority INTEGER DEFAULT 5,
+          scheduled_for TEXT NOT NULL,
+          call_type TEXT NOT NULL,
+          call_data TEXT,
+          status TEXT DEFAULT 'pending',
+          retry_attempt INTEGER DEFAULT 0,
+          initiated_call_id TEXT,
+          created_at TEXT DEFAULT (datetime('now')),
+          updated_at TEXT DEFAULT (datetime('now')),
+          FOREIGN KEY (client_key) REFERENCES tenants(client_key) ON DELETE CASCADE,
+          CHECK (status != 'completed' OR call_type != 'vapi_call' OR initiated_call_id IS NOT NULL)
+        );
+      `);
+      db.exec(`
+        INSERT INTO call_queue__phantom_mig (
+          id, client_key, lead_phone, priority, scheduled_for, call_type, call_data, status, retry_attempt, initiated_call_id, created_at, updated_at
+        )
+        SELECT id, client_key, lead_phone, priority, scheduled_for, call_type, call_data, status, retry_attempt, initiated_call_id, created_at, updated_at
+        FROM call_queue;
+      `);
+      db.exec(`DROP TABLE call_queue;`);
+      db.exec(`ALTER TABLE call_queue__phantom_mig RENAME TO call_queue;`);
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS call_queue_sqlite_pending_scheduled_priority_idx
+          ON call_queue (scheduled_for ASC, priority ASC)
+          WHERE status = 'pending';
+      `);
+      db.exec('COMMIT');
+    } catch (e) {
+      try {
+        db.exec('ROLLBACK');
+      } catch (_) {
+        /* ignore */
+      }
+      throw e;
+    } finally {
+      db.pragma('foreign_keys = ON');
+    }
+  } catch (e) {
+    console.warn('[sqlite] migrateSqliteCallQueuePhantomConstraint:', e?.message || e);
   }
 }
 
@@ -1236,6 +1343,7 @@ function initSqlite() {
   `);
 
   ensureSqliteCallQueueAndQualityAlertsTables();
+  migrateSqliteCallQueuePhantomConstraint();
 
   // avoid template literal parsing issues
   if (DB_PATH === 'json-file') {
@@ -3437,278 +3545,60 @@ export async function dedupePendingVapiCallQueueRows() {
 }
 
 // Cost tracking functions
-export async function trackCost({ clientKey, callId, costType, amount, currency = 'GBP', description, metadata }) {
-  const metadataJson = metadata ? JSON.stringify(metadata) : null;
-  
-  const { rows } = await query(`
-    INSERT INTO cost_tracking (client_key, call_id, cost_type, amount, currency, description, metadata)
-    VALUES ($1, $2, $3, $4, $5, $6, $7)
-    RETURNING *
-  `, [clientKey, callId, costType, amount, currency, description, metadataJson]);
-  
-  return rows[0];
+// Cost / budget / alert helpers — implementations live in db/cost-budget-tracking.js (PR-11).
+// These thin wrappers preserve the legacy db.js call shape (no `query` arg).
+export async function trackCost(args) {
+  return costBudgetTracking.trackCost(query, args);
 }
-
 export async function getCostsByTenant(clientKey, limit = 100) {
-  const { rows } = await query(`
-    SELECT * FROM cost_tracking 
-    WHERE client_key = $1 
-    ORDER BY created_at DESC 
-    LIMIT $2
-  `, [clientKey, limit]);
-  return rows;
+  return costBudgetTracking.getCostsByTenant(query, clientKey, limit);
 }
-
 export async function getCostsByPeriod(clientKey, period = 'daily') {
-  let interval;
-  switch (period) {
-    case 'daily': interval = '1 day'; break;
-    case 'weekly': interval = '7 days'; break;
-    case 'monthly': interval = '30 days'; break;
-    default: interval = '1 day';
-  }
-  
-  const { rows } = await query(`
-    SELECT 
-      cost_type,
-      SUM(amount) as total_amount,
-      COUNT(*) as transaction_count,
-      AVG(amount) as avg_amount
-    FROM cost_tracking 
-    WHERE client_key = $1 
-    AND created_at > now() - interval '${interval}'
-    GROUP BY cost_type
-    ORDER BY total_amount DESC
-  `, [clientKey]);
-  return rows;
+  return costBudgetTracking.getCostsByPeriod(query, clientKey, period);
 }
-
 export async function getTotalCostsByTenant(clientKey, period = 'daily') {
-  let interval;
-  switch (period) {
-    case 'daily': interval = '1 day'; break;
-    case 'weekly': interval = '7 days'; break;
-    case 'monthly': interval = '30 days'; break;
-    default: interval = '1 day';
-  }
-  
-  const { rows } = await query(`
-    SELECT 
-      SUM(amount) as total_cost,
-      COUNT(*) as transaction_count,
-      AVG(amount) as avg_cost
-    FROM cost_tracking 
-    WHERE client_key = $1 
-    AND created_at > now() - interval '${interval}'
-  `, [clientKey]);
-  return rows[0];
+  return costBudgetTracking.getTotalCostsByTenant(query, clientKey, period);
 }
-
-// Budget management functions
-export async function setBudgetLimit({ clientKey, budgetType, dailyLimit, weeklyLimit, monthlyLimit, currency = 'GBP' }) {
-  const { rows } = await query(`
-    INSERT INTO budget_limits (client_key, budget_type, daily_limit, weekly_limit, monthly_limit, currency)
-    VALUES ($1, $2, $3, $4, $5, $6)
-    ON CONFLICT (client_key, budget_type) 
-    DO UPDATE SET 
-      daily_limit = EXCLUDED.daily_limit,
-      weekly_limit = EXCLUDED.weekly_limit,
-      monthly_limit = EXCLUDED.monthly_limit,
-      currency = EXCLUDED.currency,
-      updated_at = now()
-    RETURNING *
-  `, [clientKey, budgetType, dailyLimit, weeklyLimit, monthlyLimit, currency]);
-  
-  return rows[0];
+export async function setBudgetLimit(args) {
+  return costBudgetTracking.setBudgetLimit(query, args);
 }
-
 export async function getBudgetLimits(clientKey) {
-  const { rows } = await query(`
-    SELECT * FROM budget_limits 
-    WHERE client_key = $1 AND is_active = TRUE
-    ORDER BY budget_type
-  `, [clientKey]);
-  return rows;
+  return costBudgetTracking.getBudgetLimits(query, clientKey);
 }
-
 export async function checkBudgetExceeded(clientKey, budgetType, period = 'daily') {
-  const budgetLimits = await getBudgetLimits(clientKey);
-  const budget = budgetLimits.find(b => b.budget_type === budgetType);
-  
-  if (!budget) return { exceeded: false, limit: 0, current: 0 };
-  
-  const currentCosts = await getTotalCostsByTenant(clientKey, period);
-  const currentAmount = parseFloat(currentCosts.total_cost || 0);
-  
-  let limit;
-  switch (period) {
-    case 'daily': limit = parseFloat(budget.daily_limit || 0); break;
-    case 'weekly': limit = parseFloat(budget.weekly_limit || 0); break;
-    case 'monthly': limit = parseFloat(budget.monthly_limit || 0); break;
-    default: limit = parseFloat(budget.daily_limit || 0);
-  }
-  
-  return {
-    exceeded: currentAmount > limit,
-    limit,
-    current: currentAmount,
-    remaining: Math.max(0, limit - currentAmount),
-    percentage: limit > 0 ? (currentAmount / limit) * 100 : 0
-  };
+  return costBudgetTracking.checkBudgetExceeded(query, clientKey, budgetType, period);
 }
-
-// Cost alert functions
-export async function createCostAlert({ clientKey, alertType, threshold, currentAmount, period }) {
-  const { rows } = await query(`
-    INSERT INTO cost_alerts (client_key, alert_type, threshold, current_amount, period, status)
-    VALUES ($1, $2, $3, $4, $5, 'active')
-    RETURNING *
-  `, [clientKey, alertType, threshold, currentAmount, period]);
-  
-  return rows[0];
+export async function createCostAlert(args) {
+  return costBudgetTracking.createCostAlert(query, args);
 }
-
 export async function getActiveAlerts(clientKey) {
-  const { rows } = await query(`
-    SELECT * FROM cost_alerts 
-    WHERE client_key = $1 AND status = 'active'
-    ORDER BY created_at DESC
-  `, [clientKey]);
-  return rows;
+  return costBudgetTracking.getActiveAlerts(query, clientKey);
 }
-
 export async function triggerAlert(alertId) {
-  await query(`
-    UPDATE cost_alerts 
-    SET status = 'triggered', triggered_at = now()
-    WHERE id = $1
-  `, [alertId]);
+  return costBudgetTracking.triggerAlert(query, alertId);
 }
-
 export async function checkCostAlerts(clientKey) {
-  const alerts = await getActiveAlerts(clientKey);
-  const triggeredAlerts = [];
-  
-  for (const alert of alerts) {
-    const budgetCheck = await checkBudgetExceeded(clientKey, alert.alert_type, alert.period);
-    
-    if (budgetCheck.exceeded && budgetCheck.current >= alert.threshold) {
-      await triggerAlert(alert.id);
-      triggeredAlerts.push({
-        alert,
-        budgetCheck,
-        message: `Budget exceeded: ${alert.alert_type} ${alert.period} limit of $${alert.threshold} reached (current: $${budgetCheck.current.toFixed(2)})`
-      });
-    }
-  }
-  
-  return triggeredAlerts;
+  return costBudgetTracking.checkCostAlerts(query, clientKey);
 }
 
-// Analytics functions
-export async function trackAnalyticsEvent({ clientKey, eventType, eventCategory, eventData, sessionId, userAgent, ipAddress }) {
-  const eventDataJson = eventData ? JSON.stringify(eventData) : null;
-  
-  const { rows } = await query(`
-    INSERT INTO analytics_events (client_key, event_type, event_category, event_data, session_id, user_agent, ip_address)
-    VALUES ($1, $2, $3, $4, $5, $6, $7)
-    RETURNING *
-  `, [clientKey, eventType, eventCategory, eventDataJson, sessionId, userAgent, ipAddress]);
-  
-  return rows[0];
+// Analytics events + conversion funnel — implementations live in db/analytics-events.js (PR-11).
+export async function trackAnalyticsEvent(args) {
+  return analyticsEvents.trackAnalyticsEvent(query, args);
 }
-
 export async function getAnalyticsEvents(clientKey, limit = 100, eventType = null) {
-  let queryStr = `
-    SELECT * FROM analytics_events 
-    WHERE client_key = $1
-  `;
-  const params = [clientKey];
-  
-  if (eventType) {
-    queryStr += ` AND event_type = $2`;
-    params.push(eventType);
-  }
-  
-  queryStr += ` ORDER BY created_at DESC LIMIT $${params.length + 1}`;
-  params.push(limit);
-  
-  const { rows } = await query(queryStr, params);
-  return rows;
+  return analyticsEvents.getAnalyticsEvents(query, clientKey, limit, eventType);
 }
-
 export async function getAnalyticsSummary(clientKey, days = 7) {
-  const { rows } = await query(`
-    SELECT 
-      event_type,
-      event_category,
-      COUNT(*) as event_count,
-      COUNT(DISTINCT session_id) as unique_sessions,
-      COUNT(DISTINCT ip_address) as unique_ips
-    FROM analytics_events 
-    WHERE client_key = $1 
-    AND created_at > now() - interval '${days} days'
-    GROUP BY event_type, event_category
-    ORDER BY event_count DESC
-  `, [clientKey]);
-  return rows;
+  return analyticsEvents.getAnalyticsSummary(query, clientKey, days);
 }
-
-// Conversion funnel functions
-export async function trackConversionStage({ clientKey, leadPhone, stage, stageData, previousStage = null, timeToStage = null }) {
-  const stageDataJson = stageData ? JSON.stringify(stageData) : null;
-  
-  const { rows } = await query(`
-    INSERT INTO conversion_funnel (client_key, lead_phone, stage, stage_data, previous_stage, time_to_stage)
-    VALUES ($1, $2, $3, $4, $5, $6)
-    RETURNING *
-  `, [clientKey, leadPhone, stage, stageDataJson, previousStage, timeToStage]);
-  
-  return rows[0];
+export async function trackConversionStage(args) {
+  return analyticsEvents.trackConversionStage(query, args);
 }
-
 export async function getConversionFunnel(clientKey, days = 30) {
-  const { rows } = await query(`
-    SELECT 
-      stage,
-      COUNT(*) as stage_count,
-      COUNT(DISTINCT lead_phone) as unique_leads,
-      AVG(time_to_stage) as avg_time_to_stage
-    FROM conversion_funnel 
-    WHERE client_key = $1 
-    AND created_at > now() - interval '${days} days'
-    GROUP BY stage
-    ORDER BY stage_count DESC
-  `, [clientKey]);
-  return rows;
+  return analyticsEvents.getConversionFunnel(query, clientKey, days);
 }
-
 export async function getConversionRates(clientKey, days = 30) {
-  const { rows } = await query(`
-    WITH stage_counts AS (
-      SELECT 
-        stage,
-        COUNT(DISTINCT lead_phone) as unique_leads
-      FROM conversion_funnel 
-      WHERE client_key = $1 
-      AND created_at > now() - interval '${days} days'
-      GROUP BY stage
-    ),
-    total_leads AS (
-      SELECT COUNT(DISTINCT lead_phone) as total FROM conversion_funnel 
-      WHERE client_key = $1 
-      AND created_at > now() - interval '${days} days'
-    )
-    SELECT 
-      sc.stage,
-      sc.unique_leads,
-      tl.total,
-      ROUND((sc.unique_leads::DECIMAL / tl.total) * 100, 2) as conversion_rate
-    FROM stage_counts sc
-    CROSS JOIN total_leads tl
-    ORDER BY sc.unique_leads DESC
-  `, [clientKey]);
-  return rows;
+  return analyticsEvents.getConversionRates(query, clientKey, days);
 }
 
 // Performance metrics functions

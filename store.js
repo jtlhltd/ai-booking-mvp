@@ -1,5 +1,22 @@
 // store.js — compatibility shim that forwards to db.js
-// Keep routes that import "./store.js" working without touching them.
+//
+// Layout note (do not be misled by the three similarly-named neighbours):
+//   - db.js                 : authoritative DB layer (Postgres + SQLite + JSON
+//                             fallback). All real reads/writes live here.
+//   - db/<file>.js          : focused query clusters extracted out of db.js
+//                             (e.g. db/call-queue-reads.js). Imported by db.js
+//                             and re-exported, never imported directly by
+//                             routes/lib code.
+//   - store.js (this file)  : compatibility shim. Re-exports a curated subset
+//                             of db.js plus the in-memory helpers under
+//                             store/<file>.js (tenants, leads, twilio,
+//                             optouts, contactAttempts). Keep callers that
+//                             import './store.js' working without rewriting
+//                             them; do NOT add new behavior here.
+//   - store/<file>.js       : the small in-memory key/value tables backing
+//                             the helpers above. Imported by store.js only.
+//
+// New code should import from db.js (or a db/<file>.js cluster) directly.
 
 export {
   init,
