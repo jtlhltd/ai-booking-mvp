@@ -14,7 +14,12 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
+    env:
+      # Match local `npm run test:ci` / integration-native: date-sensitive tests + coverage are deterministic in UTC.
+      TZ: UTC
+      # Full `--coverage --runInBand` can spike heap on GitHub runners; avoid silent OOM during instrumentation.
+      NODE_OPTIONS: --max-old-space-size=6144
 
     services:
       postgres:
@@ -110,6 +115,9 @@ jobs:
   test-windows:
     runs-on: windows-latest
     timeout-minutes: 20
+    env:
+      TZ: UTC
+      NODE_OPTIONS: --max-old-space-size=6144
 
     strategy:
       fail-fast: false
