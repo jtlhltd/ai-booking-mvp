@@ -257,13 +257,6 @@ export function createDailySummaryRouter(deps) {
         return res.json({
           ok: true,
           demo: true,
-          clientProfile: {
-            displayName: 'Demo',
-            phone: '',
-            timezone: demoTz,
-            businessHours: '',
-            industry: ''
-          },
           followUp: fu,
           dispositions,
           queue: { callQueuePending, callQueueDueNow, retryPending, retryDueNow },
@@ -273,20 +266,12 @@ export function createDailySummaryRouter(deps) {
 
       const client = (await getFullClient?.(clientKey)) || null;
       const tz = pickTimezone?.(client) || 'UTC';
-      const clientProfile = {
-        displayName: String(client?.displayName || client?.name || '').trim(),
-        phone: String(client?.phone || client?.numbers?.[0] || '').trim(),
-        timezone: tz,
-        businessHours: client?.businessHours || client?.booking?.businessHours || '',
-        industry: String(client?.industry || '').trim()
-      };
       const spreadsheetId = resolveLogisticsSpreadsheetId(client);
       if (!spreadsheetId) {
         return res.json({
           ok: true,
           demo: false,
           configured: false,
-          clientProfile,
           followUp: computeFollowUpStats([], tz),
           dispositions: computeDispositionBreakdown([], tz),
           queue: { callQueuePending, callQueueDueNow, retryPending, retryDueNow },
@@ -396,7 +381,6 @@ export function createDailySummaryRouter(deps) {
         ok: true,
         demo: false,
         configured: true,
-        clientProfile,
         followUp: computeFollowUpStats(records, tz),
         dispositions: computeDispositionBreakdown(records, tz),
         queue: { callQueuePending, callQueueDueNow, retryPending, retryDueNow },
