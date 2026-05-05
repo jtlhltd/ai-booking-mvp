@@ -15,17 +15,20 @@ export function createDailySummaryRouter(deps) {
   } = deps || {};
 
   const router = express.Router();
-  // NOTE: Daily summary is intentionally public read-only for the lightweight
-  // client dashboard. Other tenant-scoped JSON surfaces remain API-key gated.
-  // We keep the deps optional so server.js can pass shared auth helpers without
-  // this route depending on them.
+  const auth = authenticateApiKey;
+  const tenant = requireTenantAccessOrAdmin;
+  if (typeof auth !== 'function' || typeof tenant !== 'function') {
+    throw new Error(
+      'createDailySummaryRouter: authenticateApiKey and requireTenantAccessOrAdmin are required'
+    );
+  }
 
   function isFollowUpQueueDemoClient(clientKey) {
     const k = String(clientKey || '').toLowerCase().trim();
     return k === 'demo_client' || k === 'demo-client' || k === 'stay-focused-fitness-chris';
   }
 
-  router.get('/daily-summary/:clientKey', async (req, res) => {
+  router.get('/daily-summary/:clientKey', auth, tenant, async (req, res) => {
     try {
       const { clientKey } = req.params;
       res.set('Cache-Control', 'no-store');
@@ -264,8 +267,8 @@ export function createDailySummaryRouter(deps) {
         });
       }
 
-      const client = (await getFullClient?.(clientKey)) || null;
-      const tz = pickTimezone?.(client) || 'UTC';
+      const client = await getFullClient(clientKey);
+      const tz = pickTimezone(client);
       const spreadsheetId = resolveLogisticsSpreadsheetId(client);
       if (!spreadsheetId) {
         return res.json({

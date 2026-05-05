@@ -187,7 +187,7 @@ const rules = [
       'Tenant-scoped dashboard routes (daily-summary, ops-health-and-dnc, quick-win-metrics) must wire requireTenantAccessOrAdmin alongside authenticateApiKey.',
     mode: 'require',
     scope: 'routes/',
-    filePattern: /^routes\/(ops-health-and-dnc|quick-win-metrics)\.js$/,
+    filePattern: /^routes\/(daily-summary|ops-health-and-dnc|quick-win-metrics)\.js$/,
     requireAny: [/requireTenantAccessOrAdmin/],
     allow: []
   },
