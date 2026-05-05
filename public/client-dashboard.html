@@ -16387,6 +16387,16 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     // ignore fallback errors; UI will show "Not supplied"
                 }
             }
+
+            // If /api/clients is API-key gated we won't get dashboardOutreachMode from the server.
+            // For Tom (and other outreach dashboards), fall back to the baked-in client key list.
+            if (typeof window.__dashboardOutreachMode !== 'boolean') {
+                window.__dashboardOutreachMode = OUTREACH_DASHBOARD_CLIENT_KEYS_FALLBACK.includes(currentClient);
+            }
+            // Re-apply outreach chrome now that the mode flag may be set.
+            applyTomOutreachDashboardMode(currentClient);
+            loadLeadsFunnelSegmentForClient(currentClient);
+            syncLeadsFunnelChipUi();
             
             // Use clientConfig if available, otherwise use CLIENT_CONFIG but only for non-meta fields
             // Meta fields (phone, timezone, businessHours, industry) should only come from actual client config
