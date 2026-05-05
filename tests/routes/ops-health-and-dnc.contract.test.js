@@ -2,10 +2,14 @@ import { describe, expect, test, jest, beforeEach } from '@jest/globals';
 import request from 'supertest';
 
 import { createContractApp } from '../helpers/contract-harness.js';
+import { requireTenantAccessOrAdmin } from '../../middleware/security.js';
+import { createDashboardRouteAuthStubs } from '../helpers/dashboard-route-auth-stubs.js';
 
 beforeEach(() => {
   jest.resetModules();
 });
+
+const { authenticateApiKey: stubDashboardApiKey } = createDashboardRouteAuthStubs();
 
 describe('routes/ops-health-and-dnc.js contracts', () => {
   test('GET /dnc/list returns 400 when clientKey missing', async () => {
@@ -18,11 +22,15 @@ describe('routes/ops-health-and-dnc.js contracts', () => {
       resolveLogisticsSpreadsheetId: jest.fn(),
       query: jest.fn(),
       dbType: 'sqlite',
-      DB_PATH: 'x'
+      DB_PATH: 'x',
+      authenticateApiKey: stubDashboardApiKey,
+      requireTenantAccessOrAdmin
     });
     const app = createContractApp({ mounts: [{ path: '/', router }] });
     const res = await request(app).get('/dnc/list').expect(400);
-    expect(res.body).toEqual(expect.objectContaining({ ok: false, error: 'client_key_required' }));
+    expect(res.body).toEqual(
+      expect.objectContaining({ error: 'Tenant key required', code: 'MISSING_TENANT_KEY' })
+    );
   });
 
   test('POST /dnc/add returns 400 on invalid_phone errors', async () => {
@@ -39,7 +47,9 @@ describe('routes/ops-health-and-dnc.js contracts', () => {
       resolveLogisticsSpreadsheetId: jest.fn(),
       query: jest.fn(),
       dbType: 'sqlite',
-      DB_PATH: 'x'
+      DB_PATH: 'x',
+      authenticateApiKey: stubDashboardApiKey,
+      requireTenantAccessOrAdmin
     });
     const app = createContractApp({ mounts: [{ path: '/', router }] });
     const res = await request(app).post('/dnc/add').send({ clientKey: 'c1', phone: 'x' }).expect(400);
@@ -58,7 +68,9 @@ describe('routes/ops-health-and-dnc.js contracts', () => {
         throw new Error('db_down');
       }),
       dbType: 'sqlite',
-      DB_PATH: 'data/app.db'
+      DB_PATH: 'data/app.db',
+      authenticateApiKey: stubDashboardApiKey,
+      requireTenantAccessOrAdmin
     });
     const app = createContractApp({ mounts: [{ path: '/', router }] });
     const res = await request(app).get('/ops/health/c1').expect(200);

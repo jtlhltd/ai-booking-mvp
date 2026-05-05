@@ -6,6 +6,10 @@ import { describe, expect, test, jest, beforeAll, afterAll, beforeEach } from '@
 import request from 'supertest';
 
 import { createContractApp } from '../helpers/contract-harness.js';
+import { requireTenantAccessOrAdmin } from '../../middleware/security.js';
+import { createDashboardRouteAuthStubs } from '../helpers/dashboard-route-auth-stubs.js';
+
+const { authenticateApiKey: stubDashboardApiKey } = createDashboardRouteAuthStubs();
 
 let consoleErrSpy;
 let consoleLogSpy;
@@ -201,7 +205,10 @@ describe('routes/quick-win-metrics', () => {
     const { createQuickWinMetricsRouter } = await import('../../routes/quick-win-metrics.js');
     const app = createContractApp({
       mounts: [{ path: '/', router: () => createQuickWinMetricsRouter({
-        query, cacheMiddleware: () => (_req, _res, next) => next()
+        query,
+        cacheMiddleware: () => (_req, _res, next) => next(),
+        authenticateApiKey: stubDashboardApiKey,
+        requireTenantAccessOrAdmin
       }) }]
     });
     const res = await request(app).get('/sms-delivery-rate/acme').expect(200);
@@ -218,7 +225,10 @@ describe('routes/quick-win-metrics', () => {
     const { createQuickWinMetricsRouter } = await import('../../routes/quick-win-metrics.js');
     const app = createContractApp({
       mounts: [{ path: '/', router: () => createQuickWinMetricsRouter({
-        query, cacheMiddleware: () => (_req, _res, next) => next()
+        query,
+        cacheMiddleware: () => (_req, _res, next) => next(),
+        authenticateApiKey: stubDashboardApiKey,
+        requireTenantAccessOrAdmin
       }) }]
     });
     const res = await request(app).get('/sms-delivery-rate/acme').expect(500);
@@ -235,7 +245,10 @@ describe('routes/quick-win-metrics', () => {
     const { createQuickWinMetricsRouter } = await import('../../routes/quick-win-metrics.js');
     const app = createContractApp({
       mounts: [{ path: '/', router: () => createQuickWinMetricsRouter({
-        query, cacheMiddleware: () => (_req, _res, next) => next()
+        query,
+        cacheMiddleware: () => (_req, _res, next) => next(),
+        authenticateApiKey: stubDashboardApiKey,
+        requireTenantAccessOrAdmin
       }) }]
     });
     const res = await request(app).get('/calendar-sync/acme').expect(200);

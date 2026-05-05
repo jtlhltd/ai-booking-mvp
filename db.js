@@ -622,6 +622,7 @@ async function initPostgres() {
       call_type TEXT NOT NULL,
       call_data JSONB,
       status TEXT DEFAULT 'pending',
+      retry_attempt INTEGER DEFAULT 0,
       created_at TIMESTAMPTZ DEFAULT now(),
       updated_at TIMESTAMPTZ DEFAULT now()
     );
@@ -635,17 +636,26 @@ async function initPostgres() {
         ALTER TABLE call_queue ADD COLUMN initiated_call_id TEXT;
       END IF;
     END $$;
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'call_queue' AND column_name = 'retry_attempt'
+      ) THEN
+        ALTER TABLE call_queue ADD COLUMN retry_attempt INTEGER DEFAULT 0;
+      END IF;
+    END $$;
     -- DB-level guard: never allow a row to be marked completed unless we have an initiated call id.
     -- Use NOT VALID so we can add without scanning existing rows; it will still enforce on new writes.
     DO $$
     BEGIN
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'call_queue_completed_requires_call_id'
-      ) THEN
-        ALTER TABLE call_queue
-          ADD CONSTRAINT call_queue_completed_requires_call_id
-          CHECK (status <> 'completed' OR initiated_call_id IS NOT NULL) NOT VALID;
+      -- Narrow to vapi_call only so request-queue items (sms_send, lead_import, etc) can complete.
+      IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'call_queue_completed_requires_call_id') THEN
+        ALTER TABLE call_queue DROP CONSTRAINT call_queue_completed_requires_call_id;
       END IF;
+      ALTER TABLE call_queue
+        ADD CONSTRAINT call_queue_completed_requires_call_id
+        CHECK (status <> 'completed' OR call_type <> 'vapi_call' OR initiated_call_id IS NOT NULL) NOT VALID;
     END $$;
     CREATE INDEX IF NOT EXISTS call_queue_tenant_idx ON call_queue(client_key);
     CREATE INDEX IF NOT EXISTS call_queue_scheduled_idx ON call_queue(scheduled_for);

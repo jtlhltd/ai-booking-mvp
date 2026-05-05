@@ -1,7 +1,7 @@
 import express from 'express';
 import * as store from '../store.js';     // ← was: import store from '../store.js'
 import * as sheets from '../sheets.js';   // ← was: import sheets from '../sheets.js'
-import { normalizePhone } from '../util/phone.js';
+import { normalizePhone } from '../lib/phone-util.js';
 import { twilioWebhookVerification } from '../middleware/security.js';
 
 

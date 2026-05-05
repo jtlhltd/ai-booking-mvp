@@ -70,7 +70,6 @@ const rules = [
       'routes/admin-vapi-logistics-mount.js',
       'routes/call-recordings.js',
       'routes/demo-dashboard-debug.js',
-      'schedule-prospect-calls.js',
       // Legacy debt: server.js still has two inline call-initiation sites.
       // Keep them allow-listed until they are extracted to the queue worker
       // (tracked as a follow-up; do NOT add new sites here).
@@ -153,6 +152,45 @@ const rules = [
       /twilioWebhookVerification/,
       /X-Twilio-Signature/i
     ],
+    allow: []
+  },
+  {
+    intentId: 'queue.retry-backlog-bounded',
+    description:
+      'Retry queue failures must reschedule scheduled_for with backoff; do not reintroduce "pending + attempt++" without moving the timestamp forward.',
+    // This exact pattern caused retries to stay due-now, creating an ever-growing backlog
+    // that trips lib/ops-invariants.js#retryDue and can amplify spend.
+    pattern: /updateRetryStatus\s*\(\s*[^,]+,\s*['"`]pending['"`]\s*,\s*[^)]+\+\s*1\s*\)/,
+    allow: ['tests/', 'docs/']
+  },
+  {
+    intentId: 'tools.auth-required',
+    description:
+      'Tool endpoints must require either API-key auth or provider signature verification; unauthenticated tool routes are forbidden.',
+    mode: 'require',
+    scope: 'routes/',
+    filePattern: /^routes\/tools-mount\.js$/,
+    requireAny: [/authenticateApiKey/, /verifyVapiSignature/, /vapi-webhook-verification/],
+    allow: []
+  },
+  {
+    intentId: 'tenant.scoped-reads-require-api-key',
+    description:
+      'Tenant-scoped dashboard routes (daily-summary, ops-health-and-dnc, quick-win-metrics) must wire requireTenantAccessOrAdmin alongside authenticateApiKey.',
+    mode: 'require',
+    scope: 'routes/',
+    filePattern: /^routes\/(daily-summary|ops-health-and-dnc|quick-win-metrics)\.js$/,
+    requireAny: [/requireTenantAccessOrAdmin/],
+    allow: []
+  },
+  {
+    intentId: 'ops.monitoring-admin-key',
+    description:
+      'middleware/admin-api-key.js must include /api/monitoring paths in adminSurfaceRequiresApiKey so monitoring is not anonymously reachable when enforcement is on.',
+    mode: 'require',
+    scope: 'middleware/',
+    filePattern: /^middleware\/admin-api-key\.js$/,
+    requireAny: [/api\/monitoring/],
     allow: []
   }
 ];

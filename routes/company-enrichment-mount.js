@@ -1,6 +1,6 @@
 import { Router } from 'express';
 
-import { generateUKBusinesses, getIndustryCategories } from '../enhanced-business-search.js';
+import { generateUKBusinesses, getIndustryCategories } from '../lib/enhanced-business-search.js';
 import { isMobileNumber } from '../lib/google-places-search.js';
 
 export function createCompanyEnrichmentRouter() {
@@ -33,7 +33,7 @@ export function createCompanyEnrichmentRouter() {
         });
 
         // Dynamic import of real API module
-        const realSearchModule = await import('../real-uk-business-search.js');
+        const realSearchModule = await import('../lib/real-uk-business-search.js');
         const RealUKBusinessSearch = realSearchModule.default;
 
         const realSearcher = new RealUKBusinessSearch();
@@ -121,7 +121,7 @@ export function createCompanyEnrichmentRouter() {
       let strategy;
 
       try {
-        const contactFinderModule = await import('../real-decision-maker-contact-finder.js');
+        const contactFinderModule = await import('../lib/real-decision-maker-contact-finder.js');
         const RealDecisionMakerContactFinder = contactFinderModule.default;
         const contactFinder = new RealDecisionMakerContactFinder();
 

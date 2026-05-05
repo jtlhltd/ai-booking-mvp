@@ -9,17 +9,26 @@ export function createDailySummaryRouter(deps) {
     isPostgres,
     poolQuerySelect,
     query,
-    pickTimezone
+    pickTimezone,
+    authenticateApiKey,
+    requireTenantAccessOrAdmin
   } = deps || {};
 
   const router = express.Router();
+  const auth = authenticateApiKey;
+  const tenant = requireTenantAccessOrAdmin;
+  if (typeof auth !== 'function' || typeof tenant !== 'function') {
+    throw new Error(
+      'createDailySummaryRouter: authenticateApiKey and requireTenantAccessOrAdmin are required'
+    );
+  }
 
   function isFollowUpQueueDemoClient(clientKey) {
     const k = String(clientKey || '').toLowerCase().trim();
     return k === 'demo_client' || k === 'demo-client' || k === 'stay-focused-fitness-chris';
   }
 
-  router.get('/daily-summary/:clientKey', async (req, res) => {
+  router.get('/daily-summary/:clientKey', auth, tenant, async (req, res) => {
     try {
       const { clientKey } = req.params;
       res.set('Cache-Control', 'no-store');

@@ -4,6 +4,7 @@
  */
 import { Router } from 'express';
 import { cacheMiddleware } from '../lib/cache.js';
+import { authenticateApiKey, requireTenantAccess } from '../middleware/security.js';
 
 /**
  * @param {{
@@ -27,22 +28,35 @@ export function createClientsApiRouter(deps) {
 
   const router = Router();
 
-  router.get('/', async (_req, res) => {
+  router.use(authenticateApiKey);
+
+  function isAdminKey(req) {
+    const perms = Array.isArray(req.apiKey?.permissions) ? req.apiKey.permissions : [];
+    return perms.includes('*') || perms.includes('admin') || perms.includes('admin:clients');
+  }
+
+  router.get('/', async (req, res) => {
     try {
-      const rows = await listFullClients();
-      res.json({ ok: true, count: rows.length, clients: rows });
+      if (isAdminKey(req)) {
+        const rows = await listFullClients();
+        return res.json({ ok: true, count: rows.length, clients: rows });
+      }
+
+      const ck = req.clientKey;
+      if (!ck) return res.status(401).json({ ok: false, error: 'unauthorized' });
+      const c = await getFullClient(ck);
+      if (!c) return res.status(404).json({ ok: false, error: 'not found' });
+      const dashboardOutreachMode = isDashboardSelfServiceClient(ck);
+      return res.json({ ok: true, count: 1, clients: [{ ...c, dashboardOutreachMode }] });
     } catch (e) {
       res.status(500).json({ ok: false, error: String(e) });
     }
   });
 
-  router.get('/:key', cacheMiddleware({ ttl: 180000 }), async (req, res) => {
+  router.get('/:key', cacheMiddleware({ ttl: 180000 }), requireTenantAccess, async (req, res) => {
     try {
       const clientKey = req.params.key;
-      console.log(`[API] GET /api/clients/${clientKey} - Fetching client...`);
-
       let c = await getFullClient(clientKey);
-      console.log(`[API] getFullClient returned:`, c ? 'client found' : 'null');
 
       // Fallback: check local client files if not in database
       if (!c) {
@@ -53,39 +67,25 @@ export function createClientsApiRouter(deps) {
           if (fs.existsSync(clientFile)) {
             const fileContent = fs.readFileSync(clientFile, 'utf8');
             c = JSON.parse(fileContent);
-            console.log(`[API] Loaded client from file:`, clientFile);
           }
         } catch (fileError) {
-          console.warn(`[API] File fallback error:`, fileError.message);
+          // ignore fallback errors
         }
       }
 
       if (!c) {
-        console.log(`[API] Client not found: ${clientKey}`);
         return res.status(404).json({ ok: false, error: 'not found' });
       }
 
-      console.log(`[API] Returning client data for ${clientKey}:`, {
-        hasDisplayName: !!c.displayName,
-        hasWhiteLabel: !!c.whiteLabel,
-        hasBranding: !!c.whiteLabel?.branding,
-        clientKeys: Object.keys(c || {}).slice(0, 10)
-      });
-
       const dashboardOutreachMode = isDashboardSelfServiceClient(clientKey);
       const response = { ok: true, client: { ...c, dashboardOutreachMode } };
-      console.log(`[API] Sending response for ${clientKey}, response keys:`, Object.keys(response));
 
       if (res.headersSent) {
-        console.error(`[API] Response already sent for ${clientKey}!`);
         return;
       }
 
       res.json(response);
     } catch (e) {
-      console.error(`[API] Error in /api/clients/:key:`, e);
-      console.error(`[API] Error stack:`, e.stack);
-
       if (!res.headersSent) {
         res.status(500).json({ ok: false, error: String(e) });
       }
@@ -97,6 +97,9 @@ export function createClientsApiRouter(deps) {
       const c = req.body || {};
       const key = (c.clientKey || '').toString().trim();
       if (!key) return res.status(400).json({ ok: false, error: 'clientKey is required' });
+      if (!isAdminKey(req) && key !== req.clientKey) {
+        return res.status(403).json({ ok: false, error: 'forbidden' });
+      }
       const tz = pickTimezone(c);
       if (typeof tz !== 'string' || !tz.length) {
         return res.status(400).json({ ok: false, error: 'timezone is required (booking.timezone or timezone)' });
@@ -117,6 +120,10 @@ export function createClientsApiRouter(deps) {
 
   router.delete('/:key', async (req, res) => {
     try {
+      const key = req.params.key;
+      if (!isAdminKey(req) && key !== req.clientKey) {
+        return res.status(403).json({ ok: false, error: 'forbidden' });
+      }
       const out = await deleteClient(req.params.key);
       res.json({ ok: true, deleted: out.changes });
     } catch (e) {

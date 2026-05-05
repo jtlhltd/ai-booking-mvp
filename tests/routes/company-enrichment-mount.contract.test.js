@@ -34,7 +34,7 @@ describe('routes/company-enrichment-mount', () => {
   });
 
   test('happy: POST /api/uk-business-search uses sample data when real API module throws', async () => {
-    jest.unstable_mockModule('../../real-uk-business-search.js', () => ({
+    jest.unstable_mockModule('../../lib/real-uk-business-search.js', () => ({
       default: class {
         async searchBusinesses() {
           throw new Error('no_network');

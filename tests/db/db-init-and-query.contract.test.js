@@ -11,6 +11,7 @@ beforeEach(() => {
   delete process.env.DATABASE_URL;
   delete process.env.DB_PATH;
   delete process.env.DATA_DIR;
+  delete process.env.DB_QUERY_CACHE_SELECTS;
 });
 
 describe('db.js init/query contracts (branch coverage)', () => {
@@ -172,6 +173,7 @@ describe('db.js init/query contracts (branch coverage)', () => {
     process.env.DB_TYPE = 'sqlite';
     process.env.DATA_DIR = 'data-test';
     process.env.DB_PATH = 'data-test/app.db';
+    process.env.DB_QUERY_CACHE_SELECTS = '1';
 
     const cache = {
       get: async () => null,

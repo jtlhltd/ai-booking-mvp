@@ -15,6 +15,30 @@ data/_tmp_*.txt
 # Local databases
 data/database.json
 
+# Runtime JSON state (server.js#ensureDataFiles creates these on boot;
+# they are caches/queues, not seeds. Do not commit.)
+data/calls.json
+data/leads.json
+data/jobs.json
+data/sms-status.json
+data/app.json
+
+# Generated demo artifacts (scripts/quick-demo.js and
+# scripts/create-demo-client.js write into demos/ at runtime).
+demos/.client-*.json
+demos/.demo-*.json
+demos/business-name-demo-script-*.txt
+demos/vapi-script-*.txt
+demos/*-2024-*.html
+demos/*-2024-*.json
+demos/*-2024-*.txt
+demos/*-2025-*.html
+demos/*-2025-*.json
+demos/*-2025-*.txt
+demos/*-2026-*.html
+demos/*-2026-*.json
+demos/*-2026-*.txt
+
 # Python cache artifacts
 __pycache__/
 *.pyc
