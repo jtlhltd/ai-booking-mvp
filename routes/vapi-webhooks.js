@@ -1031,37 +1031,7 @@ async function processWebhookPayload(body, correlationId) {
       'b1ba0ad3-c519-4ab7-aa6f-9fba6516a0ee', // Tom D2D (variant)
       'b1ba0ad3-c519-4ab7-aa6f-9fba6516a8ee'  // Tom D2D (from diagnostic)
     ]);
-
-    // Outbound qual: persist analysis.structuredData to leads.custom_fields when sheet pipeline skips (assistant not on logistics allow-list).
-    if (isEndOfCallReport && tenantKey && leadPhone && tenantKey !== 'test_client') {
-      const sdQuick = callObj?.analysis?.structuredData || body.analysis?.structuredData || {};
-      const assistantAllowed = assistantId && ALLOWED_LOGISTICS_ASSISTANT_IDS.has(assistantId);
-      const cpQ = String(metadata.callPurpose || metadata.CallPurpose || '').toLowerCase();
-      const outboundQual =
-        cpQ.includes('outbound_lead_qual') || (cpQ.includes('outbound') && cpQ.includes('qual'));
-      if (outboundQual && !assistantAllowed && sdQuick && Object.keys(sdQuick).length > 0) {
-        setImmediate(() => {
-          void (async () => {
-            try {
-              const { persistLogisticsQualToLead } = await import('../lib/logistics-qual-persist.js');
-              await persistLogisticsQualToLead({
-                tenantKey,
-                leadPhone,
-                callId,
-                outcome,
-                metadata,
-                sd: sdQuick,
-                sheetData: {},
-                extracted: {}
-              });
-            } catch (e) {
-              console.warn('[LOGISTICS QUAL] non-sheet assistant merge:', e?.message || e);
-            }
-          })();
-        });
-      }
-    }
-
+    
     vapiWebhookVerboseLog('[LOGISTICS SHEET ID DEBUG]', {
       'tenant?.vapi?.logisticsSheetId': tenant?.vapi?.logisticsSheetId,
       'tenant?.gsheet_id': tenant?.gsheet_id,
@@ -1395,22 +1365,6 @@ async function processWebhookPayload(body, correlationId) {
             recordingUrl: effectiveRecordingUrl,
             transcriptSnippet
           };
-        }
-
-        try {
-          const { persistLogisticsQualToLead } = await import('../lib/logistics-qual-persist.js');
-          await persistLogisticsQualToLead({
-            tenantKey,
-            leadPhone,
-            callId,
-            outcome,
-            metadata,
-            sd: sdHasMeaningfulValue ? sd : {},
-            sheetData,
-            extracted: extracted && typeof extracted === 'object' ? extracted : {}
-          });
-        } catch (lqLeadErr) {
-          console.warn('[LOGISTICS QUAL] lead custom_fields merge failed:', lqLeadErr?.message || lqLeadErr);
         }
 
         const hasAnyLogisticsInfo = (() => {
