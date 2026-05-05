@@ -16622,6 +16622,28 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     console.error('[DASHBOARD] Could not fetch client config:', err);
                 }
             }
+
+            // Fallback: daily-summary is public read-only and returns a safe clientProfile
+            // that contains only meta fields (no secrets). Use it to populate the top
+            // dashboard tiles when /api/clients is API-key gated.
+            if (!clientConfig && currentClient !== DEMO_CLIENT_KEY) {
+                try {
+                    const res = await fetch(`${BASE_URL}/api/daily-summary/${encodeURIComponent(currentClient)}`, { cache: 'no-store' });
+                    const payload = await res.json().catch(() => ({}));
+                    const p = payload && payload.clientProfile ? payload.clientProfile : null;
+                    if (res.ok && payload?.ok && p) {
+                        clientConfig = {
+                            displayName: p.displayName || '',
+                            phone: p.phone || '',
+                            timezone: p.timezone || '',
+                            businessHours: p.businessHours || '',
+                            industry: p.industry || ''
+                        };
+                    }
+                } catch (e) {
+                    // ignore fallback errors; UI will show "Not supplied"
+                }
+            }
             
             // Use clientConfig if available, otherwise use CLIENT_CONFIG but only for non-meta fields
             // Meta fields (phone, timezone, businessHours, industry) should only come from actual client config
