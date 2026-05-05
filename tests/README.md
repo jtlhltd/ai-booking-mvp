@@ -18,13 +18,26 @@ tests/
                           # assertJsonErrorEnvelope
     determinism.js        # withFakeNow, withMockedMathRandom
     fixtures.js           # tenantFixture, leadFixture
+  canaries/               # behavioral-intent canaries (must-not-regress)
   unit/                   # pure logic (mock IO, deterministic clock)
   routes/                 # contract tests (one file per router)
   db/                     # DB-backed unit tests
+  lib/                    # tests for lib/* helpers
+  middleware/             # middleware contract tests
   integration/            # opt-in real-DB integration (Tier 3)
   harness/                # shared scaffolding (excluded from test runs)
+  manual/                 # PowerShell smoke/ops scripts (not run by Jest)
   setup.js                # global setup: console filter + singleton teardown
+  smoke.ps1               # canonical local smoke entry (npm run smoke:local)
 ```
+
+### tests/manual/
+
+The `tests/manual/` folder collects historical PowerShell harnesses
+(`test-*.ps1`, `run-*.ps1`, `final-system-test.ps1`, etc.) used for
+operator-driven sanity checks against a running server. Jest does not
+execute them; invoke them by hand when you need an end-to-end probe of a
+live instance.
 
 ## Most-used commands
 

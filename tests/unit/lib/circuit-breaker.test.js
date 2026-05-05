@@ -40,7 +40,7 @@ describe('lib/circuit-breaker', () => {
 
   test('uses fallback when open and fallback succeeds', async () => {
     const { withCircuitBreaker, recordFailure, resetCircuitBreaker } = await import(
-      '../../../lib/circuit-breaker.js',
+      '../../../lib/circuit-breaker.js'
     );
 
     resetCircuitBreaker(op);
@@ -57,7 +57,7 @@ describe('lib/circuit-breaker', () => {
 
   test('throws helpful error when open and fallback fails', async () => {
     const { withCircuitBreaker, recordFailure, resetCircuitBreaker } = await import(
-      '../../../lib/circuit-breaker.js',
+      '../../../lib/circuit-breaker.js'
     );
 
     resetCircuitBreaker(op);
@@ -98,7 +98,7 @@ describe('lib/circuit-breaker', () => {
 
   test('half-open failure re-opens circuit', async () => {
     const { recordFailure, isCircuitBreakerOpen, withCircuitBreaker, resetCircuitBreaker } = await import(
-      '../../../lib/circuit-breaker.js',
+      '../../../lib/circuit-breaker.js'
     );
 
     resetCircuitBreaker(op);

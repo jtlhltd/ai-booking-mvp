@@ -1,5 +1,7 @@
 import express from 'express';
 
+import { scrubBody } from '../lib/log-scrubber.js';
+
 export function createBookDemoRouter(deps) {
   const { bookingSystem, smsEmailPipeline } = deps || {};
   const router = express.Router();
@@ -13,7 +15,7 @@ export function createBookDemoRouter(deps) {
         });
       }
 
-      console.log('[BOOKING DEMO] Request body:', req.body);
+      console.log('[BOOKING DEMO] Request body:', scrubBody(req.body));
 
       let leadData, preferredTimes;
 

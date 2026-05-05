@@ -2,8 +2,8 @@
 import 'dotenv/config';
 import { normalizePhoneE164 } from './lib/utils.js';
 import { parseStartPreference } from './lib/start-preference.js';
-import { generateUKBusinesses, getIndustryCategories, fuzzySearch } from './enhanced-business-search.js';
-import RealUKBusinessSearch from './real-uk-business-search.js';
+import { generateUKBusinesses, getIndustryCategories, fuzzySearch } from './lib/enhanced-business-search.js';
+import RealUKBusinessSearch from './lib/real-uk-business-search.js';
 import BookingSystem from './booking-system.js';
 import SMSEmailPipeline from './sms-email-pipeline.js';
 import morgan from 'morgan';
@@ -90,6 +90,7 @@ import {
   rateLimitMiddleware, 
   requirePermission, 
   requireTenantAccess,
+  requireTenantAccessOrAdmin,
   validateAndSanitizeInput,
   securityHeaders,
   requestLogging,
@@ -141,6 +142,37 @@ import { createInlineJsonApiRouter } from './routes/inline-json-api-mount.js';
 import { createPublicReadsRouter } from './routes/public-reads-mount.js';
 import { createHealthProbesRouter } from './routes/health-probes-mount.js';
 import { getIntegrationStatuses as getIntegrationStatusesForClient } from './lib/integration-statuses.js';
+import { bootstrapClients } from './lib/bootstrap-clients.js';
+import {
+  resolveLogisticsSpreadsheetId,
+  trimEnvDashboard,
+  buildDashboardExperience,
+  adjustColorBrightness
+} from './lib/dashboard-experience.js';
+import { buildAnalyticsReportFromDashboard } from './lib/analytics-report-builder.js';
+import { generateCostRecommendations } from './lib/cost-optimization-recommendations.js';
+import { categorizeError, shouldRetryError, calculateRetryDelay } from './lib/error-retry-policy.js';
+import {
+  DASHBOARD_ACTIVITY_TZ,
+  formatGBP,
+  formatTimeAgoLabel,
+  activityFeedChannelLabel,
+  mapCallStatus,
+  formatCallDuration,
+  truncateActivityFeedText,
+  parseCallsRowMetadata,
+  isCallQueueStartFailureRow,
+  formatVapiEndedReasonDisplay,
+  inferCallEndedByFromVapiReason,
+  endedReasonFromCallRow,
+  outcomeToFriendlyLabel,
+  inferTimelinePickupStatus,
+  mapVapiEndedReasonToTimelineOutcome,
+  flattenVapiGetCallPayload,
+  messageContentToString,
+  vapiCallSnapshotToTimelineHints,
+  mapStatusClass
+} from './lib/dashboard-activity-formatters.js';
 import { createDevTestRouter } from './routes/dev-test-mount.js';
 import { createCallInsightsRouter } from './routes/call-insights-mount.js';
 import { createCompanyEnrichmentRouter } from './routes/company-enrichment-mount.js';
@@ -602,7 +634,15 @@ app.use('/api', createReportsRouter({ authenticateApiKey }));
 app.use('/api', createSmsTemplatesRouter({ authenticateApiKey }));
 app.use('/api', createMonitoringDashboardRouter({ authenticateApiKey }));
 app.use(createApiDocsRouter());
-app.use('/api', createQuickWinMetricsRouter({ query, cacheMiddleware }));
+app.use(
+  '/api',
+  createQuickWinMetricsRouter({
+    query,
+    cacheMiddleware,
+    authenticateApiKey,
+    requireTenantAccessOrAdmin
+  })
+);
 app.use(createHealthAndDiagnosticsRouter({ query }));
 app.use(
   '/api',
@@ -614,7 +654,9 @@ app.use(
     deactivateOptOut,
     query,
     dbType,
-    DB_PATH
+    DB_PATH,
+    authenticateApiKey,
+    requireTenantAccessOrAdmin
   })
 );
 app.use(
@@ -626,7 +668,9 @@ app.use(
     isPostgres,
     poolQuerySelect,
     query,
-    pickTimezone
+    pickTimezone,
+    authenticateApiKey,
+    requireTenantAccessOrAdmin
   })
 );
 app.use(
@@ -840,356 +884,9 @@ app.use('/', googlePlacesSearchRouter);
 
 // moved: GET /api/industry-comparison/:clientKey → routes/industry-comparison.js
 
-/** Rolling activity windows & touchpoint day buckets on the client dashboard (GMT/BST). */
-const DASHBOARD_ACTIVITY_TZ = 'Europe/London';
-
-function formatGBP(value = 0) {
-  const formatter = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 });
-  return formatter.format(value);
-}
-
-function formatTimeAgoLabel(dateString) {
-  if (!dateString) return 'Just now';
-  const diffMs = Date.now() - new Date(dateString).getTime();
-  const minutes = Math.floor(diffMs / 60000);
-  if (minutes < 1) return 'Just now';
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
-
-/** Live activity feed: only mention SMS when tenant has Twilio fields set (twilio_json → client.sms). */
-function activityFeedChannelLabel(client) {
-  const sms = client?.sms && typeof client.sms === 'object' ? client.sms : {};
-  const hasSmsConfig = !!(
-    sms.messagingServiceSid ||
-    sms.fromNumber ||
-    sms.accountSid ||
-    sms.authToken
-  );
-  return hasSmsConfig ? 'AI call + SMS' : 'AI call';
-}
-
-function mapCallStatus(status) {
-  const normalized = (status || '').toLowerCase();
-  if (normalized.includes('book')) return 'Booked';
-  if (normalized.includes('completed') || normalized === 'ended') return 'Completed';
-  if (normalized.includes('pending')) return 'Awaiting reply';
-  if (normalized.includes('missed')) return 'Missed call';
-  if (normalized === 'initiated') return 'In progress';
-  return status || 'Live';
-}
-
-function formatCallDuration(seconds) {
-  if (seconds == null || seconds === '') return null;
-  const s = parseInt(seconds, 10);
-  if (isNaN(s) || s < 0) return null;
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  const sec = s % 60;
-  return sec > 0 ? `${m}m ${sec}s` : `${m}m`;
-}
-
-/** Short plain text for live activity feed (avoid huge payloads). */
-function truncateActivityFeedText(str, maxLen = 220) {
-  const s = String(str || '').replace(/\s+/g, ' ').trim();
-  if (!s) return '';
-  if (s.length <= maxLen) return s;
-  return `${s.slice(0, maxLen - 1).trim()}…`;
-}
-
-function parseCallsRowMetadata(meta) {
-  if (meta == null) return null;
-  if (typeof meta === 'object' && !Array.isArray(meta)) return meta;
-  if (typeof meta === 'string') {
-    try {
-      return JSON.parse(meta);
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
-
-/** Synthetic rows when outbound queue could not start a Vapi call (not the same as an in-call failure). */
-function isCallQueueStartFailureRow(row) {
-  const cid = String(row?.call_id || '');
-  if (cid.startsWith('failed_q')) return true;
-  const m = parseCallsRowMetadata(row?.metadata);
-  return !!(m && m.fromQueue === true && String(row?.outcome || '').toLowerCase() === 'failed');
-}
-
-function formatVapiEndedReasonDisplay(reason) {
-  if (reason == null || reason === '') return '';
-  return String(reason)
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/[-_.]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .split(' ')
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-    .join(' ');
-}
-
-/** For transcript modal: map Vapi `endedReason` to who ended a live call. */
-function inferCallEndedByFromVapiReason(endedReason) {
-  const detail = formatVapiEndedReasonDisplay(endedReason);
-  if (!endedReason || typeof endedReason !== 'string') {
-    return {
-      callEndedBy: 'unknown',
-      callEndedByLabel: 'Who ended the call: not recorded',
-      endedReasonDetail: ''
-    };
-  }
-  const r = endedReason.toLowerCase();
-  if (r.includes('assistant-ended-call')) {
-    return { callEndedBy: 'assistant', callEndedByLabel: 'Ended by: AI', endedReasonDetail: detail };
-  }
-  if (r.includes('customer-ended-call')) {
-    return { callEndedBy: 'customer', callEndedByLabel: 'Ended by: contact', endedReasonDetail: detail };
-  }
-  if (r.includes('silence-timed-out')) {
-    return { callEndedBy: 'system', callEndedByLabel: 'Ended by: system (silence timeout)', endedReasonDetail: detail };
-  }
-  if (r.includes('exceeded-max-duration')) {
-    return { callEndedBy: 'system', callEndedByLabel: 'Ended by: system (max duration)', endedReasonDetail: detail };
-  }
-  if (
-    r.includes('customer-did-not-answer') ||
-    r.includes('did-not-answer') ||
-    r.includes('voicemail') ||
-    r.includes('customer-busy') ||
-    r.includes('rejected') ||
-    r.includes('failed-to-connect') ||
-    r.includes('misdialed') ||
-    r.includes('vonage-rejected') ||
-    r.includes('twilio-reported') ||
-    r.includes('error') ||
-    r.includes('fault')
-  ) {
-    return {
-      callEndedBy: 'unknown',
-      callEndedByLabel: detail ? `End reason: ${detail}` : 'Who ended the call: not applicable',
-      endedReasonDetail: detail
-    };
-  }
-  if (r.includes('vonage-completed')) {
-    return {
-      callEndedBy: 'unknown',
-      callEndedByLabel: 'Call completed (carrier — who hung up not specified)',
-      endedReasonDetail: detail
-    };
-  }
-  return {
-    callEndedBy: 'unknown',
-    callEndedByLabel: detail ? `End reason: ${detail}` : 'Who ended the call: unknown',
-    endedReasonDetail: detail
-  };
-}
-
-function endedReasonFromCallRow(row) {
-  const m = parseCallsRowMetadata(row?.metadata);
-  if (!m || typeof m !== 'object') return null;
-  return m.endedReason || m.endReason || null;
-}
-
-function outcomeToFriendlyLabel(outcome) {
-  if (!outcome) return null;
-  const o = (outcome || '').toLowerCase();
-  if (o === 'no-answer' || o === 'no_answer') return 'No answer';
-  if (o === 'voicemail') return 'Voicemail';
-  if (o === 'busy') return 'Busy';
-  if (o === 'rejected' || o === 'declined') return 'Declined';
-  if (o === 'failed') return 'Failed';
-  if (o === 'booked') return 'Booked';
-  if (o === 'completed') return 'Picked up';
-  return outcome.replace(/-/g, ' ');
-}
-
-/** Lead timeline: did a human pick up? (distinct from raw DB status / missing webhooks) */
-function inferTimelinePickupStatus(call) {
-  let outcome = (call.outcome || '').toLowerCase().trim().replace(/_/g, '-');
-  // Some pipelines mirror line status into outcome; ignore for pickup inference
-  if (outcome === 'initiated' || outcome === 'in-progress' || outcome === 'ringing' || outcome === 'queued') {
-    outcome = '';
-  }
-  const status = (call.status || '').toLowerCase().trim();
-  const durRaw = call.duration != null ? parseInt(call.duration, 10) : NaN;
-  const durNum = Number.isFinite(durRaw) && durRaw >= 0 ? durRaw : null;
-  const snip = String(call.transcript_snippet || '').trim();
-  const snipLen = snip.replace(/\s/g, '').length;
-  const hasRec = !!(call.recording_url && String(call.recording_url).trim());
-
-  const noHuman = new Set(['no-answer', 'busy', 'failed', 'voicemail', 'declined', 'rejected', 'cancelled', 'canceled']);
-  if (outcome && noHuman.has(outcome)) {
-    const friendly = outcomeToFriendlyLabel(call.outcome);
-    return {
-      status: 'no',
-      headline: 'They did not pick up',
-      reason: friendly || outcome.replace(/-/g, ' ')
-    };
-  }
-
-  if (outcome === 'booked' || outcome === 'completed' || (outcome && !noHuman.has(outcome))) {
-    return {
-      status: 'yes',
-      headline: 'They picked up',
-      reason: outcomeToFriendlyLabel(call.outcome) || outcome.replace(/-/g, ' ')
-    };
-  }
-
-  if (status === 'initiated') {
-    // Often stuck here when the "call ended" webhook never ran — still use anything we captured.
-    if (durNum != null && durNum >= 15) {
-      return {
-        status: 'yes',
-        headline: 'They picked up',
-        reason: `Connected about ${formatCallDuration(durNum)} (status never left “initiated”; final webhook likely missing).`
-      };
-    }
-    if (durNum != null && durNum >= 10 && durNum < 15) {
-      return {
-        status: 'yes',
-        headline: 'They picked up',
-        reason: `Short connection (${formatCallDuration(durNum)}); likely answered but status never left initiated.`
-      };
-    }
-    const qsInit = call.quality_score != null ? Number(call.quality_score) : null;
-    const hasSentiment = call.sentiment != null && String(call.sentiment).trim().length > 0;
-    if (hasSentiment || (qsInit != null && Number.isFinite(qsInit))) {
-      return {
-        status: 'yes',
-        headline: 'They picked up',
-        reason: hasSentiment
-          ? `Post-call analysis saved (${String(call.sentiment).trim()} sentiment); status still shows initiated.`
-          : `Quality score saved (${Math.round(qsInit)}/100); status still shows initiated.`
-      };
-    }
-    // Shorter snippet threshold than “ended” rows — partial transcripts still imply a conversation.
-    const snipOkInit = snipLen > 25;
-    if (snipOkInit || hasRec) {
-      return {
-        status: 'yes',
-        headline: 'They picked up',
-        reason: hasRec
-          ? 'Recording on file (status still “initiated”; hang-up event may not have synced).'
-          : 'Conversation text on file (status still “initiated”; hang-up event may not have synced).'
-      };
-    }
-    if (durNum != null && durNum > 0 && durNum < 12) {
-      return {
-        status: 'no',
-        headline: 'They did not pick up',
-        reason: `Very short ring (${formatCallDuration(durNum)}); call never progressed past initiated.`
-      };
-    }
-    const created = call.created_at ? new Date(call.created_at).getTime() : 0;
-    const ageMin = created ? (Date.now() - created) / 60000 : 999;
-    if (ageMin > 15) {
-      return {
-        status: 'unknown',
-        headline: 'Pickup unknown',
-        reason:
-          'No usable duration, transcript snippet, or recording on this row — we cannot tell if someone answered. Check the transcript/recording links or your telephony webhooks.'
-      };
-    }
-    return {
-      status: 'unknown',
-      headline: 'Pickup unknown',
-      reason: 'Still connecting or first webhook not received yet (line shows initiated).'
-    };
-  }
-
-  const endedLike = status === 'ended' || status === 'completed';
-  if (endedLike) {
-    if (durNum != null && durNum >= 15) {
-      return {
-        status: 'yes',
-        headline: 'They picked up',
-        reason: `Connected about ${formatCallDuration(durNum)} (no outcome stored).`
-      };
-    }
-    if (snipLen > 40 || hasRec) {
-      return {
-        status: 'yes',
-        headline: 'They picked up',
-        reason: hasRec ? 'Recording on file.' : 'Conversation text captured.'
-      };
-    }
-    if (durNum != null && durNum > 0 && durNum < 12) {
-      return {
-        status: 'no',
-        headline: 'They did not pick up',
-        reason: `Very short ring (${formatCallDuration(durNum)}).`
-      };
-    }
-    return {
-      status: 'unknown',
-      headline: 'Pickup unknown',
-      reason: 'Call ended in our logs but no outcome, duration, or transcript yet.'
-    };
-  }
-
-  if (status === 'failed' || status === 'cancelled' || status === 'canceled') {
-    return {
-      status: 'no',
-      headline: 'They did not pick up',
-      reason: mapCallStatus(call.status)
-    };
-  }
-
-  return {
-    status: 'unknown',
-    headline: 'Pickup unknown',
-    reason: mapCallStatus(call.status) || 'Not enough data yet.'
-  };
-}
-
-/** Align with vapi-webhooks mapEndedReasonToOutcome for GET /call hydration. */
-function mapVapiEndedReasonToTimelineOutcome(endedReason) {
-  if (!endedReason || typeof endedReason !== 'string') return null;
-  const r = endedReason.toLowerCase();
-  if (r.includes('customer-did-not-answer') || r.includes('did-not-answer')) return 'no-answer';
-  if (r.includes('customer-busy') || r.includes('busy')) return 'busy';
-  if (r === 'voicemail' || r.includes('voicemail')) return 'voicemail';
-  if (r.includes('rejected') || r.includes('declined') || r.includes('failed-to-connect') || r.includes('misdialed')) {
-    return 'declined';
-  }
-  if (r.includes('vonage-rejected') || r.includes('twilio-reported')) return 'declined';
-  if (r.includes('assistant-ended-call') || r.includes('customer-ended-call') || r.includes('vonage-completed')) {
-    return 'completed';
-  }
-  if (r.includes('silence-timed-out') || r.includes('exceeded-max-duration')) return 'completed';
-  if (r.includes('error') || r.includes('fault')) return 'failed';
-  return 'completed';
-}
-
-/** Merge nested `call` + `artifact` shapes from Vapi GET /call responses. */
-function flattenVapiGetCallPayload(raw) {
-  if (!raw || typeof raw !== 'object') return {};
-  const nested = raw.call && typeof raw.call === 'object' ? raw.call : {};
-  const s = { ...nested, ...raw };
-  const art = s.artifact && typeof s.artifact === 'object' ? s.artifact : {};
-  if (!s.recordingUrl && art.recordingUrl) s.recordingUrl = art.recordingUrl;
-  if (!s.stereoRecordingUrl && art.stereoRecordingUrl) s.stereoRecordingUrl = art.stereoRecordingUrl;
-  if (!s.transcript && art.transcript) s.transcript = art.transcript;
-  return s;
-}
-
-function messageContentToString(content) {
-  if (content == null) return '';
-  if (typeof content === 'string') return content;
-  if (Array.isArray(content)) {
-    return content
-      .map((p) => (p && typeof p === 'object' ? p.text || p.content || '' : String(p)))
-      .filter(Boolean)
-      .join(' ');
-  }
-  return String(content);
-}
+// Pure dashboard-activity / lead-timeline helpers were moved to
+// lib/dashboard-activity-formatters.js (PR-10 of the hygiene burndown). They
+// are imported at the top of this file alongside the other lib/ imports.
 
 /** Same key resolution as other Vapi server calls (Render often has one of these names). */
 function timelineVapiAuthKey() {
@@ -1225,69 +922,6 @@ async function fetchVapiCallSnapshotForTimeline(callId) {
   }
 }
 
-/** Map Vapi GET /call/:id JSON into fields inferTimelinePickupStatus already understands. */
-function vapiCallSnapshotToTimelineHints(snapshot) {
-  if (!snapshot || typeof snapshot !== 'object') return {};
-  const s = flattenVapiGetCallPayload(snapshot);
-  const hints = {};
-
-  const er = s.endedReason || s.endReason;
-  if (er && typeof er === 'string') {
-    const oc = mapVapiEndedReasonToTimelineOutcome(er);
-    if (oc) hints.outcome = oc;
-  }
-
-  let dur = null;
-  if (typeof s.duration === 'number' && s.duration >= 0) dur = Math.round(s.duration);
-  else if (s.duration != null && String(s.duration).trim() !== '') {
-    const p = parseInt(String(s.duration), 10);
-    if (Number.isFinite(p) && p >= 0) dur = p;
-  }
-  if (dur == null && s.endedAt && s.startedAt) {
-    const ms = new Date(s.endedAt) - new Date(s.startedAt);
-    if (ms > 0) dur = Math.round(ms / 1000);
-  }
-  if (dur != null && dur >= 0) hints.duration = dur;
-
-  let tr = s.transcript || s.summary || s.analysis?.summary || null;
-  if (!tr && Array.isArray(s.messages) && s.messages.length > 0) {
-    const parts = [];
-    for (const m of s.messages) {
-      const role = String(m?.role || m?.type || '').toLowerCase();
-      if (role === 'system' || role === 'function' || role === 'tool') continue;
-      const rawC = m?.content ?? m?.text ?? m?.message ?? m?.body;
-      const content = messageContentToString(rawC);
-      if (!content) continue;
-      const contentUpper = content.toUpperCase();
-      if (
-        contentUpper.includes('TOOLS:') ||
-        contentUpper.includes('CRITICAL:') ||
-        contentUpper.includes('FOLLOW THIS SCRIPT')
-      ) {
-        continue;
-      }
-      parts.push(content);
-    }
-    tr = parts.length ? parts.join(' ') : null;
-  }
-  if (tr && String(tr).trim()) {
-    hints.transcript_snippet = String(tr).trim().slice(0, 320);
-  }
-
-  const rec = s.recordingUrl || s.stereoRecordingUrl;
-  if (rec && String(rec).trim() && /^https?:\/\//i.test(String(rec).trim())) {
-    hints.recording_url = String(rec).trim();
-  }
-
-  return hints;
-}
-
-function mapStatusClass(status) {
-  const normalized = (status || '').toLowerCase();
-  if (normalized.includes('book')) return 'success';
-  if (normalized.includes('await') || normalized.includes('pending')) return 'pending';
-  return 'info';
-}
 
 // moved: GET /api/ab-test-results/:clientKey → routes/ab-test-results.js
 // moved: POST /api/demo/test-call → routes/demo-test-call.js
@@ -1393,92 +1027,6 @@ function effectiveDialScheduledForApiDisplay(row, tenant) {
 
 // moved: /api/retry-queue/* → routes/retry-queue.js
 
-function resolveLogisticsSpreadsheetId(client) {
-  if (!client) return process.env.LOGISTICS_SHEET_ID || null;
-  return (
-    client.vapi_json?.logisticsSheetId
-    || client.vapi?.logisticsSheetId
-    || client.gsheet_id
-    || process.env.LOGISTICS_SHEET_ID
-    || null
-  );
-}
-
-function trimEnvDashboard(key) {
-  const v = process.env[key];
-  if (v == null || String(v).trim() === '') return null;
-  return String(v).trim();
-}
-
-function parseDashboardPrivacyBullets() {
-  const raw = trimEnvDashboard('DASHBOARD_PRIVACY_BULLETS');
-  if (!raw) return [];
-  return raw
-    .split('|')
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .slice(0, 10);
-}
-
-/**
- * Client-dashboard-only bundle: integrations, sync timestamps, privacy copy, build ids, read-only flag.
- */
-function buildDashboardExperience(client, metricsAsOfIso) {
-  const v = client?.vapi && typeof client.vapi === 'object' && !Array.isArray(client.vapi) ? client.vapi : {};
-  const voiceOk = !!(client?.vapiAssistantId || v.assistantId);
-  const tenantLogistics = !!(v.logisticsSheetId && String(v.logisticsSheetId).trim());
-  const resolvedSheet = resolveLogisticsSpreadsheetId(client);
-  const logisticsAny = !!resolvedSheet;
-  const crmLeadSheet = !!(v.gsheet_id || v.gsheetId || v.crmSheetId || v.googleSheetId);
-  const smsOk = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN);
-  const readOnlyGlobal = /^(1|true|yes)$/i.test(String(process.env.DASHBOARD_GLOBAL_READ_ONLY || '').trim());
-  const readOnlyTenant = v.dashboardReadOnly === true || String(v.dashboardReadOnly || '').toLowerCase() === 'true';
-
-  const sheetHint = tenantLogistics
-    ? 'Logistics / call-result sheet id is set on this workspace.'
-    : logisticsAny
-      ? 'A sheet id is available via server default (e.g. LOGISTICS_SHEET_ID). Prefer setting logisticsSheetId on the tenant for production.'
-      : 'No logistics sheet id — voice tool writes to Sheets may fail until configured.';
-
-  return {
-    integrations: [
-      {
-        id: 'voice',
-        label: 'Voice (Vapi)',
-        ok: voiceOk,
-        hint: voiceOk ? 'Assistant is linked for outbound/inbound flows.' : 'Add assistantId to this workspace Vapi config.'
-      },
-      {
-        id: 'google_sheets',
-        label: 'Google Sheets',
-        ok: logisticsAny || crmLeadSheet,
-        hint: `${sheetHint}${crmLeadSheet ? ' Lead-list / CRM sheet id also present.' : ''}`.trim()
-      },
-      {
-        id: 'sms',
-        label: 'SMS (Twilio)',
-        ok: smsOk,
-        hint: smsOk ? 'Server Twilio credentials are set (tenant may still need templates).' : 'Twilio env vars missing — SMS may be unavailable.'
-      }
-    ],
-    sync: {
-      metricsAsOfIso: metricsAsOfIso || null,
-      payloadGeneratedAtIso: new Date().toISOString()
-    },
-    privacy: {
-      bullets: parseDashboardPrivacyBullets(),
-      exportNote: trimEnvDashboard('DASHBOARD_PRIVACY_EXPORT_NOTE')
-    },
-    app: {
-      version: trimEnvDashboard('DASHBOARD_APP_VERSION'),
-      commit: trimEnvDashboard('RENDER_GIT_COMMIT')
-    },
-    ui: {
-      readOnly: readOnlyGlobal || readOnlyTenant
-    }
-  };
-}
-
 // moved: /api/follow-up-queue/* → routes/follow-up-queue.js
 
 // moved: /api/daily-summary/:clientKey → routes/daily-summary.js
@@ -1515,17 +1063,7 @@ app.use(opsRouter);
 
 // moved: /api/(sms-delivery-rate|calendar-sync|quality-metrics) → routes/quick-win-metrics.js
 
-// Helper function to adjust color brightness
-function adjustColorBrightness(hex, percent) {
-  const num = parseInt(hex.replace("#", ""), 16);
-  const amt = Math.round(2.55 * percent);
-  const R = (num >> 16) + amt;
-  const G = (num >> 8 & 0x00FF) + amt;
-  const B = (num & 0x0000FF) + amt;
-  return "#" + (0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 +
-      (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 +
-      (B < 255 ? B < 1 ? 0 : B : 255)).toString(16).slice(1);
-}
+// Dashboard experience + logistics sheet id + color helper: lib/dashboard-experience.js
 
 // moved: /api/health/comprehensive, /api/call-status, /health/lb → routes/health-and-diagnostics.js
 
@@ -1816,39 +1354,7 @@ async function getCostOptimizationMetrics(tenantKey) {
   }
 }
 
-function generateCostRecommendations(costs, budgetStatus) {
-  const recommendations = [];
-  
-  if (costs.total_cost > 0) {
-    const avgCostPerCall = costs.total_cost / costs.transaction_count;
-    
-    if (avgCostPerCall > 0.10) {
-      recommendations.push({
-        type: 'cost_optimization',
-        priority: 'high',
-        message: `Average call cost is $${avgCostPerCall.toFixed(2)}. Consider optimizing assistant prompts to reduce call duration.`
-      });
-    }
-    
-    if (budgetStatus.vapi_calls?.daily?.percentage > 80) {
-      recommendations.push({
-        type: 'budget_alert',
-        priority: 'medium',
-        message: `Daily budget utilization is ${budgetStatus.vapi_calls.daily.percentage.toFixed(1)}%. Consider setting up budget alerts.`
-      });
-    }
-    
-    if (costs.transaction_count > 50) {
-      recommendations.push({
-        type: 'volume_optimization',
-        priority: 'low',
-        message: `High call volume (${costs.transaction_count} calls). Consider implementing call scheduling to optimize timing.`
-      });
-    }
-  }
-  
-  return recommendations;
-}
+// generateCostRecommendations: lib/cost-optimization-recommendations.js
 
 // Analytics and reporting functions
 async function trackAnalyticsEvent({ clientKey, eventType, eventCategory, eventData, sessionId, userAgent, ipAddress }) {
@@ -1965,111 +1471,11 @@ async function generateAnalyticsReport(clientKey, reportType = 'comprehensive', 
   try {
     const dashboard = await getAnalyticsDashboard(clientKey, days);
     if (!dashboard) return null;
-    
-    const { summary, conversionFunnel, conversionRates, performanceMetrics, costMetrics } = dashboard;
-    
-    // Generate insights
-    const insights = [];
-    
-    if (summary.conversionRate < 10) {
-      insights.push({
-        type: 'warning',
-        category: 'conversion',
-        message: `Low conversion rate (${summary.conversionRate}%). Consider optimizing assistant prompts or call timing.`
-      });
-    }
-    
-    if (summary.costPerConversion > 5) {
-      insights.push({
-        type: 'warning',
-        category: 'cost',
-        message: `High cost per conversion ($${summary.costPerConversion}). Review call duration and assistant efficiency.`
-      });
-    }
-    
-    if (summary.avgCallDuration > 300) {
-      insights.push({
-        type: 'info',
-        category: 'efficiency',
-        message: `Average call duration is ${Math.round(summary.avgCallDuration / 60)} minutes. Consider optimizing for shorter, more focused calls.`
-      });
-    }
-    
-    // Find conversion bottlenecks
-    const funnelStages = conversionFunnel.map(stage => ({
-      stage: stage.stage,
-      leads: stage.unique_leads,
-      conversionRate: stage.unique_leads / summary.totalLeads * 100
-    }));
-    
-    const bottleneckStage = funnelStages.reduce((min, stage) => 
-      stage.conversionRate < min.conversionRate ? stage : min
-    );
-    
-    if (bottleneckStage.conversionRate < 50) {
-      insights.push({
-        type: 'recommendation',
-        category: 'optimization',
-        message: `Conversion bottleneck detected at "${bottleneckStage.stage}" stage (${Math.round(bottleneckStage.conversionRate)}%). Focus optimization efforts here.`
-      });
-    }
-    
-    return {
-      reportType,
-      period: `${days} days`,
-      generatedAt: new Date().toISOString(),
-      clientKey,
-      summary,
-      insights,
-      funnelStages,
-      recommendations: generateRecommendations(summary, insights),
-      data: {
-        conversionFunnel,
-        conversionRates,
-        performanceMetrics,
-        costMetrics
-      }
-    };
+    return buildAnalyticsReportFromDashboard(dashboard, reportType, clientKey, days);
   } catch (error) {
     console.error('[ANALYTICS REPORT ERROR]', error);
     return null;
   }
-}
-
-function generateRecommendations(summary, insights) {
-  const recommendations = [];
-  
-  if (summary.conversionRate < 15) {
-    recommendations.push({
-      priority: 'high',
-      category: 'conversion_optimization',
-      action: 'Optimize Assistant Prompts',
-      description: 'Review and improve assistant conversation flow to increase conversion rates',
-      expectedImpact: 'Increase conversion rate by 5-10%'
-    });
-  }
-  
-  if (summary.costPerConversion > 3) {
-    recommendations.push({
-      priority: 'medium',
-      category: 'cost_optimization',
-      action: 'Implement Call Scheduling',
-      description: 'Use intelligent call scheduling to reduce costs and improve timing',
-      expectedImpact: 'Reduce cost per conversion by 20-30%'
-    });
-  }
-  
-  if (summary.avgCallDuration > 240) {
-    recommendations.push({
-      priority: 'medium',
-      category: 'efficiency',
-      action: 'Streamline Call Process',
-      description: 'Optimize call flow to reduce average duration while maintaining quality',
-      expectedImpact: 'Reduce call duration by 15-25%'
-    });
-  }
-  
-  return recommendations;
 }
 
 // A/B Testing functions
@@ -2331,76 +1737,7 @@ app.use(compression({
 // Connection pool optimization
 setInterval(optimizeDatabaseConnections, 5 * 60 * 1000); // Every 5 minutes
 
-// Categorize errors for appropriate retry handling
-function categorizeError(error) {
-  const message = error.message?.toLowerCase() || '';
-  const status = error.status || error.statusCode;
-  
-  // Network/connectivity errors (retryable)
-  if (message.includes('timeout') || message.includes('econnreset') || message.includes('enotfound')) {
-    return 'network';
-  }
-  
-  // Rate limiting (retryable with longer delay)
-  if (status === 429 || message.includes('rate limit') || message.includes('too many requests')) {
-    return 'rate_limit';
-  }
-  
-  // Server errors (retryable)
-  if (status >= 500 && status < 600) {
-    return 'server_error';
-  }
-  
-  // Client errors (not retryable)
-  if (status >= 400 && status < 500) {
-    return 'client_error';
-  }
-  
-  // VAPI-specific errors
-  if (message.includes('vapi') || message.includes('assistant') || message.includes('phone number')) {
-    return 'vapi_error';
-  }
-  
-  // Critical errors (circuit breaker)
-  if (message.includes('unauthorized') || message.includes('forbidden') || message.includes('invalid key')) {
-    return 'critical';
-  }
-  
-  return 'unknown';
-}
-
-// Determine if error should be retried
-function shouldRetryError(errorType, attempt, maxRetries) {
-  const retryableErrors = ['network', 'server_error', 'rate_limit'];
-  const nonRetryableErrors = ['client_error', 'critical'];
-  
-  if (nonRetryableErrors.includes(errorType)) {
-    return false;
-  }
-  
-  if (retryableErrors.includes(errorType)) {
-    return attempt < maxRetries;
-  }
-  
-  // Unknown errors: retry once
-  return attempt === 1;
-}
-
-// Calculate retry delay with jitter
-function calculateRetryDelay(baseDelay, attempt, errorType) {
-  let delay = baseDelay * Math.pow(2, attempt - 1);
-  
-  // Special handling for rate limiting
-  if (errorType === 'rate_limit') {
-    delay = Math.max(delay, 5000); // Minimum 5 seconds for rate limits
-  }
-  
-  // Add jitter (±25% random variation)
-  const jitter = delay * 0.25 * (Math.random() - 0.5);
-  delay = Math.max(100, delay + jitter);
-  
-  return Math.floor(delay);
-}
+// categorizeError / shouldRetryError / calculateRetryDelay: lib/error-retry-policy.js
 
 // Circuit breaker state management
 const circuitBreakerState = new Map();
@@ -3637,22 +2974,9 @@ app.use('/api/analytics', cacheMiddleware({ ttl: 300000 })); // 5 minute cache
 app.use(vapiWebhooks);
 
 // --- Bootstrap tenants from env (for free Render without disk) ---
-async function bootstrapClients() {
-  try {
-    const existing = await listFullClients();
-    if (existing.length > 0) return;
-    const raw = process.env.BOOTSTRAP_CLIENTS_JSON;
-    if (!raw) return;
-    let seed = JSON.parse(raw);
-    if (!Array.isArray(seed)) seed = [seed];
-    for (const c of seed) {
-      if (!c.clientKey || !c.booking?.timezone) continue;
-      await upsertFullClient(c);
-    }
-    console.log(`Bootstrapped ${seed.length} client(s) into SQLite from BOOTSTRAP_CLIENTS_JSON`);
-  } catch (e) {
-    console.error('bootstrapClients error', e?.message || e);
-  }
+// moved: bootstrap implementation → lib/bootstrap-clients.js (PR-10)
+async function bootstrapClientsFromEnv() {
+  return bootstrapClients({ listFullClients, upsertFullClient });
 }
 
 // Helper functions
@@ -4210,8 +3534,26 @@ async function processRetryQueue() {
 
           // Check if we should retry again or mark as failed
           if (retry.retry_attempt < retry.max_retries) {
-            // Schedule another retry
-            await updateRetryStatus(retry.id, 'pending', retry.retry_attempt + 1);
+            // Schedule another retry with backoff so due-now backlog stays bounded.
+            const nextAttempt = (parseInt(retry.retry_attempt, 10) || 0) + 1;
+            const baseMinutes = Math.max(1, Math.min(60, parseInt(process.env.RETRY_QUEUE_BACKOFF_BASE_MINUTES || '5', 10) || 5));
+            const maxMinutes = Math.max(baseMinutes, Math.min(24 * 60, parseInt(process.env.RETRY_QUEUE_BACKOFF_MAX_MINUTES || '240', 10) || 240));
+            const exp = Math.max(0, nextAttempt - 1);
+            const backoffMinutes = Math.min(maxMinutes, baseMinutes * Math.pow(2, exp));
+            const jitterSeconds = Math.floor(Math.random() * 30);
+            const nextRetryAt = new Date(Date.now() + backoffMinutes * 60 * 1000 + jitterSeconds * 1000);
+
+            await query(
+              `
+                UPDATE retry_queue
+                SET status = 'pending',
+                    retry_attempt = $1,
+                    scheduled_for = $2,
+                    updated_at = NOW()
+                WHERE id = $3
+              `,
+              [nextAttempt, nextRetryAt.toISOString(), retry.id]
+            );
           } else {
             // Max retries reached, mark as failed
             await updateRetryStatus(retry.id, 'failed');
@@ -6822,7 +6164,7 @@ async function startServer() {
     }
     
     // Bootstrap clients after DB is ready
-    await bootstrapClients();
+    await bootstrapClientsFromEnv();
     
     server.listen(process.env.PORT ? Number(process.env.PORT) : 10000, '0.0.0.0', () => {
       console.log(`AI Booking System listening on http://localhost:${process.env.PORT || 10000} (DB: ${DB_PATH})`);

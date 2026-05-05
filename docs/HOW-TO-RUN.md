@@ -54,6 +54,8 @@ Server listens on `http://localhost:3000` (or `PORT`).
 
 **SQLite locally:** If you are not using Postgres (`DATABASE_URL` unset), the app uses **`data/app.db`**. That file is **not** in git (see `.gitignore`); it is created on first run. After a fresh clone you do not need to add it manually.
 
+**Admin tenant list:** `GET /api/clients` with an API key that has admin clients permission returns a paginated slice of all tenants. Query params: `limit` (1–500, default 500), `offset` (0–500000). The response includes `total`, `count`, `limit`, `offset`, `truncated`, and `clients` (see [routes/clients-api.js](../routes/clients-api.js)).
+
 ---
 
 ## Deploy to Render

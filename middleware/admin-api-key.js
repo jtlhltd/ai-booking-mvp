@@ -4,6 +4,7 @@
  * Excludes: Admin Hub static entry, and /admin routes that use JWT (authenticateApiKey) instead.
  */
 export function adminSurfaceRequiresApiKey(reqPath) {
+  if (reqPath.startsWith('/api/monitoring')) return true;
   if (reqPath.startsWith('/api/admin/')) return true;
   if (reqPath === '/admin-hub' || reqPath === '/admin-hub.html') return false;
   if (/^\/admin\/(users|api-keys|security-events)(\/|$)/.test(reqPath)) return false;

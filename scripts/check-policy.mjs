@@ -70,7 +70,6 @@ const rules = [
       'routes/admin-vapi-logistics-mount.js',
       'routes/call-recordings.js',
       'routes/demo-dashboard-debug.js',
-      'schedule-prospect-calls.js',
       // Legacy debt: server.js still has two inline call-initiation sites.
       // Keep them allow-listed until they are extracted to the queue worker
       // (tracked as a follow-up; do NOT add new sites here).
@@ -91,6 +90,14 @@ const rules = [
     allow: [
       // No allow-list under routes/. Every match is a violation.
     ]
+  },
+  {
+    intentId: 'dial.no-instant-calling-process-call-queue-import',
+    description:
+      'Importing the legacy processCallQueue export from lib/instant-calling.js is forbidden. That export has been renamed to dialLeadsNowBatch precisely so it cannot be confused with the DB-backed worker. New callers MUST use dialLeadsNowBatch (and even then, only after confirming the route does not bypass scheduleAtOptimalCallWindow).',
+    pattern:
+      /(?:import\s*\{[^}]*\bprocessCallQueue\b[^}]*\}\s*from\s*['"][^'"]*instant-calling)|(?:\{\s*[^}]*\bprocessCallQueue\b[^}]*\}\s*=\s*(?:await\s+import|require)\s*\(\s*['"][^'"]*instant-calling)/,
+    allow: ['tests/', 'docs/']
   },
   {
     intentId: 'dial.recall-goes-through-scheduler',
@@ -154,6 +161,61 @@ const rules = [
       /X-Twilio-Signature/i
     ],
     allow: []
+  },
+  {
+    intentId: 'queue.retry-backlog-bounded',
+    description:
+      'Retry queue failures must reschedule scheduled_for with backoff; do not reintroduce "pending + attempt++" without moving the timestamp forward.',
+    // This exact pattern caused retries to stay due-now, creating an ever-growing backlog
+    // that trips lib/ops-invariants.js#retryDue and can amplify spend.
+    pattern: /updateRetryStatus\s*\(\s*[^,]+,\s*['"`]pending['"`]\s*,\s*[^)]+\+\s*1\s*\)/,
+    allow: ['tests/', 'docs/']
+  },
+  {
+    intentId: 'tools.auth-required',
+    description:
+      'Tool endpoints must require either API-key auth or provider signature verification; unauthenticated tool routes are forbidden.',
+    mode: 'require',
+    scope: 'routes/',
+    filePattern: /^routes\/tools-mount\.js$/,
+    requireAny: [/authenticateApiKey/, /verifyVapiSignature/, /vapi-webhook-verification/],
+    allow: []
+  },
+  {
+    intentId: 'tenant.scoped-reads-require-api-key',
+    description:
+      'Tenant-scoped dashboard routes (daily-summary, ops-health-and-dnc, quick-win-metrics) must wire requireTenantAccessOrAdmin alongside authenticateApiKey.',
+    mode: 'require',
+    scope: 'routes/',
+    filePattern: /^routes\/(daily-summary|ops-health-and-dnc|quick-win-metrics)\.js$/,
+    requireAny: [/requireTenantAccessOrAdmin/],
+    allow: []
+  },
+  {
+    intentId: 'ops.monitoring-admin-key',
+    description:
+      'middleware/admin-api-key.js must include /api/monitoring paths in adminSurfaceRequiresApiKey so monitoring is not anonymously reachable when enforcement is on.',
+    mode: 'require',
+    scope: 'middleware/',
+    filePattern: /^middleware\/admin-api-key\.js$/,
+    requireAny: [/api\/monitoring/],
+    allow: []
+  },
+  {
+    intentId: 'privacy.no-pretty-json-req-body',
+    description:
+      'Do not pretty-print raw req.body in routes (logs leak PII). Use scrubBody(req.body) inside JSON.stringify. Buffer.from(JSON.stringify(req.body)) for HMAC where rawBody is unavailable is excluded — allow-listed only on vapi-webhooks signature reconstruction line.',
+    scope: 'routes/',
+    pattern: /JSON\.stringify\s*\(\s*req\.body\s*,\s*null\b/,
+    allow: ['tests/', 'docs/', 'scripts/', 'demos/']
+  },
+  {
+    intentId: 'privacy.no-bare-req-body-console-arg',
+    description:
+      'Do not pass raw req.body as a terminal argument to console.* in routes (PII leak). Use scrubBody(req.body) or keys-only. Pattern: console.(log|error|warn|info|debug)(... , req.body) on one statement line — excludes scrubBody(req.body) because the comma before req is inside scrubBody(.',
+    scope: 'routes/',
+    pattern: /console\.(log|error|warn|info|debug)\([^;]*,\s*req\.body\s*\)/,
+    allow: ['tests/', 'docs/', 'scripts/', 'demos/']
   }
 ];
 

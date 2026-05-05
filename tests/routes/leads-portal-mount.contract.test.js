@@ -231,6 +231,30 @@ describe('routes/leads-portal-mount GET /api/leads (db-backed)', () => {
     expect(seenParams).toEqual(['acme', 25]);
   });
 
+  test('GET /api/leads clamps limit above hard max to 5000', async () => {
+    let seenParams;
+    const query = jest.fn(async (sql, params) => {
+      seenParams = params;
+      return { rows: [] };
+    });
+    jest.unstable_mockModule('../../db.js', () => ({ query }));
+    const { createLeadsPortalRouter: factory } = await import('../../routes/leads-portal-mount.js');
+    const app = createContractApp({
+      mounts: [{ path: '/', router: () => factory({
+        getClientFromHeader: async () => null,
+        normalizePhoneE164: () => null,
+        readJson: async () => [],
+        writeJson: async () => {},
+        LEADS_PATH: 'x',
+        nanoid: () => 'id',
+        smsConfig: () => ({ configured: false }),
+        renderTemplate: () => ''
+      }) }]
+    });
+    await request(app).get('/api/leads').query({ clientKey: 'acme', limit: 999999 }).expect(200);
+    expect(seenParams).toEqual(['acme', 5000]);
+  });
+
   test('500 when query rejects', async () => {
     jest.unstable_mockModule('../../db.js', () => ({ query: jest.fn(async () => { throw new Error('boom'); }) }));
     const { createLeadsPortalRouter: factory } = await import('../../routes/leads-portal-mount.js');

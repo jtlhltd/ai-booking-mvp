@@ -1,5 +1,6 @@
 import express from 'express';
 import { handleLeadsImport } from '../lib/leads-import.js';
+import { scrubBody } from '../lib/log-scrubber.js';
 
 export function createImportLeadsRouter(deps) {
   const {
@@ -26,7 +27,7 @@ export function createImportLeadsRouter(deps) {
   router.post('/leads/import-test', async (req, res) => {
     console.log('[TEST ENDPOINT] Request received');
     console.log('[TEST ENDPOINT] Headers:', req.headers);
-    console.log('[TEST ENDPOINT] Body:', req.body);
+    console.log('[TEST ENDPOINT] Body:', scrubBody(req.body));
     console.log('[TEST ENDPOINT] Body type:', typeof req.body);
     console.log('[TEST ENDPOINT] Body keys:', req.body ? Object.keys(req.body) : 'no body');
     res.json({

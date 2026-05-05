@@ -1,14 +1,31 @@
 import { Router } from 'express';
+import { authenticateApiKey } from '../middleware/security.js';
+import { verifyVapiSignature } from '../middleware/vapi-webhook-verification.js';
 
 export function createToolsRouter(deps) {
   const { store, sheets, sendOperatorAlert, messagingService } = deps || {};
 
   const router = Router();
 
-  router.post('/tools/access_google_sheet', async (req, res) => {
-    try {
-      console.log('[GOOGLE SHEET TOOL] Request received:', JSON.stringify(req.body, null, 2));
+  async function authOrSignature(req, res, next) {
+    const hasApiKey = !!(req.get('X-API-Key') || req.get('Authorization'));
+    if (hasApiKey) {
+      return authenticateApiKey(req, res, next);
+    }
+    // Require provider verification for unauthenticated calls.
+    return verifyVapiSignature(req, res, next);
+  }
 
+  function canActOnTenant(req, tenantKey) {
+    const perms = Array.isArray(req.apiKey?.permissions) ? req.apiKey.permissions : [];
+    const isAdmin = perms.includes('*') || perms.includes('admin') || perms.includes('admin:tools');
+    if (isAdmin) return true;
+    if (!req.clientKey) return false;
+    return String(tenantKey || '').trim() === String(req.clientKey || '').trim();
+  }
+
+  router.post('/tools/access_google_sheet', authOrSignature, async (req, res) => {
+    try {
       // Handle VAPI's tool call format: { message: { toolCallList: [{ function: { arguments: {...} } }] } }
       // OR direct format: { action: "...", data: {...}, tenantKey: "..." }
       let action, data, tenantKey, toolCallId, callId;
@@ -26,13 +43,6 @@ export function createToolsRouter(deps) {
         action = args.action || 'append';
         data = args.data || args; // If no 'data' key, use args directly
         tenantKey = args.tenantKey || req.body.message?.call?.assistantId || '';
-        console.log('[GOOGLE SHEET TOOL] Extracted from VAPI message format:', {
-          action,
-          hasData: !!data,
-          tenantKey,
-          toolCallId,
-          callId,
-        });
       }
       // Check for VAPI's direct function format
       else if (req.body.function && req.body.function.arguments) {
@@ -43,32 +53,35 @@ export function createToolsRouter(deps) {
         action = args.action || 'append';
         data = args.data || args;
         tenantKey = args.tenantKey || '';
-        console.log('[GOOGLE SHEET TOOL] Extracted from VAPI function format:', {
-          action,
-          hasData: !!data,
-          tenantKey,
-          toolCallId,
-          callId,
-        });
       }
       // Direct format
       else {
         action = req.body.action;
         data = req.body.data;
         tenantKey = req.body.tenantKey;
-        console.log('[GOOGLE SHEET TOOL] Using direct format:', { action, hasData: !!data, tenantKey });
       }
 
       if (!action) {
         return res.status(400).json({ error: 'Action is required' });
       }
 
-      // Get tenant configuration - use getFullClient instead of getTenant
-      const tenant = await store.getFullClient(tenantKey || 'logistics_client');
-      if (!tenant) {
-        console.log('[GOOGLE SHEET TOOL] Tenant not found, using default logistics_client');
-        // Continue with default sheet ID if tenant not found
+      if (!tenantKey || !String(tenantKey).trim()) {
+        return res.status(400).json({ error: 'tenantKey is required' });
       }
+      if (req.clientKey && !canActOnTenant(req, tenantKey)) {
+        return res.status(403).json({ error: 'forbidden' });
+      }
+
+      console.log('[GOOGLE SHEET TOOL] call', {
+        action,
+        tenantKey,
+        hasData: !!data,
+        toolCallId: toolCallId || null,
+        callId: callId || null
+      });
+
+      const tenant = await store.getFullClient(tenantKey);
+      if (!tenant) return res.status(404).json({ error: 'tenant_not_found' });
 
       const logisticsSheetId =
         tenant?.vapi_json?.logisticsSheetId ||
@@ -100,8 +113,6 @@ export function createToolsRouter(deps) {
           callId: callId || data.callId || '', // Use callId from webhook if available
           timestamp: new Date().toISOString(),
         });
-
-        console.log('[GOOGLE SHEET TOOL] Data appended successfully');
 
         // Return format compatible with both VAPI and direct calls
         const response = {
@@ -171,22 +182,25 @@ export function createToolsRouter(deps) {
     }
   });
 
-  router.post('/tools/schedule_callback', async (req, res) => {
+  router.post('/tools/schedule_callback', authOrSignature, async (req, res) => {
     try {
-      console.log('[CALLBACK TOOL] Request received:', req.body);
-
-      const { businessName, phone, receptionistName, reason, preferredTime, notes, tenantKey } = req.body;
+      const { businessName, phone, receptionistName, reason, preferredTime, notes, tenantKey } = req.body || {};
 
       if (!businessName || !phone || !reason) {
         return res.status(400).json({ error: 'Business name, phone, and reason are required' });
       }
 
-      // Get tenant configuration - use getFullClient instead of getTenant
-      const tenant = await store.getFullClient(tenantKey || 'logistics_client');
-      if (!tenant) {
-        console.log('[CALLBACK TOOL] Tenant not found, using default callback inbox');
-        // Continue with default callback inbox if tenant not found
+      if (!tenantKey || !String(tenantKey).trim()) {
+        return res.status(400).json({ error: 'tenantKey is required' });
       }
+      if (req.clientKey && !canActOnTenant(req, tenantKey)) {
+        return res.status(403).json({ error: 'forbidden' });
+      }
+
+      console.log('[CALLBACK TOOL] call', { tenantKey, hasPreferredTime: !!preferredTime });
+
+      const tenant = await store.getFullClient(tenantKey);
+      if (!tenant) return res.status(404).json({ error: 'tenant_not_found' });
 
       const callbackInboxEmail = tenant?.vapi_json?.callbackInboxEmail || tenant?.vapi?.callbackInboxEmail || process.env.CALLBACK_INBOX_EMAIL;
 
@@ -212,7 +226,6 @@ export function createToolsRouter(deps) {
         html: emailBody,
       });
 
-      console.log('[CALLBACK TOOL] Callback email sent successfully');
       return res.json({
         success: true,
         message: 'Callback scheduled and email sent successfully',
