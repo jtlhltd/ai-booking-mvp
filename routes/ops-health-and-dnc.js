@@ -1,4 +1,5 @@
 import express from 'express';
+import { getLastDialBlock, getLastFollowUpPatchError } from '../lib/ops-state.js';
 
 export function createOpsHealthAndDncRouter(deps) {
   const {
@@ -55,9 +56,9 @@ export function createOpsHealthAndDncRouter(deps) {
         sheet: { configured: !!spreadsheetId },
         vapi: { configured: vapiConfigured, walletGateActive },
         dnc: { activeCount: dncCountResult },
-        dialBlock: globalThis.__opsLastDialBlock || null,
+        dialBlock: getLastDialBlock(),
         lastErrors: {
-          followUpPatch: globalThis.__opsLastFollowUpPatchError || null
+          followUpPatch: getLastFollowUpPatchError()
         }
       });
     } catch (error) {
