@@ -67,12 +67,12 @@ const rules = [
   {
     intentId: 'billing.wallet-check-keeps-queue-pending',
     description:
-      'Queue worker must treat vapi_wallet_depleted as a defer/pending (no synthetic failed_q call rows). This requires the shared classifier helper to be used in server.js.',
+      'Queue worker must treat vapi_wallet_depleted as a defer/pending (no synthetic failed_q call rows). The outbound queue worker module must import the shared classifier from lib/vapi-queue-result.js and call isTransientVapiQueueResult.',
     mode: 'require',
-    scope: 'server.js',
-    filePattern: /^server\.js$/,
+    scope: 'lib/',
+    filePattern: /^lib\/server-queue-workers\.js$/,
     requireAny: [
-      /from\s+['"`]\.\/lib\/vapi-queue-result\.js['"`]/,
+      /from\s+['"`]\.\/vapi-queue-result\.js['"`]/,
       /\bisTransientVapiQueueResult\b/
     ],
     allow: []

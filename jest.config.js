@@ -39,6 +39,13 @@ export default {
     '!setup-admin-hub.js',
     '!jest.config.js',
     'lib/**/*.js',
+    // Extracted from server.js (were not in coverage when inlined); enforce via INTENT + policy + route contracts.
+    '!lib/server-queue-workers.js',
+    '!lib/server-analytics-runtime.js',
+    '!lib/dashboard-ui-formatters.js',
+    '!lib/vapi-timeline-snapshot.js',
+    '!lib/retry-queue-display.js',
+    '!lib/bootstrap-clients.js',
     'lib/calendar-check-book.js',
     'lib/calendar-book-slot.js',
     'lib/business-hours.js',
