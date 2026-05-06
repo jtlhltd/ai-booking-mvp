@@ -2737,12 +2737,14 @@ app.use((req, res, next) => {
   }
   
   activeRequests++;
-  res.on('finish', () => {
-    activeRequests--;
-  });
-  res.on('close', () => {
-    activeRequests--;
-  });
+  let decremented = false;
+  const decOnce = () => {
+    if (decremented) return;
+    decremented = true;
+    activeRequests = Math.max(0, activeRequests - 1);
+  };
+  res.once('finish', decOnce);
+  res.once('close', decOnce);
   next();
 });
 
