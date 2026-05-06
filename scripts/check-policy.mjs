@@ -54,6 +54,17 @@ const root = path.resolve(__dirname, '..');
 // -----------------------------------------------------------------------------
 const rules = [
   {
+    intentId: 'ops.server-boot-wiring-no-tdz',
+    description:
+      'server.js must not TDZ-crash at boot by passing undeclared consts into mountApi(...). Ensure key wiring constants are defined before the mountApi(app, {...}) call.',
+    scope: 'server.js',
+    // Violation if mountApi(app, ...) appears before these const initializations.
+    // This matches the historical failure class:
+    //   ReferenceError: Cannot access '<name>' before initialization
+    pattern: /mountApi\s*\(\s*app\s*,[\s\S]*?\bconst\s+(?:DASHBOARD_ACTIVITY_TZ|TWILIO_ACCOUNT_SID|TWILIO_AUTH_TOKEN|TWILIO_FROM_NUMBER|TWILIO_MESSAGING_SERVICE_SID|defaultSmsClient)\b/,
+    allow: []
+  },
+  {
     intentId: 'dial.no-direct-vapi-outside-worker',
     description:
       'Only the queue worker / Vapi helper / mock + admin tools may POST https://api.vapi.ai/call. Routes/imports/recalls must enqueue via call_queue.',

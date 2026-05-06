@@ -120,6 +120,15 @@ in the dashboard.
 | `error.json-envelope` | 4xx/5xx responses must be `{ ok?: false, error: string }`. They must NOT include V8 stack frames (`at fnName (/path:line:col)`). | All routes | canary (uses `assertJsonErrorEnvelope`) | Trigger any 500 path; the body must be JSON, no stack frame text. |
 | `error.cache-control-no-store` | Dashboard / admin reads must include `Cache-Control: no-store`. | Admin/dashboard `GET` routes | canary (uses `assertNoStoreCache`) | `curl -i` any admin endpoint; the `Cache-Control` header must contain `no-store`. |
 
+## Domain: ops
+
+Operational safety rules that prevent “green CI, broken prod” incidents.
+These primarily guard boot-time wiring and other high-blast-radius regressions.
+
+| ID | Statement | Constrains | Enforced by | Manual disprove |
+| --- | --- | --- | --- | --- |
+| `ops.server-boot-wiring-no-tdz` | `server.js` must not throw boot-time `ReferenceError: Cannot access '<name>' before initialization` due to passing undeclared `const` values into `mountApi(...)` / route wiring. Critical wiring constants must be defined before `mountApi(app, { ... })`. | `server.js`, `app/mount-api.js` | policy | Search `server.js` for `mountApi(app, {`. Verify `const DASHBOARD_ACTIVITY_TZ`, `const defaultSmsClient`, and Twilio env constants appear **above** that call (not below). |
+
 ## How to add a new rule
 
 1. Pick a stable ID (`<domain>.<short-kebab-name>`).
