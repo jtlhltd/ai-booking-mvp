@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { createCallWithKey } from '../lib/vapi.js';
 
 export function createAdminVapiLogisticsRouter(deps) {
   const { getApiKey, runLogisticsOutreach } = deps || {};
@@ -137,17 +138,8 @@ export function createAdminVapiLogisticsRouter(deps) {
               },
             };
 
-            const callResponse = await fetch('https://api.vapi.ai/call', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${vapiKey}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify(callData),
-            });
-
-            if (callResponse.ok) {
-              const callResult = await callResponse.json();
+            try {
+              const callResult = await createCallWithKey({ vapiKey, callData });
               results.push({
                 businessName: business.name,
                 phone: business.phone,
@@ -158,17 +150,16 @@ export function createAdminVapiLogisticsRouter(deps) {
               });
 
               console.log(`[LOGISTICS CALL] Initiated for ${business.name} (${business.phone})`);
-            } else {
-              const errorData = await callResponse.json();
+            } catch (error) {
               results.push({
                 businessName: business.name,
                 phone: business.phone,
                 status: 'call_failed',
-                error: errorData.message || 'Unknown error',
+                error: error?.message || 'Unknown error',
                 message: 'Failed to initiate call',
               });
 
-              console.error(`[LOGISTICS CALL ERROR] Failed to call ${business.name}:`, errorData);
+              console.error(`[LOGISTICS CALL ERROR] Failed to call ${business.name}:`, error?.message || error);
             }
           } catch (error) {
             results.push({

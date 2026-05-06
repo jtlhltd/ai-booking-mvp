@@ -4,6 +4,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createCallWithKey } from './lib/vapi.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -157,26 +158,16 @@ async function callProspect(prospect, assistantId) {
     }
   };
   
-  const response = await fetch('https://api.vapi.ai/call', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(callPayload)
-  });
-  
-  if (!response.ok) {
-    const error = await response.text();
-    console.error(`❌ Failed to call ${prospect['First Name']}: ${error}`);
-    return { success: false, error };
+  try {
+    const call = await createCallWithKey({ vapiKey: VAPI_PRIVATE_KEY, callData: callPayload });
+    console.log(`✅ Call initiated! Call ID: ${call.id}`);
+    console.log(`   Status: ${call.status}`);
+    return { success: true, callId: call.id, call };
+  } catch (e) {
+    const msg = e?.message || String(e);
+    console.error(`❌ Failed to call ${prospect['First Name']}: ${msg}`);
+    return { success: false, error: msg };
   }
-  
-  const call = await response.json();
-  console.log(`✅ Call initiated! Call ID: ${call.id}`);
-  console.log(`   Status: ${call.status}`);
-  
-  return { success: true, callId: call.id, call };
 }
 
 // Schedule calls with delays to avoid rate limits
