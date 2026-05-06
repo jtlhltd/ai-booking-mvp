@@ -65,6 +65,19 @@ const rules = [
     allow: []
   },
   {
+    intentId: 'billing.wallet-check-keeps-queue-pending',
+    description:
+      'Queue worker must treat vapi_wallet_depleted as a defer/pending (no synthetic failed_q call rows). This requires the shared classifier helper to be used in server.js.',
+    mode: 'require',
+    scope: 'server.js',
+    filePattern: /^server\.js$/,
+    requireAny: [
+      /from\s+['"`]\.\/lib\/vapi-queue-result\.js['"`]/,
+      /\bisTransientVapiQueueResult\b/
+    ],
+    allow: []
+  },
+  {
     intentId: 'dial.no-direct-vapi-outside-worker',
     description:
       'Only the queue worker / Vapi helper / mock + admin tools may POST https://api.vapi.ai/call. Routes/imports/recalls must enqueue via call_queue.',

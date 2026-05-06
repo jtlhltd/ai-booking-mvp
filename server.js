@@ -44,6 +44,7 @@ import { servicesFor } from './lib/services-for.js';
 import { scheduleAtOptimalCallWindow } from './lib/optimal-call-window.js';
 import { runOutboundCallsForImportedLeads } from './lib/lead-import-outbound.js';
 import { handleTwilioSmsInbound } from './lib/twilio-sms-inbound-webhook.js';
+import { isNoCreditsVapiResult, isTransientVapiQueueResult } from './lib/vapi-queue-result.js';
 import { handleNotifyTest, handleNotifySend } from './lib/notify-api.js';
 import { handleSmsStatusWebhook } from './lib/sms-status-webhook.js';
 import { isOptedOut } from './lib/lead-deduplication.js';
@@ -4507,22 +4508,7 @@ function isTransientInstantCallThrow(err) {
   );
 }
 
-function isTransientVapiQueueResult(vapiResult) {
-  if (!vapiResult) return true;
-  const err = String(vapiResult.error || '');
-  if (err === 'circuit_breaker_open') return true;
-  if (err === 'vapi_client_error') {
-    const sc = Number(vapiResult.statusCode);
-    if (sc === 429 || sc === 502 || sc === 503 || sc === 504) return true;
-    const d = String(vapiResult.details || '').toLowerCase();
-    if (/timeout|temporarily|unavailable|overload|rate|too many|429|502|503|504/.test(d)) return true;
-  }
-  if (err === 'call_failed') {
-    const d = String(vapiResult.details || '').toLowerCase();
-    if (/timeout|timed out|502|503|504|429|ECONNRESET|fetch|network|socket/i.test(d)) return true;
-  }
-  return false;
-}
+// moved: isTransientVapiQueueResult → lib/vapi-queue-result.js
 
 // Process VAPI call from queue
 async function processVapiCallFromQueue(call) {
@@ -4643,7 +4629,42 @@ async function processVapiCallFromQueue(call) {
     }
     
     // Make VAPI call using callLeadInstantly
-    const { callLeadInstantly } = await import('./lib/instant-calling.js');
+    const { callLeadInstantly, isVapiWalletDepleted } = await import('./lib/instant-calling.js');
+
+    // If the wallet gate is active (e.g., Vapi credits depleted), do not even attempt the dial.
+    // This avoids thrashing queue rows into "processing" only to bounce immediately, and keeps retry/queue logic clean.
+    if (isVapiWalletDepleted && isVapiWalletDepleted()) {
+      const next = smearCallQueueScheduledFor(
+        new Date(Date.now() + 15 * 60 * 1000),
+        clientKey,
+        leadPhone,
+        call.id
+      );
+      await query(
+        `
+          UPDATE call_queue
+          SET status = 'pending',
+              scheduled_for = $1,
+              initiated_call_id = NULL,
+              call_data = jsonb_set(
+                COALESCE(call_data, '{}'::jsonb),
+                '{lastDefer}',
+                jsonb_build_object(
+                  'at', NOW(),
+                  'kind', 'vapi',
+                  'error', 'vapi_wallet_depleted',
+                  'details', 'preflight_gate'
+                ),
+                true
+              ),
+              updated_at = NOW()
+          WHERE id = $2
+        `,
+        [next, call.id]
+      );
+      console.warn('[QUEUE CALL] Deferred — preflight wallet gate active', { queueId: call.id, scheduledFor: next.toISOString() });
+      return;
+    }
     
     // Prepare lead object for callLeadInstantly
     const leadForCall = {
@@ -4906,9 +4927,7 @@ async function processVapiCallFromQueue(call) {
       }
 
       const detailsStr = typeof vapiResult?.details === 'string' ? vapiResult.details : '';
-      const isNoCredits =
-        vapiResult?.error === 'vapi_client_error' &&
-        /wallet balance|purchase more credits|upgrade your plan/i.test(detailsStr);
+      const isNoCredits = isNoCreditsVapiResult(vapiResult);
 
       if (isNoCredits) {
         // Pre-flight wallet gate (intent: billing.wallet-check-before-dial).
@@ -4956,6 +4975,43 @@ async function processVapiCallFromQueue(call) {
           dedupeKey: 'vapi:no_credits',
           throttleMinutes: 120
         }).catch(() => {});
+        return;
+      }
+
+      if (vapiResult?.error === 'vapi_wallet_depleted') {
+        // Pre-flight wallet gate already prevented the dial. Treat this as a defer, not a failure,
+        // so we don't poison retry/queue logic with synthetic failed_q call rows.
+        const next = smearCallQueueScheduledFor(
+          new Date(Date.now() + 15 * 60 * 1000),
+          clientKey,
+          leadPhone,
+          call.id
+        );
+        await query(
+          `
+            UPDATE call_queue
+            SET status = 'pending',
+                scheduled_for = $1,
+                call_data = jsonb_set(
+                  COALESCE(call_data, '{}'::jsonb),
+                  '{lastDefer}',
+                  jsonb_build_object(
+                    'at', NOW(),
+                    'kind', 'vapi',
+                    'error', 'vapi_wallet_depleted',
+                    'details', $3::text
+                  ),
+                  true
+                ),
+                updated_at = NOW()
+            WHERE id = $2
+          `,
+          [next, call.id, String(vapiResult?.details || '').slice(0, 220)]
+        );
+        console.warn('[QUEUE CALL] Deferred — wallet gate active (credits likely empty)', {
+          queueId: call.id,
+          scheduledFor: next.toISOString()
+        });
         return;
       }
 
