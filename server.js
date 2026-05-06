@@ -4,8 +4,6 @@ import { normalizePhoneE164 } from './lib/utils.js';
 import { parseStartPreference } from './lib/start-preference.js';
 import { generateUKBusinesses, getIndustryCategories, fuzzySearch } from './enhanced-business-search.js';
 import RealUKBusinessSearch from './real-uk-business-search.js';
-import BookingSystem from './booking-system.js';
-import SMSEmailPipeline from './sms-email-pipeline.js';
 import morgan from 'morgan';
 import fs from 'fs/promises';
 import path from 'path';
@@ -30,11 +28,9 @@ import {
   allowOutboundWeekendCalls
 } from './lib/business-hours.js';
 import { recordDemoTelemetry, readDemoTelemetry, clearDemoTelemetry, recordReceptionistTelemetry, readReceptionistTelemetry, clearReceptionistTelemetry } from './lib/demo-telemetry.js';
-import twilio from 'twilio';
 import { createHash } from 'crypto';
 import { performanceMiddleware, getPerformanceMonitor } from './lib/performance-monitor.js';
 import { cacheMiddleware, getCache } from './lib/cache.js';
-import { sqlHoursAgo as sqlHoursAgoFn, sqlDaysAgo as sqlDaysAgoFn } from './lib/sql-relative-interval.js';
 import { phoneMatchKey, pgQueueLeadPhoneKeyExpr } from './lib/lead-phone-key.js';
 import { resolveTenantTimezone } from './lib/timezone-resolver.js';
 import { handleCalendarCheckBook } from './lib/calendar-check-book.js';
@@ -212,6 +208,11 @@ import { mountApi } from './app/mount-api.js';
 import { startServer as createStartServer } from './app/start-server.js';
 import { installGlobalMiddleware } from './app/install-global-middleware.js';
 import { installShutdownHandlers } from './app/install-shutdown-handlers.js';
+import { createRuntimeConfig } from './app/runtime-config.js';
+import { bootstrapServices } from './app/bootstrap-services.js';
+import { buildApiDeps } from './app/api-deps.js';
+import { runStartServer } from './app/startup.js';
+import { closeDatabasePool } from './app/shutdown.js';
 // Real API integration - dynamic imports will be used in endpoints
 
 const app = createApp({
@@ -226,13 +227,29 @@ const app = createApp({
   createPortalPagesRouter
 });
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const DATA_DIR = path.join(__dirname, 'data');
-const LEADS_PATH = path.join(DATA_DIR, 'leads.json');
-const CALLS_PATH = path.join(DATA_DIR, 'calls.json');
-const SMS_STATUS_PATH = path.join(DATA_DIR, 'sms-status.json');
-const JOBS_PATH = path.join(DATA_DIR, 'jobs.json');
+const runtime = createRuntimeConfig(path.dirname(fileURLToPath(import.meta.url)));
+const {
+  DATA_DIR,
+  LEADS_PATH,
+  CALLS_PATH,
+  SMS_STATUS_PATH,
+  JOBS_PATH,
+  isPostgres,
+  sqlHoursAgo,
+  sqlDaysAgo,
+  TIMEZONE,
+  GOOGLE_CLIENT_EMAIL,
+  GOOGLE_PRIVATE_KEY,
+  GOOGLE_PRIVATE_KEY_B64,
+  GOOGLE_CALENDAR_ID,
+  DASHBOARD_CACHE_TTL,
+  dashboardStatsCache,
+  DASHBOARD_ACTIVITY_TZ,
+  TWILIO_ACCOUNT_SID,
+  TWILIO_AUTH_TOKEN,
+  TWILIO_FROM_NUMBER,
+  TWILIO_MESSAGING_SERVICE_SID,
+} = runtime;
 
 // Create HTTP server and Socket.IO server
 const server = createServer(app);
@@ -240,10 +257,6 @@ const { io, socketIoAllowedOrigins } = createSocketIo(server);
 
 // Initialize caching
 const cache = getCache();
-const isPostgres = (process.env.DB_TYPE || '').toLowerCase() === 'postgres';
-const sqlHoursAgo = (hours = 1) => sqlHoursAgoFn(isPostgres, hours);
-const sqlDaysAgo = (days = 1) => sqlDaysAgoFn(isPostgres, days);
-const TIMEZONE = process.env.TZ || process.env.TIMEZONE || 'Europe/London';
 
 /** API-safe lead row (matches routes/core-api.js). */
 function sanitizeLead(row) {
@@ -259,31 +272,6 @@ function sanitizeLead(row) {
   };
 }
 
-// === Env: Google
-// Support both individual env vars AND full JSON base64
-let GOOGLE_CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL || '';
-let GOOGLE_PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY || '';
-let GOOGLE_PRIVATE_KEY_B64 = process.env.GOOGLE_PRIVATE_KEY_B64 || '';
-
-// If GOOGLE_SA_JSON_BASE64 is provided, extract credentials from it
-if (process.env.GOOGLE_SA_JSON_BASE64 && !GOOGLE_CLIENT_EMAIL) {
-  try {
-    const jsonString = Buffer.from(process.env.GOOGLE_SA_JSON_BASE64, 'base64').toString('utf8');
-    const serviceAccount = JSON.parse(jsonString);
-    GOOGLE_CLIENT_EMAIL = serviceAccount.client_email || '';
-    GOOGLE_PRIVATE_KEY = serviceAccount.private_key || '';
-    console.log('[GOOGLE AUTH] ✅ Using credentials from GOOGLE_SA_JSON_BASE64');
-  } catch (e) {
-    console.error('[GOOGLE AUTH] ❌ Failed to parse GOOGLE_SA_JSON_BASE64:', e.message);
-  }
-}
-
-const GOOGLE_CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID || 'primary';
-
-// Dashboard stats cache (separate from main cache for stats-specific TTL)
-const DASHBOARD_CACHE_TTL = 60000; // 60 seconds
-const dashboardStatsCache = new Map();
-
 const broadcastUpdate = installAdminHubRealtimeHandlers(io, {
   getBusinessStats,
   getRecentActivity,
@@ -296,140 +284,116 @@ const broadcastUpdate = installAdminHubRealtimeHandlers(io, {
 // API key guard middleware
 const requireApiKey = createRequireApiKey({ getApiKey: () => API_KEY, isWebhookBypassPath });
 
-// Initialize Booking System
-let bookingSystem = null;
-try {
-  bookingSystem = new BookingSystem();
-  console.log('✅ Booking system initialized');
-} catch (error) {
-  console.error('❌ Failed to initialize booking system:', error.message);
-  console.log('⚠️ Booking functionality will be disabled');
-}
-
-// Initialize SMS-Email Pipeline
-let smsEmailPipeline = null;
-try {
-  smsEmailPipeline = new SMSEmailPipeline(bookingSystem);
-  console.log('✅ SMS-Email pipeline initialized');
-} catch (error) {
-  console.error('❌ Failed to initialize SMS-Email pipeline:', error.message);
-  console.log('⚠️ SMS-Email functionality will be disabled');
-}
-
-/** Rolling activity windows & touchpoint day buckets on the client dashboard (GMT/BST). */
-const DASHBOARD_ACTIVITY_TZ = 'Europe/London';
-
-// === Env: Twilio (must be defined before mountApi deps wiring)
-const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || '';
-const TWILIO_AUTH_TOKEN  = process.env.TWILIO_AUTH_TOKEN  || '';
-const TWILIO_FROM_NUMBER = process.env.TWILIO_FROM_NUMBER || '';
-const TWILIO_MESSAGING_SERVICE_SID = process.env.TWILIO_MESSAGING_SERVICE_SID || '';
-
-const defaultSmsClient = (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN)
-  ? twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-  : null;
-const defaultSmsConfigured = !!(defaultSmsClient && (TWILIO_FROM_NUMBER || TWILIO_MESSAGING_SERVICE_SID));
-
-mountApi(app, {
-  bookingSystem,
-  smsEmailPipeline,
-  requireApiKey,
-  getClientFromHeader,
-  isDashboardSelfServiceClient,
-  query,
-  poolQuerySelect,
-  cacheMiddleware,
-  dashboardStatsCache,
-  DASHBOARD_CACHE_TTL,
-  dbType,
-  DB_PATH,
-  upsertFullClient,
-  getFullClient,
-  listFullClients,
-  deleteClient,
-  invalidateClientCache,
-  isBusinessHours,
-  getNextBusinessHour,
-  scheduleAtOptimalCallWindow,
-  addToCallQueue,
-  listLeadHandoff,
-  getLeadHandoffByPhone,
-  setLeadHandoffOperatorNotes,
-  pickTimezone,
-  DateTime,
-  TIMEZONE,
-  isPostgres,
-  sqlDaysAgo,
-  validateAndSanitizePhone,
-  phoneMatchKey,
-  sanitizeInput,
-  isOptedOut,
-  sendOperatorAlert,
-  sanitizeLead,
-  runOutboundCallsForImportedLeads,
-  isDemoClient,
-  readJson,
-  writeJson,
-  SMS_STATUS_PATH,
-  fetchImpl: fetch,
-  activityFeedChannelLabel,
-  DASHBOARD_ACTIVITY_TZ,
-  formatTimeAgoLabel,
-  formatCallDuration,
-  truncateActivityFeedText,
-  formatVapiEndedReasonDisplay,
-  outcomeToFriendlyLabel,
-  parseCallsRowMetadata,
-  isCallQueueStartFailureRow,
-  mapCallStatus,
-  mapStatusClass,
-  trimEnvDashboard,
-  buildDashboardExperience,
-  timelineVapiAuthKey,
-  fetchVapiCallSnapshotForTimeline,
-  vapiCallSnapshotToTimelineHints,
-  inferTimelinePickupStatus,
-  resolveLogisticsSpreadsheetId,
-  sheets,
-  effectiveDialScheduledForApiDisplay,
-  fetchLeadNamesForRetryQueuePhones,
-  getIntegrationStatusesForClient,
-  nanoid,
-  createABTestExperiment,
-  runOutboundAbTestSetup,
-  runOutboundAbChallengerUpdate,
-  runOutboundAbDimensionStop,
-  isVapiOutboundAbExperimentOnlyPatch,
-  adjustColorBrightness,
-  AIInsightsEngine,
-  getCallContextCacheStats,
-  getMostRecentCallContext,
-  GOOGLE_CLIENT_EMAIL,
-  GOOGLE_PRIVATE_KEY,
-  GOOGLE_CALENDAR_ID,
-  servicesFor,
-  makeJwtAuth,
-  GOOGLE_PRIVATE_KEY_B64,
-  google,
-  pickCalendarId,
-  insertEvent,
-  smsConfig,
-  freeBusy,
-  renderTemplate,
-  scheduleAppointmentReminders,
-  appendToSheet,
-  deriveIdemKey,
-  withRetry,
-  setCachedIdem,
-  CALLS_PATH,
-  defaultSmsClient,
+const { bookingSystem, smsEmailPipeline, defaultSmsClient, defaultSmsConfigured } = bootstrapServices({
+  TWILIO_ACCOUNT_SID,
+  TWILIO_AUTH_TOKEN,
   TWILIO_FROM_NUMBER,
   TWILIO_MESSAGING_SERVICE_SID,
-  authenticateApiKey,
-  listOptOutList,
-  upsertOptOut,
-  deactivateOptOut,
 });
+
+mountApi(
+  app,
+  buildApiDeps({
+    bookingSystem,
+    smsEmailPipeline,
+    requireApiKey,
+    getClientFromHeader,
+    isDashboardSelfServiceClient,
+    query,
+    poolQuerySelect,
+    cacheMiddleware,
+    dashboardStatsCache,
+    DASHBOARD_CACHE_TTL,
+    dbType,
+    DB_PATH,
+    upsertFullClient,
+    getFullClient,
+    listFullClients,
+    deleteClient,
+    invalidateClientCache,
+    isBusinessHours,
+    getNextBusinessHour,
+    scheduleAtOptimalCallWindow,
+    addToCallQueue,
+    listLeadHandoff,
+    getLeadHandoffByPhone,
+    setLeadHandoffOperatorNotes,
+    pickTimezone,
+    DateTime,
+    TIMEZONE,
+    isPostgres,
+    sqlDaysAgo,
+    validateAndSanitizePhone,
+    phoneMatchKey,
+    sanitizeInput,
+    isOptedOut,
+    sendOperatorAlert,
+    sanitizeLead,
+    runOutboundCallsForImportedLeads,
+    isDemoClient,
+    readJson,
+    writeJson,
+    SMS_STATUS_PATH,
+    fetchImpl: fetch,
+    activityFeedChannelLabel,
+    DASHBOARD_ACTIVITY_TZ,
+    formatTimeAgoLabel,
+    formatCallDuration,
+    truncateActivityFeedText,
+    formatVapiEndedReasonDisplay,
+    outcomeToFriendlyLabel,
+    parseCallsRowMetadata,
+    isCallQueueStartFailureRow,
+    mapCallStatus,
+    mapStatusClass,
+    trimEnvDashboard,
+    buildDashboardExperience,
+    timelineVapiAuthKey,
+    fetchVapiCallSnapshotForTimeline,
+    vapiCallSnapshotToTimelineHints,
+    inferTimelinePickupStatus,
+    resolveLogisticsSpreadsheetId,
+    sheets,
+    effectiveDialScheduledForApiDisplay,
+    fetchLeadNamesForRetryQueuePhones,
+    getIntegrationStatusesForClient,
+    nanoid,
+    createABTestExperiment,
+    runOutboundAbTestSetup,
+    runOutboundAbChallengerUpdate,
+    runOutboundAbDimensionStop,
+    isVapiOutboundAbExperimentOnlyPatch,
+    adjustColorBrightness,
+    AIInsightsEngine,
+    getCallContextCacheStats,
+    getMostRecentCallContext,
+    GOOGLE_CLIENT_EMAIL,
+    GOOGLE_PRIVATE_KEY,
+    GOOGLE_CALENDAR_ID,
+    servicesFor,
+    makeJwtAuth,
+    GOOGLE_PRIVATE_KEY_B64,
+    google,
+    pickCalendarId,
+    insertEvent,
+    smsConfig,
+    freeBusy,
+    renderTemplate,
+    scheduleAppointmentReminders,
+    appendToSheet,
+    deriveIdemKey,
+    withRetry,
+    setCachedIdem,
+    CALLS_PATH,
+    defaultSmsClient,
+    TWILIO_FROM_NUMBER,
+    TWILIO_MESSAGING_SERVICE_SID,
+    authenticateApiKey,
+    listOptOutList,
+    upsertOptOut,
+    deactivateOptOut,
+  })
+);
 
 mountAdminRoutes(app, {
   io,
@@ -6536,14 +6500,15 @@ app.use(errorHandler);
 // Initialize database and start server - FIXED: braces properly balanced
 async function startServer() {
   try {
-    // Validate environment variables first
     const { validateEnvironment } = await import('./lib/env-validator.js');
-    validateEnvironment();
-
     const { runMigrations } = await import('./lib/migration-runner.js');
     const { registerScheduledJobs } = await import('./lib/scheduled-jobs.js');
 
-    const start = createStartServer({
+    scheduledJobsController = await runStartServer({
+      createStartServer,
+      validateEnvironment,
+      runMigrations,
+      registerScheduledJobs,
       server,
       io,
       DB_PATH,
@@ -6553,18 +6518,13 @@ async function startServer() {
         await initDb();
         console.log('✅ Database initialized');
       },
-      runMigrations,
       bootstrapClients,
-      registerScheduledJobs,
-      scheduledJobsDeps: buildScheduledJobsDeps({
-        processCallQueue,
-        processRetryQueue,
-        queueNewLeadsForCalling,
-        sendScheduledReminders,
-      }),
+      buildScheduledJobsDeps,
+      processCallQueue,
+      processRetryQueue,
+      queueNewLeadsForCalling,
+      sendScheduledReminders,
     });
-    scheduledJobsController = await start();
-    
   } catch (error) {
     console.error('❌ Failed to start server:', error);
     process.exit(1);
@@ -6573,15 +6533,7 @@ async function startServer() {
 
 async function closeDatabase() {
   try {
-    // Close database pool
-    if (pool) {
-      console.log('[SHUTDOWN] Closing database pool...');
-      await pool.end();
-      console.log('[SHUTDOWN] Database pool closed successfully');
-    }
-    
-    console.log('[SHUTDOWN] Graceful shutdown complete');
-    process.exit(0);
+    await closeDatabasePool(pool);
   } catch (error) {
     console.error('[SHUTDOWN ERROR] Error during shutdown:', error);
     process.exit(1);
