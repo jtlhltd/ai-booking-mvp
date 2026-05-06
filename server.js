@@ -13,7 +13,6 @@ import { fileURLToPath } from 'url';
 import { nanoid } from 'nanoid';
 import { DateTime } from 'luxon';
 import * as chrono from 'chrono-node';
-import express from 'express';
 import { createServer } from 'http';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
@@ -204,9 +203,20 @@ import { sendOperatorAlert } from './lib/operator-alerts.js';
 import { AIInsightsEngine, LeadScoringEngine } from './lib/ai-insights.js';
 import { getCallContext, storeCallContext, getMostRecentCallContext, getCallContextCacheStats } from './lib/call-context-cache.js';
 import { createSocketIo, installAdminHubRealtimeHandlers } from './app/realtime.js';
+import { createApp } from './app/create-app.js';
 // Real API integration - dynamic imports will be used in endpoints
 
-const app = express();
+const app = createApp({
+  performanceMiddleware,
+  performanceMonitor: getPerformanceMonitor(),
+  enforceAdminApiKeyIfConfigured,
+  securityHeaders,
+  requestLogging,
+  validateAndSanitizeInput,
+  auditLog,
+  staticPagesRouter,
+  createPortalPagesRouter
+});
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -220,8 +230,7 @@ const JOBS_PATH = path.join(DATA_DIR, 'jobs.json');
 const server = createServer(app);
 const { io, socketIoAllowedOrigins } = createSocketIo(server);
 
-// Initialize performance monitoring and caching
-const performanceMonitor = getPerformanceMonitor();
+// Initialize caching
 const cache = getCache();
 const isPostgres = (process.env.DB_TYPE || '').toLowerCase() === 'postgres';
 const sqlHoursAgo = (hours = 1) => sqlHoursAgoFn(isPostgres, hours);
@@ -276,9 +285,6 @@ const broadcastUpdate = installAdminHubRealtimeHandlers(io, {
   getSystemHealthData
 });
 
-// Add performance monitoring middleware (tracks all API calls)
-app.use(performanceMiddleware(performanceMonitor));
-
 // API key guard middleware
 function requireApiKey(req, res, next) {
   // Skip API key check for public routes
@@ -297,49 +303,6 @@ function requireApiKey(req, res, next) {
   if (key && key === API_KEY) return next();
   return res.status(401).json({ error: 'Unauthorized' });
 }
-
-// CORS middleware for dashboard access
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header(
-    'Access-Control-Allow-Headers',
-    'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-API-Key'
-  );
-  
-  if (req.method === 'OPTIONS') {
-    res.sendStatus(200);
-  } else {
-    next();
-  }
-});
-
-// Middleware for parsing JSON bodies (must be before routes that need it)
-app.use(compression()); // Compress responses for better performance
-// Vapi webhooks: capture exact request bytes for HMAC (must run before global express.json).
-const vapiWebhookJsonCapture = express.json({
-  limit: '10mb',
-  verify: (req, _res, buf) => {
-    req.rawBody = Buffer.isBuffer(buf) ? buf : Buffer.from(buf || []);
-  }
-});
-app.use('/webhooks/vapi', (req, res, next) => {
-  if (req.method !== 'POST' && req.method !== 'PUT') return next();
-  return vapiWebhookJsonCapture(req, res, next);
-});
-const globalJsonParser = express.json({ limit: '10mb' });
-app.use((req, res, next) => {
-  if (
-    (req.method === 'POST' || req.method === 'PUT') &&
-    (req.path === '/webhooks/vapi' || req.path.startsWith('/webhooks/vapi/'))
-  ) {
-    return next();
-  }
-  return globalJsonParser(req, res, next);
-});
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-app.use(enforceAdminApiKeyIfConfigured);
 
 // Initialize Booking System
 let bookingSystem = null;
@@ -360,21 +323,6 @@ try {
   console.error('❌ Failed to initialize SMS-Email pipeline:', error.message);
   console.log('⚠️ SMS-Email functionality will be disabled');
 }
-
-// Trust proxy for rate limiting (required for Render)
-app.set('trust proxy', 1);
-
-// Enhanced security middleware
-app.use(securityHeaders);
-app.use(requestLogging);
-app.use(validateAndSanitizeInput());
-app.use(auditLog);
-
-// Serve static files from public directory
-app.use(express.static('public'));
-
-app.use(staticPagesRouter);
-app.use(createPortalPagesRouter());
 app.use(
   createClientOpsRouter({
     getFullClient,
