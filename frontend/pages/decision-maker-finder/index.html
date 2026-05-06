@@ -3,12 +3,237 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Decision Maker Finder</title>
+    <title>Decision Maker Finder - Google Places Search</title>
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="alternate icon" href="/icon.svg" />
+    <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <div id="app"></div>
+    <div class="container">
+      <h1>🎯 Decision Maker Finder</h1>
+
+      <div id="status"></div>
+
+      <!-- Search Templates -->
+      <div class="search-section">
+        <h3>📋 Industry Templates</h3>
+        <p style="color: #666; margin-bottom: 20px">Choose a high-value industry template or create custom search:</p>
+
+        <div class="template-grid">
+          <div class="template-card" onclick="useTemplate('private-healthcare', event)">
+            <div class="template-icon">🏥</div>
+            <div class="template-title">Private Healthcare</div>
+            <div class="template-description">Private GP practices, clinics, specialists</div>
+            <div class="template-search">"private healthcare practice" "GP surgery"</div>
+          </div>
+
+          <div class="template-card" onclick="useTemplate('financial-advisors', event)">
+            <div class="template-icon">💰</div>
+            <div class="template-title">Financial Advisors</div>
+            <div class="template-description">Independent financial advisors, wealth managers</div>
+            <div class="template-search">"financial advisor" "wealth management"</div>
+          </div>
+
+          <div class="template-card" onclick="useTemplate('dental-practices', event)">
+            <div class="template-icon">🦷</div>
+            <div class="template-title">Dental Practices</div>
+            <div class="template-description">Private dental practices, orthodontists</div>
+            <div class="template-search">"dental practice" "private dentist"</div>
+          </div>
+
+          <div class="template-card" onclick="useTemplate('legal-services', event)">
+            <div class="template-icon">⚖️</div>
+            <div class="template-title">Legal Services</div>
+            <div class="template-description">Law firms, solicitors, barristers</div>
+            <div class="template-search">"law firm" "solicitor practice"</div>
+          </div>
+
+          <div class="template-card" onclick="useTemplate('property-agents', event)">
+            <div class="template-icon">🏠</div>
+            <div class="template-title">Property Agents</div>
+            <div class="template-description">Estate agents, property investment</div>
+            <div class="template-search">"estate agent" "property investment"</div>
+          </div>
+
+          <div class="template-card" onclick="useTemplate('business-coaching', event)">
+            <div class="template-icon">🎓</div>
+            <div class="template-title">Business Coaching</div>
+            <div class="template-description">Business coaches, consultants, trainers</div>
+            <div class="template-search">"business coach" "executive coach"</div>
+          </div>
+
+          <div class="template-card" onclick="useTemplate('accounting-services', event)">
+            <div class="template-icon">📊</div>
+            <div class="template-title">Accounting Services</div>
+            <div class="template-description">Chartered accountants, tax advisors</div>
+            <div class="template-search">"chartered accountant" "tax advisor"</div>
+          </div>
+
+          <div class="template-card" onclick="useTemplate('marketing-agencies', event)">
+            <div class="template-icon">📈</div>
+            <div class="template-title">Marketing Agencies</div>
+            <div class="template-description">Digital marketing, advertising agencies</div>
+            <div class="template-search">"marketing agency" "digital marketing"</div>
+          </div>
+
+          <div class="template-card" onclick="useTemplate('it-services', event)">
+            <div class="template-icon">💻</div>
+            <div class="template-title">IT Services</div>
+            <div class="template-description">IT consultants, software developers</div>
+            <div class="template-search">"IT consultant" "software developer"</div>
+          </div>
+
+          <div class="template-card" onclick="useTemplate('consulting-firms', event)">
+            <div class="template-icon">🏢</div>
+            <div class="template-title">Consulting Firms</div>
+            <div class="template-description">Management and strategy consultants</div>
+            <div class="template-search">"management consultant" "strategy consultant"</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Search Configuration -->
+      <div class="search-section">
+        <h3>🔍 Search Configuration</h3>
+
+        <div class="form-group">
+          <label for="businessType">Business Type:</label>
+          <input
+            type="text"
+            id="businessType"
+            placeholder="e.g., 'private healthcare practice', 'financial advisor', 'dental practice'"
+            value="private GP"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="location">Location:</label>
+          <select id="location">
+            <option value="United Kingdom">🇬🇧 Whole UK (Recommended - More Results)</option>
+            <option value="London">🏙️ London</option>
+            <option value="Manchester">🏙️ Manchester</option>
+            <option value="Birmingham">🏙️ Birmingham</option>
+            <option value="Leeds">🏙️ Leeds</option>
+            <option value="Glasgow">🏙️ Glasgow</option>
+            <option value="Edinburgh">🏙️ Edinburgh</option>
+            <option value="Liverpool">🏙️ Liverpool</option>
+            <option value="Bristol">🏙️ Bristol</option>
+            <option value="Newcastle">🏙️ Newcastle</option>
+            <option value="custom">📍 Custom Location</option>
+          </select>
+        </div>
+
+        <div class="form-group" id="customLocationGroup" style="display: none">
+          <label for="customLocation">Custom Location:</label>
+          <input type="text" id="customLocation" placeholder="e.g., Brighton, Cardiff, Belfast" />
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="maxResults">Target Mobile Numbers:</label>
+            <select id="maxResults">
+              <option value="10">10 mobile numbers</option>
+              <option value="25">25 mobile numbers</option>
+              <option value="50">50 mobile numbers</option>
+              <option value="100" selected>100 mobile numbers</option>
+              <option value="200">200 mobile numbers</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="businessSize">Business Size:</label>
+            <select id="businessSize">
+              <option value="">Any Size</option>
+              <option value="solo">Solo Practice</option>
+              <option value="small">Small (2-10 employees)</option>
+              <option value="medium">Medium (10-50 employees)</option>
+              <option value="large">Large (50+ employees)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label> <input type="checkbox" id="mobileOnly" checked /> 📱 Mobile Numbers Only (Decision Makers) </label>
+          <small style="color: #666; display: block; margin-top: 5px">
+            ✅ This ensures you're reaching business owners and decision makers directly
+          </small>
+        </div>
+
+        <div class="form-group">
+          <label> <input type="checkbox" id="decisionMakerTitles" /> Include decision maker title detection </label>
+        </div>
+
+        <div class="form-group">
+          <label> <input type="checkbox" id="batchSearch" disabled /> 🔄 Batch Search (Multiple Industries) - DISABLED </label>
+          <small style="color: #666; display: block; margin-top: 5px">
+            ❌ Disabled - Use single industry search for better results
+          </small>
+        </div>
+
+        <button class="btn" onclick="startSearch()">🔍 Search Google Places</button>
+        <button class="btn btn-secondary" onclick="clearResults()">🗑️ Clear Results</button>
+      </div>
+
+      <!-- Statistics -->
+      <div class="stats">
+        <div class="stat-card">
+          <div class="stat-number" id="totalFound">0</div>
+          <div class="stat-label">Total Found</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="mobileFound">0</div>
+          <div class="stat-label">Mobile Numbers</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="exportedCount">0</div>
+          <div class="stat-label">Ready to Export</div>
+        </div>
+      </div>
+
+      <!-- Search Results -->
+      <div class="search-section">
+        <h3>📊 Search Results <span id="resultsFilterText">(All Results)</span></h3>
+
+        <!-- Progress Indicator -->
+        <div id="progressIndicator" class="progress-indicator" style="display: none">
+          <div class="progress-header">
+            <h4>🔍 Searching for Mobile Numbers...</h4>
+            <div class="progress-stats">
+              <span id="currentMobileCount">0</span> / <span id="targetMobileCount">0</span> mobile numbers found
+            </div>
+          </div>
+          <div class="progress-bar">
+            <div id="progressBarFill" class="progress-bar-fill"></div>
+          </div>
+          <div class="progress-details">
+            <div id="progressDetails">Processing businesses...</div>
+          </div>
+        </div>
+
+        <div id="searchResults" class="search-results">
+          <div class="loading">No search results yet. Enter your search criteria and click "Search Google Places".</div>
+        </div>
+
+        <div style="margin-top: 15px">
+          <button class="btn btn-success" onclick="exportToCSV()" id="exportBtn" disabled>📤 Export Mobile Leads</button>
+          <button class="btn btn-warning" onclick="addToPipeline()" id="pipelineBtn" disabled>
+            📥 Add Mobile Leads to Pipeline
+          </button>
+        </div>
+      </div>
+
+      <!-- Export Section -->
+      <div class="export-section">
+        <h3>📤 Export Options</h3>
+        <p>Export your found businesses with mobile numbers to CSV format for further processing.</p>
+
+        <div style="margin-top: 15px">
+          <button class="btn btn-success" onclick="exportToCSV()" id="exportBtn2" disabled>
+            📤 Export Mobile Leads to CSV
+          </button>
+        </div>
+      </div>
+    </div>
     <script type="module" src="./main.js"></script>
   </body>
 </html>
