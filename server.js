@@ -19,6 +19,9 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import compression from 'compression';
 import { isWebhookBypassPath, mountWebhookBodyParsers } from './app/mount-webhooks.js';
+import { createRequireApiKey } from './app/install-auth-and-guards.js';
+import { mountAdminAndTools } from './app/mount-admin-tools.js';
+import { buildScheduledJobsDeps } from './app/install-schedulers.js';
 import { getDemoOverrides, formatOverridesForTelemetry, loadDemoScript } from './lib/demo-script.js';
 import {
   isBusinessHoursForTenant,
@@ -46,14 +49,6 @@ import { isOptedOut } from './lib/lead-deduplication.js';
 import { isMobileNumber } from './lib/google-places-search.js';
 import { createCallWithKey as vapiCreateCallWithKey } from './lib/vapi.js';
 import googlePlacesSearchRouter from './routes/google-places-search.js';
-import { createAdminDiagnosticsRouter } from './routes/admin-diagnostics-mount.js';
-import { createAdminServerCallQueueRouter } from './routes/admin-server-call-queue-mount.js';
-import { createAdminAnalyticsRouter, createAdminCostAndAccessRouter } from './routes/admin-analytics-mount.js';
-import { createAdminClientsHealthRouter } from './routes/admin-clients-health-mount.js';
-import { createAdminVapiCampaignsRouter } from './routes/admin-vapi-campaigns-mount.js';
-import { createAdminVapiLogisticsRouter } from './routes/admin-vapi-logistics-mount.js';
-import { createAdminVapiPlumbingRouter } from './routes/admin-vapi-plumbing-mount.js';
-import { createToolsRouter } from './routes/tools-mount.js';
 
 import { makeJwtAuth, insertEvent, freeBusy } from './gcal.js';
 import {
@@ -292,23 +287,7 @@ const broadcastUpdate = installAdminHubRealtimeHandlers(io, {
 });
 
 // API key guard middleware
-function requireApiKey(req, res, next) {
-  // Skip API key check for public routes
-  if (req.method === 'GET' && (req.path === '/health' || req.path === '/gcal/ping' || req.path === '/healthz' || req.path === '/setup-my-client' || req.path === '/clear-my-leads' || req.path === '/check-db' || req.path === '/lead-import.html' || req.path === '/complete-setup' || req.path === '/test-booking-calendar')) return next();
-  if (isWebhookBypassPath(req.path)) return next();
-  if (req.path === '/api/test' || req.path.startsWith('/api/test/') || req.path === '/api/test-linkedin' || req.path === '/api/uk-business-search' || req.path === '/api/decision-maker-contacts' || req.path === '/api/industry-categories' || req.path === '/test-sms-pipeline' || req.path === '/sms-test' || req.path === '/api/initiate-lead-capture' || req.path === '/api/signup') return next();
-  if (req.path === '/uk-business-search' || req.path === '/booking-simple.html') return next();
-  if (req.path.startsWith('/dashboard/') || req.path.startsWith('/settings/') || req.path.startsWith('/leads') || req.path === '/privacy.html' || req.path === '/privacy' || req.path === '/zapier-docs.html' || req.path === '/zapier') return next();
-  
-  // Skip API key check for ALL admin routes (hub and API endpoints)
-  if (req.path === '/admin-hub.html' || req.path === '/admin-hub' || req.path.startsWith('/api/admin/')) return next();
-  
-  // For all other routes, check API key
-  if (!API_KEY) return next(); // If no API key is set, allow access (for development)
-  const key = req.get('X-API-Key');
-  if (key && key === API_KEY) return next();
-  return res.status(401).json({ error: 'Unauthorized' });
-}
+const requireApiKey = createRequireApiKey({ getApiKey: () => API_KEY, isWebhookBypassPath });
 
 // Initialize Booking System
 let bookingSystem = null;
@@ -349,9 +328,6 @@ app.use('/api/analytics', createAnalyticsRouter());
 app.use(createSmsEmailPipelineRouter({ smsEmailPipeline }));
 app.use(createBookingTestRouter({ bookingSystem, getApiKey: () => process.env.API_KEY, getFullClient }));
 app.use(createVapiDevRouter());
-app.use('/admin', createAdminTestLeadDataRouter());
-app.use('/admin', createAdminTestScriptRouter());
-app.use('/admin', createAdminValidateCallDurationRouter());
 app.use('/api', createPipelineTrackingRouter({ smsEmailPipeline }));
 app.use('/api', createPipelineRetryRouter({ smsEmailPipeline }));
 app.use('/api/webhooks', createZapierWebhookRouter({ requireApiKey, getClientFromHeader }));
@@ -3649,131 +3625,110 @@ const dashboardResetDeps = { query };
 
 // moved: GET /api/time/now → routes/runtime-metrics-mount.js
 
-app.use(
-  createAdminDiagnosticsRouter({
-    resolveTenantKeyFromInbound,
-    listFullClients,
-    loadDemoScript,
-    readDemoTelemetry,
-    clearDemoTelemetry,
-    readReceptionistTelemetry,
-    clearReceptionistTelemetry,
-    readJson,
-    LEADS_PATH,
-    normalizePhoneE164,
-    getFullClient,
-    calculateLeadScore,
-    getLeadPriority,
-  })
-);
+const leadsScorePrioritizeDeps = { LeadScoringEngine };
+const roiCalculatorSaveDeps = { query };
 
-app.use(
-  createAdminServerCallQueueRouter({
-    listFullClients,
+mountAdminAndTools(app, {
+  createAdminTestLeadDataRouter,
+  createAdminTestScriptRouter,
+  createAdminValidateCallDurationRouter,
+  createInlineJsonApiRouter,
+  createPublicReadsRouter,
+
+  resolveTenantKeyFromInbound,
+  listFullClients,
+  loadDemoScript,
+  readDemoTelemetry,
+  clearDemoTelemetry,
+  readReceptionistTelemetry,
+  clearReceptionistTelemetry,
+  readJson,
+  LEADS_PATH,
+  normalizePhoneE164,
+  getFullClient,
+  calculateLeadScore,
+  getLeadPriority,
+
+  query,
+  dbType,
+  authenticateApiKey,
+  rateLimitMiddleware,
+  requirePermission,
+  getCostOptimizationMetrics,
+
+  getApiKey: () => process.env.API_KEY,
+  getAnalyticsDashboard,
+  generateAnalyticsReport,
+  trackAnalyticsEvent,
+  trackConversionStage,
+  recordPerformanceMetric,
+  createABTestExperiment,
+  getActiveABTests,
+  getABTestResults,
+  recordABTestOutcome,
+  selectABTestVariant,
+  getCachedMetrics,
+  cache,
+  clearCache,
+  calculateCacheHitRate,
+  analyticsQueue,
+  connectionPool,
+  analyticsProcessing,
+  CACHE_TTL,
+
+  upsertFullClient,
+  isPostgres,
+  TWILIO_ACCOUNT_SID,
+  TWILIO_AUTH_TOKEN,
+
+  store,
+  sheets,
+  sendOperatorAlert,
+  messagingService,
+
+  startColdCallCampaign,
+  getOptimalCallTime,
+  generateFollowUpPlan,
+  generateVoicemailFollowUpEmail,
+  generateDemoConfirmationEmail,
+  generateObjectionHandlingEmail,
+  generatePersonalizedScript,
+
+  runLogisticsOutreach,
+
+  TIMEZONE,
+  isBusinessHoursForTenant,
+
+  nanoid,
+  mockCallFetchImpl: globalThis.fetch,
+  activityFeedChannelLabel,
+  outcomeToFriendlyLabel,
+  isCallQueueStartFailureRow,
+  parseCallsRowMetadata,
+  formatCallDuration,
+  truncateActivityFeedText,
+  eventsSseDeps: {
     query,
-    dbType,
-    loadDb: () => import('./db.js'),
-    getApiKey: () => process.env.API_KEY,
-  })
-);
-
-// moved: /api/admin/call-queue/dedupe-pending-vapi → routes/admin-call-queue-ops.js
-// moved: /api/admin/outbound-weekday-journey/clear → routes/admin-call-queue-ops.js
-
-app.use(
-  createAdminCostAndAccessRouter({
-    getCostOptimizationMetrics,
-    loadDb: () => import('./db.js'),
-    getApiKey: () => process.env.API_KEY,
-    authenticateApiKey,
-    rateLimitMiddleware,
-    requirePermission,
-  })
-);
-
-app.use(
-  createAdminAnalyticsRouter({
-    getApiKey: () => process.env.API_KEY,
-    getAnalyticsDashboard,
-    generateAnalyticsReport,
-    trackAnalyticsEvent,
-    trackConversionStage,
-    recordPerformanceMetric,
-    createABTestExperiment,
-    getActiveABTests,
-    getABTestResults,
-    recordABTestOutcome,
-    selectABTestVariant,
-    getCachedMetrics,
-    cache,
-    clearCache,
-    calculateCacheHitRate,
-    analyticsQueue,
-    connectionPool,
-    analyticsProcessing,
-    CACHE_TTL,
     getFullClient,
-  })
+    activityFeedChannelLabel,
+    outcomeToFriendlyLabel,
+    isCallQueueStartFailureRow,
+    parseCallsRowMetadata,
+    formatCallDuration,
+    truncateActivityFeedText,
+    mapCallStatus,
+    mapStatusClass,
+  },
+
+  dashboardResetDeps,
+  leadsScorePrioritizeDeps,
+  roiCalculatorSaveDeps,
+});
+
+console.log('🟢🟢🟢 [INLINE-JSON-API] REGISTERED: /sms, /api/dashboard/reset/:clientKey, leads score/prioritize, roi save');
+console.log(
+  '🟢 [PUBLIC-READS] Routes registered (gated by ENABLE_PUBLIC_DEV_ROUTES): /mock-call, /api/outbound-queue-day/:clientKey, /api/events/:clientKey'
 );
-
-app.use(
-  createAdminClientsHealthRouter({
-    getApiKey: () => process.env.API_KEY,
-    loadDb: () => import('./db.js'),
-    getFullClient,
-    listFullClients,
-    upsertFullClient,
-    normalizePhoneE164,
-    calculateLeadScore,
-    query,
-    isPostgres,
-    TWILIO_ACCOUNT_SID,
-    TWILIO_AUTH_TOKEN,
-  })
-);
-
-app.use(
-  createToolsRouter({
-    store,
-    sheets,
-    sendOperatorAlert,
-    messagingService,
-  })
-);
-
-app.use(
-  createAdminVapiCampaignsRouter({
-    getApiKey: () => process.env.API_KEY,
-    startColdCallCampaign,
-    getOptimalCallTime,
-    generateFollowUpPlan,
-    generateVoicemailFollowUpEmail,
-    generateDemoConfirmationEmail,
-    generateObjectionHandlingEmail,
-    generatePersonalizedScript,
-  })
-);
-
-app.use(
-  createAdminVapiLogisticsRouter({
-    getApiKey: () => process.env.API_KEY,
-    runLogisticsOutreach,
-  })
-);
-
-app.use(
-  createAdminVapiPlumbingRouter({
-    getApiKey: () => process.env.API_KEY,
-    TIMEZONE,
-    isBusinessHoursForTenant,
-  })
-);
-
-// moved: /test-booking-calendar, /test-calendar-booking → routes/booking-test.js
-
-// moved: /admin/calendar-events/* and /admin/ab-tests/* → routes/admin-analytics-mount.js
-
-// moved: /admin/clients* → routes/admin-clients-health-mount.js
 
 // Helper function for cache hit rate calculation
 function calculateCacheHitRate(tenantKey) {
@@ -3788,43 +3743,8 @@ function calculateCacheHitRate(tenantKey) {
 
 // moved: GET /api/insights/:clientKey → routes/runtime-metrics-mount.js
 
-const leadsScorePrioritizeDeps = { LeadScoringEngine };
-const roiCalculatorSaveDeps = { query };
-
-app.use(
-  createInlineJsonApiRouter({
-    getApiKey: () => process.env.API_KEY,
-    dashboardResetDeps,
-    leadsScorePrioritizeDeps,
-    roiCalculatorSaveDeps
-  })
-);
-console.log('🟢🟢🟢 [INLINE-JSON-API] REGISTERED: /sms, /api/dashboard/reset/:clientKey, leads score/prioritize, roi save');
-
-app.use(
-  createPublicReadsRouter({
-    nanoid,
-    mockCallFetchImpl: globalThis.fetch,
-    getFullClient,
-    isPostgres,
-    query,
-    eventsSseDeps: {
-      query,
-      getFullClient,
-      activityFeedChannelLabel,
-      outcomeToFriendlyLabel,
-      isCallQueueStartFailureRow,
-      parseCallsRowMetadata,
-      formatCallDuration,
-      truncateActivityFeedText,
-      mapCallStatus,
-      mapStatusClass
-    }
-  })
-);
-console.log(
-  '🟢 [PUBLIC-READS] Routes registered (gated by ENABLE_PUBLIC_DEV_ROUTES): /mock-call, /api/outbound-queue-day/:clientKey, /api/events/:clientKey'
-);
+// moved: /api/admin/call-queue/dedupe-pending-vapi → routes/admin-call-queue-ops.js
+// moved: /api/admin/outbound-weekday-journey/clear → routes/admin-call-queue-ops.js
 
 // moved: /api/admin/roi-calculator/leads → routes/admin-roi-calculator.js
 
@@ -6619,12 +6539,12 @@ async function startServer() {
       runMigrations,
       bootstrapClients,
       registerScheduledJobs,
-      scheduledJobsDeps: {
+      scheduledJobsDeps: buildScheduledJobsDeps({
         processCallQueue,
         processRetryQueue,
         queueNewLeadsForCalling,
         sendScheduledReminders,
-      },
+      }),
     });
     scheduledJobsController = await start();
     
