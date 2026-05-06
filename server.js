@@ -3866,38 +3866,45 @@ async function processVapiRetry(retry) {
     if (!client) {
       throw new Error('Client not found');
     }
-    
-    // Make VAPI call (guarded by global concurrency limiter from instant-calling)
-    const { acquireVapiSlot, releaseVapiSlot, markVapiCallActive } = await import('./lib/instant-calling.js');
-    await acquireVapiSlot();
-    let vapiResult;
-    try {
-      vapiResult = await makeVapiCall({
-        assistantId: retryData.clientConfig?.assistantId || client.vapi?.assistantId,
-        phoneNumberId: retryData.clientConfig?.phoneNumberId || client.vapi?.phoneNumberId,
-        customerNumber: leadPhone,
-        maxDurationSeconds: 10
+
+    // Do NOT dial Vapi directly from retry_queue processing.
+    // Enqueue into call_queue so the queue worker handles concurrency, wallet/config gates, and deferrals.
+    const { addToCallQueue } = await import('./db.js');
+    const phoneKey = phoneMatchKey(leadPhone) ?? '__nodigits__';
+    const existing = await query(
+      `
+        SELECT id
+        FROM call_queue
+        WHERE client_key = $1
+          AND call_type = 'vapi_call'
+          AND status IN ('pending', 'processing')
+          AND ${pgQueueLeadPhoneKeyExpr('lead_phone')} = $2
+        ORDER BY scheduled_for ASC
+        LIMIT 1
+      `,
+      [clientKey, phoneKey]
+    );
+    const alreadyQueued = existing?.rows?.[0]?.id != null;
+    if (!alreadyQueued) {
+      await addToCallQueue({
+        clientKey,
+        leadPhone,
+        priority: 6,
+        scheduledFor: new Date(),
+        callType: 'vapi_call',
+        callData: {
+          triggerType: 'retry_queue_vapi_call',
+          retryQueueId: retry.id,
+          retryReason: retry.retry_reason || null,
+          retryAttempt: retry.retry_attempt || null,
+          maxRetries: retry.max_retries || null,
+          clientConfig: retryData?.clientConfig || null,
+        }
       });
-      if (vapiResult?.id) {
-        markVapiCallActive(vapiResult.id, { ttlMs: 30 * 60 * 1000 });
-      } else {
-        releaseVapiSlot({ reason: 'no_call_id' });
-      }
-    } catch (e) {
-      releaseVapiSlot({ reason: 'start_failed' });
-      throw e;
+      console.log('[RETRY QUEUE] Enqueued vapi_call retry into call_queue', { retryId: retry.id, clientKey, leadPhone });
+    } else {
+      console.log('[RETRY QUEUE] vapi_call retry already queued', { retryId: retry.id, clientKey, leadPhone });
     }
-    
-    if (!vapiResult || vapiResult.error) {
-      throw new Error(vapiResult?.error || 'VAPI call failed');
-    }
-    
-    console.log('[RETRY SUCCESS]', {
-      retryId: retry.id,
-      clientKey,
-      leadPhone,
-      callId: vapiResult.id
-    });
     
   } catch (error) {
     console.error('[VAPI RETRY ERROR]', {
@@ -5012,6 +5019,47 @@ async function processVapiCallFromQueue(call) {
           queueId: call.id,
           scheduledFor: next.toISOString()
         });
+        return;
+      }
+
+      if (vapiResult?.error === 'vapi_not_configured') {
+        // Missing Vapi env/config should not poison queue/retry state. Defer and alert.
+        const next = smearCallQueueScheduledFor(
+          new Date(Date.now() + 60 * 60 * 1000),
+          clientKey,
+          leadPhone,
+          call.id
+        );
+        await query(
+          `
+            UPDATE call_queue
+            SET status = 'pending',
+                scheduled_for = $1,
+                call_data = jsonb_set(
+                  COALESCE(call_data, '{}'::jsonb),
+                  '{lastDefer}',
+                  jsonb_build_object(
+                    'at', NOW(),
+                    'kind', 'vapi',
+                    'error', 'vapi_not_configured',
+                    'details', $3::text
+                  ),
+                  true
+                ),
+                updated_at = NOW()
+            WHERE id = $2
+          `,
+          [next, call.id, String(vapiResult?.details || '').slice(0, 220)]
+        );
+        console.warn('[QUEUE CALL] Deferred — Vapi not configured', { queueId: call.id, scheduledFor: next.toISOString() });
+        void sendOperatorAlert({
+          subject: 'Vapi not configured — outbound dials deferred',
+          text:
+            `Queue item ${call.id} for tenant ${clientKey} deferred because Vapi is not configured. ` +
+            `Details: ${String(vapiResult?.details || '').slice(0, 240)}.`,
+          dedupeKey: 'vapi:not_configured',
+          throttleMinutes: 240
+        }).catch(() => {});
         return;
       }
 
