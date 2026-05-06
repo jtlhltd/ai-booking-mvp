@@ -10,6 +10,27 @@ export function createLeadHandoffRouter(deps) {
 
   const router = express.Router();
 
+  function parseDataJson(v) {
+    if (!v) return null;
+    if (typeof v === 'object') return v;
+    const s = String(v || '').trim();
+    if (!s) return null;
+    try { return JSON.parse(s); } catch { return null; }
+  }
+
+  function csvEscapeCell(v) {
+    const s = v == null ? '' : String(v);
+    const needs = /[",\r\n]/.test(s);
+    const escaped = s.replace(/"/g, '""');
+    return needs ? `"${escaped}"` : escaped;
+  }
+
+  function toCsv(headers, rows) {
+    const head = headers.map(csvEscapeCell).join(',');
+    const body = rows.map((r) => headers.map((h) => csvEscapeCell(r[h] ?? '')).join(','));
+    return [head, ...body].join('\r\n');
+  }
+
   router.get('/handoff/:clientKey', async (req, res) => {
     try {
       res.set('Cache-Control', 'no-store');
@@ -21,6 +42,61 @@ export function createLeadHandoffRouter(deps) {
     } catch (error) {
       console.error('[HANDOFF LIST ERROR]', error);
       res.status(500).json({ ok: false, error: 'handoff_list_failed', message: error?.message || String(error) });
+    }
+  });
+
+  router.get('/handoff/:clientKey/export.csv', async (req, res) => {
+    try {
+      res.set('Cache-Control', 'no-store');
+      const { clientKey } = req.params;
+      const limit = Math.min(500, Math.max(1, parseInt(req.query.limit, 10) || 500));
+      const rows = (await listLeadHandoff?.({ clientKey, limit, offset: 0 })) || [];
+
+      const out = rows.map((r) => {
+        const data = parseDataJson(r.dataJson || r.data_json) || {};
+        const qual = data?.qual || data?.qualification || data || {};
+        return {
+          updatedAt: r.updatedAt || r.updated_at || '',
+          leadPhone: r.leadPhone || r.lead_phone || '',
+          decisionMaker: r.decisionMaker || r.decision_maker || '',
+          callbackWindow: r.callbackWindow || r.callback_window || '',
+          summaryText: r.summaryText || r.summary_text || '',
+          lane: qual.lane || '',
+          origin: qual.origin || qual.originCity || '',
+          destination: qual.destination || qual.destinationCity || '',
+          volume: qual.volume || qual.volumePerWeek || qual.shipmentsPerWeek || '',
+          equipment: qual.equipment || qual.vehicle || '',
+          timeline: qual.timeline || qual.timing || '',
+          painPoints: Array.isArray(qual.painPoints) ? qual.painPoints.join('; ') : (qual.painPoints || ''),
+          authority: qual.authority || qual.decisionAuthority || '',
+          callbackPreference: qual.callbackPreference || qual.followUpPreference || '',
+        };
+      });
+
+      const headers = [
+        'updatedAt',
+        'leadPhone',
+        'decisionMaker',
+        'callbackWindow',
+        'summaryText',
+        'lane',
+        'origin',
+        'destination',
+        'volume',
+        'equipment',
+        'timeline',
+        'painPoints',
+        'authority',
+        'callbackPreference',
+      ];
+
+      const csv = toCsv(headers, out);
+      res.set('Content-Type', 'text/csv; charset=utf-8');
+      res.set('Content-Disposition', `attachment; filename="lead-handoff-${clientKey}.csv"`);
+      res.send(csv);
+    } catch (error) {
+      console.error('[HANDOFF EXPORT ERROR]', error);
+      res.status(500).json({ ok: false, error: 'handoff_export_failed', message: error?.message || String(error) });
     }
   });
 

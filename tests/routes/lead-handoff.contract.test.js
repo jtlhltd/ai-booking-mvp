@@ -79,5 +79,30 @@ describe('routes/lead-handoff.js contracts', () => {
       operatorNotes: 'Left voicemail, call back Friday',
     });
   });
+
+  test('GET /handoff/:clientKey/export.csv returns CSV', async () => {
+    const { createLeadHandoffRouter } = await import('../../routes/lead-handoff.js');
+    const router = createLeadHandoffRouter({
+      listLeadHandoff: jest.fn(async () => [
+        {
+          updatedAt: '2026-01-01T00:00:00.000Z',
+          leadPhone: '+447700900111',
+          decisionMaker: 'Alex',
+          callbackWindow: 'Thu PM',
+          summaryText: 'ok',
+          dataJson: JSON.stringify({ lane: 'UK->FR' }),
+        },
+      ]),
+      getLeadHandoffByPhone: jest.fn(),
+      setLeadHandoffOperatorNotes: jest.fn(),
+      phoneMatchKey: (p) => String(p || '').trim(),
+    });
+    const app = createContractApp({ mounts: [{ path: '/', router }] });
+
+    const res = await request(app).get('/handoff/c1/export.csv?limit=10').expect(200);
+    expect(res.headers['content-type']).toMatch(/text\/csv/);
+    expect(String(res.text || '')).toContain('leadPhone');
+    expect(String(res.text || '')).toContain('+447700900111');
+  });
 });
 

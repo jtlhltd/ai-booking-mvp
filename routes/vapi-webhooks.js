@@ -1437,6 +1437,27 @@ async function processWebhookPayload(body, correlationId) {
               });
               await sheets.appendLogistics(logisticsSheetId, sheetData);
               vapiWebhookVerboseLog('[LOGISTICS SHEET APPEND] ✅ SUCCESS', { callId, phone: leadPhone });
+
+              // Persist structured qualification / handoff snapshot (DB-backed, best-effort).
+              try {
+                const { upsertLeadHandoff } = await import('../db.js');
+                await upsertLeadHandoff({
+                  clientKey: tenantKey,
+                  leadPhone: sheetData.phone || leadPhone || '',
+                  callId: callId || null,
+                  source: 'vapi_webhook.end_of_call',
+                  data: {
+                    ...sheetData,
+                    structuredData: sdHasMeaningfulValue ? sd : null,
+                  },
+                  summaryText: sheetData.transcriptSnippet || '',
+                  decisionMaker: sheetData.decisionMaker || '',
+                  callbackWindow: sheetData.callbackWindow || sheetData['Callback Window'] || '',
+                });
+              } catch (e) {
+                vapiWebhookVerboseLog('[LEAD HANDOFF] upsert failed (non-fatal):', e?.message || e);
+              }
+
               // Outbound A/B: treat a successful *sheet row append* as a conversion event.
               // This aligns monitoring with "row written" rather than bookings (which may not apply to outreach).
               try {
