@@ -36,11 +36,26 @@ export function createOpsHealthAndDncRouter(deps) {
         }
       })();
 
+      let walletGateActive = false;
+      try {
+        const mod = await import('../lib/instant-calling.js');
+        walletGateActive = typeof mod?.isVapiWalletDepleted === 'function' ? !!mod.isVapiWalletDepleted() : false;
+      } catch {
+        walletGateActive = false;
+      }
+      const vapiConfigured = !!(
+        process.env.VAPI_PRIVATE_KEY &&
+        process.env.VAPI_ASSISTANT_ID &&
+        process.env.VAPI_PHONE_NUMBER_ID
+      );
+
       res.json({
         ok: true,
         db: { type: dbType || 'sqlite', path: DB_PATH },
         sheet: { configured: !!spreadsheetId },
+        vapi: { configured: vapiConfigured, walletGateActive },
         dnc: { activeCount: dncCountResult },
+        dialBlock: globalThis.__opsLastDialBlock || null,
         lastErrors: {
           followUpPatch: globalThis.__opsLastFollowUpPatchError || null
         }

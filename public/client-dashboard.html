@@ -15661,14 +15661,27 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const sheetOk = !!payload?.sheet?.configured;
                 const dncCount = Number(payload?.dnc?.activeCount || 0);
                 const lastPatch = payload?.lastErrors?.followUpPatch;
+                const vapiOk = !!payload?.vapi?.configured;
+                const walletGate = !!payload?.vapi?.walletGateActive;
+                const dialBlock = payload?.dialBlock || null;
                 const rows = [
                     { label: 'Sheet configured', value: sheetOk ? 'Yes' : 'No' },
                     { label: 'DNC active', value: formatNumber(dncCount) },
+                    { label: 'Vapi configured', value: vapiOk ? 'Yes' : 'No' },
+                    { label: 'Wallet gate active', value: walletGate ? 'Yes (dial paused)' : 'No' },
                     { label: 'DB', value: `${payload?.db?.type || 'unknown'} (${payload?.db?.path || ''})` }
                 ];
                 const list = rows
                     .map((r) => `<div class="metric-row"><span class="metric-label">${escapeHtml(r.label)}</span><span class="metric-value">${escapeHtml(r.value)}</span></div>`)
                     .join('');
+                const dialBlockHtml = dialBlock
+                    ? `<div class="empty-state-message" style="padding:12px;margin-top:10px;border:1px solid rgba(255,165,0,.35);border-radius:10px;">
+                        <strong>Last dial block</strong><br>
+                        <span style="opacity:.85;">${escapeHtml(String(dialBlock.at || ''))}</span><br>
+                        <span>${escapeHtml(String(dialBlock.kind || ''))}</span><br>
+                        <span style="opacity:.85;">${escapeHtml(String(dialBlock.details || '').slice(0, 240))}</span>
+                      </div>`
+                    : '';
                 const errHtml = lastPatch
                     ? `<div class="empty-state-message" style="padding:12px;margin-top:10px;border:1px solid rgba(255,0,0,.25);border-radius:10px;">
                         <strong>Last follow-up save error</strong><br>
@@ -15676,7 +15689,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         <span>${escapeHtml(String(lastPatch.message || ''))}</span>
                       </div>`
                     : `<div class="empty-state-message" style="padding:12px;margin-top:10px;">No recent follow-up save errors.</div>`;
-                host.innerHTML = `<div class="metric-grid">${list}</div>${errHtml}`;
+                host.innerHTML = `<div class="metric-grid">${list}</div>${dialBlockHtml}${errHtml}`;
             } catch (e) {
                 host.innerHTML = '<div class="empty-state-message" style="padding:16px;">Failed to load ops health.</div>';
             }

@@ -4641,6 +4641,13 @@ async function processVapiCallFromQueue(call) {
     // If the wallet gate is active (e.g., Vapi credits depleted), do not even attempt the dial.
     // This avoids thrashing queue rows into "processing" only to bounce immediately, and keeps retry/queue logic clean.
     if (isVapiWalletDepleted && isVapiWalletDepleted()) {
+      globalThis.__opsLastDialBlock = {
+        at: new Date().toISOString(),
+        kind: 'vapi_wallet_depleted',
+        clientKey,
+        queueId: call.id,
+        details: 'preflight_gate'
+      };
       const next = smearCallQueueScheduledFor(
         new Date(Date.now() + 15 * 60 * 1000),
         clientKey,
@@ -4937,6 +4944,13 @@ async function processVapiCallFromQueue(call) {
       const isNoCredits = isNoCreditsVapiResult(vapiResult);
 
       if (isNoCredits) {
+        globalThis.__opsLastDialBlock = {
+          at: new Date().toISOString(),
+          kind: 'vapi_no_credits',
+          clientKey,
+          queueId: call.id,
+          details: detailsStr.slice(0, 240)
+        };
         // Pre-flight wallet gate (intent: billing.wallet-check-before-dial).
         // Flag the wallet as depleted so subsequent dials skip fetch entirely
         // until the flag self-clears. Without this, every queued row spends a
@@ -4986,6 +5000,13 @@ async function processVapiCallFromQueue(call) {
       }
 
       if (vapiResult?.error === 'vapi_wallet_depleted') {
+        globalThis.__opsLastDialBlock = {
+          at: new Date().toISOString(),
+          kind: 'vapi_wallet_depleted',
+          clientKey,
+          queueId: call.id,
+          details: String(vapiResult?.details || '').slice(0, 240)
+        };
         // Pre-flight wallet gate already prevented the dial. Treat this as a defer, not a failure,
         // so we don't poison retry/queue logic with synthetic failed_q call rows.
         const next = smearCallQueueScheduledFor(
@@ -5023,6 +5044,13 @@ async function processVapiCallFromQueue(call) {
       }
 
       if (vapiResult?.error === 'vapi_not_configured') {
+        globalThis.__opsLastDialBlock = {
+          at: new Date().toISOString(),
+          kind: 'vapi_not_configured',
+          clientKey,
+          queueId: call.id,
+          details: String(vapiResult?.details || '').slice(0, 240)
+        };
         // Missing Vapi env/config should not poison queue/retry state. Defer and alert.
         const next = smearCallQueueScheduledFor(
           new Date(Date.now() + 60 * 60 * 1000),
