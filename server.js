@@ -204,6 +204,7 @@ import { AIInsightsEngine, LeadScoringEngine } from './lib/ai-insights.js';
 import { getCallContext, storeCallContext, getMostRecentCallContext, getCallContextCacheStats } from './lib/call-context-cache.js';
 import { createSocketIo, installAdminHubRealtimeHandlers } from './app/realtime.js';
 import { createApp } from './app/create-app.js';
+import { mountAdminRoutes } from './app/mount-routes.js';
 // Real API integration - dynamic imports will be used in endpoints
 
 const app = createApp({
@@ -554,49 +555,42 @@ app.use(
   })
 );
 
-app.use('/api/admin', createAdminOverviewRouter({ broadcast: broadcastUpdate }));
-app.use('/api/admin', createAdminRemindersRouter({ sendReminderSMS }));
-app.use('/api/admin', createAdminClientsRouter({ broadcast: broadcastUpdate }));
-app.use('/api/admin', createAdminAnalyticsAdvancedRouter());
-app.use('/api/admin', createAdminOperationsRouter({ io }));
-app.use('/api/admin', createAdminSalesPipelineRouter({ io }));
-app.use('/api/admin', createAdminEmailTasksDealsRouter());
-app.use('/api/admin', createAdminCalendarRouter());
-app.use('/api/admin', createAdminDocumentsCommentsFieldsRouter());
-app.use('/api/admin', createAdminTemplatesRouter());
-app.use('/api/admin', createAdminCallRecordingsRouter());
-app.use(
-  '/api/admin',
-  createAdminCallQueueRouter({
-    query,
-    getFullClient,
-    pickTimezone,
-    DateTime,
-    TIMEZONE,
-    isPostgres,
-    pgQueueLeadPhoneKeyExpr,
-    isBusinessHours
-  })
-);
-app.use(
-  '/api/admin',
-  createAdminOutboundWeekdayJourneyRouter({
-    query,
-    getFullClient,
-    pickTimezone,
-    DateTime,
-    isPostgres
-  })
-);
-app.use('/api/admin', createAdminCallsInsightsRouter({ query }));
-app.use('/api/admin', createAdminLeadScoringRouter({ query }));
-app.use('/api/admin', createAdminAppointmentsRouter({ query }));
-app.use('/api/admin', createAdminFollowUpsRouter({ query }));
-app.use('/api/admin', createAdminReportsRouter({ query }));
-app.use('/api/admin', createAdminSocialRouter({ query }));
-app.use('/api/admin', createAdminMultiClientRouter({ authenticateApiKey }));
-app.use('/api/admin', createAdminCallQueueOpsRouter());
-app.use('/api/admin', createAdminRoiCalculatorRouter());
+mountAdminRoutes(app, {
+  io,
+  broadcastUpdate,
+  sendReminderSMS,
+  query,
+  authenticateApiKey,
+  getFullClient,
+  pickTimezone,
+  DateTime,
+  TIMEZONE,
+  isPostgres,
+  pgQueueLeadPhoneKeyExpr,
+  isBusinessHours,
+  createAdminOverviewRouter,
+  createAdminRemindersRouter,
+  createAdminClientsRouter,
+  createAdminAnalyticsAdvancedRouter,
+  createAdminOperationsRouter,
+  createAdminSalesPipelineRouter,
+  createAdminEmailTasksDealsRouter,
+  createAdminCalendarRouter,
+  createAdminDocumentsCommentsFieldsRouter,
+  createAdminTemplatesRouter,
+  createAdminCallRecordingsRouter,
+  createAdminCallQueueRouter,
+  createAdminOutboundWeekdayJourneyRouter,
+  createAdminCallsInsightsRouter,
+  createAdminLeadScoringRouter,
+  createAdminAppointmentsRouter,
+  createAdminFollowUpsRouter,
+  createAdminReportsRouter,
+  createAdminSocialRouter,
+  createAdminMultiClientRouter,
+  createAdminCallQueueOpsRouter,
+  createAdminRoiCalculatorRouter,
+});
 
 // moved: /api/admin/call-recordings → routes/admin-call-recordings.js
 
