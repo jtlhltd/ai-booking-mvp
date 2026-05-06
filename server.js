@@ -15,7 +15,6 @@ import { createServer } from 'http';
 import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
-import compression from 'compression';
 import { isWebhookBypassPath, mountWebhookBodyParsers } from './app/mount-webhooks.js';
 import { createRequireApiKey } from './app/install-auth-and-guards.js';
 import { mountAdminAndTools } from './app/mount-admin-tools.js';
@@ -45,7 +44,6 @@ import { handleNotifyTest, handleNotifySend } from './lib/notify-api.js';
 import { handleSmsStatusWebhook } from './lib/sms-status-webhook.js';
 import { isOptedOut } from './lib/lead-deduplication.js';
 import { isMobileNumber } from './lib/google-places-search.js';
-import { createCallWithKey as vapiCreateCallWithKey } from './lib/vapi.js';
 import { setLastDialBlock } from './lib/ops-state.js';
 
 import { makeJwtAuth, insertEvent, freeBusy } from './gcal.js';
@@ -215,10 +213,7 @@ import { runStartServer } from './app/startup.js';
 import { closeDatabasePool } from './app/shutdown.js';
 import { buildAdminRoutesDeps } from './app/admin-deps.js';
 import { buildMountAdminAndToolsDeps } from './app/mount-admin-tools-deps.js';
-import {
-  registerHealthMonitoringAndIntakeRouters,
-  registerProbesNotifyMetaRouters,
-} from './app/register-http-routes.js';
+import { registerMainHttpRoutes } from './app/register-http-routes.js';
 import {
   formatGBP,
   formatTimeAgoLabel,
@@ -286,7 +281,32 @@ import {
   getCachedClient,
   getCachedAnalyticsDashboard,
 } from './lib/server-analytics-runtime.js';
+import {
+  createOutboundAbHandlers,
+  isDashboardSelfServiceClient,
+  isVapiOutboundAbExperimentOnlyPatch,
+} from './lib/outbound-ab-dashboard-handlers.js';
+import { runLogisticsOutreach, startColdCallCampaign } from './lib/campaign-vapi-dial-helpers.js';
+import {
+  getOptimalCallTime,
+  generateFollowUpPlan,
+  generateVoicemailFollowUpEmail,
+  generateDemoConfirmationEmail,
+  generateObjectionHandlingEmail,
+  generatePersonalizedScript,
+} from './lib/cold-call-personalization.js';
 // Real API integration - dynamic imports will be used in endpoints
+
+const {
+  runOutboundAbTestSetup,
+  runOutboundAbChallengerUpdate,
+  runOutboundAbDimensionStop,
+} = createOutboundAbHandlers({
+  invalidateClientCache,
+  getFullClient,
+  nanoid,
+  createABTestExperiment,
+});
 
 const app = createApp({
   performanceMiddleware,
@@ -614,10 +634,11 @@ mountAdminRoutes(
 
 // moved: GET /api/industry-comparison/:clientKey → routes/industry-comparison.js
 // Backup, database, cost, webhook-retry, migrations, admin/backup/check → routes/backend-status.js
-app.use(backendStatusRouter);
-
-// Query perf, rate-limit, analytics, active-indicator, performance/stats, cache → routes/ops.js
-app.use(opsRouter);
+// Query perf, rate-limit, analytics → routes/ops.js
+registerMainHttpRoutes.backendStatusOpsAndTenant(app, {
+  backendStatusRouter,
+  opsRouter
+});
 
 // moved: /api/admin/clients/* → routes/admin-multi-client.js
 
@@ -633,22 +654,6 @@ app.use(opsRouter);
 
 
 // moved: /api/health/comprehensive, /api/call-status, /health/lb → routes/health-and-diagnostics.js
-
-// --- Tenant header normalizer ---
-app.use((req, _res, next) => {
-  const hdrs = req.headers || {};
-  const fromHeader =
-    req.get?.('X-Client-Key') ||
-    req.get?.('x-client-key') ||
-    hdrs['x-client-key'] ||
-    hdrs['X-Client-Key'];
-  const fromQuery = req.query?.clientKey;
-  const tenantKey = fromHeader || fromQuery;
-  if (tenantKey && !hdrs['x-client-key']) {
-    req.headers['x-client-key'] = String(tenantKey);
-  }
-  next();
-});
 
 const PORT = process.env.PORT || 3000;
 const ORIGIN = process.env.VAPI_ORIGIN || '*';
@@ -956,16 +961,7 @@ function generateCostRecommendations(costs, budgetStatus) {
 }
 
 // Add compression middleware
-app.use(compression({
-  level: 6,
-  threshold: 1024,
-  filter: (req, res) => {
-    if (req.headers['x-no-compression']) {
-      return false;
-    }
-    return compression.filter(req, res);
-  }
-}));
+registerMainHttpRoutes.compression(app);
 
 // Cache cleanup is handled automatically by lib/cache.js (runs every 5 minutes)
 
@@ -2156,7 +2152,7 @@ const leadsPortalRouter = createLeadsPortalRouter({
   smsConfig,
   renderTemplate
 });
-registerHealthMonitoringAndIntakeRouters(app, {
+registerMainHttpRoutes.healthMonitoringAndIntake(app, {
   healthRouter,
   monitoringRouter,
   leadsPortalRouter,
@@ -2357,7 +2353,7 @@ const webhooksFacebookLeadDeps = {
   nodeEnv: process.env.NODE_ENV,
 };
 
-registerProbesNotifyMetaRouters(app, {
+registerMainHttpRoutes.probesNotifyMeta(app, {
   createHealthProbesRouter,
   createNotifyAndTwilioSmsRouter,
   createMetaIngestWebhooksRouter,
@@ -2577,9 +2573,9 @@ async function appendToSheet({ spreadsheetId, sheetName, values }) {
 
 
 // moved: POST /api/leads (JSON-backed) → routes/leads-portal-mount.js
-app.use(
-  '/api/leads',
-  createLeadsFollowupsRouter({
+registerMainHttpRoutes.leadsFollowups(app, {
+  createLeadsFollowupsRouter,
+  leadsFollowupsDeps: {
     getClientFromHeader,
     readJson,
     writeJson,
@@ -2591,8 +2587,8 @@ app.use(
     VAPI_PHONE_NUMBER_ID: process.env.VAPI_PHONE_NUMBER_ID,
     VAPI_PRIVATE_KEY: process.env.VAPI_PRIVATE_KEY,
     smsConfig
-  })
-);
+  }
+});
 // moved: /api/leads/recall, /api/leads/nudge, /api/leads/:id → routes/leads-followups.js
 
 // Retry processor - runs every 5 minutes to process pending retries
@@ -2601,1118 +2597,6 @@ app.use(
 // These will be scheduled in the cron section below
 
 // moved: /admin/vapi/cold-call-assistant and /tools/* → routes/admin-vapi-campaigns-mount.js and routes/tools-mount.js
-
-// Helper function to run logistics outreach
-async function runLogisticsOutreach({ assistantId, businesses, tenantKey, vapiKey }) {
-  if (!vapiKey) {
-    throw new Error('VAPI API key not configured');
-  }
-
-  const results = [];
-  const batchSize = 3; // Process 3 calls at a time
-  
-  for (let i = 0; i < businesses.length; i += batchSize) {
-    const batch = businesses.slice(i, i + batchSize);
-    
-    const batchPromises = batch.map(async (business, index) => {
-      try {
-        // Add staggered delay within batch
-        await new Promise(resolve => setTimeout(resolve, index * 2000));
-        
-        const callData = {
-          assistantId,
-          customer: {
-            number: business.phone,
-            name: business.name || 'Business'
-          },
-          metadata: {
-            tenantKey,
-            leadPhone: business.phone,
-            businessName: business.name,
-            businessAddress: business.address,
-            businessWebsite: business.website,
-            decisionMaker: business.decisionMaker,
-            callTime: new Date().toISOString(),
-            priority: i + index + 1
-          }
-        };
-
-        try {
-          const callResult = await vapiCreateCallWithKey({ vapiKey, callData });
-          results.push({
-            businessName: business.name,
-            phone: business.phone,
-            status: 'call_initiated',
-            callId: callResult.id,
-            priority: i + index + 1,
-            message: 'Call initiated successfully'
-          });
-          
-          console.log(`[LOGISTICS CALL] Initiated for ${business.name} (${business.phone})`);
-        } catch (error) {
-          results.push({
-            businessName: business.name,
-            phone: business.phone,
-            status: 'call_failed',
-            error: error?.vapi?.message || error?.message || 'Unknown error',
-            message: 'Failed to initiate call'
-          });
-          
-          console.error(`[LOGISTICS CALL ERROR] Failed to call ${business.name}:`, error?.vapi || error);
-        }
-        
-      } catch (error) {
-        results.push({
-          businessName: business.name,
-          phone: business.phone,
-          status: 'call_failed',
-          error: error.message,
-          message: 'Call failed due to error'
-        });
-        
-        console.error(`[LOGISTICS CALL ERROR] Error calling ${business.name}:`, error.message);
-      }
-    });
-    
-    await Promise.all(batchPromises);
-    
-    // Delay between batches
-    if (i + batchSize < businesses.length) {
-      console.log(`[LOGISTICS OUTREACH] Batch ${Math.floor(i/batchSize) + 1} completed. Waiting 5s before next batch.`);
-      await new Promise(resolve => setTimeout(resolve, 5000));
-    }
-  }
-  
-  return results;
-}
-
-// moved: /admin/vapi/logistics-* → routes/admin-vapi-logistics-mount.js
-
-// moved: /admin/vapi/cold-call-campaign → routes/admin-vapi-campaigns-mount.js
-
-// Start cold call campaign with advanced optimization
-async function startColdCallCampaign(campaign) {
-  const results = [];
-  
-  try {
-    console.log(`[COLD CALL CAMPAIGN] Starting optimized campaign ${campaign.id} with ${campaign.businesses.length} businesses`);
-    
-    // Sort businesses by priority (decision maker available, website, etc.)
-    const prioritizedBusinesses = campaign.businesses.sort((a, b) => {
-      let scoreA = 0;
-      let scoreB = 0;
-      
-      // Prioritize businesses with decision maker info
-      if (a.decisionMaker?.name) scoreA += 10;
-      if (b.decisionMaker?.name) scoreB += 10;
-      
-      // Prioritize businesses with websites
-      if (a.website) scoreA += 5;
-      if (b.website) scoreB += 5;
-      
-      // Prioritize businesses with email addresses
-      if (a.email) scoreA += 3;
-      if (b.email) scoreB += 3;
-      
-      return scoreB - scoreA;
-    });
-    
-    // Process businesses in optimized batches
-    const batchSize = 3; // Smaller batches for better quality
-    for (let i = 0; i < prioritizedBusinesses.length; i += batchSize) {
-      const batch = prioritizedBusinesses.slice(i, i + batchSize);
-      
-      // Process batch with intelligent timing
-      const batchPromises = batch.map(async (business, index) => {
-        try {
-          // Add staggered delay within batch
-          await new Promise(resolve => setTimeout(resolve, index * 1000));
-          
-          // Enhanced call data with decision maker context
-          const callData = {
-            assistantId: campaign.assistantId,
-            customer: {
-              number: business.phone,
-              name: business.decisionMaker?.name || business.name
-            },
-            metadata: {
-              businessId: business.id,
-              businessName: business.name,
-              businessAddress: business.address,
-              businessWebsite: business.website,
-              businessEmail: business.email,
-              decisionMaker: business.decisionMaker,
-              campaignId: campaign.id,
-              priority: i + index + 1,
-              callTime: new Date().toISOString()
-            },
-            // Add context for better personalization
-            context: {
-              practiceName: business.name,
-              location: business.address,
-              decisionMakerName: business.decisionMaker?.name,
-              decisionMakerRole: business.decisionMaker?.role,
-              website: business.website
-            }
-          };
-
-          // Make the call via VAPI
-          try {
-            const callRes = await vapiCreateCallWithKey({ vapiKey, callData });
-            results.push({
-              businessId: business.id,
-              businessName: business.name,
-              phone: business.phone,
-              decisionMaker: business.decisionMaker,
-              status: 'call_initiated',
-              callId: callRes.id,
-              priority: i + index + 1,
-              message: 'Call initiated successfully',
-              timestamp: new Date().toISOString()
-            });
-            
-            console.log(`[COLD CALL] Call initiated for ${business.name} (${business.phone}) - Priority: ${i + index + 1}`);
-          } catch (error) {
-            results.push({
-              businessId: business.id,
-              businessName: business.name,
-              phone: business.phone,
-              status: 'call_failed',
-              error: error?.vapi?.message || error?.message || 'Unknown error',
-              message: 'Failed to initiate call',
-              timestamp: new Date().toISOString()
-            });
-            
-            console.error(`[COLD CALL ERROR] Failed to call ${business.name}:`, error?.vapi || error);
-          }
-          
-        } catch (error) {
-          results.push({
-            businessId: business.id,
-            businessName: business.name,
-            phone: business.phone,
-            status: 'call_failed',
-            error: error.message,
-            message: 'Call failed due to error',
-            timestamp: new Date().toISOString()
-          });
-          
-          console.error(`[COLD CALL ERROR] Error calling ${business.name}:`, error.message);
-        }
-      });
-      
-      // Wait for batch to complete
-      await Promise.all(batchPromises);
-      
-      // Intelligent delay between batches based on success rate
-      const successRate = results.filter(r => r.status === 'call_initiated').length / results.length;
-      const delay = successRate > 0.8 ? 3000 : 5000; // Shorter delay if high success rate
-      
-      if (i + batchSize < prioritizedBusinesses.length) {
-        console.log(`[COLD CALL CAMPAIGN] Batch ${Math.floor(i/batchSize) + 1} completed. Success rate: ${(successRate * 100).toFixed(1)}%. Waiting ${delay}ms before next batch.`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-    
-    console.log(`[COLD CALL CAMPAIGN] Completed optimized campaign ${campaign.id}. Results:`, results.length);
-    
-  } catch (error) {
-    console.error(`[COLD CALL CAMPAIGN ERROR]`, error.message);
-  }
-  
-  return results;
-}
-
-// A/B Testing for Cold Call Scripts
-// moved: /admin/vapi/ab-test-assistant → routes/admin-vapi-campaigns-mount.js
-
-// Lead Scoring and Qualification System
-// moved: /admin/vapi/lead-scoring → routes/admin-vapi-campaigns-mount.js
-
-// Get optimal calling time based on business data
-function getOptimalCallTime(business) {
-  // Analyze business name and location for optimal timing
-  const name = business.name.toLowerCase();
-  const address = business.address?.toLowerCase() || '';
-  
-  // Dental practices typically best called 9-10 AM or 2-3 PM
-  if (name.includes('dental') || name.includes('dentist')) {
-    return '09:00-10:00 or 14:00-15:00';
-  }
-  
-  // Law firms prefer morning calls
-  if (name.includes('law') || name.includes('legal')) {
-    return '09:00-11:00';
-  }
-  
-  // Beauty salons prefer afternoon
-  if (name.includes('beauty') || name.includes('salon')) {
-    return '14:00-16:00';
-  }
-  
-  // Default optimal times
-  return '09:00-10:00 or 14:00-15:00';
-}
-
-// Advanced Analytics and Optimization
-// moved: /admin/vapi/campaign-analytics/:campaignId → routes/admin-vapi-campaigns-mount.js
-
-// Multi-Channel Follow-up System
-// moved: /admin/vapi/follow-up-sequence → routes/admin-vapi-campaigns-mount.js
-
-// Generate follow-up plan based on call outcome
-function generateFollowUpPlan(call) {
-  const outcomes = {
-    'voicemail': 'Email immediately, retry call in 2 hours',
-    'interested': 'Send demo confirmation email and calendar invite',
-    'objection': 'Send objection handling email, follow-up call in 3 days',
-    'not_interested': 'Send case study email, follow-up call in 1 week',
-    'no_answer': 'Retry call at different time, send email',
-    'busy': 'Send email, retry call next day'
-  };
-  
-  return outcomes[call.outcome] || 'Standard follow-up sequence';
-}
-
-// Generate voicemail follow-up email
-function generateVoicemailFollowUpEmail(call) {
-  return {
-    subject: `Hi ${call.decisionMaker?.name || 'there'}, following up on my call about our premium £500/month booking service`,
-    body: `Hi ${call.decisionMaker?.name || 'there'},
-
-I left you a voicemail earlier about helping ${call.businessName} increase appointment bookings by 300% with our premium £500/month service.
-
-I wanted to follow up with some quick information:
-
-✅ We've helped 500+ dental practices increase bookings
-✅ Our AI handles calls 24/7, never misses a patient  
-✅ Automatically books appointments in your calendar
-✅ Premium service includes dedicated account manager
-✅ Most practices see 20-30 extra bookings per month worth £10,000-15,000
-✅ ROI typically achieved within 30 days
-
-Our premium service pays for itself with just 2-3 extra bookings per month. Most practices see 20-30 extra bookings monthly.
-
-Would you be available for a quick 15-minute demo this week? I can show you exactly how this works and the ROI you can expect.
-
-Best regards,
-Sarah
-AI Booking Solutions
-
-P.S. If you're not the right person, could you please forward this to the practice owner or manager?`
-  };
-}
-
-// Generate demo confirmation email
-function generateDemoConfirmationEmail(call) {
-  return {
-    subject: `Demo confirmed - How to increase ${call.businessName} bookings by 300% with our premium £500/month service`,
-    body: `Hi ${call.decisionMaker?.name},
-
-Great speaking with you! I'm excited to show you how we can help ${call.businessName} increase bookings by 300% with our premium £500/month service.
-
-Demo Details:
-📅 Date: [To be confirmed]
-⏰ Duration: 15 minutes
-🎯 Focus: How our premium AI service can handle your patient calls 24/7
-💰 Investment: £500/month (typically pays for itself with 2-3 extra bookings)
-
-What you'll see:
-• Live demo of our premium AI booking system
-• How it integrates with your calendar
-• Real results from similar practices (20-30 extra bookings monthly)
-• Custom setup for your practice
-• Dedicated account manager benefits
-• ROI calculations and projections
-
-Our premium service typically generates £10,000-15,000 in additional revenue monthly for practices like yours.
-
-I'll send you a calendar invite shortly. Looking forward to showing you how this can transform your practice!
-
-Best regards,
-Sarah
-AI Booking Solutions`
-  };
-}
-
-// Generate objection handling email
-function generateObjectionHandlingEmail(call) {
-  return {
-    subject: `Addressing your concerns about our premium £500/month AI booking service for ${call.businessName}`,
-    body: `Hi ${call.decisionMaker?.name},
-
-I understand your concerns about [objection]. Let me address this directly:
-
-[OBJECTION-SPECIFIC CONTENT]
-
-But here's what I want you to know about our premium £500/month service:
-• We've helped 500+ practices overcome these same concerns
-• Most practices see ROI within 30 days
-• Our premium service pays for itself with just 2-3 extra bookings per month
-• Most practices see 20-30 extra bookings worth £10,000-15,000 monthly
-• We offer a 30-day money-back guarantee
-• Setup takes less than 30 minutes
-• Includes dedicated account manager and priority support
-
-The numbers speak for themselves: £500 investment typically generates £10,000-15,000 in additional revenue monthly.
-
-I'd love to show you a quick 15-minute demo to address your specific concerns and show you the ROI calculations. Would you be available this week?
-
-Best regards,
-Sarah
-AI Booking Solutions`
-  };
-}
-
-// Dynamic Script Personalization System
-// moved: /admin/vapi/personalized-assistant → routes/admin-vapi-campaigns-mount.js
-
-// Generate personalized script based on business data
-function generatePersonalizedScript(business, industry, region) {
-  const businessName = business.name;
-  const decisionMaker = business.decisionMaker?.name || 'there';
-  const location = business.address || business.city || business.region || '';
-  const regionHint = region || business.region || location;
-  const website = business.website ? `I noticed on ${business.website} that` : '';
-  
-  const services = Array.isArray(business.services)
-    ? business.services
-    : typeof business.services === 'string'
-      ? business.services.split(',').map(s => s.trim()).filter(Boolean)
-      : [];
-  const servicesSummary = services.length
-    ? services.slice(0, 2).join(' & ')
-    : null;
-  const primaryService = services.length ? services[0] : 'appointments';
-  const bookingLink = business.bookingLink || business.bookingUrl || null;
-  
-  // Industry-specific personalization
-  const industryContext = getIndustryContext(industry);
-  
-  // Regional personalization
-  const regionalContext = getRegionalContext(regionHint || location);
-
-  const introWebsiteLine = website
-    ? `${website} you offer ${servicesSummary || primaryService}. `
-    : '';
-  const serviceHook = servicesSummary
-    ? ` enquiries for ${servicesSummary}`
-    : ` new enquiries`;
-  
-  const firstMessage = `Hi ${decisionMaker}, this is Sarah from AI Booking Solutions. We've helped ${industryContext.examplePractice} in ${regionalContext.city} capture more ${industryContext.metric} automatically. ${introWebsiteLine}Do you have 90 seconds to see how this could handle ${serviceHook} at ${businessName}?`;
-  
-  const systemMessage = `You are Sarah, calling ${decisionMaker} at ${businessName} in ${regionalContext.city}.
-
-BUSINESS CONTEXT:
-- Practice: ${businessName}
-- Location: ${location}
-- Decision Maker: ${decisionMaker}
-- Industry: ${industry}
-- Website: ${business.website || 'Not available'}
-- Services: ${servicesSummary || primaryService}
-- Booking Link: ${bookingLink || 'Not configured'}
-
-INDUSTRY-SPECIFIC INSIGHTS:
-${industryContext.insights}
-
-REGIONAL CONTEXT:
-${regionalContext.insights}
-
-PERSONALIZATION RULES:
-- Use ${decisionMaker}'s name frequently
-- Reference ${businessName} specifically
-- Mention ${regionalContext.city} when relevant
-- Use ${industryContext.language} appropriate for ${industry}
-- Reference ${industryContext.painPoints} as pain points
-- Use ${regionalContext.examples} as local examples
-- Highlight services such as ${servicesSummary || primaryService}
-- Offer to text the booking link if interest is shown${bookingLink ? ` (link: ${bookingLink})` : ''}
-
-CONVERSATION FLOW:
-1. RAPPORT: "Hi ${decisionMaker}, this is Sarah from AI Booking Solutions"
-2. CONTEXT: "We've helped ${industryContext.examplePractice} in ${regionalContext.city} increase ${industryContext.metric} by 300%"
-3. PERSONAL: "${servicesSummary ? `I noticed you focus on ${servicesSummary}. ` : ''}Do you have 90 seconds to hear how this could work for ${businessName}?"
-4. QUALIFY: "Are you the owner or manager of ${businessName}?"
-5. PAIN: "What's your biggest challenge with ${industryContext.metric} at ${businessName}?"
-6. VALUE: "We help practices like ${businessName} increase ${industryContext.metric} by 300%"
-7. CLOSE: "Would you be available for a 15-minute demo to see how this could work for ${businessName}?${bookingLink ? ` I can also text over the booking link (${bookingLink}) if that's easier.` : ''}"
-
-OBJECTION HANDLING:
-- Too expensive: "What's the cost of losing patients at ${businessName}? Our service pays for itself with 2-3 extra bookings per month"
-- Too busy: "That's exactly why ${businessName} needs this - it saves you time by handling bookings automatically"
-- Not interested: "I understand. Can I send you a case study showing how we helped ${industryContext.examplePractice} increase bookings by 300%?"
-
-RULES:
-- Always use ${decisionMaker}'s name
-- Always reference ${businessName}
-- Keep calls under 3 minutes
-- Focus on ${industryContext.painPoints}
-- Use ${regionalContext.examples} for social proof`;
-  
-  return {
-    firstMessage,
-    systemMessage,
-    personalization: {
-      businessName,
-      decisionMaker,
-      industry,
-      region: regionalContext.city,
-      website: !!business.website
-    }
-  };
-}
-
-// Get industry-specific context
-function getIndustryContext(industry) {
-  const normalized = String(industry || '').toLowerCase().replace(/\s+/g, '_');
-  
-  const contexts = {
-    dentist: {
-      examplePractice: 'Birmingham Dental Care',
-      language: 'professional medical',
-      painPoints: 'missed calls, no-shows, scheduling gaps, treatment plan follow-ups',
-      insights: 'Dental practices typically lose 4-5 patients monthly from missed calls. Most practices see 15-20 extra bookings per month with our system.',
-      metric: 'dental appointments'
-    },
-    dental_practice: null,
-    dental: null,
-    orthodontics: {
-      examplePractice: 'Leeds Orthodontic Studio',
-      language: 'professional medical',
-      painPoints: 'consult requests left waiting, financing questions, treatment plan follow-up',
-      insights: 'Orthodontic teams often juggle new consults with existing patients. Automating follow-up adds 10-15 new starts per month.',
-      metric: 'consultations and treatment starts'
-    },
-    lawyer: {
-      examplePractice: 'Manchester Legal Associates',
-      language: 'professional legal',
-      painPoints: 'missed consultations, case intake, client communication',
-      insights: 'Law firms typically lose 3-4 consultations monthly from missed calls. Most firms see 12-18 extra consultations per month with our system.',
-      metric: 'consultations'
-    },
-    legal: null,
-    law_firm: null,
-    beauty_salon: {
-      examplePractice: 'London Beauty Studio',
-      language: 'friendly professional',
-      painPoints: 'missed appointments, no-shows, last-minute cancellations',
-      insights: 'Beauty salons typically lose 6-8 appointments monthly from missed calls. Most salons see 20-25 extra bookings per month with our system.',
-      metric: 'beauty appointments'
-    },
-    salon: null,
-    spa: {
-      examplePractice: 'Brighton Wellness Spa',
-      language: 'friendly professional',
-      painPoints: 'packages not upsold, missed voicemails, therapists double-booked',
-      insights: 'Spas recover 15-20 lost bookings per month once follow-up is automated.',
-      metric: 'treatments and packages'
-    },
-    veterinary: {
-      examplePractice: 'Northside Veterinary Clinic',
-      language: 'warm clinical',
-      painPoints: 'emergency enquiries, follow-ups, surgery scheduling',
-      insights: 'Vets often miss urgent calls after hours. Our system rebooks 10-15 pet appointments monthly.',
-      metric: 'pet appointments'
-    },
-    vet: null,
-    fitness: {
-      examplePractice: 'Total Performance PT Studio',
-      language: 'energetic professional',
-      painPoints: 'trial sign-ups, intro calls, class bookings, no-shows',
-      insights: 'Studios see 20-30% more trial conversions when leads get a fast callback.',
-      metric: 'fitness consultations and sessions'
-    },
-    gym: null,
-    personal_training: null,
-    physiotherapy: {
-      examplePractice: 'Manchester Physio Clinic',
-      language: 'professional clinical',
-      painPoints: 'treatment plan adherence, initial assessments, cancellations',
-      insights: 'Physio clinics recover 8-12 treatment bookings monthly with persistent follow-up.',
-      metric: 'treatment sessions'
-    },
-    chiropractic: {
-      examplePractice: 'Bristol Chiropractic Centre',
-      language: 'professional clinical',
-      painPoints: 'initial consults, care plan enrolments, missed voicemails',
-      insights: 'Chiropractors close 12-15 extra care plans each month when every lead is called back within 5 minutes.',
-      metric: 'consults and care plans'
-    },
-    accountant: {
-      examplePractice: 'Leeds Tax Advisors',
-      language: 'trusted advisor',
-      painPoints: 'tax season enquiries, consultation scheduling, document collection',
-      insights: 'Accountancy firms convert 10-12 extra consultations per month by tightening follow-up during busy seasons.',
-      metric: 'consultations'
-    },
-    accounting: null,
-    finance: {
-      examplePractice: 'City Financial Planning',
-      language: 'trusted advisor',
-      painPoints: 'initial discovery calls, onboarding paperwork, follow-ups',
-      insights: 'Financial planners close 3-5 additional clients monthly when no new enquiry waits longer than 5 minutes.',
-      metric: 'financial consultations'
-    },
-    medspa: {
-      examplePractice: 'Chelsea Aesthetics',
-      language: 'luxury professional',
-      painPoints: 'cosmetic consults, treatment upsells, membership plans',
-      insights: 'Medspas add 12-18 high-ticket procedures monthly when leads get immediate callbacks.',
-      metric: 'aesthetic consultations'
-    },
-    tattoo: {
-      examplePractice: 'Ink Lab London',
-      language: 'creative professional',
-      painPoints: 'design consultations, deposit collection, scheduling',
-      insights: 'Studios recover 10+ bookings per month by chasing enquiries automatically.',
-      metric: 'tattoo consultations'
-    }
-  };
-  
-  const normalizedKey = (() => {
-    if (contexts[normalized]) return normalized;
-    if (normalized.includes('dent')) return 'dentist';
-    if (normalized.includes('law')) return 'lawyer';
-    if (normalized.includes('beauty') || normalized.includes('salon')) return 'beauty_salon';
-    if (normalized.includes('vet')) return 'veterinary';
-    if (normalized.includes('fit') || normalized.includes('gym') || normalized.includes('pt')) return 'fitness';
-    if (normalized.includes('physio')) return 'physiotherapy';
-    if (normalized.includes('chiro')) return 'chiropractic';
-    if (normalized.includes('account')) return 'accountant';
-    if (normalized.includes('finance')) return 'finance';
-    if (normalized.includes('spa')) return 'spa';
-    if (normalized.includes('tattoo') || normalized.includes('ink')) return 'tattoo';
-    return 'dentist';
-  })();
-  
-  const selected = contexts[normalizedKey];
-  if (selected) {
-    return {
-      examplePractice: selected.examplePractice,
-      language: selected.language,
-      painPoints: selected.painPoints,
-      insights: selected.insights,
-      metric: selected.metric || 'appointments'
-    };
-  }
-  
-  return {
-    examplePractice: 'Local Practice',
-    language: 'professional and friendly',
-    painPoints: 'missed calls, slow follow-up, manual scheduling',
-    insights: 'Businesses typically lose 5-10 opportunities monthly from slow follow-up. Most see 25% more bookings with our system.',
-    metric: 'appointments'
-  };
-}
-
-// Get regional context
-function getRegionalContext(location) {
-  const locationLower = location.toLowerCase();
-  
-  if (locationLower.includes('london')) {
-    return {
-      city: 'London',
-      insights: 'London practices face high competition and need every advantage. We\'ve helped 50+ London practices increase bookings.',
-      examples: 'London Dental Care, Central London Practice'
-    };
-  } else if (locationLower.includes('manchester')) {
-    return {
-      city: 'Manchester',
-      insights: 'Manchester practices benefit from our system\'s efficiency. We\'ve helped 30+ Manchester practices increase bookings.',
-      examples: 'Manchester Dental Group, Northern Practice'
-    };
-  } else if (locationLower.includes('birmingham')) {
-    return {
-      city: 'Birmingham',
-      insights: 'Birmingham practices see great results with our system. We\'ve helped 25+ Birmingham practices increase bookings.',
-      examples: 'Birmingham Dental Care, Midlands Practice'
-    };
-  } else {
-    return {
-      city: 'your area',
-      insights: 'Practices in your area benefit from our system\'s efficiency. We\'ve helped hundreds of UK practices increase bookings.',
-      examples: 'local practices, similar businesses'
-    };
-  }
-}
-
-// moved: /admin/vapi/test-connection, /admin/vapi/test-call, /admin/vapi/assistants, /admin/vapi/phone-numbers, /admin/vapi/calls → routes/admin-vapi-plumbing-mount.js
-
-// moved: /api/onboard-client → routes/client-ops-mount.js
-
-/** Tenant keys allowed to use dashboard A/B setup without API key (override with DASHBOARD_SELF_SERVICE_CLIENT_KEYS). */
-function getDashboardSelfServiceClientKeys() {
-  const e = process.env.DASHBOARD_SELF_SERVICE_CLIENT_KEYS;
-  if (e === undefined) {
-    // Default: primary outreach tenant can use A/B setup without API key.
-    return ['d2d-xpress-tom'];
-  }
-  return String(e)
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-function isDashboardSelfServiceClient(clientKey) {
-  return getDashboardSelfServiceClientKeys().includes(clientKey);
-}
-const DASHBOARD_SELF_SERVICE_VAPI_AB_KEYS = new Set([
-  'outboundAbVoiceExperiment',
-  'outboundAbOpeningExperiment',
-  'outboundAbScriptExperiment',
-  'outboundAbExperiment',
-  'outboundAbFocusDimension',
-  'outboundAbMinSamplesPerVariant',
-  'outboundAbSampleReadyEmail'
-]);
-
-function isVapiOutboundAbExperimentOnlyPatch(body) {
-  if (!body || typeof body !== 'object' || Array.isArray(body)) return false;
-  const keys = Object.keys(body);
-  if (keys.length !== 1 || keys[0] !== 'vapi') return false;
-  const v = body.vapi;
-  if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
-  const vk = Object.keys(v);
-  if (vk.length === 0) return false;
-  for (const k of vk) {
-    if (!DASHBOARD_SELF_SERVICE_VAPI_AB_KEYS.has(k)) return false;
-    const val = v[k];
-    if (val !== null && val !== undefined && typeof val !== 'string') return false;
-  }
-  return true;
-}
-
-// moved: PATCH /api/clients/:clientKey/config → routes/client-ops-mount.js
-
-/** Shared create path for outbound A/B (dimension + variants + optional experiment name — auto-generated if blank). */
-async function runOutboundAbTestSetup(clientKey, body, res) {
-  try {
-    const { isOutboundAbReviewPending, OUTBOUND_AB_REVIEW_PENDING_MESSAGE } = await import(
-      './lib/outbound-ab-review-lock.js'
-    );
-    invalidateClientCache(clientKey);
-    const lockClient = await getFullClient(clientKey);
-    if (isOutboundAbReviewPending(lockClient?.vapi)) {
-      res.status(423).json({ ok: false, error: OUTBOUND_AB_REVIEW_PENDING_MESSAGE });
-      return;
-    }
-    const { OUTBOUND_AB_VAPI_KEYS } = await import('./lib/outbound-ab-variant.js');
-    const { experimentName, variants, replaceExisting = true, dimension } = body || {};
-    const dimRaw = dimension != null ? String(dimension).trim().toLowerCase() : '';
-    if (dimRaw !== 'voice' && dimRaw !== 'opening' && dimRaw !== 'script') {
-      res.status(400).json({
-        ok: false,
-        error: 'dimension is required: "voice", "opening", or "script"'
-      });
-      return;
-    }
-    const validateVoiceIdForAb =
-      dimRaw === 'voice'
-        ? (await import('./lib/elevenlabs-voice-id.js')).validateElevenLabsVoiceIdForAb
-        : null;
-    let nameTrim = experimentName != null ? String(experimentName).trim() : '';
-    if (!nameTrim) {
-      const slug = String(clientKey)
-        .replace(/[^a-z0-9_-]+/gi, '_')
-        .replace(/_+/g, '_')
-        .replace(/^_|_$/g, '')
-        .slice(0, 24);
-      nameTrim = `ab_${slug || 'tenant'}_${nanoid(10)}`;
-    }
-    if (!Array.isArray(variants) || variants.length < 1) {
-      res.status(400).json({ ok: false, error: 'At least one variant is required' });
-      return;
-    }
-    let variantsList = [...variants];
-    if (variantsList.length === 1) {
-      const { resolveOutboundAbBaselineForDimension } = await import('./lib/outbound-ab-baseline.js');
-      const baseline = await resolveOutboundAbBaselineForDimension(clientKey, lockClient, dimRaw, {
-        excludeSameDimensionExperiment: true
-      });
-      const u = variantsList[0];
-      if (dimRaw === 'voice') {
-        let ch = u.voice != null ? String(u.voice).trim() : '';
-        if (!ch) {
-          res.status(400).json({ ok: false, error: 'Challenger voice is empty' });
-          return;
-        }
-        const voiceCheck = validateVoiceIdForAb(ch);
-        if (!voiceCheck.ok) {
-          res.status(400).json({ ok: false, error: voiceCheck.error });
-          return;
-        }
-        ch = voiceCheck.id;
-        if (baseline && ch === baseline) {
-          res.status(400).json({
-            ok: false,
-            error: 'New voice matches your current live assistant voice. Use a different voice ID for the test.'
-          });
-          return;
-        }
-        variantsList = [{ name: 'control' }, { name: 'variant_b', voice: ch }];
-      } else if (dimRaw === 'opening') {
-        const ch = u.firstMessage != null ? String(u.firstMessage).trim() : '';
-        if (!ch) {
-          res.status(400).json({ ok: false, error: 'Challenger opening line is empty' });
-          return;
-        }
-        if (baseline && ch === baseline) {
-          res.status(400).json({
-            ok: false,
-            error: 'Opening line matches your current live assistant line. Change the uploaded text to run a test.'
-          });
-          return;
-        }
-        variantsList = [{ name: 'control' }, { name: 'variant_b', firstMessage: ch }];
-      } else {
-        const ch =
-          u.script != null
-            ? String(u.script).trim()
-            : u.systemMessage != null
-              ? String(u.systemMessage).trim()
-              : '';
-        if (!ch) {
-          res.status(400).json({ ok: false, error: 'Challenger script is empty' });
-          return;
-        }
-        if (baseline && ch === baseline) {
-          res.status(400).json({
-            ok: false,
-            error: 'Script matches your current live assistant script. Change the uploaded script to run a test.'
-          });
-          return;
-        }
-        variantsList = [{ name: 'control' }, { name: 'variant_b', script: ch }];
-      }
-    }
-    if (variantsList.length < 2) {
-      res.status(400).json({ ok: false, error: 'At least two variants are required' });
-      return;
-    }
-    const mapped = [];
-    for (const v of variantsList) {
-      const vn = String(v.name || v.variantName || '').trim();
-      if (!vn) {
-        res.status(400).json({ ok: false, error: 'Each variant needs a name' });
-        return;
-      }
-      const isControlArm = vn.toLowerCase() === 'control';
-      const voice = v.voice != null ? String(v.voice).trim() : '';
-      const firstMessage = v.firstMessage != null ? String(v.firstMessage).trim() : '';
-      const script =
-        v.script != null
-          ? String(v.script).trim()
-          : v.systemMessage != null
-            ? String(v.systemMessage).trim()
-            : '';
-      const config = {};
-      if (dimRaw === 'voice') {
-        if (isControlArm) {
-          mapped.push({ name: vn, config: {} });
-          continue;
-        }
-        if (!voice) {
-          res.status(400).json({
-            ok: false,
-            error: `Variant "${vn}": voice experiments require a non-empty voice ID per variant`
-          });
-          return;
-        }
-        const voiceCheck = validateVoiceIdForAb(voice);
-        if (!voiceCheck.ok) {
-          res.status(400).json({ ok: false, error: voiceCheck.error });
-          return;
-        }
-        config.voice = voiceCheck.id;
-      } else if (dimRaw === 'opening') {
-        if (isControlArm) {
-          mapped.push({ name: vn, config: {} });
-          continue;
-        }
-        if (!firstMessage) {
-          res.status(400).json({
-            ok: false,
-            error: `Variant "${vn}": opening-line experiments require a non-empty opening line per variant`
-          });
-          return;
-        }
-        config.firstMessage = firstMessage;
-      } else {
-        if (isControlArm) {
-          mapped.push({ name: vn, config: {} });
-          continue;
-        }
-        if (!script) {
-          res.status(400).json({
-            ok: false,
-            error: `Variant "${vn}": script experiments require non-empty script (system instructions) per variant`
-          });
-          return;
-        }
-        config.script = script;
-      }
-      mapped.push({ name: vn, config });
-    }
-    if (replaceExisting) {
-      const { deactivateAbTestExperimentsByName } = await import('./db.js');
-      const vapiKeyForDim = OUTBOUND_AB_VAPI_KEYS[dimRaw];
-      const prevExp =
-        lockClient?.vapi && typeof lockClient.vapi === 'object'
-          ? String(lockClient.vapi[vapiKeyForDim] || '').trim()
-          : '';
-      if (prevExp && prevExp !== nameTrim) {
-        await deactivateAbTestExperimentsByName(clientKey, prevExp);
-      }
-      await deactivateAbTestExperimentsByName(clientKey, nameTrim);
-    }
-    await createABTestExperiment({
-      clientKey,
-      experimentName: nameTrim,
-      variants: mapped,
-      isActive: true
-    });
-    const vapiKey = OUTBOUND_AB_VAPI_KEYS[dimRaw];
-    const { updateClientConfig } = await import('./lib/client-onboarding.js');
-    await updateClientConfig(clientKey, {
-      vapi: { [vapiKey]: nameTrim, outboundAbFocusDimension: dimRaw }
-    });
-    const { getOutboundAbExperimentSummary } = await import('./db.js');
-    const { enrichOutboundAbDashboardSummariesFromAssistant } = await import(
-      './lib/outbound-ab-dashboard-enrich.js'
-    );
-    const summaryClient = await getFullClient(clientKey, { bypassCache: true });
-    let voiceSummary = null;
-    let openingSummary = null;
-    let scriptSummary = null;
-    if (dimRaw === 'voice') {
-      voiceSummary = await getOutboundAbExperimentSummary(clientKey, nameTrim);
-    } else if (dimRaw === 'opening') {
-      openingSummary = await getOutboundAbExperimentSummary(clientKey, nameTrim);
-    } else {
-      scriptSummary = await getOutboundAbExperimentSummary(clientKey, nameTrim);
-    }
-    if (summaryClient) {
-      await enrichOutboundAbDashboardSummariesFromAssistant(
-        summaryClient,
-        { voiceSummary, openingSummary, scriptSummary, legacyOutboundAbSummary: null },
-        {}
-      );
-    }
-    const slotSummary =
-      dimRaw === 'voice' ? voiceSummary : dimRaw === 'opening' ? openingSummary : scriptSummary;
-    res.json({
-      ok: true,
-      experimentName: nameTrim,
-      dimension: dimRaw,
-      vapiKey,
-      variantCount: mapped.length,
-      outboundAbFocusDimension: dimRaw,
-      slotSummary
-    });
-  } catch (error) {
-    console.error('[OUTBOUND AB TEST SETUP ERROR]', error);
-    res.status(500).json({ ok: false, error: error.message || String(error) });
-  }
-}
-
-/** Update challenger variant_config in place (same experiment row ids — assignments stay valid). */
-async function runOutboundAbChallengerUpdate(clientKey, body, res) {
-  try {
-    const { isOutboundAbReviewPending, OUTBOUND_AB_REVIEW_PENDING_MESSAGE } = await import(
-      './lib/outbound-ab-review-lock.js'
-    );
-    invalidateClientCache(clientKey);
-    const lockClient = await getFullClient(clientKey);
-    if (isOutboundAbReviewPending(lockClient?.vapi)) {
-      res.status(423).json({ ok: false, error: OUTBOUND_AB_REVIEW_PENDING_MESSAGE });
-      return;
-    }
-    const { OUTBOUND_AB_VAPI_KEYS } = await import('./lib/outbound-ab-variant.js');
-    const dimRaw = body?.dimension != null ? String(body.dimension).trim().toLowerCase() : '';
-    if (dimRaw !== 'voice' && dimRaw !== 'opening' && dimRaw !== 'script') {
-      res.status(400).json({ ok: false, error: 'dimension must be voice, opening, or script' });
-      return;
-    }
-    const vapiKey = OUTBOUND_AB_VAPI_KEYS[dimRaw];
-    const expName =
-      lockClient?.vapi && typeof lockClient.vapi === 'object'
-        ? String(lockClient.vapi[vapiKey] || '').trim()
-        : '';
-    if (!expName) {
-      res.status(404).json({
-        ok: false,
-        error: 'No active outbound A/B experiment configured for this dimension.'
-      });
-      return;
-    }
-    const { resolveChallengerVariantNameForExperiment, updateActiveAbTestVariantConfig } = await import('./db.js');
-    const challengerName = await resolveChallengerVariantNameForExperiment(clientKey, expName);
-    if (!challengerName) {
-      res.status(404).json({ ok: false, error: 'No challenger variant row found for this experiment.' });
-      return;
-    }
-    let ch = '';
-    if (dimRaw === 'voice') {
-      ch = body.voice != null ? String(body.voice).trim() : '';
-      const { validateElevenLabsVoiceIdForAb } = await import('./lib/elevenlabs-voice-id.js');
-      const voiceCheck = validateElevenLabsVoiceIdForAb(ch);
-      if (!voiceCheck.ok) {
-        res.status(400).json({ ok: false, error: voiceCheck.error });
-        return;
-      }
-      ch = voiceCheck.id;
-    } else if (dimRaw === 'opening') {
-      ch = body.firstMessage != null ? String(body.firstMessage).trim() : '';
-    } else {
-      ch =
-        body.script != null
-          ? String(body.script).trim()
-          : body.systemMessage != null
-            ? String(body.systemMessage).trim()
-            : '';
-    }
-    if (!ch) {
-      res.status(400).json({ ok: false, error: 'Challenger value is empty' });
-      return;
-    }
-    const { resolveOutboundAbBaselineForDimension } = await import('./lib/outbound-ab-baseline.js');
-    const baseline = await resolveOutboundAbBaselineForDimension(clientKey, lockClient, dimRaw, {
-      excludeSameDimensionExperiment: true
-    });
-    if (baseline && ch === baseline) {
-      res.status(400).json({
-        ok: false,
-        error: 'New value matches your live assistant for this dimension. Use a different challenger.'
-      });
-      return;
-    }
-    const config =
-      dimRaw === 'voice' ? { voice: ch } : dimRaw === 'opening' ? { firstMessage: ch } : { script: ch };
-    const updated = await updateActiveAbTestVariantConfig({
-      clientKey,
-      experimentName: expName,
-      variantName: challengerName,
-      variantConfig: config
-    });
-    if (!updated) {
-      res.status(500).json({
-        ok: false,
-        error: 'Could not update challenger (experiment may have been deactivated).'
-      });
-      return;
-    }
-    const { getOutboundAbExperimentSummary } = await import('./db.js');
-    const { enrichOutboundAbDashboardSummariesFromAssistant } = await import(
-      './lib/outbound-ab-dashboard-enrich.js'
-    );
-    const summaryClient = await getFullClient(clientKey, { bypassCache: true });
-    let voiceSummary = null;
-    let openingSummary = null;
-    let scriptSummary = null;
-    if (dimRaw === 'voice') {
-      voiceSummary = await getOutboundAbExperimentSummary(clientKey, expName);
-    } else if (dimRaw === 'opening') {
-      openingSummary = await getOutboundAbExperimentSummary(clientKey, expName);
-    } else {
-      scriptSummary = await getOutboundAbExperimentSummary(clientKey, expName);
-    }
-    if (summaryClient) {
-      await enrichOutboundAbDashboardSummariesFromAssistant(
-        summaryClient,
-        { voiceSummary, openingSummary, scriptSummary, legacyOutboundAbSummary: null },
-        {}
-      );
-    }
-    const slotSummary =
-      dimRaw === 'voice' ? voiceSummary : dimRaw === 'opening' ? openingSummary : scriptSummary;
-    res.json({
-      ok: true,
-      experimentName: expName,
-      dimension: dimRaw,
-      variantName: challengerName,
-      slotSummary
-    });
-  } catch (error) {
-    console.error('[OUTBOUND AB CHALLENGER PATCH]', error);
-    res.status(500).json({ ok: false, error: error.message || String(error) });
-  }
-}
-
-/** Deactivate experiment for one dimension and clear vapi slot (+ refocus if needed). */
-async function runOutboundAbDimensionStop(clientKey, dimRaw, res) {
-  try {
-    const { isOutboundAbReviewPending, OUTBOUND_AB_REVIEW_PENDING_MESSAGE } = await import(
-      './lib/outbound-ab-review-lock.js'
-    );
-    invalidateClientCache(clientKey);
-    const lockClient = await getFullClient(clientKey);
-    if (isOutboundAbReviewPending(lockClient?.vapi)) {
-      res.status(423).json({ ok: false, error: OUTBOUND_AB_REVIEW_PENDING_MESSAGE });
-      return;
-    }
-    const { OUTBOUND_AB_VAPI_KEYS } = await import('./lib/outbound-ab-variant.js');
-    const { deactivateAbTestExperimentsByName, deactivateAllActiveOutboundAbSliceExperiments } =
-      await import('./db.js');
-    const { vapiPatchAfterStopOutboundAbDimension } = await import('./lib/outbound-ab-focus.js');
-    const { updateClientConfig } = await import('./lib/client-onboarding.js');
-    const d = String(dimRaw || '').trim().toLowerCase();
-    if (d !== 'voice' && d !== 'opening' && d !== 'script') {
-      res.status(400).json({ ok: false, error: 'dimension must be voice, opening, or script' });
-      return;
-    }
-    const vapiKey = OUTBOUND_AB_VAPI_KEYS[d];
-    const expName =
-      lockClient?.vapi && typeof lockClient.vapi === 'object'
-        ? String(lockClient.vapi[vapiKey] || '').trim()
-        : '';
-    if (expName) {
-      await deactivateAbTestExperimentsByName(clientKey, expName);
-    }
-    const sliceExperimentsDeactivated = await deactivateAllActiveOutboundAbSliceExperiments(
-      clientKey,
-      d
-    );
-    const vapiPatch = vapiPatchAfterStopOutboundAbDimension(lockClient.vapi, d);
-    await updateClientConfig(clientKey, { vapi: vapiPatch });
-    invalidateClientCache(clientKey);
-    const after = await getFullClient(clientKey);
-    const v = after?.vapi && typeof after.vapi === 'object' ? after.vapi : {};
-    const trimDial = (x) => (x != null && String(x).trim() !== '' ? String(x).trim() : '');
-    const voiceExp = trimDial(v.outboundAbVoiceExperiment);
-    const openingExp = trimDial(v.outboundAbOpeningExperiment);
-    const scriptExp = trimDial(v.outboundAbScriptExperiment);
-    const focusStored = trimDial(v.outboundAbFocusDimension).toLowerCase();
-    const focusValid =
-      focusStored === 'voice' || focusStored === 'opening' || focusStored === 'script' ? focusStored : '';
-    const { resolveOutboundAbDimensionsForDial, outboundAbDialWarning } = await import('./lib/outbound-ab-focus.js');
-    const dialPairs = resolveOutboundAbDimensionsForDial({
-      voiceExp,
-      openingExp,
-      scriptExp,
-      focusDimension: focusValid
-    });
-    const dialActiveDimensions = dialPairs.map((pair) => pair[0]);
-    const dialWarning = outboundAbDialWarning({
-      voiceExp,
-      openingExp,
-      scriptExp,
-      focusDimension: focusValid
-    });
-    res.json({
-      ok: true,
-      dimension: d,
-      stoppedExperimentName: expName || null,
-      sliceExperimentsDeactivated,
-      dashboardDial: {
-        dialActiveDimensions,
-        dialWarning,
-        focusDimension: focusValid || null
-      }
-    });
-  } catch (error) {
-    console.error('[OUTBOUND AB DIMENSION STOP]', error);
-    res.status(500).json({ ok: false, error: error.message || String(error) });
-  }
-}
 
 // moved: outbound A/B + review endpoints → routes/client-ops-mount.js
 
@@ -3731,10 +2615,7 @@ async function runOutboundAbDimensionStop(clientKey, dimRaw, res) {
 // moved: GET /api/realtime/stats → routes/runtime-metrics-mount.js
 
 // Demo/setup routes → routes/demo-setup.js
-app.use(demoSetupRouter);
-
-// Error handling middleware (must be last)
-app.use(errorHandler);
+registerMainHttpRoutes.demoSetupAndErrorHandler(app, { demoSetupRouter, errorHandler });
 
 // Initialize database and start server - FIXED: braces properly balanced
 async function startServer() {

@@ -136,7 +136,9 @@ const rules = [
       'public/client-dashboard.html',
       // Code comments / fallback constants — these do not appear in payloads.
       'server.js',
-      'lib/instant-calling.js'
+      'lib/instant-calling.js',
+      // Dashboard self-service default allow-list keys (same surface as former server.js inline).
+      'lib/outbound-ab-dashboard-handlers.js'
     ]
   },
   {
@@ -150,7 +152,9 @@ const rules = [
     pattern: /['"`]d2d-xpress-tom['"`]/,
     allow: [
       // The instant-calling worker references the slug only in a comment.
-      'lib/instant-calling.js'
+      'lib/instant-calling.js',
+      // Env-driven dashboard default keys list (not a Vapi dial payload).
+      'lib/outbound-ab-dashboard-handlers.js'
     ]
   },
   {

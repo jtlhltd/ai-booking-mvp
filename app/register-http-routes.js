@@ -1,7 +1,46 @@
 /**
- * Extracted HTTP router mounting (ordering-sensitive). Keep calls in server.js
- * in the same relative order as before the refactor.
+ * HTTP router mounting helpers (ordering-sensitive). Server remains the composition root:
+ * call sites are split around middleware/helper initialization — see `registerMainHttpRoutes`.
  */
+
+import compression from 'compression';
+
+/** Mirrors historical server.js tenant header normalization (must stay early). */
+export function normalizeTenantClientKeyHeaders(req, _res, next) {
+  const hdrs = req.headers || {};
+  const fromHeader =
+    req.get?.('X-Client-Key') ||
+    req.get?.('x-client-key') ||
+    hdrs['x-client-key'] ||
+    hdrs['X-Client-Key'];
+  const fromQuery = req.query?.clientKey;
+  const tenantKey = fromHeader || fromQuery;
+  if (tenantKey && !hdrs['x-client-key']) {
+    req.headers['x-client-key'] = String(tenantKey);
+  }
+  next();
+}
+
+export function registerBackendStatusOpsAndTenantHeaders(app, p) {
+  app.use(p.backendStatusRouter);
+  app.use(p.opsRouter);
+  app.use(normalizeTenantClientKeyHeaders);
+}
+
+export function registerResponseCompression(app) {
+  app.use(
+    compression({
+      level: 6,
+      threshold: 1024,
+      filter: (req, res) => {
+        if (req.headers['x-no-compression']) {
+          return false;
+        }
+        return compression.filter(req, res);
+      }
+    })
+  );
+}
 
 export function registerHealthMonitoringAndIntakeRouters(app, p) {
   app.use(p.healthRouter);
@@ -40,3 +79,25 @@ export function registerProbesNotifyMetaRouters(app, p) {
     })
   );
 }
+
+export function registerLeadsFollowupsMount(app, p) {
+  app.use('/api/leads', p.createLeadsFollowupsRouter(p.leadsFollowupsDeps));
+}
+
+export function registerDemoSetupAndErrorHandler(app, p) {
+  app.use(p.demoSetupRouter);
+  app.use(p.errorHandler);
+}
+
+/**
+ * Namespace for all HTTP registration helpers (single import surface).
+ * Mount order is preserved by calling these from server.js at the same positions as before.
+ */
+export const registerMainHttpRoutes = {
+  backendStatusOpsAndTenant: registerBackendStatusOpsAndTenantHeaders,
+  compression: registerResponseCompression,
+  healthMonitoringAndIntake: registerHealthMonitoringAndIntakeRouters,
+  probesNotifyMeta: registerProbesNotifyMetaRouters,
+  leadsFollowups: registerLeadsFollowupsMount,
+  demoSetupAndErrorHandler: registerDemoSetupAndErrorHandler,
+};
