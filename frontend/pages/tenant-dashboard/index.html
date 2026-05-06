@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tenant Dashboard - AI Booking System</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>🏢 Tenant Dashboard</h1>
+        <p>Multi-tenant management for your AI Booking System</p>
+
+        <div class="tenant-selector">
+          <label for="tenantSelect">Select Tenant:</label>
+          <select id="tenantSelect" onchange="switchTenant()">
+            <option value="">Loading tenants...</option>
+          </select>
+        </div>
+
+        <div id="tenantInfo" class="tenant-info" style="display: none">
+          <h4 id="tenantName">Tenant Name</h4>
+          <p><strong>Phone:</strong> <span id="tenantPhone">-</span></p>
+          <p><strong>Timezone:</strong> <span id="tenantTimezone">-</span></p>
+          <p><strong>Status:</strong> <span id="tenantStatus" class="status healthy">Active</span></p>
+        </div>
+      </div>
+
+      <div class="dashboard">
+        <!-- Tenant Metrics -->
+        <div class="card">
+          <h3>📊 Tenant Metrics</h3>
+          <div id="tenant-metrics">
+            <div class="loading">Select a tenant to view metrics</div>
+          </div>
+        </div>
+
+        <!-- Lead Management -->
+        <div class="card">
+          <h3>👥 Lead Management</h3>
+          <div id="leads-list" class="leads-list">
+            <div class="loading">Select a tenant to view leads</div>
+          </div>
+        </div>
+
+        <!-- SMS Configuration -->
+        <div class="card">
+          <h3>📱 SMS Configuration</h3>
+          <div id="sms-config">
+            <div class="loading">Select a tenant to view SMS config</div>
+          </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="card">
+          <h3>⚡ Quick Actions</h3>
+          <button class="btn" onclick="testTenantSMS()">Test SMS</button>
+          <button class="btn" onclick="refreshTenantData()">Refresh Data</button>
+          <button class="btn" onclick="viewTenantLogs()">View Logs</button>
+        </div>
+
+        <!-- Business Hours -->
+        <div class="card">
+          <h3>🕒 Business Hours</h3>
+          <div id="business-hours">
+            <div class="loading">Select a tenant to view business hours</div>
+          </div>
+        </div>
+
+        <!-- Performance -->
+        <div class="card">
+          <h3>📈 Performance</h3>
+          <div id="performance-metrics">
+            <div class="loading">Select a tenant to view performance</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
+

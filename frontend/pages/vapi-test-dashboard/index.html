@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VAPI Test Dashboard</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <h1>🚀 VAPI Test Dashboard</h1>
+
+      <div class="api-key-input">
+        <h3>🔑 API Configuration</h3>
+        <div class="form-group">
+          <label for="apiKey">API Key:</label>
+          <input type="text" id="apiKey" placeholder="Enter your API key" />
+        </div>
+        <button onclick="testApiKey()">Test API Key</button>
+        <div id="apiKeyResult" class="result" style="display: none"></div>
+      </div>
+
+      <div class="test-section">
+        <h3>🔌 VAPI Connection Test</h3>
+        <p>Test if VAPI API is properly configured and accessible.</p>
+        <button onclick="testVapiConnection()">Test VAPI Connection</button>
+        <div id="connectionResult" class="result" style="display: none"></div>
+      </div>
+
+      <div class="test-section">
+        <h3>📞 Test Call</h3>
+        <p>Make a test call to verify the system works end-to-end.</p>
+        <div class="form-group">
+          <label for="phoneNumber">Phone Number:</label>
+          <input type="tel" id="phoneNumber" placeholder="+447403934440" value="+447403934440" />
+        </div>
+        <button onclick="makeTestCall()">Make Test Call</button>
+        <div id="callResult" class="result" style="display: none"></div>
+      </div>
+
+      <div class="test-section">
+        <h3>🤖 Create Cold Call Assistant</h3>
+        <p>Create the optimized cold call assistant for £500/month service.</p>
+        <button onclick="createColdCallAssistant()">Create Assistant</button>
+        <div id="assistantResult" class="result" style="display: none"></div>
+      </div>
+
+      <div class="test-section">
+        <h3>📋 Lead Data Quality Test</h3>
+        <p>Test business search and decision maker contact research accuracy.</p>
+        <button onclick="testLeadData()">Test Lead Data Quality</button>
+        <div id="leadDataResult" class="result" style="display: none"></div>
+      </div>
+
+      <div class="test-section">
+        <h3>📝 Script Testing</h3>
+        <p>Test opening message, objection handling, and personalization effectiveness.</p>
+        <div class="form-group">
+          <label for="scriptTestType">Test Type:</label>
+          <select id="scriptTestType" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px">
+            <option value="opening_message">Opening Message</option>
+            <option value="objection_handling">Objection Handling</option>
+            <option value="personalization">Personalization</option>
+          </select>
+        </div>
+        <button onclick="testScript()">Test Script</button>
+        <div id="scriptResult" class="result" style="display: none"></div>
+      </div>
+
+      <div class="test-section">
+        <h3>⏱️ Call Duration Validation</h3>
+        <p>Validate that calls stay within optimal 2-3 minute duration.</p>
+        <button onclick="validateCallDuration()">Validate Call Duration</button>
+        <div id="durationResult" class="result" style="display: none"></div>
+      </div>
+
+      <div class="test-section">
+        <h3>📊 System Status</h3>
+        <div id="systemStatus">
+          <p><span class="status-indicator status-info"></span>Ready to test</p>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
+

@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Client Setup - AI Booking System</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>🚀 Client Setup Guide</h1>
+        <p>Create custom dashboards for your clients with AI Booking System</p>
+      </div>
+
+      <div class="setup-steps">
+        <div class="step">
+          <h3>1. Choose Your Client</h3>
+          <p>
+            Select from existing clients or create a new one. Each client gets their own branded dashboard with custom
+            colors, logos, and business information.
+          </p>
+
+          <div class="client-examples">
+            <div class="client-example">
+              <h4>🦷 Victory Dental</h4>
+              <p>Professional dental care</p>
+              <a href="/client-dashboard?client=victory_dental" class="btn">View Dashboard</a>
+            </div>
+            <div class="client-example">
+              <h4>🐾 Northside Vet</h4>
+              <p>Veterinary clinic</p>
+              <a href="/client-dashboard?client=northside_vet" class="btn">View Dashboard</a>
+            </div>
+            <div class="client-example">
+              <h4>🏢 Demo Client</h4>
+              <p>Sample business</p>
+              <a href="/client-dashboard?client=demo_client" class="btn">View Dashboard</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="step">
+          <h3>2. Customize Client Branding</h3>
+          <p>Each client dashboard can be customized with:</p>
+          <ul style="margin-left: 20px; color: #666">
+            <li>Custom company name and logo</li>
+            <li>Brand colors and themes</li>
+            <li>Business hours and timezone</li>
+            <li>Industry-specific messaging</li>
+            <li>Custom phone numbers</li>
+          </ul>
+        </div>
+
+        <div class="step">
+          <h3>3. Client Dashboard URL</h3>
+          <p>Each client gets their own unique dashboard URL:</p>
+          <div class="code-block">https://ai-booking-mvp.onrender.com/client-dashboard?client=CLIENT_KEY</div>
+          <p>Replace <code>CLIENT_KEY</code> with your client's unique identifier.</p>
+        </div>
+
+        <div class="step">
+          <h3>4. Add New Clients</h3>
+          <p>
+            To add a new client, update the <code>CLIENT_CONFIG</code> object in the client dashboard file with:
+          </p>
+          <div class="code-block">
+            'new_client': {\n    name: 'New Client Name',\n    description: 'Client description',\n    logo: '🏢',\n
+            color: '#2196F3',\n    bg: 'linear-gradient(135deg, #2196F3 0%, #1976D2 100%)',\n    phone:
+            '+447000000000',\n    timezone: 'Europe/London',\n    businessHours: '9AM - 5PM, Mon-Fri',\n    industry:
+            'Professional Services',\n    website: 'newclient.com'\n}
+          </div>
+        </div>
+      </div>
+
+      <div class="highlight">
+        <h4>💡 Pro Tips:</h4>
+        <ul style="margin-left: 20px; color: #856404">
+          <li>Use industry-specific logos and colors for better branding</li>
+          <li>Set up proper business hours for each client's timezone</li>
+          <li>Customize the description to match the client's business</li>
+          <li>Test the SMS functionality with each client's phone number</li>
+        </ul>
+      </div>
+
+      <div style="text-align: center; margin-top: 40px">
+        <a href="/" class="btn">← Back to Main Dashboard</a>
+        <a href="/tenant-dashboard" class="btn btn-secondary">View Tenant Dashboard</a>
+      </div>
+    </div>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
+

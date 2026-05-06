@@ -21,7 +21,7 @@ router.get('/', (_req, res) => {
 });
 
 router.get('/tenant-dashboard', (_req, res) => {
-  sendPublic(res, 'tenant-dashboard.html');
+  sendBuiltIfPresent(res, path.join('pages', 'tenant-dashboard', 'index.html'), 'tenant-dashboard.html');
 });
 
 router.get('/client-dashboard', (_req, res) => {
@@ -31,7 +31,7 @@ router.get('/client-dashboard', (_req, res) => {
 });
 
 router.get('/client-setup', (_req, res) => {
-  sendPublic(res, 'client-setup.html');
+  sendBuiltIfPresent(res, path.join('pages', 'client-setup', 'index.html'), 'client-setup.html');
 });
 
 router.get('/client-template', (_req, res) => {
@@ -71,7 +71,7 @@ router.get('/cold-call-dashboard', (_req, res) => {
 });
 
 router.get('/vapi-test-dashboard', (_req, res) => {
-  sendPublic(res, 'vapi-test-dashboard.html');
+  sendBuiltIfPresent(res, path.join('pages', 'vapi-test-dashboard', 'index.html'), 'vapi-test-dashboard.html');
 });
 
 router.get('/admin-hub.html', (_req, res) => {
@@ -83,7 +83,7 @@ router.get('/admin-hub', (_req, res) => {
 });
 
 router.get('/pipeline', (_req, res) => {
-  sendPublic(res, 'pipeline-kanban.html');
+  sendBuiltIfPresent(res, path.join('pages', 'pipeline', 'index.html'), 'pipeline-kanban.html');
 });
 
 export default router;

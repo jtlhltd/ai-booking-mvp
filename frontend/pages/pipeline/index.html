@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sales Pipeline - Kanban Board</title>
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>🎯 Sales Pipeline</h1>
+        <div class="stats">
+          <div class="stat-card">
+            <div class="value" id="totalLeads">0</div>
+            <div class="label">Total Leads</div>
+          </div>
+          <div class="stat-card">
+            <div class="value" id="conversionRate">0%</div>
+            <div class="label">Conversion Rate</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="pipelineBoard" class="pipeline-board">
+        <div class="loading">Loading pipeline...</div>
+      </div>
+    </div>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
+
