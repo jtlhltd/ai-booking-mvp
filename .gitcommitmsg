@@ -1,4 +1,0 @@
-refactor: centralize vapi calls and split migrations
-
-Move direct Vapi call initiation out of server helpers into the allow-listed Vapi module, extract Socket.IO realtime wiring, split db migrations into dedicated modules, and add Vite MPA scaffolding for safe future splitting of large public HTML pages.
-
