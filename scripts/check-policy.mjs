@@ -177,6 +177,19 @@ const rules = [
     allow: []
   },
   {
+    intentId: 'ops.server-helpers-no-new-vapi-call-sites',
+    description:
+      'Extracted server helpers (`lib/server-call-resilience.js`, `lib/server-assistant-scheduling.js`) keep module boundaries: resilience uses dynamic `import("../db.js")` for budget/retry queue; scheduling imports `./business-hours.js`. Direct Vapi dial POSTs remain forbidden outside allow-listed worker modules.',
+    mode: 'require',
+    scope: 'lib/',
+    filePattern: /^lib\/(server-call-resilience|server-assistant-scheduling)\.js$/,
+    requireAny: [
+      /import\s*\(\s*['"`]\.\.\/db\.js['"`]\s*\)/,
+      /from\s+['"`]\.\/business-hours\.js['"`]/
+    ],
+    allow: []
+  },
+  {
     intentId: 'queue.retry-backlog-bounded',
     description:
       'Retry queue failures must reschedule scheduled_for with backoff; do not reintroduce "pending + attempt++" without moving the timestamp forward.',

@@ -130,6 +130,7 @@ These primarily guard boot-time wiring and other high-blast-radius regressions.
 | ID | Statement | Constrains | Enforced by | Manual disprove |
 | --- | --- | --- | --- | --- |
 | `ops.server-boot-wiring-no-tdz` | `server.js` must not throw boot-time `ReferenceError: Cannot access '<name>' before initialization` due to passing undeclared `const` values into `mountApi(...)` / route wiring. Critical wiring constants must be defined before `mountApi(app, { ... })`. | `server.js`, `app/mount-api.js` | policy | Search `server.js` for `mountApi(app, {`. Verify `const DASHBOARD_ACTIVITY_TZ`, `const defaultSmsClient`, and Twilio env constants appear **above** that call (not below). |
+| `ops.server-helpers-no-new-vapi-call-sites` | Helpers extracted from `server.js` (`lib/server-*.js`, `lib/google-sheets-append.js`) are wiring/refactors only: they must not introduce new outbound `fetch('https://api.vapi.ai/call', …)` call sites (same constraint as `dial.no-direct-vapi-outside-worker`). | `lib/server-input-validation.js`, `lib/server-call-resilience.js`, `lib/server-assistant-scheduling.js`, `lib/server-files-inbound-templates.js`, `lib/server-reminders-runner.js`, `lib/server-http-context.js`, `lib/server-demo-generators.js`, `lib/server-runtime-helpers.js`, `lib/google-sheets-append.js` | policy | Run `rg "fetch\\(.*api\\.vapi\\.ai/call"` under `lib/server-*.js` and `lib/google-sheets-append.js`; expect zero matches. |
 
 ## How to add a new rule
 
