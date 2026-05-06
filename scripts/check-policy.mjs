@@ -68,16 +68,9 @@ const rules = [
       'lib/calendar-check-book.js',
       'routes/admin-vapi-plumbing-mount.js',
       'routes/admin-vapi-logistics-mount.js',
-      'routes/call-recordings.js',
-      'routes/demo-dashboard-debug.js',
       'schedule-prospect-calls.js',
-      // Legacy debt: server.js still has two inline call-initiation sites.
-      // Keep them allow-listed until they are extracted to the queue worker
-      // (tracked as a follow-up; do NOT add new sites here).
-      'server.js',
-      'tests/',
-      'scripts/',
-      'docs/'
+      // Tests + docs should not contain direct Vapi POST call sites; keep the
+      // allow-list tight so any new direct dialer is caught immediately.
     ]
   },
   {
