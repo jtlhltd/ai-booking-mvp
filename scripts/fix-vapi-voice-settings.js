@@ -13,7 +13,7 @@
  */
 
 import 'dotenv/config';
-import fetch from 'node-fetch';
+const fetchFn = globalThis.fetch;
 
 const VAPI_PRIVATE_KEY = process.env.VAPI_PRIVATE_KEY;
 const ASSISTANT_ID = process.env.VAPI_ASSISTANT_ID || process.argv[2];
@@ -47,7 +47,8 @@ const OPTIMIZED_MODEL_SETTINGS = {
 };
 
 async function getAssistant(assistantId) {
-  const response = await fetch(`https://api.vapi.ai/assistant/${assistantId}`, {
+  if (typeof fetchFn !== 'function') throw new Error('Global fetch is not available (Node 18+ required)');
+  const response = await fetchFn(`https://api.vapi.ai/assistant/${assistantId}`, {
     headers: {
       'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`,
       'Content-Type': 'application/json'
@@ -63,7 +64,8 @@ async function getAssistant(assistantId) {
 }
 
 async function updateAssistant(assistantId, updates) {
-  const response = await fetch(`https://api.vapi.ai/assistant/${assistantId}`, {
+  if (typeof fetchFn !== 'function') throw new Error('Global fetch is not available (Node 18+ required)');
+  const response = await fetchFn(`https://api.vapi.ai/assistant/${assistantId}`, {
     method: 'PATCH',
     headers: {
       'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`,

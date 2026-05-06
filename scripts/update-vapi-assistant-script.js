@@ -1,7 +1,7 @@
 // scripts/update-vapi-assistant-script.js
 // Update VAPI assistant with improved script and configuration
 
-import fetch from 'node-fetch';
+const fetchFn = globalThis.fetch;
 
 const VAPI_PRIVATE_KEY = process.env.VAPI_PRIVATE_KEY;
 const VAPI_ASSISTANT_ID = process.env.VAPI_ASSISTANT_ID || 'dd67a51c-7485-4b62-930a-4a84f328a1c9'; // Default assistant ID
@@ -167,9 +167,10 @@ async function updateAssistant() {
   console.log(`Assistant ID: ${VAPI_ASSISTANT_ID}\n`);
 
   try {
+    if (typeof fetchFn !== 'function') throw new Error('Global fetch is not available (Node 18+ required)');
     // First, get the current assistant to preserve other settings
     console.log('📥 Fetching current assistant configuration...');
-    const getResponse = await fetch(`https://api.vapi.ai/assistant/${VAPI_ASSISTANT_ID}`, {
+    const getResponse = await fetchFn(`https://api.vapi.ai/assistant/${VAPI_ASSISTANT_ID}`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`,
@@ -231,7 +232,7 @@ async function updateAssistant() {
     };
 
     console.log('📤 Updating assistant configuration...');
-    const updateResponse = await fetch(`https://api.vapi.ai/assistant/${VAPI_ASSISTANT_ID}`, {
+    const updateResponse = await fetchFn(`https://api.vapi.ai/assistant/${VAPI_ASSISTANT_ID}`, {
       method: 'PATCH',
       headers: {
         'Authorization': `Bearer ${VAPI_PRIVATE_KEY}`,

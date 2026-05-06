@@ -1,7 +1,7 @@
 // Load Testing Script for AI Booking System
 // Tests system performance under load
 
-import fetch from 'node-fetch';
+const fetchFn = globalThis.fetch;
 
 const BASE_URL = process.env.PUBLIC_BASE_URL || 'https://ai-booking-mvp.onrender.com';
 const API_KEY = process.env.API_KEY || 'test-key';
@@ -39,7 +39,8 @@ async function makeRequest(endpoint) {
   };
 
   try {
-    const response = await fetch(url, options);
+    if (typeof fetchFn !== 'function') throw new Error('Global fetch is not available (Node 18+ required)');
+    const response = await fetchFn(url, options);
     const duration = Date.now() - startTime;
     
     results.total++;

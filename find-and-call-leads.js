@@ -2,7 +2,7 @@
 // Find 10 leads and call them automatically
 // Usage: node find-and-call-leads.js "dental practices in London"
 
-import fetch from 'node-fetch';
+const fetchFn = globalThis.fetch;
 import 'dotenv/config';
 
 const VAPI_PRIVATE_KEY = process.env.VAPI_PRIVATE_KEY;
@@ -22,8 +22,9 @@ async function findLeads(query) {
   console.log(`🔍 Step 1: Searching for "${query}"...\n`);
   
   try {
+    if (typeof fetchFn !== 'function') throw new Error('Global fetch is not available (Node 18+ required)');
     // Use your existing API endpoint
-    const response = await fetch(`${BASE_URL}/api/uk-business-search`, {
+    const response = await fetchFn(`${BASE_URL}/api/uk-business-search`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -54,7 +55,7 @@ async function findLeads(query) {
       console.log(`  ${i + 1}/${businesses.length} Searching for ${business.name} owner's mobile...`);
       
       try {
-        const dmResponse = await fetch(`${BASE_URL}/api/decision-maker-contacts`, {
+        const dmResponse = await fetchFn(`${BASE_URL}/api/decision-maker-contacts`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -115,7 +116,8 @@ async function createAssistant() {
   console.log('🤖 Step 2: Creating Vapi cold call assistant...\n');
   
   try {
-    const response = await fetch(`${BASE_URL}/admin/vapi/cold-call-assistant`, {
+    if (typeof fetchFn !== 'function') throw new Error('Global fetch is not available (Node 18+ required)');
+    const response = await fetchFn(`${BASE_URL}/admin/vapi/cold-call-assistant`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -164,7 +166,8 @@ async function startCampaign(assistantId, businesses) {
   console.log(`📞 Step 4: Starting campaign to call ${businesses.length} businesses...\n`);
   
   try {
-    const response = await fetch(`${BASE_URL}/admin/vapi/cold-call-campaign`, {
+    if (typeof fetchFn !== 'function') throw new Error('Global fetch is not available (Node 18+ required)');
+    const response = await fetchFn(`${BASE_URL}/admin/vapi/cold-call-campaign`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
