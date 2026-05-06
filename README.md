@@ -1,10 +1,10 @@
-# 🤖 AI Booking MVP - Automated Appointment Booking System
+# AI Booking MVP - Automated Appointment Booking System
 
 **Production-ready SaaS platform for AI-powered appointment booking via phone calls**
 
 ---
 
-## 🎯 What This Does
+## What This Does
 
 Automatically book appointments for your clients using AI voice assistants that:
 - Answer phone calls 24/7 (even after hours)
@@ -17,7 +17,7 @@ Perfect for: Dental clinics, beauty salons, fitness studios, home services, medi
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. **Environment Setup**
 ```bash
@@ -31,7 +31,7 @@ npm install
 npm start
 ```
 
-Server runs on `http://localhost:3000`
+Server runs on `http://localhost:10000` (or `PORT` if set)
 
 ### 3. **Deploy to Render**
 - Connect your GitHub repo to Render
@@ -41,46 +41,26 @@ Server runs on `http://localhost:3000`
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 /ai-booking-mvp-skeleton-v2/
 │
-├── server.js                    # Main application server (Express.js)
-├── db.js                        # Database queries (PostgreSQL)
-├── package.json                 # Dependencies
+├── server.js                    # Server composition root (wires modules)
+├── db.js                        # DB facade (re-exports domain modules)
+├── package.json                 # Scripts + dependencies
 │
-├── /lib/                        # Core utilities
-│   ├── auto-onboarding.js       # Client self-service signup
-│   ├── vapi.js                  # Vapi AI integration
-│   ├── cache.js                 # Response caching
-│   ├── security.js              # Encryption, GDPR, 2FA
-│   ├── white-label.js           # Client branding
-│   └── ... (38 utility modules)
+├── app/                         # App wiring (create app, mounts, shutdown, schedulers)
+├── routes/                      # Express routers (API + tools)
+├── lib/                         # Core logic/services/helpers
+├── db/                          # DB plumbing + db/domains/* + db/migrations/*
 │
-├── /public/                     # Client-facing pages
-│   ├── index.html               # Landing page
-│   ├── dashboard-v2.html        # Client dashboard
-│   ├── leads.html               # Lead management
-│   ├── onboarding-wizard.html   # Client signup flow
-│   └── ... (42 HTML pages)
+├── frontend/                    # Vite MPA source (pages + shared UI helpers)
+├── public/                      # Static assets + legacy fallback HTML (see routes/static-pages.js)
+├── archive/                     # Archived legacy pages/assets (not served by default)
 │
-├── /routes/                     # API routes
-│   ├── leads.js                 # Lead CRUD operations
-│   ├── vapi-webhooks.js         # Vapi call webhooks
-│   └── twilio-webhooks.js       # SMS webhooks
-│
-├── /migrations/                 # Database schema updates
-│   └── *.sql                    # Migration files (auto-run on deploy)
-│
-├── /docs/                       # Documentation
-│   ├── /archive/                # Historical analysis & setup guides
-│   └── /vapi-history/           # Old Vapi script versions
-│
-├── .env                         # Environment variables (local only)
-├── .env.example                 # Template for setup
-├── render.yaml                  # Render deployment config
-└── VAPI-FINAL-OPTIMIZED.txt     # Latest Vapi AI script (10/10 rated)
+├── docs/                        # Documentation (incl. behavioral intent gates)
+└── tests/                       # Unit/integration/canary tests
 ```
 
 ---
