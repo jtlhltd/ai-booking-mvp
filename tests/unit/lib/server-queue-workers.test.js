@@ -32,4 +32,27 @@ describe('lib/server-queue-workers', () => {
     expect(query).toHaveBeenCalled();
     expect(getPendingRetries).toHaveBeenCalled();
   });
+
+  test('processCallQueue returns when no pending calls', async () => {
+    const query = jest.fn(async () => ({ rowCount: 0, rows: [] }));
+    jest.unstable_mockModule('../../../db.js', () => ({
+      query,
+      poolQuerySelect: jest.fn(async () => ({ rows: [] })),
+      getFullClient: jest.fn(async () => null),
+      listFullClients: jest.fn(async () => []),
+      addToCallQueue: jest.fn(async () => {}),
+      smearCallQueueScheduledFor: jest.fn((d) => d),
+      invalidateClientCache: jest.fn(async () => {}),
+      getPendingCalls: jest.fn(async () => []),
+      getPendingRetries: jest.fn(async () => []),
+      updateRetryStatus: jest.fn(async () => {}),
+      updateCallQueueStatus: jest.fn(async () => {}),
+      cancelDuplicatePendingCalls: jest.fn(async () => {})
+    }));
+
+    const { processCallQueue } = await import('../../../lib/server-queue-workers.js');
+    await processCallQueue();
+
+    expect(query).toHaveBeenCalled();
+  });
 });

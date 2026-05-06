@@ -39,22 +39,10 @@ export default {
     '!setup-admin-hub.js',
     '!jest.config.js',
     'lib/**/*.js',
-    // Extracted from server.js (were not in coverage when inlined); enforce via INTENT + policy + route contracts.
+    // Large dial/queue + webhook payload surfaces: unit slices exist; keep excluded until global merge tolerates full inclusion.
     '!lib/server-queue-workers.js',
-    '!lib/server-analytics-runtime.js',
-    '!lib/bootstrap-clients.js',
-    '!lib/campaign-vapi-dial-helpers.js',
-    '!lib/cold-call-personalization.js',
-    '!lib/outbound-ab-dashboard-handlers.js',
-    '!lib/server-call-resilience.js',
-    '!lib/server-assistant-scheduling.js',
-    '!lib/server-files-inbound-templates.js',
-    '!lib/server-reminders-runner.js',
-    '!lib/server-demo-generators.js',
-    // google-sheets-append: covered by tests/unit/lib/google-sheets-append.test.js
-    // process-webhook-payload (~1.3k lines): single exported handler; route contracts + canaries cover behavior.
-    // Keep excluded until chunked unit slices justify inclusion without tanking global thresholds.
     '!lib/vapi-webhooks/process-webhook-payload.js',
+    // google-sheets-append: covered by tests/unit/lib/google-sheets-append.test.js
     'lib/calendar-check-book.js',
     'lib/calendar-book-slot.js',
     'lib/business-hours.js',
@@ -228,6 +216,37 @@ export default {
       functions: 95,
       lines: 70,
       statements: 70
+    },
+    // Peeled from collectCoverageFrom exclusions (chunked unit tests). Gates isolate low-covered extracted modules from the global merge.
+    './lib/server-analytics-runtime.js': {
+      branches: 7,
+      functions: 17,
+      lines: 18,
+      statements: 18
+    },
+    './lib/outbound-ab-dashboard-handlers.js': {
+      branches: 8,
+      functions: 38,
+      lines: 7,
+      statements: 7
+    },
+    './lib/server-assistant-scheduling.js': {
+      branches: 8,
+      functions: 41,
+      lines: 13,
+      statements: 12
+    },
+    './lib/server-call-resilience.js': {
+      branches: 35,
+      functions: 19,
+      lines: 23,
+      statements: 23
+    },
+    './lib/campaign-vapi-dial-helpers.js': {
+      branches: 12,
+      functions: 39,
+      lines: 30,
+      statements: 30
     }
   },
   verbose: true
