@@ -205,6 +205,7 @@ import { getCallContext, storeCallContext, getMostRecentCallContext, getCallCont
 import { createSocketIo, installAdminHubRealtimeHandlers } from './app/realtime.js';
 import { createApp } from './app/create-app.js';
 import { mountAdminRoutes } from './app/mount-routes.js';
+import { startServer as createStartServer } from './app/start-server.js';
 // Real API integration - dynamic imports will be used in endpoints
 
 const app = createApp({
@@ -6657,49 +6658,31 @@ async function startServer() {
     // Validate environment variables first
     const { validateEnvironment } = await import('./lib/env-validator.js');
     validateEnvironment();
-    
-    await initDb();
-    console.log('✅ Database initialized');
-    
-    // Run database migrations
-    try {
-      const { runMigrations } = await import('./lib/migration-runner.js');
-      const migrationResult = await runMigrations();
-      if (migrationResult.applied > 0) {
-        console.log(`✅ Applied ${migrationResult.applied} new migrations`);
-      }
-    } catch (migrationError) {
-      const isProd = String(process.env.NODE_ENV || '').toLowerCase() === 'production';
-      if (isProd) {
-        console.error('❌ Migration failed in production — refusing to start:', migrationError?.message || migrationError);
-        process.exit(1);
-      }
-      console.warn('⚠️ Migration failed, but continuing server startup:', migrationError.message);
-      // Non-production: migrations can be run manually
-    }
-    
-    // Bootstrap clients after DB is ready
-    await bootstrapClients();
-    
-    server.listen(process.env.PORT ? Number(process.env.PORT) : 10000, '0.0.0.0', () => {
-      console.log(`AI Booking System listening on http://localhost:${process.env.PORT || 10000} (DB: ${DB_PATH})`);
-      console.log(`Security middleware: Enhanced authentication and rate limiting enabled`);
-      console.log(`Booking system: ${bookingSystem ? 'Available' : 'Not Available'}`);
-      console.log(`SMS-Email pipeline: ${smsEmailPipeline ? 'Available' : 'Not Available'}`);
-      console.log(`WebSocket server: Real-time Admin Hub updates enabled`);
-    });
-    
-    // Set server timeout to 25 minutes to handle comprehensive searches
-    server.timeout = 1500000; // 25 minutes
-    
-    // Register all scheduled jobs (crons + reminder setInterval); see lib/scheduled-jobs.js
+
+    const { runMigrations } = await import('./lib/migration-runner.js');
     const { registerScheduledJobs } = await import('./lib/scheduled-jobs.js');
-    scheduledJobsController = registerScheduledJobs({
-      processCallQueue,
-      processRetryQueue,
-      queueNewLeadsForCalling,
-      sendScheduledReminders
+
+    const start = createStartServer({
+      server,
+      io,
+      DB_PATH,
+      bookingSystem,
+      smsEmailPipeline,
+      initDb: async () => {
+        await initDb();
+        console.log('✅ Database initialized');
+      },
+      runMigrations,
+      bootstrapClients,
+      registerScheduledJobs,
+      scheduledJobsDeps: {
+        processCallQueue,
+        processRetryQueue,
+        queueNewLeadsForCalling,
+        sendScheduledReminders,
+      },
     });
+    scheduledJobsController = await start();
     
   } catch (error) {
     console.error('❌ Failed to start server:', error);
