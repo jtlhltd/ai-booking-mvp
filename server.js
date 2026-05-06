@@ -209,6 +209,7 @@ import { createApp } from './app/create-app.js';
 import { mountAdminRoutes } from './app/mount-routes.js';
 import { startServer as createStartServer } from './app/start-server.js';
 import { installGlobalMiddleware } from './app/install-global-middleware.js';
+import { installShutdownHandlers } from './app/install-shutdown-handlers.js';
 // Real API integration - dynamic imports will be used in endpoints
 
 const app = createApp({
@@ -2874,7 +2875,6 @@ mountWebhookBodyParsers(app, { express });
 // Graceful shutdown state management
 let isShuttingDown = false;
 let activeRequests = 0;
-let shutdownTimeout = null;
 /** @type {{ stop: () => void } | null} */
 let scheduledJobsController = null;
 
@@ -6634,64 +6634,8 @@ async function startServer() {
   }
 }
 
-// Graceful shutdown handlers
-async function gracefulShutdown(signal) {
-  if (isShuttingDown) {
-    console.log('[SHUTDOWN] Already shutting down, ignoring signal');
-    return;
-  }
-  
-  isShuttingDown = true;
-  console.log(`\n[SHUTDOWN] ${signal} received, starting graceful shutdown...`);
-  console.log(`[SHUTDOWN] Active requests: ${activeRequests}`);
-
-  if (scheduledJobsController?.stop) {
-    try {
-      scheduledJobsController.stop();
-    } catch (e) {
-      console.warn('[SHUTDOWN] scheduled jobs stop error:', e?.message || e);
-    }
-    scheduledJobsController = null;
-  }
-  
-  // Step 1: Stop accepting new connections
-  server.close(() => {
-    console.log('[SHUTDOWN] HTTP server closed, no longer accepting connections');
-  });
-  
-  // Step 2: Close WebSocket connections
-  io.close(() => {
-    console.log('[SHUTDOWN] WebSocket server closed');
-  });
-  
-  // Step 3: Wait for active requests to complete (max 30 seconds)
-  const waitForRequests = setInterval(() => {
-    if (activeRequests === 0) {
-      clearInterval(waitForRequests);
-      if (shutdownTimeout) {
-        clearTimeout(shutdownTimeout);
-        shutdownTimeout = null;
-      }
-      closeDatabase();
-    } else {
-      console.log(`[SHUTDOWN] Waiting for ${activeRequests} active requests to complete...`);
-    }
-  }, 1000);
-  
-  // Step 4: Force close after timeout
-  shutdownTimeout = setTimeout(() => {
-    console.error('[SHUTDOWN] Timeout reached (30s), forcing shutdown');
-    clearInterval(waitForRequests);
-    closeDatabase();
-  }, 30000);
-}
-
 async function closeDatabase() {
   try {
-    if (shutdownTimeout) {
-      clearTimeout(shutdownTimeout);
-      shutdownTimeout = null;
-    }
     // Close database pool
     if (pool) {
       console.log('[SHUTDOWN] Closing database pool...');
@@ -6707,20 +6651,24 @@ async function closeDatabase() {
   }
 }
 
-// Register signal handlers
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-
-// Handle uncaught exceptions
-process.on('uncaughtException', (error) => {
-  console.error('[FATAL] Uncaught exception:', error);
-  gracefulShutdown('UNCAUGHT_EXCEPTION');
-});
-
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('[FATAL] Unhandled rejection at:', promise, 'reason:', reason);
-  gracefulShutdown('UNHANDLED_REJECTION');
+installShutdownHandlers({
+  server,
+  io,
+  getActiveRequests: () => activeRequests,
+  stopScheduledJobs: () => {
+    if (scheduledJobsController?.stop) {
+      try {
+        scheduledJobsController.stop();
+      } catch (e) {
+        console.warn('[SHUTDOWN] scheduled jobs stop error:', e?.message || e);
+      }
+    }
+    scheduledJobsController = null;
+  },
+  closeDatabase: async () => {
+    isShuttingDown = true;
+    await closeDatabase();
+  },
 });
 
 startServer();
