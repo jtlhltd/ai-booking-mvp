@@ -2,8 +2,9 @@ services:
   - type: web
     name: ai-booking-mvp
     env: node
-    # Install devDependencies so Jest runs; fails the deploy if tests fail
-    buildCommand: npm ci --include=dev && npm test
+    # Install devDependencies so Jest + policy run; same gate as local `npm run test:ci`
+    # (plain `npm test` skips policy, route inventories, coverage, and leak lane — can diverge from CI).
+    buildCommand: npm ci --include=dev && npm run test:ci
     startCommand: npm run render-start
     plan: starter
     envVars:
