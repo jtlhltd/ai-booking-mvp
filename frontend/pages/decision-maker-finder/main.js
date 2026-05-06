@@ -380,6 +380,7 @@ async function addToPipeline() {
 
   for (const business of mobileLeads) {
     try {
+      const decisionMaker = business.decisionMaker || `${business.name.split(' ')[0]} (Owner)`;
       const response = await fetch(`${API_BASE}/api/initiate-lead-capture`, {
         method: 'POST',
         headers: {
@@ -387,11 +388,16 @@ async function addToPipeline() {
         },
         body: JSON.stringify({
           leadData: {
-            decisionMaker: `${business.name.split(' ')[0]} (Owner)`,
+            decisionMaker,
             phoneNumber: business.phone,
             businessName: business.name,
             industry: business.industry || 'Business',
             location: business.address,
+            email: business.email || null,
+            website: business.website || null,
+            decisionMakerTitle: business.decisionMakerTitle || null,
+            businessSize: business.businessSize || null,
+            verified: business.verified === true,
           },
         }),
       });
