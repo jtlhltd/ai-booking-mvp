@@ -1,0 +1,79 @@
+:root {
+  --primary: #5c6ac4;
+  --surface: #ffffff;
+  --border: rgba(92, 106, 196, 0.15);
+  --shadow: 0 8px 24px rgba(16, 26, 62, 0.08);
+  --text: #2b2e3b;
+  --muted: #6f7390;
+  --bg: linear-gradient(135deg, #eef2ff 0%, #e3ebff 40%, #fef9ff 100%);
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+html {
+  font-size: 71%;
+}
+
+body {
+  font-family: var(--font);
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  margin: 0;
+}
+
+.container {
+  max-width: min(1200px, 96%);
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.row > .card {
+  flex: 1 1 320px;
+}
+
+.h1 {
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 1.1rem;
+}
+
+th,
+td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  font-weight: 600;
+}
+
+.error {
+  color: #c62828;
+  font-weight: 600;
+}
+

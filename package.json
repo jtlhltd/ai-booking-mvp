@@ -7,7 +7,10 @@
   "scripts": {
     "start": "node server.js",
     "render-start": "node run-migration.js && node server.js",
-    "render-build": "echo \"no build step\"",
+    "render-build": "npm run build",
+    "dev": "node server.js",
+    "build": "vite build",
+    "preview": "vite preview",
     "migrate": "node run-migration.js",
     "env:test": "node scripts/write-test-database-url.mjs",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
@@ -68,7 +71,8 @@
     "cross-env": "^7.0.3",
     "jest": "^29.7.0",
     "standard-version": "^9.5.0",
-    "supertest": "^6.3.4"
+    "supertest": "^6.3.4",
+    "vite": "^5.4.21"
   },
   "volta": {
     "node": "20.16.0"

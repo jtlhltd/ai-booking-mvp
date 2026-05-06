@@ -17,6 +17,11 @@ import { createQueryRunner } from './db/query.js';
 import * as callQueueReads from './db/call-queue-reads.js';
 import * as callQueueWrites from './db/call-queue-writes.js';
 import { smearCallQueueScheduledFor } from './db/call-queue-smear.js';
+import { migratePostgresLeadsPhoneMatchKey } from './db/migrations/postgres-leads-phone-match-key.js';
+import { migratePostgresCallsLeadPhoneMatchKey } from './db/migrations/postgres-calls-lead-phone-match-key.js';
+import { migrateSqliteLeadsPhoneMatchKey } from './db/migrations/sqlite-leads-phone-match-key.js';
+import { migrateSqliteCallsLeadPhoneMatchKey } from './db/migrations/sqlite-calls-lead-phone-match-key.js';
+import { migrateOptOutListTenantScope } from './db/migrations/opt-out-tenant-scope.js';
 
 const dbType = (process.env.DB_TYPE || '').toLowerCase();
 let pool = null;
@@ -38,193 +43,7 @@ console.log('🔍 Database configuration:', {
 
 // (JsonFileDatabase moved to ./db/json-file-database.js)
 
-/**
- * Canonical tail-10 (etc.) key on leads — replaces UNIQUE(client_key, phone) after backfill + dedupe.
- */
-async function migratePostgresLeadsPhoneMatchKey(pgPool) {
-  await pgPool.query(`
-    DO $$
-    BEGIN
-      IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'leads' AND column_name = 'phone_match_key'
-      ) THEN
-        ALTER TABLE leads ADD COLUMN phone_match_key TEXT;
-        RAISE NOTICE 'Added column leads.phone_match_key';
-      END IF;
-    END $$;
-  `);
-
-  await pgPool.query(`
-    UPDATE leads SET phone_match_key = (
-      CASE
-        WHEN LENGTH(regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g')) >= 10
-        THEN RIGHT(regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g'), 10)
-        ELSE NULLIF(regexp_replace(COALESCE(phone, ''), '[^0-9]', '', 'g'), '')
-      END
-    )
-    WHERE phone_match_key IS NULL AND phone IS NOT NULL;
-  `);
-
-  await pgPool.query(`
-    UPDATE appointments a
-    SET lead_id = k.keep_id
-    FROM (
-      SELECT client_key, phone_match_key, MIN(id) AS keep_id
-      FROM leads
-      WHERE phone_match_key IS NOT NULL
-      GROUP BY client_key, phone_match_key
-      HAVING COUNT(*) > 1
-    ) k
-    INNER JOIN leads ld ON ld.client_key = k.client_key
-      AND ld.phone_match_key = k.phone_match_key
-      AND ld.id <> k.keep_id
-    WHERE a.lead_id = ld.id;
-  `);
-
-  await pgPool.query(`
-    DELETE FROM leads ld
-    USING (
-      SELECT client_key, phone_match_key, MIN(id) AS keep_id
-      FROM leads
-      WHERE phone_match_key IS NOT NULL
-      GROUP BY client_key, phone_match_key
-    ) k
-    WHERE ld.client_key = k.client_key
-      AND ld.phone_match_key = k.phone_match_key
-      AND ld.id <> k.keep_id;
-  `);
-
-  await pgPool.query(`
-    DO $$
-    BEGIN
-      IF EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'leads_client_key_phone_unique'
-      ) THEN
-        ALTER TABLE leads DROP CONSTRAINT leads_client_key_phone_unique;
-        RAISE NOTICE 'Dropped leads_client_key_phone_unique (superseded by phone_match_key)';
-      END IF;
-    END $$;
-  `);
-
-  await pgPool.query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS leads_client_phone_match_key_uniq
-    ON leads (client_key, phone_match_key)
-    WHERE phone_match_key IS NOT NULL;
-  `);
-
-  // Dashboard lead_lookup CTE: DISTINCT ON (phone_match_key) ... ORDER BY created_at DESC
-  // Needs (client_key, phone_match_key, created_at DESC) to avoid sorting/scanning many rows.
-  await pgPool.query(`
-    CREATE INDEX IF NOT EXISTS leads_client_phone_match_key_created_desc_idx
-    ON leads (client_key, phone_match_key, created_at DESC)
-    WHERE phone_match_key IS NOT NULL;
-  `);
-
-  console.log('✅ leads.phone_match_key migration complete');
-}
-
-/** Dashboard lead→first-call lateral join: indexable match on tail-10 digits (avoids regexp per call row). */
-async function migratePostgresCallsLeadPhoneMatchKey(pgPool) {
-  await pgPool.query(`
-    DO $$
-    BEGIN
-      IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'calls' AND column_name = 'lead_phone_match_key'
-      ) THEN
-        ALTER TABLE calls ADD COLUMN lead_phone_match_key TEXT;
-        RAISE NOTICE 'Added column calls.lead_phone_match_key';
-      END IF;
-    END $$;
-  `);
-
-  await pgPool.query(`
-    UPDATE calls SET lead_phone_match_key = (
-      CASE
-        WHEN LENGTH(regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g')) >= 10
-        THEN RIGHT(regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g'), 10)
-        ELSE NULLIF(regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g'), '')
-      END
-    )
-    WHERE lead_phone_match_key IS NULL AND lead_phone IS NOT NULL;
-  `);
-
-  await pgPool.query(`
-    CREATE INDEX IF NOT EXISTS calls_client_lead_phone_match_key_created_idx
-    ON calls (client_key, lead_phone_match_key, created_at ASC)
-    WHERE lead_phone_match_key IS NOT NULL;
-  `);
-
-  console.log('✅ calls.lead_phone_match_key migration complete');
-}
-
-async function migrateSqliteLeadsPhoneMatchKey() {
-  if (!sqlite) return;
-  try {
-    sqlite.exec('ALTER TABLE leads ADD COLUMN phone_match_key TEXT');
-  } catch {
-    /* column may already exist */
-  }
-  const rows = sqlite.prepare('SELECT id, phone FROM leads').all();
-  const upd = sqlite.prepare('UPDATE leads SET phone_match_key = ? WHERE id = ?');
-  for (const r of rows) {
-    const k = phoneMatchKey(r.phone);
-    if (k) upd.run(k, r.id);
-  }
-  const dupGroups = sqlite.prepare(`
-    SELECT client_key, phone_match_key, MIN(id) AS keep_id
-    FROM leads
-    WHERE phone_match_key IS NOT NULL
-    GROUP BY client_key, phone_match_key
-    HAVING COUNT(*) > 1
-  `).all();
-  for (const g of dupGroups) {
-    sqlite.prepare(
-      `UPDATE appointments SET lead_id = ? WHERE lead_id IN (
-        SELECT id FROM leads WHERE client_key = ? AND phone_match_key = ? AND id != ?
-      )`
-    ).run(g.keep_id, g.client_key, g.phone_match_key, g.keep_id);
-    sqlite.prepare(
-      `DELETE FROM leads WHERE client_key = ? AND phone_match_key = ? AND id != ?`
-    ).run(g.client_key, g.phone_match_key, g.keep_id);
-  }
-  try {
-    sqlite.exec(
-      'CREATE UNIQUE INDEX IF NOT EXISTS leads_client_phone_match_key_uniq ON leads (client_key, phone_match_key)'
-    );
-  } catch (e) {
-    console.warn('⚠️  SQLite phone_match_key unique index:', e.message);
-  }
-  console.log('✅ SQLite leads.phone_match_key migration complete');
-}
-
-async function migrateSqliteCallsLeadPhoneMatchKey() {
-  if (!sqlite) return;
-  try {
-    sqlite.exec('ALTER TABLE calls ADD COLUMN lead_phone_match_key TEXT');
-  } catch {
-    /* column may already exist */
-  }
-  try {
-    const rows = sqlite.prepare('SELECT id, lead_phone FROM calls WHERE lead_phone_match_key IS NULL').all();
-    const upd = sqlite.prepare('UPDATE calls SET lead_phone_match_key = ? WHERE id = ?');
-    for (const r of rows) {
-      upd.run(phoneMatchKey(r.lead_phone), r.id);
-    }
-  } catch (e) {
-    if (!String(e.message || e).includes('no such table')) {
-      console.warn('⚠️  SQLite calls.lead_phone_match_key backfill:', e.message || e);
-    }
-  }
-  try {
-    sqlite.exec(
-      'CREATE INDEX IF NOT EXISTS calls_client_lead_phone_match_key_created_idx ON calls (client_key, lead_phone_match_key, created_at ASC)'
-    );
-  } catch {
-    /* table may not exist yet */
-  }
-}
+// Migrations were extracted into db/migrations/* to keep this facade smaller.
 
 // ---------------------- Postgres ----------------------
 async function initPostgres() {
@@ -1247,115 +1066,8 @@ function initSqlite() {
   }
 }
 
-async function migrateOptOutListTenantScope() {
-  // Tenant-scoped DNC: opt_out_list(client_key, phone)
-  // Back-compat: existing rows are assigned to client_key='__global__'
-  try {
-    if (dbType === 'postgres' && pool) {
-      const col = await query(
-        `
-        SELECT 1
-        FROM information_schema.columns
-        WHERE table_schema = 'public'
-          AND table_name = 'opt_out_list'
-          AND column_name = 'client_key'
-        LIMIT 1
-        `
-      );
-      if (!((col.rows || []).length)) {
-        await query(`ALTER TABLE opt_out_list ADD COLUMN client_key TEXT`);
-      }
-      await query(`UPDATE opt_out_list SET client_key = '__global__' WHERE client_key IS NULL OR client_key = ''`);
-      // Remove legacy uniqueness on phone (global), if present
-      await query(`ALTER TABLE opt_out_list DROP CONSTRAINT IF EXISTS opt_out_list_phone_key`);
-      // Ensure composite uniqueness
-      await query(
-        `ALTER TABLE opt_out_list ADD CONSTRAINT opt_out_list_client_phone_key UNIQUE (client_key, phone)`
-      ).catch(() => {
-        /* constraint likely exists */
-      });
-      await query(
-        `CREATE INDEX IF NOT EXISTS opt_out_client_phone_active_idx ON opt_out_list(client_key, phone) WHERE active = TRUE`
-      ).catch(() => {});
-      return;
-    }
-
-    if (sqlite) {
-      // If table doesn't exist, create the new shape.
-      const hasTable = sqlite
-        .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='opt_out_list'`)
-        .get();
-      if (!hasTable) {
-        sqlite.exec(`
-          CREATE TABLE IF NOT EXISTS opt_out_list (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            client_key TEXT NOT NULL,
-            phone TEXT NOT NULL,
-            reason TEXT,
-            opted_out_at TEXT DEFAULT (datetime('now')),
-            active INTEGER DEFAULT 1,
-            updated_at TEXT DEFAULT (datetime('now')),
-            notes TEXT,
-            UNIQUE (client_key, phone)
-          );
-          CREATE INDEX IF NOT EXISTS opt_out_client_phone_active_idx
-            ON opt_out_list(client_key, phone)
-            WHERE active = 1;
-          CREATE INDEX IF NOT EXISTS opt_out_active_idx ON opt_out_list(active);
-        `);
-        return;
-      }
-
-      const cols = sqlite.prepare(`PRAGMA table_info(opt_out_list)`).all();
-      const hasClientKey = Array.isArray(cols) && cols.some((c) => String(c?.name || '') === 'client_key');
-      if (hasClientKey) return;
-
-      // Rebuild table to remove legacy UNIQUE(phone) and add client_key + composite UNIQUE.
-      sqlite.exec('BEGIN');
-      try {
-        sqlite.exec(`
-          CREATE TABLE IF NOT EXISTS opt_out_list__v2 (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            client_key TEXT NOT NULL,
-            phone TEXT NOT NULL,
-            reason TEXT,
-            opted_out_at TEXT,
-            active INTEGER DEFAULT 1,
-            updated_at TEXT,
-            notes TEXT,
-            UNIQUE (client_key, phone)
-          );
-        `);
-        sqlite.exec(`
-          INSERT INTO opt_out_list__v2 (id, client_key, phone, reason, opted_out_at, active, updated_at, notes)
-          SELECT
-            id,
-            '__global__' AS client_key,
-            phone,
-            reason,
-            opted_out_at,
-            COALESCE(active, 1) AS active,
-            updated_at,
-            notes
-          FROM opt_out_list;
-        `);
-        sqlite.exec(`DROP TABLE opt_out_list;`);
-        sqlite.exec(`ALTER TABLE opt_out_list__v2 RENAME TO opt_out_list;`);
-        sqlite.exec(`
-          CREATE INDEX IF NOT EXISTS opt_out_client_phone_active_idx
-            ON opt_out_list(client_key, phone)
-            WHERE active = 1;
-          CREATE INDEX IF NOT EXISTS opt_out_active_idx ON opt_out_list(active);
-        `);
-        sqlite.exec('COMMIT');
-      } catch (e) {
-        sqlite.exec('ROLLBACK');
-        throw e;
-      }
-    }
-  } catch (e) {
-    console.warn('⚠️  opt_out_list tenant-scope migration (non-fatal):', e?.message || e);
-  }
+async function migrateOptOutListTenantScopeFacade() {
+  return migrateOptOutListTenantScope({ dbType, pool, sqlite, query });
 }
 
 // ---------------------- Core API ----------------------
@@ -1369,7 +1081,7 @@ export async function init() {
     console.log('🔄 Initializing PostgreSQL...');
     try {
       const r = await initPostgres();
-      await migrateOptOutListTenantScope();
+      await migrateOptOutListTenantScopeFacade();
       await getCallAnalyticsFloorIso().catch((e) =>
         console.warn('[call_analytics_floor] init:', e.message)
       );
@@ -1393,13 +1105,13 @@ export async function init() {
   // Use SQLite (when DB_TYPE is not 'postgres' or not set)
   console.log('🔄 Initializing SQLite...');
   const r = initSqlite();
-  await migrateSqliteLeadsPhoneMatchKey().catch((e) =>
+  await migrateSqliteLeadsPhoneMatchKey({ sqlite, phoneMatchKey }).catch((e) =>
     console.warn('⚠️  SQLite phone_match_key migration:', e.message)
   );
-  await migrateSqliteCallsLeadPhoneMatchKey().catch((e) =>
+  await migrateSqliteCallsLeadPhoneMatchKey({ sqlite, phoneMatchKey }).catch((e) =>
     console.warn('⚠️  SQLite calls.lead_phone_match_key migration:', e.message)
   );
-  await migrateOptOutListTenantScope();
+  await migrateOptOutListTenantScopeFacade();
   await getCallAnalyticsFloorIso().catch((e) =>
     console.warn('[call_analytics_floor] init:', e.message)
   );

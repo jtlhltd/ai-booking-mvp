@@ -1,12 +1,19 @@
 // Named HTML routes (after express.static — only paths without a matching file hit these).
 import { Router } from 'express';
 import path from 'path';
+import fs from 'fs';
 
 const router = Router();
 const cwd = process.cwd();
 
 function sendPublic(res, filename) {
   res.sendFile(path.join(cwd, 'public', filename));
+}
+
+function sendBuiltIfPresent(res, builtRelPath, fallbackPublicFilename) {
+  const absBuilt = path.join(cwd, 'public', 'build', builtRelPath);
+  if (fs.existsSync(absBuilt)) return res.sendFile(absBuilt);
+  return sendPublic(res, fallbackPublicFilename);
 }
 
 router.get('/', (_req, res) => {
@@ -20,7 +27,7 @@ router.get('/tenant-dashboard', (_req, res) => {
 router.get('/client-dashboard', (_req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   res.setHeader('Pragma', 'no-cache');
-  sendPublic(res, 'client-dashboard.html');
+  sendBuiltIfPresent(res, path.join('pages', 'client-dashboard', 'index.html'), 'client-dashboard.html');
 });
 
 router.get('/client-setup', (_req, res) => {
@@ -48,7 +55,7 @@ router.get('/onboarding-wizard', (_req, res) => {
 });
 
 router.get('/uk-business-search', (_req, res) => {
-  sendPublic(res, 'uk-business-search.html');
+  sendBuiltIfPresent(res, path.join('pages', 'uk-business-search', 'index.html'), 'uk-business-search.html');
 });
 
 router.get('/decision-maker-finder', (_req, res) => {
@@ -64,11 +71,11 @@ router.get('/vapi-test-dashboard', (_req, res) => {
 });
 
 router.get('/admin-hub.html', (_req, res) => {
-  sendPublic(res, 'admin-hub-enterprise.html');
+  sendBuiltIfPresent(res, path.join('pages', 'admin-hub', 'index.html'), 'admin-hub-enterprise.html');
 });
 
 router.get('/admin-hub', (_req, res) => {
-  sendPublic(res, 'admin-hub-enterprise.html');
+  sendBuiltIfPresent(res, path.join('pages', 'admin-hub', 'index.html'), 'admin-hub-enterprise.html');
 });
 
 router.get('/pipeline', (_req, res) => {

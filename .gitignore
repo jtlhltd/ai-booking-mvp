@@ -38,6 +38,9 @@ lib/call-logs-*.csv
 ChatGPT Image*.png
 public/ChatGPT*.png
 
+# Frontend build output
+public/build/
+
 # Cursor workspace metadata (never commit)
 .cursor/
 

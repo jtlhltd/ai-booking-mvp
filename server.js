@@ -15,7 +15,6 @@ import { DateTime } from 'luxon';
 import * as chrono from 'chrono-node';
 import express from 'express';
 import { createServer } from 'http';
-import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import compression from 'compression';
@@ -44,6 +43,7 @@ import { handleNotifyTest, handleNotifySend } from './lib/notify-api.js';
 import { handleSmsStatusWebhook } from './lib/sms-status-webhook.js';
 import { isOptedOut } from './lib/lead-deduplication.js';
 import { isMobileNumber } from './lib/google-places-search.js';
+import vapi from './lib/vapi.js';
 import googlePlacesSearchRouter from './routes/google-places-search.js';
 import { createAdminDiagnosticsRouter } from './routes/admin-diagnostics-mount.js';
 import { createAdminServerCallQueueRouter } from './routes/admin-server-call-queue-mount.js';
@@ -203,7 +203,7 @@ import messagingService from './lib/messaging-service.js';
 import { sendOperatorAlert } from './lib/operator-alerts.js';
 import { AIInsightsEngine, LeadScoringEngine } from './lib/ai-insights.js';
 import { getCallContext, storeCallContext, getMostRecentCallContext, getCallContextCacheStats } from './lib/call-context-cache.js';
-import { installAdminHubSocketAuth, resolveSocketIoAllowedOrigins } from './lib/socket-io-admin-hub.js';
+import { createSocketIo, installAdminHubRealtimeHandlers } from './app/realtime.js';
 // Real API integration - dynamic imports will be used in endpoints
 
 const app = express();
@@ -218,27 +218,7 @@ const JOBS_PATH = path.join(DATA_DIR, 'jobs.json');
 
 // Create HTTP server and Socket.IO server
 const server = createServer(app);
-const socketIoAllowedOrigins = resolveSocketIoAllowedOrigins();
-const io = new SocketIOServer(server, {
-  cors: {
-    origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
-      if (!socketIoAllowedOrigins.length) {
-        const prod = String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
-        if (prod) return callback(new Error('Socket.IO CORS: set PUBLIC_BASE_URL or SOCKETIO_EXTRA_ORIGINS'), false);
-        return callback(null, true);
-      }
-      return callback(null, socketIoAllowedOrigins.includes(origin));
-    },
-    methods: ['GET', 'POST'],
-    credentials: true
-  }
-});
-installAdminHubSocketAuth(io);
-
-const ADMIN_HUB_BURST_WINDOW_MS = 60_000;
-const ADMIN_HUB_BURST_MAX = 45;
-const adminHubRequestBursts = new Map();
+const { io, socketIoAllowedOrigins } = createSocketIo(server);
 
 // Initialize performance monitoring and caching
 const performanceMonitor = getPerformanceMonitor();
@@ -287,77 +267,14 @@ const GOOGLE_CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID || 'primary';
 const DASHBOARD_CACHE_TTL = 60000; // 60 seconds
 const dashboardStatsCache = new Map();
 
-// WebSocket connection handling
-io.on('connection', (socket) => {
-  console.log('Admin Hub client connected:', socket.id);
-  
-  // Join admin room for real-time updates
-  socket.join('admin-hub');
-  
-  // Handle client disconnection
-  socket.on('disconnect', () => {
-    adminHubRequestBursts.delete(socket.id);
-    console.log('Admin Hub client disconnected:', socket.id);
-  });
-  
-  // Handle real-time data requests
-  socket.on('request-update', async (dataType) => {
-    try {
-      const now = Date.now();
-      const bucket = adminHubRequestBursts.get(socket.id) || [];
-      const pruned = bucket.filter((t) => now - t < ADMIN_HUB_BURST_WINDOW_MS);
-      pruned.push(now);
-      if (pruned.length > ADMIN_HUB_BURST_MAX) {
-        socket.emit('error', { message: 'Rate limit exceeded' });
-        return;
-      }
-      adminHubRequestBursts.set(socket.id, pruned);
-
-      let updateData = {};
-      
-      switch(dataType) {
-        case 'business-stats':
-          updateData = await getBusinessStats();
-          break;
-        case 'recent-activity':
-          updateData = await getRecentActivity();
-          break;
-        case 'clients':
-          updateData = await getClientsData();
-          break;
-        case 'calls':
-          updateData = await getCallsData();
-          break;
-        case 'analytics':
-          updateData = await getAnalyticsData();
-          break;
-        case 'system-health':
-          updateData = await getSystemHealthData();
-          break;
-        case 'all':
-          updateData = {
-            businessStats: await getBusinessStats(),
-            recentActivity: await getRecentActivity(),
-            clients: await getClientsData(),
-            calls: await getCallsData(),
-            analytics: await getAnalyticsData(),
-            systemHealth: await getSystemHealthData()
-          };
-          break;
-      }
-      
-      socket.emit('data-update', { type: dataType, data: updateData });
-    } catch (error) {
-      console.error('Error handling real-time update request:', error);
-      socket.emit('error', { message: 'Failed to fetch data' });
-    }
-  });
+const broadcastUpdate = installAdminHubRealtimeHandlers(io, {
+  getBusinessStats,
+  getRecentActivity,
+  getClientsData,
+  getCallsData,
+  getAnalyticsData,
+  getSystemHealthData
 });
-
-// Broadcast real-time updates
-function broadcastUpdate(type, data) {
-  io.to('admin-hub').emit('data-update', { type, data });
-}
 
 // Add performance monitoring middleware (tracks all API calls)
 app.use(performanceMiddleware(performanceMonitor));
@@ -5692,18 +5609,9 @@ async function runLogisticsOutreach({ assistantId, businesses, tenantKey, vapiKe
             priority: i + index + 1
           }
         };
-        
-        const callResponse = await fetch('https://api.vapi.ai/call', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${vapiKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(callData)
-        });
-        
-        if (callResponse.ok) {
-          const callResult = await callResponse.json();
+
+        try {
+          const callResult = await vapi.createCallWithKey({ vapiKey, callData });
           results.push({
             businessName: business.name,
             phone: business.phone,
@@ -5714,17 +5622,16 @@ async function runLogisticsOutreach({ assistantId, businesses, tenantKey, vapiKe
           });
           
           console.log(`[LOGISTICS CALL] Initiated for ${business.name} (${business.phone})`);
-        } else {
-          const errorData = await callResponse.json();
+        } catch (error) {
           results.push({
             businessName: business.name,
             phone: business.phone,
             status: 'call_failed',
-            error: errorData.message || 'Unknown error',
+            error: error?.vapi?.message || error?.message || 'Unknown error',
             message: 'Failed to initiate call'
           });
           
-          console.error(`[LOGISTICS CALL ERROR] Failed to call ${business.name}:`, errorData);
+          console.error(`[LOGISTICS CALL ERROR] Failed to call ${business.name}:`, error?.vapi || error);
         }
         
       } catch (error) {
@@ -5821,45 +5728,35 @@ async function startColdCallCampaign(campaign) {
               website: business.website
             }
           };
-          
+
           // Make the call via VAPI
-          const callResponse = await fetch('https://api.vapi.ai/call', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${vapiKey}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(callData)
-          });
-          
-          if (callResponse.ok) {
-            const callData = await callResponse.json();
+          try {
+            const callRes = await vapi.createCallWithKey({ vapiKey, callData });
             results.push({
               businessId: business.id,
               businessName: business.name,
               phone: business.phone,
               decisionMaker: business.decisionMaker,
               status: 'call_initiated',
-              callId: callData.id,
+              callId: callRes.id,
               priority: i + index + 1,
               message: 'Call initiated successfully',
               timestamp: new Date().toISOString()
             });
             
             console.log(`[COLD CALL] Call initiated for ${business.name} (${business.phone}) - Priority: ${i + index + 1}`);
-          } else {
-            const errorData = await callResponse.json();
+          } catch (error) {
             results.push({
               businessId: business.id,
               businessName: business.name,
               phone: business.phone,
               status: 'call_failed',
-              error: errorData.message || 'Unknown error',
+              error: error?.vapi?.message || error?.message || 'Unknown error',
               message: 'Failed to initiate call',
               timestamp: new Date().toISOString()
             });
             
-            console.error(`[COLD CALL ERROR] Failed to call ${business.name}:`, errorData);
+            console.error(`[COLD CALL ERROR] Failed to call ${business.name}:`, error?.vapi || error);
           }
           
         } catch (error) {
