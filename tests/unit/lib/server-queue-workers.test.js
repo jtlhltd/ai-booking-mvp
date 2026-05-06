@@ -1,5 +1,9 @@
 import { describe, test, expect, jest, beforeEach } from '@jest/globals';
 
+/**
+ * lib/server-queue-workers remains excluded from collectCoverageFrom (see jest.config.js).
+ * Incremental tests document safe entry points before eventual inclusion + heavier mocks.
+ */
 describe('lib/server-queue-workers', () => {
   beforeEach(() => {
     jest.resetModules();

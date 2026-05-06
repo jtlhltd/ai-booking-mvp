@@ -244,6 +244,64 @@ describe('routes/runtime-metrics-mount', () => {
     await request(app).get('/api/realtime/stats').expect(401);
   });
 
+  test('happy: GET /api/stats with clientKey uses optimizer path when mocks succeed', async () => {
+    await withIsolatedModulesAndEnv(jest, {}, async () => {
+      const optimizedQuery = jest.fn(async () => ({
+        rows: [
+          {
+            leads: '3',
+            calls: '2',
+            completed: '1',
+            failed: '0',
+            no_answer: '1',
+            bookings: '1',
+            appointments: '0'
+          }
+        ]
+      }));
+      const dbQuery = jest.fn(async () => ({
+        rows: [{ date: '2026-01-01', calls: '1' }]
+      }));
+
+      jest.unstable_mockModule('../../lib/query-optimizer.js', () => ({
+        optimizedQuery
+      }));
+      jest.unstable_mockModule('../../db.js', () => ({
+        query: dbQuery
+      }));
+
+      const { createRuntimeMetricsRouter } = await import('../../routes/runtime-metrics-mount.js');
+      const dashboardStatsCache = new Map();
+      const app = express();
+      app.use(
+        createRuntimeMetricsRouter({
+          query: async () => ({ rows: [] }),
+          listFullClients: async () => [],
+          getFullClient: async () => ({ clientKey: 'c1', displayName: 'C' }),
+          cacheMiddleware: () => (_req, _res, next) => next(),
+          dashboardStatsCache,
+          DASHBOARD_CACHE_TTL: 60_000,
+          AIInsightsEngine: class {},
+          getClientFromHeader: async () => null,
+          pickTimezone: () => 'UTC',
+          DateTime,
+          getCallContextCacheStats: () => ({}),
+          getMostRecentCallContext: () => null,
+          GOOGLE_CLIENT_EMAIL: null,
+          GOOGLE_PRIVATE_KEY: null,
+          GOOGLE_CALENDAR_ID: null
+        })
+      );
+
+      const res = await request(app).get('/api/stats?clientKey=c1&range=30d').expect(200);
+      expect(res.body.ok).toBe(true);
+      expect(res.body.leads).toBe(3);
+      expect(res.body.calls).toBe(2);
+      expect(optimizedQuery).toHaveBeenCalled();
+      expect(dbQuery).toHaveBeenCalled();
+    });
+  });
+
   test('happy: GET /monitor/tenant-resolution returns 200 with api key', async () => {
     const prev = process.env.API_KEY;
     process.env.API_KEY = 'secret';

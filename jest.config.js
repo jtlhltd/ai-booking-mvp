@@ -42,9 +42,6 @@ export default {
     // Extracted from server.js (were not in coverage when inlined); enforce via INTENT + policy + route contracts.
     '!lib/server-queue-workers.js',
     '!lib/server-analytics-runtime.js',
-    '!lib/dashboard-ui-formatters.js',
-    '!lib/vapi-timeline-snapshot.js',
-    '!lib/retry-queue-display.js',
     '!lib/bootstrap-clients.js',
     '!lib/campaign-vapi-dial-helpers.js',
     '!lib/cold-call-personalization.js',
@@ -55,7 +52,8 @@ export default {
     '!lib/server-reminders-runner.js',
     '!lib/server-demo-generators.js',
     // google-sheets-append: covered by tests/unit/lib/google-sheets-append.test.js
-    // process-webhook-payload (~1.3k lines): exercised via routes/vapi-webhooks contract tests; isolate unit tests optional.
+    // process-webhook-payload (~1.3k lines): single exported handler; route contracts + canaries cover behavior.
+    // Keep excluded until chunked unit slices justify inclusion without tanking global thresholds.
     '!lib/vapi-webhooks/process-webhook-payload.js',
     'lib/calendar-check-book.js',
     'lib/calendar-book-slot.js',
@@ -84,10 +82,10 @@ export default {
       // batch). Path gates below peel several near-100% routes off this merge, so the *global* numbers
       // here are lower than the printed summary table. Branch floor lowered slightly after extracting
       // vapi-webhooks + shared queue helpers (coverage merge shifts).
-      branches: 40,
-      functions: 56,
-      lines: 54,
-      statements: 52
+      branches: 41,
+      functions: 57,
+      lines: 55,
+      statements: 53
     },
     // Module gates for the highest-risk surfaces (booking + admin).
     './lib/booking.js': {
