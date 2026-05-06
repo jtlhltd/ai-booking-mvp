@@ -42,7 +42,7 @@ import { handleNotifyTest, handleNotifySend } from './lib/notify-api.js';
 import { handleSmsStatusWebhook } from './lib/sms-status-webhook.js';
 import { isOptedOut } from './lib/lead-deduplication.js';
 import { isMobileNumber } from './lib/google-places-search.js';
-import vapi from './lib/vapi.js';
+import { createCallWithKey as vapiCreateCallWithKey } from './lib/vapi.js';
 import googlePlacesSearchRouter from './routes/google-places-search.js';
 import { createAdminDiagnosticsRouter } from './routes/admin-diagnostics-mount.js';
 import { createAdminServerCallQueueRouter } from './routes/admin-server-call-queue-mount.js';
@@ -5554,7 +5554,7 @@ async function runLogisticsOutreach({ assistantId, businesses, tenantKey, vapiKe
         };
 
         try {
-          const callResult = await vapi.createCallWithKey({ vapiKey, callData });
+          const callResult = await vapiCreateCallWithKey({ vapiKey, callData });
           results.push({
             businessName: business.name,
             phone: business.phone,
@@ -5674,7 +5674,7 @@ async function startColdCallCampaign(campaign) {
 
           // Make the call via VAPI
           try {
-            const callRes = await vapi.createCallWithKey({ vapiKey, callData });
+            const callRes = await vapiCreateCallWithKey({ vapiKey, callData });
             results.push({
               businessId: business.id,
               businessName: business.name,
