@@ -15090,6 +15090,15 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         `${formatNumber(totalTodo)} to call`,
                         `${formatNumber(totalCalled)} called`
                     ];
+                    try {
+                        const ops = globalThis.__dashOpsHealth || null;
+                        const vapiConfigured = !!ops?.vapi?.configured;
+                        const walletGate = !!ops?.vapi?.walletGateActive;
+                        const dialBlock = ops?.dialBlock || null;
+                        if (!vapiConfigured) parts.push('dialer: not configured');
+                        else if (walletGate) parts.push('dialer: paused (wallet gate)');
+                        else if (dialBlock?.kind) parts.push(`dialer: ${String(dialBlock.kind)}`);
+                    } catch {}
                     if (followUpQueueState.sourceTimezone) {
                         parts.push(`timestamps: ${followUpQueueState.sourceTimezone}`);
                     }
@@ -15658,6 +15667,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const res = await fetch(`${BASE_URL}/api/ops/health/${encodeURIComponent(currentClient)}`, { cache: 'no-store' });
                 const payload = await res.json().catch(() => ({}));
                 if (!res.ok || !payload?.ok) throw new Error(payload?.message || payload?.error || `HTTP ${res.status}`);
+                // Cache for other dashboard modules (e.g. follow-up queue hint banners).
+                try { globalThis.__dashOpsHealth = payload; } catch {}
                 const sheetOk = !!payload?.sheet?.configured;
                 const dncCount = Number(payload?.dnc?.activeCount || 0);
                 const lastPatch = payload?.lastErrors?.followUpPatch;
