@@ -313,6 +313,17 @@ try {
 /** Rolling activity windows & touchpoint day buckets on the client dashboard (GMT/BST). */
 const DASHBOARD_ACTIVITY_TZ = 'Europe/London';
 
+// === Env: Twilio (must be defined before mountApi deps wiring)
+const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || '';
+const TWILIO_AUTH_TOKEN  = process.env.TWILIO_AUTH_TOKEN  || '';
+const TWILIO_FROM_NUMBER = process.env.TWILIO_FROM_NUMBER || '';
+const TWILIO_MESSAGING_SERVICE_SID = process.env.TWILIO_MESSAGING_SERVICE_SID || '';
+
+const defaultSmsClient = (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN)
+  ? twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+  : null;
+const defaultSmsConfigured = !!(defaultSmsClient && (TWILIO_FROM_NUMBER || TWILIO_MESSAGING_SERVICE_SID));
+
 mountApi(app, {
   bookingSystem,
   smsEmailPipeline,
@@ -2706,15 +2717,6 @@ function getLeadPriority(score) {
   if (score >= 40) return 'low';
   return 'very_low';
 }
-
-// === Env: Twilio
-const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || '';
-const TWILIO_AUTH_TOKEN  = process.env.TWILIO_AUTH_TOKEN  || '';
-const TWILIO_FROM_NUMBER = process.env.TWILIO_FROM_NUMBER || '';
-const TWILIO_MESSAGING_SERVICE_SID = process.env.TWILIO_MESSAGING_SERVICE_SID || '';
-
-const defaultSmsClient = (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN) ? twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) : null;
-const defaultSmsConfigured = !!(defaultSmsClient && (TWILIO_FROM_NUMBER || TWILIO_MESSAGING_SERVICE_SID));
 
 await installGlobalMiddleware(app, { express, morgan, cors, rateLimit, nanoid, ORIGIN });
 mountWebhookBodyParsers(app, { express });
