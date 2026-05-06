@@ -59,7 +59,11 @@ router.get('/uk-business-search', (_req, res) => {
 });
 
 router.get('/decision-maker-finder', (_req, res) => {
-  sendPublic(res, 'decision-maker-finder.html');
+  sendBuiltIfPresent(
+    res,
+    path.join('pages', 'decision-maker-finder', 'index.html'),
+    'decision-maker-finder.html'
+  );
 });
 
 router.get('/cold-call-dashboard', (_req, res) => {
