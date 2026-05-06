@@ -40,6 +40,7 @@ import { resolveTenantTimezone } from './lib/timezone-resolver.js';
 import { handleCalendarCheckBook } from './lib/calendar-check-book.js';
 import { handleCalendarBookSlot } from './lib/calendar-book-slot.js';
 import { handleCalendarFindSlots } from './lib/calendar-find-slots.js';
+import { servicesFor } from './lib/services-for.js';
 import { scheduleAtOptimalCallWindow } from './lib/optimal-call-window.js';
 import { runOutboundCallsForImportedLeads } from './lib/lead-import-outbound.js';
 import { handleTwilioSmsInbound } from './lib/twilio-sms-inbound-webhook.js';
