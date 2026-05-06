@@ -214,6 +214,27 @@ export async function ensurePostgresCoreSchema(pool) {
     );
     CREATE INDEX IF NOT EXISTS schedule_decisions_client_idx ON call_schedule_decisions(client_key, created_at DESC);
 
+    -- Structured lead qualification / handoff capture (Tom-first but generalizable).
+    -- Stores the latest known structured data per tenant + phone_match_key.
+    CREATE TABLE IF NOT EXISTS lead_handoff (
+      id BIGSERIAL PRIMARY KEY,
+      client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
+      phone_match_key TEXT NOT NULL,
+      lead_phone TEXT,
+      call_id TEXT,
+      source TEXT,
+      decision_maker TEXT,
+      callback_window TEXT,
+      summary_text TEXT,
+      data_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+      operator_notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      updated_at TIMESTAMPTZ DEFAULT now(),
+      UNIQUE (client_key, phone_match_key)
+    );
+    CREATE INDEX IF NOT EXISTS lead_handoff_client_updated_idx ON lead_handoff (client_key, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS lead_handoff_client_call_id_idx ON lead_handoff (client_key, call_id) WHERE call_id IS NOT NULL;
+
     -- Single row: calls before floor_at are excluded from bandit + call-insights-style analytics (set on first init).
     CREATE TABLE IF NOT EXISTS call_analytics_floor (
       id SMALLINT PRIMARY KEY CHECK (id = 1),

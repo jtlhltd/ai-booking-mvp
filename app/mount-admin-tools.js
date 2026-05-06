@@ -68,6 +68,8 @@ export function mountAdminAndTools(app, deps) {
     sheets,
     sendOperatorAlert,
     messagingService,
+    upsertLeadHandoff,
+    phoneMatchKey,
 
     startColdCallCampaign,
     getOptimalCallTime,
@@ -188,6 +190,8 @@ export function mountAdminAndTools(app, deps) {
       sheets,
       sendOperatorAlert,
       messagingService,
+      upsertLeadHandoff,
+      phoneMatchKey,
     })
   );
 

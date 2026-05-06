@@ -46,6 +46,7 @@ import { createQuickWinMetricsRouter } from '../routes/quick-win-metrics.js';
 import { createHealthAndDiagnosticsRouter } from '../routes/health-and-diagnostics.js';
 import { createOpsHealthAndDncRouter } from '../routes/ops-health-and-dnc.js';
 import { createDailySummaryRouter } from '../routes/daily-summary.js';
+import { createLeadHandoffRouter } from '../routes/lead-handoff.js';
 import { createCoreApiRouter } from '../routes/core-api.js';
 import { createClientsApiRouter } from '../routes/clients-api.js';
 import { createCalendarApiRouter } from '../routes/calendar-api.js';
@@ -300,6 +301,15 @@ export function mountApi(app, deps) {
   app.use(createApiDocsRouter());
   app.use('/api', createQuickWinMetricsRouter({ query, cacheMiddleware }));
   app.use(createHealthAndDiagnosticsRouter({ query }));
+  app.use(
+    '/api',
+    createLeadHandoffRouter({
+      listLeadHandoff: deps.listLeadHandoff,
+      getLeadHandoffByPhone: deps.getLeadHandoffByPhone,
+      setLeadHandoffOperatorNotes: deps.setLeadHandoffOperatorNotes,
+      phoneMatchKey: deps.phoneMatchKey,
+    })
+  );
   app.use(
     '/api',
     createOpsHealthAndDncRouter({

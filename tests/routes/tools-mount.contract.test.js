@@ -70,11 +70,13 @@ describe('routes/tools-mount /tools/access_google_sheet', () => {
   test('append happy: direct format calls ensureHeader + appendLogistics with timestamp', async () => {
     const ensureLogisticsHeader = jest.fn(async () => {});
     const appendLogistics = jest.fn(async () => {});
+    const upsertLeadHandoff = jest.fn(async () => {});
     const app = makeApp({
       store: { getFullClient: async () => SHEET_TENANT },
       sheets: { ensureLogisticsHeader, appendLogistics, readSheet: async () => [] },
       sendOperatorAlert: async () => {},
-      messagingService: { sendEmail: async () => {} }
+      messagingService: { sendEmail: async () => {} },
+      upsertLeadHandoff,
     });
 
     const res = await request(app)
@@ -93,15 +95,22 @@ describe('routes/tools-mount /tools/access_google_sheet', () => {
       phone: '+44...',
       timestamp: expect.any(String)
     }));
+    expect(upsertLeadHandoff).toHaveBeenCalledWith(expect.objectContaining({
+      clientKey: 't1',
+      leadPhone: '+44...',
+      source: 'tools.access_google_sheet',
+    }));
   });
 
   test('append via VAPI message format: extracts toolCallId, parses string args, returns VAPI envelope', async () => {
     const appendLogistics = jest.fn(async () => {});
+    const upsertLeadHandoff = jest.fn(async () => {});
     const app = makeApp({
       store: { getFullClient: async () => SHEET_TENANT },
       sheets: { ensureLogisticsHeader: async () => {}, appendLogistics, readSheet: async () => [] },
       sendOperatorAlert: async () => {},
-      messagingService: { sendEmail: async () => {} }
+      messagingService: { sendEmail: async () => {} },
+      upsertLeadHandoff,
     });
 
     const body = {
@@ -131,6 +140,31 @@ describe('routes/tools-mount /tools/access_google_sheet', () => {
     expect(appendLogistics).toHaveBeenCalledWith(SHEET_ID, expect.objectContaining({
       callId: 'call_777'
     }));
+    // No phone → no upsert
+    expect(upsertLeadHandoff).not.toHaveBeenCalled();
+  });
+
+  test('append still succeeds when lead_handoff upsert throws', async () => {
+    const appendLogistics = jest.fn(async () => {});
+    const upsertLeadHandoff = jest.fn(async () => {
+      throw new Error('db_down');
+    });
+    const app = makeApp({
+      store: { getFullClient: async () => SHEET_TENANT },
+      sheets: { ensureLogisticsHeader: async () => {}, appendLogistics, readSheet: async () => [] },
+      sendOperatorAlert: async () => {},
+      messagingService: { sendEmail: async () => {} },
+      upsertLeadHandoff,
+    });
+
+    const res = await request(app)
+      .post('/tools/access_google_sheet')
+      .send({ action: 'append', data: { name: 'X', phone: '+447700900111' }, tenantKey: 't1' });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(expect.objectContaining({ success: true, action: 'append' }));
+    expect(appendLogistics).toHaveBeenCalled();
+    expect(upsertLeadHandoff).toHaveBeenCalled();
   });
 
   test('append via VAPI message format with object arguments (not stringified)', async () => {

@@ -25,6 +25,7 @@ import { createOutboundWeekdayJourneyDomain } from './db/domains/outbound-weekda
 import { createCallsDomain } from './db/domains/calls.js';
 import { createCallQueueDomain } from './db/domains/call-queue.js';
 import { createCallTimeBanditDomain } from './db/domains/call-time-bandit.js';
+import { createLeadHandoffDomain } from './db/domains/lead-handoff.js';
 import { migratePostgresLeadsPhoneMatchKey } from './db/migrations/postgres-leads-phone-match-key.js';
 import { migratePostgresCallsLeadPhoneMatchKey } from './db/migrations/postgres-calls-lead-phone-match-key.js';
 import { migrateSqliteLeadsPhoneMatchKey } from './db/migrations/sqlite-leads-phone-match-key.js';
@@ -843,6 +844,13 @@ export const getCallsByTenant = callsDomain.getCallsByTenant;
 export const getCallsByPhone = callsDomain.getCallsByPhone;
 export const getRecentCallsCount = callsDomain.getRecentCallsCount;
 export const getCallQualityMetrics = callsDomain.getCallQualityMetrics;
+
+// Lead handoff / qualification domain (extracted)
+const leadHandoffDomain = createLeadHandoffDomain({ query, phoneMatchKey, dbType });
+export const upsertLeadHandoff = leadHandoffDomain.upsertLeadHandoff;
+export const getLeadHandoffByPhone = leadHandoffDomain.getLeadHandoffByPhone;
+export const listLeadHandoff = leadHandoffDomain.listLeadHandoff;
+export const setLeadHandoffOperatorNotes = leadHandoffDomain.setOperatorNotes;
 
 // Call time bandit domain (extracted)
 const callTimeBanditDomain = createCallTimeBanditDomain({

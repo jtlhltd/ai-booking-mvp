@@ -73,6 +73,24 @@ export function ensureSqliteCoreSchema(sqlite) {
       id INTEGER PRIMARY KEY CHECK (id = 1),
       floor_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS lead_handoff (
+      client_key TEXT NOT NULL,
+      phone_match_key TEXT NOT NULL,
+      lead_phone TEXT,
+      call_id TEXT,
+      source TEXT,
+      decision_maker TEXT,
+      callback_window TEXT,
+      summary_text TEXT,
+      data_json TEXT,
+      operator_notes TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (client_key, phone_match_key)
+    );
+    CREATE INDEX IF NOT EXISTS lead_handoff_client_updated_idx ON lead_handoff (client_key, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS lead_handoff_client_call_id_idx ON lead_handoff (client_key, call_id);
   `);
 }
 

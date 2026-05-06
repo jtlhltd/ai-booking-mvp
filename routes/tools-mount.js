@@ -1,7 +1,7 @@
 import { Router } from 'express';
 
 export function createToolsRouter(deps) {
-  const { store, sheets, sendOperatorAlert, messagingService } = deps || {};
+  const { store, sheets, sendOperatorAlert, messagingService, upsertLeadHandoff, phoneMatchKey } = deps || {};
 
   const router = Router();
 
@@ -100,6 +100,26 @@ export function createToolsRouter(deps) {
           callId: callId || data.callId || '', // Use callId from webhook if available
           timestamp: new Date().toISOString(),
         });
+
+        // Persist a structured handoff snapshot for operator workflow (DB-backed).
+        // We intentionally key by phone (match key derived in db domain) so later sheet edits still map.
+        try {
+          const leadPhone = data.phone || data.Phone || data.leadPhone || data.lead_phone || '';
+          if (typeof upsertLeadHandoff === 'function' && leadPhone) {
+            await upsertLeadHandoff({
+              clientKey: tenantKey || 'logistics_client',
+              leadPhone: String(leadPhone),
+              callId: callId || data.callId || null,
+              source: 'tools.access_google_sheet',
+              data,
+              summaryText: data['Transcript Snippet'] || data.transcriptSnippet || '',
+              decisionMaker: data['Decision Maker'] || data.decisionMaker || '',
+              callbackWindow: data['Callback Window'] || data.callbackWindow || data.preferredTime || '',
+            });
+          }
+        } catch (e) {
+          console.warn('[GOOGLE SHEET TOOL] lead_handoff upsert failed (non-fatal):', e?.message || e);
+        }
 
         console.log('[GOOGLE SHEET TOOL] Data appended successfully');
 

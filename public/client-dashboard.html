@@ -14711,7 +14711,18 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             if (col === 'Notes') {
                 const isUnknown = v.toLowerCase() === 'unknown';
                 const label = (!v || isUnknown) ? '—' : v;
-                return `<span class="fu-cell-actions"><span title="${escapeHtml(label)}">${escapeHtml(label)}</span>${followUpPencilBtn(col, !canEdit)}</span>`;
+                const h = row?._handoff || null;
+                const handoffSummary = h && (h.summaryText || h.summary_text) ? String(h.summaryText || h.summary_text).trim() : '';
+                const handoffNotes = h && (h.operatorNotes || h.operator_notes) ? String(h.operatorNotes || h.operator_notes).trim() : '';
+                const extraBits = [];
+                if (handoffSummary && handoffSummary.toLowerCase() !== String(row?.['Transcript Snippet'] || '').trim().toLowerCase()) {
+                    extraBits.push(`Handoff: ${handoffSummary}`);
+                }
+                if (handoffNotes) extraBits.push(`Operator: ${handoffNotes}`);
+                const extraHtml = extraBits.length
+                    ? `<div class="fu-muted" style="margin-top:6px; font-size:12px; line-height:1.35;">${escapeHtml(extraBits.join(' · '))}</div>`
+                    : '';
+                return `<span class="fu-cell-actions"><span title="${escapeHtml(label)}">${escapeHtml(label)}</span>${followUpPencilBtn(col, !canEdit)}${extraHtml}</span>`;
             }
             if (col === 'Recording URI' && /^https?:\/\//i.test(v)) {
                 return `<span class="fu-cell-actions"><a href="${escapeHtml(v)}" target="_blank" rel="noopener noreferrer">Open</a>${followUpPencilBtn(col, !canEdit)}</span>`;
@@ -15029,6 +15040,29 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     return;
                 }
                 rows = followUpHydrateRowsForDashboard(rows, clientKey);
+
+                // Best-effort: enrich sheet rows with DB-backed handoff snapshots (if available).
+                try {
+                    const phones = rows.map((r) => String(r?.Phone || '').trim()).filter(Boolean);
+                    if (phones.length) {
+                        const handoffRes = await fetch(`${BASE_URL}/api/handoff/${encodeURIComponent(clientKey)}/batch`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ phones: Array.from(new Set(phones)).slice(0, 200) })
+                        });
+                        const handoff = await handoffRes.json().catch(() => ({}));
+                        if (handoffRes.ok && handoff && handoff.ok && handoff.items) {
+                            rows = rows.map((r) => {
+                                const p = String(r?.Phone || '').trim();
+                                const item = p ? (handoff.items[p] || null) : null;
+                                return item ? { ...r, _handoff: item } : r;
+                            });
+                        }
+                    }
+                } catch (e) {
+                    // ignore: older deployments or missing table should not break the dashboard
+                }
+
                 const colsRaw = followUpVisibleColumns(rows);
                 followUpColumnPrefs = loadFollowUpColumnPrefs(clientKey);
                 const applied = applyFollowUpColumnPrefs(colsRaw, followUpColumnPrefs);

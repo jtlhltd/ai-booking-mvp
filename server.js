@@ -70,6 +70,10 @@ import {
   deactivateOptOut,
   getLeadsByClient,
   getCallsByTenant,
+  upsertLeadHandoff,
+  listLeadHandoff,
+  getLeadHandoffByPhone,
+  setLeadHandoffOperatorNotes,
   addToCallQueue
 } from './db.js'; // SQLite-backed tenants
 import {
@@ -346,6 +350,9 @@ mountApi(app, {
   getNextBusinessHour,
   scheduleAtOptimalCallWindow,
   addToCallQueue,
+  listLeadHandoff,
+  getLeadHandoffByPhone,
+  setLeadHandoffOperatorNotes,
   pickTimezone,
   DateTime,
   TIMEZONE,
@@ -3560,6 +3567,8 @@ mountAdminAndTools(app, {
   sheets,
   sendOperatorAlert,
   messagingService,
+  upsertLeadHandoff,
+  phoneMatchKey,
 
   startColdCallCampaign,
   getOptimalCallTime,
