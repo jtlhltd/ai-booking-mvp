@@ -308,6 +308,10 @@ try {
   console.error('❌ Failed to initialize SMS-Email pipeline:', error.message);
   console.log('⚠️ SMS-Email functionality will be disabled');
 }
+
+/** Rolling activity windows & touchpoint day buckets on the client dashboard (GMT/BST). */
+const DASHBOARD_ACTIVITY_TZ = 'Europe/London';
+
 mountApi(app, {
   bookingSystem,
   smsEmailPipeline,
@@ -548,9 +552,6 @@ mountAdminRoutes(app, {
 // moved: GET /api/roi/:clientKey → routes/roi.js
 
 // moved: GET /api/industry-comparison/:clientKey → routes/industry-comparison.js
-
-/** Rolling activity windows & touchpoint day buckets on the client dashboard (GMT/BST). */
-const DASHBOARD_ACTIVITY_TZ = 'Europe/London';
 
 function formatGBP(value = 0) {
   const formatter = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 });
