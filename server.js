@@ -48,7 +48,6 @@ import { handleSmsStatusWebhook } from './lib/sms-status-webhook.js';
 import { isOptedOut } from './lib/lead-deduplication.js';
 import { isMobileNumber } from './lib/google-places-search.js';
 import { createCallWithKey as vapiCreateCallWithKey } from './lib/vapi.js';
-import googlePlacesSearchRouter from './routes/google-places-search.js';
 
 import { makeJwtAuth, insertEvent, freeBusy } from './gcal.js';
 import {
@@ -202,6 +201,7 @@ import { getCallContext, storeCallContext, getMostRecentCallContext, getCallCont
 import { createSocketIo, installAdminHubRealtimeHandlers } from './app/realtime.js';
 import { createApp } from './app/create-app.js';
 import { mountAdminRoutes } from './app/mount-routes.js';
+import { mountApi } from './app/mount-api.js';
 import { startServer as createStartServer } from './app/start-server.js';
 import { installGlobalMiddleware } from './app/install-global-middleware.js';
 import { installShutdownHandlers } from './app/install-shutdown-handlers.js';
@@ -308,233 +308,103 @@ try {
   console.error('❌ Failed to initialize SMS-Email pipeline:', error.message);
   console.log('⚠️ SMS-Email functionality will be disabled');
 }
-app.use(
-  createClientOpsRouter({
-    getFullClient,
-    nanoid,
-    createABTestExperiment,
-    invalidateClientCache,
-    runOutboundAbTestSetup,
-    runOutboundAbChallengerUpdate,
-    runOutboundAbDimensionStop,
-    isDashboardSelfServiceClient,
-    isVapiOutboundAbExperimentOnlyPatch,
-  })
-);
-app.use('/api/outreach', createOutreachRouter());
-app.use('/api/crm', createCrmRouter({ getFullClient }));
-app.use('/api/branding', createBrandingRouter({ getFullClient, upsertFullClient }));
-app.use('/api/analytics', createAnalyticsRouter());
-app.use(createSmsEmailPipelineRouter({ smsEmailPipeline }));
-app.use(createBookingTestRouter({ bookingSystem, getApiKey: () => process.env.API_KEY, getFullClient }));
-app.use(createVapiDevRouter());
-app.use('/api', createPipelineTrackingRouter({ smsEmailPipeline }));
-app.use('/api', createPipelineRetryRouter({ smsEmailPipeline }));
-app.use('/api/webhooks', createZapierWebhookRouter({ requireApiKey, getClientFromHeader }));
-app.use('/api', createImportLeadsCsvRouter({ requireApiKey }));
-app.use('/api', createGooglePlacesTestRouter());
-app.use('/api', createBookDemoRouter({ bookingSystem, smsEmailPipeline }));
-app.use('/api', createAvailableSlotsRouter({ bookingSystem }));
-app.use('/api', createCreateClientRouter({ upsertFullClient, adjustColorBrightness }));
-app.use('/api', createQualityAlertsRouter());
-app.use('/api', createDevTestRouter({ query, readJson, writeJson, SMS_STATUS_PATH }));
-app.use('/api', createCallInsightsRouter({ cacheMiddleware, poolQuerySelect, query }));
-app.use(createCompanyEnrichmentRouter());
-app.use(
-  createRuntimeMetricsRouter({
-    query,
-    listFullClients,
-    getFullClient,
-    cacheMiddleware,
-    dashboardStatsCache,
-    DASHBOARD_CACHE_TTL,
-    AIInsightsEngine,
-    getClientFromHeader,
-    pickTimezone,
-    DateTime,
-    getCallContextCacheStats,
-    getMostRecentCallContext,
-    GOOGLE_CLIENT_EMAIL,
-    GOOGLE_PRIVATE_KEY,
-    GOOGLE_CALENDAR_ID,
-  })
-);
-app.use(
-  '/api',
-  createImportLeadsRouter({
-    getFullClient,
-    isBusinessHours,
-    query,
-    getClientFromHeader,
-    getNextBusinessHour,
-    scheduleAtOptimalCallWindow,
-    addToCallQueue,
-    validateAndSanitizePhone,
-    phoneMatchKey,
-    sanitizeInput,
-    isOptedOut,
-    sendOperatorAlert,
-    sanitizeLead,
-    runOutboundCallsForImportedLeads,
-    TIMEZONE
-  })
-);
-app.use('/api', createImportLeadEmailRouter());
-app.use('/api', createRoiRouter());
-app.use('/api', createIndustryComparisonRouter({ getFullClient }));
-app.use('/api', createLeadsExistingMatchKeysRouter({ query }));
-app.use('/api', createAbTestResultsRouter());
-app.use('/api', createDemoTestCallRouter({ getFullClient, isDemoClient, fetchImpl: fetch }));
-app.use('/api', createCallTranscriptRouter({ query }));
-app.use('/api', createDemoDashboardDebugRouter({ query, fetchImpl: fetch }));
-app.use(
-  '/api',
-  createDemoDashboardRouter({
-    handleDemoDashboard: (req, res, _routerDeps) =>
-      handleDemoDashboard(req, res, {
-        getFullClient,
-        activityFeedChannelLabel,
-        DateTime,
-        DASHBOARD_ACTIVITY_TZ,
-        isPostgres,
-        query,
-        sqlDaysAgo,
-        formatTimeAgoLabel,
-        formatCallDuration,
-        truncateActivityFeedText,
-        formatVapiEndedReasonDisplay,
-        outcomeToFriendlyLabel,
-        parseCallsRowMetadata,
-        isCallQueueStartFailureRow,
-        mapCallStatus,
-        mapStatusClass,
-        trimEnvDashboard,
-        buildDashboardExperience,
-        sendOperatorAlert,
-        fetchImpl: fetch
-      })
-  })
-);
-app.use(
-  '/api',
-  createLeadTimelineRouter({
-    query,
-    timelineVapiAuthKey,
-    fetchVapiCallSnapshotForTimeline,
-    vapiCallSnapshotToTimelineHints,
-    inferTimelinePickupStatus,
-    formatCallDuration
-  })
-);
-app.use('/api', createCallTimeBanditRouter());
-app.use(
-  '/api',
-  createRetryQueueRouter({
-    poolQuerySelect,
-    query,
-    getFullClient,
-    fetchLeadNamesForRetryQueuePhones,
-    effectiveDialScheduledForApiDisplay,
-    resolveLogisticsSpreadsheetId,
-    sheets
-  })
-);
-app.use('/api', createFollowUpQueueRouter({ getFullClient, resolveLogisticsSpreadsheetId, sheets }));
-app.use('/api', createNextActionsRouter({ query, cacheMiddleware }));
-app.use('/api', createCallRecordingsRouter({ query, formatTimeAgoLabel }));
-app.use('/api', createVoicemailsRouter({ isPostgres, poolQuerySelect, formatTimeAgoLabel, truncateActivityFeedText }));
-app.use('/api', createCallRecordingsStreamRouter({ poolQuerySelect }));
-app.use('/api', createRecordingsQualityCheckRouter({ query }));
-app.use('/api', createReportsRouter({ authenticateApiKey }));
-app.use('/api', createSmsTemplatesRouter({ authenticateApiKey }));
-app.use('/api', createMonitoringDashboardRouter({ authenticateApiKey }));
-app.use(createApiDocsRouter());
-app.use('/api', createQuickWinMetricsRouter({ query, cacheMiddleware }));
-app.use(createHealthAndDiagnosticsRouter({ query }));
-app.use(
-  '/api',
-  createOpsHealthAndDncRouter({
-    getFullClient,
-    resolveLogisticsSpreadsheetId,
-    listOptOutList,
-    upsertOptOut,
-    deactivateOptOut,
-    query,
-    dbType,
-    DB_PATH
-  })
-);
-app.use(
-  '/api',
-  createDailySummaryRouter({
-    getFullClient,
-    resolveLogisticsSpreadsheetId,
-    sheets,
-    isPostgres,
-    poolQuerySelect,
-    query,
-    pickTimezone
-  })
-);
-app.use(
-  '/api',
-  createCoreApiRouter({
-    query,
-    getFullClient,
-    getIntegrationStatuses: (clientKey) => getIntegrationStatusesForClient(clientKey, { query })
-  })
-);
-app.use(
-  '/api/clients',
-  createClientsApiRouter({
-    listFullClients,
-    getFullClient,
-    upsertFullClient,
-    deleteClient,
-    pickTimezone,
-    isDashboardSelfServiceClient
-  })
-);
-app.use(
-  '/api/calendar',
-  createCalendarApiRouter({
-    getClientFromHeader,
-    servicesFor: (typeof servicesFor === 'function') ? servicesFor : undefined,
-    makeJwtAuth,
-    GOOGLE_CLIENT_EMAIL,
-    GOOGLE_PRIVATE_KEY,
-    GOOGLE_PRIVATE_KEY_B64,
-    google,
-    pickCalendarId,
-    insertEvent,
-    pickTimezone,
-    smsConfig,
-    getGoogleCredentials: () => ({
-      clientEmail: GOOGLE_CLIENT_EMAIL,
-      privateKey: GOOGLE_PRIVATE_KEY,
-      privateKeyB64: GOOGLE_PRIVATE_KEY_B64,
-      calendarId: GOOGLE_CALENDAR_ID,
-    }),
-    freeBusy,
-    renderTemplate,
-    scheduleAppointmentReminders,
-    appendToSheet,
-    // check-book deps
-    deriveIdemKey,
-    getMostRecentCallContext,
-    isDemoClient,
-    readJson,
-    writeJson,
-    CALLS_PATH,
-    withRetry,
-    setCachedIdem,
-    getTwilioDemoContext: () => ({
-      defaultSmsClient,
-      TWILIO_FROM_NUMBER,
-      TWILIO_MESSAGING_SERVICE_SID,
-    }),
-  })
-);
+mountApi(app, {
+  bookingSystem,
+  smsEmailPipeline,
+  requireApiKey,
+  getClientFromHeader,
+  isDashboardSelfServiceClient,
+  query,
+  poolQuerySelect,
+  cacheMiddleware,
+  dashboardStatsCache,
+  DASHBOARD_CACHE_TTL,
+  dbType,
+  DB_PATH,
+  upsertFullClient,
+  getFullClient,
+  listFullClients,
+  deleteClient,
+  invalidateClientCache,
+  isBusinessHours,
+  getNextBusinessHour,
+  scheduleAtOptimalCallWindow,
+  addToCallQueue,
+  pickTimezone,
+  DateTime,
+  TIMEZONE,
+  isPostgres,
+  sqlDaysAgo,
+  validateAndSanitizePhone,
+  phoneMatchKey,
+  sanitizeInput,
+  isOptedOut,
+  sendOperatorAlert,
+  sanitizeLead,
+  runOutboundCallsForImportedLeads,
+  isDemoClient,
+  readJson,
+  writeJson,
+  SMS_STATUS_PATH,
+  fetchImpl: fetch,
+  activityFeedChannelLabel,
+  DASHBOARD_ACTIVITY_TZ,
+  formatTimeAgoLabel,
+  formatCallDuration,
+  truncateActivityFeedText,
+  formatVapiEndedReasonDisplay,
+  outcomeToFriendlyLabel,
+  parseCallsRowMetadata,
+  isCallQueueStartFailureRow,
+  mapCallStatus,
+  mapStatusClass,
+  trimEnvDashboard,
+  buildDashboardExperience,
+  timelineVapiAuthKey,
+  fetchVapiCallSnapshotForTimeline,
+  vapiCallSnapshotToTimelineHints,
+  inferTimelinePickupStatus,
+  resolveLogisticsSpreadsheetId,
+  sheets,
+  effectiveDialScheduledForApiDisplay,
+  fetchLeadNamesForRetryQueuePhones,
+  getIntegrationStatusesForClient,
+  nanoid,
+  createABTestExperiment,
+  runOutboundAbTestSetup,
+  runOutboundAbChallengerUpdate,
+  runOutboundAbDimensionStop,
+  isVapiOutboundAbExperimentOnlyPatch,
+  adjustColorBrightness,
+  AIInsightsEngine,
+  getCallContextCacheStats,
+  getMostRecentCallContext,
+  GOOGLE_CLIENT_EMAIL,
+  GOOGLE_PRIVATE_KEY,
+  GOOGLE_CALENDAR_ID,
+  servicesFor,
+  makeJwtAuth,
+  GOOGLE_PRIVATE_KEY_B64,
+  google,
+  pickCalendarId,
+  insertEvent,
+  smsConfig,
+  freeBusy,
+  renderTemplate,
+  scheduleAppointmentReminders,
+  appendToSheet,
+  deriveIdemKey,
+  withRetry,
+  setCachedIdem,
+  CALLS_PATH,
+  defaultSmsClient,
+  TWILIO_FROM_NUMBER,
+  TWILIO_MESSAGING_SERVICE_SID,
+  authenticateApiKey,
+  listOptOutList,
+  upsertOptOut,
+  deactivateOptOut,
+});
 
 mountAdminRoutes(app, {
   io,
@@ -660,7 +530,6 @@ mountAdminRoutes(app, {
 // moved: POST /api/test-google-places → routes/google-places-test.js
 
 // moved: POST /api/search-google-places → routes/google-places-search.js
-app.use('/', googlePlacesSearchRouter);
 
 // (search-google-places handler and its helper functions moved to routes/lib modules)
 
