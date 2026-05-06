@@ -49,19 +49,14 @@ export default {
     '!lib/campaign-vapi-dial-helpers.js',
     '!lib/cold-call-personalization.js',
     '!lib/outbound-ab-dashboard-handlers.js',
-    '!lib/server-input-validation.js',
     '!lib/server-call-resilience.js',
     '!lib/server-assistant-scheduling.js',
     '!lib/server-files-inbound-templates.js',
     '!lib/server-reminders-runner.js',
-    '!lib/server-http-context.js',
     '!lib/server-demo-generators.js',
-    '!lib/server-runtime-helpers.js',
-    '!lib/google-sheets-append.js',
-    // Extracted from routes/vapi-webhooks.js (move-only); route contracts + policy enforce boundaries.
-    '!lib/vapi-webhooks/**/*.js',
-    '!lib/server-queue-workers-shared.js',
-    '!db/domains/api-keys-rate-limit.js',
+    // google-sheets-append: covered by tests/unit/lib/google-sheets-append.test.js
+    // process-webhook-payload (~1.3k lines): exercised via routes/vapi-webhooks contract tests; isolate unit tests optional.
+    '!lib/vapi-webhooks/process-webhook-payload.js',
     'lib/calendar-check-book.js',
     'lib/calendar-book-slot.js',
     'lib/business-hours.js',
@@ -89,10 +84,10 @@ export default {
       // batch). Path gates below peel several near-100% routes off this merge, so the *global* numbers
       // here are lower than the printed summary table. Branch floor lowered slightly after extracting
       // vapi-webhooks + shared queue helpers (coverage merge shifts).
-      branches: 39,
-      functions: 55,
-      lines: 53,
-      statements: 51
+      branches: 40,
+      functions: 56,
+      lines: 54,
+      statements: 52
     },
     // Module gates for the highest-risk surfaces (booking + admin).
     './lib/booking.js': {
