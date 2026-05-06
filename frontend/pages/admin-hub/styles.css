@@ -1,42 +1,107 @@
-.adminHubShell {
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
+.adminHubPage {
+  min-height: 100vh;
 }
 
-.adminHubTopbar {
+.adminHubTopbar2 {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 10px 14px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.25);
-  background: rgba(2, 6, 23, 0.75);
+  background: rgba(2, 6, 23, 0.9);
+  backdrop-filter: blur(10px);
 }
 
-.adminHubTitle {
-  font-weight: 700;
+.adminHubTitle2 {
+  font-weight: 800;
 }
 
-.adminHubActions {
+.adminHubTopbarRight {
   display: flex;
+  align-items: center;
   gap: 10px;
+}
+
+.adminHubInput {
+  width: min(420px, 52vw);
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.8);
+  color: rgba(226, 232, 240, 0.96);
+}
+
+.adminHubBtn {
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(59, 130, 246, 0.25);
+  color: rgba(226, 232, 240, 0.96);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.adminHubBtn:hover {
+  background: rgba(59, 130, 246, 0.35);
+}
+
+.adminHubStatus {
+  font-size: 12px;
+  color: rgba(148, 163, 184, 0.95);
+}
+
+.adminHubContent {
+  padding: 16px;
+}
+
+.adminHubGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 14px;
+}
+
+.adminHubCard {
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.6);
+  padding: 12px;
+}
+
+.adminHubCardTitle {
+  font-weight: 800;
+  margin-bottom: 10px;
+}
+
+.adminHubPre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(226, 232, 240, 0.92);
+}
+
+.adminHubEmptyTitle {
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.adminHubEmptyMuted {
+  color: rgba(148, 163, 184, 0.95);
+  margin-bottom: 10px;
 }
 
 .adminHubLink {
   color: rgba(226, 232, 240, 0.92);
   text-decoration: none;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .adminHubLink:hover {
   text-decoration: underline;
-}
-
-.adminHubFrame {
-  width: 100%;
-  flex: 1;
-  border: 0;
-  background: #0b1220;
 }
 
