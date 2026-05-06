@@ -18,6 +18,7 @@ import * as callQueueReads from './db/call-queue-reads.js';
 import * as callQueueWrites from './db/call-queue-writes.js';
 import { smearCallQueueScheduledFor } from './db/call-queue-smear.js';
 import { createOptOutDomain } from './db/domains/opt-outs.js';
+import { createQualityAlertsDomain } from './db/domains/quality-alerts.js';
 import { migratePostgresLeadsPhoneMatchKey } from './db/migrations/postgres-leads-phone-match-key.js';
 import { migratePostgresCallsLeadPhoneMatchKey } from './db/migrations/postgres-calls-lead-phone-match-key.js';
 import { migrateSqliteLeadsPhoneMatchKey } from './db/migrations/sqlite-leads-phone-match-key.js';
@@ -2659,41 +2660,11 @@ export async function getCallQualityMetrics(clientKey, days = 30) {
   };
 }
 
-// Get quality alerts for a client
-export async function getQualityAlerts(clientKey, options = {}) {
-  const { resolved = false, limit = 50 } = options;
-  
-  const { rows } = await query(`
-    SELECT * FROM quality_alerts
-    WHERE client_key = $1 
-      AND resolved = $2
-    ORDER BY created_at DESC
-    LIMIT $3
-  `, [clientKey, resolved, limit]);
-  
-  return rows || [];
-}
-
-// Resolve a quality alert
-export async function resolveQualityAlert(alertId) {
-  await query(`
-    UPDATE quality_alerts
-    SET resolved = TRUE, resolved_at = NOW()
-    WHERE id = $1
-  `, [alertId]);
-}
-
-// Store quality alert
-export async function storeQualityAlert({ clientKey, alertType, severity, metric, actualValue, expectedValue, message, action, impact, metadata }) {
-  const metadataJson = metadata ? JSON.stringify(metadata) : null;
-  
-  await query(`
-    INSERT INTO quality_alerts (
-      client_key, alert_type, severity, metric, actual_value, expected_value,
-      message, action, impact, metadata
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-  `, [clientKey, alertType, severity, metric, actualValue, expectedValue, message, action, impact, metadataJson]);
-}
+// Quality alerts domain (extracted)
+const qualityAlertsDomain = createQualityAlertsDomain({ query });
+export const getQualityAlerts = qualityAlertsDomain.getQualityAlerts;
+export const resolveQualityAlert = qualityAlertsDomain.resolveQualityAlert;
+export const storeQualityAlert = qualityAlertsDomain.storeQualityAlert;
 
 // Retry queue functions
 export async function addToRetryQueue({ clientKey, leadPhone, retryType, retryReason, retryData, scheduledFor, retryAttempt = 1, maxRetries = 3 }) {
