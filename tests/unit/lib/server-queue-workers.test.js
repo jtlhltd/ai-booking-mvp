@@ -170,4 +170,117 @@ describe('lib/server-queue-workers', () => {
     global.Math.random.mockRestore();
     jest.useRealTimers();
   });
+
+  test('processRetryQueue vapi_call enqueues into call_queue when journey slot ok', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2030-01-01T00:00:00.000Z'));
+    jest.spyOn(global.Math, 'random').mockReturnValue(0);
+
+    const addToCallQueue = jest.fn(async () => {});
+    const query = jest.fn(async (sql) => {
+      const s = String(sql);
+      if (s.includes('UPDATE retry_queue SET scheduled_for')) return { rowCount: 1, rows: [] };
+      if (s.includes('SELECT id') && s.includes('FROM call_queue')) return { rows: [] }; // not already queued
+      return { rowCount: 0, rows: [] };
+    });
+    const getPendingRetries = jest.fn(async () => [
+      {
+        id: 12,
+        retry_type: 'vapi_call',
+        client_key: 'c1',
+        lead_phone: '+15550003333',
+        retry_attempt: 0,
+        max_retries: 3,
+        retry_data: '{"clientConfig":{"x":1}}',
+        retry_reason: 'test'
+      }
+    ]);
+    const updateRetryStatus = jest.fn(async () => {});
+
+    jest.unstable_mockModule('../../../db.js', () => ({
+      query,
+      poolQuerySelect: jest.fn(async () => ({ rows: [] })),
+      getFullClient: jest.fn(async () => ({ clientKey: 'c1', timezone: 'UTC', booking: { timezone: 'UTC' } })),
+      listFullClients: jest.fn(async () => []),
+      addToCallQueue,
+      smearCallQueueScheduledFor: jest.fn(async () => {}),
+      invalidateClientCache: jest.fn(async () => {}),
+      getPendingRetries,
+      updateRetryStatus,
+      claimOutboundWeekdayJourneySlot: jest.fn(async () => ({ ok: true })),
+    }));
+    jest.unstable_mockModule('../../../lib/server-queue-workers-shared.js', () => ({
+      TIMEZONE: 'UTC',
+      isBusinessHours: jest.fn(() => true),
+      getNextBusinessHour: jest.fn(() => new Date('2030-01-01T10:00:00.000Z')),
+      pickTimezone: jest.fn(() => 'UTC')
+    }));
+
+    const { processRetryQueue } = await import('../../../lib/server-queue-workers.js');
+    const p = processRetryQueue();
+    await jest.advanceTimersByTimeAsync(500);
+    await p;
+
+    expect(updateRetryStatus).toHaveBeenCalledWith(12, 'processing');
+    expect(addToCallQueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clientKey: 'c1',
+        leadPhone: '+15550003333',
+        callType: 'vapi_call',
+      })
+    );
+    expect(updateRetryStatus).toHaveBeenCalledWith(12, 'completed');
+
+    global.Math.random.mockRestore();
+    jest.useRealTimers();
+  });
+
+  test('processRetryQueue cancels retry when weekday journey is terminal', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2030-01-01T00:00:00.000Z'));
+    jest.spyOn(global.Math, 'random').mockReturnValue(0);
+
+    const query = jest.fn(async (sql) => {
+      if (String(sql).includes("UPDATE retry_queue SET status = 'cancelled'")) return { rowCount: 1 };
+      return { rowCount: 0, rows: [] };
+    });
+    const getPendingRetries = jest.fn(async () => [
+      { id: 13, retry_type: 'vapi_call', client_key: 'c1', lead_phone: '+15550004444', retry_attempt: 0, max_retries: 3 }
+    ]);
+    const updateRetryStatus = jest.fn(async () => {});
+
+    jest.unstable_mockModule('../../../db.js', () => ({
+      query,
+      poolQuerySelect: jest.fn(async () => ({ rows: [] })),
+      getFullClient: jest.fn(async () => ({ clientKey: 'c1', timezone: 'UTC', booking: { timezone: 'UTC' } })),
+      listFullClients: jest.fn(async () => []),
+      addToCallQueue: jest.fn(async () => {}),
+      smearCallQueueScheduledFor: jest.fn(async () => {}),
+      invalidateClientCache: jest.fn(async () => {}),
+      getPendingRetries,
+      updateRetryStatus,
+      claimOutboundWeekdayJourneySlot: jest.fn(async () => ({ ok: false, reason: 'journey_terminal' })),
+    }));
+    jest.unstable_mockModule('../../../lib/server-queue-workers-shared.js', () => ({
+      TIMEZONE: 'UTC',
+      isBusinessHours: jest.fn(() => true),
+      getNextBusinessHour: jest.fn(() => new Date('2030-01-01T10:00:00.000Z')),
+      pickTimezone: jest.fn(() => 'UTC')
+    }));
+
+    const { processRetryQueue } = await import('../../../lib/server-queue-workers.js');
+    const p = processRetryQueue();
+    await jest.advanceTimersByTimeAsync(500);
+    await p;
+
+    // should not transition to processing/completed for a terminal journey
+    expect(updateRetryStatus).not.toHaveBeenCalled();
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("UPDATE retry_queue SET status = 'cancelled'"),
+      [13]
+    );
+
+    global.Math.random.mockRestore();
+    jest.useRealTimers();
+  });
 });

@@ -97,4 +97,68 @@ describe('lib/outbound-ab-dashboard-handlers', () => {
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ ok: false }));
   });
+
+  test('runOutboundAbTestSetup returns 423 when review pending lock is active', async () => {
+    jest.resetModules();
+    jest.unstable_mockModule('../../../lib/outbound-ab-review-lock.js', () => ({
+      isOutboundAbReviewPending: jest.fn(() => true),
+      OUTBOUND_AB_REVIEW_PENDING_MESSAGE: 'review_pending'
+    }));
+    jest.unstable_mockModule('../../../lib/outbound-ab-variant.js', () => ({
+      OUTBOUND_AB_VAPI_KEYS: {
+        voice: 'outboundAbVoiceExperiment',
+        opening: 'outboundAbOpeningExperiment',
+        script: 'outboundAbScriptExperiment',
+      }
+    }));
+
+    const { createOutboundAbHandlers } = await import('../../../lib/outbound-ab-dashboard-handlers.js');
+    const handlers = createOutboundAbHandlers({
+      invalidateClientCache: jest.fn(),
+      getFullClient: jest.fn(async () => ({ vapi: {} })),
+      nanoid: () => 'abc123',
+      createABTestExperiment: jest.fn(async () => {})
+    });
+
+    const res = { status: jest.fn(() => res), json: jest.fn(() => res) };
+    await handlers.runOutboundAbTestSetup('c1', { dimension: 'voice', variants: [{ name: 'variant_b', voice: 'v1' }] }, res);
+    expect(res.status).toHaveBeenCalledWith(423);
+    expect(res.json).toHaveBeenCalledWith({ ok: false, error: 'review_pending' });
+  });
+
+  test('runOutboundAbTestSetup voice dimension rejects challenger matching baseline', async () => {
+    jest.resetModules();
+    jest.unstable_mockModule('../../../lib/outbound-ab-review-lock.js', () => ({
+      isOutboundAbReviewPending: jest.fn(() => false),
+      OUTBOUND_AB_REVIEW_PENDING_MESSAGE: 'locked'
+    }));
+    jest.unstable_mockModule('../../../lib/outbound-ab-variant.js', () => ({
+      OUTBOUND_AB_VAPI_KEYS: {
+        voice: 'outboundAbVoiceExperiment',
+        opening: 'outboundAbOpeningExperiment',
+        script: 'outboundAbScriptExperiment',
+      }
+    }));
+    jest.unstable_mockModule('../../../lib/elevenlabs-voice-id.js', () => ({
+      validateElevenLabsVoiceIdForAb: (id) => ({ ok: true, id: String(id) })
+    }));
+    jest.unstable_mockModule('../../../lib/outbound-ab-baseline.js', () => ({
+      resolveOutboundAbBaselineForDimension: jest.fn(async () => 'v1')
+    }));
+
+    const { createOutboundAbHandlers } = await import('../../../lib/outbound-ab-dashboard-handlers.js');
+    const handlers = createOutboundAbHandlers({
+      invalidateClientCache: jest.fn(),
+      getFullClient: jest.fn(async () => ({ vapi: {} })),
+      nanoid: () => 'abc123',
+      createABTestExperiment: jest.fn(async () => {})
+    });
+
+    const res = { status: jest.fn(() => res), json: jest.fn(() => res) };
+    await handlers.runOutboundAbTestSetup('c1', { dimension: 'voice', variants: [{ name: 'variant_b', voice: 'v1' }] }, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ ok: false, error: expect.stringMatching(/matches your current live assistant voice/i) })
+    );
+  });
 });

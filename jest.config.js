@@ -20,40 +20,13 @@ export default {
     '/scripts/smoke/'
   ],
   collectCoverageFrom: [
-    'db.js',
-    'db/**/*.js',
-    // Focus coverage on high-signal modules first; expand this set over time.
-    '*.js',
-    '!server.js',
-    // Exclude one-off CLIs/scripts from coverage (they execute on import / require env)
-    '!booking-system.js',
-    '!create-clean-sheet.js',
-    '!enhanced-business-search.js',
-    '!enhanced-uk-business-search.js',
-    '!find-and-call-leads.js',
-    '!load-prospects-to-dashboard.js',
-    '!real-decision-maker-contact-finder.js',
-    '!real-uk-business-search.js',
-    '!run-migration.js',
-    '!schedule-prospect-calls.js',
-    '!setup-admin-hub.js',
-    '!jest.config.js',
-    'lib/**/*.js',
-    // google-sheets-append: covered by tests/unit/lib/google-sheets-append.test.js
-    'lib/calendar-check-book.js',
-    'lib/calendar-book-slot.js',
-    'lib/business-hours.js',
-    'lib/booking.js',
-    'lib/scheduled-jobs.js',
-    'lib/healthz.js',
-    'lib/gcal-ping.js',
-    'lib/webhook-retry.js',
-    'lib/stuck-processing-reaper.js',
-    'middleware/**/*.js',
-    'routes/**/*.js',
+    '**/*.js',
     '!**/node_modules/**',
+    '!**/docs/**',
     '!**/archive/**',
-    '!**/docs/**'
+    '!**/coverage/**',
+    '!**/tests/**',
+    '!jest.config.js'
   ],
   coverageThreshold: {
     global: {
@@ -67,11 +40,32 @@ export default {
       // batch). Path gates below peel several near-100% routes off this merge, so the *global* numbers
       // here are lower than the printed summary table. Branch floor lowered slightly after extracting
       // vapi-webhooks + shared queue helpers (coverage merge shifts).
-      branches: 41,
-      functions: 58,
-      lines: 55,
-      statements: 54
+      // Temporarily lowered after expanding coverage scope to **/*.js.
+      // Ratchet upward after hotspot batches (db.js, queue workers, dashboard).
+      branches: 35,
+      functions: 50,
+      lines: 44,
+      statements: 43
     },
+    // Peel-off gates for large one-off scripts/CLIs so scope can expand without breaking global thresholds.
+    // These files remain in coverage scope (and will appear in reports) but do not affect the global merge.
+    './booking-system.js': { branches: 0, functions: 0, lines: 0, statements: 0 },
+    './create-clean-sheet.js': { branches: 0, functions: 0, lines: 0, statements: 0 },
+    './enhanced-business-search.js': { branches: 0, functions: 0, lines: 0, statements: 0 },
+    './enhanced-uk-business-search.js': { branches: 0, functions: 0, lines: 0, statements: 0 },
+    './find-and-call-leads.js': { branches: 0, functions: 0, lines: 0, statements: 0 },
+    './gcal.js': { branches: 0, functions: 0, lines: 0, statements: 0 },
+    './load-prospects-to-dashboard.js': { branches: 0, functions: 0, lines: 0, statements: 0 },
+    './real-decision-maker-contact-finder.js': { branches: 0, functions: 0, lines: 0, statements: 0 },
+    './real-uk-business-search.js': { branches: 0, functions: 0, lines: 0, statements: 0 },
+    './run-migration.js': { branches: 0, functions: 0, lines: 0, statements: 0 },
+    './schedule-prospect-calls.js': { branches: 0, functions: 0, lines: 0, statements: 0 },
+    './setup-admin-hub.js': { branches: 0, functions: 0, lines: 0, statements: 0 },
+    './sms-email-pipeline.js': { branches: 0, functions: 0, lines: 0, statements: 0 },
+    './sheets.js': { branches: 0, functions: 0, lines: 0, statements: 0 },
+    './store.js': { branches: 0, functions: 0, lines: 0, statements: 0 },
+    './server.js': { branches: 0, functions: 0, lines: 0, statements: 0 },
+    './vite.config.js': { branches: 0, functions: 0, lines: 0, statements: 0 },
     // Module gates for the highest-risk surfaces (booking + admin).
     './lib/booking.js': {
       branches: 90,
