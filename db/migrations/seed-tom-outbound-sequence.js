@@ -64,14 +64,47 @@ export const TOM_OUTBOUND_SEQUENCE = {
   ]
 };
 
+/**
+ * Idempotent: only seeds when the column is NULL. Operator-edited JSON
+ * (including the rollback flip `enabled: false`) is preserved across restarts.
+ * Set `RESEED_TOM_OUTBOUND_SEQUENCE=1` to force overwrite (use sparingly).
+ */
 export async function migrateTomOutboundSequencePostgres(pool) {
   if (!pool) return;
   const json = JSON.stringify(TOM_OUTBOUND_SEQUENCE);
-  await pool.query(`UPDATE tenants SET outbound_sequence_json = $1::jsonb WHERE client_key = 'd2d-xpress-tom'`, [json]);
+  const force = String(process.env.RESEED_TOM_OUTBOUND_SEQUENCE || '').trim() === '1';
+  if (force) {
+    await pool.query(
+      `UPDATE tenants SET outbound_sequence_json = $1::jsonb WHERE client_key = 'd2d-xpress-tom'`,
+      [json]
+    );
+    return;
+  }
+  await pool.query(
+    `UPDATE tenants
+       SET outbound_sequence_json = $1::jsonb
+     WHERE client_key = 'd2d-xpress-tom'
+       AND outbound_sequence_json IS NULL`,
+    [json]
+  );
 }
 
 export function migrateTomOutboundSequenceSqlite(sqlite) {
   if (!sqlite) return;
   const json = JSON.stringify(TOM_OUTBOUND_SEQUENCE);
-  sqlite.prepare(`UPDATE tenants SET outbound_sequence_json = ? WHERE client_key = 'd2d-xpress-tom'`).run(json);
+  const force = String(process.env.RESEED_TOM_OUTBOUND_SEQUENCE || '').trim() === '1';
+  if (force) {
+    sqlite
+      .prepare(`UPDATE tenants SET outbound_sequence_json = ? WHERE client_key = 'd2d-xpress-tom'`)
+      .run(json);
+    return;
+  }
+  sqlite
+    .prepare(
+      `UPDATE tenants
+         SET outbound_sequence_json = ?
+       WHERE client_key = 'd2d-xpress-tom'
+         AND outbound_sequence_json IS NULL`
+    )
+    .run(json);
 }

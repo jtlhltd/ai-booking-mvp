@@ -14745,7 +14745,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 try {
                     const dj = h && (h.dataJson || h.data_json);
                     const d = typeof dj === 'string' ? JSON.parse(dj) : (dj || {});
-                    const stages = d?.sequence?.stages;
+                    const stages = d?.sequence?.stages || d?.qual?._sequenceStages;
                     if (Array.isArray(stages) && stages.length) {
                         txt = stages.map((s) => (s && s.stageId) || '').filter(Boolean).join(' → ');
                     }

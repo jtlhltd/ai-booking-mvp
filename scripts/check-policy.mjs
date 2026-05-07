@@ -224,6 +224,7 @@ const rules = [
       'db.js',
       'docs/INTENT.md',
       'lib/outbound-sequence.js',
+      'lib/ops-invariants.js',
       'scripts/check-policy.mjs',
       'tests/'
     ]

@@ -18,6 +18,33 @@ export function createLeadHandoffRouter(deps) {
     try { return JSON.parse(s); } catch { return null; }
   }
 
+  /** Surfaces `data.sequence.stages` on `qual._sequenceStages` for dashboard/API consumers. */
+  function enrichHandoffRow(row) {
+    if (!row || typeof row !== 'object') return row;
+    const raw = row.dataJson ?? row.data_json;
+    if (raw == null) return row;
+    const data = typeof raw === 'object' ? raw : parseDataJson(raw);
+    if (!data || typeof data !== 'object') return row;
+    const stages = Array.isArray(data.sequence?.stages) ? data.sequence.stages : [];
+    if (!stages.length) return row;
+    const baseQual = data.qual && typeof data.qual === 'object' ? { ...data.qual } : {};
+    if (Array.isArray(baseQual._sequenceStages) && baseQual._sequenceStages.length) return row;
+    const nextData = {
+      ...data,
+      qual: { ...baseQual, _sequenceStages: stages }
+    };
+    const out = { ...row };
+    if (typeof raw === 'object') {
+      out.dataJson = nextData;
+      if ('data_json' in row) out.data_json = nextData;
+    } else {
+      const ser = JSON.stringify(nextData);
+      out.dataJson = ser;
+      if ('data_json' in row) out.data_json = ser;
+    }
+    return out;
+  }
+
   function csvEscapeCell(v) {
     const s = v == null ? '' : String(v);
     const needs = /[",\r\n]/.test(s);
@@ -38,7 +65,8 @@ export function createLeadHandoffRouter(deps) {
       const limit = Math.min(500, Math.max(1, parseInt(req.query.limit, 10) || 120));
       const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
       const rows = (await listLeadHandoff?.({ clientKey, limit, offset })) || [];
-      res.json({ ok: true, clientKey, total: rows.length, offset, limit, rows });
+      const enriched = rows.map((r) => enrichHandoffRow(r));
+      res.json({ ok: true, clientKey, total: enriched.length, offset, limit, rows: enriched });
     } catch (error) {
       console.error('[HANDOFF LIST ERROR]', error);
       res.status(500).json({ ok: false, error: 'handoff_list_failed', message: error?.message || String(error) });
@@ -56,25 +84,25 @@ export function createLeadHandoffRouter(deps) {
         const data = parseDataJson(r.dataJson || r.data_json) || {};
         const qual = data?.qual || data?.qualification || data || {};
         const seqStages = data?.sequence?.stages || qual._sequenceStages || [];
-        const stagesCompleted = Array.isArray(seqStages)
+        const stagesCompletedJoined = Array.isArray(seqStages)
           ? seqStages.map((s) => (s && s.stageId) || '').filter(Boolean).join(' | ')
           : '';
         return {
-          updatedAt: r.updatedAt || r.updated_at || '',
-          leadPhone: r.leadPhone || r.lead_phone || '',
-          decisionMaker: r.decisionMaker || r.decision_maker || '',
-          callbackWindow: r.callbackWindow || r.callback_window || '',
-          summaryText: r.summaryText || r.summary_text || '',
-          stagesCompleted,
-          lane: qual.lane || '',
-          origin: qual.origin || qual.originCity || '',
-          destination: qual.destination || qual.destinationCity || '',
-          volume: qual.volume || qual.volumePerWeek || qual.shipmentsPerWeek || '',
-          equipment: qual.equipment || qual.vehicle || '',
-          timeline: qual.timeline || qual.timing || '',
-          painPoints: Array.isArray(qual.painPoints) ? qual.painPoints.join('; ') : (qual.painPoints || ''),
-          authority: qual.authority || qual.decisionAuthority || '',
-          callbackPreference: qual.callbackPreference || qual.followUpPreference || '',
+          'updatedAt': r.updatedAt || r.updated_at || '',
+          'leadPhone': r.leadPhone || r.lead_phone || '',
+          'decisionMaker': r.decisionMaker || r.decision_maker || '',
+          'callbackWindow': r.callbackWindow || r.callback_window || '',
+          'summaryText': r.summaryText || r.summary_text || '',
+          'Stages Completed': stagesCompletedJoined,
+          'lane': qual.lane || '',
+          'origin': qual.origin || qual.originCity || '',
+          'destination': qual.destination || qual.destinationCity || '',
+          'volume': qual.volume || qual.volumePerWeek || qual.shipmentsPerWeek || '',
+          'equipment': qual.equipment || qual.vehicle || '',
+          'timeline': qual.timeline || qual.timing || '',
+          'painPoints': Array.isArray(qual.painPoints) ? qual.painPoints.join('; ') : (qual.painPoints || ''),
+          'authority': qual.authority || qual.decisionAuthority || '',
+          'callbackPreference': qual.callbackPreference || qual.followUpPreference || '',
         };
       });
 
@@ -84,7 +112,7 @@ export function createLeadHandoffRouter(deps) {
         'decisionMaker',
         'callbackWindow',
         'summaryText',
-        'stagesCompleted',
+        'Stages Completed',
         'lane',
         'origin',
         'destination',
@@ -111,7 +139,7 @@ export function createLeadHandoffRouter(deps) {
       res.set('Cache-Control', 'no-store');
       const { clientKey, phone } = req.params;
       const row = await getLeadHandoffByPhone?.({ clientKey, leadPhone: phone });
-      res.json({ ok: true, clientKey, phone, row });
+      res.json({ ok: true, clientKey, phone, row: row ? enrichHandoffRow(row) : null });
     } catch (error) {
       console.error('[HANDOFF GET ERROR]', error);
       res.status(500).json({ ok: false, error: 'handoff_get_failed', message: error?.message || String(error) });
@@ -128,10 +156,11 @@ export function createLeadHandoffRouter(deps) {
       for (const p of unique) {
         const row = await getLeadHandoffByPhone?.({ clientKey, leadPhone: p });
         if (row) {
-          out[p] = row;
+          const er = enrichHandoffRow(row);
+          out[p] = er;
           if (typeof phoneMatchKey === 'function') {
             const mk = phoneMatchKey(p);
-            if (mk) out[mk] = row;
+            if (mk) out[mk] = er;
           }
         }
       }
