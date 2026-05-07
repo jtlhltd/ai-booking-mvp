@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach } from '@jest/globals';
+import { describe, test, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import {
   getDashboardSelfServiceClientKeys,
   isDashboardSelfServiceClient,
@@ -41,5 +41,60 @@ describe('lib/outbound-ab-dashboard-handlers', () => {
         vapi: { outboundAbVoiceExperiment: 'a', outboundAbOpeningExperiment: 'b' }
       })
     ).toBe(true);
+  });
+
+  test('runOutboundAbTestSetup rejects missing dimension', async () => {
+    jest.resetModules();
+    jest.unstable_mockModule('../../../lib/outbound-ab-review-lock.js', () => ({
+      isOutboundAbReviewPending: jest.fn(() => false),
+      OUTBOUND_AB_REVIEW_PENDING_MESSAGE: 'locked'
+    }));
+    jest.unstable_mockModule('../../../lib/outbound-ab-variant.js', () => ({
+      OUTBOUND_AB_VAPI_KEYS: {
+        voice: 'outboundAbVoiceExperiment',
+        opening: 'outboundAbOpeningExperiment',
+        script: 'outboundAbScriptExperiment',
+      }
+    }));
+
+    const { createOutboundAbHandlers } = await import('../../../lib/outbound-ab-dashboard-handlers.js');
+    const handlers = createOutboundAbHandlers({
+      invalidateClientCache: jest.fn(),
+      getFullClient: jest.fn(async () => ({ vapi: {} })),
+      nanoid: () => 'abc123',
+      createABTestExperiment: jest.fn(async () => {})
+    });
+
+    const res = { status: jest.fn(() => res), json: jest.fn(() => res) };
+    await handlers.runOutboundAbTestSetup('c1', { variants: [{ name: 'variant_b', voice: 'v1' }] }, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  test('runOutboundAbTestSetup rejects missing variants', async () => {
+    jest.resetModules();
+    jest.unstable_mockModule('../../../lib/outbound-ab-review-lock.js', () => ({
+      isOutboundAbReviewPending: jest.fn(() => false),
+      OUTBOUND_AB_REVIEW_PENDING_MESSAGE: 'locked'
+    }));
+    jest.unstable_mockModule('../../../lib/outbound-ab-variant.js', () => ({
+      OUTBOUND_AB_VAPI_KEYS: {
+        voice: 'outboundAbVoiceExperiment',
+        opening: 'outboundAbOpeningExperiment',
+        script: 'outboundAbScriptExperiment',
+      }
+    }));
+
+    const { createOutboundAbHandlers } = await import('../../../lib/outbound-ab-dashboard-handlers.js');
+    const handlers = createOutboundAbHandlers({
+      invalidateClientCache: jest.fn(),
+      getFullClient: jest.fn(async () => ({ vapi: {} })),
+      nanoid: () => 'abc123',
+      createABTestExperiment: jest.fn(async () => {})
+    });
+
+    const res = { status: jest.fn(() => res), json: jest.fn(() => res) };
+    await handlers.runOutboundAbTestSetup('c1', { dimension: 'voice' }, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ ok: false }));
   });
 });

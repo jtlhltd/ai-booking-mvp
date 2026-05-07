@@ -39,9 +39,6 @@ export default {
     '!setup-admin-hub.js',
     '!jest.config.js',
     'lib/**/*.js',
-    // Large dial/queue + webhook payload surfaces: unit slices exist; keep excluded until global merge tolerates full inclusion.
-    '!lib/server-queue-workers.js',
-    '!lib/vapi-webhooks/process-webhook-payload.js',
     // google-sheets-append: covered by tests/unit/lib/google-sheets-append.test.js
     'lib/calendar-check-book.js',
     'lib/calendar-book-slot.js',
@@ -71,9 +68,9 @@ export default {
       // here are lower than the printed summary table. Branch floor lowered slightly after extracting
       // vapi-webhooks + shared queue helpers (coverage merge shifts).
       branches: 41,
-      functions: 57,
+      functions: 58,
       lines: 55,
-      statements: 53
+      statements: 54
     },
     // Module gates for the highest-risk surfaces (booking + admin).
     './lib/booking.js': {
@@ -247,6 +244,19 @@ export default {
       functions: 39,
       lines: 30,
       statements: 30
+    },
+    // Included in coverage scope; keep gated until tests are expanded.
+    './lib/server-queue-workers.js': {
+      branches: 10,
+      functions: 15,
+      lines: 20,
+      statements: 20
+    },
+    './lib/vapi-webhooks/process-webhook-payload.js': {
+      branches: 30,
+      functions: 40,
+      lines: 70,
+      statements: 70
     }
   },
   verbose: true

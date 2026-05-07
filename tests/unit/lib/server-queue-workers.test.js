@@ -55,4 +55,119 @@ describe('lib/server-queue-workers', () => {
 
     expect(query).toHaveBeenCalled();
   });
+
+  test('processRetryQueue defers vapi_call retries outside business hours (updates scheduled_for, no status transitions)', async () => {
+    const query = jest.fn(async () => ({ rowCount: 0, rows: [] }));
+    const getPendingRetries = jest.fn(async () => [
+      {
+        id: 10,
+        retry_type: 'vapi_call',
+        client_key: 'c1',
+        lead_phone: '+15550001111',
+        retry_attempt: 0,
+        max_retries: 3,
+        retry_data: '{}'
+      }
+    ]);
+    const updateRetryStatus = jest.fn(async () => {});
+    const getFullClient = jest.fn(async () => ({ clientKey: 'c1', timezone: 'UTC', booking: { timezone: 'UTC' } }));
+
+    jest.unstable_mockModule('../../../db.js', () => ({
+      query,
+      poolQuerySelect: jest.fn(async () => ({ rows: [] })),
+      getFullClient,
+      listFullClients: jest.fn(async () => []),
+      addToCallQueue: jest.fn(async () => {}),
+      smearCallQueueScheduledFor: jest.fn(async () => {}),
+      invalidateClientCache: jest.fn(async () => {}),
+      getPendingRetries,
+      updateRetryStatus,
+      claimOutboundWeekdayJourneySlot: jest.fn(async () => ({ ok: true })),
+    }));
+    jest.unstable_mockModule('../../../lib/server-queue-workers-shared.js', () => ({
+      TIMEZONE: 'UTC',
+      isBusinessHours: jest.fn(() => false),
+      getNextBusinessHour: jest.fn(() => new Date('2030-01-01T10:00:00.000Z')),
+      pickTimezone: jest.fn(() => 'UTC')
+    }));
+
+    const { processRetryQueue } = await import('../../../lib/server-queue-workers.js');
+    await processRetryQueue();
+
+    // should update scheduled_for and continue, without marking processing/completed/failed
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE retry_queue SET scheduled_for'),
+      [new Date('2030-01-01T10:00:00.000Z'), 10]
+    );
+    expect(updateRetryStatus).not.toHaveBeenCalled();
+  });
+
+  test('processRetryQueue schedules retry backoff on processing error (increments attempt + sets scheduled_for)', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2030-01-01T00:00:00.000Z'));
+    jest.spyOn(global.Math, 'random').mockReturnValue(0);
+
+    const query = jest.fn(async () => ({ rowCount: 0, rows: [] }));
+    const getPendingRetries = jest.fn(async () => [
+      {
+        id: 11,
+        retry_type: 'sheet_patch',
+        client_key: 'c1',
+        lead_phone: '+15550002222',
+        retry_attempt: 0,
+        max_retries: 3,
+        retry_data: '{}'
+      }
+    ]);
+    const updateRetryStatus = jest.fn(async () => {});
+
+    jest.unstable_mockModule('../../../db.js', () => ({
+      query,
+      poolQuerySelect: jest.fn(async () => ({ rows: [] })),
+      getFullClient: jest.fn(async () => ({ clientKey: 'c1', timezone: 'UTC', booking: { timezone: 'UTC' } })),
+      listFullClients: jest.fn(async () => []),
+      addToCallQueue: jest.fn(async () => {}),
+      smearCallQueueScheduledFor: jest.fn(async () => {}),
+      invalidateClientCache: jest.fn(async () => {}),
+      getPendingRetries,
+      updateRetryStatus,
+      claimOutboundWeekdayJourneySlot: jest.fn(async () => ({ ok: true })),
+    }));
+    jest.unstable_mockModule('../../../lib/server-queue-workers-shared.js', () => ({
+      TIMEZONE: 'UTC',
+      isBusinessHours: jest.fn(() => true),
+      getNextBusinessHour: jest.fn(() => new Date('2030-01-01T10:00:00.000Z')),
+      pickTimezone: jest.fn(() => 'UTC')
+    }));
+
+    // Force sheet patch processing to throw.
+    jest.unstable_mockModule('../../../sheets.js', () => ({
+      patchRow: jest.fn(async () => {
+        throw new Error('boom');
+      })
+    }));
+
+    const { processRetryQueue } = await import('../../../lib/server-queue-workers.js');
+    const p = processRetryQueue();
+    // processRetryQueue's worker intentionally sleeps up to ~350ms before starting;
+    // under fake timers we must advance time to let it progress.
+    await jest.advanceTimersByTimeAsync(500);
+    await p;
+
+    // processing starts, then catch schedules backoff via query UPDATE (not updateRetryStatus('failed'))
+    expect(updateRetryStatus).toHaveBeenCalledWith(11, 'processing');
+    expect(updateRetryStatus).not.toHaveBeenCalledWith(11, 'failed');
+
+    const updateCalls = query.mock.calls.filter((c) => String(c[0]).includes('UPDATE retry_queue') && String(c[0]).includes('retry_attempt'));
+    expect(updateCalls.length).toBe(1);
+    const [_sql, params] = updateCalls[0];
+    expect(params[0]).toBe(1); // nextAttempt
+    expect(params[2]).toBe(11);
+    const scheduledForIso = params[1];
+    // base 5 minutes, jitter 0 seconds because Math.random mocked to 0
+    expect(new Date(scheduledForIso).toISOString()).toBe('2030-01-01T00:05:00.000Z');
+
+    global.Math.random.mockRestore();
+    jest.useRealTimers();
+  });
 });
