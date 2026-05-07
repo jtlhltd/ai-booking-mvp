@@ -14037,6 +14037,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             'Notes',
             'Status',
             'Disposition',
+            'Stage',
             'Callback Window',
             'International (Y/N)',
             'Main Couriers',
@@ -14738,6 +14739,19 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const badge = v ? `<span class="status-tag status-tag--other" title="${escapeHtml(label)}">${escapeHtml(label)}</span>` : '';
                 return `<div class="fu-status-cell">${badge}${actions}${followUpPencilBtn(col, !canEdit)}</div>`;
             }
+            if (col === 'Stage') {
+                const h = row?._handoff || null;
+                let txt = '—';
+                try {
+                    const dj = h && (h.dataJson || h.data_json);
+                    const d = typeof dj === 'string' ? JSON.parse(dj) : (dj || {});
+                    const stages = d?.sequence?.stages;
+                    if (Array.isArray(stages) && stages.length) {
+                        txt = stages.map((s) => (s && s.stageId) || '').filter(Boolean).join(' → ');
+                    }
+                } catch (_) { /* ignore */ }
+                return escapeHtml(txt);
+            }
             if (col === 'Callback Window') {
                 const label = v || '—';
                 return `<span class="fu-cell-actions"><span title="${escapeHtml(label)}">${escapeHtml(label)}</span>${followUpPencilBtn(col, !canEdit)}</span>`;
@@ -14777,6 +14791,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         }
 
         const FOLLOW_UP_EDITABLE_COLUMNS = new Set(FOLLOW_UP_TABLE_COLUMNS);
+        FOLLOW_UP_EDITABLE_COLUMNS.delete('Stage');
         let followUpEditing = false;
 
         function followUpBeginEditCell(td, colName, rowKey) {

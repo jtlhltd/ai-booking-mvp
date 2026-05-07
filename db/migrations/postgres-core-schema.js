@@ -708,6 +708,37 @@ export async function ensurePostgresCoreSchema(pool) {
     CREATE INDEX IF NOT EXISTS crm_sync_failures_type_idx ON crm_sync_failures(crm_type);
     CREATE INDEX IF NOT EXISTS crm_sync_failures_resolved_idx ON crm_sync_failures(resolved);
     CREATE INDEX IF NOT EXISTS crm_sync_failures_created_idx ON crm_sync_failures(created_at);
+
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'tenants' AND column_name = 'outbound_sequence_json'
+      ) THEN
+        ALTER TABLE tenants ADD COLUMN outbound_sequence_json JSONB;
+      END IF;
+    END $$;
+
+    CREATE TABLE IF NOT EXISTS lead_sequence_state (
+      id BIGSERIAL PRIMARY KEY,
+      client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,
+      lead_phone TEXT NOT NULL,
+      current_stage_id TEXT NOT NULL,
+      stages_completed JSONB NOT NULL DEFAULT '[]'::jsonb,
+      attempts_in_stage INTEGER NOT NULL DEFAULT 0,
+      attempts_total INTEGER NOT NULL DEFAULT 0,
+      started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      last_call_id TEXT,
+      next_stage_scheduled_for TIMESTAMPTZ,
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at TIMESTAMPTZ DEFAULT now(),
+      updated_at TIMESTAMPTZ DEFAULT now(),
+      UNIQUE (client_key, lead_phone)
+    );
+    CREATE INDEX IF NOT EXISTS lead_sequence_state_client_status_idx
+      ON lead_sequence_state (client_key, status);
+    CREATE INDEX IF NOT EXISTS lead_sequence_state_client_phone_idx
+      ON lead_sequence_state (client_key, lead_phone);
   `);
 }
 

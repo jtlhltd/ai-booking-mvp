@@ -55,12 +55,17 @@ export function createLeadHandoffRouter(deps) {
       const out = rows.map((r) => {
         const data = parseDataJson(r.dataJson || r.data_json) || {};
         const qual = data?.qual || data?.qualification || data || {};
+        const seqStages = data?.sequence?.stages || qual._sequenceStages || [];
+        const stagesCompleted = Array.isArray(seqStages)
+          ? seqStages.map((s) => (s && s.stageId) || '').filter(Boolean).join(' | ')
+          : '';
         return {
           updatedAt: r.updatedAt || r.updated_at || '',
           leadPhone: r.leadPhone || r.lead_phone || '',
           decisionMaker: r.decisionMaker || r.decision_maker || '',
           callbackWindow: r.callbackWindow || r.callback_window || '',
           summaryText: r.summaryText || r.summary_text || '',
+          stagesCompleted,
           lane: qual.lane || '',
           origin: qual.origin || qual.originCity || '',
           destination: qual.destination || qual.destinationCity || '',
@@ -79,6 +84,7 @@ export function createLeadHandoffRouter(deps) {
         'decisionMaker',
         'callbackWindow',
         'summaryText',
+        'stagesCompleted',
         'lane',
         'origin',
         'destination',

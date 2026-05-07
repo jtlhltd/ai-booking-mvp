@@ -122,6 +122,26 @@ in the dashboard.
 | `error.json-envelope` | 4xx/5xx responses must be `{ ok?: false, error: string }`. They must NOT include V8 stack frames (`at fnName (/path:line:col)`). | All routes | canary (uses `assertJsonErrorEnvelope`) | Trigger any 500 path; the body must be JSON, no stack frame text. |
 | `error.cache-control-no-store` | Dashboard / admin reads must include `Cache-Control: no-store`. | Admin/dashboard `GET` routes | canary (uses `assertNoStoreCache`) | `curl -i` any admin endpoint; the `Cache-Control` header must contain `no-store`. |
 
+## Domain: sequence
+
+Multi-stage outbound sequences are **opt-in per tenant** (`tenants.outbound_sequence_json.enabled`).
+When enabled, stage advancement is **server-inferred** from structured fields; the next dial is always a **future** `call_queue` row (no inline Vapi dial from webhooks).
+
+| ID | Statement | Constrains | Enforced by | Manual disprove |
+| --- | --- | --- | --- | --- |
+| `sequence.tenant-opt-in-required` | Sequence behavior runs only when `client.outboundSequence.enabled === true` and config passes `validateOutboundSequenceConfig`. Tenants without this flag behave like legacy single-call. | `lib/server-queue-workers.js`, `lib/instant-calling.js`, `lib/vapi-webhooks/process-webhook-payload.js` | canary | Create a tenant with `enabled: false`; observe no `stageId` in `call_queue.call_data` and no sequence DB rows for new leads. |
+| `sequence.advance-only-when-required-filled` | The engine must not enqueue the next stage unless every `requiredFields` entry for the current stage is present and non-empty in structured data. | `lib/vapi-webhooks/process-webhook-payload.js`, `lib/outbound-sequence.js#isStageComplete` | canary | Send webhook with missing required field; no new `call_queue` row with `sequence_next`. |
+| `sequence.no-skip-stages` | At most one stage transition per end-of-call webhook (no jumping from stage 1 to stage 3 in one event). | `lib/vapi-webhooks/process-webhook-payload.js` | canary | Complete stage 1 only; next queued row must reference stage 2 id, never stage 3. |
+| `sequence.no-parallel-stages-per-lead` | At most one `pending` or `processing` `vapi_call` row per `(client_key, lead_phone)` while a sequence is active. | `lib/server-queue-workers.js`, `lib/vapi-webhooks/process-webhook-payload.js`, `db/domains/call-queue.js` | canary, invariant | Attempt double-enqueue; second insert must be rejected or deduped; invariant query for duplicate actives returns 0. |
+| `sequence.no-new-vapi-call-sites` | `lib/outbound-sequence.js` must not contain `fetch('https://api.vapi.ai/call', …)`. Sequences enqueue only. | `lib/outbound-sequence.js` | policy, canary | `rg` the file for `api.vapi.ai/call`; expect zero. |
+| `sequence.no-inline-stage-chaining` | After a stage completes, the next stage must be scheduled with `scheduled_for` strictly in the future (never `NOW()` equality from webhook path). | `lib/vapi-webhooks/process-webhook-payload.js`, `lib/outbound-sequence.js#computeNextStageScheduledFor` | canary | Observe `call_queue.scheduled_for > webhook_received_at` for `triggerType: sequence_next`. |
+| `sequence.respects-business-hours` | Next-stage `scheduled_for` must be produced via `scheduleAtOptimalCallWindow` (same chokepoint as other dials). | `lib/outbound-sequence.js#computeNextStageScheduledFor` | canary | Disable business window; next slot still clamps to allowed outbound window. |
+| `sequence.stage-config-validation` | Invalid `outbound_sequence_json` when `enabled: true` must not crash the server; `getValidatedOutboundSequence` returns null and the tenant falls back to legacy outbound. | `lib/outbound-sequence.js#validateOutboundSequenceConfig` | canary | Set malformed JSON with `enabled: true`; server boots; tenant dials as single-call. |
+| `sequence.kill-switch-honored` | When `OUTBOUND_SEQUENCE_DISABLED=1`, no tenant uses sequence behavior regardless of JSON. | `lib/outbound-sequence.js`, queuer, webhook, dial path | canary | Set env; observe legacy payloads only. |
+| `sequence.bounded-attempts-per-stage` | `attempts_in_stage` must never exceed `stage.maxAttemptsInStage` for the active stage. | `lib/vapi-webhooks/process-webhook-payload.js`, `lead_sequence_state` | invariant | Force incomplete webhooks; after cap, `status='abandoned'`. |
+| `sequence.bounded-total-dials-per-lead` | `attempts_total` must not exceed `maxTotalDialsPerLead`; when hit, sequence abandons and handoff is written. | `lib/vapi-webhooks/process-webhook-payload.js` | canary | Set cap to 1; second completed dial abandons without new queue row. |
+| `sequence.bounded-duration` | When `now - started_at` exceeds `maxSequenceDurationDays`, sequence abandons. | `lib/vapi-webhooks/process-webhook-payload.js` | canary | Backdate `started_at` in test DB; next webhook abandons. |
+
 ## Domain: ops
 
 Operational safety rules that prevent “green CI, broken prod” incidents.

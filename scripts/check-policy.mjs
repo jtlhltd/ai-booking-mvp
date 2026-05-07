@@ -131,6 +131,8 @@ const rules = [
       'tests/',
       'scripts/',
       'demos/',
+      // Seed / migration SQL references the anchor tenant key (not customer-facing).
+      'db/migrations/seed-tom-outbound-sequence.js',
       // Public dashboard HTML only references the slug in comments and
       // an explicit "DEMO_DATA must NOT load for d2d-xpress-tom" guard.
       'public/client-dashboard.html',
@@ -197,6 +199,34 @@ const rules = [
     // that trips lib/ops-invariants.js#retryDue and can amplify spend.
     pattern: /updateRetryStatus\s*\(\s*[^,]+,\s*['"`]pending['"`]\s*,\s*[^)]+\+\s*1\s*\)/,
     allow: ['tests/', 'docs/']
+  },
+  {
+    intentId: 'sequence.lead-sequence-state-sql-contained',
+    description:
+      'Mutations to lead_sequence_state must stay in the domain module, queue worker, webhook handler, or migrations — not random routes.',
+    pattern: /\b(INTO|UPDATE)\s+lead_sequence_state\b/i,
+    allow: [
+      'db/domains/lead-sequence-state.js',
+      'db/migrations/postgres-core-schema.js',
+      'db/migrations/sqlite-core-schema.js',
+      'lib/server-queue-workers.js',
+      'tests/',
+      'docs/INTENT.md'
+    ]
+  },
+  {
+    intentId: 'sequence.outbound-sequence-json-contained',
+    description:
+      'The tenants JSON column for outbound sequences (see INTENT domain: sequence) must not sprawl into arbitrary lib/ files; keep writes in migrations + db facade + docs.',
+    pattern: /\boutbound_sequence_json\b/,
+    allow: [
+      'db/migrations/',
+      'db.js',
+      'docs/INTENT.md',
+      'lib/outbound-sequence.js',
+      'scripts/check-policy.mjs',
+      'tests/'
+    ]
   }
 ];
 

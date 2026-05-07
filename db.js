@@ -26,6 +26,7 @@ import { createCallsDomain } from './db/domains/calls.js';
 import { createCallQueueDomain } from './db/domains/call-queue.js';
 import { createCallTimeBanditDomain } from './db/domains/call-time-bandit.js';
 import { createLeadHandoffDomain } from './db/domains/lead-handoff.js';
+import { createLeadSequenceStateDomain } from './db/domains/lead-sequence-state.js';
 import { createApiKeysRateLimitDomain } from './db/domains/api-keys-rate-limit.js';
 import { migratePostgresLeadsPhoneMatchKey } from './db/migrations/postgres-leads-phone-match-key.js';
 import { migratePostgresCallsLeadPhoneMatchKey } from './db/migrations/postgres-calls-lead-phone-match-key.js';
@@ -107,6 +108,13 @@ async function initPostgres() {
   try {
     // Run migrations for schema creation
     await ensurePostgresCoreSchema(pool);
+
+    try {
+      const { migrateTomOutboundSequencePostgres } = await import('./db/migrations/seed-tom-outbound-sequence.js');
+      await migrateTomOutboundSequencePostgres(pool);
+    } catch (seedErr) {
+      console.warn('⚠️  Tom outbound_sequence_json seed (non-fatal):', seedErr?.message || seedErr);
+    }
 
   // Add missing columns to existing tables (safe migration)
   // This handles cases where tables exist but are missing new columns
@@ -313,6 +321,12 @@ export async function init() {
     console.warn('⚠️  SQLite calls.lead_phone_match_key migration:', e.message)
   );
   await migrateOptOutListTenantScopeFacade();
+  try {
+    const { migrateTomOutboundSequenceSqlite } = await import('./db/migrations/seed-tom-outbound-sequence.js');
+    migrateTomOutboundSequenceSqlite(sqlite);
+  } catch (seedErr) {
+    console.warn('⚠️  Tom outbound_sequence_json seed sqlite (non-fatal):', seedErr?.message || seedErr);
+  }
   await getCallAnalyticsFloorIso().catch((e) =>
     console.warn('[call_analytics_floor] init:', e.message)
   );
@@ -357,6 +371,7 @@ function mapTenantRow(r) {
   const calendar = toJson(r.calendar_json) || {};
   const smsTemplates = toJson(r.sms_templates_json) || {};
   const whiteLabel = toJson(r.white_label_config) || {};
+  const outboundSequence = toJson(r.outbound_sequence_json);
 
   const out = {
     clientKey: r.client_key,
@@ -370,6 +385,7 @@ function mapTenantRow(r) {
     booking: calendar.booking || { defaultDurationMin: 30, timezone: r.timezone },
     smsTemplates,
     whiteLabel,
+    outboundSequence: outboundSequence && typeof outboundSequence === 'object' ? outboundSequence : null,
     isEnabled: r.is_enabled === true || r.is_enabled === 1,
     createdAt: r.created_at
   };
@@ -472,7 +488,7 @@ export async function listFullClients() {
   const { rows } = await query(`
     SELECT client_key, display_name, timezone, locale,
            numbers_json, twilio_json, vapi_json, calendar_json, sms_templates_json, 
-           white_label_config, is_enabled, created_at
+           white_label_config, outbound_sequence_json, is_enabled, created_at
     FROM tenants ORDER BY created_at DESC
   `);
   const data = rows.map(mapTenantRow);
@@ -504,7 +520,7 @@ export async function getFullClient(clientKey, options = {}) {
   const { rows } = await query(`
     SELECT client_key, display_name, timezone, locale,
            numbers_json, twilio_json, vapi_json, calendar_json, sms_templates_json, 
-           white_label_config, is_enabled, created_at
+           white_label_config, outbound_sequence_json, is_enabled, created_at
     FROM tenants WHERE client_key = $1
   `, [clientKey]);
   
@@ -852,6 +868,11 @@ export const upsertLeadHandoff = leadHandoffDomain.upsertLeadHandoff;
 export const getLeadHandoffByPhone = leadHandoffDomain.getLeadHandoffByPhone;
 export const listLeadHandoff = leadHandoffDomain.listLeadHandoff;
 export const setLeadHandoffOperatorNotes = leadHandoffDomain.setOperatorNotes;
+
+const leadSequenceStateDomain = createLeadSequenceStateDomain({ query, dbType });
+export const insertLeadSequenceState = leadSequenceStateDomain.insertLeadSequenceState;
+export const getLeadSequenceState = leadSequenceStateDomain.getLeadSequenceState;
+export const updateLeadSequenceState = leadSequenceStateDomain.updateLeadSequenceState;
 
 // Call time bandit domain (extracted)
 const callTimeBanditDomain = createCallTimeBanditDomain({

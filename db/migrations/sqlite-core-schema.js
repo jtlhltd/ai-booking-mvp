@@ -11,6 +11,7 @@ export function ensureSqliteCoreSchema(sqlite) {
       calendar_json TEXT,
       sms_templates_json TEXT,
       white_label_config TEXT,
+      outbound_sequence_json TEXT,
       is_enabled INTEGER DEFAULT 1,
       created_at TEXT DEFAULT (datetime('now'))
     );
@@ -91,7 +92,38 @@ export function ensureSqliteCoreSchema(sqlite) {
     );
     CREATE INDEX IF NOT EXISTS lead_handoff_client_updated_idx ON lead_handoff (client_key, updated_at DESC);
     CREATE INDEX IF NOT EXISTS lead_handoff_client_call_id_idx ON lead_handoff (client_key, call_id);
+
+    CREATE TABLE IF NOT EXISTS lead_sequence_state (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_key TEXT NOT NULL,
+      lead_phone TEXT NOT NULL,
+      current_stage_id TEXT NOT NULL,
+      stages_completed TEXT NOT NULL DEFAULT '[]',
+      attempts_in_stage INTEGER NOT NULL DEFAULT 0,
+      attempts_total INTEGER NOT NULL DEFAULT 0,
+      started_at TEXT NOT NULL DEFAULT (datetime('now')),
+      last_call_id TEXT,
+      next_stage_scheduled_for TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      UNIQUE (client_key, lead_phone),
+      FOREIGN KEY(client_key) REFERENCES tenants(client_key) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS lead_sequence_state_client_status_idx
+      ON lead_sequence_state (client_key, status);
+    CREATE INDEX IF NOT EXISTS lead_sequence_state_client_phone_idx
+      ON lead_sequence_state (client_key, lead_phone);
   `);
+  try {
+    const cols = sqlite.prepare(`PRAGMA table_info(tenants)`).all();
+    const hasSeq = cols.some((c) => c.name === 'outbound_sequence_json');
+    if (!hasSeq) {
+      sqlite.exec(`ALTER TABLE tenants ADD COLUMN outbound_sequence_json TEXT`);
+    }
+  } catch (e) {
+    console.warn('[sqlite] tenants.outbound_sequence_json migration:', e?.message || e);
+  }
 }
 
 export function ensureSqliteCallQueueAndQualityAlertsTables(sqlite) {
