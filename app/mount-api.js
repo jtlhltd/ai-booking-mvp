@@ -51,6 +51,7 @@ import { createCoreApiRouter } from '../routes/core-api.js';
 import { createClientsApiRouter } from '../routes/clients-api.js';
 import { createCalendarApiRouter } from '../routes/calendar-api.js';
 import { createClientOpsRouter } from '../routes/client-ops-mount.js';
+import { createOutboundSequenceVisibilityRouter } from '../routes/outbound-sequence-visibility-mount.js';
 
 export function mountApi(app, deps) {
   const {
@@ -308,6 +309,15 @@ export function mountApi(app, deps) {
       getLeadHandoffByPhone: deps.getLeadHandoffByPhone,
       setLeadHandoffOperatorNotes: deps.setLeadHandoffOperatorNotes,
       phoneMatchKey: deps.phoneMatchKey,
+    })
+  );
+  app.use(
+    '/api',
+    createOutboundSequenceVisibilityRouter({
+      query,
+      getFullClient,
+      isPostgres,
+      phoneMatchKey,
     })
   );
   app.use(

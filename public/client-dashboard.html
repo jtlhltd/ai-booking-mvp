@@ -6910,6 +6910,39 @@
         <div id="outreachCapacityStrip" class="outreach-capacity-strip" hidden aria-live="polite"></div>
         <div id="usageMetersStrip" class="usage-meters-strip" hidden aria-live="polite"></div>
 
+        <section class="dashboard-section" id="outboundSequenceWindow" hidden aria-label="Outbound sequence visibility">
+            <h2 class="section-header">🧭 Sequence window</h2>
+            <article class="card card-fullwidth" style="display:flex;flex-direction:column;gap:12px;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
+                    <div>
+                        <h3 style="margin:0;">Multi-stage outbound</h3>
+                        <p class="card-subtitle" style="margin:6px 0 0 0;">
+                            Read-only view into what stages are active, what’s queued next, and a per-lead drill-down.
+                        </p>
+                    </div>
+                    <button type="button" id="outboundSequenceRefresh" class="export-btn secondary" style="padding:6px 10px;font-size:12px;">Refresh</button>
+                </div>
+
+                <div id="outboundSequenceSummary" class="outreach-strip-facts" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;"></div>
+
+                <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+                    <label style="display:flex;flex-direction:column;gap:4px;font-size:0.85rem;min-width:240px;">
+                        Lead phone (E.164 or local)
+                        <input type="text" id="outboundSequencePhoneInput" autocomplete="off" spellcheck="false" style="padding:8px;border-radius:8px;border:1px solid var(--border);" placeholder="+44… or 07…" />
+                    </label>
+                    <button type="button" id="outboundSequenceLookupBtn" class="export-btn secondary">Lookup</button>
+                    <small id="outboundSequenceLookupMsg" style="color:var(--muted);"></small>
+                </div>
+
+                <div id="outboundSequenceLeadDetail" class="thin-scroll" style="max-height:320px;border:1px solid var(--border);border-radius:12px;padding:10px;background:var(--surface-2);"></div>
+
+                <div>
+                    <div class="meta-label" style="margin-bottom:6px;">Recently updated sequences</div>
+                    <div id="outboundSequenceRecentList" class="thin-scroll" style="max-height:260px;border:1px solid var(--border);border-radius:12px;padding:8px;background:var(--surface-2);"></div>
+                </div>
+            </article>
+        </section>
+
         <section
             class="dashboard-section tom-ab-test-section"
             id="tomAbOutreachAbSection"
@@ -8290,6 +8323,162 @@
                 return payload && payload.ok ? payload : null;
             } catch {
                 return null;
+            }
+        }
+
+        function renderOutboundSequenceSummary(summary) {
+            const host = document.getElementById('outboundSequenceSummary');
+            if (!host) return;
+            const s = summary && typeof summary === 'object' ? summary : {};
+            const fact = (label, value, hint = '') => `
+                <dl class="outreach-strip-fact">
+                    <dt>${escapeHtml(label)}</dt>
+                    <dd title="${escapeHtml(hint)}">${escapeHtml(String(value ?? '—'))}</dd>
+                </dl>
+            `;
+            host.innerHTML = [
+                fact('Active sequences', formatNumber(s.activeSequences ?? 0), 'lead_sequence_state rows with status=active'),
+                fact('Completed today', formatNumber(s.completedToday ?? 0), 'lead_sequence_state rows completed today'),
+                fact('Abandoned today', formatNumber(s.abandonedToday ?? 0), 'abandoned due to caps or duration'),
+                fact('Next-stage queued', formatNumber(s.nextStageQueued ?? 0), "pending/processing call_queue rows where triggerType='sequence_next'"),
+                fact('Oldest active update', s.oldestActiveUpdatedAt ? formatRelativeWithAbsolute(s.oldestActiveUpdatedAt, getOperationalTimezone(dashboardData)) : '—', 'helps spot stuck sequences'),
+            ].join('');
+        }
+
+        function renderOutboundSequenceRecentList(rows) {
+            const host = document.getElementById('outboundSequenceRecentList');
+            if (!host) return;
+            const list = Array.isArray(rows) ? rows : [];
+            if (!list.length) {
+                host.innerHTML = '<div class="empty-state-message" style="padding:8px;">No active sequences yet.</div>';
+                return;
+            }
+            const tz = getOperationalTimezone(dashboardData);
+            host.innerHTML = list.slice(0, 120).map((r) => {
+                const phone = r.leadPhone || '';
+                const stage = r.currentStageId || '';
+                const status = r.status || '';
+                const updated = r.updatedAt ? formatRelativeWithAbsolute(r.updatedAt, tz) : '';
+                const attempts = `${formatNumber(r.attemptsInStage ?? 0)} in stage · ${formatNumber(r.attemptsTotal ?? 0)} total`;
+                return `
+                    <button type="button" class="export-btn secondary" data-seq-phone="${escapeHtml(phone)}" style="width:100%;text-align:left;display:flex;justify-content:space-between;gap:10px;align-items:baseline;padding:8px 10px;margin:0 0 6px 0;">
+                        <span><strong>${escapeHtml(phone)}</strong> <span class="tom-ab-test-meta">· ${escapeHtml(status)} · ${escapeHtml(stage)}</span></span>
+                        <span class="tom-ab-test-meta">${escapeHtml(updated || attempts)}</span>
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function renderOutboundSequenceLeadDetail(payload) {
+            const host = document.getElementById('outboundSequenceLeadDetail');
+            if (!host) return;
+            const row = payload?.row || null;
+            if (!row) {
+                host.innerHTML = '<div class="empty-state-message" style="padding:8px;">No sequence state found for that phone.</div>';
+                return;
+            }
+            const tz = getOperationalTimezone(dashboardData);
+            const stages = Array.isArray(row.stagesCompleted) ? row.stagesCompleted : [];
+            const nextQueue = payload?.nextQueue || null;
+            const nextLine = nextQueue
+                ? `Next queued: <strong>${escapeHtml(nextQueue.status || 'pending')}</strong> · ${escapeHtml(nextQueue.scheduledFor ? formatRelativeWithAbsolute(nextQueue.scheduledFor, tz) : '—')}`
+                : 'Next queued: —';
+            const stagesHtml = stages.length
+                ? `<ol style="margin:8px 0 0 18px;padding:0;display:flex;flex-direction:column;gap:6px;">${
+                    stages.map((s) => {
+                        const sid = s?.stageId || '';
+                        const at = s?.completedAt ? formatRelativeWithAbsolute(s.completedAt, tz) : '';
+                        const keys = s?.structuredData && typeof s.structuredData === 'object'
+                            ? Object.keys(s.structuredData).slice(0, 6)
+                            : [];
+                        const keyLine = keys.length ? ` · ${keys.map(escapeHtml).join(', ')}` : '';
+                        return `<li><strong>${escapeHtml(sid)}</strong> <span class="tom-ab-test-meta">${escapeHtml(at)}${keyLine}</span></li>`;
+                    }).join('')
+                }</ol>`
+                : '<div class="tom-ab-test-meta" style="margin-top:6px;">No completed stages yet.</div>';
+            host.innerHTML = `
+                <div style="display:flex;flex-direction:column;gap:6px;">
+                    <div><strong>${escapeHtml(row.leadPhone || '')}</strong> <span class="tom-ab-test-meta">· ${escapeHtml(row.status || '')}</span></div>
+                    <div class="tom-ab-test-meta">Current stage: <strong>${escapeHtml(row.currentStageId || '—')}</strong></div>
+                    <div class="tom-ab-test-meta">Attempts: ${escapeHtml(formatNumber(row.attemptsInStage ?? 0))} in stage · ${escapeHtml(formatNumber(row.attemptsTotal ?? 0))} total</div>
+                    <div class="tom-ab-test-meta">${nextLine}</div>
+                    <div class="tom-ab-test-meta">Next stage scheduled: <strong>${escapeHtml(row.nextStageScheduledFor ? formatRelativeWithAbsolute(row.nextStageScheduledFor, tz) : '—')}</strong></div>
+                    <div class="meta-label" style="margin-top:6px;">Stages completed</div>
+                    ${stagesHtml}
+                </div>
+            `;
+        }
+
+        async function refreshOutboundSequenceWindow(clientKey, { phoneLookup = null } = {}) {
+            const wrap = document.getElementById('outboundSequenceWindow');
+            if (!wrap) return;
+            if (!clientKey || !isOutreachDashboardClient(clientKey)) {
+                wrap.hidden = true;
+                return;
+            }
+            wrap.hidden = false;
+            try {
+                const [summaryRes, leadsRes] = await Promise.all([
+                    fetch(`${BASE_URL}/api/outbound-sequence/${encodeURIComponent(clientKey)}/summary`, { cache: 'no-store' }).then((r) => r.json()),
+                    fetch(`${BASE_URL}/api/outbound-sequence/${encodeURIComponent(clientKey)}/leads?limit=120&offset=0`, { cache: 'no-store' }).then((r) => r.json()),
+                ]);
+                if (summaryRes?.ok) renderOutboundSequenceSummary(summaryRes.summary || {});
+                if (leadsRes?.ok) renderOutboundSequenceRecentList(leadsRes.rows || []);
+
+                if (phoneLookup) {
+                    const detailRes = await fetch(
+                        `${BASE_URL}/api/outbound-sequence/${encodeURIComponent(clientKey)}/phone/${encodeURIComponent(phoneLookup)}`,
+                        { cache: 'no-store' }
+                    ).then((r) => r.json());
+                    if (detailRes?.ok) renderOutboundSequenceLeadDetail(detailRes);
+                }
+            } catch (e) {
+                console.warn('[DASHBOARD] outbound sequence window refresh failed', e);
+            }
+        }
+
+        function initOutboundSequenceWindowUi() {
+            const wrap = document.getElementById('outboundSequenceWindow');
+            if (!wrap || wrap.dataset.bound === '1') return;
+            wrap.dataset.bound = '1';
+            const refreshBtn = document.getElementById('outboundSequenceRefresh');
+            const lookupBtn = document.getElementById('outboundSequenceLookupBtn');
+            const input = document.getElementById('outboundSequencePhoneInput');
+            const msg = document.getElementById('outboundSequenceLookupMsg');
+            const recent = document.getElementById('outboundSequenceRecentList');
+
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', () => refreshOutboundSequenceWindow(currentClient));
+            }
+            if (lookupBtn) {
+                lookupBtn.addEventListener('click', async () => {
+                    const raw = input?.value?.trim();
+                    if (!raw) {
+                        if (msg) msg.textContent = 'Enter a phone number.';
+                        return;
+                    }
+                    if (msg) msg.textContent = 'Loading…';
+                    await refreshOutboundSequenceWindow(currentClient, { phoneLookup: raw });
+                    if (msg) msg.textContent = '';
+                });
+            }
+            if (input) {
+                input.addEventListener('keydown', async (e) => {
+                    if (e.key !== 'Enter') return;
+                    e.preventDefault();
+                    lookupBtn?.click();
+                });
+            }
+            if (recent) {
+                recent.addEventListener('click', async (e) => {
+                    const btn = e.target.closest('[data-seq-phone]');
+                    if (!btn) return;
+                    const phone = btn.getAttribute('data-seq-phone') || '';
+                    if (input) input.value = phone;
+                    if (msg) msg.textContent = 'Loading…';
+                    await refreshOutboundSequenceWindow(currentClient, { phoneLookup: phone });
+                    if (msg) msg.textContent = '';
+                });
             }
         }
 
@@ -16731,6 +16920,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             initDashboardListSearch();
             initLeadsFunnelFilterUi();
             initLeadJourneyFunnelClicks();
+            initOutboundSequenceWindowUi();
             // Init test call button - it will fetch config if needed
             initTestCallButton(currentClient, config).catch(err => console.warn('Test call button init error:', err));
             initModalControls();
@@ -16866,6 +17056,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 renderRetryQueue(dashboardData).catch(err => console.warn('Retry queue failed', err)),
                 renderDailySummary().catch(err => console.warn('Daily summary failed', err)),
                 renderOpsHealth().catch(err => console.warn('Ops health failed', err)),
+                refreshOutboundSequenceWindow(currentClient).catch(err => console.warn('Outbound sequence window failed', err)),
                 (async () => { initDncUi(); await renderDncList(); })().catch(err => console.warn('DNC list failed', err)),
                 loadFollowUpQueue(currentClient).catch(err => console.warn('Follow-up list failed', err)),
                 renderCalendarDetails(dashboardData).catch(err => console.warn('Calendar details failed', err)),
@@ -16930,7 +17121,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             modalsOpen ? Promise.resolve() : renderRetryQueue(dashboardData),
                             renderDailySummary(),
                             renderOpsHealth(),
-                            renderCalendarDetails(dashboardData)
+                            renderCalendarDetails(dashboardData),
+                            refreshOutboundSequenceWindow(currentClient)
                         ];
                         await Promise.allSettled(tasks);
 
