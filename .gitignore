@@ -42,5 +42,7 @@ public/ChatGPT*.png
 public/build/
 
 # Cursor workspace metadata (never commit)
-.cursor/
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/*.mdc
 

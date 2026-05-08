@@ -1,0 +1,37 @@
+---
+description: Persist execution plans to repo before implementation
+alwaysApply: true
+---
+
+# Persist execution plans (required)
+
+Chat history may be lost on app reload. Therefore, **any plan that will be executed must be persisted into the repo before implementation starts**.
+
+## When to persist
+
+Persist a plan file when any of these are true:
+
+- The user asks for a plan (even if you also paste it into chat).
+- The user says or implies “implement the plan”, “execute this plan”, “build this”, “do that”, or similar.
+- You are about to begin a multi-step change (3+ steps) even if the user didn’t explicitly ask for a plan.
+
+## Where to persist
+
+- Write plans to `docs/plans/`.
+- Filename format: `YYYY-MM-DD_<short-kebab-slug>.md` (local date).
+
+## Minimum plan template
+
+Every persisted plan must contain:
+
+- **Context**: 2–5 bullets describing the user goal and constraints.
+- **Definition of done**: observable outcomes (including commands/tests if applicable).
+- **Non-goals**: explicit exclusions to prevent scope creep.
+- **Work breakdown**: a checklist of tasks that map 1:1 to what will be executed.
+- **Risk & rollback**: key risks, and how to disable/rollback safely.
+
+## Execution contract
+
+- **Do not start code changes** until the plan file exists on disk.
+- If the plan changes materially during implementation, append an **Amendments** section to the same plan file (do not rewrite history).
+
