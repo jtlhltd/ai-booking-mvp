@@ -30,6 +30,13 @@ router.get('/client-dashboard', (_req, res) => {
   sendBuiltIfPresent(res, path.join('pages', 'client-dashboard', 'index.html'), 'client-dashboard.html');
 });
 
+// Legacy alias used in older links/bookmarks (underscore). Redirect to the canonical route
+// so users always get the latest dashboard HTML + headers.
+router.get('/client_dashboard.html', (req, res) => {
+  const qs = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+  res.redirect(302, `/client-dashboard${qs}`);
+});
+
 router.get('/client-setup', (_req, res) => {
   sendBuiltIfPresent(res, path.join('pages', 'client-setup', 'index.html'), 'client-setup.html');
 });
