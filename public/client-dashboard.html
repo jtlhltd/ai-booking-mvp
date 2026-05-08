@@ -15878,18 +15878,42 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
                 // Best-effort: enrich sheet rows with DB-backed handoff snapshots (if available).
                 try {
-                    const phones = rows.map((r) => String(r?.Phone || '').trim()).filter(Boolean);
-                    if (phones.length) {
+                    const normalizeDigits = (p) => String(p || '').replace(/\D+/g, '');
+                    const last10 = (p) => {
+                        const d = normalizeDigits(p);
+                        return d.length >= 10 ? d.slice(-10) : d;
+                    };
+
+                    const phones = [];
+                    rows.forEach((r) => {
+                        const p1 = String(r?.['Called Number'] || '').trim();
+                        const p2 = String(r?.Phone || '').trim();
+                        if (p1) phones.push(p1);
+                        if (p2) phones.push(p2);
+                        // Also include match keys (server will echo these too if it finds a row).
+                        if (p1) phones.push(last10(p1));
+                        if (p2) phones.push(last10(p2));
+                    });
+
+                    const uniquePhones = Array.from(new Set(phones.map((p) => String(p || '').trim()).filter(Boolean))).slice(0, 250);
+                    if (uniquePhones.length) {
                         const handoffRes = await fetch(`${BASE_URL}/api/handoff/${encodeURIComponent(clientKey)}/batch`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ phones: Array.from(new Set(phones)).slice(0, 200) })
+                            body: JSON.stringify({ phones: uniquePhones })
                         });
                         const handoff = await handoffRes.json().catch(() => ({}));
                         if (handoffRes.ok && handoff && handoff.ok && handoff.items) {
                             rows = rows.map((r) => {
-                                const p = String(r?.Phone || '').trim();
-                                const item = p ? (handoff.items[p] || null) : null;
+                                const called = String(r?.['Called Number'] || '').trim();
+                                const phone = String(r?.Phone || '').trim();
+                                const keys = [
+                                    called,
+                                    phone,
+                                    last10(called),
+                                    last10(phone),
+                                ].map((x) => String(x || '').trim()).filter(Boolean);
+                                const item = keys.map((k) => handoff.items[k]).find(Boolean) || null;
                                 return item ? { ...r, _handoff: item } : r;
                             });
                         }
