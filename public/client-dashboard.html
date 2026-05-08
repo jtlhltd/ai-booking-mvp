@@ -16328,7 +16328,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         followUpQueueState.sortDir = col === 'Timestamp' ? 'desc' : 'asc';
                     }
                     followUpPaintTable(wrap);
-                });
+                };
+                wrap.addEventListener('click', wrap.__fuClickDelegationHandler, true);
             }
             startFollowUpAutoRefresh();
         }
