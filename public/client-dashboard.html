@@ -14965,24 +14965,32 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             })();
 
             const pickHandoffSnapForCall = (callCreatedAtIso) => {
-                if (!handoffStageSnaps.length || !callCreatedAtIso) return null;
+                if (!handoffStageSnaps.length) return null;
+
+                // If we don't have a usable call timestamp, still show the latest handoff snapshot
+                // so operators can see captured data rather than a misleading "none".
+                if (!callCreatedAtIso) return handoffStageSnaps[handoffStageSnaps.length - 1] || null;
                 const tCall = new Date(callCreatedAtIso).getTime();
-                if (!Number.isFinite(tCall)) return null;
+                if (!Number.isFinite(tCall)) return handoffStageSnaps[handoffStageSnaps.length - 1] || null;
 
                 let bestBefore = null;
                 let bestBeforeT = -Infinity;
                 let bestAny = null;
                 let bestAbs = Infinity;
+                let sawAnyTimestamp = false;
 
                 for (const s of handoffStageSnaps) {
                     if (!s?.completedAt) continue;
                     const t = new Date(s.completedAt).getTime();
                     if (!Number.isFinite(t)) continue;
+                    sawAnyTimestamp = true;
                     const abs = Math.abs(t - tCall);
                     if (abs < bestAbs) { bestAbs = abs; bestAny = s; }
                     if (t <= tCall && t > bestBeforeT) { bestBeforeT = t; bestBefore = s; }
                 }
-                return bestBefore || bestAny || null;
+                // If stages have no parseable timestamps, just show the latest captured stage snapshot.
+                if (!sawAnyTimestamp) return handoffStageSnaps[handoffStageSnaps.length - 1] || null;
+                return bestBefore || bestAny || (handoffStageSnaps[handoffStageSnaps.length - 1] || null);
             };
 
             const render = ({ callsPayload, seqPayload }) => {
