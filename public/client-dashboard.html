@@ -15062,11 +15062,40 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     return;
                 }
 
-                // Compute deltas in displayed order, regardless of whether source is sequence or handoff.
+                // Only attribute per-call snapshots when we actually have a per-call source.
+                const handoffHasAnyTimestamp = handoffStageSnaps.some((s) => {
+                    const t = s?.completedAt ? new Date(s.completedAt).getTime() : NaN;
+                    return Number.isFinite(t);
+                });
+
+                const sheetHtml = sheetRowSnap
+                    ? (() => {
+                        const sd = sheetRowSnap.structuredData || {};
+                        const keys = Object.keys(sd);
+                        const lis = keys.slice(0, 60).map((k) => {
+                            const v = sd?.[k];
+                            const txt = v == null ? '' : (typeof v === 'string' ? v : JSON.stringify(v));
+                            return `<li><strong>${escapeHtml(k)}</strong> <span class="tom-ab-test-meta">· <code>${escapeHtml(txt).slice(0, 220)}${txt.length > 220 ? '…' : ''}</code></span></li>`;
+                        }).join('');
+                        return `
+                            <div class="meta-label" style="margin-top:12px;">Current sheet snapshot (not per-call)</div>
+                            <div class="tom-ab-test-meta">This is the latest state of the sheet row; it can’t be truthfully attributed to a specific call.</div>
+                            <details style="margin-top:8px;">
+                                <summary style="cursor:pointer;color:var(--muted);font-size:0.9rem;">Show sheet fields (${escapeHtml(String(keys.length))})</summary>
+                                <div style="margin-top:8px;">
+                                    ${keys.length ? `<ul style="margin:0 0 0 18px;padding:0;display:flex;flex-direction:column;gap:6px;">${lis}</ul>` : '<div class="tom-ab-test-meta">No fields found in sheet snapshot.</div>'}
+                                </div>
+                            </details>
+                        `;
+                    })()
+                    : '';
+
+                // Compute deltas in displayed order for per-call snapshots only (sequence/handoff).
                 let prevDisplayedStructured = {};
 
                 host.innerHTML = `
                     ${title}${summary}
+                    ${sheetHtml}
                     <div class="meta-label" style="margin-top:12px;">Per-call history (with captured data)</div>
                     <ol style="margin:6px 0 0 18px;padding:0;display:flex;flex-direction:column;gap:10px;">
                         ${calls.map((c) => {
@@ -15078,9 +15107,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             const snip = c.transcriptSnippet ? escapeHtml(String(c.transcriptSnippet)).slice(0, 260) : '';
                             const sid = c.callId || null;
                             const seqSnap = sid ? (snapByCallId.get(sid) || null) : null;
-                            const handoffSnap = !seqSnap ? pickHandoffSnapForCall(c.createdAt) : null;
-                            const snap = seqSnap || handoffSnap || sheetRowSnap || null;
-                            const snapSource = seqSnap ? 'sequence' : (handoffSnap ? 'handoff' : (sheetRowSnap ? 'sheet' : 'none'));
+                            const handoffSnap = (!seqSnap && handoffHasAnyTimestamp) ? pickHandoffSnapForCall(c.createdAt) : null;
+                            const snap = seqSnap || handoffSnap || null;
+                            const snapSource = seqSnap ? 'sequence' : (handoffSnap ? 'handoff' : 'none');
                             const snapStructured = snap?.structuredData && typeof snap.structuredData === 'object' ? snap.structuredData : {};
                             const deltaKeys = snap ? followUpComputeDelta(prevDisplayedStructured, snapStructured) : [];
                             if (snap) prevDisplayedStructured = snapStructured;
@@ -15095,7 +15124,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                                     }).join('');
                                     return `<div class="meta-label" style="margin-top:8px;">Captured (delta)</div><ul style="margin:6px 0 0 18px;padding:0;display:flex;flex-direction:column;gap:6px;">${lis}</ul>`;
                                 })()
-                                : '<div class="tom-ab-test-meta" style="margin-top:8px;">No snapshot found for this call (sequence, handoff, and sheet row were all empty).</div>';
+                                : '<div class="tom-ab-test-meta" style="margin-top:8px;">No per-call snapshot for this call (sequence/handoff not available).</div>';
 
                             const fullHtml = snap
                                 ? (() => {
