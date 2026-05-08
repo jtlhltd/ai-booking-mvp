@@ -52,6 +52,7 @@ import { createClientsApiRouter } from '../routes/clients-api.js';
 import { createCalendarApiRouter } from '../routes/calendar-api.js';
 import { createClientOpsRouter } from '../routes/client-ops-mount.js';
 import { createOutboundSequenceVisibilityRouter } from '../routes/outbound-sequence-visibility-mount.js';
+import { createCallsByPhoneRouter } from '../routes/calls-by-phone-mount.js';
 
 export function mountApi(app, deps) {
   const {
@@ -291,6 +292,7 @@ export function mountApi(app, deps) {
     })
   );
   app.use('/api', createFollowUpQueueRouter({ getFullClient, resolveLogisticsSpreadsheetId, sheets }));
+  app.use('/api', createCallsByPhoneRouter({ query, getFullClient }));
   app.use('/api', createNextActionsRouter({ query, cacheMiddleware }));
   app.use('/api', createCallRecordingsRouter({ query, formatTimeAgoLabel }));
   app.use('/api', createVoicemailsRouter({ isPostgres, poolQuerySelect, formatTimeAgoLabel, truncateActivityFeedText }));

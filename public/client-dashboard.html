@@ -14638,6 +14638,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const { rawRows, cols, sortKey, sortDir } = followUpQueueState;
             if (!wrap || !cols.length || !rawRows.length) return;
             const term = String(followUpSearchTerm || '').trim().toLowerCase();
+            const expanded = globalThis.__followUpExpandedPhones || (globalThis.__followUpExpandedPhones = new Set());
             const dupCounts = new Map();
             rawRows.forEach((r) => {
                 const k = followUpNormalizePhoneKey(r.Phone);
@@ -14706,6 +14707,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const key = followUpRowKey(row);
                 const selected = followUpSelectedKeys.has(key);
                 const selTd = `<td data-col="select"><input type="checkbox" data-fu-select="1" ${selected ? 'checked' : ''} aria-label="Select row"></td>`;
+                const phoneNorm = followUpNormalizePhoneKey(row.Phone);
+                const isExpanded = phoneNorm && expanded.has(phoneNorm);
                 const tds = cols.map((c) => {
                     const slug = followUpDataColSlug(c);
                     const extra = c === 'Phone'
@@ -14713,10 +14716,117 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         : null;
                     return `<td data-col="${escapeHtml(slug)}">${formatFollowUpCell(c, row[c], row, extra)}</td>`;
                 }).join('');
-                return `<tr data-fu-key="${escapeHtml(key)}">${selTd}${tds}</tr>`;
+                const expToggle = phoneNorm
+                    ? `<button type="button" class="fu-mini-btn fu-mini-btn--muted" data-fu-expand="1" data-fu-phone="${escapeHtml(phoneNorm)}" aria-expanded="${isExpanded ? 'true' : 'false'}">${isExpanded ? 'Hide' : 'Show'} calls</button>`
+                    : '';
+                const expTd = `<td data-col="actions" class="fu-actions">${expToggle}</td>`;
+                const rowHtml = `<tr data-fu-key="${escapeHtml(key)}">${selTd}${tds}${expTd}</tr>`;
+
+                const expPanel = isExpanded
+                    ? `<tr data-fu-expand-row="1" data-fu-phone="${escapeHtml(phoneNorm)}">
+                        <td colspan="${1 + cols.length + 1}">
+                            <div style="padding:10px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2);display:flex;flex-direction:column;gap:10px;">
+                                <div class="meta-label">Call timeline + captured data</div>
+                                <div data-fu-expand-handoff="1">${followUpRenderHandoffStages(row)}</div>
+                                <div data-fu-expand-calls="1"><div class="empty-state-message" style="padding:8px;">Loading calls…</div></div>
+                            </div>
+                        </td>
+                      </tr>`
+                    : '';
+                return rowHtml + expPanel;
             }).join('');
             wrap.innerHTML = `<table class="follow-up-queue-table">${thead}<tbody>${tbody}</tbody></table>`;
             followUpUpdateSelectionUi();
+        }
+
+        function followUpRenderHandoffStages(row) {
+            try {
+                const handoff = row?._handoff || null;
+                const data = handoff?.dataJson || handoff?.data_json || null;
+                const obj = typeof data === 'object' ? data : (() => { try { return JSON.parse(String(data || '')); } catch { return null; } })();
+                const qual = obj?.qual || obj?.qualification || {};
+                const stages = Array.isArray(qual?._sequenceStages) ? qual._sequenceStages : (Array.isArray(obj?.sequence?.stages) ? obj.sequence.stages : []);
+                if (!stages.length) return '<div class="tom-ab-test-meta">No per-stage snapshots found yet (handoff may not be persisted).</div>';
+                const items = stages.map((s) => {
+                    const sid = s?.stageId || s?.id || '';
+                    const at = s?.completedAt || s?.at || '';
+                    const structured = s?.structuredData && typeof s.structuredData === 'object' ? s.structuredData : {};
+                    const keys = Object.keys(structured);
+                    const kv = keys.slice(0, 12).map((k) => {
+                        const v = structured[k];
+                        const txt = v == null ? '' : (typeof v === 'string' ? v : JSON.stringify(v));
+                        return `<li><strong>${escapeHtml(k)}</strong> <span class="tom-ab-test-meta">· <code>${escapeHtml(txt).slice(0, 180)}${txt.length > 180 ? '…' : ''}</code></span></li>`;
+                    }).join('');
+                    return `
+                        <details style="border:1px solid var(--border);border-radius:12px;padding:8px;background:var(--surface-3);">
+                            <summary style="cursor:pointer;">
+                                <strong>${escapeHtml(String(sid || 'stage'))}</strong>
+                                <span class="tom-ab-test-meta">· ${escapeHtml(String(at || ''))} · fields ${escapeHtml(String(keys.length))}</span>
+                            </summary>
+                            <div style="margin-top:8px;">
+                                ${keys.length ? `<ul style="margin:0 0 0 18px;padding:0;display:flex;flex-direction:column;gap:6px;">${kv}</ul>` : '<div class="tom-ab-test-meta">No structured fields captured in this stage snapshot.</div>'}
+                            </div>
+                        </details>
+                    `;
+                }).join('');
+                return `<div style="display:flex;flex-direction:column;gap:8px;">${items}</div>`;
+            } catch {
+                return '<div class="tom-ab-test-meta">Unable to render handoff stage snapshots.</div>';
+            }
+        }
+
+        async function followUpLoadCallsForExpandedPhone(clientKey, phoneNorm) {
+            const cache = globalThis.__followUpCallsCache || (globalThis.__followUpCallsCache = {});
+            const key = `${String(clientKey || '')}::${String(phoneNorm || '')}`;
+            const host = document.querySelector(`[data-fu-expand-row="1"][data-fu-phone="${CSS.escape(phoneNorm)}"] [data-fu-expand-calls="1"]`);
+            if (!host) return;
+
+            const render = (payload) => {
+                const calls = Array.isArray(payload?.calls) ? payload.calls : [];
+                if (!calls.length) {
+                    host.innerHTML = '<div class="tom-ab-test-meta">No calls found for this phone yet.</div>';
+                    return;
+                }
+                const tz = getOperationalTimezone(dashboardData);
+                host.innerHTML = `
+                    <div class="meta-label">Calls (latest first)</div>
+                    <ol style="margin:6px 0 0 18px;padding:0;display:flex;flex-direction:column;gap:8px;">
+                        ${calls.map((c) => {
+                            const when = c.createdAt ? formatRelativeWithAbsolute(c.createdAt, tz) : '';
+                            const outcome = c.outcome || '—';
+                            const status = c.status || '—';
+                            const dur = c.duration != null ? `${formatNumber(c.duration)}s` : '—';
+                            const rec = c.recordingUrl ? `<a href="${escapeHtml(c.recordingUrl)}" target="_blank" rel="noreferrer">recording</a>` : '';
+                            const snip = c.transcriptSnippet ? escapeHtml(String(c.transcriptSnippet)).slice(0, 260) : '';
+                            return `
+                                <li style="border:1px solid var(--border);border-radius:12px;padding:8px;background:var(--surface-3);">
+                                    <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                                        <div><strong>${escapeHtml(outcome)}</strong> <span class="tom-ab-test-meta">· ${escapeHtml(status)} · ${escapeHtml(dur)}</span></div>
+                                        <div class="tom-ab-test-meta">${escapeHtml(when)} ${rec ? `· ${rec}` : ''}</div>
+                                    </div>
+                                    ${snip ? `<div class="tom-ab-test-meta" style="margin-top:6px;"><code>${snip}${String(c.transcriptSnippet).length > 260 ? '…' : ''}</code></div>` : ''}
+                                </li>
+                            `;
+                        }).join('')}
+                    </ol>
+                `;
+            };
+
+            if (cache[key]) {
+                render(cache[key]);
+                return;
+            }
+
+            host.innerHTML = '<div class="empty-state-message" style="padding:8px;">Loading calls…</div>';
+            const url = `${BASE_URL}/api/calls/${encodeURIComponent(clientKey)}/phone/${encodeURIComponent(phoneNorm)}?limit=25`;
+            const res = await fetch(url, { cache: 'no-store' });
+            const payload = await res.json().catch(() => ({}));
+            if (!res.ok || payload?.ok === false) {
+                host.innerHTML = `<div class="tom-ab-test-meta">Failed to load calls (${escapeHtml(String(payload?.error || res.status))}).</div>`;
+                return;
+            }
+            cache[key] = payload;
+            render(payload);
         }
 
         function followUpApplyColumnOrderFromDnD(clientKey, draggedCol, targetCol) {
@@ -15517,6 +15627,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const searchInput = document.getElementById('followUpSearchInput');
             const dispSelect = document.getElementById('followUpDispositionSelect');
             const bulkBar = document.getElementById('followUpBulkActions');
+            const wrapEl = document.getElementById('follow-up-queue');
             followUpLoadPrefs();
             followUpColumnPrefs = loadFollowUpColumnPrefs(currentClient);
             const colsModal = document.getElementById('followUpColumnsModal');
@@ -15622,6 +15733,27 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             if (btn && !btn.dataset.bound) {
                 btn.dataset.bound = '1';
                 btn.addEventListener('click', () => loadFollowUpQueue(currentClient, { page: followUpQueuePage }));
+            }
+
+            if (wrapEl && !wrapEl.dataset.boundExpand) {
+                wrapEl.dataset.boundExpand = '1';
+                wrapEl.addEventListener('click', async (e) => {
+                    const t = e.target.closest('[data-fu-expand="1"]');
+                    if (!t) return;
+                    const phoneNorm = t.getAttribute('data-fu-phone') || '';
+                    if (!phoneNorm) return;
+                    const expanded = globalThis.__followUpExpandedPhones || (globalThis.__followUpExpandedPhones = new Set());
+                    if (expanded.has(phoneNorm)) expanded.delete(phoneNorm);
+                    else expanded.add(phoneNorm);
+                    followUpPaintTable(wrapEl);
+                    if (!expanded.has(phoneNorm)) return;
+
+                    try {
+                        await followUpLoadCallsForExpandedPhone(currentClient, phoneNorm);
+                    } catch (err) {
+                        console.warn('[FOLLOW-UP] expand calls load failed', err);
+                    }
+                });
             }
             if (exportBtn && !exportBtn.dataset.bound) {
                 exportBtn.dataset.bound = '1';

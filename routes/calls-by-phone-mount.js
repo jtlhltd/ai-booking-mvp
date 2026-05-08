@@ -1,0 +1,50 @@
+import express from 'express';
+import { createCallsDomain } from '../db/domains/calls.js';
+
+export function createCallsByPhoneRouter(deps) {
+  const { query, getFullClient } = deps || {};
+  const router = express.Router();
+  const callsDomain = createCallsDomain({ query, getCallAnalyticsFloorIso: null });
+
+  function clampInt(n, lo, hi, fallback) {
+    const v = parseInt(String(n), 10);
+    if (!Number.isFinite(v)) return fallback;
+    return Math.max(lo, Math.min(hi, v));
+  }
+
+  router.get('/calls/:clientKey/phone/:phone', async (req, res) => {
+    try {
+      res.set('Cache-Control', 'no-store');
+      const { clientKey, phone } = req.params;
+      const client = await getFullClient?.(clientKey, { bypassCache: false }).catch(() => null);
+      if (!client) return res.status(404).json({ ok: false, error: 'client_not_found' });
+
+      const limit = clampInt(req.query.limit, 1, 100, 25);
+      const leadPhone = String(phone || '').trim();
+      const rows = await callsDomain.getCallsByPhone(clientKey, leadPhone, limit);
+
+      const calls = (rows || []).map((r) => ({
+        callId: r.call_id || r.callId || null,
+        leadPhone: r.lead_phone || r.leadPhone || leadPhone,
+        status: r.status || null,
+        outcome: r.outcome || null,
+        duration: r.duration != null ? Number(r.duration) : null,
+        cost: r.cost != null ? Number(r.cost) : null,
+        retryAttempt: r.retry_attempt != null ? Number(r.retry_attempt) : null,
+        transcriptSnippet: r.transcript || null,
+        recordingUrl: r.recording_url || r.recordingUrl || null,
+        metadata: r.metadata || null,
+        createdAt: r.created_at ? new Date(r.created_at).toISOString() : (r.createdAt ? new Date(r.createdAt).toISOString() : null),
+        updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : (r.updatedAt ? new Date(r.updatedAt).toISOString() : null),
+      }));
+
+      return res.json({ ok: true, clientKey, phone: leadPhone, limit, calls });
+    } catch (error) {
+      console.error('[CALLS BY PHONE ERROR]', error);
+      return res.status(500).json({ ok: false, error: 'calls_by_phone_failed', message: error?.message || String(error) });
+    }
+  });
+
+  return router;
+}
+
