@@ -5261,6 +5261,19 @@
             justify-self: end;
         }
 
+        /* Business Name: keep left-aligned, vertically centered, and predictable wrap. */
+        .follow-up-queue-table td[data-col="business-name"] .fu-cell-actions {
+            align-items: center;
+        }
+
+        .follow-up-queue-table td[data-col="business-name"] .fu-drilldown-btn {
+            display: block;
+            width: 100%;
+            text-align: left;
+            line-height: 1.2;
+            padding: 2px 0;
+        }
+
         .follow-up-queue-table .fu-phone-cell {
             display: flex;
             flex-direction: row;
@@ -14890,11 +14903,58 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             return changed;
         }
 
-        async function followUpRenderCallHistoryInto(host, clientKey, phoneNorm, { businessName = '' } = {}) {
+        async function followUpRenderCallHistoryInto(host, clientKey, phoneNorm, { businessName = '', row = null } = {}) {
             if (!host) return;
             const cache = globalThis.__followUpCallsCache || (globalThis.__followUpCallsCache = {});
             const key = `${String(clientKey || '')}::${String(phoneNorm || '')}`;
             const tz = getOperationalTimezone(dashboardData);
+
+            const handoffStageSnaps = (() => {
+                try {
+                    if (!row?._handoff) return [];
+                    const handoff = row._handoff;
+                    const data = handoff?.dataJson || handoff?.data_json || null;
+                    const obj = typeof data === 'object' ? data : (() => { try { return JSON.parse(String(data || '')); } catch { return null; } })();
+                    const qual = obj?.qual || obj?.qualification || {};
+                    const stages = Array.isArray(qual?._sequenceStages) ? qual._sequenceStages : (Array.isArray(obj?.sequence?.stages) ? obj.sequence.stages : []);
+                    if (!Array.isArray(stages) || !stages.length) return [];
+                    const snaps = stages.map((s) => {
+                        const structuredData = s?.structuredData && typeof s.structuredData === 'object' ? s.structuredData : {};
+                        const completedAt = s?.completedAt || s?.at || null;
+                        return {
+                            source: 'handoff',
+                            stageId: String(s?.stageId || s?.id || '').trim(),
+                            completedAt: completedAt ? String(completedAt) : null,
+                            structuredData,
+                        };
+                    }).filter((s) => Object.keys(s.structuredData || {}).length);
+                    snaps.sort((a, b) => String(a.completedAt || '').localeCompare(String(b.completedAt || '')));
+                    return snaps;
+                } catch {
+                    return [];
+                }
+            })();
+
+            const pickHandoffSnapForCall = (callCreatedAtIso) => {
+                if (!handoffStageSnaps.length || !callCreatedAtIso) return null;
+                const tCall = new Date(callCreatedAtIso).getTime();
+                if (!Number.isFinite(tCall)) return null;
+
+                let bestBefore = null;
+                let bestBeforeT = -Infinity;
+                let bestAny = null;
+                let bestAbs = Infinity;
+
+                for (const s of handoffStageSnaps) {
+                    if (!s?.completedAt) continue;
+                    const t = new Date(s.completedAt).getTime();
+                    if (!Number.isFinite(t)) continue;
+                    const abs = Math.abs(t - tCall);
+                    if (abs < bestAbs) { bestAbs = abs; bestAny = s; }
+                    if (t <= tCall && t > bestBeforeT) { bestBeforeT = t; bestBefore = s; }
+                }
+                return bestBefore || bestAny || null;
+            };
 
             const render = ({ callsPayload, seqPayload }) => {
                 const calls = Array.isArray(callsPayload?.calls) ? callsPayload.calls : [];
@@ -14922,12 +14982,15 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 }
 
                 const title = businessName ? `<div class="meta-label">${escapeHtml(businessName)}</div>` : '';
-                const summary = `<div class="tom-ab-test-meta"><strong>${escapeHtml(phoneNorm)}</strong> · ${escapeHtml(String(calls.length))} call(s) · ${escapeHtml(String(snaps.length))} snapshot(s)</div>`;
+                const summary = `<div class="tom-ab-test-meta"><strong>${escapeHtml(phoneNorm)}</strong> · ${escapeHtml(String(calls.length))} call(s) · ${escapeHtml(String(snaps.length))} sequence snapshot(s) · ${escapeHtml(String(handoffStageSnaps.length))} handoff stage snapshot(s)</div>`;
 
                 if (!calls.length) {
                     host.innerHTML = `${title}${summary}<div class="tom-ab-test-meta" style="margin-top:8px;">No calls found for this phone yet.</div>`;
                     return;
                 }
+
+                // Compute deltas in displayed order, regardless of whether source is sequence or handoff.
+                let prevDisplayedStructured = {};
 
                 host.innerHTML = `
                     ${title}${summary}
@@ -14941,26 +15004,31 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             const rec = c.recordingUrl ? `<a href="${escapeHtml(c.recordingUrl)}" target="_blank" rel="noreferrer">recording</a>` : '';
                             const snip = c.transcriptSnippet ? escapeHtml(String(c.transcriptSnippet)).slice(0, 260) : '';
                             const sid = c.callId || null;
-                            const snap = sid ? (snapByCallId.get(sid) || null) : null;
-                            const deltaKeys = sid ? (deltaByCallId.get(sid) || []) : [];
+                            const seqSnap = sid ? (snapByCallId.get(sid) || null) : null;
+                            const handoffSnap = !seqSnap ? pickHandoffSnapForCall(c.createdAt) : null;
+                            const snap = seqSnap || handoffSnap || null;
+                            const snapSource = seqSnap ? 'sequence' : (handoffSnap ? 'handoff' : 'none');
+                            const snapStructured = snap?.structuredData && typeof snap.structuredData === 'object' ? snap.structuredData : {};
+                            const deltaKeys = snap ? followUpComputeDelta(prevDisplayedStructured, snapStructured) : [];
+                            if (snap) prevDisplayedStructured = snapStructured;
 
                             const deltaHtml = snap
                                 ? (() => {
                                     if (!deltaKeys.length) return '<div class="tom-ab-test-meta">Delta: no new/changed structured fields vs prior snapshot.</div>';
                                     const lis = deltaKeys.slice(0, 24).map((k) => {
-                                        const v = snap.structuredData?.[k];
+                                        const v = snapStructured?.[k];
                                         const txt = v == null ? '' : (typeof v === 'string' ? v : JSON.stringify(v));
                                         return `<li><strong>${escapeHtml(k)}</strong> <span class="tom-ab-test-meta">· <code>${escapeHtml(txt).slice(0, 180)}${txt.length > 180 ? '…' : ''}</code></span></li>`;
                                     }).join('');
                                     return `<div class="meta-label" style="margin-top:8px;">Captured (delta)</div><ul style="margin:6px 0 0 18px;padding:0;display:flex;flex-direction:column;gap:6px;">${lis}</ul>`;
                                 })()
-                                : '<div class="tom-ab-test-meta" style="margin-top:8px;">No structured snapshot stored for this call (stage not complete / no useful outcome).</div>';
+                                : '<div class="tom-ab-test-meta" style="margin-top:8px;">No snapshot found for this call (neither sequence completion nor handoff stage snapshot).</div>';
 
                             const fullHtml = snap
                                 ? (() => {
-                                    const keys = Object.keys(snap.structuredData || {});
+                                    const keys = Object.keys(snapStructured || {});
                                     const lis = keys.slice(0, 60).map((k) => {
-                                        const v = snap.structuredData?.[k];
+                                        const v = snapStructured?.[k];
                                         const txt = v == null ? '' : (typeof v === 'string' ? v : JSON.stringify(v));
                                         return `<li><strong>${escapeHtml(k)}</strong> <span class="tom-ab-test-meta">· <code>${escapeHtml(txt).slice(0, 220)}${txt.length > 220 ? '…' : ''}</code></span></li>`;
                                     }).join('');
@@ -14976,7 +15044,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                                 : '';
 
                             const snapMeta = snap
-                                ? `<div class="tom-ab-test-meta" style="margin-top:6px;">Snapshot: stage=<code>${escapeHtml(snap.stageId || '—')}</code> · capturedAt=${escapeHtml(snap.completedAt ? formatRelativeWithAbsolute(snap.completedAt, tz) : '—')}</div>`
+                                ? `<div class="tom-ab-test-meta" style="margin-top:6px;">Snapshot: source=<code>${escapeHtml(snapSource)}</code>${snap.stageId ? ` · stage=<code>${escapeHtml(snap.stageId || '—')}</code>` : ''} · capturedAt=${escapeHtml(snap.completedAt ? formatRelativeWithAbsolute(snap.completedAt, tz) : '—')}</div>`
                                 : '';
 
                             return `
@@ -16153,7 +16221,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             e.stopImmediatePropagation();
                             followUpOpenCallHistoryModal({ phone: phoneKey, businessName });
                             const host = document.getElementById('followUpCallHistoryResults');
-                            followUpRenderCallHistoryInto(host, currentClient, phoneKey, { businessName }).catch(() => {});
+                            followUpRenderCallHistoryInto(host, currentClient, phoneKey, { businessName, row }).catch(() => {});
                         }
                         return;
                     }
@@ -16173,7 +16241,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             e.stopImmediatePropagation();
                             followUpOpenCallHistoryModal({ phone: phoneKey, businessName });
                             const host = document.getElementById('followUpCallHistoryResults');
-                            followUpRenderCallHistoryInto(host, currentClient, phoneKey, { businessName }).catch(() => {});
+                            followUpRenderCallHistoryInto(host, currentClient, phoneKey, { businessName, row }).catch(() => {});
                         }
                         return;
                     }
