@@ -7193,6 +7193,7 @@
                 <div class="dashboard-list-toolbar follow-up-queue-toolbar">
                     <button type="button" id="followUpQueueRefresh" class="export-btn secondary">Refresh</button>
                     <button type="button" id="followUpQueueExport" class="export-btn secondary">Export CSV</button>
+                    <button type="button" id="followUpCallHistoryBtn" class="export-btn secondary" title="Lookup a phone to view calls + captured data">Call history…</button>
                     <div class="follow-up-status-filters" style="gap:6px;">
                         <button type="button" class="export-btn secondary" id="followUpSelectAllBtn" title="Select all rows on this page">Select page</button>
                         <button type="button" class="export-btn secondary" id="followUpClearSelectionBtn" title="Clear selection">Clear</button>
@@ -7458,6 +7459,26 @@
             <div class="modal-actions">
                 <button type="button" class="modal-btn" id="followUpColumnsResetBtn">Reset</button>
                 <button type="button" class="modal-btn primary" id="followUpColumnsDoneBtn">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-backdrop" id="followUpCallHistoryModal" role="dialog" aria-labelledby="followUpCallHistoryTitle" aria-modal="true">
+        <div class="lead-modal fu-columns-modal" style="max-width: 860px;">
+            <div class="modal-header">
+                <h4 id="followUpCallHistoryTitle">Call history</h4>
+                <button class="modal-close" id="followUpCallHistoryCloseBtn" aria-label="Close call history modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;">
+                    <label style="display:flex;flex-direction:column;gap:4px;min-width:260px;">
+                        Phone (E.164 or local)
+                        <input type="text" id="followUpCallHistoryPhoneInput" class="dashboard-list-search" placeholder="+44… or 07…" autocomplete="off" inputmode="tel" />
+                    </label>
+                    <button type="button" class="export-btn secondary" id="followUpCallHistoryLookupBtn">Lookup</button>
+                    <small id="followUpCallHistoryMsg" style="color:var(--muted);"></small>
+                </div>
+                <div id="followUpCallHistoryResults" class="thin-scroll" style="margin-top:12px;max-height:520px;border:1px solid var(--border);border-radius:12px;padding:10px;background:var(--surface-2);"></div>
             </div>
         </div>
     </div>
@@ -14825,6 +14846,81 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             render(payload);
         }
 
+        async function followUpRenderCallHistoryInto(host, clientKey, phoneNorm) {
+            if (!host) return;
+            const cache = globalThis.__followUpCallsCache || (globalThis.__followUpCallsCache = {});
+            const key = `${String(clientKey || '')}::${String(phoneNorm || '')}`;
+            const tz = getOperationalTimezone(dashboardData);
+
+            const renderCallsHtml = (payload) => {
+                const calls = Array.isArray(payload?.calls) ? payload.calls : [];
+                if (!calls.length) return '<div class="tom-ab-test-meta">No calls found for this phone yet.</div>';
+                return `
+                    <div class="meta-label">Calls (latest first)</div>
+                    <ol style="margin:6px 0 0 18px;padding:0;display:flex;flex-direction:column;gap:8px;">
+                        ${calls.map((c) => {
+                            const when = c.createdAt ? formatRelativeWithAbsolute(c.createdAt, tz) : '';
+                            const outcome = c.outcome || '—';
+                            const status = c.status || '—';
+                            const dur = c.duration != null ? `${formatNumber(c.duration)}s` : '—';
+                            const rec = c.recordingUrl ? `<a href="${escapeHtml(c.recordingUrl)}" target="_blank" rel="noreferrer">recording</a>` : '';
+                            const snip = c.transcriptSnippet ? escapeHtml(String(c.transcriptSnippet)).slice(0, 260) : '';
+                            return `
+                                <li style="border:1px solid var(--border);border-radius:12px;padding:8px;background:var(--surface-3);">
+                                    <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                                        <div><strong>${escapeHtml(outcome)}</strong> <span class="tom-ab-test-meta">· ${escapeHtml(status)} · ${escapeHtml(dur)}</span></div>
+                                        <div class="tom-ab-test-meta">${escapeHtml(when)} ${rec ? `· ${rec}` : ''}</div>
+                                    </div>
+                                    ${snip ? `<div class="tom-ab-test-meta" style="margin-top:6px;"><code>${snip}${String(c.transcriptSnippet).length > 260 ? '…' : ''}</code></div>` : ''}
+                                </li>
+                            `;
+                        }).join('')}
+                    </ol>
+                `;
+            };
+
+            const handoffHtml = (() => {
+                const rows = followUpQueueState?.rawRows || [];
+                const row = rows.find((r) => followUpNormalizePhoneKey(r?.Phone) === phoneNorm) || null;
+                return row ? followUpRenderHandoffStages(row) : '<div class="tom-ab-test-meta">Captured-by-stage: not available on this page.</div>';
+            })();
+
+            if (cache[key]) {
+                host.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px;">${handoffHtml}${renderCallsHtml(cache[key])}</div>`;
+                return;
+            }
+
+            host.innerHTML = '<div class="empty-state-message" style="padding:8px;">Loading…</div>';
+            const url = `${BASE_URL}/api/calls/${encodeURIComponent(clientKey)}/phone/${encodeURIComponent(phoneNorm)}?limit=25`;
+            const res = await fetch(url, { cache: 'no-store' });
+            const payload = await res.json().catch(() => ({}));
+            if (!res.ok || payload?.ok === false) {
+                host.innerHTML = `<div class="tom-ab-test-meta">Failed to load calls (${escapeHtml(String(payload?.error || res.status))}).</div>`;
+                return;
+            }
+            cache[key] = payload;
+            host.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px;">${handoffHtml}${renderCallsHtml(payload)}</div>`;
+        }
+
+        function followUpOpenCallHistoryModal({ phone = '' } = {}) {
+            const modal = document.getElementById('followUpCallHistoryModal');
+            const input = document.getElementById('followUpCallHistoryPhoneInput');
+            const msg = document.getElementById('followUpCallHistoryMsg');
+            const host = document.getElementById('followUpCallHistoryResults');
+            if (!modal || !input || !host) return;
+            if (msg) msg.textContent = '';
+            input.value = phone || '';
+            host.innerHTML = '<div class="tom-ab-test-meta">Enter a phone and click Lookup.</div>';
+            modal.classList.add('open');
+            input.focus();
+        }
+
+        function followUpCloseCallHistoryModal() {
+            const modal = document.getElementById('followUpCallHistoryModal');
+            if (!modal) return;
+            modal.classList.remove('open');
+        }
+
         function followUpApplyColumnOrderFromDnD(clientKey, draggedCol, targetCol) {
             if (!draggedCol || !targetCol || draggedCol === targetCol) return;
             const prefs = loadFollowUpColumnPrefs(clientKey);
@@ -15244,7 +15340,11 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const callId = String(row?.['Call ID'] || '').trim();
                 const nm = String(row?.['Business Name'] || row?.['Decision Maker'] || row?.Phone || 'Prospect').trim();
                 const btn = callId ? `<button type="button" class="fu-transcript-btn" data-fu-transcript="${escapeHtml(callId)}" data-fu-name="${escapeHtml(nm)}">Transcript</button>` : '';
-                return `<div class="fu-transcript-actions"><div class="fu-transcript" title="${escapeHtml(v)}">${escapeHtml(v)}</div><span class="fu-cell-actions">${btn}${followUpPencilBtn(col, !canEdit)}</span></div>`;
+                const phoneNorm = row?.Phone ? followUpNormalizePhoneKey(row.Phone) : '';
+                const callsBtn = phoneNorm
+                    ? `<button type="button" class="fu-transcript-btn" data-fu-callhistory="1" data-fu-phone="${escapeHtml(phoneNorm)}">Calls</button>`
+                    : '';
+                return `<div class="fu-transcript-actions"><div class="fu-transcript" title="${escapeHtml(v)}">${escapeHtml(v)}</div><span class="fu-cell-actions">${btn}${callsBtn}${followUpPencilBtn(col, !canEdit)}</span></div>`;
             }
             if (FOLLOW_UP_EDITABLE_COLUMNS && FOLLOW_UP_EDITABLE_COLUMNS.has(col)) {
                 const label = v || '—';
@@ -15619,6 +15719,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         function initFollowUpQueueUi() {
             const btn = document.getElementById('followUpQueueRefresh');
             const exportBtn = document.getElementById('followUpQueueExport');
+            const callHistoryBtn = document.getElementById('followUpCallHistoryBtn');
             const colsBtn = document.getElementById('followUpColumnsBtn');
             const selectAll = document.getElementById('followUpSelectAllBtn');
             const clearSel = document.getElementById('followUpClearSelectionBtn');
@@ -15630,6 +15731,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const dispSelect = document.getElementById('followUpDispositionSelect');
             const bulkBar = document.getElementById('followUpBulkActions');
             const wrapEl = document.getElementById('follow-up-queue');
+            const callHistoryModal = document.getElementById('followUpCallHistoryModal');
+            const callHistoryClose = document.getElementById('followUpCallHistoryCloseBtn');
+            const callHistoryLookup = document.getElementById('followUpCallHistoryLookupBtn');
+            const callHistoryInput = document.getElementById('followUpCallHistoryPhoneInput');
             followUpLoadPrefs();
             followUpColumnPrefs = loadFollowUpColumnPrefs(currentClient);
             const colsModal = document.getElementById('followUpColumnsModal');
@@ -15757,6 +15862,45 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     }
                 });
             }
+
+            if (callHistoryBtn && !callHistoryBtn.dataset.bound) {
+                callHistoryBtn.dataset.bound = '1';
+                callHistoryBtn.addEventListener('click', () => followUpOpenCallHistoryModal());
+            }
+            if (callHistoryClose && !callHistoryClose.dataset.bound) {
+                callHistoryClose.dataset.bound = '1';
+                callHistoryClose.addEventListener('click', followUpCloseCallHistoryModal);
+            }
+            if (callHistoryModal && !callHistoryModal.dataset.bound) {
+                callHistoryModal.dataset.bound = '1';
+                callHistoryModal.addEventListener('click', (e) => {
+                    if (e.target === callHistoryModal) followUpCloseCallHistoryModal();
+                });
+            }
+            if (callHistoryLookup && !callHistoryLookup.dataset.bound) {
+                callHistoryLookup.dataset.bound = '1';
+                callHistoryLookup.addEventListener('click', async () => {
+                    const msg = document.getElementById('followUpCallHistoryMsg');
+                    const host = document.getElementById('followUpCallHistoryResults');
+                    const raw = String(callHistoryInput?.value || '').trim();
+                    if (!raw) {
+                        if (msg) msg.textContent = 'Enter a phone number.';
+                        return;
+                    }
+                    const phoneNorm = followUpNormalizePhoneKey(raw) || raw;
+                    if (msg) msg.textContent = 'Loading…';
+                    await followUpRenderCallHistoryInto(host, currentClient, phoneNorm);
+                    if (msg) msg.textContent = '';
+                });
+            }
+            if (callHistoryInput && !callHistoryInput.dataset.bound) {
+                callHistoryInput.dataset.bound = '1';
+                callHistoryInput.addEventListener('keydown', (e) => {
+                    if (e.key !== 'Enter') return;
+                    e.preventDefault();
+                    callHistoryLookup?.click();
+                });
+            }
             if (exportBtn && !exportBtn.dataset.bound) {
                 exportBtn.dataset.bound = '1';
                 exportBtn.addEventListener('click', () => exportFollowUpQueueCsv(currentClient));
@@ -15839,6 +15983,16 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             if (wrap && !wrap.dataset.sortDelegation) {
                 wrap.dataset.sortDelegation = '1';
                 wrap.addEventListener('click', (e) => {
+                    const callsBtn = e.target.closest('[data-fu-callhistory="1"]');
+                    if (callsBtn) {
+                        const phoneNorm = callsBtn.getAttribute('data-fu-phone') || '';
+                        if (phoneNorm) {
+                            followUpOpenCallHistoryModal({ phone: phoneNorm });
+                            const host = document.getElementById('followUpCallHistoryResults');
+                            followUpRenderCallHistoryInto(host, currentClient, phoneNorm).catch(() => {});
+                        }
+                        return;
+                    }
                     const trBtn = e.target.closest('[data-fu-transcript]');
                     if (trBtn) {
                         const callId = trBtn.getAttribute('data-fu-transcript');
