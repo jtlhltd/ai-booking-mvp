@@ -14964,6 +14964,41 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 }
             })();
 
+            const sheetRowSnap = (() => {
+                try {
+                    if (!resolvedRow || typeof resolvedRow !== 'object') return null;
+                    const deny = new Set([
+                        '_row',
+                        '_handoff',
+                        '_normalized',
+                        '_normalizedPhoneKey',
+                        'Transcript',
+                        'Transcript Snippet',
+                    ]);
+                    const out = {};
+                    for (const [k, v] of Object.entries(resolvedRow)) {
+                        if (!k || deny.has(k)) continue;
+                        if (String(k).startsWith('_')) continue;
+                        const sv = String(v == null ? '' : v).trim();
+                        if (!sv) continue;
+                        // Avoid dumping very long blobs into the modal.
+                        if (sv.length > 800) continue;
+                        out[k] = sv;
+                    }
+                    const keys = Object.keys(out);
+                    if (!keys.length) return null;
+                    // Treat the sheet row as the latest snapshot we have.
+                    return {
+                        source: 'sheet',
+                        stageId: 'sheet_row',
+                        completedAt: null,
+                        structuredData: out,
+                    };
+                } catch {
+                    return null;
+                }
+            })();
+
             const pickHandoffSnapForCall = (callCreatedAtIso) => {
                 if (!handoffStageSnaps.length) return null;
 
@@ -15044,8 +15079,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             const sid = c.callId || null;
                             const seqSnap = sid ? (snapByCallId.get(sid) || null) : null;
                             const handoffSnap = !seqSnap ? pickHandoffSnapForCall(c.createdAt) : null;
-                            const snap = seqSnap || handoffSnap || null;
-                            const snapSource = seqSnap ? 'sequence' : (handoffSnap ? 'handoff' : 'none');
+                            const snap = seqSnap || handoffSnap || sheetRowSnap || null;
+                            const snapSource = seqSnap ? 'sequence' : (handoffSnap ? 'handoff' : (sheetRowSnap ? 'sheet' : 'none'));
                             const snapStructured = snap?.structuredData && typeof snap.structuredData === 'object' ? snap.structuredData : {};
                             const deltaKeys = snap ? followUpComputeDelta(prevDisplayedStructured, snapStructured) : [];
                             if (snap) prevDisplayedStructured = snapStructured;
@@ -15060,7 +15095,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                                     }).join('');
                                     return `<div class="meta-label" style="margin-top:8px;">Captured (delta)</div><ul style="margin:6px 0 0 18px;padding:0;display:flex;flex-direction:column;gap:6px;">${lis}</ul>`;
                                 })()
-                                : '<div class="tom-ab-test-meta" style="margin-top:8px;">No snapshot found for this call (neither sequence completion nor handoff stage snapshot).</div>';
+                                : '<div class="tom-ab-test-meta" style="margin-top:8px;">No snapshot found for this call (sequence, handoff, and sheet row were all empty).</div>';
 
                             const fullHtml = snap
                                 ? (() => {
