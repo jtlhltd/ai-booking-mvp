@@ -15392,7 +15392,15 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const v = String(val || '').trim();
             const canEdit = row && typeof row._row === 'number';
             if (col === 'Business Name') {
-                const label = v || '—';
+                const label = (() => {
+                    const raw = (v || '').trim();
+                    if (!raw) return '—';
+                    // Keep original content but remove common sheet cruft like trailing commas/spaces.
+                    return raw
+                        .replace(/\s+/g, ' ')
+                        .replace(/[,\s]+$/g, '')
+                        .trim() || '—';
+                })();
                 const calledRaw = String(row?.['Called Number'] || '').trim();
                 const phoneRaw = String(row?.Phone || '').trim();
                 const phoneKey = followUpNormalizePhoneKey(calledRaw) || followUpNormalizePhoneKey(phoneRaw) || calledRaw || phoneRaw;

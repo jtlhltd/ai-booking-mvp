@@ -21,7 +21,10 @@ export function createCallsByPhoneRouter(deps) {
 
       const limit = clampInt(req.query.limit, 1, 100, 25);
       const leadPhone = String(phone || '').trim();
-      const rows = await callsDomain.getCallsByPhone(clientKey, leadPhone, limit);
+      const leadDigits = leadPhone.replace(/\D+/g, '');
+      const rows = typeof callsDomain.getCallsByPhoneLoose === 'function'
+        ? await callsDomain.getCallsByPhoneLoose(clientKey, leadPhone, leadDigits, limit)
+        : await callsDomain.getCallsByPhone(clientKey, leadPhone, limit);
 
       const calls = (rows || []).map((r) => ({
         callId: r.call_id || r.callId || null,

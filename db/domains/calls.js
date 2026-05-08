@@ -19,6 +19,7 @@ export function createCallsDomain({ query, getCallAnalyticsFloorIso }) {
   }
 
   async function getCallsByPhone(clientKey, leadPhone, limit = 50) {
+    // Strict match retained for existing callers.
     const { rows } = await query(
       `
       SELECT
@@ -33,6 +34,30 @@ export function createCallsDomain({ query, getCallAnalyticsFloorIso }) {
       LIMIT $3
     `,
       [clientKey, leadPhone, limit]
+    );
+    return rows;
+  }
+
+  async function getCallsByPhoneLoose(clientKey, leadPhone, leadDigits, limit = 50) {
+    const digits = String(leadDigits || '').replace(/\D+/g, '').trim();
+    const { rows } = await query(
+      `
+      SELECT
+        id, call_id, client_key, lead_phone, status, outcome, duration, cost,
+        metadata, retry_attempt,
+        LEFT(COALESCE(transcript, ''), 512) AS transcript,
+        recording_url, sentiment, quality_score, objections, key_phrases, metrics,
+        analyzed_at, created_at, updated_at
+      FROM calls
+      WHERE client_key = $1
+        AND (
+          lead_phone = $2
+          OR ($3 <> '' AND regexp_replace(lead_phone, '\\D', '', 'g') = $3)
+        )
+      ORDER BY created_at DESC
+      LIMIT $4
+    `,
+      [clientKey, leadPhone, digits, limit]
     );
     return rows;
   }
@@ -94,6 +119,7 @@ export function createCallsDomain({ query, getCallAnalyticsFloorIso }) {
   return {
     getCallsByTenant,
     getCallsByPhone,
+    getCallsByPhoneLoose,
     getRecentCallsCount,
     getCallQualityMetrics,
   };
