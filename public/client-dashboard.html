@@ -14846,18 +14846,68 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             render(payload);
         }
 
-        async function followUpRenderCallHistoryInto(host, clientKey, phoneNorm) {
+        function followUpValueEquals(a, b) {
+            if (a === b) return true;
+            try { return JSON.stringify(a) === JSON.stringify(b); } catch { return false; }
+        }
+
+        function followUpComputeDelta(prevObj, nextObj) {
+            const prev = prevObj && typeof prevObj === 'object' ? prevObj : {};
+            const next = nextObj && typeof nextObj === 'object' ? nextObj : {};
+            const keys = Array.from(new Set([...Object.keys(prev), ...Object.keys(next)])).sort();
+            const changed = [];
+            for (const k of keys) {
+                if (!(k in next)) continue;
+                if (!(k in prev) || !followUpValueEquals(prev[k], next[k])) {
+                    changed.push(k);
+                }
+            }
+            return changed;
+        }
+
+        async function followUpRenderCallHistoryInto(host, clientKey, phoneNorm, { businessName = '' } = {}) {
             if (!host) return;
             const cache = globalThis.__followUpCallsCache || (globalThis.__followUpCallsCache = {});
             const key = `${String(clientKey || '')}::${String(phoneNorm || '')}`;
             const tz = getOperationalTimezone(dashboardData);
 
-            const renderCallsHtml = (payload) => {
-                const calls = Array.isArray(payload?.calls) ? payload.calls : [];
-                if (!calls.length) return '<div class="tom-ab-test-meta">No calls found for this phone yet.</div>';
-                return `
-                    <div class="meta-label">Calls (latest first)</div>
-                    <ol style="margin:6px 0 0 18px;padding:0;display:flex;flex-direction:column;gap:8px;">
+            const render = ({ callsPayload, seqPayload }) => {
+                const calls = Array.isArray(callsPayload?.calls) ? callsPayload.calls : [];
+                const stagesCompleted = Array.isArray(seqPayload?.row?.stagesCompleted) ? seqPayload.row.stagesCompleted : [];
+
+                const snaps = stagesCompleted
+                    .map((s) => ({
+                        stageId: s?.stageId || '',
+                        completedAt: s?.completedAt || null,
+                        callId: s?.callId || null,
+                        structuredData: s?.structuredData && typeof s.structuredData === 'object' ? s.structuredData : {},
+                    }))
+                    .filter((s) => s.callId);
+
+                snaps.sort((a, b) => String(a.completedAt || '').localeCompare(String(b.completedAt || '')));
+
+                const snapByCallId = new Map();
+                const deltaByCallId = new Map();
+                let prevStructured = {};
+                for (const s of snaps) {
+                    const deltaKeys = followUpComputeDelta(prevStructured, s.structuredData);
+                    snapByCallId.set(s.callId, s);
+                    deltaByCallId.set(s.callId, deltaKeys);
+                    prevStructured = s.structuredData;
+                }
+
+                const title = businessName ? `<div class="meta-label">${escapeHtml(businessName)}</div>` : '';
+                const summary = `<div class="tom-ab-test-meta"><strong>${escapeHtml(phoneNorm)}</strong> · ${escapeHtml(String(calls.length))} call(s) · ${escapeHtml(String(snaps.length))} snapshot(s)</div>`;
+
+                if (!calls.length) {
+                    host.innerHTML = `${title}${summary}<div class="tom-ab-test-meta" style="margin-top:8px;">No calls found for this phone yet.</div>`;
+                    return;
+                }
+
+                host.innerHTML = `
+                    ${title}${summary}
+                    <div class="meta-label" style="margin-top:12px;">Per-call history (with captured data)</div>
+                    <ol style="margin:6px 0 0 18px;padding:0;display:flex;flex-direction:column;gap:10px;">
                         ${calls.map((c) => {
                             const when = c.createdAt ? formatRelativeWithAbsolute(c.createdAt, tz) : '';
                             const outcome = c.outcome || '—';
@@ -14865,13 +14915,55 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             const dur = c.duration != null ? `${formatNumber(c.duration)}s` : '—';
                             const rec = c.recordingUrl ? `<a href="${escapeHtml(c.recordingUrl)}" target="_blank" rel="noreferrer">recording</a>` : '';
                             const snip = c.transcriptSnippet ? escapeHtml(String(c.transcriptSnippet)).slice(0, 260) : '';
+                            const sid = c.callId || null;
+                            const snap = sid ? (snapByCallId.get(sid) || null) : null;
+                            const deltaKeys = sid ? (deltaByCallId.get(sid) || []) : [];
+
+                            const deltaHtml = snap
+                                ? (() => {
+                                    if (!deltaKeys.length) return '<div class="tom-ab-test-meta">Delta: no new/changed structured fields vs prior snapshot.</div>';
+                                    const lis = deltaKeys.slice(0, 24).map((k) => {
+                                        const v = snap.structuredData?.[k];
+                                        const txt = v == null ? '' : (typeof v === 'string' ? v : JSON.stringify(v));
+                                        return `<li><strong>${escapeHtml(k)}</strong> <span class="tom-ab-test-meta">· <code>${escapeHtml(txt).slice(0, 180)}${txt.length > 180 ? '…' : ''}</code></span></li>`;
+                                    }).join('');
+                                    return `<div class="meta-label" style="margin-top:8px;">Captured (delta)</div><ul style="margin:6px 0 0 18px;padding:0;display:flex;flex-direction:column;gap:6px;">${lis}</ul>`;
+                                })()
+                                : '<div class="tom-ab-test-meta" style="margin-top:8px;">No structured snapshot stored for this call (stage not complete / no useful outcome).</div>';
+
+                            const fullHtml = snap
+                                ? (() => {
+                                    const keys = Object.keys(snap.structuredData || {});
+                                    const lis = keys.slice(0, 60).map((k) => {
+                                        const v = snap.structuredData?.[k];
+                                        const txt = v == null ? '' : (typeof v === 'string' ? v : JSON.stringify(v));
+                                        return `<li><strong>${escapeHtml(k)}</strong> <span class="tom-ab-test-meta">· <code>${escapeHtml(txt).slice(0, 220)}${txt.length > 220 ? '…' : ''}</code></span></li>`;
+                                    }).join('');
+                                    return `
+                                        <details style="margin-top:8px;">
+                                            <summary style="cursor:pointer;color:var(--muted);font-size:0.9rem;">Full structured snapshot (${escapeHtml(String(keys.length))} fields)</summary>
+                                            <div style="margin-top:8px;">
+                                                ${keys.length ? `<ul style="margin:0 0 0 18px;padding:0;display:flex;flex-direction:column;gap:6px;">${lis}</ul>` : '<div class="tom-ab-test-meta">No structured fields in snapshot.</div>'}
+                                            </div>
+                                        </details>
+                                    `;
+                                })()
+                                : '';
+
+                            const snapMeta = snap
+                                ? `<div class="tom-ab-test-meta" style="margin-top:6px;">Snapshot: stage=<code>${escapeHtml(snap.stageId || '—')}</code> · capturedAt=${escapeHtml(snap.completedAt ? formatRelativeWithAbsolute(snap.completedAt, tz) : '—')}</div>`
+                                : '';
+
                             return `
-                                <li style="border:1px solid var(--border);border-radius:12px;padding:8px;background:var(--surface-3);">
+                                <li style="border:1px solid var(--border);border-radius:12px;padding:10px;background:var(--surface-3);">
                                     <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-                                        <div><strong>${escapeHtml(outcome)}</strong> <span class="tom-ab-test-meta">· ${escapeHtml(status)} · ${escapeHtml(dur)}</span></div>
+                                        <div><strong>${escapeHtml(outcome)}</strong> <span class="tom-ab-test-meta">· ${escapeHtml(status)} · ${escapeHtml(dur)}${sid ? ` · <code>${escapeHtml(sid)}</code>` : ''}</span></div>
                                         <div class="tom-ab-test-meta">${escapeHtml(when)} ${rec ? `· ${rec}` : ''}</div>
                                     </div>
                                     ${snip ? `<div class="tom-ab-test-meta" style="margin-top:6px;"><code>${snip}${String(c.transcriptSnippet).length > 260 ? '…' : ''}</code></div>` : ''}
+                                    ${snapMeta}
+                                    ${deltaHtml}
+                                    ${fullHtml}
                                 </li>
                             `;
                         }).join('')}
@@ -14879,30 +14971,40 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 `;
             };
 
-            const handoffHtml = (() => {
-                const rows = followUpQueueState?.rawRows || [];
-                const row = rows.find((r) => followUpNormalizePhoneKey(r?.Phone) === phoneNorm) || null;
-                return row ? followUpRenderHandoffStages(row) : '<div class="tom-ab-test-meta">Captured-by-stage: not available on this page.</div>';
-            })();
+            const loadSeq = async () => {
+                try {
+                    const url = `${BASE_URL}/api/outbound-sequence/${encodeURIComponent(clientKey)}/phone/${encodeURIComponent(phoneNorm)}`;
+                    const res = await fetch(url, { cache: 'no-store' });
+                    const payload = await res.json().catch(() => ({}));
+                    if (!res.ok || payload?.ok === false) return { ok: false, row: null };
+                    return payload;
+                } catch {
+                    return { ok: false, row: null };
+                }
+            };
 
-            if (cache[key]) {
-                host.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px;">${handoffHtml}${renderCallsHtml(cache[key])}</div>`;
-                return;
-            }
+            const loadCalls = async () => {
+                const url = `${BASE_URL}/api/calls/${encodeURIComponent(clientKey)}/phone/${encodeURIComponent(phoneNorm)}?limit=25`;
+                const res = await fetch(url, { cache: 'no-store' });
+                const payload = await res.json().catch(() => ({}));
+                if (!res.ok || payload?.ok === false) throw new Error(payload?.error || `HTTP ${res.status}`);
+                cache[key] = payload;
+                return payload;
+            };
 
             host.innerHTML = '<div class="empty-state-message" style="padding:8px;">Loading…</div>';
-            const url = `${BASE_URL}/api/calls/${encodeURIComponent(clientKey)}/phone/${encodeURIComponent(phoneNorm)}?limit=25`;
-            const res = await fetch(url, { cache: 'no-store' });
-            const payload = await res.json().catch(() => ({}));
-            if (!res.ok || payload?.ok === false) {
-                host.innerHTML = `<div class="tom-ab-test-meta">Failed to load calls (${escapeHtml(String(payload?.error || res.status))}).</div>`;
-                return;
+            try {
+                const [callsPayload, seqPayload] = await Promise.all([
+                    cache[key] ? Promise.resolve(cache[key]) : loadCalls(),
+                    loadSeq(),
+                ]);
+                render({ callsPayload, seqPayload });
+            } catch (e) {
+                host.innerHTML = `<div class="tom-ab-test-meta">Failed to load call history (${escapeHtml(String(e?.message || e))}).</div>`;
             }
-            cache[key] = payload;
-            host.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px;">${handoffHtml}${renderCallsHtml(payload)}</div>`;
         }
 
-        function followUpOpenCallHistoryModal({ phone = '' } = {}) {
+        function followUpOpenCallHistoryModal({ phone = '', businessName = '' } = {}) {
             const modal = document.getElementById('followUpCallHistoryModal');
             const input = document.getElementById('followUpCallHistoryPhoneInput');
             const msg = document.getElementById('followUpCallHistoryMsg');
@@ -14910,7 +15012,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             if (!modal || !input || !host) return;
             if (msg) msg.textContent = '';
             input.value = phone || '';
-            host.innerHTML = '<div class="tom-ab-test-meta">Enter a phone and click Lookup.</div>';
+            host.innerHTML = businessName
+                ? `<div class="meta-label">${escapeHtml(businessName)}</div><div class="tom-ab-test-meta">Enter a phone and click Lookup.</div>`
+                : '<div class="tom-ab-test-meta">Enter a phone and click Lookup.</div>';
             modal.classList.add('open');
             input.focus();
         }
@@ -15983,6 +16087,20 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             if (wrap && !wrap.dataset.sortDelegation) {
                 wrap.dataset.sortDelegation = '1';
                 wrap.addEventListener('click', (e) => {
+                    const tdBiz = e.target.closest('td[data-col="business-name"]');
+                    if (tdBiz) {
+                        const tr = tdBiz.closest('tr');
+                        const key = tr && tr.getAttribute('data-fu-key');
+                        const row = key ? followUpQueueState.rawRows.find((r) => followUpRowKey(r) === key) : null;
+                        const phoneNorm = row?.Phone ? followUpNormalizePhoneKey(row.Phone) : '';
+                        const businessName = String(row?.['Business Name'] || '').trim();
+                        if (phoneNorm) {
+                            followUpOpenCallHistoryModal({ phone: phoneNorm, businessName });
+                            const host = document.getElementById('followUpCallHistoryResults');
+                            followUpRenderCallHistoryInto(host, currentClient, phoneNorm, { businessName }).catch(() => {});
+                        }
+                        return;
+                    }
                     const callsBtn = e.target.closest('[data-fu-callhistory="1"]');
                     if (callsBtn) {
                         const phoneNorm = callsBtn.getAttribute('data-fu-phone') || '';

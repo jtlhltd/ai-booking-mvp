@@ -170,7 +170,7 @@ describe('routes/outbound-sequence-visibility-mount.js', () => {
               leadPhone: '+447700900000',
               currentStageId: 'stage_gatekeeper',
               stagesCompleted: JSON.stringify([
-                { stageId: 'stage_gatekeeper', completedAt: '2030-01-01T00:00:00.000Z', structuredData: { lane: 'LON→MAN' } },
+                { stageId: 'stage_gatekeeper', completedAt: '2030-01-01T00:00:00.000Z', callId: 'call_1', structuredData: { lane: 'LON→MAN' } },
               ]),
               attemptsInStage: 0,
               attemptsTotal: 1,
@@ -206,6 +206,8 @@ describe('routes/outbound-sequence-visibility-mount.js', () => {
       ])
     );
     expect(res.body.explain.stage.promptRedacted).toEqual(expect.any(Object));
+    expect(Array.isArray(res.body.row.stagesCompleted)).toBe(true);
+    expect(res.body.row.stagesCompleted[0]).toEqual(expect.objectContaining({ callId: 'call_1' }));
   });
 });
 
