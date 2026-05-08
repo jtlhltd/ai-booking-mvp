@@ -15108,8 +15108,26 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             const sid = c.callId || null;
                             const seqSnap = sid ? (snapByCallId.get(sid) || null) : null;
                             const handoffSnap = (!seqSnap && handoffHasAnyTimestamp) ? pickHandoffSnapForCall(c.createdAt) : null;
-                            const snap = seqSnap || handoffSnap || null;
-                            const snapSource = seqSnap ? 'sequence' : (handoffSnap ? 'handoff' : 'none');
+                            const callExtract = (() => {
+                                try {
+                                    const m = c?.metadata && typeof c.metadata === 'object' ? c.metadata : null;
+                                    const cap = m?.structuredExtract?.captured;
+                                    if (!cap || typeof cap !== 'object') return null;
+                                    const keys = Object.keys(cap).filter((k) => String(cap[k] || '').trim() !== '');
+                                    if (!keys.length) return null;
+                                    return {
+                                        source: 'call',
+                                        stageId: 'structuredExtract',
+                                        completedAt: m?.structuredExtract?.extractedAt || null,
+                                        structuredData: cap,
+                                    };
+                                } catch {
+                                    return null;
+                                }
+                            })();
+
+                            const snap = seqSnap || callExtract || handoffSnap || null;
+                            const snapSource = seqSnap ? 'sequence' : (callExtract ? 'call' : (handoffSnap ? 'handoff' : 'none'));
                             const snapStructured = snap?.structuredData && typeof snap.structuredData === 'object' ? snap.structuredData : {};
                             const deltaKeys = snap ? followUpComputeDelta(prevDisplayedStructured, snapStructured) : [];
                             if (snap) prevDisplayedStructured = snapStructured;
