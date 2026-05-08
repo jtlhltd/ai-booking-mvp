@@ -15388,19 +15388,21 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             `</span>`;
         }
 
+        function followUpCleanBusinessName(name) {
+            const raw = String(name || '').trim();
+            if (!raw) return '';
+            return raw
+                .replace(/\s+/g, ' ')
+                .replace(/[,\s]+$/g, '')
+                .trim();
+        }
+
         function formatFollowUpCell(col, val, row = null, extra = null) {
             const v = String(val || '').trim();
             const canEdit = row && typeof row._row === 'number';
             if (col === 'Business Name') {
-                const label = (() => {
-                    const raw = (v || '').trim();
-                    if (!raw) return '—';
-                    // Keep original content but remove common sheet cruft like trailing commas/spaces.
-                    return raw
-                        .replace(/\s+/g, ' ')
-                        .replace(/[,\s]+$/g, '')
-                        .trim() || '—';
-                })();
+                const cleaned = followUpCleanBusinessName(v);
+                const label = cleaned || (v ? v : '—') || '—';
                 const calledRaw = String(row?.['Called Number'] || '').trim();
                 const phoneRaw = String(row?.Phone || '').trim();
                 const phoneKey = followUpNormalizePhoneKey(calledRaw) || followUpNormalizePhoneKey(phoneRaw) || calledRaw || phoneRaw;
@@ -15485,7 +15487,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const label = v || '—';
                 if (!v) return `<span class="fu-cell-actions"><span title="${escapeHtml(label)}">${escapeHtml(label)}</span>${followUpPencilBtn(col, !canEdit)}</span>`;
                 const callId = String(row?.['Call ID'] || '').trim();
-                const nm = String(row?.['Business Name'] || row?.['Decision Maker'] || row?.Phone || 'Prospect').trim();
+                const nm = followUpCleanBusinessName(row?.['Business Name']) || String(row?.['Decision Maker'] || row?.Phone || 'Prospect').trim();
                 const btn = callId ? `<button type="button" class="fu-transcript-btn" data-fu-transcript="${escapeHtml(callId)}" data-fu-name="${escapeHtml(nm)}">Transcript</button>` : '';
                 const calledRaw = String(row?.['Called Number'] || '').trim();
                 const phoneRaw = String(row?.Phone || '').trim();
@@ -16165,7 +16167,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         const calledRaw = String(row?.['Called Number'] || '').trim();
                         const phoneRaw = String(row?.Phone || '').trim();
                         const phoneKey = followUpNormalizePhoneKey(calledRaw) || followUpNormalizePhoneKey(phoneRaw) || calledRaw || phoneRaw;
-                        const businessName = String(row?.['Business Name'] || '').trim();
+                        const businessName = followUpCleanBusinessName(row?.['Business Name']) || String(row?.['Business Name'] || '').trim();
                         if (phoneKey) {
                             e.preventDefault();
                             e.stopImmediatePropagation();

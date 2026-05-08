@@ -40,6 +40,7 @@ export function createCallsDomain({ query, getCallAnalyticsFloorIso }) {
 
   async function getCallsByPhoneLoose(clientKey, leadPhone, leadDigits, limit = 50) {
     const digits = String(leadDigits || '').replace(/\D+/g, '').trim();
+    const last10 = digits.length >= 10 ? digits.slice(-10) : '';
     const { rows } = await query(
       `
       SELECT
@@ -53,11 +54,12 @@ export function createCallsDomain({ query, getCallAnalyticsFloorIso }) {
         AND (
           lead_phone = $2
           OR ($3 <> '' AND regexp_replace(lead_phone, '\\D', '', 'g') = $3)
+          OR ($4 <> '' AND RIGHT(regexp_replace(lead_phone, '\\D', '', 'g'), 10) = $4)
         )
       ORDER BY created_at DESC
-      LIMIT $4
+      LIMIT $5
     `,
-      [clientKey, leadPhone, digits, limit]
+      [clientKey, leadPhone, digits, last10, limit]
     );
     return rows;
   }
