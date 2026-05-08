@@ -15093,6 +15093,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 // Compute deltas in displayed order for per-call snapshots only (sequence/handoff).
                 let prevDisplayedStructured = {};
 
+                // Collect per-call snapshots (for collated + change log).
+                const perCallSnaps = [];
+
                 host.innerHTML = `
                     ${title}${summary}
                     ${sheetHtml}
@@ -15160,6 +15163,16 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             const deltaKeys = snap ? followUpComputeDelta(prevDisplayedStructured, snapStructured) : [];
                             if (snap) prevDisplayedStructured = snapStructured;
 
+                            if (snap && Object.keys(snapStructured || {}).length) {
+                                perCallSnaps.push({
+                                    callId: sid || null,
+                                    createdAt: c.createdAt || null,
+                                    outcome,
+                                    source: snapSource,
+                                    structuredData: snapStructured,
+                                });
+                            }
+
                             const deltaHtml = snap
                                 ? (() => {
                                     if (!deltaKeys.length) return '<div class="tom-ab-test-meta">Delta: no new/changed structured fields vs prior snapshot.</div>';
@@ -15210,6 +15223,79 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         }).join('')}
                     </ol>
                 `;
+
+                // Collated best-known + change log
+                try {
+                    const snapshotsChrono = perCallSnaps
+                        .slice()
+                        .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+
+                    const final = {};
+                    const changeItems = [];
+                    let prev = {};
+
+                    for (const s of snapshotsChrono) {
+                        const cur = s.structuredData || {};
+                        const keys = Object.keys(cur);
+                        const added = [];
+                        const updated = [];
+                        for (const k of keys) {
+                            const v = cur[k];
+                            const nextVal = v == null ? '' : String(v);
+                            if (!nextVal.trim()) continue;
+                            const prevVal = prev[k] == null ? '' : String(prev[k]);
+                            if (!prevVal.trim()) added.push([k, nextVal]);
+                            else if (!followUpValueEquals(prevVal, nextVal)) updated.push([k, prevVal, nextVal]);
+                            final[k] = nextVal;
+                        }
+                        if (added.length || updated.length) {
+                            changeItems.push({ ...s, added, updated });
+                        }
+                        prev = { ...prev, ...cur };
+                    }
+
+                    const finalKeys = Object.keys(final).sort();
+                    const previewKeys = finalKeys.slice(0, 10);
+                    const preview = previewKeys.map((k) => `<li><strong>${escapeHtml(k)}</strong> <span class="tom-ab-test-meta">· <code>${escapeHtml(String(final[k])).slice(0, 180)}</code></span></li>`).join('');
+                    const full = finalKeys.slice(0, 80).map((k) => `<li><strong>${escapeHtml(k)}</strong> <span class="tom-ab-test-meta">· <code>${escapeHtml(String(final[k])).slice(0, 220)}</code></span></li>`).join('');
+
+                    const collatedHtml = `
+                        <div class="meta-label" style="margin-top:14px;">Collated data (best-known)</div>
+                        ${finalKeys.length
+                            ? `<ul style="margin:6px 0 0 18px;padding:0;display:flex;flex-direction:column;gap:6px;">${preview}</ul>
+                               <details style="margin-top:8px;">
+                                   <summary style="cursor:pointer;color:var(--muted);font-size:0.9rem;">Show all fields (${escapeHtml(String(finalKeys.length))})</summary>
+                                   <div style="margin-top:8px;">
+                                       <ul style="margin:0 0 0 18px;padding:0;display:flex;flex-direction:column;gap:6px;">${full}</ul>
+                                   </div>
+                               </details>`
+                            : `<div class="tom-ab-test-meta">No collated fields yet.</div>`
+                        }
+                    `;
+
+                    const changeHtml = `
+                        <div class="meta-label" style="margin-top:14px;">Change log (by call)</div>
+                        ${changeItems.length ? `<ol style="margin:6px 0 0 18px;padding:0;display:flex;flex-direction:column;gap:10px;">
+                            ${changeItems.map((it) => {
+                                const when = it.createdAt ? formatRelativeWithAbsolute(it.createdAt, tz) : '';
+                                const cid = it.callId ? `<code>${escapeHtml(String(it.callId))}</code>` : '';
+                                const addedLis = it.added.slice(0, 25).map(([k, v]) => `<li><strong>${escapeHtml(k)}</strong> <span class="tom-ab-test-meta">= <code>${escapeHtml(String(v)).slice(0, 180)}</code></span></li>`).join('');
+                                const updLis = it.updated.slice(0, 25).map(([k, a, b]) => `<li><strong>${escapeHtml(k)}</strong> <span class="tom-ab-test-meta">· <code>${escapeHtml(String(a)).slice(0, 120)}</code> → <code>${escapeHtml(String(b)).slice(0, 120)}</code></span></li>`).join('');
+                                const moreA = it.added.length > 25 ? `<div class="tom-ab-test-meta">+${it.added.length - 25} more added…</div>` : '';
+                                const moreU = it.updated.length > 25 ? `<div class="tom-ab-test-meta">+${it.updated.length - 25} more updated…</div>` : '';
+                                return `
+                                    <li style="border:1px solid var(--border);border-radius:12px;padding:10px;background:var(--surface-3);">
+                                        <div><strong>${escapeHtml(String(it.outcome || 'call'))}</strong> <span class="tom-ab-test-meta">· ${escapeHtml(when)} · ${cid} · source=<code>${escapeHtml(String(it.source || ''))}</code></span></div>
+                                        ${it.added.length ? `<div class="meta-label" style="margin-top:8px;">Added</div><ul style="margin:6px 0 0 18px;padding:0;display:flex;flex-direction:column;gap:6px;">${addedLis}</ul>${moreA}` : ''}
+                                        ${it.updated.length ? `<div class="meta-label" style="margin-top:8px;">Updated</div><ul style="margin:6px 0 0 18px;padding:0;display:flex;flex-direction:column;gap:6px;">${updLis}</ul>${moreU}` : ''}
+                                    </li>
+                                `;
+                            }).join('')}
+                        </ol>` : `<div class="tom-ab-test-meta">No changes recorded yet.</div>`}
+                    `;
+
+                    host.innerHTML += collatedHtml + changeHtml;
+                } catch {}
             };
 
             const loadSeq = async () => {
