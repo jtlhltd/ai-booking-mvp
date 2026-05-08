@@ -1,5 +1,6 @@
 import express from 'express';
 import { createCallsDomain } from '../db/domains/calls.js';
+import { extractLogisticsFields } from '../lib/logistics-extractor.js';
 
 export function createCallsByPhoneRouter(deps) {
   const { query, getFullClient } = deps || {};
@@ -35,9 +36,12 @@ export function createCallsByPhoneRouter(deps) {
       const limit = clampInt(req.query.limit, 1, 100, 25);
       const leadPhone = String(phone || '').trim();
       const leadDigits = leadPhone.replace(/\D+/g, '');
-      const rows = typeof callsDomain.getCallsByPhoneLoose === 'function'
-        ? await callsDomain.getCallsByPhoneLoose(clientKey, leadPhone, leadDigits, limit)
-        : await callsDomain.getCallsByPhone(clientKey, leadPhone, limit);
+      const includeExtract = String(req.query.includeExtract || '').trim() === '1';
+      const rows = (includeExtract && typeof callsDomain.getCallsByPhoneLooseWithFullTranscript === 'function')
+        ? await callsDomain.getCallsByPhoneLooseWithFullTranscript(clientKey, leadPhone, leadDigits, limit)
+        : (typeof callsDomain.getCallsByPhoneLoose === 'function'
+            ? await callsDomain.getCallsByPhoneLoose(clientKey, leadPhone, leadDigits, limit)
+            : await callsDomain.getCallsByPhone(clientKey, leadPhone, limit));
 
       const calls = (rows || []).map((r) => ({
         callId: r.call_id || r.callId || null,
@@ -50,6 +54,7 @@ export function createCallsByPhoneRouter(deps) {
         transcriptSnippet: r.transcript || null,
         recordingUrl: r.recording_url || r.recordingUrl || null,
         metadata: safeParseJsonObject(r.metadata) || (r.metadata && typeof r.metadata === 'object' ? r.metadata : null),
+        extracted: includeExtract ? extractLogisticsFields(r.transcript || '') : undefined,
         createdAt: r.created_at ? new Date(r.created_at).toISOString() : (r.createdAt ? new Date(r.createdAt).toISOString() : null),
         updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : (r.updatedAt ? new Date(r.updatedAt).toISOString() : null),
       }));

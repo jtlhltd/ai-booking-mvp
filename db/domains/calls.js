@@ -64,6 +64,32 @@ export function createCallsDomain({ query, getCallAnalyticsFloorIso }) {
     return rows;
   }
 
+  async function getCallsByPhoneLooseWithFullTranscript(clientKey, leadPhone, leadDigits, limit = 50) {
+    const digits = String(leadDigits || '').replace(/\D+/g, '').trim();
+    const last10 = digits.length >= 10 ? digits.slice(-10) : '';
+    const { rows } = await query(
+      `
+      SELECT
+        id, call_id, client_key, lead_phone, status, outcome, duration, cost,
+        metadata, retry_attempt,
+        COALESCE(transcript, '') AS transcript,
+        recording_url, sentiment, quality_score, objections, key_phrases, metrics,
+        analyzed_at, created_at, updated_at
+      FROM calls
+      WHERE client_key = $1
+        AND (
+          lead_phone = $2
+          OR ($3 <> '' AND regexp_replace(lead_phone, '\\D', '', 'g') = $3)
+          OR ($4 <> '' AND RIGHT(regexp_replace(lead_phone, '\\D', '', 'g'), 10) = $4)
+        )
+      ORDER BY created_at DESC
+      LIMIT $5
+    `,
+      [clientKey, leadPhone, digits, last10, limit]
+    );
+    return rows;
+  }
+
   async function getRecentCallsCount(clientKey, minutesBack = 60) {
     const { rows } = await query(
       `
@@ -122,6 +148,7 @@ export function createCallsDomain({ query, getCallAnalyticsFloorIso }) {
     getCallsByTenant,
     getCallsByPhone,
     getCallsByPhoneLoose,
+    getCallsByPhoneLooseWithFullTranscript,
     getRecentCallsCount,
     getCallQualityMetrics,
   };

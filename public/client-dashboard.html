@@ -15126,8 +15126,36 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                                 }
                             })();
 
-                            const snap = seqSnap || callExtract || handoffSnap || null;
-                            const snapSource = seqSnap ? 'sequence' : (callExtract ? 'call' : (handoffSnap ? 'handoff' : 'none'));
+                            const transcriptExtract = (() => {
+                                try {
+                                    const ex = c?.extracted;
+                                    if (!ex || typeof ex !== 'object') return null;
+                                    const compact = {};
+                                    for (const [k, v] of Object.entries(ex)) {
+                                        if (v == null) continue;
+                                        if (Array.isArray(v)) {
+                                            const joined = v.filter(Boolean).join(', ');
+                                            if (joined.trim()) compact[k] = joined;
+                                            continue;
+                                        }
+                                        const s = String(v || '').trim();
+                                        if (s) compact[k] = s;
+                                    }
+                                    const keys = Object.keys(compact);
+                                    if (!keys.length) return null;
+                                    return {
+                                        source: 'call',
+                                        stageId: 'transcript_extract',
+                                        completedAt: c.createdAt || null,
+                                        structuredData: compact,
+                                    };
+                                } catch {
+                                    return null;
+                                }
+                            })();
+
+                            const snap = seqSnap || callExtract || transcriptExtract || handoffSnap || null;
+                            const snapSource = seqSnap ? 'sequence' : ((callExtract || transcriptExtract) ? 'call' : (handoffSnap ? 'handoff' : 'none'));
                             const snapStructured = snap?.structuredData && typeof snap.structuredData === 'object' ? snap.structuredData : {};
                             const deltaKeys = snap ? followUpComputeDelta(prevDisplayedStructured, snapStructured) : [];
                             if (snap) prevDisplayedStructured = snapStructured;
@@ -15197,7 +15225,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             };
 
             const loadCalls = async () => {
-                const url = `${BASE_URL}/api/calls/${encodeURIComponent(clientKey)}/phone/${encodeURIComponent(phoneNorm)}?limit=25`;
+                const url = `${BASE_URL}/api/calls/${encodeURIComponent(clientKey)}/phone/${encodeURIComponent(phoneNorm)}?limit=25&includeExtract=1`;
                 const res = await fetch(url, { cache: 'no-store' });
                 const payload = await res.json().catch(() => ({}));
                 if (!res.ok || payload?.ok === false) throw new Error(payload?.error || `HTTP ${res.status}`);
