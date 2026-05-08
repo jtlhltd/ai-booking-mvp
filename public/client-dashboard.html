@@ -15366,6 +15366,15 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         function formatFollowUpCell(col, val, row = null, extra = null) {
             const v = String(val || '').trim();
             const canEdit = row && typeof row._row === 'number';
+            if (col === 'Business Name') {
+                const label = v || '—';
+                const phoneRaw = String(row?.Phone || '').trim();
+                const phoneKey = followUpNormalizePhoneKey(phoneRaw) || phoneRaw;
+                const drill = phoneKey
+                    ? `<button type="button" class="fu-drilldown-btn" data-fu-drilldown="1" data-fu-phone="${escapeHtml(phoneKey)}" data-fu-biz="${escapeHtml(label)}" title="Open call history">${escapeHtml(label)}</button>`
+                    : `<span title="${escapeHtml(label)}">${escapeHtml(label)}</span>`;
+                return `<span class="fu-cell-actions">${drill}${followUpPencilBtn(col, !canEdit)}</span>`;
+            }
             if (col === 'Notes') {
                 const isUnknown = v.toLowerCase() === 'unknown';
                 const label = (!v || isUnknown) ? '—' : v;
@@ -15444,9 +15453,10 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const callId = String(row?.['Call ID'] || '').trim();
                 const nm = String(row?.['Business Name'] || row?.['Decision Maker'] || row?.Phone || 'Prospect').trim();
                 const btn = callId ? `<button type="button" class="fu-transcript-btn" data-fu-transcript="${escapeHtml(callId)}" data-fu-name="${escapeHtml(nm)}">Transcript</button>` : '';
-                const phoneNorm = row?.Phone ? followUpNormalizePhoneKey(row.Phone) : '';
-                const callsBtn = phoneNorm
-                    ? `<button type="button" class="fu-transcript-btn" data-fu-callhistory="1" data-fu-phone="${escapeHtml(phoneNorm)}">Calls</button>`
+                const phoneRaw = String(row?.Phone || '').trim();
+                const phoneKey = followUpNormalizePhoneKey(phoneRaw) || phoneRaw;
+                const callsBtn = phoneKey
+                    ? `<button type="button" class="fu-transcript-btn" data-fu-callhistory="1" data-fu-phone="${escapeHtml(phoneKey)}">Calls</button>`
                     : '';
                 return `<div class="fu-transcript-actions"><div class="fu-transcript" title="${escapeHtml(v)}">${escapeHtml(v)}</div><span class="fu-cell-actions">${btn}${callsBtn}${followUpPencilBtn(col, !canEdit)}</span></div>`;
             }
@@ -16084,49 +16094,91 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     }
                 });
             }
-            if (wrap && !wrap.dataset.sortDelegation) {
-                wrap.dataset.sortDelegation = '1';
-                wrap.addEventListener('click', (e) => {
+            // Follow-up queue click delegation (versioned + capture) so new handlers
+            // can take effect even if the tab stayed open across deploys.
+            const FU_CLICK_DELEGATION_VER = 'v2';
+            if (wrap && wrap.dataset.fuClickDelegationVer !== FU_CLICK_DELEGATION_VER) {
+                wrap.dataset.fuClickDelegationVer = FU_CLICK_DELEGATION_VER;
+                try {
+                    if (wrap.__fuClickDelegationHandler) {
+                        wrap.removeEventListener('click', wrap.__fuClickDelegationHandler, true);
+                    }
+                } catch {}
+
+                wrap.__fuClickDelegationHandler = (e) => {
+                    // Explicit drilldown control (preferred)
+                    const drillBtn = e.target.closest('[data-fu-drilldown="1"]');
+                    if (drillBtn) {
+                        const phoneKey = drillBtn.getAttribute('data-fu-phone') || '';
+                        const businessName = drillBtn.getAttribute('data-fu-biz') || '';
+                        if (phoneKey) {
+                            e.preventDefault();
+                            e.stopImmediatePropagation();
+                            followUpOpenCallHistoryModal({ phone: phoneKey, businessName });
+                            const host = document.getElementById('followUpCallHistoryResults');
+                            followUpRenderCallHistoryInto(host, currentClient, phoneKey, { businessName }).catch(() => {});
+                        }
+                        return;
+                    }
+
+                    // Fallback: click anywhere in the Business Name cell
                     const tdBiz = e.target.closest('td[data-col="business-name"]');
                     if (tdBiz) {
                         const tr = tdBiz.closest('tr');
                         const key = tr && tr.getAttribute('data-fu-key');
                         const row = key ? followUpQueueState.rawRows.find((r) => followUpRowKey(r) === key) : null;
-                        const phoneNorm = row?.Phone ? followUpNormalizePhoneKey(row.Phone) : '';
+                        const phoneRaw = String(row?.Phone || '').trim();
+                        const phoneKey = followUpNormalizePhoneKey(phoneRaw) || phoneRaw;
                         const businessName = String(row?.['Business Name'] || '').trim();
-                        if (phoneNorm) {
-                            followUpOpenCallHistoryModal({ phone: phoneNorm, businessName });
+                        if (phoneKey) {
+                            e.preventDefault();
+                            e.stopImmediatePropagation();
+                            followUpOpenCallHistoryModal({ phone: phoneKey, businessName });
                             const host = document.getElementById('followUpCallHistoryResults');
-                            followUpRenderCallHistoryInto(host, currentClient, phoneNorm, { businessName }).catch(() => {});
+                            followUpRenderCallHistoryInto(host, currentClient, phoneKey, { businessName }).catch(() => {});
                         }
                         return;
                     }
+
                     const callsBtn = e.target.closest('[data-fu-callhistory="1"]');
                     if (callsBtn) {
-                        const phoneNorm = callsBtn.getAttribute('data-fu-phone') || '';
-                        if (phoneNorm) {
-                            followUpOpenCallHistoryModal({ phone: phoneNorm });
+                        const phoneKey = callsBtn.getAttribute('data-fu-phone') || '';
+                        if (phoneKey) {
+                            e.preventDefault();
+                            e.stopImmediatePropagation();
+                            followUpOpenCallHistoryModal({ phone: phoneKey });
                             const host = document.getElementById('followUpCallHistoryResults');
-                            followUpRenderCallHistoryInto(host, currentClient, phoneNorm).catch(() => {});
+                            followUpRenderCallHistoryInto(host, currentClient, phoneKey).catch(() => {});
                         }
                         return;
                     }
+
                     const trBtn = e.target.closest('[data-fu-transcript]');
                     if (trBtn) {
                         const callId = trBtn.getAttribute('data-fu-transcript');
                         const nm = trBtn.getAttribute('data-fu-name') || 'Prospect';
-                        if (callId) viewTranscript(callId, nm);
+                        if (callId) {
+                            e.preventDefault();
+                            e.stopImmediatePropagation();
+                            viewTranscript(callId, nm);
+                        }
                         return;
                     }
+
                     const editBtn = e.target.closest('[data-fu-edit]');
                     if (editBtn) {
                         const td = editBtn.closest('td');
                         const colName = editBtn.getAttribute('data-fu-edit-col') || '';
                         const tr = editBtn.closest('tr');
                         const key = tr && tr.getAttribute('data-fu-key');
-                        if (td && colName && key) followUpBeginEditCell(td, colName, key);
+                        if (td && colName && key) {
+                            e.preventDefault();
+                            e.stopImmediatePropagation();
+                            followUpBeginEditCell(td, colName, key);
+                        }
                         return;
                     }
+
                     const miniActionBtn = e.target.closest('[data-fu-action]');
                     if (miniActionBtn) {
                         const tr = miniActionBtn.closest('tr');
