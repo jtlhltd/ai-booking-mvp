@@ -72,7 +72,17 @@ export function createApp({
   app.use(auditLog);
 
   // Serve static files from public directory
-  app.use(express.static('public'));
+  app.use(
+    express.static('public', {
+      setHeaders: (res, filePath) => {
+        // HTML should never be cached on deploy targets (stale dashboards cause confusion).
+        if (typeof filePath === 'string' && filePath.toLowerCase().endsWith('.html')) {
+          res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+          res.setHeader('Pragma', 'no-cache');
+        }
+      }
+    })
+  );
 
   // Named HTML routes + portal pages
   app.use(staticPagesRouter);

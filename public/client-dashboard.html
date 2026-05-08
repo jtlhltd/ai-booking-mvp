@@ -14716,15 +14716,11 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         : null;
                     return `<td data-col="${escapeHtml(slug)}">${formatFollowUpCell(c, row[c], row, extra)}</td>`;
                 }).join('');
-                const expToggle = phoneNorm
-                    ? `<button type="button" class="fu-mini-btn fu-mini-btn--muted" data-fu-expand="1" data-fu-phone="${escapeHtml(phoneNorm)}" aria-expanded="${isExpanded ? 'true' : 'false'}">${isExpanded ? 'Hide' : 'Show'} calls</button>`
-                    : '';
-                const expTd = `<td data-col="actions" class="fu-actions">${expToggle}</td>`;
-                const rowHtml = `<tr data-fu-key="${escapeHtml(key)}">${selTd}${tds}${expTd}</tr>`;
+                const rowHtml = `<tr data-fu-key="${escapeHtml(key)}">${selTd}${tds}</tr>`;
 
                 const expPanel = isExpanded
                     ? `<tr data-fu-expand-row="1" data-fu-phone="${escapeHtml(phoneNorm)}">
-                        <td colspan="${1 + cols.length + 1}">
+                            <td colspan="${1 + cols.length}">
                             <div style="padding:10px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2);display:flex;flex-direction:column;gap:10px;">
                                 <div class="meta-label">Call timeline + captured data</div>
                                 <div data-fu-expand-handoff="1">${followUpRenderHandoffStages(row)}</div>
@@ -15229,7 +15225,13 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const label = v || '—';
                 if (!v) return `<span class="fu-cell-actions"><span title="${escapeHtml(label)}">${escapeHtml(label)}</span>${followUpPencilBtn(col, !canEdit)}</span>`;
                 const chip = extra?.dupCount > 1 ? `<span class="fu-dup-chip" title="Duplicate phone appears ${extra.dupCount} times">Duplicate ×${extra.dupCount}</span>` : '';
-                return `<span class="fu-cell-actions">${followUpPhoneCellHtml(v, 'Copy phone number')}${chip}${followUpPencilBtn(col, !canEdit)}</span>`;
+                const phoneNorm = followUpNormalizePhoneKey(v);
+                const expanded = globalThis.__followUpExpandedPhones || (globalThis.__followUpExpandedPhones = new Set());
+                const isExpanded = phoneNorm && expanded.has(phoneNorm);
+                const expToggle = phoneNorm
+                    ? `<button type="button" class="fu-mini-btn fu-mini-btn--muted" data-fu-expand="1" data-fu-phone="${escapeHtml(phoneNorm)}" aria-expanded="${isExpanded ? 'true' : 'false'}">${isExpanded ? 'Hide' : 'Show'} calls</button>`
+                    : '';
+                return `<span class="fu-cell-actions">${followUpPhoneCellHtml(v, 'Copy phone number')}${chip}${expToggle}${followUpPencilBtn(col, !canEdit)}</span>`;
             }
             if (col === 'Called Number') {
                 const label = v || '—';
