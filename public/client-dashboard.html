@@ -14909,10 +14909,39 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const key = `${String(clientKey || '')}::${String(phoneNorm || '')}`;
             const tz = getOperationalTimezone(dashboardData);
 
+            const getRowPhoneKey = (r) => {
+                const calledRaw = String(r?.['Called Number'] || '').trim();
+                const phoneRaw = String(r?.Phone || '').trim();
+                const phoneKey = followUpNormalizePhoneKey(calledRaw) || followUpNormalizePhoneKey(phoneRaw) || calledRaw || phoneRaw;
+                return String(phoneKey || '').trim();
+            };
+
+            const normalizeDigits = (p) => String(p || '').replace(/\D+/g, '');
+            const wantDigits = normalizeDigits(phoneNorm);
+            const wantLast10 = wantDigits.length >= 10 ? wantDigits.slice(-10) : '';
+
+            const resolvedRow = row || (() => {
+                try {
+                    const rows = followUpQueueState?.rawRows || [];
+                    if (!rows.length) return null;
+                    for (const r of rows) {
+                        const pk = getRowPhoneKey(r);
+                        if (!pk) continue;
+                        if (pk === phoneNorm) return r;
+                        const d = normalizeDigits(pk);
+                        if (wantDigits && d === wantDigits) return r;
+                        if (wantLast10 && d.length >= 10 && d.slice(-10) === wantLast10) return r;
+                    }
+                    return null;
+                } catch {
+                    return null;
+                }
+            })();
+
             const handoffStageSnaps = (() => {
                 try {
-                    if (!row?._handoff) return [];
-                    const handoff = row._handoff;
+                    if (!resolvedRow?._handoff) return [];
+                    const handoff = resolvedRow._handoff;
                     const data = handoff?.dataJson || handoff?.data_json || null;
                     const obj = typeof data === 'object' ? data : (() => { try { return JSON.parse(String(data || '')); } catch { return null; } })();
                     const qual = obj?.qual || obj?.qualification || {};
@@ -14981,7 +15010,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     prevStructured = s.structuredData;
                 }
 
-                const title = businessName ? `<div class="meta-label">${escapeHtml(businessName)}</div>` : '';
+                const titleName = businessName || followUpCleanBusinessName(resolvedRow?.['Business Name']) || '';
+                const title = titleName ? `<div class="meta-label">${escapeHtml(titleName)}</div>` : '';
                 const summary = `<div class="tom-ab-test-meta"><strong>${escapeHtml(phoneNorm)}</strong> · ${escapeHtml(String(calls.length))} call(s) · ${escapeHtml(String(snaps.length))} sequence snapshot(s) · ${escapeHtml(String(handoffStageSnaps.length))} handoff stage snapshot(s)</div>`;
 
                 if (!calls.length) {
@@ -16254,7 +16284,11 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             e.stopImmediatePropagation();
                             followUpOpenCallHistoryModal({ phone: phoneKey });
                             const host = document.getElementById('followUpCallHistoryResults');
-                            followUpRenderCallHistoryInto(host, currentClient, phoneKey).catch(() => {});
+                            // Try to pass a row when the click originated inside a table row.
+                            const tr = callsBtn.closest('tr');
+                            const key = tr && tr.getAttribute('data-fu-key');
+                            const row = key ? followUpQueueState.rawRows.find((r) => followUpRowKey(r) === key) : null;
+                            followUpRenderCallHistoryInto(host, currentClient, phoneKey, { row }).catch(() => {});
                         }
                         return;
                     }
