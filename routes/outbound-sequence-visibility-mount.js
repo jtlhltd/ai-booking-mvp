@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { phoneMatchKey as phoneMatchKeyLib } from '../lib/lead-phone-key.js';
+import crypto from 'crypto';
 
 export function createOutboundSequenceVisibilityRouter(deps) {
   const { query, getFullClient, isPostgres, phoneMatchKey } = deps || {};
@@ -12,6 +13,33 @@ export function createOutboundSequenceVisibilityRouter(deps) {
     return Math.max(lo, Math.min(hi, v));
   }
 
+  function previewRedacted(text, { maxLen = 120 } = {}) {
+    const raw = text == null ? '' : String(text);
+    const s = raw.trim();
+    const length = s.length;
+    const preview = length > 0 ? `${s.slice(0, maxLen)}${length > maxLen ? '…' : ''}` : '';
+    const sha = length > 0 ? crypto.createHash('sha256').update(s).digest('hex').slice(0, 10) : '';
+    return { length, preview, sha };
+  }
+
+  function buildSequenceConfigExplain(client) {
+    const explain = {
+      killSwitchActive: false,
+      enabled: false,
+      maxTotalDialsPerLead: null,
+      maxSequenceDurationDays: null,
+      stages: [],
+      errors: [],
+    };
+    try {
+      // Lazy import to keep module side effects minimal.
+      // eslint-disable-next-line no-unused-vars
+    } catch {
+      /* ignore */
+    }
+    return explain;
+  }
+
   router.get('/outbound-sequence/:clientKey/summary', async (req, res) => {
     try {
       res.set('Cache-Control', 'no-store');
@@ -19,10 +47,46 @@ export function createOutboundSequenceVisibilityRouter(deps) {
       const client = await getFullClient?.(clientKey, { bypassCache: false }).catch(() => null);
       if (!client) return res.status(404).json({ ok: false, error: 'client_not_found' });
 
+      const {
+        getValidatedOutboundSequence,
+        validateOutboundSequenceConfig,
+        isOutboundSequenceGloballyDisabled,
+      } = await import('../lib/outbound-sequence.js');
+      const killSwitchActive = isOutboundSequenceGloballyDisabled();
+      const validated = getValidatedOutboundSequence(client);
+      const raw = client?.outboundSequence;
+      const v = raw && typeof raw === 'object' ? validateOutboundSequenceConfig(raw) : { ok: false, errors: ['outboundSequence missing'] };
+      const cfgStages = Array.isArray(validated?.stages) ? validated.stages : [];
+      const stagesExplain = cfgStages.map((st) => {
+        const first = previewRedacted(st?.firstMessage, { maxLen: 120 });
+        const sys = previewRedacted(st?.systemMessage, { maxLen: 120 });
+        return {
+          id: st?.id || '',
+          isFinal: st?.isFinal === true,
+          nextStage: st?.nextStage || null,
+          requiredFields: Array.isArray(st?.requiredFields) ? st.requiredFields : [],
+          maxAttemptsInStage: st?.maxAttemptsInStage != null ? Number(st.maxAttemptsInStage) : null,
+          scheduling: st?.scheduling && typeof st.scheduling === 'object' ? st.scheduling : null,
+          promptRedacted: {
+            firstMessage: { preview: first.preview, length: first.length, sha: first.sha },
+            systemMessage: { preview: sys.preview, length: sys.length, sha: sys.sha },
+          },
+        };
+      });
+
       if (!isPostgres) {
         return res.json({
           ok: true,
           clientKey,
+          sequence: {
+            killSwitchActive,
+            enabled: validated?.enabled === true,
+            maxTotalDialsPerLead: validated?.maxTotalDialsPerLead ?? null,
+            maxSequenceDurationDays: validated?.maxSequenceDurationDays ?? null,
+            stages: stagesExplain,
+            configValid: !!validated,
+            configErrors: v.ok ? [] : (v.errors || []),
+          },
           summary: {
             activeSequences: 0,
             completedToday: 0,
@@ -64,6 +128,15 @@ export function createOutboundSequenceVisibilityRouter(deps) {
       return res.json({
         ok: true,
         clientKey,
+        sequence: {
+          killSwitchActive,
+          enabled: validated?.enabled === true,
+          maxTotalDialsPerLead: validated?.maxTotalDialsPerLead ?? null,
+          maxSequenceDurationDays: validated?.maxSequenceDurationDays ?? null,
+          stages: stagesExplain,
+          configValid: !!validated,
+          configErrors: v.ok ? [] : (v.errors || []),
+        },
         summary: {
           activeSequences: parseInt(r.active_sequences, 10) || 0,
           completedToday: parseInt(r.completed_today, 10) || 0,
@@ -118,7 +191,29 @@ export function createOutboundSequenceVisibilityRouter(deps) {
         return { ...r, stagesCompleted: stages };
       });
 
-      return res.json({ ok: true, clientKey, limit, offset, rows: out });
+      const { getValidatedOutboundSequence, validateOutboundSequenceConfig, isOutboundSequenceGloballyDisabled } =
+        await import('../lib/outbound-sequence.js');
+      const killSwitchActive = isOutboundSequenceGloballyDisabled();
+      const validated = getValidatedOutboundSequence(client);
+      const raw = client?.outboundSequence;
+      const v = raw && typeof raw === 'object' ? validateOutboundSequenceConfig(raw) : { ok: false, errors: ['outboundSequence missing'] };
+
+      return res.json({
+        ok: true,
+        clientKey,
+        limit,
+        offset,
+        sequence: {
+          killSwitchActive,
+          enabled: validated?.enabled === true,
+          maxTotalDialsPerLead: validated?.maxTotalDialsPerLead ?? null,
+          maxSequenceDurationDays: validated?.maxSequenceDurationDays ?? null,
+          stageCount: Array.isArray(validated?.stages) ? validated.stages.length : 0,
+          configValid: !!validated,
+          configErrors: v.ok ? [] : (v.errors || []),
+        },
+        rows: out,
+      });
     } catch (error) {
       console.error('[OUTBOUND SEQUENCE LEADS ERROR]', error);
       return res.status(500).json({ ok: false, error: 'outbound_sequence_leads_failed', message: error?.message || String(error) });
@@ -131,6 +226,18 @@ export function createOutboundSequenceVisibilityRouter(deps) {
       const { clientKey, phone } = req.params;
       const client = await getFullClient?.(clientKey, { bypassCache: false }).catch(() => null);
       if (!client) return res.status(404).json({ ok: false, error: 'client_not_found' });
+
+      const {
+        getValidatedOutboundSequence,
+        getStageById,
+        validateOutboundSequenceConfig,
+        isOutboundSequenceGloballyDisabled,
+        isStageComplete,
+      } = await import('../lib/outbound-sequence.js');
+      const killSwitchActive = isOutboundSequenceGloballyDisabled();
+      const validated = getValidatedOutboundSequence(client);
+      const raw = client?.outboundSequence;
+      const v = raw && typeof raw === 'object' ? validateOutboundSequenceConfig(raw) : { ok: false, errors: ['outboundSequence missing'] };
 
       const rowRes = await query(
         `
@@ -153,7 +260,22 @@ export function createOutboundSequenceVisibilityRouter(deps) {
         [clientKey, String(phone || '').trim()]
       );
       const row = rowRes?.rows?.[0] || null;
-      if (!row) return res.json({ ok: true, clientKey, phone, row: null, nextQueue: null });
+      if (!row) {
+        return res.json({
+          ok: true,
+          clientKey,
+          phone,
+          sequence: {
+            killSwitchActive,
+            enabled: validated?.enabled === true,
+            configValid: !!validated,
+            configErrors: v.ok ? [] : (v.errors || []),
+          },
+          row: null,
+          nextQueue: null,
+          explain: null,
+        });
+      }
 
       let stages = row.stagesCompleted;
       if (typeof stages === 'string') {
@@ -187,14 +309,91 @@ export function createOutboundSequenceVisibilityRouter(deps) {
         );
         const qr = qRes?.rows?.[0] || null;
         if (qr) {
+          const cd = qr.callData && typeof qr.callData === 'object' ? qr.callData : {};
           nextQueue = {
             id: qr.id,
             status: qr.status,
             scheduledFor: qr.scheduledFor ? new Date(qr.scheduledFor).toISOString() : null,
             callData: qr.callData,
+            triggerType: cd?.triggerType || null,
+            stageId: cd?.stageId || null,
+            prevCallId: cd?.prevCallId || null,
           };
         }
       }
+
+      const currentStageId = String(row.currentStageId || '').trim();
+      const stage = validated && currentStageId ? getStageById(client, currentStageId) : null;
+      const reqFields = Array.isArray(stage?.requiredFields) ? stage.requiredFields : [];
+      const lastCompletedStageSnapshot = stages.length ? stages[stages.length - 1] : null;
+      const lastStructured = lastCompletedStageSnapshot?.structuredData && typeof lastCompletedStageSnapshot.structuredData === 'object'
+        ? lastCompletedStageSnapshot.structuredData
+        : {};
+
+      const requiredFieldsStatus = reqFields.map((f) => {
+        const key = String(f || '').trim();
+        const val = key ? lastStructured[key] : undefined;
+        const present = val != null && !(typeof val === 'string' && !String(val).trim());
+        return { field: key, present, value: val ?? null };
+      });
+
+      let lastOutcome = null;
+      try {
+        if (isPostgres && row.lastCallId) {
+          const oRes = await query(
+            `
+            SELECT outcome, status, duration, created_at AS "createdAt"
+            FROM calls
+            WHERE client_key = $1 AND call_id = $2
+            LIMIT 1
+          `,
+            [clientKey, row.lastCallId]
+          );
+          const or = oRes?.rows?.[0] || null;
+          if (or) {
+            lastOutcome = {
+              outcome: or.outcome || null,
+              status: or.status || null,
+              duration: or.duration != null ? Number(or.duration) : null,
+              createdAt: or.createdAt ? new Date(or.createdAt).toISOString() : null,
+            };
+          }
+        }
+      } catch {
+        /* best-effort */
+      }
+
+      const outcomeLower = String(lastOutcome?.outcome || '').toLowerCase();
+      const outcomeExcluded = !!outcomeLower && ['voicemail', 'no-answer', 'busy', 'declined', 'failed'].includes(outcomeLower);
+      const stageComplete = stage ? isStageComplete(stage, lastStructured) : false;
+      const maxDials = Number(validated?.maxTotalDialsPerLead ?? 999) || 999;
+      const maxDays = Number(validated?.maxSequenceDurationDays ?? 999) || 999;
+      const nextTotal = (Number(row.attemptsTotal) || 0) + 1;
+      const capExceeded = nextTotal > maxDials;
+      const startedAt = row.startedAt ? new Date(row.startedAt) : null;
+      const durationExceeded =
+        startedAt && Number.isFinite(startedAt.getTime())
+          ? Date.now() - startedAt.getTime() > maxDays * 24 * 60 * 60 * 1000
+          : false;
+
+      const stageExplain = stage
+        ? (() => {
+            const first = previewRedacted(stage?.firstMessage, { maxLen: 120 });
+            const sys = previewRedacted(stage?.systemMessage, { maxLen: 120 });
+            return {
+              id: stage?.id || '',
+              isFinal: stage?.isFinal === true,
+              nextStage: stage?.nextStage || null,
+              requiredFields: reqFields,
+              maxAttemptsInStage: stage?.maxAttemptsInStage != null ? Number(stage.maxAttemptsInStage) : null,
+              scheduling: stage?.scheduling && typeof stage.scheduling === 'object' ? stage.scheduling : null,
+              promptRedacted: {
+                firstMessage: { preview: first.preview, length: first.length, sha: first.sha },
+                systemMessage: { preview: sys.preview, length: sys.length, sha: sys.sha },
+              },
+            };
+          })()
+        : null;
 
       return res.json({
         ok: true,
@@ -202,6 +401,35 @@ export function createOutboundSequenceVisibilityRouter(deps) {
         phone,
         row: { ...row, stagesCompleted: stages },
         nextQueue,
+        sequence: {
+          killSwitchActive,
+          enabled: validated?.enabled === true,
+          maxTotalDialsPerLead: validated?.maxTotalDialsPerLead ?? null,
+          maxSequenceDurationDays: validated?.maxSequenceDurationDays ?? null,
+          stageCount: Array.isArray(validated?.stages) ? validated.stages.length : 0,
+          configValid: !!validated,
+          configErrors: v.ok ? [] : (v.errors || []),
+        },
+        explain: {
+          stage: stageExplain,
+          lastOutcome,
+          lastCompletedStageSnapshot,
+          currentStage: {
+            requiredFieldsStatus,
+          },
+          completionGate: {
+            outcomeExcluded,
+            stageComplete,
+            capExceeded,
+            durationExceeded,
+            // stored nowhere today; we can only mirror it if future work persists it
+            noUsefulOutcome: false,
+          },
+          caveats: [
+            'requiredFieldsStatus is evaluated against the most recent completed stage snapshot (structuredData) stored in lead_sequence_state.',
+            'the webhook uses fresh structured fields from Vapi end-of-call; incomplete stages may not have stored structuredData yet.',
+          ],
+        },
       });
     } catch (error) {
       console.error('[OUTBOUND SEQUENCE PHONE ERROR]', error);

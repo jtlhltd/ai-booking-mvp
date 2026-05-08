@@ -6923,22 +6923,38 @@
                     <button type="button" id="outboundSequenceRefresh" class="export-btn secondary" style="padding:6px 10px;font-size:12px;">Refresh</button>
                 </div>
 
-                <div id="outboundSequenceSummary" class="outreach-strip-facts" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;"></div>
-
-                <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
-                    <label style="display:flex;flex-direction:column;gap:4px;font-size:0.85rem;min-width:240px;">
-                        Lead phone (E.164 or local)
-                        <input type="text" id="outboundSequencePhoneInput" autocomplete="off" spellcheck="false" style="padding:8px;border-radius:8px;border:1px solid var(--border);" placeholder="+44… or 07…" />
-                    </label>
-                    <button type="button" id="outboundSequenceLookupBtn" class="export-btn secondary">Lookup</button>
-                    <small id="outboundSequenceLookupMsg" style="color:var(--muted);"></small>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                    <button type="button" id="outboundSequenceTabRuntime" class="export-btn secondary" data-seq-tab="runtime" aria-pressed="true">Runtime</button>
+                    <button type="button" id="outboundSequenceTabConfig" class="export-btn secondary" data-seq-tab="config" aria-pressed="false">Config</button>
+                    <small id="outboundSequenceMeta" style="color:var(--muted);"></small>
                 </div>
 
-                <div id="outboundSequenceLeadDetail" class="thin-scroll" style="max-height:320px;border:1px solid var(--border);border-radius:12px;padding:10px;background:var(--surface-2);"></div>
+                <div id="outboundSequenceTabRuntimePanel">
+                    <div id="outboundSequenceSummary" class="outreach-strip-facts" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;"></div>
 
-                <div>
-                    <div class="meta-label" style="margin-bottom:6px;">Recently updated sequences</div>
-                    <div id="outboundSequenceRecentList" class="thin-scroll" style="max-height:260px;border:1px solid var(--border);border-radius:12px;padding:8px;background:var(--surface-2);"></div>
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+                        <label style="display:flex;flex-direction:column;gap:4px;font-size:0.85rem;min-width:240px;">
+                            Lead phone (E.164 or local)
+                            <input type="text" id="outboundSequencePhoneInput" autocomplete="off" spellcheck="false" style="padding:8px;border-radius:8px;border:1px solid var(--border);" placeholder="+44… or 07…" />
+                        </label>
+                        <button type="button" id="outboundSequenceLookupBtn" class="export-btn secondary">Lookup</button>
+                        <small id="outboundSequenceLookupMsg" style="color:var(--muted);"></small>
+                    </div>
+
+                    <div id="outboundSequenceLeadDetail" class="thin-scroll" style="max-height:380px;border:1px solid var(--border);border-radius:12px;padding:10px;background:var(--surface-2);"></div>
+
+                    <div>
+                        <div class="meta-label" style="margin-bottom:6px;">Recently updated sequences</div>
+                        <div id="outboundSequenceRecentList" class="thin-scroll" style="max-height:260px;border:1px solid var(--border);border-radius:12px;padding:8px;background:var(--surface-2);"></div>
+                    </div>
+                </div>
+
+                <div id="outboundSequenceTabConfigPanel" hidden>
+                    <div id="outboundSequenceConfigSummary" class="outreach-strip-facts" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;"></div>
+                    <div style="margin-top:10px;">
+                        <div class="meta-label" style="margin-bottom:6px;">Stages (what’s implemented)</div>
+                        <div id="outboundSequenceStagesList" class="thin-scroll" style="max-height:420px;border:1px solid var(--border);border-radius:12px;padding:10px;background:var(--surface-2);"></div>
+                    </div>
                 </div>
             </article>
         </section>
@@ -8345,6 +8361,92 @@
             ].join('');
         }
 
+        function renderOutboundSequenceConfig(sequence, configStages = []) {
+            const summaryHost = document.getElementById('outboundSequenceConfigSummary');
+            const stagesHost = document.getElementById('outboundSequenceStagesList');
+            const meta = document.getElementById('outboundSequenceMeta');
+            if (meta) {
+                const ks = sequence?.killSwitchActive === true ? 'kill switch ON' : 'kill switch off';
+                const en = sequence?.enabled === true ? 'enabled' : 'disabled';
+                meta.textContent = `Sequence: ${en} · ${ks}`;
+            }
+            if (summaryHost) {
+                const fact = (label, value, hint = '') => `
+                    <dl class="outreach-strip-fact">
+                        <dt>${escapeHtml(label)}</dt>
+                        <dd title="${escapeHtml(hint)}">${escapeHtml(String(value ?? '—'))}</dd>
+                    </dl>
+                `;
+                summaryHost.innerHTML = [
+                    fact('Enabled', sequence?.enabled === true ? 'Yes' : 'No', 'tenant outboundSequence.enabled'),
+                    fact('Kill switch', sequence?.killSwitchActive === true ? 'ON' : 'off', 'OUTBOUND_SEQUENCE_DISABLED env'),
+                    fact('Cap: total dials', sequence?.maxTotalDialsPerLead ?? '—', 'maxTotalDialsPerLead'),
+                    fact('Cap: duration days', sequence?.maxSequenceDurationDays ?? '—', 'maxSequenceDurationDays'),
+                    fact('Stages', formatNumber(sequence?.stageCount ?? (Array.isArray(sequence?.stages) ? sequence.stages.length : 0)), 'number of stage configs'),
+                    fact('Config valid', sequence?.configValid === true ? 'Yes' : 'No', (sequence?.configErrors || []).join(' · ')),
+                ].join('');
+            }
+            if (!stagesHost) return;
+            const stages = Array.isArray(configStages) ? configStages : (Array.isArray(sequence?.stages) ? sequence.stages : []);
+            if (!stages.length) {
+                stagesHost.innerHTML = '<div class="empty-state-message" style="padding:8px;">No stages configured for this tenant.</div>';
+                return;
+            }
+            stagesHost.innerHTML = stages.map((st, idx) => {
+                const req = Array.isArray(st.requiredFields) ? st.requiredFields : [];
+                const sched = st.scheduling && typeof st.scheduling === 'object' ? st.scheduling : null;
+                const firstPrev = st?.promptRedacted?.firstMessage?.preview || '';
+                const sysPrev = st?.promptRedacted?.systemMessage?.preview || '';
+                const firstLen = st?.promptRedacted?.firstMessage?.length ?? null;
+                const sysLen = st?.promptRedacted?.systemMessage?.length ?? null;
+                const firstSha = st?.promptRedacted?.firstMessage?.sha ?? '';
+                const sysSha = st?.promptRedacted?.systemMessage?.sha ?? '';
+                const delayLine =
+                    sched && (sched.minDelayMinutesBeforeNext != null || sched.maxDelayMinutesBeforeNext != null)
+                        ? `Delay: ${escapeHtml(String(sched.minDelayMinutesBeforeNext ?? '—'))}–${escapeHtml(String(sched.maxDelayMinutesBeforeNext ?? '—'))} min`
+                        : 'Delay: —';
+                const linkLine = st.isFinal === true ? 'Final stage' : `Next: ${escapeHtml(st.nextStage || '—')}`;
+                return `
+                    <div style="border:1px solid var(--border);border-radius:12px;padding:10px;margin:0 0 10px 0;">
+                        <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                            <div><strong>${escapeHtml(st.id || `stage_${idx + 1}`)}</strong> <span class="tom-ab-test-meta">· ${escapeHtml(linkLine)} · maxAttempts ${escapeHtml(String(st.maxAttemptsInStage ?? '—'))}</span></div>
+                            <div class="tom-ab-test-meta">${escapeHtml(delayLine)}</div>
+                        </div>
+                        <div class="tom-ab-test-meta" style="margin-top:6px;">Required fields: ${req.length ? req.map(escapeHtml).join(', ') : '—'}</div>
+                        <details style="margin-top:8px;">
+                            <summary style="cursor:pointer;color:var(--muted);font-size:0.9rem;">Prompts (redacted previews)</summary>
+                            <div style="margin-top:8px;display:grid;gap:10px;">
+                                <div>
+                                    <div class="meta-label">firstMessage</div>
+                                    <div class="tom-ab-test-meta"><code>${escapeHtml(firstPrev)}</code></div>
+                                    <div class="tom-ab-test-meta">len=${escapeHtml(String(firstLen ?? '—'))} · sha=${escapeHtml(String(firstSha || '—'))}</div>
+                                </div>
+                                <div>
+                                    <div class="meta-label">systemMessage</div>
+                                    <div class="tom-ab-test-meta"><code>${escapeHtml(sysPrev)}</code></div>
+                                    <div class="tom-ab-test-meta">len=${escapeHtml(String(sysLen ?? '—'))} · sha=${escapeHtml(String(sysSha || '—'))}</div>
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderOutboundSequenceStageGraph(sequenceStages = [], currentStageId = '') {
+            const stages = Array.isArray(sequenceStages) ? sequenceStages : [];
+            if (!stages.length) return '';
+            const cur = String(currentStageId || '').trim();
+            const chips = stages.map((st) => {
+                const sid = String(st?.id || '').trim() || '—';
+                const active = cur && sid === cur;
+                return `<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;border:1px solid var(--border-strong);background:${active ? 'var(--surface)' : 'var(--surface-3)'};font-size:0.85rem;">
+                    ${escapeHtml(sid)}${active ? ' <strong>(current)</strong>' : ''}
+                </span>`;
+            });
+            return `<div style="display:flex;gap:8px;flex-wrap:wrap;">${chips.join('<span class="tom-ab-test-meta">→</span>')}</div>`;
+        }
+
         function renderOutboundSequenceRecentList(rows) {
             const host = document.getElementById('outboundSequenceRecentList');
             if (!host) return;
@@ -8380,9 +8482,48 @@
             const tz = getOperationalTimezone(dashboardData);
             const stages = Array.isArray(row.stagesCompleted) ? row.stagesCompleted : [];
             const nextQueue = payload?.nextQueue || null;
+            const seq = payload?.sequence || {};
+            const explain = payload?.explain || {};
+            const configStages = Array.isArray(seq?.stages) ? seq.stages : [];
             const nextLine = nextQueue
                 ? `Next queued: <strong>${escapeHtml(nextQueue.status || 'pending')}</strong> · ${escapeHtml(nextQueue.scheduledFor ? formatRelativeWithAbsolute(nextQueue.scheduledFor, tz) : '—')}`
                 : 'Next queued: —';
+            const nextMeta = nextQueue
+                ? `<div class="tom-ab-test-meta">Queue details: triggerType=<code>${escapeHtml(nextQueue.triggerType || '—')}</code> · stageId=<code>${escapeHtml(nextQueue.stageId || '—')}</code> · prevCallId=<code>${escapeHtml(nextQueue.prevCallId || '—')}</code></div>`
+                : '';
+
+            const gate = explain?.completionGate || {};
+            const gateLine = `
+                <div class="meta-label" style="margin-top:10px;">Why (debug)</div>
+                <div class="tom-ab-test-meta">
+                    outcomeExcluded=<strong>${escapeHtml(String(gate.outcomeExcluded === true))}</strong> ·
+                    stageComplete=<strong>${escapeHtml(String(gate.stageComplete === true))}</strong> ·
+                    capExceeded=<strong>${escapeHtml(String(gate.capExceeded === true))}</strong> ·
+                    durationExceeded=<strong>${escapeHtml(String(gate.durationExceeded === true))}</strong>
+                </div>
+                <div class="tom-ab-test-meta">Caveat: stageComplete is evaluated from stored structured snapshots; webhook uses fresh end-of-call structured fields.</div>
+            `;
+
+            const reqStatus = Array.isArray(explain?.currentStage?.requiredFieldsStatus)
+                ? explain.currentStage.requiredFieldsStatus
+                : [];
+            const reqHtml = reqStatus.length
+                ? `<ul style="margin:6px 0 0 18px;padding:0;display:flex;flex-direction:column;gap:6px;">${
+                    reqStatus.map((it) => {
+                        const ok = it.present === true;
+                        const v = it.value;
+                        const valTxt = v == null ? '' : (typeof v === 'string' ? v : JSON.stringify(v));
+                        return `<li><strong>${escapeHtml(it.field || '')}</strong> <span class="tom-ab-test-meta">· ${ok ? 'present' : 'missing'}${valTxt ? ` · <code>${escapeHtml(valTxt).slice(0, 220)}${valTxt.length > 220 ? '…' : ''}</code>` : ''}</span></li>`;
+                    }).join('')
+                }</ul>`
+                : '<div class="tom-ab-test-meta" style="margin-top:6px;">No requiredFields configured for this stage (or sequence disabled).</div>';
+
+            const stageGraph = renderOutboundSequenceStageGraph(configStages, row.currentStageId || '');
+
+            const lastOutcome = explain?.lastOutcome || null;
+            const lastOutcomeLine = lastOutcome
+                ? `<div class="tom-ab-test-meta">Last call: outcome=<code>${escapeHtml(lastOutcome.outcome || '—')}</code> · status=<code>${escapeHtml(lastOutcome.status || '—')}</code> · duration=${escapeHtml(String(lastOutcome.duration ?? '—'))}s · ${escapeHtml(lastOutcome.createdAt ? formatRelativeWithAbsolute(lastOutcome.createdAt, tz) : '')}</div>`
+                : '<div class="tom-ab-test-meta">Last call: —</div>';
             const stagesHtml = stages.length
                 ? `<ol style="margin:8px 0 0 18px;padding:0;display:flex;flex-direction:column;gap:6px;">${
                     stages.map((s) => {
@@ -8401,8 +8542,14 @@
                     <div><strong>${escapeHtml(row.leadPhone || '')}</strong> <span class="tom-ab-test-meta">· ${escapeHtml(row.status || '')}</span></div>
                     <div class="tom-ab-test-meta">Current stage: <strong>${escapeHtml(row.currentStageId || '—')}</strong></div>
                     <div class="tom-ab-test-meta">Attempts: ${escapeHtml(formatNumber(row.attemptsInStage ?? 0))} in stage · ${escapeHtml(formatNumber(row.attemptsTotal ?? 0))} total</div>
+                    ${lastOutcomeLine}
                     <div class="tom-ab-test-meta">${nextLine}</div>
+                    ${nextMeta}
                     <div class="tom-ab-test-meta">Next stage scheduled: <strong>${escapeHtml(row.nextStageScheduledFor ? formatRelativeWithAbsolute(row.nextStageScheduledFor, tz) : '—')}</strong></div>
+                    ${stageGraph ? `<div style="margin-top:8px;">${stageGraph}</div>` : ''}
+                    ${gateLine}
+                    <div class="meta-label" style="margin-top:10px;">Required fields (current stage)</div>
+                    ${reqHtml}
                     <div class="meta-label" style="margin-top:6px;">Stages completed</div>
                     ${stagesHtml}
                 </div>
@@ -8424,6 +8571,7 @@
                 ]);
                 if (summaryRes?.ok) renderOutboundSequenceSummary(summaryRes.summary || {});
                 if (leadsRes?.ok) renderOutboundSequenceRecentList(leadsRes.rows || []);
+                if (summaryRes?.ok) renderOutboundSequenceConfig(summaryRes.sequence || {}, summaryRes.sequence?.stages || []);
 
                 if (phoneLookup) {
                     const detailRes = await fetch(
@@ -8446,6 +8594,20 @@
             const input = document.getElementById('outboundSequencePhoneInput');
             const msg = document.getElementById('outboundSequenceLookupMsg');
             const recent = document.getElementById('outboundSequenceRecentList');
+            const tabRuntime = document.getElementById('outboundSequenceTabRuntime');
+            const tabConfig = document.getElementById('outboundSequenceTabConfig');
+            const runtimePanel = document.getElementById('outboundSequenceTabRuntimePanel');
+            const configPanel = document.getElementById('outboundSequenceTabConfigPanel');
+
+            const setTab = (tab) => {
+                const isCfg = tab === 'config';
+                if (runtimePanel) runtimePanel.hidden = isCfg;
+                if (configPanel) configPanel.hidden = !isCfg;
+                if (tabRuntime) tabRuntime.setAttribute('aria-pressed', isCfg ? 'false' : 'true');
+                if (tabConfig) tabConfig.setAttribute('aria-pressed', isCfg ? 'true' : 'false');
+            };
+            if (tabRuntime) tabRuntime.addEventListener('click', () => setTab('runtime'));
+            if (tabConfig) tabConfig.addEventListener('click', () => setTab('config'));
 
             if (refreshBtn) {
                 refreshBtn.addEventListener('click', () => refreshOutboundSequenceWindow(currentClient));
