@@ -15393,8 +15393,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const canEdit = row && typeof row._row === 'number';
             if (col === 'Business Name') {
                 const label = v || '—';
+                const calledRaw = String(row?.['Called Number'] || '').trim();
                 const phoneRaw = String(row?.Phone || '').trim();
-                const phoneKey = followUpNormalizePhoneKey(phoneRaw) || phoneRaw;
+                const phoneKey = followUpNormalizePhoneKey(calledRaw) || followUpNormalizePhoneKey(phoneRaw) || calledRaw || phoneRaw;
                 const drill = phoneKey
                     ? `<button type="button" class="fu-drilldown-btn" data-fu-drilldown="1" data-fu-phone="${escapeHtml(phoneKey)}" data-fu-biz="${escapeHtml(label)}" title="Open call history">${escapeHtml(label)}</button>`
                     : `<span title="${escapeHtml(label)}">${escapeHtml(label)}</span>`;
@@ -15478,8 +15479,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const callId = String(row?.['Call ID'] || '').trim();
                 const nm = String(row?.['Business Name'] || row?.['Decision Maker'] || row?.Phone || 'Prospect').trim();
                 const btn = callId ? `<button type="button" class="fu-transcript-btn" data-fu-transcript="${escapeHtml(callId)}" data-fu-name="${escapeHtml(nm)}">Transcript</button>` : '';
+                const calledRaw = String(row?.['Called Number'] || '').trim();
                 const phoneRaw = String(row?.Phone || '').trim();
-                const phoneKey = followUpNormalizePhoneKey(phoneRaw) || phoneRaw;
+                const phoneKey = followUpNormalizePhoneKey(calledRaw) || followUpNormalizePhoneKey(phoneRaw) || calledRaw || phoneRaw;
                 const callsBtn = phoneKey
                     ? `<button type="button" class="fu-transcript-btn" data-fu-callhistory="1" data-fu-phone="${escapeHtml(phoneKey)}">Calls</button>`
                     : '';
@@ -16152,8 +16154,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         const tr = tdBiz.closest('tr');
                         const key = tr && tr.getAttribute('data-fu-key');
                         const row = key ? followUpQueueState.rawRows.find((r) => followUpRowKey(r) === key) : null;
+                        const calledRaw = String(row?.['Called Number'] || '').trim();
                         const phoneRaw = String(row?.Phone || '').trim();
-                        const phoneKey = followUpNormalizePhoneKey(phoneRaw) || phoneRaw;
+                        const phoneKey = followUpNormalizePhoneKey(calledRaw) || followUpNormalizePhoneKey(phoneRaw) || calledRaw || phoneRaw;
                         const businessName = String(row?.['Business Name'] || '').trim();
                         if (phoneKey) {
                             e.preventDefault();
