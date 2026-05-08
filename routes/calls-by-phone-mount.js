@@ -6,6 +6,19 @@ export function createCallsByPhoneRouter(deps) {
   const router = express.Router();
   const callsDomain = createCallsDomain({ query, getCallAnalyticsFloorIso: null });
 
+  function safeParseJsonObject(v) {
+    if (!v) return null;
+    if (typeof v === 'object') return v;
+    const s = String(v || '').trim();
+    if (!s) return null;
+    try {
+      const parsed = JSON.parse(s);
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
   function clampInt(n, lo, hi, fallback) {
     const v = parseInt(String(n), 10);
     if (!Number.isFinite(v)) return fallback;
@@ -36,7 +49,7 @@ export function createCallsByPhoneRouter(deps) {
         retryAttempt: r.retry_attempt != null ? Number(r.retry_attempt) : null,
         transcriptSnippet: r.transcript || null,
         recordingUrl: r.recording_url || r.recordingUrl || null,
-        metadata: r.metadata || null,
+        metadata: safeParseJsonObject(r.metadata) || (r.metadata && typeof r.metadata === 'object' ? r.metadata : null),
         createdAt: r.created_at ? new Date(r.created_at).toISOString() : (r.createdAt ? new Date(r.createdAt).toISOString() : null),
         updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : (r.updatedAt ? new Date(r.updatedAt).toISOString() : null),
       }));

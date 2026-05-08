@@ -15113,8 +15113,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                                     const m = c?.metadata && typeof c.metadata === 'object' ? c.metadata : null;
                                     const cap = m?.structuredExtract?.captured;
                                     if (!cap || typeof cap !== 'object') return null;
-                                    const keys = Object.keys(cap).filter((k) => String(cap[k] || '').trim() !== '');
-                                    if (!keys.length) return null;
+                                    // Treat presence of structuredExtract as a per-call snapshot even if it captured 0 fields.
+                                    // This avoids misleading "no per-call snapshot" when we did persist extraction metadata.
                                     return {
                                         source: 'call',
                                         stageId: 'structuredExtract',
