@@ -64,6 +64,16 @@ export async function ensurePostgresCoreSchema(pool) {
       END IF;
     END $$;
 
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'leads' AND column_name = 'lead_dial_context_json'
+      ) THEN
+        ALTER TABLE leads ADD COLUMN lead_dial_context_json JSONB;
+      END IF;
+    END $$;
+
     CREATE TABLE IF NOT EXISTS appointments (
       id BIGSERIAL PRIMARY KEY,
       client_key TEXT NOT NULL REFERENCES tenants(client_key) ON DELETE CASCADE,

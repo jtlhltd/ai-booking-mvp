@@ -124,6 +124,15 @@ export function ensureSqliteCoreSchema(sqlite) {
   } catch (e) {
     console.warn('[sqlite] tenants.outbound_sequence_json migration:', e?.message || e);
   }
+  try {
+    const leadCols = sqlite.prepare(`PRAGMA table_info(leads)`).all();
+    const hasDialCtx = leadCols.some((c) => c.name === 'lead_dial_context_json');
+    if (!hasDialCtx) {
+      sqlite.exec(`ALTER TABLE leads ADD COLUMN lead_dial_context_json TEXT`);
+    }
+  } catch (e) {
+    console.warn('[sqlite] leads.lead_dial_context_json migration:', e?.message || e);
+  }
 }
 
 export function ensureSqliteCallQueueAndQualityAlertsTables(sqlite) {
