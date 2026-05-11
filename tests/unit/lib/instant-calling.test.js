@@ -6,6 +6,7 @@ const rollbackOutboundWeekdayJourneySlot = jest.fn(async () => {});
 const cancelDuplicatePendingCalls = jest.fn(async () => 0);
 const inferOutboundAbExperimentNamesForDimensions = jest.fn(async () => ({}));
 const inferOutboundAbExperimentName = jest.fn(async () => null);
+const getLeadSequenceState = jest.fn(async () => null);
 const upsertCall = jest.fn(async () => {});
 
 jest.unstable_mockModule('../../../lib/business-hours.js', () => ({
@@ -18,6 +19,7 @@ jest.unstable_mockModule('../../../db.js', () => ({
   cancelDuplicatePendingCalls,
   inferOutboundAbExperimentNamesForDimensions,
   inferOutboundAbExperimentName,
+  getLeadSequenceState,
   upsertCall,
   query: jest.fn(async () => ({ rows: [] }))
 }));
@@ -36,7 +38,14 @@ const selectABTestVariantForLead = jest.fn(async () => null);
 jest.unstable_mockModule('../../../lib/outbound-ab-variant.js', () => ({
   selectABTestVariantForLead,
   buildAssistantOverridesFromVariantConfig: () => ({ overrides: {} }),
-  mergeAssistantOverrides: (a, b) => ({ ...(a || {}), ...(b || {}) })
+  mergeAssistantOverrides: (a, b) => ({
+    ...(a || {}),
+    ...(b || {}),
+    variableValues: {
+      ...((a && typeof a.variableValues === 'object') ? a.variableValues : {}),
+      ...((b && typeof b.variableValues === 'object') ? b.variableValues : {})
+    }
+  })
 }));
 
 jest.unstable_mockModule('../../../lib/outbound-ab-focus.js', () => ({
@@ -60,6 +69,8 @@ describe('instant-calling', () => {
     isBusinessHoursForTenant.mockImplementation(() => true);
     claimOutboundWeekdayJourneySlot.mockResolvedValue({ ok: true });
     fetchWithTimeout.mockReset();
+    getLeadSequenceState.mockReset();
+    getLeadSequenceState.mockResolvedValue(null);
     process.env.VAPI_PRIVATE_KEY = 'k';
     process.env.VAPI_ASSISTANT_ID = 'asst';
     process.env.VAPI_PHONE_NUMBER_ID = 'ph';
@@ -195,6 +206,67 @@ describe('instant-calling', () => {
     expect(r.ok).toBe(false);
     expect(r.error).toBe('vapi_client_error');
     expect(rollbackOutboundWeekdayJourneySlot).toHaveBeenCalled();
+  });
+
+  test('callLeadInstantly applies leadDialContext as the final scalar-only variableValues overlay', async () => {
+    jest.unstable_mockModule('../../../lib/outbound-sequence.js', () => ({
+      getValidatedOutboundSequence: jest.fn(() => ({ enabled: true })),
+      getStageById: jest.fn(() => ({ id: 'stage-1', isFinal: false })),
+      buildAssistantOverridesForStage: jest.fn(() => ({
+        variableValues: {
+          lane: 'from_sequence',
+          leadName: 'Seq Name',
+          seqOnly: 'kept'
+        }
+      })),
+      isOutboundSequenceGloballyDisabled: jest.fn(() => false)
+    }));
+    getLeadSequenceState.mockResolvedValueOnce({
+      attemptsTotal: 1,
+      stagesCompleted: []
+    });
+    fetchWithTimeout.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: 'vapi_overlay_1', status: 'queued' })
+    });
+
+    const mod = await import('../../../lib/instant-calling.js');
+    const result = await mod.callLeadInstantly({
+      clientKey: 'c1',
+      lead: { phone: '+447700900009', name: 'Lead', service: 'x', source: 'y' },
+      leadDialContext: {
+        lane: 'from_lead',
+        safeBoolean: true,
+        safeNumber: 3,
+        nested: { nope: true },
+        leadName: 'Bad Override',
+        tenant_key: 'secret'
+      },
+      client: {
+        booking: { timezone: 'Europe/London' },
+        displayName: 'Tenant',
+        assistantOverrides: { variableValues: { baseOnly: 'base' } },
+        outboundSequence: { enabled: true },
+        vapi: {}
+      },
+      queueCallData: { stageId: 'stage-1' }
+    });
+
+    expect(result.ok).toBe(true);
+    const [, init] = fetchWithTimeout.mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(body.assistantOverrides.variableValues).toEqual({
+      baseOnly: 'base',
+      lane: 'from_lead',
+      leadName: 'Seq Name',
+      seqOnly: 'kept',
+      safeBoolean: true,
+      safeNumber: 3
+    });
+    expect(body.assistantOverrides.variableValues.nested).toBeUndefined();
+    expect(body.assistantOverrides.variableValues.tenant_key).toBeUndefined();
+    mod.releaseVapiSlot({ callId: 'vapi_overlay_1', reason: 'test' });
   });
 
   test('callLeadInstantly success path persists call and metadata', async () => {

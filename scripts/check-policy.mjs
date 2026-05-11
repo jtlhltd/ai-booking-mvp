@@ -232,12 +232,13 @@ const rules = [
   {
     intentId: 'dial.lead-dial-context-contained',
     description:
-      'leads.lead_dial_context_json must not sprawl into routes or random lib until explicitly allow-listed (migrations, lead-dial-context helper, db facade, workers, tests, docs).',
+      'leads.lead_dial_context_json must not sprawl into routes or random lib until explicitly allow-listed (migrations, lead-dial-context helper, queue worker, tests, docs).',
     pattern: /\blead_dial_context_json\b/,
     allow: [
       'db/migrations/postgres-core-schema.js',
       'db/migrations/sqlite-core-schema.js',
       'lib/lead-dial-context.js',
+      'lib/server-queue-workers.js',
       'docs/INTENT.md',
       'docs/plans/',
       'scripts/check-policy.mjs',
