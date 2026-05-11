@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>PR4 Handoff For Tomorrow</title>
+  <style>
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      margin: 40px;
+      color: #111;
+      line-height: 1.45;
+      font-size: 14px;
+    }
+    h1, h2, h3 {
+      margin: 0 0 10px;
+    }
+    h1 {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+    h2 {
+      font-size: 20px;
+      margin-top: 28px;
+      border-bottom: 1px solid #ccc;
+      padding-bottom: 4px;
+    }
+    h3 {
+      font-size: 16px;
+      margin-top: 18px;
+    }
+    p, li {
+      margin: 0 0 8px;
+    }
+    ul, ol {
+      margin: 8px 0 12px 22px;
+    }
+    code {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 12px;
+      background: #f3f3f3;
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 18px;
+      font-size: 13px;
+    }
+    th, td {
+      border: 1px solid #bbb;
+      padding: 8px;
+      vertical-align: top;
+      text-align: left;
+    }
+    th {
+      background: #f3f3f3;
+    }
+    .meta {
+      color: #444;
+      margin-bottom: 18px;
+    }
+    .done {
+      color: #0b6b2d;
+      font-weight: bold;
+    }
+    .next {
+      color: #8a5a00;
+      font-weight: bold;
+    }
+    .pending {
+      color: #555;
+      font-weight: bold;
+    }
+    .small {
+      font-size: 12px;
+      color: #444;
+    }
+    .pagebreak {
+      page-break-before: always;
+    }
+  </style>
+</head>
+<body>
+  <h1>PR4 Handoff For Tomorrow</h1>
+  <p class="meta">
+    Generated: 2026-05-11<br>
+    Authoritative source plan: <code>.cursor/plans/tom_multi_stage_outbound_9c4e2b1a.plan.md</code><br>
+    Purpose: save where execution is up to so work can resume cleanly tomorrow.
+  </p>
+
+  <h2>Current State</h2>
+  <ul>
+    <li>Main plan remains <code>.cursor/plans/tom_multi_stage_outbound_9c4e2b1a.plan.md</code>.</li>
+    <li>PR4 is being shipped in small slices.</li>
+    <li>Slice 1 completed and pushed: <code>09693a8</code> - schema + helper + policy + tests for <code>lead_dial_context_json</code>.</li>
+    <li>Slice 2 completed and pushed: <code>0307955</code> - queue-worker read + <code>callLeadInstantly</code> merge + payload canary.</li>
+    <li>Both slices passed <code>npm run test:ci</code>.</li>
+    <li>Working tree was clean after the latest push.</li>
+  </ul>
+
+  <h2>Where We Are Up To</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Phase</th>
+        <th>Status</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Phase 0</td>
+        <td class="pending">Pending gate</td>
+        <td><code>pr3_synthetic_run</code> and <code>pr3_acceptance</code> staging gate still exists before PR4 should be considered merge-safe for mainline rollout.</td>
+      </tr>
+      <tr>
+        <td>Phase 1</td>
+        <td class="done">Done</td>
+        <td>Schema + normalizer skeleton + policy + unit/canary tests completed in slice 1.</td>
+      </tr>
+      <tr>
+        <td>Phase 2</td>
+        <td class="done">Done</td>
+        <td>Queue read + dial payload overlay + merge-order canary completed in slice 2.</td>
+      </tr>
+      <tr>
+        <td>Phase 3</td>
+        <td class="next">Next</td>
+        <td><code>outboundDialMode</code> stamping across enqueue sites plus dedupe merge lock in <code>db/domains/call-queue.js</code>.</td>
+      </tr>
+      <tr>
+        <td>Phase 4</td>
+        <td class="pending">Pending</td>
+        <td><code>validateOutboundSequenceConfig</code> optional keys + webhook <code>qual._importContext</code> builder + INTENT/canaries.</td>
+      </tr>
+      <tr>
+        <td>Phase 5</td>
+        <td class="pending">Pending</td>
+        <td>Dashboard unified filters + server predicates.</td>
+      </tr>
+      <tr>
+        <td>Phase 6 / PR4.5</td>
+        <td class="pending">Pending</td>
+        <td>Admin stop + dismiss + <code>_opsAudit</code> + UI/API.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Exactly What Landed</h2>
+
+  <h3>Slice 1</h3>
+  <ul>
+    <li>Added nullable <code>leads.lead_dial_context_json</code> in Postgres and SQLite migrations.</li>
+    <li>Added <code>lib/lead-dial-context.js</code> with reserved-key stripping and size validation.</li>
+    <li>Added intent row <code>dial.lead-dial-context-contained</code> plus policy allow-list.</li>
+    <li>Added unit test and first canary.</li>
+  </ul>
+
+  <h3>Slice 2</h3>
+  <ul>
+    <li><code>lib/server-queue-workers.js</code> now selects <code>lead_dial_context_json</code> on the queue path and normalizes it before dialing.</li>
+    <li><code>lib/instant-calling.js</code> now takes explicit <code>leadDialContext</code> and applies it as the final shallow <code>assistantOverrides.variableValues</code> overlay.</li>
+    <li><code>normalizeLeadDialContext()</code> now strips reserved keys, keeps scalar values only, and drops oversize payloads.</li>
+    <li>Added merge-order coverage in unit tests and a payload-capture canary <code>tests/canaries/lead-outbound-context-merge.canary.test.js</code>.</li>
+  </ul>
+
+  <h2>Resume Point Tomorrow</h2>
+  <ol>
+    <li>Start with Phase 3 / slice 3: stamp <code>call_data.outboundDialMode</code> on every outbound <code>addToCallQueue</code> site.</li>
+    <li>Implement the locked dedupe merge truth table in <code>db/domains/call-queue.js</code> for both Postgres and SQLite branches.</li>
+    <li>Add freeze canary coverage for same-phone duplicate enqueues proving stored mode follows the lock table and never downgrades <code>sequence</code> to <code>classic</code>.</li>
+    <li>Run <code>npm run test:ci</code>.</li>
+    <li>Commit as PR4 slice 3, then continue to webhook <code>_importContext</code> work.</li>
+  </ol>
+
+  <h2>Primary Files For The Next Slice</h2>
+  <ul>
+    <li><code>db/domains/call-queue.js</code></li>
+    <li><code>lib/server-queue-workers.js</code></li>
+    <li><code>lib/lead-import-outbound.js</code></li>
+    <li><code>lib/follow-up-processor.js</code></li>
+    <li><code>lib/vapi-webhooks/outbound-sequence-webhook.js</code></li>
+    <li><code>routes/import-leads.js</code></li>
+    <li><code>lib/leads-import.js</code></li>
+    <li><code>lib/twilio-sms-inbound-webhook.js</code> if it enqueues <code>vapi_call</code></li>
+  </ul>
+
+  <div class="pagebreak"></div>
+
+  <h2>Copied Plan Excerpt: Execution Phases</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Phase</th>
+        <th>Contents</th>
+        <th>Blocked until</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>0</td><td>Complete <code>pr3_synthetic_run</code> + <code>pr3_acceptance</code> on staging</td><td>PR4 merge to <code>main</code></td></tr>
+      <tr><td>1</td><td>Schema <code>lead_dial_context_json</code> + policy allowlist + normalizer skeleton + unit tests</td><td>-</td></tr>
+      <tr><td>2</td><td><code>processVapiCallFromQueue</code> SELECT + wire into <code>callLeadInstantly</code>; merge overlay + tests</td><td>Phase 1</td></tr>
+      <tr><td>3</td><td><code>outboundDialMode</code> stamp all enqueue paths + <code>call-queue</code> dedupe rule + canary</td><td>Phase 2</td></tr>
+      <tr><td>4</td><td><code>validateOutboundSequenceConfig</code> optional keys + <code>_importContext</code> builder in webhook + INTENT/canary</td><td>Phase 2</td></tr>
+      <tr><td>5</td><td>Dashboard unified filters + server predicates + copy</td><td>Phases 2-4</td></tr>
+      <tr><td>6</td><td>PR4.5 admin stop + dismiss + <code>_opsAudit</code> + routes + UI</td><td>Phase 3 minimum</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Copied Plan Excerpt: Definition Of Done</h2>
+  <ol>
+    <li>Schema: <code>leads.lead_dial_context_json</code> exists and queue-path reads include it.</li>
+    <li>Dial path: normalized JSON merges as <code>variableValues</code> only, after sequence and after A/B merge.</li>
+    <li>Normalizer: <code>lib/lead-dial-context.js</code> with reserved key stripping, size cap, and no tenant-key leak in merged vars.</li>
+    <li>Queue snapshot: enqueue paths stamp <code>outboundDialMode</code>; dedupe merges mode per locked truth table.</li>
+    <li>Tenant JSON: <code>validateOutboundSequenceConfig</code> accepts <code>handoffImportContextKeys</code> and <code>classicFollowUpCutoverDate</code>.</li>
+    <li>Handoffs: completed or abandoned sequence writes bounded <code>qual._importContext</code> from an allow-list only.</li>
+    <li>INTENT + policy + canaries cover merge order, tenant-key safety, dial-mode freeze, and bounded import context.</li>
+    <li>Dashboard filters and server predicates match the agreed cohort logic.</li>
+    <li>PR4.5 adds admin-only stop + dismiss + bounded <code>qual._opsAudit</code>.</li>
+    <li><code>npm run test:ci</code> is green.</li>
+  </ol>
+
+  <h2>Copied Plan Excerpt: Locked Dedupe Truth Table</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Existing</th>
+        <th>Incoming</th>
+        <th>Result</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><code>sequence</code></td><td>any</td><td><code>sequence</code> (never downgrade)</td></tr>
+      <tr><td><code>classic</code></td><td><code>sequence</code></td><td><code>sequence</code></td></tr>
+      <tr><td><code>classic</code></td><td><code>classic</code> or null</td><td><code>classic</code></td></tr>
+      <tr><td>null</td><td><code>sequence</code></td><td><code>sequence</code></td></tr>
+      <tr><td>null</td><td><code>classic</code></td><td><code>classic</code></td></tr>
+      <tr><td>null</td><td>null</td><td>null (infer at dial)</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Copied Plan Excerpt: PR Slice Order</h2>
+  <ol>
+    <li>Schema + normalizer + policy allowlist + unit tests.</li>
+    <li><code>processVapiCallFromQueue</code> + <code>callLeadInstantly</code> overlay + merge-order canary.</li>
+    <li><code>outboundDialMode</code> all enqueue sites + dedupe merge + freeze canaries.</li>
+    <li>Webhook <code>_importContext</code> + INTENT rows for handoff/import bounds.</li>
+    <li>Dashboard filters.</li>
+    <li>PR4.5 stop / dismiss / <code>_opsAudit</code>.</li>
+  </ol>
+
+  <h2>Tomorrow's Short Checklist</h2>
+  <ul>
+    <li>Open <code>.cursor/plans/tom_multi_stage_outbound_9c4e2b1a.plan.md</code> and this handoff PDF.</li>
+    <li>Start at Phase 3 / PR slice 3.</li>
+    <li>Keep the locked dedupe truth table unchanged.</li>
+    <li>Add the new canary in the same PR as the dedupe merge.</li>
+    <li>Do not start webhook <code>_importContext</code> until slice 3 is green.</li>
+  </ul>
+
+  <p class="small">
+    This document is a handoff copy for convenience. The authoritative evolving plan remains
+    <code>.cursor/plans/tom_multi_stage_outbound_9c4e2b1a.plan.md</code>.
+  </p>
+</body>
+</html>
