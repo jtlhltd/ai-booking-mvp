@@ -4,8 +4,11 @@ import {
   extractLeadDialContextFromImportLead,
   filterLeadDialContextToScalars,
   LEAD_DIAL_CONTEXT_MAX_BYTES,
+  normalizeLeadDialContextEnvelope,
   normalizeLeadDialContext,
   parseLeadDialContextFromDb,
+  sanitizeLeadDialContextMessage,
+  serializeLeadDialContextEnvelope,
   stripReservedLeadDialContextKeys,
   validateLeadDialContextSize
 } from '../../lib/lead-dial-context.js';
@@ -92,6 +95,56 @@ describe('lead-dial-context', () => {
     ).toEqual({});
   });
 
+  test('normalizeLeadDialContextEnvelope keeps bounded message overrides while preserving variableValues compatibility', () => {
+    expect(
+      normalizeLeadDialContextEnvelope({
+        lane: 'M25',
+        variableValues: {
+          crmCampaign: 'spring-25',
+          tenantBusinessName: 'blocked',
+        },
+        firstMessage: '  Hello there  ',
+        systemMessage: 'Use the courier script.',
+      })
+    ).toEqual({
+      variableValues: {
+        lane: 'M25',
+        crmCampaign: 'spring-25',
+      },
+      firstMessage: 'Hello there',
+      systemMessage: 'Use the courier script.',
+    });
+  });
+
+  test('sanitizeLeadDialContextMessage trims and bounds message text', () => {
+    expect(sanitizeLeadDialContextMessage('  hello  ', 5)).toBe('hello');
+    expect(sanitizeLeadDialContextMessage('abcdef', 3)).toBe('abc');
+    expect(sanitizeLeadDialContextMessage('', 10)).toBeNull();
+  });
+
+  test('serializeLeadDialContextEnvelope keeps legacy flat shape unless envelope is needed', () => {
+    expect(
+      serializeLeadDialContextEnvelope({
+        variableValues: { crmCampaign: 'spring-25' }
+      })
+    ).toEqual({
+      crmCampaign: 'spring-25'
+    });
+
+    expect(
+      serializeLeadDialContextEnvelope(
+        {
+          variableValues: { crmCampaign: 'spring-25' },
+          firstMessage: 'Hello'
+        },
+        { preferEnvelope: true }
+      )
+    ).toEqual({
+      variableValues: { crmCampaign: 'spring-25' },
+      firstMessage: 'Hello'
+    });
+  });
+
   test('extractLeadDialContextFromImportLead prefers explicit objects and otherwise uses extra top-level keys', () => {
     expect(
       extractLeadDialContextFromImportLead({
@@ -117,6 +170,26 @@ describe('lead-dial-context', () => {
     ).toEqual({
       crmCampaign: 'spring-25',
       laneHint: 'Manchester-Rotterdam',
+    });
+  });
+
+  test('extractLeadDialContextFromImportLead preserves explicit message overrides inside envelope objects', () => {
+    expect(
+      extractLeadDialContextFromImportLead({
+        phone: '+447700900000',
+        customFields: {
+          laneHint: 'Manchester-Rotterdam',
+          firstMessage: '  Hello  ',
+          systemMessage: 'Use the logistics script.',
+          tenant_key: 'blocked'
+        }
+      })
+    ).toEqual({
+      variableValues: {
+        laneHint: 'Manchester-Rotterdam'
+      },
+      firstMessage: 'Hello',
+      systemMessage: 'Use the logistics script.'
     });
   });
 });

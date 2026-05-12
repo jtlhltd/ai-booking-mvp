@@ -269,6 +269,115 @@ describe('instant-calling', () => {
     mod.releaseVapiSlot({ callId: 'vapi_overlay_1', reason: 'test' });
   });
 
+  test('callLeadInstantly applies lead firstMessage and systemMessage after sequence merges', async () => {
+    jest.unstable_mockModule('../../../lib/outbound-sequence.js', () => ({
+      getValidatedOutboundSequence: jest.fn(() => ({ enabled: true })),
+      getStageById: jest.fn(() => ({ id: 'stage-1', isFinal: false })),
+      buildAssistantOverridesForStage: jest.fn(() => ({
+        firstMessage: 'Stage hello',
+        variableValues: {
+          lane: 'from_sequence',
+        },
+        model: {
+          provider: 'openai',
+          model: 'gpt-4o-mini',
+          temperature: 0.7,
+          maxTokens: 300,
+          messages: [{ role: 'system', content: 'Stage script' }]
+        }
+      })),
+      isOutboundSequenceGloballyDisabled: jest.fn(() => false)
+    }));
+    getLeadSequenceState.mockResolvedValueOnce({
+      attemptsTotal: 1,
+      stagesCompleted: []
+    });
+    fetchWithTimeout.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: 'vapi_messages_1', status: 'queued' })
+    });
+
+    const mod = await import('../../../lib/instant-calling.js');
+    const result = await mod.callLeadInstantly({
+      clientKey: 'client-alpha',
+      lead: { phone: '+447700900010', name: 'Lead' },
+      leadDialContext: {
+        variableValues: { lane: 'from_lead' },
+        firstMessage: 'Lead hello',
+        systemMessage: 'Lead-specific script'
+      },
+      client: {
+        booking: { timezone: 'Europe/London' },
+        assistantOverrides: {
+          firstMessage: 'Base hello',
+          model: {
+            provider: 'anthropic',
+            model: 'claude',
+            temperature: 0.2,
+            maxTokens: 123
+          }
+        },
+        outboundSequence: { enabled: true },
+        vapi: {}
+      },
+      queueCallData: { stageId: 'stage-1' }
+    });
+
+    expect(result.ok).toBe(true);
+    const [, init] = fetchWithTimeout.mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(body.assistantOverrides.firstMessage).toBe('Lead hello');
+    expect(body.assistantOverrides.variableValues.lane).toBe('from_lead');
+    expect(body.assistantOverrides.model).toEqual({
+      provider: 'openai',
+      model: 'gpt-4o-mini',
+      temperature: 0.7,
+      maxTokens: 300,
+      messages: [{ role: 'system', content: 'Lead-specific script' }]
+    });
+    mod.releaseVapiSlot({ callId: 'vapi_messages_1', reason: 'test' });
+  });
+
+  test('callLeadInstantly skips lead message overrides that contain internal-key-like text', async () => {
+    fetchWithTimeout.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: 'vapi_messages_2', status: 'queued' })
+    });
+
+    const mod = await import('../../../lib/instant-calling.js');
+    const result = await mod.callLeadInstantly({
+      clientKey: 'd2d-xpress-tom',
+      lead: { phone: '+447700900011', name: 'Lead' },
+      leadDialContext: {
+        firstMessage: 'Mention d2d-xpress-tom on the call',
+        systemMessage: 'Use tenant_key in the opener'
+      },
+      client: {
+        booking: { timezone: 'Europe/London' },
+        assistantOverrides: {
+          firstMessage: 'Base hello',
+          model: {
+            provider: 'openai',
+            model: 'gpt-4o',
+            temperature: 0.3,
+            maxTokens: 500,
+            messages: [{ role: 'system', content: 'Base script' }]
+          }
+        },
+        vapi: {}
+      }
+    });
+
+    expect(result.ok).toBe(true);
+    const [, init] = fetchWithTimeout.mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(body.assistantOverrides.firstMessage).toBe('Base hello');
+    expect(body.assistantOverrides.model.messages).toEqual([{ role: 'system', content: 'Base script' }]);
+    mod.releaseVapiSlot({ callId: 'vapi_messages_2', reason: 'test' });
+  });
+
   test('callLeadInstantly success path persists call and metadata', async () => {
     fetchWithTimeout.mockResolvedValueOnce({
       ok: true,

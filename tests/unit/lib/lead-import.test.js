@@ -40,6 +40,31 @@ describe('lib/lead-import', () => {
     });
   });
 
+  test('parseCSV can map explicit per-lead message overrides into the stored envelope', async () => {
+    const { parseCSV } = await import('../../../lib/lead-import.js');
+    const csv = [
+      'Name,Phone,Campaign,Opening,System',
+      'Alice,+447700900000,Spring 25,Hello Alice,Use the courier script',
+    ].join('\n');
+
+    const leads = parseCSV(csv, {
+      leadDialContext: {
+        crmCampaign: 'Campaign',
+        firstMessage: 'Opening',
+        systemMessage: 'System',
+      },
+    });
+
+    expect(leads).toHaveLength(1);
+    expect(leads[0].leadDialContext).toEqual({
+      variableValues: {
+        crmCampaign: 'Spring 25',
+      },
+      firstMessage: 'Hello Alice',
+      systemMessage: 'Use the courier script',
+    });
+  });
+
   test('importLeads counts invalids and calls batch insert path', async () => {
     jest.unstable_mockModule('../../../db.js', () => ({
       upsertImportedLead: jest.fn(async () => ({ row: { id: 9 }, created: true })),
