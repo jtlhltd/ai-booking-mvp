@@ -82,6 +82,7 @@ export function mountApi(app, deps) {
     getNextBusinessHour,
     scheduleAtOptimalCallWindow,
     addToCallQueue,
+    upsertImportedLead,
     pickTimezone,
     DateTime,
     TIMEZONE,
@@ -188,7 +189,7 @@ export function mountApi(app, deps) {
   app.use(createVapiDevRouter());
   app.use('/api', createPipelineTrackingRouter({ smsEmailPipeline }));
   app.use('/api', createPipelineRetryRouter({ smsEmailPipeline }));
-  app.use('/api/webhooks', createZapierWebhookRouter({ requireApiKey, getClientFromHeader }));
+  app.use('/api/webhooks', createZapierWebhookRouter({ requireApiKey, getClientFromHeader, upsertImportedLead }));
   app.use('/api', createImportLeadsCsvRouter({ requireApiKey }));
   app.use('/api', createGooglePlacesTestRouter());
   app.use('/api', createBookDemoRouter({ bookingSystem, smsEmailPipeline }));
@@ -235,6 +236,7 @@ export function mountApi(app, deps) {
       sanitizeLead,
       runOutboundCallsForImportedLeads,
       TIMEZONE,
+      upsertImportedLead,
     })
   );
   app.use('/api', createImportLeadEmailRouter());

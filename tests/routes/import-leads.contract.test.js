@@ -7,22 +7,19 @@ function buildImportRouter(overrides = {}) {
   const query = jest.fn(async (sql) => {
     const s = String(sql);
     if (s.includes('SELECT COUNT(*)')) return { rows: [{ n: 0 }] };
-    if (s.includes('INSERT INTO leads')) {
-      return {
-        rows: [
-          {
-            id: 1,
-            name: 'A',
-            phone: '+447700900000',
-            service: 'Lead Follow-Up',
-            source: 'Import',
-            status: 'new'
-          }
-        ]
-      };
-    }
     return { rows: [] };
   });
+  const upsertImportedLead = jest.fn(async () => ({
+    row: {
+      id: 1,
+      name: 'A',
+      phone: '+447700900000',
+      service: 'Lead Follow-Up',
+      source: 'Import',
+      status: 'new'
+    },
+    created: true,
+  }));
 
   const app = express();
   app.use(express.json());
@@ -43,11 +40,12 @@ function buildImportRouter(overrides = {}) {
       sendOperatorAlert: jest.fn(async () => {}),
       sanitizeLead: (row) => row,
       runOutboundCallsForImportedLeads: jest.fn(async () => ({ reason: 'queued_test', queued: 1 })),
+      upsertImportedLead,
       TIMEZONE: 'Europe/London',
       ...overrides
     })
   );
-  return { app, query };
+  return { app, query, upsertImportedLead };
 }
 
 describe('routes/import-leads', () => {
@@ -80,5 +78,18 @@ describe('routes/import-leads', () => {
       .send({ clientKey: 'c1', leads: [{ phone: '+447700900000', name: 'A' }] });
     expect(res.status).toBe(200);
     expect(res.body.inserted).toBe(1);
+  });
+
+  test('POST /api/leads/import sanitizes top-level custom fields into lead dial context', async () => {
+    const { app, upsertImportedLead } = buildImportRouter();
+    const res = await request(app)
+      .post('/api/leads/import')
+      .send({ clientKey: 'c1', leads: [{ phone: '+447700900000', name: 'A', crmCampaign: 'spring-25', leadName: 'blocked' }] });
+    expect(res.status).toBe(200);
+    expect(upsertImportedLead).toHaveBeenCalledWith(
+      expect.objectContaining({
+        leadDialContext: { crmCampaign: 'spring-25' },
+      })
+    );
   });
 });

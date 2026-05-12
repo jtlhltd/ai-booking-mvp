@@ -545,6 +545,7 @@ describe('Batch2: next 25 routes (happy + failure)', () => {
 
   describe('routes/zapier-webhook.js', () => {
     test('happy: accepts lead when client and phone present', async () => {
+      const upsertImportedLead = jest.fn(async () => ({ row: { id: 1 }, created: true }));
       jest.unstable_mockModule('../../lib/lead-deduplication.js', () => ({
         processBulkLeads: jest.fn(async () => ({ valid: 1, invalid: 0 }))
       }));
@@ -556,13 +557,25 @@ describe('Batch2: next 25 routes (happy + failure)', () => {
             router: () =>
               createZapierWebhookRouter({
                 requireApiKey: (_req, _res, next) => next(),
-                getClientFromHeader: async () => ({ clientKey: 'c1' })
+                getClientFromHeader: async () => ({ clientKey: 'c1' }),
+                upsertImportedLead,
               })
           }
         ]
       });
-      const res = await request(app).post('/zapier').set('X-API-Key', 'k').set('X-Client-Key', 'c1').send({ phone: '+44' }).expect(200);
+      const res = await request(app)
+        .post('/zapier')
+        .set('X-API-Key', 'k')
+        .set('X-Client-Key', 'c1')
+        .send({ phone: '+44', customFields: { crmCampaign: 'spring-25', leadName: 'blocked' } })
+        .expect(200);
       expect(res.body).toEqual(expect.objectContaining({ success: true }));
+      expect(upsertImportedLead).toHaveBeenCalledWith(
+        expect.objectContaining({
+          clientKey: 'c1',
+          leadDialContext: { crmCampaign: 'spring-25' },
+        })
+      );
     });
 
     test('failure: rejects missing phone', async () => {
@@ -574,7 +587,8 @@ describe('Batch2: next 25 routes (happy + failure)', () => {
             router: () =>
               createZapierWebhookRouter({
                 requireApiKey: (_req, _res, next) => next(),
-                getClientFromHeader: async () => ({ clientKey: 'c1' })
+                getClientFromHeader: async () => ({ clientKey: 'c1' }),
+                upsertImportedLead: jest.fn(async () => ({ row: { id: 1 }, created: true })),
               })
           }
         ]

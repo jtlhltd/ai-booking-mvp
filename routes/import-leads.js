@@ -18,7 +18,8 @@ export function createImportLeadsRouter(deps) {
     sendOperatorAlert,
     sanitizeLead,
     runOutboundCallsForImportedLeads,
-    TIMEZONE
+    TIMEZONE,
+    upsertImportedLead,
   } = deps || {};
   const router = express.Router();
 
@@ -58,7 +59,8 @@ export function createImportLeadsRouter(deps) {
       sendOperatorAlert,
       sanitizeLead,
       runOutboundCallsForImportedLeads,
-      TIMEZONE
+      TIMEZONE,
+      upsertImportedLead,
     })
   );
 
@@ -77,7 +79,8 @@ export function createImportLeadsRouter(deps) {
       sendOperatorAlert,
       sanitizeLead,
       runOutboundCallsForImportedLeads,
-      TIMEZONE
+      TIMEZONE,
+      upsertImportedLead,
     })
   );
 

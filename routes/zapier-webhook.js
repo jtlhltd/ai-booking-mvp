@@ -1,11 +1,15 @@
 import express from 'express';
+import { extractLeadDialContextFromImportLead } from '../lib/lead-dial-context.js';
 
 export function createZapierWebhookRouter(deps) {
-  const { requireApiKey, getClientFromHeader } = deps || {};
+  const { requireApiKey, getClientFromHeader, upsertImportedLead } = deps || {};
   const router = express.Router();
 
   router.post('/zapier', requireApiKey, async (req, res) => {
     try {
+      if (typeof upsertImportedLead !== 'function') {
+        throw new Error('upsertImportedLead dependency missing');
+      }
       console.log('[ZAPIER WEBHOOK] Received lead:', req.body);
 
       const client = await getClientFromHeader(req);
@@ -48,6 +52,18 @@ export function createZapierWebhookRouter(deps) {
           details: result.invalid > 0 ? 'Duplicate lead or invalid phone' : 'Unknown error'
         });
       }
+
+      const leadDialContext = extractLeadDialContextFromImportLead(leadData);
+      await upsertImportedLead({
+        clientKey: client.clientKey,
+        name: leadData.name,
+        phone: leadData.phone,
+        service: typeof customFields?.service === 'string' && customFields.service.trim()
+          ? customFields.service.trim()
+          : 'Lead Follow-Up',
+        source: leadData.source,
+        leadDialContext: Object.keys(leadDialContext).length ? leadDialContext : null,
+      });
 
       console.log('[ZAPIER WEBHOOK] Lead imported successfully');
 

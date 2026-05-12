@@ -35,18 +35,19 @@ describe('lib/leads-import', () => {
       body: { clientKey: 'c1', leads: [{ phone: '+447700900000', name: 'A' }] }
     };
     const res = mockRes();
-
     const query = jest.fn(async (sql) => {
       const s = String(sql);
       if (s.includes('SELECT COUNT(*)')) return { rows: [{ n: 0 }] };
-      if (s.includes('INSERT INTO leads')) {
-        return { rows: [{ id: 1, name: 'A', phone: '+447700900000', service: 'Lead Follow-Up', source: 'Import', status: 'new' }] };
-      }
       return { rows: [] };
     });
+    const upsertImportedLead = jest.fn(async () => ({
+      row: { id: 1, name: 'A', phone: '+447700900000', service: 'Lead Follow-Up', source: 'Import', status: 'new' },
+      created: true,
+    }));
 
     await handleLeadsImport(req, res, {
       query,
+      upsertImportedLead,
       validateAndSanitizePhone: (p) => p,
       phoneMatchKey: () => 'k',
       sanitizeInput: (s) => s,
@@ -57,33 +58,29 @@ describe('lib/leads-import', () => {
     expect(res.body).toEqual(expect.objectContaining({ ok: true, inserted: 1 }));
   });
 
-  test('42P10 on INSERT falls back to update-or-insert path', async () => {
+  test('persists sanitized extra import fields into lead dial context', async () => {
     const req = {
       method: 'POST',
       url: '/api/leads/import',
       headers: {},
-      body: { clientKey: 'c1', leads: [{ phone: '+447700900000', name: 'A' }] }
+      body: {
+        clientKey: 'c1',
+        leads: [{ phone: '+447700900000', name: 'A', crmCampaign: 'spring-25', phoneType: 'mobile', leadName: 'blocked' }],
+      }
     };
     const res = mockRes();
-
-    const err42 = new Error('no constraint');
-    err42.code = '42P10';
-
     const query = jest.fn(async (sql) => {
-      const s = String(sql);
-      if (s.includes('SELECT COUNT(*)')) return { rows: [{ n: 0 }] };
-      if (s.includes('ON CONFLICT')) throw err42;
-      if (s.includes('UPDATE leads')) {
-        return { rows: [{ id: 9, name: 'A', phone: '+447700900000', service: 'Lead Follow-Up', source: 'Import', status: 'new' }] };
-      }
-      if (s.includes('INSERT INTO leads') && !s.includes('ON CONFLICT')) {
-        return { rows: [] };
-      }
+      if (String(sql).includes('SELECT COUNT(*)')) return { rows: [{ n: 0 }] };
       return { rows: [] };
     });
+    const upsertImportedLead = jest.fn(async () => ({
+      row: { id: 9, name: 'A', phone: '+447700900000', service: 'Lead Follow-Up', source: 'Import', status: 'new' },
+      created: true,
+    }));
 
     await handleLeadsImport(req, res, {
       query,
+      upsertImportedLead,
       validateAndSanitizePhone: (p) => p,
       phoneMatchKey: () => 'k',
       sanitizeInput: (s) => s,
@@ -92,7 +89,12 @@ describe('lib/leads-import', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body.inserted).toBe(1);
-    expect(query.mock.calls.some((c) => String(c[0]).includes('UPDATE leads'))).toBe(true);
+    expect(upsertImportedLead).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clientKey: 'c1',
+        leadDialContext: { crmCampaign: 'spring-25' },
+      })
+    );
   });
 });
 

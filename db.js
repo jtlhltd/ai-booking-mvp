@@ -722,6 +722,66 @@ export async function findOrCreateLead({ tenantKey, phone, name = null, service 
   return { id: row?.id, client_key: tenantKey, name, phone, phone_match_key: mk, service, source };
 }
 
+export async function upsertImportedLead({
+  clientKey,
+  name = null,
+  phone,
+  service = null,
+  source = null,
+  leadDialContext = null,
+}) {
+  const mk = phoneMatchKey(phone);
+  if (!clientKey || !phone || !mk) throw new Error('upsertImportedLead requires clientKey + phone');
+
+  const existing = await query(
+    'SELECT * FROM leads WHERE client_key = $1 AND phone_match_key = $2 ORDER BY created_at DESC LIMIT 1',
+    [clientKey, mk]
+  );
+  const current = existing?.rows?.[0] || null;
+  const contextJson =
+    leadDialContext && typeof leadDialContext === 'object' && !Array.isArray(leadDialContext)
+      ? JSON.stringify(leadDialContext)
+      : null;
+
+  if (current) {
+    const result = await query(
+      dbType === 'postgres'
+        ? `UPDATE leads
+           SET name = COALESCE($3, name),
+               phone = $4,
+               service = COALESCE($5, service),
+               source = COALESCE($6, source),
+               lead_dial_context_json = COALESCE($7::jsonb, lead_dial_context_json)
+           WHERE client_key = $1 AND phone_match_key = $2
+           RETURNING *`
+        : `UPDATE leads
+           SET name = COALESCE($3, name),
+               phone = $4,
+               service = COALESCE($5, service),
+               source = COALESCE($6, source),
+               lead_dial_context_json = COALESCE($7, lead_dial_context_json)
+           WHERE client_key = $1 AND phone_match_key = $2
+           RETURNING *`,
+      [clientKey, mk, name, phone, service, source, contextJson]
+    );
+    return { row: result?.rows?.[0] || current, created: false };
+  }
+
+  const inserted = await query(
+    dbType === 'postgres'
+      ? `INSERT INTO leads (
+           client_key, name, phone, phone_match_key, service, source, lead_dial_context_json
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+         RETURNING *`
+      : `INSERT INTO leads (
+           client_key, name, phone, phone_match_key, service, source, lead_dial_context_json
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING *`,
+    [clientKey, name, phone, mk, service, source, contextJson]
+  );
+  return { row: inserted?.rows?.[0] || null, created: true };
+}
+
 export async function getLeadsByClient(clientKey, limit = 100) {
   const result = await query(
     'SELECT * FROM leads WHERE client_key=$1 ORDER BY created_at DESC LIMIT $2',

@@ -1,6 +1,7 @@
 import { describe, expect, test } from '@jest/globals';
 
 import {
+  extractLeadDialContextFromImportLead,
   filterLeadDialContextToScalars,
   LEAD_DIAL_CONTEXT_MAX_BYTES,
   normalizeLeadDialContext,
@@ -89,5 +90,33 @@ describe('lead-dial-context', () => {
     expect(
       normalizeLeadDialContext({ big: 'a'.repeat(200) }, { maxBytes: 32 })
     ).toEqual({});
+  });
+
+  test('extractLeadDialContextFromImportLead prefers explicit objects and otherwise uses extra top-level keys', () => {
+    expect(
+      extractLeadDialContextFromImportLead({
+        phone: '+447700900000',
+        name: 'Alice',
+        leadDialContext: {
+          crmCampaign: 'spring-25',
+          leadName: 'blocked',
+        },
+      })
+    ).toEqual({
+      crmCampaign: 'spring-25',
+    });
+
+    expect(
+      extractLeadDialContextFromImportLead({
+        phone: '+447700900000',
+        name: 'Alice',
+        crmCampaign: 'spring-25',
+        laneHint: 'Manchester-Rotterdam',
+        leadName: 'blocked',
+      })
+    ).toEqual({
+      crmCampaign: 'spring-25',
+      laneHint: 'Manchester-Rotterdam',
+    });
   });
 });
