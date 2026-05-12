@@ -6974,7 +6974,8 @@
                         <button type="button" class="follow-up-status-chip follow-up-status-chip--active" data-dashboard-cohort-filter="all">All</button>
                         <button type="button" class="follow-up-status-chip" data-dashboard-cohort-filter="classic">Classic</button>
                         <button type="button" class="follow-up-status-chip" data-dashboard-cohort-filter="sequence">Sequence</button>
-                        <button type="button" class="follow-up-status-chip" data-dashboard-cohort-filter="abandoned">Abandoned·salvage</button>
+                        <button type="button" class="follow-up-status-chip" data-dashboard-cohort-filter="stopped">Stopped·operator</button>
+                        <button type="button" class="follow-up-status-chip" data-dashboard-cohort-filter="abandoned">Abandoned·system</button>
                     </div>
 
                     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
@@ -7243,7 +7244,8 @@
                         <button type="button" class="follow-up-status-chip follow-up-status-chip--active" data-dashboard-cohort-filter="all">All</button>
                         <button type="button" class="follow-up-status-chip" data-dashboard-cohort-filter="classic">Classic</button>
                         <button type="button" class="follow-up-status-chip" data-dashboard-cohort-filter="sequence">Sequence</button>
-                        <button type="button" class="follow-up-status-chip" data-dashboard-cohort-filter="abandoned">Abandoned·salvage</button>
+                        <button type="button" class="follow-up-status-chip" data-dashboard-cohort-filter="stopped">Stopped·operator</button>
+                        <button type="button" class="follow-up-status-chip" data-dashboard-cohort-filter="abandoned">Abandoned·system</button>
                     </div>
                     <div class="follow-up-status-filters" style="gap:6px;">
                         <button type="button" class="export-btn secondary" id="followUpSelectAllBtn" title="Select all rows on this page">Select page</button>
@@ -8427,7 +8429,8 @@
             host.innerHTML = [
                 fact('Active sequences', formatNumber(s.activeSequences ?? 0), 'lead_sequence_state rows with status=active'),
                 fact('Completed today', formatNumber(s.completedToday ?? 0), 'lead_sequence_state rows completed today'),
-                fact('Abandoned today', formatNumber(s.abandonedToday ?? 0), 'abandoned due to caps or duration'),
+                fact('Stopped today', formatNumber(s.stoppedToday ?? 0), 'sequence rows explicitly stopped by an operator'),
+                fact('Abandoned by system', formatNumber(s.abandonedToday ?? 0), 'sequence rows abandoned automatically due to caps, duration, or stage limits'),
                 fact('Next-stage queued', formatNumber(s.nextStageQueued ?? 0), "pending/processing call_queue rows where triggerType='sequence_next'"),
                 fact('Oldest active update', s.oldestActiveUpdatedAt ? formatRelativeWithAbsolute(s.oldestActiveUpdatedAt, getOperationalTimezone(dashboardData)) : '—', 'helps spot stuck sequences'),
             ].join('');
@@ -14615,14 +14618,15 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         let followUpStatusFilter = 'todo'; // todo | called | quoted | all
         let followUpSearchTerm = '';
         let followUpDispositionFilter = 'all'; // all | voicemail | spoke
-        let dashboardCohortFilter = 'all'; // all | classic | sequence | abandoned
+        let dashboardCohortFilter = 'all'; // all | classic | sequence | stopped | abandoned
         const followUpSelectedKeys = new Set();
 
         function dashboardCohortFilterLabel(value) {
             const v = String(value || '').trim().toLowerCase();
             if (v === 'classic') return 'Classic';
             if (v === 'sequence') return 'Sequence';
-            if (v === 'abandoned') return 'Abandoned·salvage';
+            if (v === 'stopped') return 'Stopped·operator';
+            if (v === 'abandoned') return 'Abandoned·system';
             return 'All';
         }
 
@@ -14634,7 +14638,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         }
 
         function setDashboardCohortFilter(next, { reloadFollowUp = true, reloadSequence = true } = {}) {
-            const val = ['all', 'classic', 'sequence', 'abandoned'].includes(String(next || '').trim().toLowerCase())
+            const val = ['all', 'classic', 'sequence', 'stopped', 'abandoned'].includes(String(next || '').trim().toLowerCase())
                 ? String(next || '').trim().toLowerCase()
                 : 'all';
             dashboardCohortFilter = val;
@@ -14713,7 +14717,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const df = localStorage.getItem('dash.fu.dispositionFilter') || '';
                 if (['all','voicemail','spoke'].includes(df)) followUpDispositionFilter = df;
                 const cf = localStorage.getItem('dash.dashboardCohortFilter') || '';
-                if (['all', 'classic', 'sequence', 'abandoned'].includes(cf)) dashboardCohortFilter = cf;
+                if (['all', 'classic', 'sequence', 'stopped', 'abandoned'].includes(cf)) dashboardCohortFilter = cf;
             } catch {}
         }
 

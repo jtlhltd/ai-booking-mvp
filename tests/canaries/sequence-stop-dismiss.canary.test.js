@@ -26,11 +26,7 @@ describe('canary: sequence.operator-stop-dismiss-audited', () => {
         { id: 2, status: 'pending', call_type: 'vapi_call', call_data: { triggerType: 'follow_up_retry' } },
       ]),
       updateCallQueueStatus,
-      getLeadHandoffByPhone: jest.fn(async () => ({
-        leadPhone: '+447700900111',
-        source: 'vapi_webhook.sequence_abandoned',
-        dataJson: '{}',
-      })),
+      getLeadHandoffByPhone: jest.fn(async () => null),
       upsertLeadHandoff,
     });
 
@@ -43,6 +39,7 @@ describe('canary: sequence.operator-stop-dismiss-audited', () => {
       expect.objectContaining({ status: 'abandoned', nextStageScheduledFor: null })
     );
     expect(upsertLeadHandoff).toHaveBeenCalledWith(expect.objectContaining({
+      source: 'operator.sequence_stopped',
       data: expect.objectContaining({
         qual: expect.objectContaining({
           _opsAudit: expect.arrayContaining([
@@ -51,6 +48,15 @@ describe('canary: sequence.operator-stop-dismiss-audited', () => {
         }),
       }),
     }));
+    const handoff = upsertLeadHandoff.mock.calls[0][0];
+    const meta = getDashboardCohortMeta({
+      handoffSource: handoff.source,
+      hasSequenceState: true,
+      leadCreatedAt: '2026-05-12T09:00:00.000Z',
+      tenantTimezone: 'Europe/London',
+    });
+    expect(matchesDashboardCohort(meta, 'stopped')).toBe(true);
+    expect(matchesDashboardCohort(meta, 'abandoned')).toBe(false);
   });
 
   test('dismissed salvage leaves abandoned cohort but remains in all', async () => {

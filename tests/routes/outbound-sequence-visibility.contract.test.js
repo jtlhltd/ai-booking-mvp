@@ -42,6 +42,7 @@ describe('routes/outbound-sequence-visibility-mount.js', () => {
         {
           active_sequences: '2',
           completed_today: '1',
+          stopped_today: '4',
           abandoned_today: '0',
           next_stage_queued: '3',
           oldest_active_updated_at: '2030-01-01T00:00:00.000Z',
@@ -77,6 +78,7 @@ describe('routes/outbound-sequence-visibility-mount.js', () => {
         summary: expect.objectContaining({
           activeSequences: 2,
           completedToday: 1,
+          stoppedToday: 4,
           abandonedToday: 0,
           nextStageQueued: 3,
         }),
@@ -276,6 +278,12 @@ describe('routes/outbound-sequence-visibility-mount.js', () => {
               updatedAt: '2030-01-01T01:00:00.000Z',
             },
             {
+              leadPhone: '+447700900333',
+              phoneMatchKey: '7700900333',
+              source: 'operator.sequence_stopped',
+              updatedAt: '2030-01-01T01:00:00.000Z',
+            },
+            {
               leadPhone: '+447700900222',
               phoneMatchKey: '7700900222',
               source: 'vapi_webhook.sequence_completed',
@@ -288,6 +296,7 @@ describe('routes/outbound-sequence-visibility-mount.js', () => {
         return {
           rows: [
             { phone: '+447700900111', phoneMatchKey: '7700900111', createdAt: '2030-01-01T00:00:00.000Z' },
+            { phone: '+447700900333', phoneMatchKey: '7700900333', createdAt: '2030-01-01T00:00:00.000Z' },
             { phone: '+447700900222', phoneMatchKey: '7700900222', createdAt: '2030-01-01T00:00:00.000Z' },
           ],
         };
@@ -296,6 +305,7 @@ describe('routes/outbound-sequence-visibility-mount.js', () => {
         return {
           rows: [
             { leadPhone: '+447700900111', status: 'abandoned', updatedAt: '2030-01-01T01:00:00.000Z' },
+            { leadPhone: '+447700900333', status: 'abandoned', updatedAt: '2030-01-01T01:00:00.000Z' },
             { leadPhone: '+447700900222', status: 'completed', updatedAt: '2030-01-01T01:00:00.000Z' },
           ],
         };
@@ -318,6 +328,94 @@ describe('routes/outbound-sequence-visibility-mount.js', () => {
     expect(res.body.rows[0]).toEqual(expect.objectContaining({
       leadPhone: '+447700900111',
       dashboardCohort: 'abandoned'
+    }));
+  });
+
+  test('GET /api/outbound-sequence/:clientKey/leads applies stopped cohort filter', async () => {
+    const getFullClient = jest.fn(async () => ({
+      clientKey: 'd2d-xpress-tom',
+      displayName: 'D2D Xpress',
+      timezone: 'Europe/London',
+      outboundSequence: {
+        enabled: true,
+        stages: [
+          {
+            id: 'stage_gatekeeper',
+            firstMessage: 'Hello',
+            systemMessage: 'System',
+            requiredFields: ['lane'],
+            maxAttemptsInStage: 2,
+            isFinal: true,
+          },
+        ],
+      },
+    }));
+
+    const query = jest.fn(async (sql) => {
+      const s = String(sql);
+      if (s.includes('current_stage_id AS "currentStageId"')) {
+        return {
+          rows: [
+            {
+              clientKey: 'd2d-xpress-tom',
+              leadPhone: '+447700900333',
+              currentStageId: 'stage_gatekeeper',
+              stagesCompleted: '[]',
+              attemptsInStage: 0,
+              attemptsTotal: 1,
+              startedAt: '2030-01-01T00:00:00.000Z',
+              lastCallId: null,
+              nextStageScheduledFor: null,
+              status: 'abandoned',
+              updatedAt: '2030-01-01T01:00:00.000Z',
+            },
+          ],
+        };
+      }
+      if (s.includes('FROM lead_handoff')) {
+        return {
+          rows: [
+            {
+              leadPhone: '+447700900333',
+              phoneMatchKey: '7700900333',
+              source: 'operator.sequence_stopped',
+              updatedAt: '2030-01-01T01:00:00.000Z',
+            },
+          ],
+        };
+      }
+      if (s.includes('FROM leads')) {
+        return {
+          rows: [
+            { phone: '+447700900333', phoneMatchKey: '7700900333', createdAt: '2030-01-01T00:00:00.000Z' },
+          ],
+        };
+      }
+      if (s.includes('FROM lead_sequence_state')) {
+        return {
+          rows: [
+            { leadPhone: '+447700900333', status: 'abandoned', updatedAt: '2030-01-01T01:00:00.000Z' },
+          ],
+        };
+      }
+      return { rows: [] };
+    });
+
+    const { createOutboundSequenceVisibilityRouter } = await import('../../routes/outbound-sequence-visibility-mount.js');
+    const app = createContractApp({
+      mounts: [{ path: '/api', router: () => createOutboundSequenceVisibilityRouter({ query, getFullClient, isPostgres: true }) }],
+    });
+
+    const res = await request(app).get('/api/outbound-sequence/d2d-xpress-tom/leads?filter=stopped').expect(200);
+    expect(res.body).toEqual(expect.objectContaining({
+      ok: true,
+      filter: 'stopped',
+      rows: expect.any(Array)
+    }));
+    expect(res.body.rows).toHaveLength(1);
+    expect(res.body.rows[0]).toEqual(expect.objectContaining({
+      leadPhone: '+447700900333',
+      dashboardCohort: 'stopped'
     }));
   });
 });

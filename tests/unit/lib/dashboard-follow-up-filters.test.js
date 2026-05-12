@@ -10,6 +10,7 @@ describe('lib/dashboard-follow-up-filters', () => {
   test('normalizeDashboardCohortFilter clamps unknown values to all', () => {
     expect(normalizeDashboardCohortFilter('sequence')).toBe('sequence');
     expect(normalizeDashboardCohortFilter('ABANDONED')).toBe('abandoned');
+    expect(normalizeDashboardCohortFilter('STOPPED')).toBe('stopped');
     expect(normalizeDashboardCohortFilter('weird')).toBe('all');
   });
 
@@ -71,6 +72,19 @@ describe('lib/dashboard-follow-up-filters', () => {
     expect(meta.cohort).toBe('abandoned');
     expect(matchesDashboardCohort(meta, 'abandoned')).toBe(true);
     expect(matchesDashboardCohort(meta, 'sequence')).toBe(false);
+  });
+
+  test('operator stop source lands in the stopped cohort', () => {
+    const meta = getDashboardCohortMeta({
+      handoffSource: 'operator.sequence_stopped',
+      hasSequenceState: true,
+      leadCreatedAt: '2026-05-12T09:00:00.000Z',
+      classicFollowUpCutoverDate: '2026-05-10',
+      tenantTimezone: 'Europe/London',
+    });
+    expect(meta.cohort).toBe('stopped');
+    expect(matchesDashboardCohort(meta, 'stopped')).toBe(true);
+    expect(matchesDashboardCohort(meta, 'abandoned')).toBe(false);
   });
 
   test('dismissed abandoned salvage leaves abandoned filter but stays in all', () => {

@@ -7,6 +7,7 @@ import {
   loadDashboardArtifactMap,
   matchesDashboardCohort,
   normalizeDashboardCohortFilter,
+  OPERATOR_SEQUENCE_STOP_SOURCE,
   SEQUENCE_ABANDONED_HANDOFF_SOURCE,
   SEQUENCE_COMPLETED_HANDOFF_SOURCE,
 } from '../lib/dashboard-follow-up-filters.js';
@@ -99,6 +100,7 @@ export function createOutboundSequenceVisibilityRouter(deps) {
           summary: {
             activeSequences: 0,
             completedToday: 0,
+            stoppedToday: 0,
             abandonedToday: 0,
             nextStageQueued: 0,
             oldestActiveUpdatedAt: null,
@@ -111,10 +113,29 @@ export function createOutboundSequenceVisibilityRouter(deps) {
         `
         WITH seq AS (
           SELECT
+            lead_phone,
             status,
             updated_at
           FROM lead_sequence_state
           WHERE client_key = $1
+        ),
+        handoff_latest AS (
+          SELECT DISTINCT ON (lead_phone)
+            lead_phone,
+            source
+          FROM lead_handoff
+          WHERE client_key = $1
+          ORDER BY lead_phone, updated_at DESC
+        ),
+        abandoned_today_rows AS (
+          SELECT
+            s.lead_phone,
+            hl.source
+          FROM seq s
+          LEFT JOIN handoff_latest hl
+            ON hl.lead_phone = s.lead_phone
+          WHERE s.status = 'abandoned'
+            AND s.updated_at::date = NOW()::date
         ),
         nextq AS (
           SELECT COUNT(*)::int AS n
@@ -127,11 +148,12 @@ export function createOutboundSequenceVisibilityRouter(deps) {
         SELECT
           (SELECT COUNT(*)::int FROM seq WHERE status = 'active') AS active_sequences,
           (SELECT COUNT(*)::int FROM seq WHERE status = 'completed' AND updated_at::date = NOW()::date) AS completed_today,
-          (SELECT COUNT(*)::int FROM seq WHERE status = 'abandoned' AND updated_at::date = NOW()::date) AS abandoned_today,
+          (SELECT COUNT(*)::int FROM abandoned_today_rows WHERE source = $2) AS stopped_today,
+          (SELECT COUNT(*)::int FROM abandoned_today_rows WHERE source IS DISTINCT FROM $2) AS abandoned_today,
           (SELECT n FROM nextq) AS next_stage_queued,
           (SELECT MIN(updated_at) FROM seq WHERE status = 'active') AS oldest_active_updated_at
       `,
-        [clientKey]
+        [clientKey, OPERATOR_SEQUENCE_STOP_SOURCE]
       );
       const r = rows?.rows?.[0] || {};
       return res.json({
@@ -149,6 +171,7 @@ export function createOutboundSequenceVisibilityRouter(deps) {
         summary: {
           activeSequences: parseInt(r.active_sequences, 10) || 0,
           completedToday: parseInt(r.completed_today, 10) || 0,
+          stoppedToday: parseInt(r.stopped_today, 10) || 0,
           abandonedToday: parseInt(r.abandoned_today, 10) || 0,
           nextStageQueued: parseInt(r.next_stage_queued, 10) || 0,
           oldestActiveUpdatedAt: r.oldest_active_updated_at ? new Date(r.oldest_active_updated_at).toISOString() : null,
