@@ -16627,7 +16627,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     }
                 } catch {}
 
-                wrap.__fuClickDelegationHandler = (e) => {
+                wrap.__fuClickDelegationHandler = async (e) => {
                     // Explicit drilldown control (preferred)
                     const drillBtn = e.target.closest('[data-fu-drilldown="1"]');
                     if (drillBtn) {
