@@ -4646,6 +4646,215 @@
             color: var(--primary, #5c6ac4);
         }
 
+        .outbound-seq-shell {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .outbound-seq-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .outbound-seq-tabs {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .outbound-seq-intro {
+            margin: 0;
+            padding: 12px 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(92, 106, 196, 0.18);
+            background: linear-gradient(135deg, rgba(92, 106, 196, 0.10), rgba(46, 58, 128, 0.06));
+            font-size: 0.84rem;
+            line-height: 1.5;
+            color: var(--text-secondary, #5c6178);
+        }
+
+        .outbound-seq-runtime {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .outbound-seq-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            gap: 10px 12px;
+            padding: 12px;
+            border-radius: 14px;
+            border: 1px solid var(--border);
+            background: var(--surface-3);
+        }
+
+        .outbound-seq-toolbar label {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: 0.85rem;
+            min-width: 240px;
+            flex: 1 1 240px;
+        }
+
+        .outbound-seq-toolbar input {
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--surface-2);
+            color: var(--text);
+        }
+
+        .outbound-seq-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+            gap: 14px;
+            align-items: start;
+        }
+
+        .outbound-seq-pane {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            min-width: 0;
+        }
+
+        .outbound-seq-pane__label {
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--muted, #5c6478);
+        }
+
+        .outbound-seq-detail,
+        .outbound-seq-list,
+        .outbound-seq-stage-list {
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            background:
+                linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0)),
+                var(--surface-2);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+        }
+
+        .outbound-seq-detail {
+            padding: 12px;
+            min-height: 520px;
+        }
+
+        .outbound-seq-list {
+            padding: 10px;
+            min-height: 520px;
+        }
+
+        .outbound-seq-stage-list {
+            padding: 10px;
+            max-height: 420px;
+        }
+
+        .outbound-seq-row {
+            width: 100%;
+            text-align: left;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 12px 14px;
+            margin: 0 0 10px 0;
+            border-radius: 16px;
+            border: 1px solid rgba(92, 106, 196, 0.14);
+            background: linear-gradient(180deg, rgba(92, 106, 196, 0.07), rgba(92, 106, 196, 0.03));
+            box-shadow: 0 8px 20px rgba(8, 12, 28, 0.08);
+            transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease, background 0.18s ease;
+        }
+
+        .outbound-seq-row:hover {
+            transform: translateY(-1px);
+            border-color: rgba(92, 106, 196, 0.30);
+            box-shadow: 0 10px 24px rgba(8, 12, 28, 0.12);
+        }
+
+        .outbound-seq-row[aria-pressed="true"] {
+            border-color: rgba(96, 165, 250, 0.52);
+            background: linear-gradient(180deg, rgba(59, 130, 246, 0.18), rgba(37, 99, 235, 0.08));
+            box-shadow: 0 0 0 1px rgba(96,165,250,0.18) inset, 0 12px 26px rgba(16, 24, 48, 0.18);
+        }
+
+        .outbound-seq-row__top {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: flex-start;
+        }
+
+        .outbound-seq-row__meta,
+        .outbound-seq-row__footer {
+            font-size: 0.76rem;
+            line-height: 1.45;
+            color: var(--text-secondary, #5c6178);
+        }
+
+        .outbound-seq-empty {
+            min-height: 220px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 18px;
+            border-radius: 14px;
+            border: 1px dashed rgba(92, 106, 196, 0.24);
+            background: linear-gradient(180deg, rgba(92, 106, 196, 0.08), rgba(92, 106, 196, 0.03));
+        }
+
+        .outbound-seq-empty__inner {
+            max-width: 560px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .outbound-seq-empty__title {
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        .outbound-seq-empty__body {
+            margin: 0;
+            font-size: 0.86rem;
+            line-height: 1.5;
+            color: var(--text-secondary, #5c6178);
+        }
+
+        .outbound-seq-detail-block {
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 12px;
+            background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0)), var(--surface-3);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        @media (max-width: 980px) {
+            .outbound-seq-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .outbound-seq-detail,
+            .outbound-seq-list {
+                min-height: 340px;
+                max-height: none;
+            }
+        }
+
         .fu-columns-modal {
             width: min(560px, 92vw);
             max-height: min(72vh, 720px);
@@ -6950,8 +7159,8 @@
 
         <section class="dashboard-section" id="outboundSequenceWindow" hidden aria-label="Outbound sequence visibility">
             <h2 class="section-header">🧭 Sequence window</h2>
-            <article class="card card-fullwidth" style="display:flex;flex-direction:column;gap:12px;">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
+            <article class="card card-fullwidth outbound-seq-shell">
+                <div class="outbound-seq-header">
                     <div>
                         <h3 style="margin:0;">Multi-stage outbound</h3>
                         <p class="card-subtitle" style="margin:6px 0 0 0;">
@@ -6961,15 +7170,15 @@
                     <button type="button" id="outboundSequenceRefresh" class="export-btn secondary" style="padding:6px 10px;font-size:12px;">Refresh</button>
                 </div>
 
-                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                <div class="outbound-seq-tabs">
                     <button type="button" id="outboundSequenceTabRuntime" class="export-btn secondary" data-seq-tab="runtime" aria-pressed="true">Runtime</button>
                     <button type="button" id="outboundSequenceTabConfig" class="export-btn secondary" data-seq-tab="config" aria-pressed="false">Config</button>
                     <small id="outboundSequenceMeta" style="color:var(--muted);"></small>
                 </div>
 
-                <div id="outboundSequenceTabRuntimePanel">
+                <div id="outboundSequenceTabRuntimePanel" class="outbound-seq-runtime">
                     <div id="outboundSequenceSummary" class="outreach-strip-facts" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;"></div>
-                    <div class="tom-ab-test-meta" style="margin:8px 0 0 0;">Use this panel to see which lead is in sequence, why they are there, what data has been captured, and whether another stage is still queued.</div>
+                    <p class="outbound-seq-intro">Use this panel to see which lead is in sequence, why they are there, what data has been captured, and whether another stage is still queued.</p>
 
                     <div class="follow-up-status-filters" id="outboundSequenceCohortFilters" role="group" aria-label="Filter sequence window by cohort">
                         <button type="button" class="follow-up-status-chip follow-up-status-chip--active" data-dashboard-cohort-filter="all">All</button>
@@ -6979,24 +7188,24 @@
                         <button type="button" class="follow-up-status-chip" data-dashboard-cohort-filter="abandoned">Abandoned·system</button>
                     </div>
 
-                    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
-                        <label style="display:flex;flex-direction:column;gap:4px;font-size:0.85rem;min-width:240px;">
+                    <div class="outbound-seq-toolbar">
+                        <label>
                             Lead phone (E.164 or local)
-                            <input type="text" id="outboundSequencePhoneInput" autocomplete="off" spellcheck="false" style="padding:8px;border-radius:8px;border:1px solid var(--border);" placeholder="+44… or 07…" />
+                            <input type="text" id="outboundSequencePhoneInput" autocomplete="off" spellcheck="false" placeholder="+44… or 07…" />
                         </label>
                         <button type="button" id="outboundSequenceLookupBtn" class="export-btn secondary">Lookup</button>
                         <small id="outboundSequenceLookupMsg" style="color:var(--muted);"></small>
                     </div>
 
-                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;align-items:start;">
-                        <div>
-                            <div class="meta-label" style="margin-bottom:6px;">Selected lead</div>
-                            <div id="outboundSequenceLeadDetail" class="thin-scroll" style="max-height:520px;border:1px solid var(--border);border-radius:12px;padding:10px;background:var(--surface-2);"></div>
+                    <div class="outbound-seq-grid">
+                        <div class="outbound-seq-pane">
+                            <div class="outbound-seq-pane__label">Selected lead</div>
+                            <div id="outboundSequenceLeadDetail" class="thin-scroll outbound-seq-detail"></div>
                         </div>
 
-                        <div>
-                            <div class="meta-label" style="margin-bottom:6px;">Recently updated sequences</div>
-                            <div id="outboundSequenceRecentList" class="thin-scroll" style="max-height:520px;border:1px solid var(--border);border-radius:12px;padding:8px;background:var(--surface-2);"></div>
+                        <div class="outbound-seq-pane">
+                            <div class="outbound-seq-pane__label">Recently updated sequences</div>
+                            <div id="outboundSequenceRecentList" class="thin-scroll outbound-seq-list"></div>
                         </div>
                     </div>
                 </div>
@@ -7004,8 +7213,8 @@
                 <div id="outboundSequenceTabConfigPanel" hidden>
                     <div id="outboundSequenceConfigSummary" class="outreach-strip-facts" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;"></div>
                     <div style="margin-top:10px;">
-                        <div class="meta-label" style="margin-bottom:6px;">Stages (what’s implemented)</div>
-                        <div id="outboundSequenceStagesList" class="thin-scroll" style="max-height:420px;border:1px solid var(--border);border-radius:12px;padding:10px;background:var(--surface-2);"></div>
+                        <div class="outbound-seq-pane__label" style="margin-bottom:6px;">Stages (what’s implemented)</div>
+                        <div id="outboundSequenceStagesList" class="thin-scroll outbound-seq-stage-list"></div>
                     </div>
                 </div>
             </article>
@@ -8593,10 +8802,46 @@
             return String(lead.name || row?.leadPhone || 'Lead').trim() || 'Lead';
         }
 
+        function outboundSequenceSelectedRowFallback() {
+            const rows = Array.isArray(outboundSequenceRecentRows) ? outboundSequenceRecentRows : [];
+            if (!rows.length) return null;
+            const selected = rows.find((row) => String(row?.leadPhone || '').trim() === String(outboundSequenceSelectedPhone || '').trim());
+            return selected || rows[0] || null;
+        }
+
+        function renderOutboundSequenceLeadEmptyState(message = '', row = null) {
+            const host = document.getElementById('outboundSequenceLeadDetail');
+            if (!host) return;
+            const fallback = row || outboundSequenceSelectedRowFallback();
+            const title = fallback ? outboundSequenceLeadTitle(fallback) : 'No lead selected yet';
+            const phone = String(fallback?.leadPhone || '').trim();
+            const statusMeta = fallback ? outboundSequenceStatusMeta(fallback) : null;
+            const lead = fallback?.lead && typeof fallback.lead === 'object' ? fallback.lead : {};
+            const detailBits = [
+                phone,
+                lead.service ? `Service: ${lead.service}` : '',
+                lead.source ? `Source: ${lead.source}` : '',
+            ].filter(Boolean).join(' · ');
+            const hint = message || (fallback
+                ? 'We could not load the full sequence detail for this lead yet, but you can still use the list on the right to compare rows and retry a lookup.'
+                : 'Choose a row from the list or search by phone to open the lead details.');
+            host.innerHTML = `
+                <div class="outbound-seq-empty">
+                    <div class="outbound-seq-empty__inner">
+                        <h4 class="outbound-seq-empty__title">${escapeHtml(title)}</h4>
+                        ${detailBits ? `<div class="tom-ab-test-meta">${escapeHtml(detailBits)}</div>` : ''}
+                        ${statusMeta ? `<div style="display:flex;flex-wrap:wrap;gap:8px;">${outboundSequenceBadgeHtml(statusMeta.label, statusMeta.tone)}</div>` : ''}
+                        <p class="outbound-seq-empty__body">${escapeHtml(hint)}</p>
+                    </div>
+                </div>
+            `;
+        }
+
         function renderOutboundSequenceRecentList(rows) {
             const host = document.getElementById('outboundSequenceRecentList');
             if (!host) return;
             const list = Array.isArray(rows) ? rows : [];
+            outboundSequenceRecentRows = list;
             if (!list.length) {
                 host.innerHTML = `<div class="empty-state-message" style="padding:8px;">No ${escapeHtml(dashboardCohortFilterLabel(dashboardCohortFilter))} rows in the current window.</div>`;
                 return;
@@ -8634,15 +8879,15 @@
                     return `
                         <button
                             type="button"
-                            class="export-btn secondary"
+                            class="outbound-seq-row"
                             data-seq-phone="${escapeHtml(phone)}"
                             aria-pressed="${selected ? 'true' : 'false'}"
-                            style="width:100%;text-align:left;display:flex;flex-direction:column;gap:8px;padding:10px 12px;margin:0 0 8px 0;border:${selected ? '1px solid rgba(96,165,250,0.55)' : '1px solid var(--border)'};background:${selected ? 'rgba(59,130,246,0.10)' : 'var(--surface-3)'};box-shadow:${selected ? '0 0 0 1px rgba(96,165,250,0.18) inset' : 'none'};">
-                            <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+                            >
+                            <div class="outbound-seq-row__top">
                                 <div style="min-width:0;flex:1;">
                                     <div><strong>${escapeHtml(title)}</strong></div>
                                     ${titleLine}
-                                    <div class="tom-ab-test-meta" style="margin-top:4px;">${escapeHtml(metaBits.join(' · ') || createdLine)}</div>
+                                    <div class="outbound-seq-row__meta" style="margin-top:4px;">${escapeHtml(metaBits.join(' · ') || createdLine)}</div>
                                 </div>
                                 <div style="display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;">${outboundSequenceBadgeHtml(statusMeta.label, statusMeta.tone)}</div>
                             </div>
@@ -8651,9 +8896,9 @@
                                 ${outboundSequenceBadgeHtml(`Attempts: ${attempts}`, 'neutral')}
                                 ${r?.dashboardCohort && r.dashboardCohort !== 'unclassified' ? outboundSequenceBadgeHtml(`Bucket: ${dashboardCohortFilterLabel(r.dashboardCohort)}`, 'neutral') : ''}
                             </div>
-                            <div class="tom-ab-test-meta">${escapeHtml(nextAction)}</div>
-                            ${summary ? `<div class="tom-ab-test-meta" style="line-height:1.4;"><strong>Context:</strong> ${escapeHtml(summary)}</div>` : ''}
-                            <div class="tom-ab-test-meta">Updated ${escapeHtml(updated)}${lead.createdAt ? ` · ${escapeHtml(createdLine)}` : ''}</div>
+                            <div class="outbound-seq-row__meta">${escapeHtml(nextAction)}</div>
+                            ${summary ? `<div class="outbound-seq-row__meta" style="line-height:1.45;"><strong>Context:</strong> ${escapeHtml(summary)}</div>` : ''}
+                            <div class="outbound-seq-row__footer">Updated ${escapeHtml(updated)}${lead.createdAt ? ` · ${escapeHtml(createdLine)}` : ''}</div>
                         </button>
                     `;
                 }).join('')}
@@ -8665,7 +8910,7 @@
             if (!host) return;
             const row = payload?.row || null;
             if (!row) {
-                host.innerHTML = '<div class="empty-state-message" style="padding:8px;">Select a recent row or look up a phone number to inspect the lead.</div>';
+                renderOutboundSequenceLeadEmptyState();
                 return;
             }
             const tz = getOperationalTimezone(dashboardData);
@@ -8775,7 +9020,7 @@
                     </div>
                     ${factGrid}
                     ${stageGraph ? `<div><div class="meta-label" style="margin-bottom:6px;">Sequence path</div>${stageGraph}</div>` : ''}
-                    <div style="border:1px solid var(--border);border-radius:12px;padding:10px;background:var(--surface-3);display:flex;flex-direction:column;gap:6px;">
+                    <div class="outbound-seq-detail-block">
                         <div class="meta-label">What happens next</div>
                         <div class="tom-ab-test-meta" style="line-height:1.45;">${escapeHtml(gateSummary)}</div>
                         <div class="tom-ab-test-meta">${nextLine}</div>
@@ -8783,16 +9028,16 @@
                         ${nextMeta}
                         ${lastOutcomeLine}
                     </div>
-                    <div style="border:1px solid var(--border);border-radius:12px;padding:10px;background:var(--surface-3);display:flex;flex-direction:column;gap:8px;">
+                    <div class="outbound-seq-detail-block">
                         <div class="meta-label">Lead context</div>
                         ${contextBlock}
                         ${handoff.updatedAt ? `<div class="tom-ab-test-meta">Handoff updated ${escapeHtml(formatRelativeWithAbsolute(handoff.updatedAt, tz))}${handoff.source ? ` · source=${escapeHtml(handoff.source)}` : ''}</div>` : ''}
                     </div>
-                    <div style="border:1px solid var(--border);border-radius:12px;padding:10px;background:var(--surface-3);">
+                    <div class="outbound-seq-detail-block">
                         <div class="meta-label">Required fields for current stage</div>
                         ${reqHtml}
                     </div>
-                    <div style="border:1px solid var(--border);border-radius:12px;padding:10px;background:var(--surface-3);">
+                    <div class="outbound-seq-detail-block">
                         <div class="meta-label">Completed stage snapshots</div>
                         ${stagesHtml}
                     </div>
@@ -8847,17 +9092,21 @@
                         `${BASE_URL}/api/outbound-sequence/${encodeURIComponent(clientKey)}/phone/${encodeURIComponent(detailPhone)}`,
                         { cache: 'no-store' }
                     ).then((r) => r.json());
-                    if (detailRes?.ok) {
+                    if (detailRes?.ok && detailRes?.row) {
                         outboundSequenceSelectedPhone = String(detailRes?.row?.leadPhone || detailPhone).trim() || detailPhone;
                         renderOutboundSequenceLeadDetail(detailRes);
                     } else {
-                        renderOutboundSequenceLeadDetail(null);
+                        renderOutboundSequenceLeadEmptyState(
+                            'We could not load the full detail for this lead yet. The selected row on the right still shows the latest summary we have.',
+                            outboundSequenceSelectedRowFallback()
+                        );
                     }
                 } else {
-                    renderOutboundSequenceLeadDetail(null);
+                    renderOutboundSequenceLeadEmptyState();
                 }
             } catch (e) {
                 console.warn('[DASHBOARD] outbound sequence window refresh failed', e);
+                renderOutboundSequenceLeadEmptyState('The sequence panel could not refresh just now. Try Refresh again in a moment.');
             }
         }
 
@@ -14819,6 +15068,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         let followUpDispositionFilter = 'all'; // all | voicemail | spoke
         let dashboardCohortFilter = 'all'; // all | classic | sequence | stopped | abandoned
         let outboundSequenceSelectedPhone = '';
+        let outboundSequenceRecentRows = [];
         const followUpSelectedKeys = new Set();
 
         function dashboardCohortFilterLabel(value) {

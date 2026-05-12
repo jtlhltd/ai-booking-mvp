@@ -27,3 +27,8 @@
 - Risk: adding lead-context queries could slow the sequence panel or fail on older schemas if optional columns are queried.
 - Mitigation: only use stable base columns (`name`, `service`, `source`, `notes`, `status`, `created_at`) and keep joins/query fan-out bounded to the current page set.
 - Rollback: revert the UX-upgrade commit to restore the simpler sequence panel if operators find the extra detail noisy.
+
+## Amendments
+- Add a visual polish pass focused on spacing, hierarchy, pane balance, and selection/empty states inside the sequence runtime panel.
+- Reduce the “blank debug box” feel by giving the selected-lead panel a stronger empty/loading treatment and by styling the recent-list cards more clearly.
+- Keep this pass frontend-only unless a small fallback is needed to avoid a confusing empty detail panel.
