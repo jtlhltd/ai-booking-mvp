@@ -4,7 +4,6 @@ import crypto from 'crypto';
 import { getClassicFollowUpCutoverDate } from '../lib/outbound-sequence.js';
 import {
   getDashboardCohortMeta,
-  loadDashboardArtifactMap,
   matchesDashboardCohort,
   normalizeDashboardCohortFilter,
   OPERATOR_SEQUENCE_STOP_SOURCE,
@@ -30,6 +29,146 @@ export function createOutboundSequenceVisibilityRouter(deps) {
     const preview = length > 0 ? `${s.slice(0, maxLen)}${length > maxLen ? '…' : ''}` : '';
     const sha = length > 0 ? crypto.createHash('sha256').update(s).digest('hex').slice(0, 10) : '';
     return { length, preview, sha };
+  }
+
+  function buildInClause(startIndex, values) {
+    return values.map((_, idx) => `$${startIndex + idx}`).join(', ');
+  }
+
+  function uniqueTrimmed(values) {
+    const out = [];
+    const seen = new Set();
+    for (const value of Array.isArray(values) ? values : []) {
+      const trimmed = String(value || '').trim();
+      if (!trimmed || seen.has(trimmed)) continue;
+      seen.add(trimmed);
+      out.push(trimmed);
+    }
+    return out;
+  }
+
+  function lookupKeysForPhone(phone, phoneMatch = null) {
+    return uniqueTrimmed([phone, phoneMatch]);
+  }
+
+  function mergeSequenceContext(map, keys, patch) {
+    for (const key of uniqueTrimmed(keys)) {
+      const prior = map.get(key) || {};
+      map.set(key, { ...prior, ...patch });
+    }
+  }
+
+  function getSequenceContextForPhone(map, phone, phoneMatch = null) {
+    for (const key of lookupKeysForPhone(phone, phoneMatch)) {
+      const hit = map.get(key);
+      if (hit) return hit;
+    }
+    return {};
+  }
+
+  function parseJsonObject(raw) {
+    if (!raw) return null;
+    if (typeof raw === 'object' && !Array.isArray(raw)) return raw;
+    try {
+      const parsed = JSON.parse(String(raw || ''));
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function loadLeadAndHandoffMap(clientKey, phones = []) {
+    const map = new Map();
+    if (typeof query !== 'function' || !clientKey) return map;
+    const uniquePhones = uniqueTrimmed(phones);
+    const matchKeys = uniqueTrimmed(uniquePhones.map((phone) => phoneKeyFn(phone)));
+    if (!uniquePhones.length && !matchKeys.length) return map;
+
+    const leadPhoneClause = uniquePhones.length ? `phone IN (${buildInClause(2, uniquePhones)})` : '';
+    const leadMatchClause = matchKeys.length ? `phone_match_key IN (${buildInClause(2 + uniquePhones.length, matchKeys)})` : '';
+    const leadWhere = [leadPhoneClause, leadMatchClause].filter(Boolean).join(' OR ');
+    if (leadWhere) {
+      const leadRes = await query(
+        `
+        SELECT
+          id,
+          phone,
+          phone_match_key AS "phoneMatchKey",
+          name,
+          service,
+          source,
+          notes,
+          status AS "leadStatus",
+          created_at AS "createdAt"
+        FROM leads
+        WHERE client_key = $1
+          AND (${leadWhere})
+        ORDER BY created_at DESC
+      `,
+        [clientKey, ...uniquePhones, ...matchKeys]
+      ).catch(() => ({ rows: [] }));
+      for (const row of leadRes?.rows || []) {
+        mergeSequenceContext(
+          map,
+          lookupKeysForPhone(row.phone, row.phoneMatchKey),
+          {
+            lead: {
+              id: row.id ?? null,
+              phone: row.phone || null,
+              phoneMatchKey: row.phoneMatchKey || null,
+              name: row.name || null,
+              service: row.service || null,
+              source: row.source || null,
+              notes: row.notes || null,
+              status: row.leadStatus || null,
+              createdAt: row.createdAt ? new Date(row.createdAt).toISOString() : null,
+            },
+          }
+        );
+      }
+    }
+
+    const handoffPhoneClause = uniquePhones.length ? `lead_phone IN (${buildInClause(2, uniquePhones)})` : '';
+    const handoffMatchClause = matchKeys.length ? `phone_match_key IN (${buildInClause(2 + uniquePhones.length, matchKeys)})` : '';
+    const handoffWhere = [handoffPhoneClause, handoffMatchClause].filter(Boolean).join(' OR ');
+    if (handoffWhere) {
+      const handoffRes = await query(
+        `
+        SELECT
+          lead_phone AS "leadPhone",
+          phone_match_key AS "phoneMatchKey",
+          source,
+          summary_text AS "summaryText",
+          operator_notes AS "operatorNotes",
+          updated_at AS "updatedAt",
+          data_json AS "dataJson"
+        FROM lead_handoff
+        WHERE client_key = $1
+          AND (${handoffWhere})
+        ORDER BY updated_at DESC
+      `,
+        [clientKey, ...uniquePhones, ...matchKeys]
+      ).catch(() => ({ rows: [] }));
+      const seen = new Set();
+      for (const row of handoffRes?.rows || []) {
+        const keys = lookupKeysForPhone(row.leadPhone, row.phoneMatchKey);
+        const primaryKey = keys[0];
+        if (!primaryKey || seen.has(primaryKey)) continue;
+        seen.add(primaryKey);
+        const handoffData = parseJsonObject(row.dataJson);
+        mergeSequenceContext(map, keys, {
+          handoff: {
+            source: row.source || null,
+            summaryText: row.summaryText || null,
+            operatorNotes: row.operatorNotes || null,
+            updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString() : null,
+            salvageDismissedAt: handoffData?.qual?._salvageDismissedAt || null,
+          },
+        });
+      }
+    }
+
+    return map;
   }
 
   function buildSequenceConfigExplain(client) {
@@ -231,19 +370,14 @@ export function createOutboundSequenceVisibilityRouter(deps) {
       const validated = getValidatedOutboundSequence(client);
       const raw = client?.outboundSequence;
       const v = raw && typeof raw === 'object' ? validateOutboundSequenceConfig(raw) : { ok: false, errors: ['outboundSequence missing'] };
-      const artifactMap = await loadDashboardArtifactMap({
-        query,
-        clientKey,
-        phones: out.map((row) => row?.leadPhone || ''),
-        phoneMatchKey: phoneKeyFn,
-      });
+      const contextMap = await loadLeadAndHandoffMap(clientKey, out.map((row) => row?.leadPhone || ''));
       const tenantTimezone = client?.booking?.timezone || client?.timezone || 'Europe/London';
       const classicFollowUpCutoverDate = getClassicFollowUpCutoverDate(client);
       const filteredRows = out
         .map((row) => {
           const phone = String(row?.leadPhone || '').trim();
           const phoneKey = phoneKeyFn(phone);
-          const artifact = artifactMap.get(phone) || (phoneKey ? artifactMap.get(phoneKey) : null) || {};
+          const context = getSequenceContextForPhone(contextMap, phone, phoneKey);
           const fallbackSource =
             row?.status === 'abandoned'
               ? SEQUENCE_ABANDONED_HANDOFF_SOURCE
@@ -251,16 +385,18 @@ export function createOutboundSequenceVisibilityRouter(deps) {
                 ? SEQUENCE_COMPLETED_HANDOFF_SOURCE
                 : '';
           const cohortMeta = getDashboardCohortMeta({
-            handoffSource: artifact?.handoffSource || fallbackSource,
+            handoffSource: context?.handoff?.source || fallbackSource,
             hasSequenceState: true,
-            leadCreatedAt: artifact?.leadCreatedAt || null,
+            leadCreatedAt: context?.lead?.createdAt || null,
             classicFollowUpCutoverDate,
             tenantTimezone,
-            salvageDismissedAt: artifact?.salvageDismissedAt || null,
+            salvageDismissedAt: context?.handoff?.salvageDismissedAt || null,
           });
           return {
             ...row,
             dashboardCohort: cohortMeta.cohort,
+            lead: context?.lead || null,
+            handoff: context?.handoff || null,
           };
         })
         .filter((row) => matchesDashboardCohort({ cohort: row?.dashboardCohort }, filter));
@@ -308,6 +444,8 @@ export function createOutboundSequenceVisibilityRouter(deps) {
       const validated = getValidatedOutboundSequence(client);
       const raw = client?.outboundSequence;
       const v = raw && typeof raw === 'object' ? validateOutboundSequenceConfig(raw) : { ok: false, errors: ['outboundSequence missing'] };
+      const phoneRaw = String(phone || '').trim();
+      const phoneMatch = phoneKeyFn(phoneRaw);
 
       const rowRes = await query(
         `
@@ -324,10 +462,14 @@ export function createOutboundSequenceVisibilityRouter(deps) {
           status,
           updated_at AS "updatedAt"
         FROM lead_sequence_state
-        WHERE client_key = $1 AND lead_phone = $2
+        WHERE client_key = $1
+          AND (
+            lead_phone = $2
+            OR (lead_phone IS NOT NULL AND $3 IS NOT NULL AND RIGHT(regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g'), 10) = $3)
+          )
         LIMIT 1
       `,
-        [clientKey, String(phone || '').trim()]
+        [clientKey, phoneRaw, phoneMatch]
       );
       const row = rowRes?.rows?.[0] || null;
       if (!row) {
@@ -347,6 +489,9 @@ export function createOutboundSequenceVisibilityRouter(deps) {
         });
       }
 
+      const contextMap = await loadLeadAndHandoffMap(clientKey, [row.leadPhone || phoneRaw]);
+      const context = getSequenceContextForPhone(contextMap, row.leadPhone || phoneRaw, phoneKeyFn(row.leadPhone || phoneRaw));
+
       let stages = row.stagesCompleted;
       if (typeof stages === 'string') {
         try { stages = JSON.parse(stages); } catch { stages = []; }
@@ -355,7 +500,7 @@ export function createOutboundSequenceVisibilityRouter(deps) {
 
       let nextQueue = null;
       if (isPostgres) {
-        const mk = phoneKeyFn(phone);
+        const mk = phoneKeyFn(phoneRaw);
         const qRes = await query(
           `
           SELECT
@@ -464,12 +609,30 @@ export function createOutboundSequenceVisibilityRouter(deps) {
             };
           })()
         : null;
+      const tenantTimezone = client?.booking?.timezone || client?.timezone || 'Europe/London';
+      const classicFollowUpCutoverDate = getClassicFollowUpCutoverDate(client);
+      const fallbackSource =
+        row?.status === 'abandoned'
+          ? SEQUENCE_ABANDONED_HANDOFF_SOURCE
+          : row?.status === 'completed'
+            ? SEQUENCE_COMPLETED_HANDOFF_SOURCE
+            : '';
+      const cohortMeta = getDashboardCohortMeta({
+        handoffSource: context?.handoff?.source || fallbackSource,
+        hasSequenceState: true,
+        leadCreatedAt: context?.lead?.createdAt || null,
+        classicFollowUpCutoverDate,
+        tenantTimezone,
+        salvageDismissedAt: context?.handoff?.salvageDismissedAt || null,
+      });
 
       return res.json({
         ok: true,
         clientKey,
         phone,
-        row: { ...row, stagesCompleted: stages },
+        row: { ...row, stagesCompleted: stages, dashboardCohort: cohortMeta.cohort },
+        lead: context?.lead || null,
+        handoff: context?.handoff || null,
         nextQueue,
         sequence: {
           killSwitchActive,

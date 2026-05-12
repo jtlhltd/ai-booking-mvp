@@ -188,6 +188,38 @@ describe('routes/outbound-sequence-visibility-mount.js', () => {
       if (s.includes('FROM call_queue')) {
         return { rows: [] };
       }
+      if (s.includes('FROM lead_handoff')) {
+        return {
+          rows: [
+            {
+              leadPhone: '+447700900000',
+              phoneMatchKey: '7700900000',
+              source: 'vapi_webhook.sequence_abandoned',
+              summaryText: 'Needs a better lane match before next call.',
+              operatorNotes: 'Asked to retry after ops review.',
+              updatedAt: '2030-01-01T00:45:00.000Z',
+              dataJson: '{}',
+            },
+          ],
+        };
+      }
+      if (s.includes('FROM leads')) {
+        return {
+          rows: [
+            {
+              id: 44,
+              phone: '+447700900000',
+              phoneMatchKey: '7700900000',
+              name: 'Northbridge Freight Ltd',
+              service: 'International parcel',
+              source: 'import_csv',
+              notes: 'High weekly volume.',
+              leadStatus: 'new',
+              createdAt: '2030-01-01T00:00:00.000Z',
+            },
+          ],
+        };
+      }
       if (s.includes('FROM calls')) {
         return { rows: [{ outcome: 'no-answer', status: 'ended', duration: 12, createdAt: '2030-01-01T00:30:00.000Z' }] };
       }
@@ -199,8 +231,17 @@ describe('routes/outbound-sequence-visibility-mount.js', () => {
       mounts: [{ path: '/api', router: () => createOutboundSequenceVisibilityRouter({ query, getFullClient, isPostgres: true }) }],
     });
 
-    const res = await request(app).get('/api/outbound-sequence/d2d-xpress-tom/phone/%2B447700900000').expect(200);
+    const res = await request(app).get('/api/outbound-sequence/d2d-xpress-tom/phone/07700900000').expect(200);
     expect(res.body).toEqual(expect.objectContaining({ ok: true, row: expect.any(Object), explain: expect.any(Object) }));
+    expect(res.body.lead).toEqual(expect.objectContaining({
+      name: 'Northbridge Freight Ltd',
+      service: 'International parcel',
+      source: 'import_csv',
+    }));
+    expect(res.body.handoff).toEqual(expect.objectContaining({
+      summaryText: 'Needs a better lane match before next call.',
+      operatorNotes: 'Asked to retry after ops review.',
+    }));
     expect(res.body.explain.currentStage.requiredFieldsStatus).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ field: 'lane', present: true }),
@@ -275,19 +316,25 @@ describe('routes/outbound-sequence-visibility-mount.js', () => {
               leadPhone: '+447700900111',
               phoneMatchKey: '7700900111',
               source: 'vapi_webhook.sequence_abandoned',
+              summaryText: 'Auto-abandoned after cap reached.',
               updatedAt: '2030-01-01T01:00:00.000Z',
+              dataJson: '{}',
             },
             {
               leadPhone: '+447700900333',
               phoneMatchKey: '7700900333',
               source: 'operator.sequence_stopped',
+              summaryText: 'Stopped by operator after review.',
               updatedAt: '2030-01-01T01:00:00.000Z',
+              dataJson: '{}',
             },
             {
               leadPhone: '+447700900222',
               phoneMatchKey: '7700900222',
               source: 'vapi_webhook.sequence_completed',
+              summaryText: 'Sequence completed.',
               updatedAt: '2030-01-01T01:00:00.000Z',
+              dataJson: '{}',
             },
           ],
         };
@@ -295,9 +342,9 @@ describe('routes/outbound-sequence-visibility-mount.js', () => {
       if (s.includes('FROM leads')) {
         return {
           rows: [
-            { phone: '+447700900111', phoneMatchKey: '7700900111', createdAt: '2030-01-01T00:00:00.000Z' },
-            { phone: '+447700900333', phoneMatchKey: '7700900333', createdAt: '2030-01-01T00:00:00.000Z' },
-            { phone: '+447700900222', phoneMatchKey: '7700900222', createdAt: '2030-01-01T00:00:00.000Z' },
+            { id: 11, phone: '+447700900111', phoneMatchKey: '7700900111', name: 'Acme Freight', service: 'LTL', source: 'import_csv', notes: 'Hot lead', leadStatus: 'new', createdAt: '2030-01-01T00:00:00.000Z' },
+            { id: 33, phone: '+447700900333', phoneMatchKey: '7700900333', name: 'Operator Stop Co', service: 'Parcel', source: 'manual', notes: '', leadStatus: 'follow_up', createdAt: '2030-01-01T00:00:00.000Z' },
+            { id: 22, phone: '+447700900222', phoneMatchKey: '7700900222', name: 'Done Logistics', service: 'Pallet', source: 'zapier', notes: '', leadStatus: 'contacted', createdAt: '2030-01-01T00:00:00.000Z' },
           ],
         };
       }
@@ -327,7 +374,9 @@ describe('routes/outbound-sequence-visibility-mount.js', () => {
     expect(res.body.rows).toHaveLength(1);
     expect(res.body.rows[0]).toEqual(expect.objectContaining({
       leadPhone: '+447700900111',
-      dashboardCohort: 'abandoned'
+      dashboardCohort: 'abandoned',
+      lead: expect.objectContaining({ name: 'Acme Freight', service: 'LTL' }),
+      handoff: expect.objectContaining({ summaryText: 'Auto-abandoned after cap reached.' }),
     }));
   });
 
@@ -379,7 +428,9 @@ describe('routes/outbound-sequence-visibility-mount.js', () => {
               leadPhone: '+447700900333',
               phoneMatchKey: '7700900333',
               source: 'operator.sequence_stopped',
+              summaryText: 'Stopped by operator after callback request.',
               updatedAt: '2030-01-01T01:00:00.000Z',
+              dataJson: '{}',
             },
           ],
         };
@@ -387,7 +438,7 @@ describe('routes/outbound-sequence-visibility-mount.js', () => {
       if (s.includes('FROM leads')) {
         return {
           rows: [
-            { phone: '+447700900333', phoneMatchKey: '7700900333', createdAt: '2030-01-01T00:00:00.000Z' },
+            { id: 33, phone: '+447700900333', phoneMatchKey: '7700900333', name: 'Operator Stop Co', service: 'Parcel', source: 'manual', notes: '', leadStatus: 'follow_up', createdAt: '2030-01-01T00:00:00.000Z' },
           ],
         };
       }
@@ -415,7 +466,9 @@ describe('routes/outbound-sequence-visibility-mount.js', () => {
     expect(res.body.rows).toHaveLength(1);
     expect(res.body.rows[0]).toEqual(expect.objectContaining({
       leadPhone: '+447700900333',
-      dashboardCohort: 'stopped'
+      dashboardCohort: 'stopped',
+      lead: expect.objectContaining({ name: 'Operator Stop Co' }),
+      handoff: expect.objectContaining({ summaryText: 'Stopped by operator after callback request.' }),
     }));
   });
 });
