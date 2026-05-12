@@ -4781,6 +4781,7 @@
             background: linear-gradient(180deg, rgba(92, 106, 196, 0.07), rgba(92, 106, 196, 0.03));
             box-shadow: 0 8px 20px rgba(8, 12, 28, 0.08);
             transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease, background 0.18s ease;
+            cursor: pointer;
         }
 
         .outbound-seq-row:hover {
@@ -4807,6 +4808,30 @@
             font-size: 0.76rem;
             line-height: 1.45;
             color: var(--text-secondary, #5c6178);
+        }
+
+        .outbound-seq-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .outbound-seq-action-btn {
+            padding: 6px 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(92, 106, 196, 0.24);
+            background: rgba(92, 106, 196, 0.08);
+            color: var(--primary, #5c6ac4);
+            font-size: 0.76rem;
+            font-weight: 700;
+            cursor: pointer;
+            line-height: 1.2;
+        }
+
+        .outbound-seq-action-btn:hover {
+            background: rgba(92, 106, 196, 0.14);
+            border-color: rgba(92, 106, 196, 0.34);
         }
 
         .outbound-seq-empty {
@@ -4849,6 +4874,12 @@
             display: flex;
             flex-direction: column;
             gap: 8px;
+        }
+
+        .outbound-seq-history-host {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         }
 
         @media (max-width: 980px) {
@@ -8812,6 +8843,33 @@
             return String(lead.name || row?.leadPhone || 'Lead').trim() || 'Lead';
         }
 
+        function outboundSequencePhoneNorm(phone) {
+            return followUpNormalizePhoneKey(phone) || String(phone || '').trim();
+        }
+
+        function outboundSequenceJourneyActionsHtml({ phone = '', leadId = '', title = '' } = {}) {
+            const phoneNorm = outboundSequencePhoneNorm(phone);
+            const bits = [];
+            if (phoneNorm) {
+                bits.push(`<button type="button" class="outbound-seq-action-btn" data-seq-history="${escapeHtml(phoneNorm)}" data-seq-title="${escapeHtml(title || phone)}">History</button>`);
+            }
+            if (leadId != null && String(leadId).trim()) {
+                bits.push(`<button type="button" class="outbound-seq-action-btn" data-seq-journey="${escapeHtml(String(leadId))}" data-seq-title="${escapeHtml(title || phone)}">Journey</button>`);
+            }
+            return bits.length ? `<div class="outbound-seq-actions">${bits.join('')}</div>` : '';
+        }
+
+        async function renderOutboundSequenceInlineHistory({ phone = '', title = '' } = {}) {
+            const host = document.getElementById('outboundSequenceDetailHistory');
+            const phoneNorm = outboundSequencePhoneNorm(phone);
+            if (!host) return;
+            if (!phoneNorm || !currentClient) {
+                host.innerHTML = '<div class="tom-ab-test-meta">Call history is not available for this lead yet.</div>';
+                return;
+            }
+            await followUpRenderCallHistoryInto(host, currentClient, phoneNorm, { businessName: title || phoneNorm });
+        }
+
         function outboundSequenceSelectedRowFallback() {
             const rows = Array.isArray(outboundSequenceRecentRows) ? outboundSequenceRecentRows : [];
             if (!rows.length) return null;
@@ -8886,11 +8944,13 @@
                             ? 'Active, but no future stage is queued right now'
                             : 'No future stage queued';
                     const summary = outboundSequenceShortText(handoff.summaryText || handoff.operatorNotes || lead.notes || '', 150);
+                    const actions = outboundSequenceJourneyActionsHtml({ phone, leadId: lead.id, title });
                     return `
-                        <button
-                            type="button"
+                        <div
                             class="outbound-seq-row"
                             data-seq-phone="${escapeHtml(phone)}"
+                            role="button"
+                            tabindex="0"
                             aria-pressed="${selected ? 'true' : 'false'}"
                             >
                             <div class="outbound-seq-row__top">
@@ -8906,10 +8966,11 @@
                                 ${outboundSequenceBadgeHtml(`Attempts: ${attempts}`, 'neutral')}
                                 ${r?.dashboardCohort && r.dashboardCohort !== 'unclassified' ? outboundSequenceBadgeHtml(`Bucket: ${dashboardCohortFilterLabel(r.dashboardCohort)}`, 'neutral') : ''}
                             </div>
+                            ${actions}
                             <div class="outbound-seq-row__meta">${escapeHtml(nextAction)}</div>
                             ${summary ? `<div class="outbound-seq-row__meta" style="line-height:1.45;"><strong>Context:</strong> ${escapeHtml(summary)}</div>` : ''}
                             <div class="outbound-seq-row__footer">Updated ${escapeHtml(updated)}${lead.createdAt ? ` · ${escapeHtml(createdLine)}` : ''}</div>
-                        </button>
+                        </div>
                     `;
                 }).join('')}
             `;
@@ -9015,6 +9076,7 @@
             const contextBlock = handoffBits
                 ? `<div style="display:grid;gap:10px;">${handoffBits}</div>`
                 : '<div class="tom-ab-test-meta">No handoff summary, operator note, or lead note is stored for this lead yet.</div>';
+            const journeyActions = outboundSequenceJourneyActionsHtml({ phone: row.leadPhone || lead.phone, leadId: lead.id, title });
             host.innerHTML = `
                 <div style="display:flex;flex-direction:column;gap:12px;">
                     <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
@@ -9029,6 +9091,7 @@
                         </div>
                     </div>
                     ${factGrid}
+                    ${journeyActions}
                     ${stageGraph ? `<div><div class="meta-label" style="margin-bottom:6px;">Sequence path</div>${stageGraph}</div>` : ''}
                     <div class="outbound-seq-detail-block">
                         <div class="meta-label">What happens next</div>
@@ -9051,6 +9114,10 @@
                         <div class="meta-label">Completed stage snapshots</div>
                         ${stagesHtml}
                     </div>
+                    <div class="outbound-seq-detail-block">
+                        <div class="meta-label">Call history</div>
+                        <div id="outboundSequenceDetailHistory" class="outbound-seq-history-host"><div class="tom-ab-test-meta">Loading call history…</div></div>
+                    </div>
                     <details>
                         <summary style="cursor:pointer;color:var(--muted);font-size:0.9rem;">Why / debug details</summary>
                         <div style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">
@@ -9065,6 +9132,7 @@
                     </details>
                 </div>
             `;
+            renderOutboundSequenceInlineHistory({ phone: row.leadPhone || lead.phone, title }).catch(() => {});
         }
 
         async function refreshOutboundSequenceWindow(clientKey, { phoneLookup = null } = {}) {
@@ -9182,9 +9250,46 @@
             }
             if (recent) {
                 recent.addEventListener('click', async (e) => {
+                    const historyBtn = e.target.closest('[data-seq-history]');
+                    if (historyBtn) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const phone = historyBtn.getAttribute('data-seq-history') || '';
+                        const title = historyBtn.getAttribute('data-seq-title') || '';
+                        followUpOpenCallHistoryModal({ phone, businessName: title });
+                        const input = document.getElementById('followUpCallHistoryPhoneInput');
+                        if (input) input.value = phone;
+                        const host = document.getElementById('followUpCallHistoryResults');
+                        if (host && currentClient && phone) {
+                            followUpRenderCallHistoryInto(host, currentClient, phone, { businessName: title }).catch(() => {});
+                        }
+                        return;
+                    }
+                    const journeyBtn = e.target.closest('[data-seq-journey]');
+                    if (journeyBtn) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const leadId = journeyBtn.getAttribute('data-seq-journey') || '';
+                        const title = journeyBtn.getAttribute('data-seq-title') || 'Lead';
+                        if (leadId) viewLeadTimeline(leadId, title);
+                        return;
+                    }
                     const btn = e.target.closest('[data-seq-phone]');
                     if (!btn) return;
                     const phone = btn.getAttribute('data-seq-phone') || '';
+                    outboundSequenceSelectedPhone = phone;
+                    if (input) input.value = phone;
+                    if (msg) msg.textContent = 'Loading…';
+                    await refreshOutboundSequenceWindow(currentClient, { phoneLookup: phone });
+                    if (msg) msg.textContent = '';
+                });
+                recent.addEventListener('keydown', async (e) => {
+                    const row = e.target.closest('[data-seq-phone]');
+                    if (!row) return;
+                    if (e.key !== 'Enter' && e.key !== ' ') return;
+                    e.preventDefault();
+                    const phone = row.getAttribute('data-seq-phone') || '';
+                    if (!phone) return;
                     outboundSequenceSelectedPhone = phone;
                     if (input) input.value = phone;
                     if (msg) msg.textContent = 'Loading…';
@@ -9195,6 +9300,28 @@
             if (detail && !detail.dataset.stopBound) {
                 detail.dataset.stopBound = '1';
                 detail.addEventListener('click', async (e) => {
+                    const historyBtn = e.target.closest('[data-seq-history]');
+                    if (historyBtn) {
+                        e.preventDefault();
+                        const phone = historyBtn.getAttribute('data-seq-history') || '';
+                        const title = historyBtn.getAttribute('data-seq-title') || '';
+                        followUpOpenCallHistoryModal({ phone, businessName: title });
+                        const input = document.getElementById('followUpCallHistoryPhoneInput');
+                        if (input) input.value = phone;
+                        const host = document.getElementById('followUpCallHistoryResults');
+                        if (host && currentClient && phone) {
+                            followUpRenderCallHistoryInto(host, currentClient, phone, { businessName: title }).catch(() => {});
+                        }
+                        return;
+                    }
+                    const journeyBtn = e.target.closest('[data-seq-journey]');
+                    if (journeyBtn) {
+                        e.preventDefault();
+                        const leadId = journeyBtn.getAttribute('data-seq-journey') || '';
+                        const title = journeyBtn.getAttribute('data-seq-title') || 'Lead';
+                        if (leadId) viewLeadTimeline(leadId, title);
+                        return;
+                    }
                     const btn = e.target.closest('[data-seq-stop]');
                     if (!btn) return;
                     const phone = btn.getAttribute('data-seq-stop') || '';

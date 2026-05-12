@@ -33,3 +33,4 @@
 - Reduce the “blank debug box” feel by giving the selected-lead panel a stronger empty/loading treatment and by styling the recent-list cards more clearly.
 - Keep this pass frontend-only unless a small fallback is needed to avoid a confusing empty detail panel.
 - Cap the runtime module height so the sequence section cannot consume an outsized share of the page; keep the detail and recent-list panes scrollable within that cap.
+- Add explicit drill-in affordances for sequence rows so operators can click into call history and full lead journey without hunting through unrelated modules.
