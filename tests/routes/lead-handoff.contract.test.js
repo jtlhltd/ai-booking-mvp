@@ -29,6 +29,67 @@ describe('routes/lead-handoff.js contracts', () => {
     expect(res.body.rows.length).toBe(1);
   });
 
+  test('GET /handoff/:clientKey applies abandoned cohort filter', async () => {
+    const { createLeadHandoffRouter } = await import('../../routes/lead-handoff.js');
+    const router = createLeadHandoffRouter({
+      listLeadHandoff: jest.fn(async () => [
+        { clientKey: 'c1', leadPhone: '+447700900111', source: 'vapi_webhook.sequence_abandoned', summaryText: 'abandoned' },
+        { clientKey: 'c1', leadPhone: '+447700900222', source: 'vapi_webhook.sequence_completed', summaryText: 'done' }
+      ]),
+      getLeadHandoffByPhone: jest.fn(),
+      setLeadHandoffOperatorNotes: jest.fn(),
+      phoneMatchKey: (p) => String(p || '').replace(/\D+/g, '').slice(-10) || null,
+      getFullClient: jest.fn(async () => ({
+        clientKey: 'c1',
+        timezone: 'Europe/London',
+        outboundSequence: { enabled: false, classicFollowUpCutoverDate: '2026-05-10' }
+      })),
+      query: jest.fn(async (sql) => {
+        const text = String(sql);
+        if (text.includes('FROM lead_handoff')) {
+          return {
+            rows: [
+              { leadPhone: '+447700900111', phoneMatchKey: '7700900111', source: 'vapi_webhook.sequence_abandoned' },
+              { leadPhone: '+447700900222', phoneMatchKey: '7700900222', source: 'vapi_webhook.sequence_completed' }
+            ]
+          };
+        }
+        if (text.includes('FROM leads')) {
+          return {
+            rows: [
+              { phone: '+447700900111', phoneMatchKey: '7700900111', createdAt: '2026-05-12T09:00:00.000Z' },
+              { phone: '+447700900222', phoneMatchKey: '7700900222', createdAt: '2026-05-12T09:00:00.000Z' }
+            ]
+          };
+        }
+        if (text.includes('FROM lead_sequence_state')) {
+          return {
+            rows: [
+              { leadPhone: '+447700900111', status: 'abandoned', updatedAt: '2026-05-12T11:00:00.000Z' },
+              { leadPhone: '+447700900222', status: 'completed', updatedAt: '2026-05-12T11:00:00.000Z' }
+            ]
+          };
+        }
+        return { rows: [] };
+      })
+    });
+    const app = createContractApp({ mounts: [{ path: '/', router }] });
+
+    const res = await request(app).get('/handoff/c1?filter=abandoned').expect(200);
+    expect(res.body).toEqual(expect.objectContaining({
+      ok: true,
+      clientKey: 'c1',
+      filter: 'abandoned',
+      total: 1,
+      rows: expect.any(Array)
+    }));
+    expect(res.body.rows).toHaveLength(1);
+    expect(res.body.rows[0]).toEqual(expect.objectContaining({
+      leadPhone: '+447700900111',
+      dashboardCohort: 'abandoned'
+    }));
+  });
+
   test('POST /handoff/:clientKey/batch returns items map', async () => {
     const { createLeadHandoffRouter } = await import('../../routes/lead-handoff.js');
     const getLeadHandoffByPhone = jest.fn(async ({ leadPhone }) => ({ leadPhone, summaryText: 'ok' }));

@@ -68,7 +68,11 @@ import {
   listLeadHandoff,
   getLeadHandoffByPhone,
   setLeadHandoffOperatorNotes,
-  addToCallQueue
+  addToCallQueue,
+  getLeadSequenceState,
+  updateLeadSequenceState,
+  getCallQueueByPhone,
+  updateCallQueueStatus
 } from './db.js'; // SQLite-backed tenants
 import {
   getBusinessStats,
@@ -472,9 +476,14 @@ mountApi(
     getNextBusinessHour,
     scheduleAtOptimalCallWindow,
     addToCallQueue,
+    upsertLeadHandoff,
     listLeadHandoff,
     getLeadHandoffByPhone,
     setLeadHandoffOperatorNotes,
+    getLeadSequenceState,
+    updateLeadSequenceState,
+    getCallQueueByPhone,
+    updateCallQueueStatus,
     pickTimezone,
     DateTime,
     TIMEZONE,

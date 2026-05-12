@@ -6970,6 +6970,13 @@
                 <div id="outboundSequenceTabRuntimePanel">
                     <div id="outboundSequenceSummary" class="outreach-strip-facts" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;"></div>
 
+                    <div class="follow-up-status-filters" id="outboundSequenceCohortFilters" role="group" aria-label="Filter sequence window by cohort">
+                        <button type="button" class="follow-up-status-chip follow-up-status-chip--active" data-dashboard-cohort-filter="all">All</button>
+                        <button type="button" class="follow-up-status-chip" data-dashboard-cohort-filter="classic">Classic</button>
+                        <button type="button" class="follow-up-status-chip" data-dashboard-cohort-filter="sequence">Sequence</button>
+                        <button type="button" class="follow-up-status-chip" data-dashboard-cohort-filter="abandoned">Abandoned·salvage</button>
+                    </div>
+
                     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
                         <label style="display:flex;flex-direction:column;gap:4px;font-size:0.85rem;min-width:240px;">
                             Lead phone (E.164 or local)
@@ -7232,6 +7239,12 @@
                     <button type="button" id="followUpQueueRefresh" class="export-btn secondary">Refresh</button>
                     <button type="button" id="followUpQueueExport" class="export-btn secondary">Export CSV</button>
                     <button type="button" id="followUpCallHistoryBtn" class="export-btn secondary" title="Lookup a phone to view calls + captured data">Call history…</button>
+                    <div class="follow-up-status-filters" id="followUpCohortFilters" role="group" aria-label="Filter follow-up rows by cohort">
+                        <button type="button" class="follow-up-status-chip follow-up-status-chip--active" data-dashboard-cohort-filter="all">All</button>
+                        <button type="button" class="follow-up-status-chip" data-dashboard-cohort-filter="classic">Classic</button>
+                        <button type="button" class="follow-up-status-chip" data-dashboard-cohort-filter="sequence">Sequence</button>
+                        <button type="button" class="follow-up-status-chip" data-dashboard-cohort-filter="abandoned">Abandoned·salvage</button>
+                    </div>
                     <div class="follow-up-status-filters" style="gap:6px;">
                         <button type="button" class="export-btn secondary" id="followUpSelectAllBtn" title="Select all rows on this page">Select page</button>
                         <button type="button" class="export-btn secondary" id="followUpClearSelectionBtn" title="Clear selection">Clear</button>
@@ -8427,7 +8440,7 @@
             if (meta) {
                 const ks = sequence?.killSwitchActive === true ? 'kill switch ON' : 'kill switch off';
                 const en = sequence?.enabled === true ? 'enabled' : 'disabled';
-                meta.textContent = `Sequence: ${en} · ${ks}`;
+                meta.textContent = `Sequence: ${en} · ${ks} · cohort: ${dashboardCohortFilterLabel(dashboardCohortFilter)}`;
             }
             if (summaryHost) {
                 const fact = (label, value, hint = '') => `
@@ -8511,7 +8524,7 @@
             if (!host) return;
             const list = Array.isArray(rows) ? rows : [];
             if (!list.length) {
-                host.innerHTML = '<div class="empty-state-message" style="padding:8px;">No active sequences yet.</div>';
+                host.innerHTML = `<div class="empty-state-message" style="padding:8px;">No ${escapeHtml(dashboardCohortFilterLabel(dashboardCohortFilter))} rows in the current window.</div>`;
                 return;
             }
             const tz = getOperationalTimezone(dashboardData);
@@ -8596,6 +8609,9 @@
                     }).join('')
                 }</ol>`
                 : '<div class="tom-ab-test-meta" style="margin-top:6px;">No completed stages yet.</div>';
+            const stopActionHtml = row.status === 'active'
+                ? `<div style="margin-top:10px;"><button type="button" class="export-btn secondary" data-seq-stop="${escapeHtml(row.leadPhone || '')}">Stop future sequence dials…</button></div>`
+                : '';
             host.innerHTML = `
                 <div style="display:flex;flex-direction:column;gap:6px;">
                     <div><strong>${escapeHtml(row.leadPhone || '')}</strong> <span class="tom-ab-test-meta">· ${escapeHtml(row.status || '')}</span></div>
@@ -8609,6 +8625,7 @@
                     ${gateLine}
                     <div class="meta-label" style="margin-top:10px;">Required fields (current stage)</div>
                     ${reqHtml}
+                    ${stopActionHtml}
                     <div class="meta-label" style="margin-top:6px;">Stages completed</div>
                     ${stagesHtml}
                 </div>
@@ -8626,7 +8643,7 @@
             try {
                 const [summaryRes, leadsRes] = await Promise.all([
                     fetch(`${BASE_URL}/api/outbound-sequence/${encodeURIComponent(clientKey)}/summary`, { cache: 'no-store' }).then((r) => r.json()),
-                    fetch(`${BASE_URL}/api/outbound-sequence/${encodeURIComponent(clientKey)}/leads?limit=120&offset=0`, { cache: 'no-store' }).then((r) => r.json()),
+                    fetch(`${BASE_URL}/api/outbound-sequence/${encodeURIComponent(clientKey)}/leads?limit=120&offset=0&filter=${encodeURIComponent(dashboardCohortFilter || 'all')}`, { cache: 'no-store' }).then((r) => r.json()),
                 ]);
                 if (summaryRes?.ok) renderOutboundSequenceSummary(summaryRes.summary || {});
                 if (leadsRes?.ok) renderOutboundSequenceRecentList(leadsRes.rows || []);
@@ -8653,6 +8670,8 @@
             const input = document.getElementById('outboundSequencePhoneInput');
             const msg = document.getElementById('outboundSequenceLookupMsg');
             const recent = document.getElementById('outboundSequenceRecentList');
+            const detail = document.getElementById('outboundSequenceLeadDetail');
+            const cohortFilters = document.getElementById('outboundSequenceCohortFilters');
             const tabRuntime = document.getElementById('outboundSequenceTabRuntime');
             const tabConfig = document.getElementById('outboundSequenceTabConfig');
             const runtimePanel = document.getElementById('outboundSequenceTabRuntimePanel');
@@ -8667,6 +8686,17 @@
             };
             if (tabRuntime) tabRuntime.addEventListener('click', () => setTab('runtime'));
             if (tabConfig) tabConfig.addEventListener('click', () => setTab('config'));
+            updateDashboardCohortFilterUi();
+
+            if (cohortFilters && !cohortFilters.dataset.bound) {
+                cohortFilters.dataset.bound = '1';
+                cohortFilters.addEventListener('click', (e) => {
+                    const chip = e.target.closest('[data-dashboard-cohort-filter]');
+                    if (!chip) return;
+                    const val = chip.getAttribute('data-dashboard-cohort-filter') || 'all';
+                    setDashboardCohortFilter(val, { reloadFollowUp: true, reloadSequence: true });
+                });
+            }
 
             if (refreshBtn) {
                 refreshBtn.addEventListener('click', () => refreshOutboundSequenceWindow(currentClient));
@@ -8699,6 +8729,30 @@
                     if (msg) msg.textContent = 'Loading…';
                     await refreshOutboundSequenceWindow(currentClient, { phoneLookup: phone });
                     if (msg) msg.textContent = '';
+                });
+            }
+            if (detail && !detail.dataset.stopBound) {
+                detail.dataset.stopBound = '1';
+                detail.addEventListener('click', async (e) => {
+                    const btn = e.target.closest('[data-seq-stop]');
+                    if (!btn) return;
+                    const phone = btn.getAttribute('data-seq-stop') || '';
+                    if (!phone) return;
+                    try {
+                        btn.disabled = true;
+                        await postOperatorClientAction(
+                            `/api/clients/${encodeURIComponent(currentClient)}/outbound-sequence/stop`,
+                            { leadPhone: phone, actor: 'operator' },
+                            'Stop future sequence dials'
+                        );
+                        showToast('Sequence stopped', 'Future sequence dials were cancelled for this lead.', 'success');
+                        await refreshOutboundSequenceWindow(currentClient, { phoneLookup: phone });
+                        await loadFollowUpQueue(currentClient, { page: 1, silent: false });
+                    } catch (err) {
+                        showToast('Stop failed', err?.message || 'Could not stop the sequence.', 'error', 3500);
+                    } finally {
+                        btn.disabled = false;
+                    }
                 });
             }
         }
@@ -13388,6 +13442,39 @@ ${actionsRow}
             }, duration);
         }
 
+        function promptForOperatorApiKey(actionLabel = 'Operator action') {
+            if (document.body.dataset.dashboardReadOnly === '1') {
+                showToast('View-only', 'Operator actions are disabled in viewer mode.', 'info');
+                return '';
+            }
+            const prior = (() => {
+                try { return sessionStorage.getItem('dash.operatorApiKey') || ''; } catch { return ''; }
+            })();
+            const entered = window.prompt(`${actionLabel}: enter operator API key`, prior || '');
+            const apiKey = String(entered || '').trim();
+            if (!apiKey) return '';
+            try { sessionStorage.setItem('dash.operatorApiKey', apiKey); } catch {}
+            return apiKey;
+        }
+
+        async function postOperatorClientAction(path, body, actionLabel) {
+            const apiKey = promptForOperatorApiKey(actionLabel);
+            if (!apiKey) throw new Error('API key required');
+            const res = await fetch(`${BASE_URL}${path}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
+                body: JSON.stringify(body || {})
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.status === 401) {
+                try { sessionStorage.removeItem('dash.operatorApiKey'); } catch {}
+            }
+            if (!res.ok || data?.ok === false) {
+                throw new Error(data?.error || data?.message || `HTTP ${res.status}`);
+            }
+            return data;
+        }
+
         function clearTranscriptEndedByBanner() {
             const el = document.getElementById('transcriptEndedBy');
             if (!el) return;
@@ -14528,7 +14615,38 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
         let followUpStatusFilter = 'todo'; // todo | called | quoted | all
         let followUpSearchTerm = '';
         let followUpDispositionFilter = 'all'; // all | voicemail | spoke
+        let dashboardCohortFilter = 'all'; // all | classic | sequence | abandoned
         const followUpSelectedKeys = new Set();
+
+        function dashboardCohortFilterLabel(value) {
+            const v = String(value || '').trim().toLowerCase();
+            if (v === 'classic') return 'Classic';
+            if (v === 'sequence') return 'Sequence';
+            if (v === 'abandoned') return 'Abandoned·salvage';
+            return 'All';
+        }
+
+        function updateDashboardCohortFilterUi() {
+            document.querySelectorAll('[data-dashboard-cohort-filter]').forEach((btn) => {
+                const val = btn.getAttribute('data-dashboard-cohort-filter') || 'all';
+                btn.classList.toggle('follow-up-status-chip--active', val === dashboardCohortFilter);
+            });
+        }
+
+        function setDashboardCohortFilter(next, { reloadFollowUp = true, reloadSequence = true } = {}) {
+            const val = ['all', 'classic', 'sequence', 'abandoned'].includes(String(next || '').trim().toLowerCase())
+                ? String(next || '').trim().toLowerCase()
+                : 'all';
+            dashboardCohortFilter = val;
+            followUpSavePrefs();
+            updateDashboardCohortFilterUi();
+            if (reloadFollowUp && currentClient) {
+                loadFollowUpQueue(currentClient, { page: 1 });
+            }
+            if (reloadSequence && currentClient) {
+                refreshOutboundSequenceWindow(currentClient).catch((err) => console.warn('Outbound sequence window failed', err));
+            }
+        }
 
         function followUpColumnsLsKey(clientKey) {
             return `${FOLLOW_UP_COLUMNS_LS_PREFIX}${String(clientKey || '').trim() || 'unknown'}`;
@@ -14594,6 +14712,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 followUpSearchTerm = localStorage.getItem('dash.fu.search') || '';
                 const df = localStorage.getItem('dash.fu.dispositionFilter') || '';
                 if (['all','voicemail','spoke'].includes(df)) followUpDispositionFilter = df;
+                const cf = localStorage.getItem('dash.dashboardCohortFilter') || '';
+                if (['all', 'classic', 'sequence', 'abandoned'].includes(cf)) dashboardCohortFilter = cf;
             } catch {}
         }
 
@@ -14603,6 +14723,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 localStorage.setItem('dash.fu.statusFilter', String(followUpStatusFilter || 'todo'));
                 localStorage.setItem('dash.fu.search', String(followUpSearchTerm || ''));
                 localStorage.setItem('dash.fu.dispositionFilter', String(followUpDispositionFilter || 'all'));
+                localStorage.setItem('dash.dashboardCohortFilter', String(dashboardCohortFilter || 'all'));
             } catch {}
         }
 
@@ -15690,6 +15811,26 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             `</span>`;
         }
 
+        function followUpParseHandoffData(row) {
+            try {
+                const raw = row?._handoff && (row._handoff.dataJson || row._handoff.data_json);
+                if (!raw) return {};
+                if (typeof raw === 'object') return raw || {};
+                return JSON.parse(String(raw || '')) || {};
+            } catch {
+                return {};
+            }
+        }
+
+        function followUpSalvageActionsHtml(row) {
+            if (String(row?._dashboardCohort || '') !== 'abandoned') return '';
+            const phone = String(row?.Phone || row?.['Called Number'] || '').trim();
+            if (!phone) return '';
+            return `<span class="fu-inline-actions" style="margin-top:6px;">` +
+                `<button type="button" class="fu-mini-btn fu-mini-btn--muted" data-fu-action="dismissSalvage" data-fu-phone="${escapeHtml(phone)}" title="Archive this abandoned salvage row after human follow-up">Dismiss salvage</button>` +
+            `</span>`;
+        }
+
         function followUpCleanBusinessName(name) {
             const raw = String(name || '').trim();
             if (!raw) return '';
@@ -15717,6 +15858,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const isUnknown = v.toLowerCase() === 'unknown';
                 const label = (!v || isUnknown) ? '—' : v;
                 const h = row?._handoff || null;
+                const handoffData = followUpParseHandoffData(row);
+                const qual = handoffData?.qual && typeof handoffData.qual === 'object' ? handoffData.qual : {};
                 const handoffSummary = h && (h.summaryText || h.summary_text) ? String(h.summaryText || h.summary_text).trim() : '';
                 const handoffNotes = h && (h.operatorNotes || h.operator_notes) ? String(h.operatorNotes || h.operator_notes).trim() : '';
                 const extraBits = [];
@@ -15724,10 +15867,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     extraBits.push(`Handoff: ${handoffSummary}`);
                 }
                 if (handoffNotes) extraBits.push(`Operator: ${handoffNotes}`);
+                if (qual._salvageDismissedAt) extraBits.push(`Dismissed salvage: ${String(qual._salvageDismissedAt)}`);
                 const extraHtml = extraBits.length
                     ? `<div class="fu-muted" style="margin-top:6px; font-size:12px; line-height:1.35;">${escapeHtml(extraBits.join(' · '))}</div>`
                     : '';
-                return `<span class="fu-cell-actions"><span title="${escapeHtml(label)}">${escapeHtml(label)}</span>${followUpPencilBtn(col, !canEdit)}${extraHtml}</span>`;
+                const salvageActions = followUpSalvageActionsHtml(row);
+                return `<span class="fu-cell-actions"><span title="${escapeHtml(label)}">${escapeHtml(label)}</span>${followUpPencilBtn(col, !canEdit)}${extraHtml}${salvageActions}</span>`;
             }
             if (col === 'Recording URI' && /^https?:\/\//i.test(v)) {
                 return `<span class="fu-cell-actions"><a href="${escapeHtml(v)}" target="_blank" rel="noopener noreferrer">Open</a>${followUpPencilBtn(col, !canEdit)}</span>`;
@@ -15955,6 +16100,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 while (safety < 500) {
                     safety += 1;
                     const q = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+                    q.set('filter', dashboardCohortFilter || 'all');
                     const res = await fetch(`${BASE_URL}/api/follow-up-queue/${encodeURIComponent(clientKey)}?${q}`, { cache: 'no-store' });
                     const data = await res.json().catch(() => ({}));
                     if (!res.ok || data.ok === false) {
@@ -16026,6 +16172,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 const priorSortKey = followUpQueueState.sortKey;
                 const priorSortDir = followUpQueueState.sortDir;
                 const q = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+                q.set('filter', dashboardCohortFilter || 'all');
                 if (callback) q.set('callback', '1');
                 const res = await fetch(`${BASE_URL}/api/follow-up-queue/${encodeURIComponent(clientKey)}?${q}`, { cache: 'no-store' });
                 const data = await res.json().catch(() => ({}));
@@ -16142,6 +16289,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     const totalTodo = rows.length - totalCalled;
                     const parts = [
                         `Showing ${formatNumber(start)}–${formatNumber(end)} of ${formatNumber(total)}`,
+                        `cohort: ${dashboardCohortFilterLabel(dashboardCohortFilter)}`,
                         `${formatNumber(totalTodo)} to call`,
                         `${formatNumber(totalCalled)} called`
                     ];
@@ -16204,6 +16352,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const next = document.getElementById('followUpNextPage');
             const size = document.getElementById('followUpPageSize');
             const statusFilters = document.getElementById('followUpStatusFilters');
+            const cohortFilters = document.getElementById('followUpCohortFilters');
             const searchInput = document.getElementById('followUpSearchInput');
             const dispSelect = document.getElementById('followUpDispositionSelect');
             const bulkBar = document.getElementById('followUpBulkActions');
@@ -16214,6 +16363,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             const callHistoryInput = document.getElementById('followUpCallHistoryPhoneInput');
             followUpLoadPrefs();
             followUpColumnPrefs = loadFollowUpColumnPrefs(currentClient);
+            updateDashboardCohortFilterUi();
             const colsModal = document.getElementById('followUpColumnsModal');
             const colsClose = document.getElementById('followUpColumnsCloseBtn');
             const colsDone = document.getElementById('followUpColumnsDoneBtn');
@@ -16421,6 +16571,15 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     if (wrapEl) followUpPaintTable(wrapEl);
                 });
             }
+            if (cohortFilters && !cohortFilters.dataset.bound) {
+                cohortFilters.dataset.bound = '1';
+                cohortFilters.addEventListener('click', (e) => {
+                    const chip = e.target.closest('[data-dashboard-cohort-filter]');
+                    if (!chip) return;
+                    const val = chip.getAttribute('data-dashboard-cohort-filter') || 'all';
+                    setDashboardCohortFilter(val, { reloadFollowUp: true, reloadSequence: true });
+                });
+            }
             if (searchInput && !searchInput.dataset.bound) {
                 searchInput.dataset.bound = '1';
                 searchInput.value = followUpSearchTerm || '';
@@ -16556,7 +16715,30 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                         if (!key || !action) return;
 
                         const row = followUpQueueState.rawRows.find((r) => followUpRowKey(r) === key);
-                        if (!row || typeof row._row !== 'number') return;
+                        if (!row) return;
+
+                        if (action === 'dismissSalvage') {
+                            const phone = miniActionBtn.getAttribute('data-fu-phone') || String(row.Phone || row['Called Number'] || '').trim();
+                            if (!phone) return;
+                            try {
+                                miniActionBtn.disabled = true;
+                                await postOperatorClientAction(
+                                    `/api/clients/${encodeURIComponent(currentClient)}/outbound-sequence/salvage-dismiss`,
+                                    { leadPhone: phone, actor: 'operator' },
+                                    'Dismiss abandoned salvage'
+                                );
+                                showToast('Salvage dismissed', 'The abandoned salvage row left the default salvage view.', 'success');
+                                await loadFollowUpQueue(currentClient, { page: 1, silent: false });
+                                await refreshOutboundSequenceWindow(currentClient).catch(() => {});
+                            } catch (err) {
+                                showToast('Dismiss failed', err?.message || 'Could not dismiss salvage.', 'error', 3500);
+                            } finally {
+                                miniActionBtn.disabled = false;
+                            }
+                            return;
+                        }
+
+                        if (typeof row._row !== 'number') return;
 
                         if (action === 'setStatus') {
                             const nextStatus = String(value || '').trim() || 'To Call';

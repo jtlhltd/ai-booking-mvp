@@ -1,6 +1,15 @@
 import { Router } from 'express';
 import { phoneMatchKey as phoneMatchKeyLib } from '../lib/lead-phone-key.js';
 import crypto from 'crypto';
+import { getClassicFollowUpCutoverDate } from '../lib/outbound-sequence.js';
+import {
+  getDashboardCohortMeta,
+  loadDashboardArtifactMap,
+  matchesDashboardCohort,
+  normalizeDashboardCohortFilter,
+  SEQUENCE_ABANDONED_HANDOFF_SOURCE,
+  SEQUENCE_COMPLETED_HANDOFF_SOURCE,
+} from '../lib/dashboard-follow-up-filters.js';
 
 export function createOutboundSequenceVisibilityRouter(deps) {
   const { query, getFullClient, isPostgres, phoneMatchKey } = deps || {};
@@ -157,6 +166,8 @@ export function createOutboundSequenceVisibilityRouter(deps) {
       const { clientKey } = req.params;
       const limit = clamp(req.query.limit, 1, 500, 120);
       const offset = clamp(req.query.offset, 0, 50_000, 0);
+      const filter = normalizeDashboardCohortFilter(req.query.filter);
+      const fetchLimit = 500;
       const client = await getFullClient?.(clientKey, { bypassCache: false }).catch(() => null);
       if (!client) return res.status(404).json({ ok: false, error: 'client_not_found' });
 
@@ -179,7 +190,7 @@ export function createOutboundSequenceVisibilityRouter(deps) {
         ORDER BY updated_at DESC
         LIMIT $2 OFFSET $3
       `,
-        [clientKey, limit, offset]
+        [clientKey, fetchLimit, 0]
       );
 
       const out = (rows?.rows || []).map((r) => {
@@ -197,12 +208,48 @@ export function createOutboundSequenceVisibilityRouter(deps) {
       const validated = getValidatedOutboundSequence(client);
       const raw = client?.outboundSequence;
       const v = raw && typeof raw === 'object' ? validateOutboundSequenceConfig(raw) : { ok: false, errors: ['outboundSequence missing'] };
+      const artifactMap = await loadDashboardArtifactMap({
+        query,
+        clientKey,
+        phones: out.map((row) => row?.leadPhone || ''),
+        phoneMatchKey: phoneKeyFn,
+      });
+      const tenantTimezone = client?.booking?.timezone || client?.timezone || 'Europe/London';
+      const classicFollowUpCutoverDate = getClassicFollowUpCutoverDate(client);
+      const filteredRows = out
+        .map((row) => {
+          const phone = String(row?.leadPhone || '').trim();
+          const phoneKey = phoneKeyFn(phone);
+          const artifact = artifactMap.get(phone) || (phoneKey ? artifactMap.get(phoneKey) : null) || {};
+          const fallbackSource =
+            row?.status === 'abandoned'
+              ? SEQUENCE_ABANDONED_HANDOFF_SOURCE
+              : row?.status === 'completed'
+                ? SEQUENCE_COMPLETED_HANDOFF_SOURCE
+                : '';
+          const cohortMeta = getDashboardCohortMeta({
+            handoffSource: artifact?.handoffSource || fallbackSource,
+            hasSequenceState: true,
+            leadCreatedAt: artifact?.leadCreatedAt || null,
+            classicFollowUpCutoverDate,
+            tenantTimezone,
+            salvageDismissedAt: artifact?.salvageDismissedAt || null,
+          });
+          return {
+            ...row,
+            dashboardCohort: cohortMeta.cohort,
+          };
+        })
+        .filter((row) => matchesDashboardCohort({ cohort: row?.dashboardCohort }, filter));
+      const pageRows = filteredRows.slice(offset, offset + limit);
 
       return res.json({
         ok: true,
         clientKey,
         limit,
         offset,
+        filter,
+        total: filteredRows.length,
         sequence: {
           killSwitchActive,
           enabled: validated?.enabled === true,
@@ -212,7 +259,7 @@ export function createOutboundSequenceVisibilityRouter(deps) {
           configValid: !!validated,
           configErrors: v.ok ? [] : (v.errors || []),
         },
-        rows: out,
+        rows: pageRows,
       });
     } catch (error) {
       console.error('[OUTBOUND SEQUENCE LEADS ERROR]', error);

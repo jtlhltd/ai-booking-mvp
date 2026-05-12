@@ -75,6 +75,73 @@ describe('routes/follow-up-queue.js contracts', () => {
     );
   });
 
+  test('GET /follow-up-queue/:clientKey applies dashboard cohort filter server-side', async () => {
+    const { createFollowUpQueueRouter } = await import('../../routes/follow-up-queue.js');
+    const router = createFollowUpQueueRouter({
+      getFullClient: jest.fn(async () => ({
+        clientKey: 'c1',
+        timezone: 'Europe/London',
+        outboundSequence: { enabled: false, classicFollowUpCutoverDate: '2026-05-10' }
+      })),
+      resolveLogisticsSpreadsheetId: jest.fn(() => 'sheet_1'),
+      phoneMatchKey: (p) => String(p || '').replace(/\D+/g, '').slice(-10) || null,
+      query: jest.fn(async (sql) => {
+        const text = String(sql);
+        if (text.includes('FROM lead_handoff')) {
+          return {
+            rows: [
+              {
+                leadPhone: '+447700900222',
+                phoneMatchKey: '7700900222',
+                source: 'vapi_webhook.sequence_completed',
+                updatedAt: '2026-05-12T10:00:00.000Z'
+              }
+            ]
+          };
+        }
+        if (text.includes('FROM leads')) {
+          return {
+            rows: [
+              { phone: '+447700900111', phoneMatchKey: '7700900111', createdAt: '2026-05-09T09:00:00.000Z' },
+              { phone: '+447700900222', phoneMatchKey: '7700900222', createdAt: '2026-05-12T09:00:00.000Z' }
+            ]
+          };
+        }
+        if (text.includes('FROM lead_sequence_state')) {
+          return {
+            rows: [
+              { leadPhone: '+447700900222', status: 'completed', updatedAt: '2026-05-12T10:00:00.000Z' }
+            ]
+          };
+        }
+        return { rows: [] };
+      }),
+      sheets: {
+        ensureLogisticsHeader: jest.fn(async () => {}),
+        readSheet: jest.fn(async () => ({ rows: [] })),
+        logisticsSheetRowsToRecords: jest.fn(() => [
+          { Timestamp: '09/05/2026, 10:00', Phone: '+447700900111', 'Called Number': '+447700900111', Status: 'To call' },
+          { Timestamp: '12/05/2026, 10:00', Phone: '+447700900222', 'Called Number': '+447700900222', Status: 'To call' }
+        ])
+      }
+    });
+    const app = createContractApp({ mounts: [{ path: '/', router }] });
+
+    const res = await request(app).get('/follow-up-queue/c1?filter=sequence').expect(200);
+    expect(res.body).toEqual(
+      expect.objectContaining({
+        ok: true,
+        configured: true,
+        filter: 'sequence',
+        total: 1,
+        rows: expect.any(Array)
+      })
+    );
+    expect(res.body.rows).toHaveLength(1);
+    expect(res.body.rows[0].Phone).toBe('+447700900222');
+    expect(res.body.rows[0]._dashboardCohort).toBe('sequence');
+  });
+
   test('GET /follow-up-queue/:clientKey/stats returns demo stats breakdown', async () => {
     const { createFollowUpQueueRouter } = await import('../../routes/follow-up-queue.js');
     const router = createFollowUpQueueRouter({

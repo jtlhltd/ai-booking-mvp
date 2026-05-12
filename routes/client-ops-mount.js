@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { dismissSequenceSalvageForLead, stopOutboundSequenceForLead } from '../lib/outbound-sequence-ops.js';
 
 export function createClientOpsRouter(deps) {
   const {
@@ -11,9 +12,20 @@ export function createClientOpsRouter(deps) {
     runOutboundAbDimensionStop,
     isDashboardSelfServiceClient,
     isVapiOutboundAbExperimentOnlyPatch,
+    getLeadSequenceState,
+    updateLeadSequenceState,
+    getCallQueueByPhone,
+    updateCallQueueStatus,
+    getLeadHandoffByPhone,
+    upsertLeadHandoff,
   } = deps || {};
 
   const router = Router();
+
+  function hasOperatorApiKey(req) {
+    const apiKey = req.get('X-API-Key');
+    return !!(apiKey && apiKey === process.env.API_KEY);
+  }
 
   // Client Onboarding API (admin only)
   router.post('/api/onboard-client', async (req, res) => {
@@ -311,6 +323,84 @@ export function createClientOpsRouter(deps) {
       });
     } catch (error) {
       console.error('[OUTBOUND AB REVIEW CONTINUE ERROR]', error);
+      return res.status(500).json({ ok: false, error: error.message || String(error) });
+    }
+  });
+
+  router.post('/api/clients/:clientKey/outbound-sequence/stop', async (req, res) => {
+    const { clientKey } = req.params;
+    if (!hasOperatorApiKey(req)) {
+      return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    }
+    try {
+      const leadPhone = String(req.body?.leadPhone || '').trim();
+      const actor = String(req.body?.actor || 'operator').trim() || 'operator';
+      if (!leadPhone) {
+        return res.status(400).json({ ok: false, error: 'leadPhone is required' });
+      }
+      const out = await stopOutboundSequenceForLead({
+        clientKey,
+        leadPhone,
+        actor,
+        getLeadSequenceState,
+        updateLeadSequenceState,
+        getCallQueueByPhone,
+        updateCallQueueStatus,
+        getLeadHandoffByPhone,
+        upsertLeadHandoff,
+      });
+      if (!out.ok) {
+        const status = out.error === 'sequence_not_found' ? 404 : 400;
+        return res.status(status).json({ ok: false, error: out.error });
+      }
+      return res.json({
+        ok: true,
+        clientKey,
+        leadPhone,
+        status: out.status,
+        cancelledQueueRows: out.cancelledQueueRows || 0,
+      });
+    } catch (error) {
+      console.error('[OUTBOUND SEQUENCE STOP ERROR]', error);
+      return res.status(500).json({ ok: false, error: error.message || String(error) });
+    }
+  });
+
+  router.post('/api/clients/:clientKey/outbound-sequence/salvage-dismiss', async (req, res) => {
+    const { clientKey } = req.params;
+    if (!hasOperatorApiKey(req)) {
+      return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    }
+    try {
+      const leadPhone = String(req.body?.leadPhone || '').trim();
+      const actor = String(req.body?.actor || 'operator').trim() || 'operator';
+      if (!leadPhone) {
+        return res.status(400).json({ ok: false, error: 'leadPhone is required' });
+      }
+      const out = await dismissSequenceSalvageForLead({
+        clientKey,
+        leadPhone,
+        actor,
+        getLeadHandoffByPhone,
+        upsertLeadHandoff,
+      });
+      if (!out.ok) {
+        const status =
+          out.error === 'handoff_not_found'
+            ? 404
+            : out.error === 'handoff_not_abandoned_salvage'
+              ? 409
+              : 400;
+        return res.status(status).json({ ok: false, error: out.error });
+      }
+      return res.json({
+        ok: true,
+        clientKey,
+        leadPhone,
+        source: out.source,
+      });
+    } catch (error) {
+      console.error('[OUTBOUND SALVAGE DISMISS ERROR]', error);
       return res.status(500).json({ ok: false, error: error.message || String(error) });
     }
   });

@@ -145,5 +145,66 @@ describe('client-ops-mount contract coverage', () => {
       .expect(400);
     expect(res.body).toEqual(expect.objectContaining({ ok: false }));
   });
+
+  test('POST /api/clients/:clientKey/outbound-sequence/stop requires API key', async () => {
+    const { createClientOpsRouter } = await import('../../routes/client-ops-mount.js');
+    const router = createClientOpsRouter({});
+    const app = createContractApp({ mounts: [{ path: '/', router }] });
+    await request(app)
+      .post('/api/clients/c1/outbound-sequence/stop')
+      .send({ leadPhone: '+447700900111' })
+      .expect(401);
+  });
+
+  test('POST /api/clients/:clientKey/outbound-sequence/stop returns ok on success', async () => {
+    const { createClientOpsRouter } = await import('../../routes/client-ops-mount.js');
+    const router = createClientOpsRouter({
+      getLeadSequenceState: jest.fn(async () => ({ status: 'active' })),
+      updateLeadSequenceState: jest.fn(async () => ({ ok: true })),
+      getCallQueueByPhone: jest.fn(async () => [
+        { id: 1, status: 'pending', call_type: 'vapi_call', call_data: { triggerType: 'sequence_next' } },
+      ]),
+      updateCallQueueStatus: jest.fn(async () => {}),
+      getLeadHandoffByPhone: jest.fn(async () => null),
+      upsertLeadHandoff: jest.fn(async () => {}),
+    });
+    const app = createContractApp({ mounts: [{ path: '/', router }] });
+    const res = await request(app)
+      .post('/api/clients/c1/outbound-sequence/stop')
+      .set('X-API-Key', 'secret')
+      .send({ leadPhone: '+447700900111', actor: 'ops-user' })
+      .expect(200);
+    expect(res.body).toEqual(expect.objectContaining({
+      ok: true,
+      clientKey: 'c1',
+      leadPhone: '+447700900111',
+      status: 'abandoned',
+      cancelledQueueRows: 1,
+    }));
+  });
+
+  test('POST /api/clients/:clientKey/outbound-sequence/salvage-dismiss returns ok on success', async () => {
+    const { createClientOpsRouter } = await import('../../routes/client-ops-mount.js');
+    const router = createClientOpsRouter({
+      getLeadHandoffByPhone: jest.fn(async () => ({
+        leadPhone: '+447700900111',
+        source: 'vapi_webhook.sequence_abandoned',
+        dataJson: '{}',
+      })),
+      upsertLeadHandoff: jest.fn(async () => {}),
+    });
+    const app = createContractApp({ mounts: [{ path: '/', router }] });
+    const res = await request(app)
+      .post('/api/clients/c1/outbound-sequence/salvage-dismiss')
+      .set('X-API-Key', 'secret')
+      .send({ leadPhone: '+447700900111', actor: 'ops-user' })
+      .expect(200);
+    expect(res.body).toEqual(expect.objectContaining({
+      ok: true,
+      clientKey: 'c1',
+      leadPhone: '+447700900111',
+      source: 'vapi_webhook.sequence_abandoned',
+    }));
+  });
 });
 

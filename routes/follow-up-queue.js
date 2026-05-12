@@ -1,12 +1,69 @@
 import express from 'express';
+import { getClassicFollowUpCutoverDate } from '../lib/outbound-sequence.js';
+import {
+  getDashboardCohortMeta,
+  loadDashboardArtifactMap,
+  matchesDashboardCohort,
+  normalizeDashboardCohortFilter,
+} from '../lib/dashboard-follow-up-filters.js';
 
 export function createFollowUpQueueRouter(deps) {
-  const { getFullClient, resolveLogisticsSpreadsheetId, sheets } = deps || {};
+  const { getFullClient, resolveLogisticsSpreadsheetId, sheets, query, phoneMatchKey } = deps || {};
   const router = express.Router();
 
   function isFollowUpQueueDemoClient(clientKey) {
     const k = String(clientKey || '').toLowerCase().trim();
     return k === 'demo_client' || k === 'demo-client' || k === 'stay-focused-fitness-chris';
+  }
+
+  async function applyDashboardCohortFilter(clientKey, client, records, filter) {
+    const normalizedFilter = normalizeDashboardCohortFilter(filter);
+    const rows = Array.isArray(records) ? records : [];
+    if (!rows.length) {
+      return { rows: [], filter: normalizedFilter, classicFollowUpCutoverDate: null, tenantTimezone: 'Europe/London' };
+    }
+
+    const tenantTimezone = client?.booking?.timezone || client?.timezone || 'Europe/London';
+    const classicFollowUpCutoverDate = getClassicFollowUpCutoverDate(client);
+    const phones = rows.flatMap((row) => [row?.['Called Number'], row?.Phone]);
+    const artifactMap = await loadDashboardArtifactMap({
+      query,
+      clientKey,
+      phones,
+      phoneMatchKey,
+    });
+
+    const decorated = rows.map((row) => {
+      const calledPhone = String(row?.['Called Number'] || '').trim();
+      const phone = String(row?.Phone || '').trim();
+      const calledKey = typeof phoneMatchKey === 'function' ? phoneMatchKey(calledPhone) : null;
+      const phoneKey = typeof phoneMatchKey === 'function' ? phoneMatchKey(phone) : null;
+      const artifact =
+        artifactMap.get(calledPhone) ||
+        artifactMap.get(phone) ||
+        (calledKey ? artifactMap.get(calledKey) : null) ||
+        (phoneKey ? artifactMap.get(phoneKey) : null) ||
+        {};
+      const cohortMeta = getDashboardCohortMeta({
+        handoffSource: artifact?.handoffSource || '',
+        hasSequenceState: artifact?.hasSequenceState === true,
+        leadCreatedAt: artifact?.leadCreatedAt || null,
+        classicFollowUpCutoverDate,
+        tenantTimezone,
+        salvageDismissedAt: artifact?.salvageDismissedAt || null,
+      });
+      return {
+        ...row,
+        _dashboardCohort: cohortMeta.cohort,
+      };
+    });
+
+    return {
+      rows: decorated.filter((row) => matchesDashboardCohort({ cohort: row?._dashboardCohort }, normalizedFilter)),
+      filter: normalizedFilter,
+      classicFollowUpCutoverDate,
+      tenantTimezone,
+    };
   }
 
   router.get('/follow-up-queue/:clientKey', async (req, res) => {
@@ -15,6 +72,7 @@ export function createFollowUpQueueRouter(deps) {
       res.set('Cache-Control', 'no-store');
       const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 80));
       const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+      const filter = normalizeDashboardCohortFilter(req.query.filter);
 
       if (isFollowUpQueueDemoClient(clientKey)) {
         const demoRows = [
@@ -35,7 +93,8 @@ export function createFollowUpQueueRouter(deps) {
               'Interested in comparing international rates; asked for a callback Thursday PM.',
             'Recording URI': '',
             'Called Number': '+442033344555',
-            'Receptionist Name': 'Sam'
+            'Receptionist Name': 'Sam',
+            _dashboardCohort: 'sequence',
           },
           {
             Timestamp: new Date(Date.now() - 26 * 3600000).toLocaleString('en-GB', {
@@ -53,10 +112,11 @@ export function createFollowUpQueueRouter(deps) {
               'Confirmed they use multi-parcel daily; not ready to switch until Q3.',
             'Recording URI': '',
             'Called Number': '+442033344555',
-            'Receptionist Name': ''
+            'Receptionist Name': '',
+            _dashboardCohort: 'classic',
           }
         ];
-        const rows = demoRows;
+        const rows = demoRows.filter((row) => matchesDashboardCohort({ cohort: row._dashboardCohort }, filter));
         const total = rows.length;
         return res.json({
           ok: true,
@@ -64,6 +124,7 @@ export function createFollowUpQueueRouter(deps) {
           configured: true,
           source: 'demo',
           sourceTimezone: 'Europe/London',
+          filter,
           total,
           offset,
           limit,
@@ -92,17 +153,19 @@ export function createFollowUpQueueRouter(deps) {
         _row: idx + 2
       }));
       records.reverse();
-      const total = records.length;
+      const filtered = await applyDashboardCohortFilter(clientKey, client, records, filter);
+      const total = filtered.rows.length;
       res.json({
         ok: true,
         demo: false,
         configured: true,
         source: 'sheet',
         sourceTimezone: 'Europe/London',
+        filter: filtered.filter,
         total,
         offset,
         limit,
-        rows: records.slice(offset, offset + limit)
+        rows: filtered.rows.slice(offset, offset + limit)
       });
     } catch (error) {
       console.error('[FOLLOW-UP QUEUE ERROR]', error);

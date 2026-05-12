@@ -209,5 +209,116 @@ describe('routes/outbound-sequence-visibility-mount.js', () => {
     expect(Array.isArray(res.body.row.stagesCompleted)).toBe(true);
     expect(res.body.row.stagesCompleted[0]).toEqual(expect.objectContaining({ callId: 'call_1' }));
   });
+
+  test('GET /api/outbound-sequence/:clientKey/leads applies cohort filter', async () => {
+    const getFullClient = jest.fn(async () => ({
+      clientKey: 'd2d-xpress-tom',
+      timezone: 'Europe/London',
+      outboundSequence: {
+        enabled: true,
+        maxTotalDialsPerLead: 3,
+        maxSequenceDurationDays: 7,
+        classicFollowUpCutoverDate: '2026-05-10',
+        stages: [
+          {
+            id: 'stage_gatekeeper',
+            firstMessage: 'Hello',
+            systemMessage: 'System',
+            requiredFields: ['lane'],
+            maxAttemptsInStage: 2,
+            isFinal: true,
+          },
+        ],
+      },
+    }));
+
+    const query = jest.fn(async (sql) => {
+      const s = String(sql);
+      if (s.includes('current_stage_id AS "currentStageId"')) {
+        return {
+          rows: [
+            {
+              clientKey: 'd2d-xpress-tom',
+              leadPhone: '+447700900111',
+              currentStageId: 'stage_gatekeeper',
+              stagesCompleted: '[]',
+              attemptsInStage: 0,
+              attemptsTotal: 1,
+              startedAt: '2030-01-01T00:00:00.000Z',
+              lastCallId: null,
+              nextStageScheduledFor: null,
+              status: 'abandoned',
+              updatedAt: '2030-01-01T01:00:00.000Z',
+            },
+            {
+              clientKey: 'd2d-xpress-tom',
+              leadPhone: '+447700900222',
+              currentStageId: 'stage_gatekeeper',
+              stagesCompleted: '[]',
+              attemptsInStage: 0,
+              attemptsTotal: 1,
+              startedAt: '2030-01-01T00:00:00.000Z',
+              lastCallId: null,
+              nextStageScheduledFor: null,
+              status: 'completed',
+              updatedAt: '2030-01-01T01:00:00.000Z',
+            },
+          ],
+        };
+      }
+      if (s.includes('FROM lead_handoff')) {
+        return {
+          rows: [
+            {
+              leadPhone: '+447700900111',
+              phoneMatchKey: '7700900111',
+              source: 'vapi_webhook.sequence_abandoned',
+              updatedAt: '2030-01-01T01:00:00.000Z',
+            },
+            {
+              leadPhone: '+447700900222',
+              phoneMatchKey: '7700900222',
+              source: 'vapi_webhook.sequence_completed',
+              updatedAt: '2030-01-01T01:00:00.000Z',
+            },
+          ],
+        };
+      }
+      if (s.includes('FROM leads')) {
+        return {
+          rows: [
+            { phone: '+447700900111', phoneMatchKey: '7700900111', createdAt: '2030-01-01T00:00:00.000Z' },
+            { phone: '+447700900222', phoneMatchKey: '7700900222', createdAt: '2030-01-01T00:00:00.000Z' },
+          ],
+        };
+      }
+      if (s.includes('FROM lead_sequence_state')) {
+        return {
+          rows: [
+            { leadPhone: '+447700900111', status: 'abandoned', updatedAt: '2030-01-01T01:00:00.000Z' },
+            { leadPhone: '+447700900222', status: 'completed', updatedAt: '2030-01-01T01:00:00.000Z' },
+          ],
+        };
+      }
+      return { rows: [] };
+    });
+
+    const { createOutboundSequenceVisibilityRouter } = await import('../../routes/outbound-sequence-visibility-mount.js');
+    const app = createContractApp({
+      mounts: [{ path: '/api', router: () => createOutboundSequenceVisibilityRouter({ query, getFullClient, isPostgres: true }) }],
+    });
+
+    const res = await request(app).get('/api/outbound-sequence/d2d-xpress-tom/leads?filter=abandoned').expect(200);
+    expect(res.body).toEqual(expect.objectContaining({
+      ok: true,
+      filter: 'abandoned',
+      rows: expect.any(Array)
+    }));
+    expect(res.body.rows).toHaveLength(1);
+    expect(res.body.rows[0]).toEqual(expect.objectContaining({
+      leadPhone: '+447700900111',
+      dashboardCohort: 'abandoned'
+    }));
+  });
 });
 

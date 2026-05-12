@@ -171,6 +171,12 @@ export function mountApi(app, deps) {
       runOutboundAbDimensionStop,
       isDashboardSelfServiceClient,
       isVapiOutboundAbExperimentOnlyPatch,
+      getLeadSequenceState: deps.getLeadSequenceState,
+      updateLeadSequenceState: deps.updateLeadSequenceState,
+      getCallQueueByPhone: deps.getCallQueueByPhone,
+      updateCallQueueStatus: deps.updateCallQueueStatus,
+      getLeadHandoffByPhone: deps.getLeadHandoffByPhone,
+      upsertLeadHandoff: deps.upsertLeadHandoff,
     })
   );
   app.use('/api/outreach', createOutreachRouter());
@@ -291,7 +297,7 @@ export function mountApi(app, deps) {
       sheets,
     })
   );
-  app.use('/api', createFollowUpQueueRouter({ getFullClient, resolveLogisticsSpreadsheetId, sheets }));
+  app.use('/api', createFollowUpQueueRouter({ getFullClient, resolveLogisticsSpreadsheetId, sheets, query, phoneMatchKey }));
   app.use('/api', createCallsByPhoneRouter({ query, getFullClient }));
   app.use('/api', createNextActionsRouter({ query, cacheMiddleware }));
   app.use('/api', createCallRecordingsRouter({ query, formatTimeAgoLabel }));
@@ -311,6 +317,8 @@ export function mountApi(app, deps) {
       getLeadHandoffByPhone: deps.getLeadHandoffByPhone,
       setLeadHandoffOperatorNotes: deps.setLeadHandoffOperatorNotes,
       phoneMatchKey: deps.phoneMatchKey,
+      getFullClient,
+      query,
     })
   );
   app.use(

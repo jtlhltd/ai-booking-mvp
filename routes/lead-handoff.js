@@ -1,4 +1,11 @@
 import express from 'express';
+import { getClassicFollowUpCutoverDate } from '../lib/outbound-sequence.js';
+import {
+  getDashboardCohortMeta,
+  loadDashboardArtifactMap,
+  matchesDashboardCohort,
+  normalizeDashboardCohortFilter,
+} from '../lib/dashboard-follow-up-filters.js';
 
 export function createLeadHandoffRouter(deps) {
   const {
@@ -6,6 +13,8 @@ export function createLeadHandoffRouter(deps) {
     getLeadHandoffByPhone,
     setLeadHandoffOperatorNotes,
     phoneMatchKey,
+    getFullClient,
+    query,
   } = deps || {};
 
   const router = express.Router();
@@ -58,15 +67,70 @@ export function createLeadHandoffRouter(deps) {
     return [head, ...body].join('\r\n');
   }
 
+  async function applyDashboardCohortFilter(clientKey, rows, filter) {
+    const normalizedFilter = normalizeDashboardCohortFilter(filter);
+    const sourceRows = Array.isArray(rows) ? rows : [];
+    if (!sourceRows.length) {
+      return { rows: [], filter: normalizedFilter, classicFollowUpCutoverDate: null, tenantTimezone: 'Europe/London' };
+    }
+
+    const client = typeof getFullClient === 'function'
+      ? await getFullClient(clientKey, { bypassCache: false }).catch(() => null)
+      : null;
+    const tenantTimezone = client?.booking?.timezone || client?.timezone || 'Europe/London';
+    const classicFollowUpCutoverDate = getClassicFollowUpCutoverDate(client);
+    const phones = sourceRows.map((row) => row?.leadPhone || row?.lead_phone || '');
+    const artifactMap = await loadDashboardArtifactMap({
+      query,
+      clientKey,
+      phones,
+      phoneMatchKey,
+    });
+
+    const decorated = sourceRows.map((row) => {
+      const phone = row?.leadPhone || row?.lead_phone || '';
+      const phoneKey = typeof phoneMatchKey === 'function' ? phoneMatchKey(phone) : null;
+      const artifact = artifactMap.get(String(phone || '').trim()) || (phoneKey ? artifactMap.get(phoneKey) : null) || {};
+      const cohortMeta = getDashboardCohortMeta({
+        handoffSource: row?.source || artifact?.handoffSource || '',
+        hasSequenceState: artifact?.hasSequenceState === true,
+        leadCreatedAt: artifact?.leadCreatedAt || null,
+        classicFollowUpCutoverDate,
+        tenantTimezone,
+        salvageDismissedAt: artifact?.salvageDismissedAt || null,
+      });
+      return enrichHandoffRow({
+        ...row,
+        dashboardCohort: cohortMeta.cohort,
+      });
+    });
+
+    return {
+      rows: decorated.filter((row) => matchesDashboardCohort({ cohort: row?.dashboardCohort }, normalizedFilter)),
+      filter: normalizedFilter,
+      classicFollowUpCutoverDate,
+      tenantTimezone,
+    };
+  }
+
   router.get('/handoff/:clientKey', async (req, res) => {
     try {
       res.set('Cache-Control', 'no-store');
       const { clientKey } = req.params;
       const limit = Math.min(500, Math.max(1, parseInt(req.query.limit, 10) || 120));
       const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
-      const rows = (await listLeadHandoff?.({ clientKey, limit, offset })) || [];
-      const enriched = rows.map((r) => enrichHandoffRow(r));
-      res.json({ ok: true, clientKey, total: enriched.length, offset, limit, rows: enriched });
+      const rows = (await listLeadHandoff?.({ clientKey, limit: 500, offset: 0 })) || [];
+      const filtered = await applyDashboardCohortFilter(clientKey, rows, req.query.filter);
+      const pageRows = filtered.rows.slice(offset, offset + limit);
+      res.json({
+        ok: true,
+        clientKey,
+        total: filtered.rows.length,
+        offset,
+        limit,
+        filter: filtered.filter,
+        rows: pageRows,
+      });
     } catch (error) {
       console.error('[HANDOFF LIST ERROR]', error);
       res.status(500).json({ ok: false, error: 'handoff_list_failed', message: error?.message || String(error) });
@@ -78,9 +142,11 @@ export function createLeadHandoffRouter(deps) {
       res.set('Cache-Control', 'no-store');
       const { clientKey } = req.params;
       const limit = Math.min(500, Math.max(1, parseInt(req.query.limit, 10) || 500));
-      const rows = (await listLeadHandoff?.({ clientKey, limit, offset: 0 })) || [];
+      const rows = (await listLeadHandoff?.({ clientKey, limit: 500, offset: 0 })) || [];
+      const filtered = await applyDashboardCohortFilter(clientKey, rows, req.query.filter);
+      const scopedRows = filtered.rows.slice(0, limit);
 
-      const out = rows.map((r) => {
+      const out = scopedRows.map((r) => {
         const data = parseDataJson(r.dataJson || r.data_json) || {};
         const qual = data?.qual || data?.qualification || data || {};
         const seqStages = data?.sequence?.stages || qual._sequenceStages || [];
@@ -126,7 +192,8 @@ export function createLeadHandoffRouter(deps) {
 
       const csv = toCsv(headers, out);
       res.set('Content-Type', 'text/csv; charset=utf-8');
-      res.set('Content-Disposition', `attachment; filename="lead-handoff-${clientKey}.csv"`);
+      const filterSuffix = filtered.filter && filtered.filter !== 'all' ? `-${filtered.filter}` : '';
+      res.set('Content-Disposition', `attachment; filename="lead-handoff-${clientKey}${filterSuffix}.csv"`);
       res.send(csv);
     } catch (error) {
       console.error('[HANDOFF EXPORT ERROR]', error);
