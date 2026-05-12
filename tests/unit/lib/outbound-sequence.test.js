@@ -43,6 +43,16 @@ describe('lib/outbound-sequence', () => {
     expect(out.ok).toBe(true);
   });
 
+  test('validateOutboundSequenceConfig accepts optional handoff/root keys', async () => {
+    const { validateOutboundSequenceConfig } = await import('../../../lib/outbound-sequence.js');
+    const out = validateOutboundSequenceConfig({
+      ...VALID_CFG,
+      handoffImportContextKeys: ['crmCampaign', 'laneHint', 'shipperCompanyName'],
+      classicFollowUpCutoverDate: '2026-05-12'
+    });
+    expect(out.ok).toBe(true);
+  });
+
   test('validateOutboundSequenceConfig rejects missing requiredFields', async () => {
     const { validateOutboundSequenceConfig } = await import('../../../lib/outbound-sequence.js');
     const bad = validateOutboundSequenceConfig({
@@ -76,6 +86,21 @@ describe('lib/outbound-sequence', () => {
     expect(bad.ok).toBe(false);
   });
 
+  test('validateOutboundSequenceConfig rejects malformed handoff/root keys', async () => {
+    const { validateOutboundSequenceConfig } = await import('../../../lib/outbound-sequence.js');
+    const badKeys = validateOutboundSequenceConfig({
+      ...VALID_CFG,
+      handoffImportContextKeys: ['crmCampaign', '   ', 42]
+    });
+    expect(badKeys.ok).toBe(false);
+
+    const badCutover = validateOutboundSequenceConfig({
+      ...VALID_CFG,
+      classicFollowUpCutoverDate: '2026-02-31'
+    });
+    expect(badCutover.ok).toBe(false);
+  });
+
   test('getValidatedOutboundSequence returns null when env kill switch set', async () => {
     process.env.OUTBOUND_SEQUENCE_DISABLED = '1';
     const { getValidatedOutboundSequence } = await import('../../../lib/outbound-sequence.js');
@@ -85,6 +110,19 @@ describe('lib/outbound-sequence', () => {
   test('getValidatedOutboundSequence returns null for invalid config (no crash)', async () => {
     const { getValidatedOutboundSequence } = await import('../../../lib/outbound-sequence.js');
     expect(getValidatedOutboundSequence({ outboundSequence: { enabled: true, stages: [] } })).toBeNull();
+  });
+
+  test('getHandoffImportContextKeys uses defaults unless tenant overrides them', async () => {
+    const { getHandoffImportContextKeys } = await import('../../../lib/outbound-sequence.js');
+    expect(getHandoffImportContextKeys({ outboundSequence: VALID_CFG })).toEqual(['crmCampaign', 'laneHint']);
+    expect(
+      getHandoffImportContextKeys({
+        outboundSequence: {
+          ...VALID_CFG,
+          handoffImportContextKeys: ['shipperCompanyName', 'crmCampaign']
+        }
+      })
+    ).toEqual(['shipperCompanyName', 'crmCampaign']);
   });
 
   test('getFirstStage / getStageById resolve stage by id', async () => {
