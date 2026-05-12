@@ -3,6 +3,7 @@ import { describe, expect, test } from '@jest/globals';
 import {
   extractLeadDialContextFromImportLead,
   filterLeadDialContextToScalars,
+  isLeadExplicitlyOptedIntoOutboundSequence,
   LEAD_DIAL_CONTEXT_MAX_BYTES,
   normalizeLeadDialContextEnvelope,
   normalizeLeadDialContext,
@@ -191,5 +192,15 @@ describe('lead-dial-context', () => {
       firstMessage: 'Hello',
       systemMessage: 'Use the logistics script.'
     });
+  });
+
+  test('isLeadExplicitlyOptedIntoOutboundSequence requires an explicit opt-in flag', () => {
+    expect(isLeadExplicitlyOptedIntoOutboundSequence(null)).toBe(false);
+    expect(isLeadExplicitlyOptedIntoOutboundSequence({ crmCampaign: 'spring-25' })).toBe(false);
+    expect(isLeadExplicitlyOptedIntoOutboundSequence({ outboundSequenceOptIn: true })).toBe(true);
+    expect(isLeadExplicitlyOptedIntoOutboundSequence({ variableValues: { sequenceOptIn: 'yes' } })).toBe(true);
+    expect(isLeadExplicitlyOptedIntoOutboundSequence({ multiCallOptIn: 1 })).toBe(true);
+    expect(isLeadExplicitlyOptedIntoOutboundSequence({ outboundDialMode: 'sequence' })).toBe(true);
+    expect(isLeadExplicitlyOptedIntoOutboundSequence({ outboundSequenceOptIn: false })).toBe(false);
   });
 });

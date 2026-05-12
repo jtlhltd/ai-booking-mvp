@@ -131,7 +131,7 @@ describe('lib/lead-import-outbound', () => {
     expect(mockProcessCallQueue).not.toHaveBeenCalled();
   });
 
-  test('sequence-enabled tenant stamps imported rows with outboundDialMode sequence', async () => {
+  test('sequence-enabled tenant still defaults imported rows to classic without explicit lead opt-in', async () => {
     mockGetFullClient.mockResolvedValue({
       isEnabled: true,
       clientKey: 'c1',
@@ -155,6 +155,48 @@ describe('lib/lead-import-outbound', () => {
     await runOutboundCallsForImportedLeads({
       clientKey: 'c1',
       inserted: [{ id: 1, phone: '+447700900000', name: 'x' }],
+      isBusinessHours: () => true,
+      getNextBusinessHour: () => new Date(),
+      scheduleAtOptimalCallWindow: jest.fn(async () => new Date('2026-06-01T10:00:00Z')),
+      addToCallQueue,
+      TIMEZONE: 'UTC'
+    });
+
+    expect(addToCallQueue).toHaveBeenCalledTimes(1);
+    expect(addToCallQueue.mock.calls[0][0].callData?.outboundDialMode).toBe('classic');
+  });
+
+  test('sequence-enabled tenant stamps imported rows with outboundDialMode sequence only when lead explicitly opts in', async () => {
+    mockGetFullClient.mockResolvedValue({
+      isEnabled: true,
+      clientKey: 'c1',
+      vapi: { assistantId: 'asst_1' },
+      outboundSequence: {
+        enabled: true,
+        stages: [
+          {
+            id: 'stage_1',
+            firstMessage: 'Hello',
+            systemMessage: 'Qualify the lead',
+            requiredFields: ['decisionMakerName'],
+            maxAttemptsInStage: 2,
+            isFinal: true
+          }
+        ]
+      }
+    });
+    const addToCallQueue = jest.fn(async () => {});
+
+    await runOutboundCallsForImportedLeads({
+      clientKey: 'c1',
+      inserted: [
+        {
+          id: 1,
+          phone: '+447700900000',
+          name: 'x',
+          lead_dial_context_json: { outboundSequenceOptIn: true }
+        }
+      ],
       isBusinessHours: () => true,
       getNextBusinessHour: () => new Date(),
       scheduleAtOptimalCallWindow: jest.fn(async () => new Date('2026-06-01T10:00:00Z')),

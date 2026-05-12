@@ -126,12 +126,13 @@ in the dashboard.
 
 ## Domain: sequence
 
-Multi-stage outbound sequences are **opt-in per tenant** (`tenants.outbound_sequence_json.enabled`).
+Multi-stage outbound sequences are **opt-in per tenant and per lead**: the tenant must have a valid enabled `outbound_sequence_json`, and each lead must carry an explicit opt-in signal in `leads.lead_dial_context_json`.
 When enabled, stage advancement is **server-inferred** from structured fields; the next dial is always a **future** `call_queue` row (no inline Vapi dial from webhooks).
 
 | ID | Statement | Constrains | Enforced by | Manual disprove |
 | --- | --- | --- | --- | --- |
 | `sequence.tenant-opt-in-required` | Sequence behavior runs only when `client.outboundSequence.enabled === true` and config passes `validateOutboundSequenceConfig`. Tenants without this flag behave like legacy single-call. | `lib/server-queue-workers.js`, `lib/instant-calling.js`, `lib/vapi-webhooks/process-webhook-payload.js` | canary | Create a tenant with `enabled: false`; observe no `stageId` in `call_queue.call_data` and no sequence DB rows for new leads. |
+| `sequence.lead-opt-in-required` | Even for a sequence-enabled tenant, outbound leads default to `classic` unless the lead explicitly opts into multi-call via `lead_dial_context_json` (for example `outboundSequenceOptIn: true`). Tenant enablement alone must never auto-enroll every lead. | `lib/lead-dial-context.js`, `lib/outbound-sequence.js`, `lib/server-queue-workers.js`, `lib/lead-import-outbound.js` | canary | Use a sequence-enabled tenant and queue/import two otherwise identical leads, one with no opt-in flag and one with `outboundSequenceOptIn: true`. The unflagged lead must stay `classic`; only the flagged lead may use `sequence`. |
 | `sequence.advance-only-when-required-filled` | The engine must not enqueue the next stage unless every `requiredFields` entry for the current stage is present and non-empty in structured data. | `lib/vapi-webhooks/process-webhook-payload.js`, `lib/outbound-sequence.js#isStageComplete` | canary | Send webhook with missing required field; no new `call_queue` row with `sequence_next`. |
 | `sequence.no-skip-stages` | At most one stage transition per end-of-call webhook (no jumping from stage 1 to stage 3 in one event). | `lib/vapi-webhooks/process-webhook-payload.js` | canary | Complete stage 1 only; next queued row must reference stage 2 id, never stage 3. |
 | `sequence.no-parallel-stages-per-lead` | At most one `pending` or `processing` `vapi_call` row per `(client_key, lead_phone)` while a sequence is active. | `lib/server-queue-workers.js`, `lib/vapi-webhooks/process-webhook-payload.js`, `db/domains/call-queue.js` | canary, invariant | Attempt double-enqueue; second insert must be rejected or deduped; invariant query for duplicate actives returns 0. |
