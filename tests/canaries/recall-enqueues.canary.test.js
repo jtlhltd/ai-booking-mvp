@@ -71,6 +71,7 @@ describe('canary: dial.recall-goes-through-scheduler', () => {
       expect(arg.callType).toBe('vapi_call');
       expect(arg.leadPhone).toBe('+441234');
       expect(arg.callData?.triggerType).toBe('manual_recall');
+      expect(arg.callData?.outboundDialMode).toBe('classic');
       expect(arg.callData?.recall).toBe(true);
     });
   });

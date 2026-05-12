@@ -87,6 +87,7 @@ export function createLeadsFollowupsRouter(deps) {
         callType: 'vapi_call',
         callData: {
           triggerType: 'manual_recall',
+          outboundDialMode: 'classic',
           leadName: lead.name || 'Lead',
           leadService: lead.service || '',
           leadSource: lead.source || null,

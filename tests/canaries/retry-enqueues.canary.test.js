@@ -72,6 +72,7 @@ describe('canary: dial.retry-goes-through-scheduler', () => {
     expect(arg.callType).toBe('vapi_call');
     expect(arg.leadPhone).toBe('+447700900111');
     expect(arg.callData?.triggerType).toBe('follow_up_retry');
+    expect(arg.callData?.outboundDialMode).toBe('classic');
     expect(arg.callData?.retryQueueId).toBe(99);
   });
 });

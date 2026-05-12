@@ -75,6 +75,7 @@ describe('canary: dial.imports-distribute-not-burst / queue.spread-min-spacing',
     for (const enqueued of calls) {
       expect(enqueued.callType).toBe('vapi_call');
       expect(enqueued.callData?.triggerType).toBe('new_lead_import');
+      expect(enqueued.callData?.outboundDialMode).toBe('classic');
       expect(enqueued.scheduledFor).toBeInstanceOf(Date);
     }
 

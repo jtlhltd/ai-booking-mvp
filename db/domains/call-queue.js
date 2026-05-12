@@ -10,6 +10,51 @@ export function createCallQueueDomain({
   callQueueReads,
   callQueueWrites,
 }) {
+  function parseCallData(raw) {
+    if (!raw) return {};
+    if (typeof raw === 'string') {
+      try {
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+      } catch {
+        return {};
+      }
+    }
+    if (typeof raw === 'object' && !Array.isArray(raw)) return raw;
+    return {};
+  }
+
+  function normalizeOutboundDialMode(raw) {
+    const v = String(raw || '').trim().toLowerCase();
+    return v === 'sequence' || v === 'classic' ? v : null;
+  }
+
+  function mergeOutboundDialMode(existingMode, incomingMode) {
+    const ex = normalizeOutboundDialMode(existingMode);
+    const inc = normalizeOutboundDialMode(incomingMode);
+    if (ex === 'sequence') return 'sequence';
+    if (ex === 'classic') return inc === 'sequence' ? 'sequence' : 'classic';
+    if (ex == null) return inc;
+    return null;
+  }
+
+  function mergeCallDataForDedupe(existingRaw, incomingRaw) {
+    const existing = parseCallData(existingRaw);
+    const incoming = parseCallData(incomingRaw);
+    const existingMode = normalizeOutboundDialMode(existing.outboundDialMode);
+    const mergedMode = mergeOutboundDialMode(existingMode, incoming.outboundDialMode);
+    const next = { ...existing };
+    if (mergedMode == null) {
+      delete next.outboundDialMode;
+    } else {
+      next.outboundDialMode = mergedMode;
+    }
+    return {
+      modeChanged: existingMode !== mergedMode,
+      next
+    };
+  }
+
   // --- V1: hard block outbound calls to opted-out numbers (DNC)
   const optedOutDialCacheByClient = new Map(); // clientKey -> { loadedAt, set }
   const OPTED_OUT_DIAL_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -88,7 +133,7 @@ export function createCallQueueDomain({
         const sel = await query(
           weakDigits
             ? `
-          SELECT id, scheduled_for, priority
+          SELECT id, scheduled_for, priority, call_data
           FROM call_queue
           WHERE client_key = $1
             AND status IN ('pending', 'processing')
@@ -98,7 +143,7 @@ export function createCallQueueDomain({
           LIMIT 1
           `
             : `
-          SELECT id, scheduled_for, priority
+          SELECT id, scheduled_for, priority, call_data
           FROM call_queue
           WHERE client_key = $1
             AND status IN ('pending', 'processing')
@@ -115,14 +160,16 @@ export function createCallQueueDomain({
           const newTime = when instanceof Date ? when.getTime() : new Date(when).getTime();
           const earlier = newTime < exTime;
           const betterPriority = priority < Number(ex.priority);
-          if (earlier || betterPriority) {
+          const merged = mergeCallDataForDedupe(ex.call_data, callData);
+          if (earlier || betterPriority || merged.modeChanged) {
             const nextWhen = earlier
               ? smearCallQueueScheduledFor(when instanceof Date ? when : new Date(when), clientKey, raw, ex.id)
               : ex.scheduled_for;
             const nextPri = betterPriority ? priority : ex.priority;
-            await query(`UPDATE call_queue SET scheduled_for = $1, priority = $2, updated_at = now() WHERE id = $3`, [
+            await query(`UPDATE call_queue SET scheduled_for = $1, priority = $2, call_data = $3::jsonb, updated_at = now() WHERE id = $4`, [
               nextWhen,
               nextPri,
+              Object.keys(merged.next).length > 0 ? JSON.stringify(merged.next) : null,
               ex.id,
             ]);
           }
@@ -132,7 +179,7 @@ export function createCallQueueDomain({
       } else if (sqlite) {
         const rowsSqlite = sqlite
           .prepare(
-            `SELECT id, scheduled_for, priority, lead_phone FROM call_queue
+            `SELECT id, scheduled_for, priority, lead_phone, call_data FROM call_queue
              WHERE client_key = ? AND call_type = 'vapi_call' AND status IN ('pending','processing')`
           )
           .all(clientKey);
@@ -144,14 +191,20 @@ export function createCallQueueDomain({
           const newTime = when instanceof Date ? when.getTime() : new Date(when).getTime();
           const earlier = newTime < exTime;
           const betterPriority = priority < Number(ex.priority);
-          if (earlier || betterPriority) {
+          const merged = mergeCallDataForDedupe(ex.call_data, callData);
+          if (earlier || betterPriority || merged.modeChanged) {
             const nextWhen = earlier
               ? smearCallQueueScheduledFor(when instanceof Date ? when : new Date(when), clientKey, raw, ex.id)
               : ex.scheduled_for;
             const nextPri = betterPriority ? priority : ex.priority;
             sqlite
-              .prepare(`UPDATE call_queue SET scheduled_for = ?, priority = ?, updated_at = datetime('now') WHERE id = ?`)
-              .run(nextWhen instanceof Date ? nextWhen.toISOString() : nextWhen, nextPri, ex.id);
+              .prepare(`UPDATE call_queue SET scheduled_for = ?, priority = ?, call_data = ?, updated_at = datetime('now') WHERE id = ?`)
+              .run(
+                nextWhen instanceof Date ? nextWhen.toISOString() : nextWhen,
+                nextPri,
+                Object.keys(merged.next).length > 0 ? JSON.stringify(merged.next) : null,
+                ex.id
+              );
           }
           return sqlite.prepare(`SELECT * FROM call_queue WHERE id = ?`).get(ex.id);
         }

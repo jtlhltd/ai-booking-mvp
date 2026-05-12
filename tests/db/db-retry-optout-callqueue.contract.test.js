@@ -158,7 +158,7 @@ function mockSqliteEnv({
             if (s.includes('FROM performance_metrics')) return perfAggRows;
 
             // addToCallQueue sqlite de-dupe scan
-            if (s.includes('SELECT id, scheduled_for, priority, lead_phone FROM call_queue')) {
+            if (s.includes('SELECT id, scheduled_for, priority, lead_phone, call_data FROM call_queue')) {
               return callQueueExistingRows;
             }
 

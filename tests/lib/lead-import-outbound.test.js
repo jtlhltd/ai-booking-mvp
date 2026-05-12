@@ -130,4 +130,39 @@ describe('lib/lead-import-outbound', () => {
     expect(addToCallQueue).toHaveBeenCalledTimes(1);
     expect(mockProcessCallQueue).not.toHaveBeenCalled();
   });
+
+  test('sequence-enabled tenant stamps imported rows with outboundDialMode sequence', async () => {
+    mockGetFullClient.mockResolvedValue({
+      isEnabled: true,
+      clientKey: 'c1',
+      vapi: { assistantId: 'asst_1' },
+      outboundSequence: {
+        enabled: true,
+        stages: [
+          {
+            id: 'stage_1',
+            firstMessage: 'Hello',
+            systemMessage: 'Qualify the lead',
+            requiredFields: ['decisionMakerName'],
+            maxAttemptsInStage: 2,
+            isFinal: true
+          }
+        ]
+      }
+    });
+    const addToCallQueue = jest.fn(async () => {});
+
+    await runOutboundCallsForImportedLeads({
+      clientKey: 'c1',
+      inserted: [{ id: 1, phone: '+447700900000', name: 'x' }],
+      isBusinessHours: () => true,
+      getNextBusinessHour: () => new Date(),
+      scheduleAtOptimalCallWindow: jest.fn(async () => new Date('2026-06-01T10:00:00Z')),
+      addToCallQueue,
+      TIMEZONE: 'UTC'
+    });
+
+    expect(addToCallQueue).toHaveBeenCalledTimes(1);
+    expect(addToCallQueue.mock.calls[0][0].callData?.outboundDialMode).toBe('sequence');
+  });
 });
