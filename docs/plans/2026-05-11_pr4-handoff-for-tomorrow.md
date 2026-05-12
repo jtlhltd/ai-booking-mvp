@@ -1,66 +1,106 @@
-# PR4 Handoff For Tomorrow
+# PR4 / PR5 Handoff Status
 
-Generated: 2026-05-11  
+Refreshed: 2026-05-12  
 Authoritative source plan: `.cursor/plans/tom_multi_stage_outbound_9c4e2b1a.plan.md`
 
-This is a convenience handoff copy so work can resume cleanly tomorrow. The authoritative evolving plan remains `.cursor/plans/tom_multi_stage_outbound_9c4e2b1a.plan.md`.
+This handoff file was originally written on 2026-05-11 when only PR4 slices 1-2 were landed. It is now refreshed to match the actual repo state.
 
 ## Current State
 
-- PR4 is being shipped in small slices.
-- Slice 1 completed and pushed: `09693a8`  
-  Add `leads.lead_dial_context_json` schema + helper + policy + tests.
-- Slice 2 completed and pushed: `0307955`  
-  Wire queue-worker read + `callLeadInstantly` payload merge + merge-order canary.
-- Handoff PDF/HTML completed and pushed: `551cad0`
-- The first two implementation slices both passed `npm run test:ci`.
+- The repo has progressed through:
+  - PR4 slice 1: `09693a8`
+  - PR4 slice 2: `0307955`
+  - PR4 slice 3: `d13e8ab`
+  - PR4 slice 4: `8c5d146`
+  - PR4 slice 5: `4bc6f2e`
+  - optional PR4 import/API context work: `2712a87`
+  - PR5 per-lead message overrides: `7db6bcb`
+- PR4 core implementation is present in code.
+- PR4.5 stop/dismiss and audit behavior is present in code.
+- The optional import/API persistence work is present in code.
+- PR5 message-level lead overrides are present in code.
+- The main remaining item that is **not proven by repo evidence** is the manual/staging gate:
+  - `pr3_synthetic_run`
+  - `pr3_acceptance`
 
 ## Where We Are Up To
 
 | Phase | Status | Notes |
 | --- | --- | --- |
-| 0 | Pending gate | `pr3_synthetic_run` and `pr3_acceptance` staging gate still exists before PR4 should be considered rollout-safe. |
-| 1 | Done | Schema + normalizer skeleton + policy + unit/canary tests completed in slice 1. |
-| 2 | Done | Queue read + dial payload overlay + merge-order canary completed in slice 2. |
-| 3 | Next | `outboundDialMode` stamping across enqueue sites plus dedupe merge lock in `db/domains/call-queue.js`. |
-| 4 | Pending | `validateOutboundSequenceConfig` optional keys + webhook `qual._importContext` builder + INTENT/canaries. |
-| 5 | Pending | Dashboard unified filters + server predicates. |
-| 6 / PR4.5 | Pending | Admin stop + dismiss + `_opsAudit` + UI/API. |
+| 0 | Not proven in repo | `pr3_synthetic_run` and `pr3_acceptance` are still the gating manual/staging checks from the plan. |
+| 1 | Done | Schema + normalizer + policy/tests landed. |
+| 2 | Done | Queue read + dial payload overlay landed. |
+| 3 | Done | `outboundDialMode` stamping + dedupe freeze logic landed. |
+| 4 | Done | `_importContext` allow-list + sequence config optional keys landed. |
+| 5 | Done | Dashboard cohort filters and route/UI wiring landed. |
+| 6 / PR4.5 | Done | Admin stop + salvage dismiss + bounded `_opsAudit` landed. |
+| Optional PR4 | Done | Import/API writers for `lead_dial_context_json` landed. |
+| PR5 | Done | Per-lead `firstMessage` / `systemMessage` overrides landed. |
 
 ## Exactly What Landed
 
-### Slice 1
+### PR4 slice 1
 
 - Added nullable `leads.lead_dial_context_json` in Postgres and SQLite migrations.
-- Added `lib/lead-dial-context.js` with reserved-key stripping and size validation.
-- Added intent row `dial.lead-dial-context-contained` plus policy allow-list.
-- Added unit test and first canary.
+- Added `lib/lead-dial-context.js` and initial reserved-key / size gates.
+- Added the first intent/policy/canary coverage.
 
-### Slice 2
+### PR4 slice 2
 
-- `lib/server-queue-workers.js` now selects `lead_dial_context_json` on the queue path and normalizes it before dialing.
-- `lib/instant-calling.js` now takes explicit `leadDialContext` and applies it as the final shallow `assistantOverrides.variableValues` overlay.
-- `normalizeLeadDialContext()` now strips reserved keys, keeps scalar values only, and drops oversize payloads.
-- Added merge-order coverage in unit tests and a payload-capture canary in `tests/canaries/lead-outbound-context-merge.canary.test.js`.
+- `lib/server-queue-workers.js` reads `lead_dial_context_json` on the queue path.
+- `lib/instant-calling.js` applies the lead context as the final `assistantOverrides.variableValues` overlay.
+- Added merge-order coverage and payload canary coverage.
 
-## Resume Point Tomorrow
+### PR4 slice 3
 
-1. Start with Phase 3 / slice 3: stamp `call_data.outboundDialMode` on every outbound `addToCallQueue` site.
-2. Implement the locked dedupe merge truth table in `db/domains/call-queue.js` for both Postgres and SQLite branches.
-3. Add freeze canary coverage for same-phone duplicate enqueues proving stored mode follows the lock table and never downgrades `sequence` to `classic`.
-4. Run `npm run test:ci`.
-5. Commit as PR4 slice 3, then continue to webhook `_importContext` work.
+- Outbound enqueue sites stamp `call_data.outboundDialMode`.
+- `db/domains/call-queue.js` merges dedupe mode with the locked truth table.
+- Canary coverage proves no downgrade from `sequence` to `classic`.
 
-## Primary Files For The Next Slice
+### PR4 slice 4
 
-- `db/domains/call-queue.js`
-- `lib/server-queue-workers.js`
-- `lib/lead-import-outbound.js`
-- `lib/follow-up-processor.js`
-- `lib/vapi-webhooks/outbound-sequence-webhook.js`
-- `routes/import-leads.js`
-- `lib/leads-import.js`
-- `lib/twilio-sms-inbound-webhook.js` if it enqueues `vapi_call`
+- `lib/outbound-sequence.js` validates `handoffImportContextKeys` and `classicFollowUpCutoverDate`.
+- `lib/vapi-webhooks/outbound-sequence-webhook.js` writes bounded `qual._importContext` from the allowed lead context keys only.
+- Intent + canary coverage landed for handoff import context behavior.
+
+### PR4 slice 5
+
+- Shared dashboard cohort logic landed in `lib/dashboard-follow-up-filters.js`.
+- Route wiring landed in `routes/follow-up-queue.js`, `routes/lead-handoff.js`, and `routes/outbound-sequence-visibility-mount.js`.
+- Unified cohort filter UI landed in `public/client-dashboard.html`.
+
+### PR4.5
+
+- Admin/operator stop and salvage dismiss logic landed in `lib/outbound-sequence-ops.js`.
+- API routes landed in `routes/client-ops-mount.js`.
+- `_opsAudit`, `_salvageDismissedAt`, and `_salvageDismissedBy` behavior is covered by canary tests.
+
+### Optional PR4 import/API work
+
+- Import/API paths now persist sanitized `lead_dial_context_json`.
+- Zapier/custom field ingestion is wired to the same sanitizer path.
+
+### PR5
+
+- `lib/lead-dial-context.js` now supports an envelope with `variableValues`, `firstMessage`, and `systemMessage`.
+- `lib/instant-calling.js` applies lead-owned `firstMessage` / `systemMessage` last, after sequence and A/B merges.
+
+## Resume Point Now
+
+There is no unfinished repo implementation slice left from the original PR4 plan.
+
+If continuing from here, the next practical path is:
+
+1. Confirm whether `pr3_synthetic_run` and `pr3_acceptance` were actually executed on staging.
+2. If not, run that staging/manual sign-off and record the result.
+3. If yes, choose the next product scope beyond PR5 rather than continuing old PR4 work.
+
+## Most Important Remaining Check
+
+- Verify the **manual/staging gate**, because that is the only part of the original plan still not evidenced in the repo:
+  - `pr3_synthetic_run`
+  - `pr3_acceptance`
+  - the staging sign-off checklist items in the main plan
 
 ## Copied Plan Excerpt: Execution Phases
 
@@ -107,10 +147,9 @@ This is a convenience handoff copy so work can resume cleanly tomorrow. The auth
 5. Dashboard filters.
 6. PR4.5 stop / dismiss / `_opsAudit`.
 
-## Tomorrow's Short Checklist
+## Updated Short Checklist
 
 - Open `.cursor/plans/tom_multi_stage_outbound_9c4e2b1a.plan.md` and this handoff file.
-- Start at Phase 3 / PR4 slice 3.
-- Keep the locked dedupe truth table unchanged.
-- Add the new canary in the same PR as the dedupe merge.
-- Do not start webhook `_importContext` until slice 3 is green.
+- Treat PR4 / PR4.5 code implementation as complete in-repo.
+- Verify whether the staging/manual acceptance gate was completed outside the repo.
+- If the staging gate is already done, define the next scope after PR5 instead of reopening old slices.
