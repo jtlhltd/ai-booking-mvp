@@ -9099,7 +9099,7 @@
             `;
         }
 
-        function renderOutboundSequenceLeadDetail(payload) {
+        async function renderOutboundSequenceLeadDetail(payload) {
             const host = document.getElementById('outboundSequenceLeadDetail');
             if (!host) return;
             const row = payload?.row || null;
@@ -9255,7 +9255,11 @@
                     </details>
                 </div>
             `;
-            renderOutboundSequenceInlineHistory({ phone: row.leadPhone || lead.phone, title, detailPayload: payload }).catch(() => {});
+            try {
+                await renderOutboundSequenceInlineHistory({ phone: row.leadPhone || lead.phone, title, detailPayload: payload });
+            } catch {
+                /* non-fatal: call history is supplementary */
+            }
         }
 
         async function refreshOutboundSequenceWindow(clientKey, { phoneLookup = null } = {}) {
@@ -9304,7 +9308,7 @@
                     );
                     if (detailRes?.ok === true && detailRes?.row) {
                         outboundSequenceSelectedPhone = String(detailRes?.row?.leadPhone || detailPhone).trim() || detailPhone;
-                        renderOutboundSequenceLeadDetail(detailRes);
+                        await renderOutboundSequenceLeadDetail(detailRes);
                     } else {
                         const errLabel =
                             detailRes?.error === 'outbound_sequence_phone_failed' && String(detailRes?.message || '').trim()
