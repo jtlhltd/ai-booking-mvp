@@ -9,9 +9,58 @@
     <title>Client Dashboard</title>
     <script>
         (function () {
-            const BOOT_LOCK_MS = 3400;
+            const BOOT_LOCK_MS = 5200;
             let bootLockUntil = 0;
             let bootFocusCleanupTimer = null;
+            let bootUserIntent = false;
+            let bootScrollClampAttached = false;
+
+            function detachBootListeners() {
+                document.removeEventListener('focusin', onBootFocusIn, true);
+                if (bootScrollClampAttached) {
+                    window.removeEventListener('scroll', onBootScroll, { passive: true });
+                    bootScrollClampAttached = false;
+                }
+                ['pointerdown', 'wheel', 'touchstart'].forEach((evt) => {
+                    document.removeEventListener(evt, markBootUserIntent, true);
+                });
+            }
+
+            function markBootUserIntent() {
+                bootUserIntent = true;
+                if (bootScrollClampAttached) {
+                    window.removeEventListener('scroll', onBootScroll, { passive: true });
+                    bootScrollClampAttached = false;
+                }
+            }
+
+            function onBootScroll() {
+                if (Date.now() > bootLockUntil || bootUserIntent) {
+                    if (bootScrollClampAttached) {
+                        window.removeEventListener('scroll', onBootScroll, { passive: true });
+                        bootScrollClampAttached = false;
+                    }
+                    return;
+                }
+                try {
+                    const y = window.scrollY || window.pageYOffset || 0;
+                    if (y > 6) {
+                        window.scrollTo(0, 0);
+                        try {
+                            document.documentElement.scrollTop = 0;
+                        } catch (e) {
+                            /* ignore */
+                        }
+                        try {
+                            document.body.scrollTop = 0;
+                        } catch (e2) {
+                            /* ignore */
+                        }
+                    }
+                } catch (e3) {
+                    /* ignore */
+                }
+            }
 
             /** Session restore often lands on the sequence phone field seconds after load; blur + scroll before it pins the viewport. */
             function onBootFocusIn(ev) {
@@ -37,16 +86,23 @@
             }
 
             function armBootLock() {
+                bootUserIntent = false;
                 bootLockUntil = Math.max(bootLockUntil, Date.now() + BOOT_LOCK_MS);
                 document.removeEventListener('focusin', onBootFocusIn, true);
                 document.addEventListener('focusin', onBootFocusIn, true);
+                if (!bootScrollClampAttached) {
+                    bootScrollClampAttached = true;
+                    window.addEventListener('scroll', onBootScroll, { passive: true });
+                }
+                ['pointerdown', 'wheel', 'touchstart'].forEach((evt) => {
+                    document.removeEventListener(evt, markBootUserIntent, true);
+                    document.addEventListener(evt, markBootUserIntent, { capture: true, passive: true });
+                });
                 if (bootFocusCleanupTimer) clearTimeout(bootFocusCleanupTimer);
                 bootFocusCleanupTimer = setTimeout(function () {
                     bootFocusCleanupTimer = null;
-                    if (Date.now() > bootLockUntil) {
-                        document.removeEventListener('focusin', onBootFocusIn, true);
-                    }
-                }, BOOT_LOCK_MS + 220);
+                    detachBootListeners();
+                }, BOOT_LOCK_MS + 280);
             }
 
             globalThis.__dashboardArmScrollBootLock = armBootLock;
@@ -60,6 +116,16 @@
                 }
                 try {
                     window.scrollTo(0, 0);
+                } catch (e) {
+                    /* ignore */
+                }
+                try {
+                    document.documentElement.scrollTop = 0;
+                } catch (e) {
+                    /* ignore */
+                }
+                try {
+                    document.body.scrollTop = 0;
                 } catch (e) {
                     /* ignore */
                 }
@@ -96,6 +162,7 @@
                 setTimeout(n, 1200);
                 setTimeout(n, 2200);
                 setTimeout(n, 3200);
+                setTimeout(n, 4500);
             }
 
             try {
@@ -190,6 +257,7 @@
             font-weight: 400;
             font-feature-settings: 'cv02', 'cv03', 'cv04';
             overflow-x: hidden;
+            overflow-anchor: none;
         }
 
         /* Ensure all text elements use Inter */
