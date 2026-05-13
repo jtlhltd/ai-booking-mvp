@@ -8877,7 +8877,7 @@
             return bits.length ? `<div class="outbound-seq-actions">${bits.join('')}</div>` : '';
         }
 
-        async function renderOutboundSequenceInlineHistory({ phone = '', title = '' } = {}) {
+        async function renderOutboundSequenceInlineHistory({ phone = '', title = '', detailPayload = null } = {}) {
             const host = document.getElementById('outboundSequenceDetailHistory');
             const phoneNorm = outboundSequencePhoneNorm(phone);
             if (!host) return;
@@ -8885,7 +8885,16 @@
                 host.innerHTML = '<div class="tom-ab-test-meta">Call history is not available for this lead yet.</div>';
                 return;
             }
-            await followUpRenderCallHistoryInto(host, currentClient, phoneNorm, { businessName: title || phoneNorm });
+            const h = detailPayload?.handoff && typeof detailPayload.handoff === 'object' ? detailPayload.handoff : {};
+            const dj = h.dataJson ?? h.data_json;
+            const syntheticRow =
+                (dj != null && (typeof dj === 'object' || (typeof dj === 'string' && String(dj).trim())))
+                    ? { _handoff: { dataJson: dj } }
+                    : null;
+            await followUpRenderCallHistoryInto(host, currentClient, phoneNorm, {
+                businessName: title || phoneNorm,
+                row: syntheticRow,
+            });
         }
 
         function outboundSequenceSelectedRowFallback() {
@@ -9192,7 +9201,7 @@
                     </details>
                 </div>
             `;
-            renderOutboundSequenceInlineHistory({ phone: row.leadPhone || lead.phone, title }).catch(() => {});
+            renderOutboundSequenceInlineHistory({ phone: row.leadPhone || lead.phone, title, detailPayload: payload }).catch(() => {});
         }
 
         async function refreshOutboundSequenceWindow(clientKey, { phoneLookup = null } = {}) {
@@ -15848,12 +15857,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     return;
                 }
 
-                // Only attribute per-call snapshots when we actually have a per-call source.
-                const handoffHasAnyTimestamp = handoffStageSnaps.some((s) => {
-                    const t = s?.completedAt ? new Date(s.completedAt).getTime() : NaN;
-                    return Number.isFinite(t);
-                });
-
                 const sheetHtml = sheetRowSnap
                     ? (() => {
                         const sd = sheetRowSnap.structuredData || {};
@@ -15896,7 +15899,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             const snip = c.transcriptSnippet ? escapeHtml(String(c.transcriptSnippet)).slice(0, 260) : '';
                             const sid = c.callId || null;
                             const seqSnap = sid ? (snapByCallId.get(sid) || null) : null;
-                            const handoffSnap = (!seqSnap && handoffHasAnyTimestamp) ? pickHandoffSnapForCall(c.createdAt) : null;
+                            const handoffSnap = !seqSnap && handoffStageSnaps.length ? pickHandoffSnapForCall(c.createdAt) : null;
                             const callExtract = (() => {
                                 try {
                                     const m = c?.metadata && typeof c.metadata === 'object' ? c.metadata : null;

@@ -169,6 +169,7 @@ export function createOutboundSequenceVisibilityRouter(deps) {
             operatorNotes: row.operatorNotes || null,
             updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString() : null,
             salvageDismissedAt: handoffData?.qual?._salvageDismissedAt || null,
+            dataJson: row.dataJson != null && typeof row.dataJson === 'object' ? row.dataJson : handoffData,
           },
         });
       }
