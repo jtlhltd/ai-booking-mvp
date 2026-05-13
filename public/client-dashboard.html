@@ -8895,6 +8895,43 @@
             return selected || rows[0] || null;
         }
 
+        async function outboundSequenceFetchPhoneDetail(clientKey, primaryPhone, fallbackRow) {
+            const tried = new Set();
+            const candidates = [];
+            const add = (v) => {
+                const s = String(v || '').trim();
+                if (!s || tried.has(s)) return;
+                tried.add(s);
+                candidates.push(s);
+            };
+            add(primaryPhone);
+            add(fallbackRow?.leadPhone);
+            add(followUpNormalizePhoneKey(primaryPhone));
+            const digits = String(primaryPhone || '').replace(/\D/g, '');
+            if (digits.length >= 7) add(digits);
+            let last = { httpOk: false, httpStatus: 0, payload: {}, lastPhone: '' };
+            for (const p of candidates) {
+                last.lastPhone = p;
+                try {
+                    const res = await fetch(
+                        `${BASE_URL}/api/outbound-sequence/${encodeURIComponent(clientKey)}/phone/${encodeURIComponent(p)}`,
+                        { cache: 'no-store' }
+                    );
+                    const payload = await res.json().catch(() => ({}));
+                    last = { httpOk: res.ok, httpStatus: res.status, payload, lastPhone: p };
+                    if (res.ok && payload?.ok === true && payload?.row) return last;
+                } catch (e) {
+                    last = {
+                        httpOk: false,
+                        httpStatus: 0,
+                        payload: { ok: false, error: 'fetch_failed', message: e?.message || String(e) },
+                        lastPhone: p,
+                    };
+                }
+            }
+            return last;
+        }
+
         function renderOutboundSequenceLeadEmptyState(message = '', row = null) {
             const host = document.getElementById('outboundSequenceLeadDetail');
             if (!host) return;
@@ -9196,18 +9233,22 @@
                 const detailPhone = String(outboundSequenceSelectedPhone || requestedPhone || '').trim();
                 if (detailPhone) {
                     if (input && (!input.value || requestedPhone)) input.value = detailPhone;
-                    const detailRes = await fetch(
-                        `${BASE_URL}/api/outbound-sequence/${encodeURIComponent(clientKey)}/phone/${encodeURIComponent(detailPhone)}`,
-                        { cache: 'no-store' }
-                    ).then((r) => r.json());
-                    if (detailRes?.ok && detailRes?.row) {
+                    const rowFb = outboundSequenceSelectedRowFallback();
+                    const { httpOk, httpStatus, payload: detailRes } = await outboundSequenceFetchPhoneDetail(
+                        clientKey,
+                        detailPhone,
+                        rowFb
+                    );
+                    if (detailRes?.ok === true && detailRes?.row) {
                         outboundSequenceSelectedPhone = String(detailRes?.row?.leadPhone || detailPhone).trim() || detailPhone;
                         renderOutboundSequenceLeadDetail(detailRes);
                     } else {
-                        renderOutboundSequenceLeadEmptyState(
-                            'We could not load the full detail for this lead yet. The selected row on the right still shows the latest summary we have.',
-                            outboundSequenceSelectedRowFallback()
-                        );
+                        const errLabel = detailRes?.error || detailRes?.message || (httpStatus ? `HTTP ${httpStatus}` : 'unknown');
+                        const hint =
+                            !httpOk || detailRes?.ok === false
+                                ? `Could not load sequence detail from the server (${errLabel}). Try Refresh or open the row again.`
+                                : 'We could not load the full detail for this lead yet. The selected row on the right still shows the latest summary we have.';
+                        renderOutboundSequenceLeadEmptyState(hint, outboundSequenceSelectedRowFallback());
                     }
                 } else {
                     renderOutboundSequenceLeadEmptyState();

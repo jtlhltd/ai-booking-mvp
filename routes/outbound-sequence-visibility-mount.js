@@ -444,7 +444,9 @@ export function createOutboundSequenceVisibilityRouter(deps) {
       const validated = getValidatedOutboundSequence(client);
       const raw = client?.outboundSequence;
       const v = raw && typeof raw === 'object' ? validateOutboundSequenceConfig(raw) : { ok: false, errors: ['outboundSequence missing'] };
-      const phoneRaw = String(phone || '').trim();
+      const phoneRaw = String(phone || '')
+        .trim()
+        .replace(/[\u200b-\u200d\ufeff\u200e\u200f\u202a-\u202e]/g, '');
       const phoneMatch = phoneKeyFn(phoneRaw);
 
       const rowRes = await query(
@@ -465,6 +467,11 @@ export function createOutboundSequenceVisibilityRouter(deps) {
         WHERE client_key = $1
           AND (
             lead_phone = $2
+            OR (
+              NULLIF(regexp_replace(COALESCE($2, ''), '[^0-9]', '', 'g'), '') IS NOT NULL
+              AND regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g')
+                = regexp_replace(COALESCE($2, ''), '[^0-9]', '', 'g')
+            )
             OR (lead_phone IS NOT NULL AND $3 IS NOT NULL AND RIGHT(regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g'), 10) = $3)
           )
         LIMIT 1
@@ -500,7 +507,8 @@ export function createOutboundSequenceVisibilityRouter(deps) {
 
       let nextQueue = null;
       if (isPostgres) {
-        const mk = phoneKeyFn(phoneRaw);
+        const queuePhone = String(row.leadPhone || phoneRaw).trim();
+        const mk = phoneKeyFn(queuePhone);
         const qRes = await query(
           `
           SELECT
@@ -515,12 +523,17 @@ export function createOutboundSequenceVisibilityRouter(deps) {
             AND (call_data->>'triggerType') = 'sequence_next'
             AND (
               lead_phone = $2
+              OR (
+                NULLIF(regexp_replace(COALESCE($2, ''), '[^0-9]', '', 'g'), '') IS NOT NULL
+                AND regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g')
+                  = regexp_replace(COALESCE($2, ''), '[^0-9]', '', 'g')
+              )
               OR (lead_phone IS NOT NULL AND $3 IS NOT NULL AND RIGHT(regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g'), 10) = $3)
             )
           ORDER BY scheduled_for ASC
           LIMIT 1
         `,
-          [clientKey, String(phone || '').trim(), mk]
+          [clientKey, queuePhone, mk]
         );
         const qr = qRes?.rows?.[0] || null;
         if (qr) {
