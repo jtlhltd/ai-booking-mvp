@@ -113,7 +113,8 @@ export function createOutboundSequenceVisibilityRouter(deps) {
           lookupKeysForPhone(row.phone, row.phoneMatchKey),
           {
             lead: {
-              id: row.id ?? null,
+              // pg 8+ may return BIGINT as BigInt; Express JSON cannot serialize BigInt.
+              id: row.id != null ? String(row.id) : null,
               phone: row.phone || null,
               phoneMatchKey: row.phoneMatchKey || null,
               name: row.name || null,
@@ -539,7 +540,7 @@ export function createOutboundSequenceVisibilityRouter(deps) {
         if (qr) {
           const cd = qr.callData && typeof qr.callData === 'object' ? qr.callData : {};
           nextQueue = {
-            id: qr.id,
+            id: qr.id != null ? String(qr.id) : null,
             status: qr.status,
             scheduledFor: qr.scheduledFor ? new Date(qr.scheduledFor).toISOString() : null,
             callData: qr.callData,

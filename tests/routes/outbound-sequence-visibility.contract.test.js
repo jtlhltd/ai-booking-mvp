@@ -253,6 +253,104 @@ describe('routes/outbound-sequence-visibility-mount.js', () => {
     expect(res.body.row.stagesCompleted[0]).toEqual(expect.objectContaining({ callId: 'call_1' }));
   });
 
+  test('GET /api/outbound-sequence/:clientKey/phone/:phone serializes BIGINT ids (pg-style) without 500', async () => {
+    const getFullClient = jest.fn(async () => ({
+      clientKey: 'd2d-xpress-tom',
+      outboundSequence: {
+        enabled: true,
+        maxTotalDialsPerLead: 3,
+        maxSequenceDurationDays: 7,
+        stages: [
+          {
+            id: 'stage_gatekeeper',
+            firstMessage: 'Hello',
+            systemMessage: 'System',
+            requiredFields: ['lane', 'volume'],
+            maxAttemptsInStage: 2,
+            isFinal: true,
+          },
+        ],
+      },
+    }));
+
+    const query = jest.fn(async (sql) => {
+      const s = String(sql);
+      if (s.includes('FROM lead_sequence_state')) {
+        return {
+          rows: [
+            {
+              clientKey: 'd2d-xpress-tom',
+              leadPhone: '+447700900000',
+              currentStageId: 'stage_gatekeeper',
+              stagesCompleted: '[]',
+              attemptsInStage: 0,
+              attemptsTotal: 1,
+              startedAt: '2030-01-01T00:00:00.000Z',
+              lastCallId: null,
+              nextStageScheduledFor: null,
+              status: 'active',
+              updatedAt: '2030-01-01T01:00:00.000Z',
+            },
+          ],
+        };
+      }
+      if (s.includes('FROM call_queue')) {
+        return {
+          rows: [
+            {
+              id: 9007199254740993n,
+              status: 'pending',
+              scheduledFor: '2030-01-02T00:00:00.000Z',
+              callData: { triggerType: 'sequence_next', stageId: 'stage_gatekeeper' },
+            },
+          ],
+        };
+      }
+      if (s.includes('FROM lead_handoff')) {
+        return { rows: [] };
+      }
+      if (s.includes('FROM leads')) {
+        return {
+          rows: [
+            {
+              id: 9223372036854775807n,
+              phone: '+447700900000',
+              phoneMatchKey: '7700900000',
+              name: 'BigInt Lead Co',
+              service: 'Parcel',
+              source: 'import_csv',
+              notes: '',
+              leadStatus: 'new',
+              createdAt: '2030-01-01T00:00:00.000Z',
+            },
+          ],
+        };
+      }
+      return { rows: [] };
+    });
+
+    const { createOutboundSequenceVisibilityRouter } = await import('../../routes/outbound-sequence-visibility-mount.js');
+    const app = createContractApp({
+      mounts: [{ path: '/api', router: () => createOutboundSequenceVisibilityRouter({ query, getFullClient, isPostgres: true }) }],
+    });
+
+    const res = await request(app).get('/api/outbound-sequence/d2d-xpress-tom/phone/%2B447700900000').expect(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.lead).toEqual(
+      expect.objectContaining({
+        id: '9223372036854775807',
+        name: 'BigInt Lead Co',
+      })
+    );
+    expect(res.body.nextQueue).toEqual(
+      expect.objectContaining({
+        id: '9007199254740993',
+        status: 'pending',
+        triggerType: 'sequence_next',
+      })
+    );
+  });
+
   test('GET /api/outbound-sequence/:clientKey/leads applies cohort filter', async () => {
     const getFullClient = jest.fn(async () => ({
       clientKey: 'd2d-xpress-tom',
