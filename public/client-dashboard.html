@@ -8847,6 +8847,24 @@
             return followUpNormalizePhoneKey(phone) || String(phone || '').trim();
         }
 
+        /** Match a recent-list row by exact leadPhone or same last-10-digit key as the server detail route. */
+        function outboundSequenceFindRowByPhoneHint(needle, rows) {
+            const n = String(needle || '').trim();
+            if (!n || !Array.isArray(rows) || !rows.length) return null;
+            for (const row of rows) {
+                const lp = String(row?.leadPhone || '').trim();
+                if (lp && lp === n) return row;
+            }
+            const nk = followUpNormalizePhoneKey(n);
+            if (!nk) return null;
+            for (const row of rows) {
+                const lp = String(row?.leadPhone || '').trim();
+                if (!lp) continue;
+                if (followUpNormalizePhoneKey(lp) === nk) return row;
+            }
+            return null;
+        }
+
         function outboundSequenceJourneyActionsHtml({ phone = '', leadId = '', title = '' } = {}) {
             const phoneNorm = outboundSequencePhoneNorm(phone);
             const bits = [];
@@ -8873,7 +8891,7 @@
         function outboundSequenceSelectedRowFallback() {
             const rows = Array.isArray(outboundSequenceRecentRows) ? outboundSequenceRecentRows : [];
             if (!rows.length) return null;
-            const selected = rows.find((row) => String(row?.leadPhone || '').trim() === String(outboundSequenceSelectedPhone || '').trim());
+            const selected = outboundSequenceFindRowByPhoneHint(outboundSequenceSelectedPhone, rows);
             return selected || rows[0] || null;
         }
 
@@ -8919,7 +8937,12 @@
                 <div class="tom-ab-test-meta" style="margin:0 0 10px 0;">Click a row to inspect the lead, review captured data, and stop future sequence dials if needed.</div>
                 ${list.slice(0, 120).map((r) => {
                     const phone = String(r?.leadPhone || '').trim();
-                    const selected = phone && phone === outboundSequenceSelectedPhone;
+                    const selNorm = outboundSequenceSelectedPhone ? followUpNormalizePhoneKey(outboundSequenceSelectedPhone) : '';
+                    const selected = Boolean(
+                        phone
+                        && (phone === outboundSequenceSelectedPhone
+                            || (selNorm && followUpNormalizePhoneKey(phone) === selNorm))
+                    );
                     const stage = String(r?.currentStageId || '').trim() || 'No current stage';
                     const updated = r?.updatedAt ? formatRelativeWithAbsolute(r.updatedAt, tz) : '—';
                     const attempts = `${formatNumber(r?.attemptsInStage ?? 0)} in stage · ${formatNumber(r?.attemptsTotal ?? 0)} total`;
@@ -9155,15 +9178,22 @@
                 if (requestedPhone) outboundSequenceSelectedPhone = requestedPhone;
                 if (leadsRes?.ok) {
                     const availablePhones = new Set(leadRows.map((row) => String(row?.leadPhone || '').trim()).filter(Boolean));
-                    if (!availablePhones.has(outboundSequenceSelectedPhone)) {
-                        outboundSequenceSelectedPhone = requestedPhone && availablePhones.has(requestedPhone)
-                            ? requestedPhone
-                            : (leadRows[0]?.leadPhone || '');
+                    let sel = String(outboundSequenceSelectedPhone || '').trim();
+                    if (!availablePhones.has(sel)) {
+                        const match =
+                            outboundSequenceFindRowByPhoneHint(sel, leadRows)
+                            || (requestedPhone ? outboundSequenceFindRowByPhoneHint(requestedPhone, leadRows) : null);
+                        sel = String(match?.leadPhone || '').trim()
+                            || (requestedPhone && availablePhones.has(requestedPhone) ? requestedPhone : '')
+                            || String(leadRows[0]?.leadPhone || '').trim()
+                            || requestedPhone
+                            || sel;
                     }
+                    outboundSequenceSelectedPhone = sel;
                     renderOutboundSequenceRecentList(leadRows);
                 }
                 if (summaryRes?.ok) renderOutboundSequenceConfig(summaryRes.sequence || {}, summaryRes.sequence?.stages || []);
-                const detailPhone = requestedPhone || outboundSequenceSelectedPhone;
+                const detailPhone = String(outboundSequenceSelectedPhone || requestedPhone || '').trim();
                 if (detailPhone) {
                     if (input && (!input.value || requestedPhone)) input.value = detailPhone;
                     const detailRes = await fetch(
