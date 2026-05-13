@@ -478,7 +478,10 @@ export function createOutboundSequenceVisibilityRouter(deps) {
               AND regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g')
                 = regexp_replace(COALESCE($2, ''), '[^0-9]', '', 'g')
             )
-            OR (lead_phone IS NOT NULL AND $3 IS NOT NULL AND RIGHT(regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g'), 10) = $3)
+            OR (
+              NULLIF(btrim(COALESCE($3::text, '')), '') IS NOT NULL
+              AND RIGHT(regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g'), 10) = $3::text
+            )
           )
         LIMIT 1
       `,
@@ -534,7 +537,10 @@ export function createOutboundSequenceVisibilityRouter(deps) {
                 AND regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g')
                   = regexp_replace(COALESCE($2, ''), '[^0-9]', '', 'g')
               )
-              OR (lead_phone IS NOT NULL AND $3 IS NOT NULL AND RIGHT(regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g'), 10) = $3)
+              OR (
+                NULLIF(btrim(COALESCE($3::text, '')), '') IS NOT NULL
+                AND RIGHT(regexp_replace(COALESCE(lead_phone, ''), '[^0-9]', '', 'g'), 10) = $3::text
+              )
             )
           ORDER BY scheduled_for ASC
           LIMIT 1
