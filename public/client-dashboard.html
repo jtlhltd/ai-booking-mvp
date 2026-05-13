@@ -9,7 +9,7 @@
     <title>Client Dashboard</title>
     <script>
         (function () {
-            /** Full reload: session may restore focus to mid-page inputs (e.g. sequence phone), which scrolls the window. */
+            /** Full reload: session may restore focus to mid-page controls (sequence phone, tabindex rows), which scrolls the window. */
             globalThis.__dashboardScrollTopNudge = function dashboardScrollTopNudge() {
                 try {
                     if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
@@ -27,12 +27,10 @@
                         ae &&
                         ae !== document.body &&
                         ae !== document.documentElement &&
-                        typeof ae.matches === 'function' &&
                         typeof ae.closest === 'function' &&
-                        ae.matches('input, textarea, select') &&
                         ae.closest('#outboundSequenceWindow')
                     ) {
-                        ae.blur();
+                        if (typeof ae.blur === 'function') ae.blur();
                         window.scrollTo(0, 0);
                     }
                 } catch (e2) {
