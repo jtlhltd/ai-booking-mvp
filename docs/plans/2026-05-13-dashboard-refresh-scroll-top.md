@@ -28,6 +28,7 @@
 - **2026-05-13 (sequence viewport):** Session focus restoration on `#outboundSequencePhoneInput` (and similar) can scroll the window to the sequence card after reload. Replaced single `pageshow` scroll with `globalThis.__dashboardScrollTopNudge` (scroll top + blur focused `input/textarea/select` inside `#outboundSequenceWindow`) and scheduled rAF/timeouts; call nudge again after initial `Promise.all` async dashboard load.
 - **2026-05-13 (sequence focus restore):** Blur **any** `document.activeElement` inside `#outboundSequenceWindow` (not only inputs)—`tabindex="0"` sequence rows can receive session focus and still pull the viewport.
 - **2026-05-13 (late call-history paint):** `renderOutboundSequenceLeadDetail` fired `renderOutboundSequenceInlineHistory` without awaiting, so `refreshOutboundSequenceWindow` returned before `followUpRenderCallHistoryInto` finished inserting the large call-history DOM; the initial `Promise.all` scroll nudge ran too early. `renderOutboundSequenceLeadDetail` is now `async` and awaits inline history; `refreshOutboundSequenceWindow` awaits lead detail render.
+- **2026-05-13 (late session focus):** Added capture `focusin` during a boot window to blur `input/textarea/select` inside `#outboundSequenceWindow`, extended timed nudges, `__dashboardArmScrollBootLock()` after async `Promise.all`, and `overflow-anchor: none` on `#outboundSequenceWindow` / `.outbound-seq-shell`.
 
 ## Risk & rollback
 

@@ -9,6 +9,48 @@
     <title>Client Dashboard</title>
     <script>
         (function () {
+            const BOOT_LOCK_MS = 3400;
+            let bootLockUntil = 0;
+            let bootFocusCleanupTimer = null;
+
+            /** Session restore often lands on the sequence phone field seconds after load; blur + scroll before it pins the viewport. */
+            function onBootFocusIn(ev) {
+                if (Date.now() > bootLockUntil) {
+                    document.removeEventListener('focusin', onBootFocusIn, true);
+                    return;
+                }
+                const t = ev.target;
+                if (!t || typeof t.closest !== 'function') return;
+                if (!t.closest('#outboundSequenceWindow')) return;
+                const tag = (t.tagName || '').toLowerCase();
+                if (tag !== 'input' && tag !== 'textarea' && tag !== 'select') return;
+                try {
+                    if (typeof t.blur === 'function') t.blur();
+                } catch (e) {
+                    /* ignore */
+                }
+                try {
+                    window.scrollTo(0, 0);
+                } catch (e2) {
+                    /* ignore */
+                }
+            }
+
+            function armBootLock() {
+                bootLockUntil = Math.max(bootLockUntil, Date.now() + BOOT_LOCK_MS);
+                document.removeEventListener('focusin', onBootFocusIn, true);
+                document.addEventListener('focusin', onBootFocusIn, true);
+                if (bootFocusCleanupTimer) clearTimeout(bootFocusCleanupTimer);
+                bootFocusCleanupTimer = setTimeout(function () {
+                    bootFocusCleanupTimer = null;
+                    if (Date.now() > bootLockUntil) {
+                        document.removeEventListener('focusin', onBootFocusIn, true);
+                    }
+                }, BOOT_LOCK_MS + 220);
+            }
+
+            globalThis.__dashboardArmScrollBootLock = armBootLock;
+
             /** Full reload: session may restore focus to mid-page controls (sequence phone, tabindex rows), which scrolls the window. */
             globalThis.__dashboardScrollTopNudge = function dashboardScrollTopNudge() {
                 try {
@@ -39,6 +81,8 @@
             };
 
             function scheduleNudges() {
+                armBootLock();
+
                 const n = globalThis.__dashboardScrollTopNudge;
                 if (typeof n !== 'function') return;
                 n();
@@ -49,6 +93,9 @@
                 setTimeout(n, 50);
                 setTimeout(n, 200);
                 setTimeout(n, 600);
+                setTimeout(n, 1200);
+                setTimeout(n, 2200);
+                setTimeout(n, 3200);
             }
 
             try {
@@ -4704,6 +4751,11 @@
             display: flex;
             flex-direction: column;
             gap: 16px;
+            overflow-anchor: none;
+        }
+
+        #outboundSequenceWindow {
+            overflow-anchor: none;
         }
 
         .outbound-seq-header {
@@ -19027,10 +19079,15 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             ]).then(() => {
                 console.log('All async data loaded');
                 try {
+                    if (typeof globalThis.__dashboardArmScrollBootLock === 'function') {
+                        globalThis.__dashboardArmScrollBootLock();
+                    }
                     if (typeof globalThis.__dashboardScrollTopNudge === 'function') {
                         globalThis.__dashboardScrollTopNudge();
                         setTimeout(() => globalThis.__dashboardScrollTopNudge(), 80);
                         setTimeout(() => globalThis.__dashboardScrollTopNudge(), 400);
+                        setTimeout(() => globalThis.__dashboardScrollTopNudge(), 900);
+                        setTimeout(() => globalThis.__dashboardScrollTopNudge(), 2000);
                     }
                 } catch (e) {
                     console.warn('[DASHBOARD] scroll nudge failed', e);
