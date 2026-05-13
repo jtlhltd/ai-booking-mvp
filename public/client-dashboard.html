@@ -8036,7 +8036,7 @@
 
     <div class="data-freshness" id="dataFreshness" role="status" aria-live="polite">
         <span class="data-freshness-dot" id="freshnessDot"></span>
-        <span id="freshnessText">Loading…</span>
+        <span id="freshnessText">—</span>
             </div>
 
     <div class="keyboard-hint" id="keyboardHint" role="tooltip" aria-hidden="true">
@@ -10771,6 +10771,11 @@ ${actionsRow}
             const freshnessText = document.getElementById('freshnessText');
             if (!freshnessText) return;
             const dot = document.getElementById('freshnessDot');
+            if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+                freshnessText.textContent = 'Offline';
+                if (dot) dot.classList.add('offline');
+                return;
+            }
             if (dashboardLivePayloadFailed) {
                 freshnessText.textContent = 'Live metrics unavailable';
                 if (dot) dot.classList.add('offline');
@@ -11462,26 +11467,6 @@ ${actionsRow}
                 const inner = pipelineH.querySelector(':scope > .card-title-inner');
                 if (inner) inner.textContent = nextLabel;
                 else pipelineH.textContent = nextLabel;
-            }
-        }
-        
-        function updateFreshnessIndicator() {
-            const freshnessEl = document.getElementById('freshnessText');
-            if (!freshnessEl) return;
-            
-            if (lastDataUpdate) {
-                const secondsAgo = Math.floor((Date.now() - lastDataUpdate.getTime()) / 1000);
-                if (secondsAgo < 60) {
-                    freshnessEl.textContent = `Updated ${secondsAgo}s ago`;
-                } else if (secondsAgo < 3600) {
-                    const minutes = Math.floor(secondsAgo / 60);
-                    freshnessEl.textContent = `Updated ${minutes}m ago`;
-                } else {
-                    const hours = Math.floor(secondsAgo / 3600);
-                    freshnessEl.textContent = `Updated ${hours}h ago`;
-                }
-            } else {
-                freshnessEl.textContent = 'Loading…';
             }
         }
         
@@ -19111,25 +19096,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 /* ignore */
             }
             currentClient = getClientFromURL();
-            document.body.dataset.dashboardInit = 'loading';
-            let dashboardInitWatchdogTimer = setTimeout(function () {
-                try {
-                    if (document.body.dataset.dashboardInit === 'ready') return;
-                    console.warn('[DASHBOARD] init watchdog: main paint did not finish within budget');
-                    ['leads-list', 'upcoming-appointments', 'recent-calls', 'recent-activity'].forEach((id) => {
-                        const el = document.getElementById(id);
-                        if (el && el.querySelector('.skeleton-card')) {
-                            el.innerHTML =
-                                '<div class="empty-state-message" role="alert">This section is taking too long to load (server may be slow). <button type="button" class="export-btn secondary" onclick="location.reload()">Reload page</button></div>';
-                        }
-                    });
-                    const ft = document.getElementById('freshnessText');
-                    if (ft) ft.textContent = 'Load stalled — try Reload';
-                } catch (e) {
-                    /* ignore */
-                }
-            }, 150000);
-            try {
             activityFeedOutcomeFilter = 'all';
             try {
                 activityFeedHideStartFailures = localStorage.getItem('dash.act.hideStartFailures') !== '0';
@@ -19554,32 +19520,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     dashboardPollInFlight = false;
                 }
             }, dashboardPollMs);
-
-            document.body.dataset.dashboardInit = 'ready';
-            if (dashboardInitWatchdogTimer) {
-                clearTimeout(dashboardInitWatchdogTimer);
-                dashboardInitWatchdogTimer = null;
-            }
-            } catch (initDashErr) {
-                console.error('[DASHBOARD] initDashboard failed', initDashErr);
-                try {
-                    const ft = document.getElementById('freshnessText');
-                    if (ft) ft.textContent = 'Dashboard error — try Reload';
-                } catch (e0) {
-                    /* ignore */
-                }
-                try {
-                    ['leads-list', 'upcoming-appointments', 'recent-calls', 'recent-activity'].forEach((id) => {
-                        const el = document.getElementById(id);
-                        if (el && el.querySelector('.skeleton-card')) {
-                            el.innerHTML =
-                                '<div class="empty-state-message" role="alert">Something went wrong while loading. <button type="button" class="export-btn secondary" onclick="location.reload()">Reload page</button></div>';
-                        }
-                    });
-                } catch (e1) {
-                    /* ignore */
-                }
-            }
         }
 
         // Accessibility improvements
@@ -19684,15 +19624,18 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
         // Offline detection
         function initOfflineDetection() {
-            if (document.body.dataset.dashOfflineInit === '1') return;
-            document.body.dataset.dashOfflineInit = '1';
             const freshnessDot = document.getElementById('freshnessDot');
             const freshnessText = document.getElementById('freshnessText');
 
             function updateOnlineStatus() {
                 if (navigator.onLine) {
                     freshnessDot?.classList.remove('offline');
-                    if (freshnessText) freshnessText.textContent = 'Online';
+                    /* Footer copy is owned by syncDashboardFreshnessUi ("Updated … ago"); do not force "Online" here or it masks load state. */
+                    try {
+                        syncDashboardFreshnessUi();
+                    } catch (e) {
+                        /* ignore */
+                    }
                 } else {
                     freshnessDot?.classList.add('offline');
                     if (freshnessText) freshnessText.textContent = 'Offline';
@@ -19700,37 +19643,47 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 }
             }
 
-            window.addEventListener('online', () => {
-                updateOnlineStatus();
-                showToast('Connection Restored', 'You are back online. Syncing data...', 'success');
-                // Refresh data
-                setTimeout(async () => {
-                    try {
-                        const refreshPayload = await fetchLiveData(currentClient);
-                        if (refreshPayload) {
-                            dashboardData = mergeData(dashboardData, refreshPayload);
-                            updateStatusBar(dashboardData);
-                            renderRecentActivity(dashboardData);
-                            renderLeadJourney(dashboardData);
-                            renderLeads(dashboardData.recentLeads || []);
-                            renderAppointments(dashboardData.appointments || []);
+            if (!globalThis.__dashOfflineListenersBound) {
+                globalThis.__dashOfflineListenersBound = true;
+                window.addEventListener('online', () => {
+                    updateOnlineStatus();
+                    showToast('Connection Restored', 'You are back online. Syncing data...', 'success');
+                    // Refresh data
+                    setTimeout(async () => {
+                        try {
+                            const refreshPayload = await fetchLiveData(currentClient);
+                            if (refreshPayload) {
+                                dashboardData = mergeData(dashboardData, refreshPayload);
+                                updateStatusBar(dashboardData);
+                                renderRecentActivity(dashboardData);
+                                renderLeadJourney(dashboardData);
+                                renderLeads(dashboardData.recentLeads || []);
+                                renderAppointments(dashboardData.appointments || []);
+                            }
+                        } catch (error) {
+                            console.error('Failed to refresh after coming online', error);
                         }
-                    } catch (error) {
-                        console.error('Failed to refresh after coming online', error);
-                    }
-                }, 1000);
-            });
+                    }, 1000);
+                });
 
-            window.addEventListener('offline', updateOnlineStatus);
+                window.addEventListener('offline', updateOnlineStatus);
+            }
             updateOnlineStatus();
         }
 
         // Data freshness indicator
         function initDataFreshness() {
             const freshnessText = document.getElementById('freshnessText');
-            if (!freshnessText || freshnessText.dataset.dashFreshnessInit === '1') return;
-            freshnessText.dataset.dashFreshnessInit = '1';
-            setInterval(syncDashboardFreshnessUi, 5000);
+            if (!freshnessText) return;
+            if (globalThis.__dashFreshnessIntervalId != null) {
+                try {
+                    clearInterval(globalThis.__dashFreshnessIntervalId);
+                } catch (e) {
+                    /* ignore */
+                }
+                globalThis.__dashFreshnessIntervalId = null;
+            }
+            globalThis.__dashFreshnessIntervalId = setInterval(syncDashboardFreshnessUi, 5000);
             syncDashboardFreshnessUi();
         }
 
