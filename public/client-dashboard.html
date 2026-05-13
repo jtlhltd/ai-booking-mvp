@@ -10861,9 +10861,23 @@ ${actionsRow}
                     }
                     let errBody = '';
                     try {
-                        errBody = await res.text();
-                    } catch {
-                        errBody = '';
+                        errBody = await Promise.race([
+                            res.text(),
+                            new Promise((_, rej) =>
+                                setTimeout(
+                                    () =>
+                                        rej(
+                                            Object.assign(new Error('error body stalled'), {
+                                                name: 'BodyReadTimeout',
+                                            })
+                                        ),
+                                    12000
+                                )
+                            ),
+                        ]);
+                    } catch (te) {
+                        errBody =
+                            te && te.name === 'BodyReadTimeout' ? '(error body read timed out)' : '(error body unreadable)';
                     }
                     lastDashboardFetchError = `HTTP ${res.status}${errBody ? ` — ${errBody.slice(0, 240)}` : ''}`;
                     return null;
@@ -19097,6 +19111,25 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 /* ignore */
             }
             currentClient = getClientFromURL();
+            document.body.dataset.dashboardInit = 'loading';
+            let dashboardInitWatchdogTimer = setTimeout(function () {
+                try {
+                    if (document.body.dataset.dashboardInit === 'ready') return;
+                    console.warn('[DASHBOARD] init watchdog: main paint did not finish within budget');
+                    ['leads-list', 'upcoming-appointments', 'recent-calls', 'recent-activity'].forEach((id) => {
+                        const el = document.getElementById(id);
+                        if (el && el.querySelector('.skeleton-card')) {
+                            el.innerHTML =
+                                '<div class="empty-state-message" role="alert">This section is taking too long to load (server may be slow). <button type="button" class="export-btn secondary" onclick="location.reload()">Reload page</button></div>';
+                        }
+                    });
+                    const ft = document.getElementById('freshnessText');
+                    if (ft) ft.textContent = 'Load stalled — try Reload';
+                } catch (e) {
+                    /* ignore */
+                }
+            }, 150000);
+            try {
             activityFeedOutcomeFilter = 'all';
             try {
                 activityFeedHideStartFailures = localStorage.getItem('dash.act.hideStartFailures') !== '0';
@@ -19132,10 +19165,29 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     console.log('[DASHBOARD] Response status:', response.status, response.ok);
                     
                     if (response.ok) {
-                const data = await response.json();
+                        let data;
+                        try {
+                            data = await Promise.race([
+                                response.json(),
+                                new Promise((_, rej) =>
+                                    setTimeout(
+                                        () =>
+                                            rej(
+                                                Object.assign(new Error('client config JSON stalled'), {
+                                                    name: 'JsonReadTimeout',
+                                                })
+                                            ),
+                                        25000
+                                    )
+                                ),
+                            ]);
+                        } catch (je) {
+                            console.warn('[DASHBOARD] client config JSON read failed', je);
+                            data = null;
+                        }
                         console.log('[DASHBOARD] API response data:', data);
                         
-                        if (data.ok && data.client) {
+                        if (data && data.ok && data.client) {
                             clientConfig = data.client;
                             window.__dashboardOutreachMode =
                                 typeof clientConfig.dashboardOutreachMode === 'boolean'
@@ -19157,13 +19209,32 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             });
                         } else {
                             console.warn('[DASHBOARD] API response missing client data:', {
-                                hasOk: !!data.ok,
-                                hasClient: !!data.client,
+                                hasOk: !!(data && data.ok),
+                                hasClient: !!(data && data.client),
                                 data: data
                             });
                         }
                     } else {
-                        const errorText = await response.text();
+                        let errorText = '';
+                        try {
+                            errorText = await Promise.race([
+                                response.text(),
+                                new Promise((_, rej) =>
+                                    setTimeout(
+                                        () =>
+                                            rej(
+                                                Object.assign(new Error('client error body stalled'), {
+                                                    name: 'BodyReadTimeout',
+                                                })
+                                            ),
+                                        12000
+                                    )
+                                ),
+                            ]);
+                        } catch (te) {
+                            errorText =
+                                te && te.name === 'BodyReadTimeout' ? '(error body timed out)' : '(error body unreadable)';
+                        }
                         console.error('[DASHBOARD] API error response:', response.status, errorText);
                     }
                 } catch (err) {
@@ -19483,6 +19554,32 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     dashboardPollInFlight = false;
                 }
             }, dashboardPollMs);
+
+            document.body.dataset.dashboardInit = 'ready';
+            if (dashboardInitWatchdogTimer) {
+                clearTimeout(dashboardInitWatchdogTimer);
+                dashboardInitWatchdogTimer = null;
+            }
+            } catch (initDashErr) {
+                console.error('[DASHBOARD] initDashboard failed', initDashErr);
+                try {
+                    const ft = document.getElementById('freshnessText');
+                    if (ft) ft.textContent = 'Dashboard error — try Reload';
+                } catch (e0) {
+                    /* ignore */
+                }
+                try {
+                    ['leads-list', 'upcoming-appointments', 'recent-calls', 'recent-activity'].forEach((id) => {
+                        const el = document.getElementById(id);
+                        if (el && el.querySelector('.skeleton-card')) {
+                            el.innerHTML =
+                                '<div class="empty-state-message" role="alert">Something went wrong while loading. <button type="button" class="export-btn secondary" onclick="location.reload()">Reload page</button></div>';
+                        }
+                    });
+                } catch (e1) {
+                    /* ignore */
+                }
+            }
         }
 
         // Accessibility improvements
