@@ -8036,7 +8036,7 @@
 
     <div class="data-freshness" id="dataFreshness" role="status" aria-live="polite">
         <span class="data-freshness-dot" id="freshnessDot"></span>
-        <span id="freshnessText">Data syncing...</span>
+        <span id="freshnessText">Loading…</span>
             </div>
 
     <div class="keyboard-hint" id="keyboardHint" role="tooltip" aria-hidden="true">
@@ -10776,11 +10776,20 @@ ${actionsRow}
                 if (dot) dot.classList.add('offline');
                 return;
             }
+            if (typeof currentClient === 'string' && currentClient !== DEMO_CLIENT_KEY && !liveDashboardPayloadReceived) {
+                freshnessText.textContent = 'Loading live metrics…';
+                if (dot) dot.classList.remove('offline');
+                return;
+            }
             if (dot) dot.classList.remove('offline');
             const now = new Date();
             const diffMs = now - lastDataUpdate;
             const diffMins = Math.floor(diffMs / 60000);
             const diffSecs = Math.floor((diffMs % 60000) / 1000);
+            if (!Number.isFinite(diffMs) || diffMs < 0) {
+                freshnessText.textContent = 'Updated just now';
+                return;
+            }
             if (diffMins < 1) {
                 freshnessText.textContent = `Updated ${diffSecs}s ago`;
             } else if (diffMins < 60) {
@@ -10801,6 +10810,8 @@ ${actionsRow}
         }
 
         let lastDataUpdate = new Date();
+        /** First `/api/demo-dashboard` hydration finished (success or hard failure); until then freshness shows a loading line, not stale ages. */
+        let liveDashboardPayloadReceived = false;
         async function fetchLiveData(clientKey, options = {}) {
             const bustCache = options && options.bustCache === true;
             const brief = options && options.brief === true;
@@ -11439,7 +11450,7 @@ ${actionsRow}
                     freshnessEl.textContent = `Updated ${hours}h ago`;
                 }
             } else {
-                freshnessEl.textContent = 'Data syncing...';
+                freshnessEl.textContent = 'Loading live metrics…';
             }
         }
         
@@ -19075,6 +19086,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 activityFeedGroupRetries = localStorage.getItem('dash.act.groupRetries') !== '0';
             } catch {}
             initActivityFeedChips();
+            initOfflineDetection();
+            initDataFreshness();
             initFollowUpQueueUi();
             applyRoiPanelVisibility(currentClient);
             applyTomOutreachDashboardMode(currentClient);
@@ -19090,7 +19103,15 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             if (currentClient !== DEMO_CLIENT_KEY) {
                 try {
                     console.log('[DASHBOARD] Fetching client config from:', `${BASE_URL}/api/clients/${currentClient}`);
-                    const response = await fetch(`${BASE_URL}/api/clients/${currentClient}`);
+                    const controller = new AbortController();
+                    const clientCfgTimeoutMs = 35000;
+                    const tid = setTimeout(() => controller.abort(), clientCfgTimeoutMs);
+                    let response;
+                    try {
+                        response = await fetch(`${BASE_URL}/api/clients/${currentClient}`, { signal: controller.signal });
+                    } finally {
+                        clearTimeout(tid);
+                    }
                     console.log('[DASHBOARD] Response status:', response.status, response.ok);
                     
                     if (response.ok) {
@@ -19130,6 +19151,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     }
                 } catch (err) {
                     console.error('[DASHBOARD] Could not fetch client config:', err);
+                    if (err && err.name === 'AbortError') {
+                        console.warn(`[DASHBOARD] Client config fetch aborted after ${35000}ms`);
+                    }
                 }
             }
             
@@ -19213,8 +19237,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             initDashboardExperienceUi();
             initAccessibility();
             initKeyboardShortcuts();
-            initOfflineDetection();
-            initDataFreshness();
 
             // Initialize with empty data structure for real clients, demo data only for demo client
             if (currentClient === DEMO_CLIENT_KEY) {
@@ -19267,6 +19289,13 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     if (leadsContainer) {
                         showError(leadsContainer, 'Unable to load dashboard data. Please refresh the page.', () => location.reload());
                     }
+                }
+            } finally {
+                liveDashboardPayloadReceived = true;
+                try {
+                    syncDashboardFreshnessUi();
+                } catch (e) {
+                    /* ignore */
                 }
             }
 
@@ -19542,6 +19571,8 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
         // Offline detection
         function initOfflineDetection() {
+            if (document.body.dataset.dashOfflineInit === '1') return;
+            document.body.dataset.dashOfflineInit = '1';
             const freshnessDot = document.getElementById('freshnessDot');
             const freshnessText = document.getElementById('freshnessText');
 
@@ -19583,7 +19614,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
         // Data freshness indicator
         function initDataFreshness() {
-            if (!document.getElementById('freshnessText')) return;
+            const freshnessText = document.getElementById('freshnessText');
+            if (!freshnessText || freshnessText.dataset.dashFreshnessInit === '1') return;
+            freshnessText.dataset.dashFreshnessInit = '1';
             setInterval(syncDashboardFreshnessUi, 5000);
             syncDashboardFreshnessUi();
         }
