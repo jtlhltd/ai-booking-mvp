@@ -15745,13 +15745,19 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     const snaps = stages.map((s) => {
                         const structuredData = s?.structuredData && typeof s.structuredData === 'object' ? s.structuredData : {};
                         const completedAt = s?.completedAt || s?.at || null;
+                        const callId = String(s?.callId || s?.call_id || '').trim() || null;
+                        const stageId = String(s?.stageId || s?.id || '').trim();
                         return {
                             source: 'handoff',
-                            stageId: String(s?.stageId || s?.id || '').trim(),
+                            stageId,
+                            callId,
                             completedAt: completedAt ? String(completedAt) : null,
                             structuredData,
                         };
-                    }).filter((s) => Object.keys(s.structuredData || {}).length);
+                    }).filter((s) => {
+                        const n = Object.keys(s.structuredData || {}).length;
+                        return n > 0 || !!s.callId || !!s.stageId;
+                    });
                     snaps.sort((a, b) => String(a.completedAt || '').localeCompare(String(b.completedAt || '')));
                     return snaps;
                 } catch {
@@ -15831,7 +15837,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     .map((s) => ({
                         stageId: s?.stageId || '',
                         completedAt: s?.completedAt || null,
-                        callId: s?.callId || null,
+                        callId: String(s?.callId || s?.call_id || '').trim() || null,
                         structuredData: s?.structuredData && typeof s.structuredData === 'object' ? s.structuredData : {},
                     }))
                     .filter((s) => s.callId);
@@ -15843,8 +15849,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 let prevStructured = {};
                 for (const s of snaps) {
                     const deltaKeys = followUpComputeDelta(prevStructured, s.structuredData);
-                    snapByCallId.set(s.callId, s);
-                    deltaByCallId.set(s.callId, deltaKeys);
+                    const cid = String(s.callId || '').trim();
+                    if (cid) {
+                        snapByCallId.set(cid, s);
+                        snapByCallId.set(cid.toLowerCase(), s);
+                        deltaByCallId.set(cid, deltaKeys);
+                    }
                     prevStructured = s.structuredData;
                 }
 
@@ -15897,25 +15907,49 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             const dur = c.duration != null ? `${formatNumber(c.duration)}s` : '—';
                             const rec = c.recordingUrl ? `<a href="${escapeHtml(c.recordingUrl)}" target="_blank" rel="noreferrer">recording</a>` : '';
                             const snip = c.transcriptSnippet ? escapeHtml(String(c.transcriptSnippet)).slice(0, 260) : '';
-                            const sid = c.callId || null;
-                            const seqSnap = sid ? (snapByCallId.get(sid) || null) : null;
+                            const sidRaw = c.callId != null ? String(c.callId).trim() : '';
+                            const seqSnap = sidRaw
+                                ? (snapByCallId.get(sidRaw) || snapByCallId.get(sidRaw.toLowerCase()) || null)
+                                : null;
                             const handoffSnap = !seqSnap && handoffStageSnaps.length ? pickHandoffSnapForCall(c.createdAt) : null;
                             const callExtract = (() => {
                                 try {
                                     const m = c?.metadata && typeof c.metadata === 'object' ? c.metadata : null;
+                                    if (!m) return null;
                                     const cap = m?.structuredExtract?.captured;
-                                    if (!cap || typeof cap !== 'object') return null;
-                                    // Treat presence of structuredExtract as a per-call snapshot even if it captured 0 fields.
-                                    // This avoids misleading "no per-call snapshot" when we did persist extraction metadata.
-                                    return {
-                                        source: 'call',
-                                        stageId: 'structuredExtract',
-                                        completedAt: m?.structuredExtract?.extractedAt || null,
-                                        structuredData: cap,
+                                    if (cap && typeof cap === 'object') {
+                                        return {
+                                            source: 'call',
+                                            stageId: 'structuredExtract',
+                                            completedAt: m?.structuredExtract?.extractedAt || null,
+                                            structuredData: cap,
+                                        };
+                                    }
+                                    const shallowObject = (obj, stageId) => {
+                                        if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
+                                        const flat = {};
+                                        for (const [k, val] of Object.entries(obj)) {
+                                            if (val == null) continue;
+                                            if (typeof val === 'string' && val.trim()) flat[k] = val.trim();
+                                            else if (typeof val === 'number' && Number.isFinite(val)) flat[k] = String(val);
+                                            else if (typeof val === 'boolean') flat[k] = val ? 'true' : 'false';
+                                        }
+                                        if (!Object.keys(flat).length) return null;
+                                        return {
+                                            source: 'call',
+                                            stageId,
+                                            completedAt: c.createdAt || null,
+                                            structuredData: flat,
+                                        };
                                     };
+                                    const fromStructured = shallowObject(m.structuredData || m.structured_data, 'structuredData');
+                                    if (fromStructured) return fromStructured;
+                                    const fromAnalysis = shallowObject(m.analysis, 'analysis');
+                                    if (fromAnalysis) return fromAnalysis;
                                 } catch {
                                     return null;
                                 }
+                                return null;
                             })();
 
                             const transcriptExtract = (() => {
@@ -15954,7 +15988,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
                             if (snap && Object.keys(snapStructured || {}).length) {
                                 perCallSnaps.push({
-                                    callId: sid || null,
+                                    callId: sidRaw || null,
                                     createdAt: c.createdAt || null,
                                     outcome,
                                     source: snapSource,
@@ -15964,6 +15998,9 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
                             const deltaHtml = snap
                                 ? (() => {
+                                    if (!Object.keys(snapStructured || {}).length) {
+                                        return '<div class="tom-ab-test-meta">Linked snapshot has no structured fields (common for failed calls before capture).</div>';
+                                    }
                                     if (!deltaKeys.length) return '<div class="tom-ab-test-meta">Delta: no new/changed structured fields vs prior snapshot.</div>';
                                     const lis = deltaKeys.slice(0, 24).map((k) => {
                                         const v = snapStructured?.[k];
@@ -15972,7 +16009,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                                     }).join('');
                                     return `<div class="meta-label" style="margin-top:8px;">Captured (delta)</div><ul style="margin:6px 0 0 18px;padding:0;display:flex;flex-direction:column;gap:6px;">${lis}</ul>`;
                                 })()
-                                : '<div class="tom-ab-test-meta" style="margin-top:8px;">No per-call snapshot for this call (sequence/handoff not available).</div>';
+                                : '<div class="tom-ab-test-meta" style="margin-top:8px;">No structured capture is linked to this call (no matching sequence <code>callId</code>, no handoff stage snapshots, and no metadata/transcript extract). Outcome and snippet above are still authoritative.</div>';
 
                             const fullHtml = snap
                                 ? (() => {
@@ -16000,7 +16037,7 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                             return `
                                 <li style="border:1px solid var(--border);border-radius:12px;padding:10px;background:var(--surface-3);">
                                     <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
-                                        <div><strong>${escapeHtml(outcome)}</strong> <span class="tom-ab-test-meta">· ${escapeHtml(status)} · ${escapeHtml(dur)}${sid ? ` · <code>${escapeHtml(sid)}</code>` : ''}</span></div>
+                                        <div><strong>${escapeHtml(outcome)}</strong> <span class="tom-ab-test-meta">· ${escapeHtml(status)} · ${escapeHtml(dur)}${sidRaw ? ` · <code>${escapeHtml(sidRaw)}</code>` : ''}</span></div>
                                         <div class="tom-ab-test-meta">${escapeHtml(when)} ${rec ? `· ${rec}` : ''}</div>
                                     </div>
                                     ${snip ? `<div class="tom-ab-test-meta" style="margin-top:6px;"><code>${snip}${String(c.transcriptSnippet).length > 260 ? '…' : ''}</code></div>` : ''}
