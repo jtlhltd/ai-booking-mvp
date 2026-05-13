@@ -33,6 +33,7 @@
 - **2026-05-13 (pin header):** Centralized `pinDashboardToTop()` using `scrollingElement.scrollTop`, `window.scrollTo(0,0)`, and `header.header.scrollIntoView({ block: 'start' })`; exposed as `__dashboardPinToTop` for init fallback; boot scroll clamp and nudges use it; `keydown` counts as user intent to disable clamp.
 - **2026-05-13 (clamp hardening):** Longer boot lock (7.2s), ignore untrusted/early `keydown` for user-intent, clamp when `doc.scrollTop>1` or `scrollY>1`, listen on `visualViewport` `scroll`, reset `visualViewport` offsets in pin, extra nudge at 6.2s, fix clamp cleanup to detach visualViewport listener.
 - **2026-05-13 (focusin vs tabindex rows):** `capture focusin` still returned early for non-inputs, so session restore onto `div.outbound-seq-row[tabindex="0"]` or cohort **`<button>`**s never blurred — the browser scrolled those into view. `onBootFocusIn` now always pins once, then blurs buttons/links/tabindex targets (not `-1`), pins again, and double-`requestAnimationFrame` pin.
+- **2026-05-13 (scroll hardening v2):** Removed `header.scrollIntoView` from pin (unreliable with some scrollports). During boot, `MutationObserver` on `#outboundSequenceWindow` forces new `.outbound-seq-row` to `tabindex="-1"` until detach restores `0`. `refreshOutboundSequenceWindow` pins+rAF on reveal and `finally` blur+pin after async paint. Extra nudges at 8s/9.5s. `pageshow` with `persisted` only re-pins (does not re-run full `scheduleNudges`).
 
 ## Risk & rollback
 

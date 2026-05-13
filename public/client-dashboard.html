@@ -15,8 +15,26 @@
             let bootUserIntent = false;
             let bootScrollClampAttached = false;
             let bootVvScrollAttached = false;
+            /** During boot, sequence rows stay non-tabbable so session restore cannot focus a row and scroll it into view. */
+            let bootSeqTabMo = null;
             /** Ignore keydown for “user intent” briefly so extensions cannot disable the scroll clamp before session-restore scroll. */
             let bootEarlyKeydownIgnoreUntil = 0;
+
+            function stripOutboundSeqRowTabindexForBoot() {
+                const w = document.getElementById('outboundSequenceWindow');
+                if (!w) return;
+                w.querySelectorAll('.outbound-seq-row[tabindex="0"]').forEach((row) => {
+                    row.setAttribute('tabindex', '-1');
+                    row.setAttribute('data-dashboard-seq-tab-deferred', '1');
+                });
+            }
+
+            function restoreOutboundSeqRowTabindexAfterBoot() {
+                document.querySelectorAll('.outbound-seq-row[data-dashboard-seq-tab-deferred="1"]').forEach((row) => {
+                    row.setAttribute('tabindex', '0');
+                    row.removeAttribute('data-dashboard-seq-tab-deferred');
+                });
+            }
 
             function pinDashboardToTop() {
                 try {
@@ -52,14 +70,6 @@
                 } catch (e) {
                     /* ignore */
                 }
-                try {
-                    const hdr = document.querySelector('header.header');
-                    if (hdr && typeof hdr.scrollIntoView === 'function') {
-                        hdr.scrollIntoView({ block: 'start', inline: 'nearest', behavior: 'auto' });
-                    }
-                } catch (e2) {
-                    /* ignore */
-                }
             }
 
             globalThis.__dashboardPinToTop = pinDashboardToTop;
@@ -81,6 +91,15 @@
                 ['pointerdown', 'wheel', 'touchstart', 'keydown'].forEach((evt) => {
                     document.removeEventListener(evt, markBootUserIntent, true);
                 });
+                if (bootSeqTabMo) {
+                    try {
+                        bootSeqTabMo.disconnect();
+                    } catch (e) {
+                        /* ignore */
+                    }
+                    bootSeqTabMo = null;
+                }
+                restoreOutboundSeqRowTabindexAfterBoot();
             }
 
             function markBootUserIntent(ev) {
@@ -223,6 +242,21 @@
                     bootFocusCleanupTimer = null;
                     detachBootListeners();
                 }, BOOT_LOCK_MS + 280);
+
+                stripOutboundSeqRowTabindexForBoot();
+                if (!bootSeqTabMo && typeof MutationObserver !== 'undefined') {
+                    const seqRoot = document.getElementById('outboundSequenceWindow');
+                    if (seqRoot) {
+                        try {
+                            bootSeqTabMo = new MutationObserver(function () {
+                                stripOutboundSeqRowTabindexForBoot();
+                            });
+                            bootSeqTabMo.observe(seqRoot, { childList: true, subtree: true });
+                        } catch (e) {
+                            bootSeqTabMo = null;
+                        }
+                    }
+                }
             }
 
             globalThis.__dashboardArmScrollBootLock = armBootLock;
@@ -271,6 +305,8 @@
                 setTimeout(n, 3200);
                 setTimeout(n, 4500);
                 setTimeout(n, 6200);
+                setTimeout(n, 8000);
+                setTimeout(n, 9500);
             }
 
             try {
@@ -278,7 +314,27 @@
             } catch (e) {
                 /* ignore */
             }
-            window.addEventListener('pageshow', scheduleNudges, { once: true });
+            window.addEventListener('pageshow', function dashboardPageShow(ev) {
+                if (ev && ev.persisted) {
+                    try {
+                        if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+                    } catch (e) {
+                        /* ignore */
+                    }
+                    if (typeof globalThis.__dashboardPinToTop === 'function') {
+                        try {
+                            globalThis.__dashboardPinToTop();
+                            setTimeout(function () {
+                                globalThis.__dashboardPinToTop();
+                            }, 0);
+                        } catch (e2) {
+                            /* ignore */
+                        }
+                    }
+                    return;
+                }
+                scheduleNudges();
+            });
         })();
     </script>
     <link rel="icon" type="image/svg+xml" href="/icon.svg">
@@ -9500,6 +9556,16 @@
             }
             wrap.hidden = false;
             try {
+                if (typeof globalThis.__dashboardPinToTop === 'function') {
+                    globalThis.__dashboardPinToTop();
+                    requestAnimationFrame(function () {
+                        if (typeof globalThis.__dashboardPinToTop === 'function') globalThis.__dashboardPinToTop();
+                    });
+                }
+            } catch (ePin0) {
+                /* ignore */
+            }
+            try {
                 const [summaryRes, leadsRes] = await Promise.all([
                     fetch(`${BASE_URL}/api/outbound-sequence/${encodeURIComponent(clientKey)}/summary`, { cache: 'no-store' }).then((r) => r.json()),
                     fetch(`${BASE_URL}/api/outbound-sequence/${encodeURIComponent(clientKey)}/leads?limit=120&offset=0&filter=${encodeURIComponent(dashboardCohortFilter || 'all')}`, { cache: 'no-store' }).then((r) => r.json()),
@@ -9554,8 +9620,33 @@
             } catch (e) {
                 console.warn('[DASHBOARD] outbound sequence window refresh failed', e);
                 renderOutboundSequenceLeadEmptyState('The sequence panel could not refresh just now. Try Refresh again in a moment.');
+            } finally {
+                try {
+                    if (typeof globalThis.__dashboardPinToTop === 'function') {
+                        globalThis.__dashboardPinToTop();
+                        const ae = document.activeElement;
+                        if (
+                            ae &&
+                            ae !== document.body &&
+                            ae !== document.documentElement &&
+                            typeof ae.closest === 'function' &&
+                            ae.closest('#outboundSequenceWindow')
+                        ) {
+                            if (typeof ae.blur === 'function') ae.blur();
+                            globalThis.__dashboardPinToTop();
+                        }
+                    }
+                    requestAnimationFrame(function () {
+                        try {
+                            if (typeof globalThis.__dashboardPinToTop === 'function') globalThis.__dashboardPinToTop();
+                        } catch (e2) {
+                            /* ignore */
+                        }
+                    });
+                } catch (e3) {
+                    /* ignore */
+                }
             }
-        }
 
         function initOutboundSequenceWindowUi() {
             const wrap = document.getElementById('outboundSequenceWindow');
