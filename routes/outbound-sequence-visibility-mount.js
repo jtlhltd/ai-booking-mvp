@@ -16,6 +16,11 @@ export function createOutboundSequenceVisibilityRouter(deps) {
   const phoneKeyFn = typeof phoneMatchKey === 'function' ? phoneMatchKey : phoneMatchKeyLib;
   const router = Router();
 
+  /** pg 8+ may return BIGINT as bigint anywhere in row trees; JSON.stringify throws on bigint. */
+  function jsonStripBigIntDeep(value) {
+    return JSON.parse(JSON.stringify(value, (_k, v) => (typeof v === 'bigint' ? String(v) : v)));
+  }
+
   function clamp(n, lo, hi, fallback) {
     const v = parseInt(String(n), 10);
     if (!Number.isFinite(v)) return fallback;
@@ -640,44 +645,46 @@ export function createOutboundSequenceVisibilityRouter(deps) {
         salvageDismissedAt: context?.handoff?.salvageDismissedAt || null,
       });
 
-      return res.json({
-        ok: true,
-        clientKey,
-        phone,
-        row: { ...row, stagesCompleted: stages, dashboardCohort: cohortMeta.cohort },
-        lead: context?.lead || null,
-        handoff: context?.handoff || null,
-        nextQueue,
-        sequence: {
-          killSwitchActive,
-          enabled: validated?.enabled === true,
-          maxTotalDialsPerLead: validated?.maxTotalDialsPerLead ?? null,
-          maxSequenceDurationDays: validated?.maxSequenceDurationDays ?? null,
-          stageCount: Array.isArray(validated?.stages) ? validated.stages.length : 0,
-          configValid: !!validated,
-          configErrors: v.ok ? [] : (v.errors || []),
-        },
-        explain: {
-          stage: stageExplain,
-          lastOutcome,
-          lastCompletedStageSnapshot,
-          currentStage: {
-            requiredFieldsStatus,
+      return res.json(
+        jsonStripBigIntDeep({
+          ok: true,
+          clientKey,
+          phone,
+          row: { ...row, stagesCompleted: stages, dashboardCohort: cohortMeta.cohort },
+          lead: context?.lead || null,
+          handoff: context?.handoff || null,
+          nextQueue,
+          sequence: {
+            killSwitchActive,
+            enabled: validated?.enabled === true,
+            maxTotalDialsPerLead: validated?.maxTotalDialsPerLead ?? null,
+            maxSequenceDurationDays: validated?.maxSequenceDurationDays ?? null,
+            stageCount: Array.isArray(validated?.stages) ? validated.stages.length : 0,
+            configValid: !!validated,
+            configErrors: v.ok ? [] : (v.errors || []),
           },
-          completionGate: {
-            outcomeExcluded,
-            stageComplete,
-            capExceeded,
-            durationExceeded,
-            // stored nowhere today; we can only mirror it if future work persists it
-            noUsefulOutcome: false,
+          explain: {
+            stage: stageExplain,
+            lastOutcome,
+            lastCompletedStageSnapshot,
+            currentStage: {
+              requiredFieldsStatus,
+            },
+            completionGate: {
+              outcomeExcluded,
+              stageComplete,
+              capExceeded,
+              durationExceeded,
+              // stored nowhere today; we can only mirror it if future work persists it
+              noUsefulOutcome: false,
+            },
+            caveats: [
+              'requiredFieldsStatus is evaluated against the most recent completed stage snapshot (structuredData) stored in lead_sequence_state.',
+              'the webhook uses fresh structured fields from Vapi end-of-call; incomplete stages may not have stored structuredData yet.',
+            ],
           },
-          caveats: [
-            'requiredFieldsStatus is evaluated against the most recent completed stage snapshot (structuredData) stored in lead_sequence_state.',
-            'the webhook uses fresh structured fields from Vapi end-of-call; incomplete stages may not have stored structuredData yet.',
-          ],
-        },
-      });
+        })
+      );
     } catch (error) {
       console.error('[OUTBOUND SEQUENCE PHONE ERROR]', error);
       return res.status(500).json({ ok: false, error: 'outbound_sequence_phone_failed', message: error?.message || String(error) });

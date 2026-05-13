@@ -9243,7 +9243,10 @@
                         outboundSequenceSelectedPhone = String(detailRes?.row?.leadPhone || detailPhone).trim() || detailPhone;
                         renderOutboundSequenceLeadDetail(detailRes);
                     } else {
-                        const errLabel = detailRes?.error || detailRes?.message || (httpStatus ? `HTTP ${httpStatus}` : 'unknown');
+                        const errLabel =
+                            detailRes?.error === 'outbound_sequence_phone_failed' && String(detailRes?.message || '').trim()
+                                ? `${detailRes.error}: ${detailRes.message}`
+                                : detailRes?.message || detailRes?.error || (httpStatus ? `HTTP ${httpStatus}` : 'unknown');
                         const hint =
                             !httpOk || detailRes?.ok === false
                                 ? `Could not load sequence detail from the server (${errLabel}). Try Refresh or open the row again.`

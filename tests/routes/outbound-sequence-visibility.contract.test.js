@@ -290,6 +290,7 @@ describe('routes/outbound-sequence-visibility-mount.js', () => {
               nextStageScheduledFor: null,
               status: 'active',
               updatedAt: '2030-01-01T01:00:00.000Z',
+              _bigintEchoFromDriver: 42n,
             },
           ],
         };
@@ -349,6 +350,7 @@ describe('routes/outbound-sequence-visibility-mount.js', () => {
         triggerType: 'sequence_next',
       })
     );
+    expect(res.body.row._bigintEchoFromDriver).toBe('42');
   });
 
   test('GET /api/outbound-sequence/:clientKey/leads applies cohort filter', async () => {
