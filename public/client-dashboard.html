@@ -19096,6 +19096,13 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
             currentClient = getClientFromURL();
             activityFeedOutcomeFilter = 'all';
+            dashboardData =
+                currentClient === DEMO_CLIENT_KEY ? { ...DEMO_DATA } : createEmptyDashboardData();
+            try {
+                updateStatusBar(dashboardData);
+            } catch (e) {
+                console.warn('[DASHBOARD] bootstrap status bar paint skipped', e);
+            }
             try {
                 activityFeedHideStartFailures = localStorage.getItem('dash.act.hideStartFailures') !== '0';
                 activityFeedGroupRetries = localStorage.getItem('dash.act.groupRetries') !== '0';
@@ -19291,13 +19298,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             initAccessibility();
             initKeyboardShortcuts();
 
-            // Initialize with empty data structure for real clients, demo data only for demo client
+            // dashboardData already seeded at start of initDashboard; only toggle demo chrome here.
             if (currentClient === DEMO_CLIENT_KEY) {
-                dashboardData = { ...DEMO_DATA };
-                document.getElementById('demoBanner').style.display = 'block';
+                const db = document.getElementById('demoBanner');
+                if (db) db.style.display = 'block';
                 stopLiveEvents();
             } else {
-                dashboardData = createEmptyDashboardData();
                 const banner = document.getElementById('demoBanner');
                 if (banner) banner.style.display = 'none';
             }
@@ -19731,20 +19737,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 `;
             }
         }
-
-        function scheduleDashboardBoot() {
-            if (globalThis.__dashboardBootScheduled) return;
-            globalThis.__dashboardBootScheduled = true;
-            const run = () =>
-                void initDashboard().catch((e) => console.error('[DASHBOARD] initDashboard failed', e));
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', run, { once: true });
-            } else {
-                run();
-            }
-        }
-        scheduleDashboardBoot();
-        window.addEventListener('beforeunload', stopLiveEvents);
 
         async function initTestCallButton(clientKey, config) {
             const testCallBtn = document.getElementById('testCallBtn');
@@ -21213,6 +21205,19 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
         }
         }
+        function scheduleDashboardBoot() {
+            if (globalThis.__dashboardBootScheduled) return;
+            globalThis.__dashboardBootScheduled = true;
+            const run = () =>
+                void initDashboard().catch((e) => console.error('[DASHBOARD] initDashboard failed', e));
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', run, { once: true });
+            } else {
+                run();
+            }
+        }
+        scheduleDashboardBoot();
+        window.addEventListener('beforeunload', stopLiveEvents);
     </script>
     <!-- Tooltip lives on body so it is not clipped by dashboard cards (overflow: hidden). -->
     <div id="weeklyChartTooltip" class="weekly-chart-tooltip" role="tooltip" hidden aria-hidden="true"></div>

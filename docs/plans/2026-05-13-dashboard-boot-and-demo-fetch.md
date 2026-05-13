@@ -26,7 +26,8 @@
 
 # Amendments
 
-- None.
+- **2026-05-14 — Early status bar paint:** Call `updateStatusBar(dashboardData)` once immediately before `await fetchLiveData` so static HTML “Loading…” hints are replaced from `DEMO_DATA` / empty shell data without waiting on the network (helps slow or blocked `fetch` in embedded browsers too).
+- **2026-05-14 — Boot at end of script:** Move `scheduleDashboardBoot()` / `beforeunload` to the bottom of the inline bundle so `initDashboard` never runs while later top-level `const`/helpers are still in TDZ.
 
 # Risk & rollback
 
