@@ -1,0 +1,25 @@
+---
+description: After IDE browser or local server checks, close Glass browser tabs and stop dev servers.
+alwaysApply: true
+---
+
+# IDE browser and local server cleanup (required)
+
+Whenever this agent **starts `npm start` / `node server.js`** or **uses the Cursor IDE browser MCP** (`cursor-ide-browser`) for verification, finish the same way **before ending the turn** (unless the user explicitly asks to leave them running):
+
+## IDE browser (MCP `cursor-ide-browser`)
+
+1. Call **`browser_tabs`** with `action: "list"`.
+2. **Close every open tab** from that session: `browser_tabs` with `action: "close"` (repeat for each index, or close index `0` until **no remaining tabs**).
+3. If **`browser_lock`** was used with `action: "lock"`, call **`browser_lock`** with `action: "unlock"` before closing.
+
+**Note:** Editor tabs such as **Simple Browser** (“Client Dashboard :3000”) are **not** controllable via MCP. If the user opened that separately, tell them to **click the tab ×**; still always clean up **MCP Glass** tabs.
+
+## Local dev server
+
+1. If a server was started for checks, find the listener (e.g. `netstat -ano | findstr ":3000"` on Windows) and **`taskkill /PID <pid> /F`** (or equivalent) so **port 3000** (or whichever `PORT` was used) is free.
+2. Do **not** leave duplicate `npm start` jobs running after verification.
+
+## Ordering
+
+Prefer: **verify → record result → close browser tabs → stop server** so the user does not have to clean up manually.
