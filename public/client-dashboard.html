@@ -10776,11 +10776,6 @@ ${actionsRow}
                 if (dot) dot.classList.add('offline');
                 return;
             }
-            if (typeof currentClient === 'string' && currentClient !== DEMO_CLIENT_KEY && !liveDashboardPayloadReceived) {
-                freshnessText.textContent = 'Loading live metrics…';
-                if (dot) dot.classList.remove('offline');
-                return;
-            }
             if (dot) dot.classList.remove('offline');
             const now = new Date();
             const diffMs = now - lastDataUpdate;
@@ -10810,16 +10805,15 @@ ${actionsRow}
         }
 
         let lastDataUpdate = new Date();
-        /** First `/api/demo-dashboard` hydration finished (success or hard failure); until then freshness shows a loading line, not stale ages. */
-        let liveDashboardPayloadReceived = false;
         async function fetchLiveData(clientKey, options = {}) {
             const bustCache = options && options.bustCache === true;
             const brief = options && options.brief === true;
             if (clientKey !== DEMO_CLIENT_KEY) {
+                const networkBudgetMs = 115000;
+                const jsonReadBudgetMs = 45000;
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), networkBudgetMs);
                 try {
-                    // Add timeout to prevent hanging
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 115000); // server smartRequestTimeout demoDashboard tier is 98s (JSON 504 before Render ~100s HTML 502); client waits slightly longer for slow reads
                     const params = new URLSearchParams();
                     if (bustCache) params.set('t', String(Date.now()));
                     if (brief) params.set('brief', '1');
@@ -10828,10 +10822,32 @@ ${actionsRow}
                         `${BASE_URL}/api/demo-dashboard/${encodeURIComponent(clientKey)}${q}`,
                         { signal: controller.signal }
                     );
-                    clearTimeout(timeoutId);
-                    
+
                     if (res.ok) {
-                        const payload = await res.json();
+                        let payload;
+                        try {
+                            payload = await Promise.race([
+                                res.json(),
+                                new Promise((_, rej) =>
+                                    setTimeout(
+                                        () =>
+                                            rej(
+                                                Object.assign(new Error('Live metrics response body stalled'), {
+                                                    name: 'JsonReadTimeout',
+                                                })
+                                            ),
+                                        jsonReadBudgetMs
+                                    )
+                                ),
+                            ]);
+                        } catch (je) {
+                            if (je && je.name === 'JsonReadTimeout') {
+                                lastDashboardFetchError = `Reading live metrics stalled (${jsonReadBudgetMs / 1000}s). Try refresh.`;
+                            } else {
+                                lastDashboardFetchError = `Could not parse live metrics: ${String(je?.message || je).slice(0, 240)}`;
+                            }
+                            return null;
+                        }
                         if (payload && payload.ok) {
                             lastDashboardFetchError = '';
                             lastDataUpdate = new Date();
@@ -10854,13 +10870,14 @@ ${actionsRow}
                 } catch (err) {
                     if (err.name === 'AbortError') {
                         console.warn('Data fetch timeout - server may be slow');
-                        lastDashboardFetchError = 'Request timed out while loading live metrics (115s budget).';
+                        lastDashboardFetchError = `Request timed out while loading live metrics (${networkBudgetMs / 1000}s budget).`;
                     } else {
                         console.warn('Live data unavailable', err.message);
                         lastDashboardFetchError = `Network: ${String(err.message || err).slice(0, 240)}`;
                     }
-                    // Don't throw - return null to allow dashboard to continue with existing data
                     return null;
+                } finally {
+                    clearTimeout(timeoutId);
                 }
             } else {
                 lastDataUpdate = new Date();
@@ -11450,7 +11467,7 @@ ${actionsRow}
                     freshnessEl.textContent = `Updated ${hours}h ago`;
                 }
             } else {
-                freshnessEl.textContent = 'Loading live metrics…';
+                freshnessEl.textContent = 'Loading…';
             }
         }
         
@@ -19291,7 +19308,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     }
                 }
             } finally {
-                liveDashboardPayloadReceived = true;
                 try {
                     syncDashboardFreshnessUi();
                 } catch (e) {
