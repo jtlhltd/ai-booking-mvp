@@ -10813,95 +10813,90 @@ ${actionsRow}
         async function fetchLiveData(clientKey, options = {}) {
             const bustCache = options && options.bustCache === true;
             const brief = options && options.brief === true;
-            if (clientKey !== DEMO_CLIENT_KEY) {
-                const networkBudgetMs = 115000;
-                const jsonReadBudgetMs = 45000;
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), networkBudgetMs);
-                try {
-                    const params = new URLSearchParams();
-                    if (bustCache) params.set('t', String(Date.now()));
-                    if (brief) params.set('brief', '1');
-                    const q = params.toString() ? `?${params.toString()}` : '';
-                    const res = await fetch(
-                        `${BASE_URL}/api/demo-dashboard/${encodeURIComponent(clientKey)}${q}`,
-                        { signal: controller.signal }
-                    );
+            const networkBudgetMs = 115000;
+            const jsonReadBudgetMs = 45000;
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), networkBudgetMs);
+            try {
+                const params = new URLSearchParams();
+                if (bustCache) params.set('t', String(Date.now()));
+                if (brief) params.set('brief', '1');
+                const q = params.toString() ? `?${params.toString()}` : '';
+                const res = await fetch(
+                    `${BASE_URL}/api/demo-dashboard/${encodeURIComponent(clientKey)}${q}`,
+                    { signal: controller.signal }
+                );
 
-                    if (res.ok) {
-                        let payload;
-                        try {
-                            payload = await Promise.race([
-                                res.json(),
-                                new Promise((_, rej) =>
-                                    setTimeout(
-                                        () =>
-                                            rej(
-                                                Object.assign(new Error('Live metrics response body stalled'), {
-                                                    name: 'JsonReadTimeout',
-                                                })
-                                            ),
-                                        jsonReadBudgetMs
-                                    )
-                                ),
-                            ]);
-                        } catch (je) {
-                            if (je && je.name === 'JsonReadTimeout') {
-                                lastDashboardFetchError = `Reading live metrics stalled (${jsonReadBudgetMs / 1000}s). Try refresh.`;
-                            } else {
-                                lastDashboardFetchError = `Could not parse live metrics: ${String(je?.message || je).slice(0, 240)}`;
-                            }
-                            return null;
-                        }
-                        if (payload && payload.ok) {
-                            lastDashboardFetchError = '';
-                            lastDataUpdate = new Date();
-                            return payload;
-                        }
-                        lastDashboardFetchError =
-                            payload && payload.error
-                                ? `API error: ${String(payload.error).slice(0, 240)}`
-                                : 'API returned an unexpected payload (missing ok).';
-                        return null;
-                    }
-                    let errBody = '';
+                if (res.ok) {
+                    let payload;
                     try {
-                        errBody = await Promise.race([
-                            res.text(),
+                        payload = await Promise.race([
+                            res.json(),
                             new Promise((_, rej) =>
                                 setTimeout(
                                     () =>
                                         rej(
-                                            Object.assign(new Error('error body stalled'), {
-                                                name: 'BodyReadTimeout',
+                                            Object.assign(new Error('Live metrics response body stalled'), {
+                                                name: 'JsonReadTimeout',
                                             })
                                         ),
-                                    12000
+                                    jsonReadBudgetMs
                                 )
                             ),
                         ]);
-                    } catch (te) {
-                        errBody =
-                            te && te.name === 'BodyReadTimeout' ? '(error body read timed out)' : '(error body unreadable)';
+                    } catch (je) {
+                        if (je && je.name === 'JsonReadTimeout') {
+                            lastDashboardFetchError = `Reading live metrics stalled (${jsonReadBudgetMs / 1000}s). Try refresh.`;
+                        } else {
+                            lastDashboardFetchError = `Could not parse live metrics: ${String(je?.message || je).slice(0, 240)}`;
+                        }
+                        return null;
                     }
-                    lastDashboardFetchError = `HTTP ${res.status}${errBody ? ` — ${errBody.slice(0, 240)}` : ''}`;
-                    return null;
-                } catch (err) {
-                    if (err.name === 'AbortError') {
-                        console.warn('Data fetch timeout - server may be slow');
-                        lastDashboardFetchError = `Request timed out while loading live metrics (${networkBudgetMs / 1000}s budget).`;
-                    } else {
-                        console.warn('Live data unavailable', err.message);
-                        lastDashboardFetchError = `Network: ${String(err.message || err).slice(0, 240)}`;
+                    if (payload && payload.ok) {
+                        lastDashboardFetchError = '';
+                        lastDataUpdate = new Date();
+                        return payload;
                     }
+                    lastDashboardFetchError =
+                        payload && payload.error
+                            ? `API error: ${String(payload.error).slice(0, 240)}`
+                            : 'API returned an unexpected payload (missing ok).';
                     return null;
-                } finally {
-                    clearTimeout(timeoutId);
                 }
-            } else {
-                lastDataUpdate = new Date();
+                let errBody = '';
+                try {
+                    errBody = await Promise.race([
+                        res.text(),
+                        new Promise((_, rej) =>
+                            setTimeout(
+                                () =>
+                                    rej(
+                                        Object.assign(new Error('error body stalled'), {
+                                            name: 'BodyReadTimeout',
+                                        })
+                                    ),
+                                12000
+                            )
+                        ),
+                    ]);
+                } catch (te) {
+                    errBody =
+                        te && te.name === 'BodyReadTimeout' ? '(error body read timed out)' : '(error body unreadable)';
+                }
+                lastDashboardFetchError = `HTTP ${res.status}${errBody ? ` — ${errBody.slice(0, 240)}` : ''}`;
+                return null;
+            } catch (err) {
+                if (err.name === 'AbortError') {
+                    console.warn('Data fetch timeout - server may be slow');
+                    lastDashboardFetchError = `Request timed out while loading live metrics (${networkBudgetMs / 1000}s budget).`;
+                } else {
+                    console.warn('Live data unavailable', err.message);
+                    lastDashboardFetchError = `Network: ${String(err.message || err).slice(0, 240)}`;
+                }
+                return null;
+            } finally {
+                clearTimeout(timeoutId);
             }
-            return null;
         }
 
         /** Re-pull /api/demo-dashboard after CRM mutations so KPI tiles match Postgres without waiting for the 60s poll. */
@@ -11545,6 +11540,7 @@ ${actionsRow}
             'Cohort: lead row created in the last 30 days, and its first matching outbound dial within 48h of that time. Phones matched exactly or by last 10 digits.';
 
         function updateStatusBar(data) {
+            try {
             const tomOutreach = isOutreachDashboardClient(currentClient);
             const totalLeads = formatNumber(data.totalLeads);
             const totalCalls = formatNumber(data.totalCalls);
@@ -11741,6 +11737,9 @@ ${actionsRow}
             renderDashboardExperiencePanel(data);
             applyDashboardReadOnly(data);
             bindOutreachScheduleDayClicks();
+            } catch (e) {
+                console.error('[DASHBOARD] updateStatusBar failed', e);
+            }
         }
 
         function formatActivitySnapshot(iso, timeZone = DASHBOARD_ACTIVITY_TZ) {
@@ -19733,7 +19732,18 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
         }
 
-        document.addEventListener('DOMContentLoaded', initDashboard);
+        function scheduleDashboardBoot() {
+            if (globalThis.__dashboardBootScheduled) return;
+            globalThis.__dashboardBootScheduled = true;
+            const run = () =>
+                void initDashboard().catch((e) => console.error('[DASHBOARD] initDashboard failed', e));
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', run, { once: true });
+            } else {
+                run();
+            }
+        }
+        scheduleDashboardBoot();
         window.addEventListener('beforeunload', stopLiveEvents);
 
         async function initTestCallButton(clientKey, config) {
