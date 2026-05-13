@@ -9,22 +9,56 @@
     <title>Client Dashboard</title>
     <script>
         (function () {
+            /** Full reload: session may restore focus to mid-page inputs (e.g. sequence phone), which scrolls the window. */
+            globalThis.__dashboardScrollTopNudge = function dashboardScrollTopNudge() {
+                try {
+                    if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+                } catch (e) {
+                    /* ignore */
+                }
+                try {
+                    window.scrollTo(0, 0);
+                } catch (e) {
+                    /* ignore */
+                }
+                try {
+                    const ae = document.activeElement;
+                    if (
+                        ae &&
+                        ae !== document.body &&
+                        ae !== document.documentElement &&
+                        typeof ae.matches === 'function' &&
+                        typeof ae.closest === 'function' &&
+                        ae.matches('input, textarea, select') &&
+                        ae.closest('#outboundSequenceWindow')
+                    ) {
+                        ae.blur();
+                        window.scrollTo(0, 0);
+                    }
+                } catch (e2) {
+                    /* ignore */
+                }
+            };
+
+            function scheduleNudges() {
+                const n = globalThis.__dashboardScrollTopNudge;
+                if (typeof n !== 'function') return;
+                n();
+                requestAnimationFrame(function () {
+                    n();
+                    requestAnimationFrame(n);
+                });
+                setTimeout(n, 50);
+                setTimeout(n, 200);
+                setTimeout(n, 600);
+            }
+
             try {
                 if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
             } catch (e) {
                 /* ignore */
             }
-            window.addEventListener(
-                'pageshow',
-                function () {
-                    try {
-                        window.scrollTo(0, 0);
-                    } catch (e2) {
-                        /* ignore */
-                    }
-                },
-                { once: true }
-            );
+            window.addEventListener('pageshow', scheduleNudges, { once: true });
         })();
     </script>
     <link rel="icon" type="image/svg+xml" href="/icon.svg">
@@ -18700,8 +18734,12 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
 
         async function initDashboard() {
             try {
-                if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
-                window.scrollTo(0, 0);
+                if (typeof globalThis.__dashboardScrollTopNudge === 'function') {
+                    globalThis.__dashboardScrollTopNudge();
+                } else {
+                    if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+                    window.scrollTo(0, 0);
+                }
             } catch {
                 /* ignore */
             }
@@ -18986,6 +19024,15 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 renderVoicemailListener().catch(err => console.warn('Voicemail listener failed', err))
             ]).then(() => {
                 console.log('All async data loaded');
+                try {
+                    if (typeof globalThis.__dashboardScrollTopNudge === 'function') {
+                        globalThis.__dashboardScrollTopNudge();
+                        setTimeout(() => globalThis.__dashboardScrollTopNudge(), 80);
+                        setTimeout(() => globalThis.__dashboardScrollTopNudge(), 400);
+                    }
+                } catch (e) {
+                    console.warn('[DASHBOARD] scroll nudge failed', e);
+                }
             });
             
             // Load integration health (non-blocking)
