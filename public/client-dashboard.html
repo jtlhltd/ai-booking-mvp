@@ -7,6 +7,26 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Client Dashboard</title>
+    <script>
+        (function () {
+            try {
+                if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+            } catch (e) {
+                /* ignore */
+            }
+            window.addEventListener(
+                'pageshow',
+                function () {
+                    try {
+                        window.scrollTo(0, 0);
+                    } catch (e2) {
+                        /* ignore */
+                    }
+                },
+                { once: true }
+            );
+        })();
+    </script>
     <link rel="icon" type="image/svg+xml" href="/icon.svg">
     <link rel="alternate icon" href="/icon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -78,6 +98,8 @@
          */
         html {
             font-size: 71%;
+            /* Avoid viewport jumping when async sections above the fold change height */
+            overflow-anchor: none;
         }
 
         body, html {
@@ -16169,7 +16191,15 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                 ? `<div class="meta-label">${escapeHtml(businessName)}</div><div class="tom-ab-test-meta">Enter a phone and click Lookup.</div>`
                 : '<div class="tom-ab-test-meta">Enter a phone and click Lookup.</div>';
             modal.classList.add('open');
-            input.focus();
+            try {
+                input.focus({ preventScroll: true });
+            } catch {
+                try {
+                    input.focus();
+                } catch {
+                    /* ignore */
+                }
+            }
         }
 
         function followUpCloseCallHistoryModal() {
@@ -16745,7 +16775,17 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             });
             input.addEventListener('blur', () => finish(true));
             setTimeout(() => {
-                try { input.focus(); input.select(); } catch {}
+                try {
+                    input.focus({ preventScroll: true });
+                    input.select();
+                } catch {
+                    try {
+                        input.focus();
+                        input.select();
+                    } catch {
+                        /* ignore */
+                    }
+                }
             }, 0);
         }
 
@@ -19726,7 +19766,15 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     const isVisible = pasteContainer.style.display === 'block';
                     pasteContainer.style.display = isVisible ? 'none' : 'block';
                     if (!isVisible && pasteInput) {
-                        pasteInput.focus();
+                        try {
+                            pasteInput.focus({ preventScroll: true });
+                        } catch {
+                            try {
+                                pasteInput.focus();
+                            } catch {
+                                /* ignore */
+                            }
+                        }
                     }
                 });
             }

@@ -24,6 +24,7 @@
 ## Amendments
 
 - Implemented in `public/client-dashboard.html` at the start of `initDashboard()` as above.
+- **2026-05-13 (follow-up):** User still saw mid-page after refresh. Added: (1) early `<head>` script setting `scrollRestoration` and a one-shot `pageshow` → `scrollTo(0,0)` so correction runs after the browser’s restore pass; (2) `overflow-anchor: none` on `html` to reduce scroll anchoring when async blocks change height; (3) `focus({ preventScroll: true })` on call-history modal, follow-up cell edit, and paste import where supported so programmatic focus does not scroll the main document.
 
 ## Risk & rollback
 
