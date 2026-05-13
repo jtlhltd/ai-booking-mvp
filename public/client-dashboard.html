@@ -9,11 +9,14 @@
     <title>Client Dashboard</title>
     <script>
         (function () {
-            const BOOT_LOCK_MS = 5200;
+            const BOOT_LOCK_MS = 7200;
             let bootLockUntil = 0;
             let bootFocusCleanupTimer = null;
             let bootUserIntent = false;
             let bootScrollClampAttached = false;
+            let bootVvScrollAttached = false;
+            /** Ignore keydown for “user intent” briefly so extensions cannot disable the scroll clamp before session-restore scroll. */
+            let bootEarlyKeydownIgnoreUntil = 0;
 
             function pinDashboardToTop() {
                 try {
@@ -29,6 +32,23 @@
                 }
                 try {
                     window.scrollTo(0, 0);
+                } catch (e) {
+                    /* ignore */
+                }
+                try {
+                    const vv = window.visualViewport;
+                    if (vv) {
+                        try {
+                            vv.scrollTop = 0;
+                        } catch (e) {
+                            /* ignore */
+                        }
+                        try {
+                            vv.scrollLeft = 0;
+                        } catch (e) {
+                            /* ignore */
+                        }
+                    }
                 } catch (e) {
                     /* ignore */
                 }
@@ -50,16 +70,36 @@
                     window.removeEventListener('scroll', onBootScroll, { passive: true });
                     bootScrollClampAttached = false;
                 }
+                if (bootVvScrollAttached && window.visualViewport) {
+                    try {
+                        window.visualViewport.removeEventListener('scroll', onBootScroll, { passive: true });
+                    } catch (e) {
+                        /* ignore */
+                    }
+                    bootVvScrollAttached = false;
+                }
                 ['pointerdown', 'wheel', 'touchstart', 'keydown'].forEach((evt) => {
                     document.removeEventListener(evt, markBootUserIntent, true);
                 });
             }
 
-            function markBootUserIntent() {
+            function markBootUserIntent(ev) {
+                if (ev && ev.type === 'keydown') {
+                    if (ev.isTrusted === false) return;
+                    if (Date.now() < bootEarlyKeydownIgnoreUntil) return;
+                }
                 bootUserIntent = true;
                 if (bootScrollClampAttached) {
                     window.removeEventListener('scroll', onBootScroll, { passive: true });
                     bootScrollClampAttached = false;
+                }
+                if (bootVvScrollAttached && window.visualViewport) {
+                    try {
+                        window.visualViewport.removeEventListener('scroll', onBootScroll, { passive: true });
+                    } catch (e) {
+                        /* ignore */
+                    }
+                    bootVvScrollAttached = false;
                 }
             }
 
@@ -69,11 +109,24 @@
                         window.removeEventListener('scroll', onBootScroll, { passive: true });
                         bootScrollClampAttached = false;
                     }
+                    if (bootVvScrollAttached && window.visualViewport) {
+                        try {
+                            window.visualViewport.removeEventListener('scroll', onBootScroll, { passive: true });
+                        } catch (e) {
+                            /* ignore */
+                        }
+                        bootVvScrollAttached = false;
+                    }
                     return;
                 }
                 try {
                     const y = window.scrollY || window.pageYOffset || 0;
-                    if (y > 6) {
+                    const docY =
+                        (document.scrollingElement && document.scrollingElement.scrollTop) ||
+                        document.documentElement.scrollTop ||
+                        document.body.scrollTop ||
+                        0;
+                    if (y > 1 || docY > 1) {
                         pinDashboardToTop();
                     }
                 } catch (e3) {
@@ -106,12 +159,21 @@
 
             function armBootLock() {
                 bootUserIntent = false;
+                bootEarlyKeydownIgnoreUntil = Math.max(bootEarlyKeydownIgnoreUntil, Date.now() + 750);
                 bootLockUntil = Math.max(bootLockUntil, Date.now() + BOOT_LOCK_MS);
                 document.removeEventListener('focusin', onBootFocusIn, true);
                 document.addEventListener('focusin', onBootFocusIn, true);
                 if (!bootScrollClampAttached) {
                     bootScrollClampAttached = true;
                     window.addEventListener('scroll', onBootScroll, { passive: true });
+                }
+                if (!bootVvScrollAttached && window.visualViewport) {
+                    try {
+                        window.visualViewport.addEventListener('scroll', onBootScroll, { passive: true });
+                        bootVvScrollAttached = true;
+                    } catch (e) {
+                        bootVvScrollAttached = false;
+                    }
                 }
                 ['pointerdown', 'wheel', 'touchstart', 'keydown'].forEach((evt) => {
                     document.removeEventListener(evt, markBootUserIntent, true);
@@ -152,6 +214,7 @@
             };
 
             function scheduleNudges() {
+                bootEarlyKeydownIgnoreUntil = Math.max(bootEarlyKeydownIgnoreUntil, Date.now() + 750);
                 armBootLock();
 
                 const n = globalThis.__dashboardScrollTopNudge;
@@ -168,6 +231,7 @@
                 setTimeout(n, 2200);
                 setTimeout(n, 3200);
                 setTimeout(n, 4500);
+                setTimeout(n, 6200);
             }
 
             try {
