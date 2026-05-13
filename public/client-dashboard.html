@@ -134,7 +134,7 @@
                 }
             }
 
-            /** Session restore often lands on the sequence phone field seconds after load; blur + scroll before it pins the viewport. */
+            /** Session restore may focus sequence list rows (tabindex=0), cohort pills (button), or inputs — all can scroll the window into the outbound block. */
             function onBootFocusIn(ev) {
                 if (Date.now() > bootLockUntil) {
                     document.removeEventListener('focusin', onBootFocusIn, true);
@@ -143,16 +143,55 @@
                 const t = ev.target;
                 if (!t || typeof t.closest !== 'function') return;
                 if (!t.closest('#outboundSequenceWindow')) return;
-                const tag = (t.tagName || '').toLowerCase();
-                if (tag !== 'input' && tag !== 'textarea' && tag !== 'select') return;
-                try {
-                    if (typeof t.blur === 'function') t.blur();
-                } catch (e) {
-                    /* ignore */
-                }
+
                 try {
                     pinDashboardToTop();
-                } catch (e2) {
+                } catch (e0) {
+                    /* ignore */
+                }
+
+                const el = /** @type {Element} */ (t);
+                const tag = (el.tagName || '').toLowerCase();
+                let blurFocus = tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'button';
+                if (!blurFocus && tag === 'a') {
+                    const href = (typeof el.getAttribute === 'function' ? el.getAttribute('href') : '') || '';
+                    const h = href.trim().toLowerCase();
+                    blurFocus = h !== '' && h !== 'javascript:void(0)' && h !== '#';
+                }
+                if (!blurFocus) {
+                    try {
+                        const ti = typeof el.getAttribute === 'function' ? el.getAttribute('tabindex') : null;
+                        if (ti !== null && ti !== undefined && String(ti).trim() !== '' && String(ti).trim() !== '-1') {
+                            blurFocus = true;
+                        }
+                    } catch (e1) {
+                        /* ignore */
+                    }
+                }
+
+                if (blurFocus) {
+                    try {
+                        if (typeof t.blur === 'function') t.blur();
+                    } catch (e) {
+                        /* ignore */
+                    }
+                    try {
+                        pinDashboardToTop();
+                    } catch (e2) {
+                        /* ignore */
+                    }
+                }
+
+                try {
+                    requestAnimationFrame(function () {
+                        if (Date.now() > bootLockUntil) return;
+                        pinDashboardToTop();
+                        requestAnimationFrame(function () {
+                            if (Date.now() > bootLockUntil) return;
+                            pinDashboardToTop();
+                        });
+                    });
+                } catch (e3) {
                     /* ignore */
                 }
             }

@@ -32,6 +32,7 @@
 - **2026-05-13 (scroll clamp):** During boot, listen for `window` `scroll` and if `scrollY > 6` before any user `pointerdown`/`wheel`/`touchstart`, force scroll back to top (catches focus-scroll paths that never hit our `focusin` filter). Longer boot window (5.2s), extra nudge at 4.5s, `overflow-anchor: none` on `body, html`, and explicit `documentElement`/`body` `scrollTop` in nudge.
 - **2026-05-13 (pin header):** Centralized `pinDashboardToTop()` using `scrollingElement.scrollTop`, `window.scrollTo(0,0)`, and `header.header.scrollIntoView({ block: 'start' })`; exposed as `__dashboardPinToTop` for init fallback; boot scroll clamp and nudges use it; `keydown` counts as user intent to disable clamp.
 - **2026-05-13 (clamp hardening):** Longer boot lock (7.2s), ignore untrusted/early `keydown` for user-intent, clamp when `doc.scrollTop>1` or `scrollY>1`, listen on `visualViewport` `scroll`, reset `visualViewport` offsets in pin, extra nudge at 6.2s, fix clamp cleanup to detach visualViewport listener.
+- **2026-05-13 (focusin vs tabindex rows):** `capture focusin` still returned early for non-inputs, so session restore onto `div.outbound-seq-row[tabindex="0"]` or cohort **`<button>`**s never blurred — the browser scrolled those into view. `onBootFocusIn` now always pins once, then blurs buttons/links/tabindex targets (not `-1`), pins again, and double-`requestAnimationFrame` pin.
 
 ## Risk & rollback
 
