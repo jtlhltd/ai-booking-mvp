@@ -30,6 +30,7 @@
 - **2026-05-13 (late call-history paint):** `renderOutboundSequenceLeadDetail` fired `renderOutboundSequenceInlineHistory` without awaiting, so `refreshOutboundSequenceWindow` returned before `followUpRenderCallHistoryInto` finished inserting the large call-history DOM; the initial `Promise.all` scroll nudge ran too early. `renderOutboundSequenceLeadDetail` is now `async` and awaits inline history; `refreshOutboundSequenceWindow` awaits lead detail render.
 - **2026-05-13 (late session focus):** Added capture `focusin` during a boot window to blur `input/textarea/select` inside `#outboundSequenceWindow`, extended timed nudges, `__dashboardArmScrollBootLock()` after async `Promise.all`, and `overflow-anchor: none` on `#outboundSequenceWindow` / `.outbound-seq-shell`.
 - **2026-05-13 (scroll clamp):** During boot, listen for `window` `scroll` and if `scrollY > 6` before any user `pointerdown`/`wheel`/`touchstart`, force scroll back to top (catches focus-scroll paths that never hit our `focusin` filter). Longer boot window (5.2s), extra nudge at 4.5s, `overflow-anchor: none` on `body, html`, and explicit `documentElement`/`body` `scrollTop` in nudge.
+- **2026-05-13 (pin header):** Centralized `pinDashboardToTop()` using `scrollingElement.scrollTop`, `window.scrollTo(0,0)`, and `header.header.scrollIntoView({ block: 'start' })`; exposed as `__dashboardPinToTop` for init fallback; boot scroll clamp and nudges use it; `keydown` counts as user intent to disable clamp.
 
 ## Risk & rollback
 

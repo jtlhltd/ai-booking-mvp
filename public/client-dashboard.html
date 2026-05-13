@@ -15,13 +15,42 @@
             let bootUserIntent = false;
             let bootScrollClampAttached = false;
 
+            function pinDashboardToTop() {
+                try {
+                    const se = document.scrollingElement || document.documentElement;
+                    if (se) se.scrollTop = 0;
+                } catch (e) {
+                    /* ignore */
+                }
+                try {
+                    document.body.scrollTop = 0;
+                } catch (e) {
+                    /* ignore */
+                }
+                try {
+                    window.scrollTo(0, 0);
+                } catch (e) {
+                    /* ignore */
+                }
+                try {
+                    const hdr = document.querySelector('header.header');
+                    if (hdr && typeof hdr.scrollIntoView === 'function') {
+                        hdr.scrollIntoView({ block: 'start', inline: 'nearest', behavior: 'auto' });
+                    }
+                } catch (e2) {
+                    /* ignore */
+                }
+            }
+
+            globalThis.__dashboardPinToTop = pinDashboardToTop;
+
             function detachBootListeners() {
                 document.removeEventListener('focusin', onBootFocusIn, true);
                 if (bootScrollClampAttached) {
                     window.removeEventListener('scroll', onBootScroll, { passive: true });
                     bootScrollClampAttached = false;
                 }
-                ['pointerdown', 'wheel', 'touchstart'].forEach((evt) => {
+                ['pointerdown', 'wheel', 'touchstart', 'keydown'].forEach((evt) => {
                     document.removeEventListener(evt, markBootUserIntent, true);
                 });
             }
@@ -45,17 +74,7 @@
                 try {
                     const y = window.scrollY || window.pageYOffset || 0;
                     if (y > 6) {
-                        window.scrollTo(0, 0);
-                        try {
-                            document.documentElement.scrollTop = 0;
-                        } catch (e) {
-                            /* ignore */
-                        }
-                        try {
-                            document.body.scrollTop = 0;
-                        } catch (e2) {
-                            /* ignore */
-                        }
+                        pinDashboardToTop();
                     }
                 } catch (e3) {
                     /* ignore */
@@ -79,7 +98,7 @@
                     /* ignore */
                 }
                 try {
-                    window.scrollTo(0, 0);
+                    pinDashboardToTop();
                 } catch (e2) {
                     /* ignore */
                 }
@@ -94,7 +113,7 @@
                     bootScrollClampAttached = true;
                     window.addEventListener('scroll', onBootScroll, { passive: true });
                 }
-                ['pointerdown', 'wheel', 'touchstart'].forEach((evt) => {
+                ['pointerdown', 'wheel', 'touchstart', 'keydown'].forEach((evt) => {
                     document.removeEventListener(evt, markBootUserIntent, true);
                     document.addEventListener(evt, markBootUserIntent, { capture: true, passive: true });
                 });
@@ -114,21 +133,7 @@
                 } catch (e) {
                     /* ignore */
                 }
-                try {
-                    window.scrollTo(0, 0);
-                } catch (e) {
-                    /* ignore */
-                }
-                try {
-                    document.documentElement.scrollTop = 0;
-                } catch (e) {
-                    /* ignore */
-                }
-                try {
-                    document.body.scrollTop = 0;
-                } catch (e) {
-                    /* ignore */
-                }
+                pinDashboardToTop();
                 try {
                     const ae = document.activeElement;
                     if (
@@ -139,7 +144,7 @@
                         ae.closest('#outboundSequenceWindow')
                     ) {
                         if (typeof ae.blur === 'function') ae.blur();
-                        window.scrollTo(0, 0);
+                        pinDashboardToTop();
                     }
                 } catch (e2) {
                     /* ignore */
@@ -18860,7 +18865,11 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
                     globalThis.__dashboardScrollTopNudge();
                 } else {
                     if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
-                    window.scrollTo(0, 0);
+                    if (typeof globalThis.__dashboardPinToTop === 'function') {
+                        globalThis.__dashboardPinToTop();
+                    } else {
+                        window.scrollTo(0, 0);
+                    }
                 }
             } catch {
                 /* ignore */
