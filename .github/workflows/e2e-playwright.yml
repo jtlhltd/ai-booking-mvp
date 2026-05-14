@@ -1,0 +1,66 @@
+# Opt-in Playwright E2E (dashboard DOM smoke). Widen triggers once stable.
+name: E2E (Playwright)
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-playwright-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  playwright:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TZ: UTC
+      CI: true
+      NODE_ENV: test
+      DB_TYPE: postgres
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/testdb
+      API_KEY: github-actions-e2e-api-key
+      ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      PORT: '3000'
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d testdb"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium + OS deps
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright E2E
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          if-no-files-found: ignore

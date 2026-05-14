@@ -41,8 +41,16 @@ public/ChatGPT*.png
 # Frontend build output
 public/build/
 
+# Playwright
+playwright-report/
+test-results/
+blob-report/
+
 # Cursor workspace metadata (never commit)
 .cursor/*
 !.cursor/rules/
 !.cursor/rules/*.mdc
+
+# Repo-root scratch (local agent / debug); never commit
+/tmp-*
 

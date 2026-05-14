@@ -8131,6 +8131,22 @@
     </div>
     
     <script>
+        // Boot runs from a later inline <script>; hook registration at the end of this file was accidentally
+        // nested inside another scope and never executed. Always listen here (top of script) so DOM boot works.
+        window.addEventListener(
+            'client-dashboard-boot',
+            function __clientDashboardBootHandler() {
+                try {
+                    globalThis.__stopClientDashboardLive = stopLiveEvents;
+                    globalThis.__initClientDashboard = initDashboard;
+                } catch (e) {
+                    console.error('[DASHBOARD] registerBootHooks failed', e);
+                }
+                void initDashboard().catch((e) => console.error('[DASHBOARD] initDashboard failed', e));
+            },
+            { once: true }
+        );
+
         const DEMO_CLIENT_KEY = 'demo_client';
         /** Sync with RECENT_LEADS_DASHBOARD_CAP in server.js (/api/demo-dashboard lead query LIMIT). Brief initial outreach load uses server DASHBOARD_BRIEF_LEADS_CAP with ?brief=1. */
         const RECENT_LEADS_DASHBOARD_CAP = 5000;
@@ -8158,6 +8174,8 @@
             { icon: '📊', title: 'Outcomes tracked', desc: 'Reach, no pickup, and conversation signals stay visible here.' },
             { icon: '🔄', title: 'Follow-ups scheduled', desc: 'Retries queue after voicemail, busy, or no-answer when configured.' }
         ];
+        const BASE_URL = window.location.origin;
+        const THEME_KEY = 'dashboard_theme';
         /** True when server sent dashboardOutreachMode for this client. */
         function isOutreachDashboardClient(clientKey) {
             const k = clientKey != null ? String(clientKey).trim() : '';
@@ -10086,9 +10104,6 @@
             applyStoredDashboardCollapsedState();
         }
 
-        const BASE_URL = window.location.origin;
-        const THEME_KEY = 'dashboard_theme';
-        
         // Global client name for personalization
         let clientBusinessName = 'Your Business';
         
@@ -10813,8 +10828,9 @@ ${actionsRow}
         async function fetchLiveData(clientKey, options = {}) {
             const bustCache = options && options.bustCache === true;
             const brief = options && options.brief === true;
-            const networkBudgetMs = 115000;
-            const jsonReadBudgetMs = 45000;
+            /** Demo tenant uses embedded DEMO_DATA on failure; keep a tight budget so first paint (and E2E) are not blocked by the ~115s live-tenant budget. */
+            const networkBudgetMs = clientKey === DEMO_CLIENT_KEY ? 15000 : 115000;
+            const jsonReadBudgetMs = clientKey === DEMO_CLIENT_KEY ? 20000 : 45000;
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), networkBudgetMs);
             try {
@@ -19096,13 +19112,6 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
             currentClient = getClientFromURL();
             activityFeedOutcomeFilter = 'all';
-            dashboardData =
-                currentClient === DEMO_CLIENT_KEY ? { ...DEMO_DATA } : createEmptyDashboardData();
-            try {
-                updateStatusBar(dashboardData);
-            } catch (e) {
-                console.warn('[DASHBOARD] bootstrap status bar paint skipped', e);
-            }
             try {
                 activityFeedHideStartFailures = localStorage.getItem('dash.act.hideStartFailures') !== '0';
                 activityFeedGroupRetries = localStorage.getItem('dash.act.groupRetries') !== '0';
@@ -19298,12 +19307,19 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             initAccessibility();
             initKeyboardShortcuts();
 
-            // dashboardData already seeded at start of initDashboard; only toggle demo chrome here.
+            // Initialize with empty data structure for real clients, demo data only for demo client
             if (currentClient === DEMO_CLIENT_KEY) {
-                const db = document.getElementById('demoBanner');
-                if (db) db.style.display = 'block';
+                dashboardData = { ...DEMO_DATA };
+                try {
+                    updateStatusBar(dashboardData);
+                } catch (e) {
+                    console.warn('[DASHBOARD] demo KPI status paint failed', e);
+                }
+                const demoBannerEl = document.getElementById('demoBanner');
+                if (demoBannerEl) demoBannerEl.style.display = 'block';
                 stopLiveEvents();
             } else {
+                dashboardData = createEmptyDashboardData();
                 const banner = document.getElementById('demoBanner');
                 if (banner) banner.style.display = 'none';
             }
@@ -19323,7 +19339,36 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             try {
                 const useInitialBrief =
                     currentClient !== DEMO_CLIENT_KEY && isOutreachDashboardClient(currentClient);
-                const livePayload = await fetchLiveData(currentClient, { brief: useInitialBrief });
+                let livePayload = null;
+                if (currentClient === DEMO_CLIENT_KEY) {
+                    /** Demo first paint uses embedded DEMO_DATA; live metrics can be slow or stubbed in tests — do not block KPI hints on that round-trip. */
+                    void fetchLiveData(currentClient, { brief: false })
+                        .then((p) => {
+                            if (!p || p.ok !== true) return;
+                            try {
+                                dashboardData = mergeData(dashboardData, p, true);
+                                lastDashboardPollFingerprint = dashboardPollFingerprint(dashboardData);
+                                updateStatusBar(dashboardData);
+                                renderRecentActivity(dashboardData);
+                                renderLeadJourney(dashboardData);
+                                renderLeads(dashboardData.recentLeads || [], { preserveFilter: true });
+                                const chartCfg =
+                                    currentDashboardChartConfig ||
+                                    CLIENT_CONFIG[currentClient] ||
+                                    CLIENT_CONFIG[DEMO_CLIENT_KEY] ||
+                                    {};
+                                renderChart(chartCfg, dashboardData);
+                                renderCalls(dashboardData.recentCalls || []);
+                                renderTomAbTestSection(dashboardData);
+                                syncDashboardFreshnessUi();
+                            } catch (e) {
+                                console.warn('[DASHBOARD] demo live metrics apply failed', e);
+                            }
+                        })
+                        .catch((e) => console.warn('[DASHBOARD] demo live metrics fetch failed', e));
+                } else {
+                    livePayload = await fetchLiveData(currentClient, { brief: useInitialBrief });
+                }
                 if (livePayload) {
                     // Use real data from API, don't merge with demo data
                     dashboardData = mergeData({}, livePayload, currentClient === DEMO_CLIENT_KEY);
@@ -21205,19 +21250,37 @@ AI: You're welcome! We'll see you next Thursday. Have a great week!
             }
         }
         }
-        function scheduleDashboardBoot() {
-            if (globalThis.__dashboardBootScheduled) return;
-            globalThis.__dashboardBootScheduled = true;
-            const run = () =>
-                void initDashboard().catch((e) => console.error('[DASHBOARD] initDashboard failed', e));
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', run, { once: true });
-            } else {
-                run();
+    </script>
+    <script>
+        (function () {
+            function bootClientDashboard() {
+                if (globalThis.__dashboardBootScheduled) return;
+                globalThis.__dashboardBootScheduled = true;
+                window.addEventListener('beforeunload', () => {
+                    try {
+                        if (typeof globalThis.__stopClientDashboardLive === 'function') {
+                            globalThis.__stopClientDashboardLive();
+                        }
+                    } catch {
+                        /* ignore */
+                    }
+                });
+                function runClientDashboardBoot() {
+                    const fn = globalThis.__initClientDashboard;
+                    if (typeof fn === 'function') {
+                        void fn().catch((e) => console.error('[DASHBOARD] initDashboard failed', e));
+                        return;
+                    }
+                    window.dispatchEvent(new CustomEvent('client-dashboard-boot'));
+                }
+                runClientDashboardBoot();
             }
-        }
-        scheduleDashboardBoot();
-        window.addEventListener('beforeunload', stopLiveEvents);
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', bootClientDashboard, { once: true });
+            } else {
+                bootClientDashboard();
+            }
+        })();
     </script>
     <!-- Tooltip lives on body so it is not clipped by dashboard cards (overflow: hidden). -->
     <div id="weeklyChartTooltip" class="weekly-chart-tooltip" role="tooltip" hidden aria-hidden="true"></div>

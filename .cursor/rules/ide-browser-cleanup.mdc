@@ -23,3 +23,7 @@ Whenever this agent **starts `npm start` / `node server.js`** or **uses the Curs
 ## Ordering
 
 Prefer: **verify → record result → close browser tabs → stop server** so the user does not have to clean up manually.
+
+## Dashboard DOM smoke (preferred)
+
+For **client dashboard** loading / metric hints (not stuck on `Loading...`), prefer **`npm run test:e2e`** (real Chromium via Playwright) over IDE Glass snapshots alone — Glass can diverge from production Chrome DOM.

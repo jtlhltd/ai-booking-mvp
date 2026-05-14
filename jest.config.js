@@ -17,11 +17,14 @@ export default {
     '/archive/',
     '/docs/',
     '/tests/harness/',
-    '/scripts/smoke/'
+    '/scripts/smoke/',
+    // Playwright lives here (*.spec.js); must not run under Jest during test:coverage / test:ci.
+    '/e2e/'
   ],
   collectCoverageFrom: [
     '**/*.js',
-    '!**/node_modules/**'
+    '!**/node_modules/**',
+    '!**/e2e/**'
   ],
   coverageThreshold: {
     global: {
