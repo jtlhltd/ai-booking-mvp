@@ -116,15 +116,20 @@ describe('lib/server-queue-workers', () => {
         lead_phone: '+15550002222',
         retry_attempt: 0,
         max_retries: 3,
-        retry_data: '{}'
-      }
+        retry_data: JSON.stringify({ rowNumber: 2, patch: { Status: 'x' } }),
+      },
     ]);
     const updateRetryStatus = jest.fn(async () => {});
 
     jest.unstable_mockModule('../../../db.js', () => ({
       query,
       poolQuerySelect: jest.fn(async () => ({ rows: [] })),
-      getFullClient: jest.fn(async () => ({ clientKey: 'c1', timezone: 'UTC', booking: { timezone: 'UTC' } })),
+      getFullClient: jest.fn(async () => ({
+        clientKey: 'c1',
+        timezone: 'UTC',
+        booking: { timezone: 'UTC' },
+        vapi_json: { logisticsSheetId: 'sheet_mock_1' },
+      })),
       listFullClients: jest.fn(async () => []),
       addToCallQueue: jest.fn(async () => {}),
       smearCallQueueScheduledFor: jest.fn(async () => {}),
@@ -142,9 +147,9 @@ describe('lib/server-queue-workers', () => {
 
     // Force sheet patch processing to throw.
     jest.unstable_mockModule('../../../sheets.js', () => ({
-      patchRow: jest.fn(async () => {
+      patchLogisticsRowByNumber: jest.fn(async () => {
         throw new Error('boom');
-      })
+      }),
     }));
 
     const { processRetryQueue } = await import('../../../lib/server-queue-workers.js');

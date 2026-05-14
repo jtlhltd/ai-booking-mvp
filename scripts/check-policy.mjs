@@ -268,12 +268,12 @@ const rules = [
   {
     intentId: 'queue.worker-imports-scheduling-and-resilience',
     description:
-      'lib/server-queue-workers.js must statically import selectOptimalAssistant from ./server-assistant-scheduling.js and categorizeError from ./server-call-resilience.js when referenced, so cron/dial paths never throw ReferenceError at runtime.',
+      'lib/server-queue-workers.js must statically import selectOptimalAssistant from ./server-assistant-scheduling.js, categorizeError from ./server-call-resilience.js, resolveLogisticsSpreadsheetId from ./dashboard-ui-formatters.js, and patchLogisticsRowByNumber from ../sheets.js when referenced, so cron/retry paths never throw ReferenceError at runtime.',
     mode: 'require',
     scope: 'lib/',
     filePattern: /^lib\/server-queue-workers\.js$/,
     requireAny: [
-      /(?=.*\bimport\s*\{[^}]*\bcategorizeError\b[^}]*\}\s*from\s*['"]\.\/server-call-resilience\.js['"])(?=.*\bimport\s*\{[^}]*\bselectOptimalAssistant\b[^}]*\}\s*from\s*['"]\.\/server-assistant-scheduling\.js['"])/s
+      /(?=.*\bimport\s*\{[^}]*\bcategorizeError\b[^}]*\}\s*from\s*['"]\.\/server-call-resilience\.js['"])(?=.*\bimport\s*\{[^}]*\bselectOptimalAssistant\b[^}]*\}\s*from\s*['"]\.\/server-assistant-scheduling\.js['"])(?=.*\bimport\s*\{[^}]*\bresolveLogisticsSpreadsheetId\b[^}]*\}\s*from\s*['"]\.\/dashboard-ui-formatters\.js['"])(?=.*\bimport\s*\{[^}]*\bpatchLogisticsRowByNumber\b[^}]*\}\s*from\s*['"]\.\.\/sheets\.js['"])/s
     ],
     allow: []
   }
